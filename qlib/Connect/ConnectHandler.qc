@@ -40,6 +40,11 @@ public hashdecl ConnectServerMethodInfo {
     *AbstractDataProviderType request_type;
     #! Optional response type descriptor for reflection
     *AbstractDataProviderType response_type;
+    #! @ref True if the code that registered the method was restricted by a sandbox (qore#7303)
+    /** Its handler gets the request metadata without the credentials of the request (see
+        @ref ConnectHandler::methodIsRestricted())
+    */
+    bool registered_restricted = False;
 }
 
 #! Connect RPC server handler for HttpServer
@@ -106,6 +111,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_UNARY,
         };
     }
@@ -125,6 +131,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_SERVER_STREAM,
         };
     }
@@ -144,6 +151,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_CLIENT_STREAM,
         };
     }
@@ -163,6 +171,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_BIDI,
         };
     }
@@ -184,6 +193,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_UNARY,
             "request_type": request_type,
             "response_type": response_type,
@@ -208,6 +218,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_SERVER_STREAM,
             "request_type": request_type,
             "response_type": response_type,
@@ -232,6 +243,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_CLIENT_STREAM,
             "request_type": request_type,
             "response_type": response_type,
@@ -256,6 +268,7 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_BIDI,
             "request_type": request_type,
             "response_type": response_type,
@@ -288,6 +301,7 @@ handler.registerDatagramFireAndForget("Telemetry", "Report",
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET,
         };
     }
@@ -308,6 +322,7 @@ handler.registerDatagramFireAndForget("Telemetry", "Report",
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_DATAGRAM_FIRE_AND_FORGET,
             "request_type": request_type,
         };
@@ -342,6 +357,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_DATAGRAM_BIDI,
         };
     }
@@ -364,6 +380,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             "method": method,
             "path": "/" + service + "/" + method,
             "handler": handler,
+            "registered_restricted": SandboxManager::isRestricted(),
             "rpc_type": CONNECT_RPC_DATAGRAM_BIDI,
             "request_type": request_type,
             "response_type": response_type,
@@ -520,8 +537,12 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         bool streaming = ct_info ? ct_info.streaming : False;
         bool datagram = ct_info ? (ct_info.datagram ?? False) : False;
 
-        # Extract metadata from request headers
-        hash<auto> metadata = extractMetadata(hdr);
+        # Extract metadata from request headers: restricted code gets them without the credentials of the request
+        # (qore#7303)
+        hash<auto> metadata = extractMetadata(
+            (ConnectHandler::methodIsRestricted(method_info) || filtersRequestsFor())
+                ? withholdCredentialsForDispatch(cx, hdr).hdr
+                : hdr);
 
         # Parse deadline from Connect-Timeout-Ms
         *date deadline;
@@ -1067,6 +1088,29 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             "body": error_json,
             "hdr": {"Content-Type": "application/json"},
         };
+    }
+
+    #! Returns @ref True if the handler of a method is restricted code, which gets the request without its credentials
+    /** The handler gets the request metadata without the credentials of the request (see
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()") when the
+        calling code is restricted by a sandbox (@ref Qore::SandboxManager::isRestricted()
+        "SandboxManager::isRestricted()"), the code that registered the method was, or the code of the handler is
+        (@ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()");
+        fails closed: @ref True if it cannot be decided (qore#7303)
+
+        @param method_info the method
+
+        @return @ref True if the handler of the method is restricted code
+
+        @since Connect 1.3
+    */
+    static bool methodIsRestricted(hash<ConnectServerMethodInfo> method_info) {
+        try {
+            return method_info.registered_restricted || SandboxManager::isRestricted()
+                || SandboxManager::isCodeFromRestrictedProgram(method_info.handler);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
     }
 
     #! Extract metadata from request headers

@@ -173,8 +173,16 @@ module HttpServerUtil {
     sandbox governs only to interrupt or limit it, gets the request as the server made it, unless its handler asks
     for the filter (@ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"), as a
     trusted handler that hands its requests to other code does.  The filter applies to the code that the base class
-    dispatches a stream request to and to the REST classes; a handler class of restricted code that overrides
-    @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.
+    dispatches a stream request to and to the REST classes.  The methods of a handler of restricted code
+    (@ref HttpServer::AbstractHttpRequestHandler::handlerCodeIsRestricted() "handlerCodeIsRestricted()") that the
+    HTTP server calls for a request (handleExpectHeader(), wantsBodyStreaming(), preprocessRequest(),
+    authenticateRequest(), canHandleInline(), handleInlineRequest() and
+    @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()") get the request without its
+    credentials (@ref HttpServer::AbstractHttpRequestHandler::withholdCredentialsForDispatch() "withholdCredentialsForDispatch()");
+    the rest of the context is the handler's.  The trusted authenticator of such a handler authenticates the raw
+    request first (@ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "authenticateRestrictedRequest()"),
+    and the handler's code gets the platform context keys that it sets, but not the other keys that it adds, such as
+    a session token; an authenticator of restricted code gets the request without its credentials.
     A stream request of a class of a restricted %Program that a trusted handler creates without filtering the request
     for it is refused (\c HTTP-SERVER-ERROR): a trusted handler that creates the stream requests of restricted code
     filters its requests (setFilterRequests() or setHostsCode()).  The refusal recognizes the request context that
@@ -229,6 +237,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - the methods of a handler of restricted code that the HTTP server calls for a request get the request without its
+      credentials, and the handler's trusted authenticator authenticates the raw request first
+      (@ref httpserverutil_request_credentials; issue #7303)
     - added @ref HttpServer::AbstractStreamRequest::getContext() "AbstractStreamRequest::getContext()",
       @ref HttpServer::AbstractStreamRequest::getHeaders() "getHeaders()" and
       @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
@@ -475,6 +486,81 @@ module HttpServerUtil {
     - implemented support for custom timeout values in stream handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/719">issue 719</a>)
 */
+
+#! The requests that the server authenticated with the trusted authenticator of their handler (qore#7303)
+/** Not exported: only this module's code can create one, and it never leaves the method that creates it (see
+    @ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "AbstractHttpRequestHandler::authenticateRestrictedRequest()").
+    It marks the request of a handler on its thread, by the ID of the request, while the handler's own
+    authenticateRequest() runs; the marks of a thread are a stack, so a request dispatched while another is
+    authenticated on the thread does not take its mark
+*/
+class HttpPlatformAuthentication {
+    private:internal {
+        #! the token of this mark
+        object token = new Mutex();
+
+        #! the key of this mark's thread
+        string tid = string(gettid());
+
+        #! the marks, by thread: the token, the handler and the ID of the request
+        static hash<string, list<hash<auto>>> marks = {};
+
+        #! the lock of \c marks
+        static Mutex lock();
+    }
+
+    #! Marks the request of the handler on this thread
+    constructor(object handler, hash<auto> cx) {
+        AutoLock al(lock);
+        push marks{tid}, {"token": token, "handler": handler.uniqueHash(), "id": cx.id};
+    }
+
+    #! Removes the mark
+    destructor() {
+        AutoLock al(lock);
+        *list<hash<auto>> l = marks{tid};
+        for (int i = l.size() - 1; i >= 0; --i) {
+            if (l[i].token === token) {
+                splice l, i, 1;
+                break;
+            }
+        }
+        if (l) {
+            marks{tid} = l;
+        } else {
+            remove marks{tid};
+        }
+    }
+
+    #! Returns @ref True if the innermost mark of this thread is that of the request of the handler
+    static bool active(object handler, hash<auto> cx) {
+        AutoLock al(lock);
+        *list<hash<auto>> l = marks{string(gettid())};
+        if (!l) {
+            return False;
+        }
+        hash<auto> top = l.last();
+        return top.handler == handler.uniqueHash() && top.id == cx.id;
+    }
+
+    #! Returns the raw value with the changes that a handler made to its copy without the credentials of the request
+    /** A key whose value the handler did not change keeps its raw value, a key that it changed or added gets its
+        value, a key that it removed is removed, and a key that its copy did not have (a credential that was withheld)
+        keeps its raw value
+    */
+    static hash<auto> merge(hash<auto> raw, hash<auto> filtered, hash<auto> changed) {
+        hash<auto> rv = {};
+        foreach string key in (keys changed) {
+            rv{key} = (filtered.hasKey(key) && changed{key} === filtered{key}) ? raw{key} : changed{key};
+        }
+        foreach string key in (keys raw) {
+            if (!filtered.hasKey(key)) {
+                rv{key} = raw{key};
+            }
+        }
+        return rv;
+    }
+}
 
 #! the main namespace for the HttpServer and HttpServerUtil modules
 /** To use this module, use \c "%requires HttpServerUtil" in your code.
@@ -2297,7 +2383,9 @@ public class AbstractAuthenticator {
     #! Returns the keys of the request context that this authenticator sets: the platform's authorization context
     /** The code that a restricted sandbox governs gets the request context filtered (see
         @ref httpserverutil_request_credentials); the keys returned here, which the authentication of the platform
-        sets (for example the identity and the authorization flags of the user), are kept for it.  The server's
+        sets (for example the identity and the authorization flags of the user), are kept for it.  An authenticator
+        must not put credentials into the keys of the request context that the filter gives (such as \c user or
+        \c hdr) either, as they are given to such code as well.  The server's
         objects, the keys of the request that the filter handles itself and values that are objects or hold one are
         not kept in any case.  The keys must hold plain data and no credentials (such as an authentication token):
         the code that a restricted sandbox governs gets them.  Only the keys of an authenticator of trusted code are
@@ -5316,6 +5404,11 @@ public class AbstractHttpRequestHandler {
             listener.log("Handler %y: no authentication required", cx.handler_name);
             return;
         }
+        # the server authenticated the request with the handler's trusted authenticator on the raw request (see
+        # authenticateRestrictedRequest()); the code of the handler gets the request without its credentials (qore#7303)
+        if (HttpPlatformAuthentication::active(self, cx) && handlerClassIsRestricted()) {
+            return;
+        }
         if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
             return ah;
         }
@@ -5658,6 +5751,13 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             if (trailers) {
                 cx.trailers = trailers;
             }
+            # the handleRequest() of a handler of restricted code gets the request without its credentials
+            # (qore#7303)
+            if (handlerCodeIsRestricted()) {
+                hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr);
+                return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(filtered.cx, filtered.hdr,
+                    msg_body));
+            }
             return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
@@ -5717,6 +5817,190 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             handoff = new HttpRequestHandoff(cx, hdr, trailer_keep);
         }
         return rv;
+    }
+
+    #! Returns @ref True if the code of this handler is restricted by a sandbox (qore#7303)
+    /** The calling code is restricted (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"),
+        or the class of the handler is of a restricted %Program
+        (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"); fails
+        closed.  The server then gives the handler's own methods the request without its credentials (see
+        withholdCredentialsForDispatch())
+
+        @since HttpServerUtil 1.6
+    */
+    final bool handlerCodeIsRestricted() {
+        try {
+            return SandboxManager::isRestricted() || SandboxManager::isFromRestrictedProgram(self);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Returns @ref True if the class of this handler is of a restricted %Program (qore#7303)
+    /** (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"); fails
+        closed.  The server authenticates the requests of such a handler with its trusted authenticator first (see
+        authenticateRestrictedRequest())
+
+        @since HttpServerUtil 1.6
+    */
+    final bool handlerClassIsRestricted() {
+        try {
+            return SandboxManager::isFromRestrictedProgram(self);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Authenticates a request of a handler whose class is of a restricted %Program (qore#7303)
+    /** The server calls it for such a handler (see handlerClassIsRestricted()) instead of the handler's
+        authenticateRequest(): the authenticator of the handler (@ref auth), if its class is not of a restricted
+        %Program (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()",
+        failing closed), authenticates the raw request first, consuming its credentials and adding its context keys;
+        then the handler's own authenticateRequest() is called with the request without its credentials and without
+        what the authenticator added that is not among its platform context keys (see
+        withholdCredentialsForDispatch()), and does not authenticate the request again in the authenticateRequest() of
+        this class.  The changes that the handler's code makes to its copy of the context are taken over, and the
+        credentials of the raw request are kept in \a cx.  An authenticator of restricted code gets the request
+        without its credentials in authenticateRequest(), as the handler's own code does.
+
+        The mark of the authenticated request exists only while this method calls the handler's authenticateRequest(),
+        so no other code can keep it.  Calling it with other request header fields than those of a request gives
+        nothing that sending such a request does not give, so it is not restricted.
+
+        @param listener the listener
+        @param hdr the raw request header fields
+        @param cx the raw request context, which the authenticator and the handler change
+        @param changes set to the keys of \a cx that the trusted authenticator added (\c added) and the values before
+        the authentication of those that it changed (\c changed), other than the keys of the request context that the
+        request filter gives and the authenticator's platform context keys, for withholdCredentialsForDispatch()
+
+        @return the response of a failed authentication, if any
+
+        @since HttpServerUtil 1.6
+    */
+    final *hash<HttpResponseInfo> authenticateRestrictedRequest(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<*hash<auto>> changes) {
+        *HttpPlatformAuthentication mark;
+        on_exit delete mark;
+        bool trusted;
+        if (auth) {
+            try {
+                trusted = !SandboxManager::isFromRestrictedProgram(auth);
+            } catch (hash<ExceptionInfo> ex) {
+                trusted = False;
+            }
+        }
+        if (trusted) {
+            if (*hash<HttpResponseInfo> ah = authenticateTrusted(listener, hdr, \cx, \changes)) {
+                return ah;
+            }
+            mark = new HttpPlatformAuthentication(self, cx);
+        }
+        # the handler's own code gets the request without its credentials
+        hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr, changes);
+        hash<auto> fcx = filtered.cx;
+        *hash<HttpResponseInfo> ah = authenticateRequest(listener, filtered.hdr, \fcx);
+        cx = HttpPlatformAuthentication::merge(cx, filtered.cx, fcx);
+        return ah;
+    }
+
+    #! Authenticates the raw request with the handler's trusted authenticator; returns the response of a failure
+    private:internal *hash<HttpResponseInfo> authenticateTrusted(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<*hash<auto>> changes) {
+        hash<auto> before = cx;
+        if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
+            return ah;
+        }
+        # the keys that the handler's code gets: those that the request filter gives and the platform's keys
+        hash<string, bool> kept = map {$1: True}, AbstractStreamRequest::ContextKeys;
+        try {
+            map kept{$1} = True, auth.getPlatformContextKeys();
+        } catch (hash<ExceptionInfo> ex) {
+            # fails closed: none of the authenticator's keys is kept
+        }
+        hash<auto> ch = {"added": (), "changed": {}};
+        foreach hash<auto> i in (cx.pairIterator()) {
+            if (kept{i.key}) {
+                continue;
+            }
+            if (!before.hasKey(i.key)) {
+                push ch.added, i.key;
+            } else if (before{i.key} !== i.value) {
+                ch.changed{i.key} = before{i.key};
+            }
+        }
+        changes = ch;
+        if (exists cx.user) {
+            listener.log("Handler %y: authenticated request with user %y", cx.handler_name, cx.user);
+        } else {
+            listener.log("Handler %y: authenticated request without a user context", cx.handler_name);
+        }
+    }
+
+    #! Returns the request without its credentials for the handler's own code (qore#7303)
+    /** The server gives the handleRequest() of a handler of restricted code (see filtersRequestsFor()) the request
+        without its credentials, as the request filter withholds them (see
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()", with the
+        options of this handler): the credential header fields (also in \c cx.hdr), the credential trailer fields,
+        those of the raw header fields and of the request URI in \c cx."header-info", the user information of the URL
+        and the credential query parameters of the paths, and the raw \c Authorization value (\c cx.auth).  The rest of
+        the context is the handler's, as before: the socket and the stream of its request, its own thread context
+        (\c cx.uctx); the code that the handler dispatches the request to gets it filtered further by the code of this
+        class (see withholdRequestCredentials()).
+
+        It returns only a copy of the request that it is given, so it is not restricted.
+
+        The keys of the context that the handler's trusted authenticator added or changed when it authenticated the
+        raw request (see authenticateRestrictedRequest()), other than the keys of the request context that the filter gives and
+        the authenticator's platform context keys
+        (@ref HttpServer::AbstractAuthenticator::getPlatformContextKeys() "AbstractAuthenticator::getPlatformContextKeys()"),
+        such as the platform's session token, are withheld as well: an added key is removed, a changed key gets its
+        value from before the authentication.
+
+        @param cx the raw request context
+        @param hdr the raw request header fields
+        @param platform_changes the keys that the handler's trusted authenticator added (\c added) and the values
+        before the authentication of those that it changed (\c changed), as authenticateRestrictedRequest() returns them in its
+        \a changes argument
+
+        @return the request without its credentials; \c withheld lists what was withheld
+
+        @since HttpServerUtil 1.6
+    */
+    final hash<HttpFilteredRequestInfo> withholdCredentialsForDispatch(hash<auto> cx, hash<auto> hdr,
+            *hash<auto> platform_changes) {
+        hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, hdr);
+        # the raw Authorization value
+        hash<auto> rcx = cx - "auth";
+        # the parts of the context that hold the credentials of the request, as the filter has them
+        foreach string key in ("hdr", "trailers", "masked_path", "orig_path", "raw_path", "url") {
+            if (filtered.cx.hasKey(key)) {
+                rcx{key} = filtered.cx{key};
+            } else {
+                remove rcx{key};
+            }
+        }
+        if (cx."header-info".typeCode() == NT_HASH) {
+            hash<auto> info = cx."header-info";
+            foreach string key in ("headers-raw", "request-uri") {
+                if (filtered.cx."header-info".hasKey(key)) {
+                    info{key} = filtered.cx."header-info"{key};
+                } else {
+                    remove info{key};
+                }
+            }
+            rcx."header-info" = info;
+        }
+        # what the handler's trusted authenticator added or changed and is not given to the handler's code
+        foreach string key in (platform_changes.added) {
+            remove rcx{key};
+        }
+        map rcx{$1.key} = $1.value, platform_changes.changed.pairIterator();
+        return <HttpFilteredRequestInfo>{
+            "cx": rcx,
+            "hdr": filtered.hdr,
+            "withheld": filtered.withheld,
+        };
     }
 
     #! Returns the request filtered with the options of this handler (its authenticator and

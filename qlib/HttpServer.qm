@@ -5504,9 +5504,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
             }
 
+            # the methods of a handler of restricted code get the request without its credentials (qore#7303)
+            bool restricted_handler = handler && handler.handlerCodeIsRestricted();
+
             if (handler && http_get_field(hdr, "expect")) {
                 if (http_get_field(hdr, "expect") == "100-continue") {
-                    hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
+                    hash<HttpResponseInfo> resp = restricted_handler
+                        ? handler.handleExpectHeader(handler.withholdCredentialsForDispatch(cx, hdr).cx,
+                            handler.withholdCredentialsForDispatch(cx, hdr).hdr)
+                        : handler.handleExpectHeader(cx, hdr);
                     # 100-continue is an intermediate response that must be sent directly on the
                     # socket before the client sends the body.  Do NOT route through sendReply()
                     # or doResponse() because those capture to async_response_out, which would
@@ -5550,7 +5556,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # Check if handler wants body streaming (bidi) for HTTP/2 or HTTP/3
             bool want_streaming = cx."header-info".body_streaming
                 && handler
-                && handler.wantsBodyStreaming(cx, hdr);
+                && http_handler_wants_body_streaming(handler, restricted_handler, cx, hdr);
 
             # an HTTP/1.x body with a Content-Length that a stream handler wants as a stream (qore#7308): decided
             # here, on the handler thread, also for a body that the server read before the request was dispatched,
@@ -5562,7 +5568,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler.stream
                 && !http_get_field(hdr, "transfer-encoding")
                 && http_parse_content_length(http_get_field(hdr, "content-length")) > 0
-                && handler.wantsBodyStreaming(cx, hdr);
+                && http_handler_wants_body_streaming(handler, restricted_handler, cx, hdr);
 
             # the request body, read in a method of its own so that its locals and early returns are not part of the
             # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
@@ -5608,12 +5614,26 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # stream that it is sent on, the socket given to an SSE or WebSocket connection) depend only on the
                 # server's own values, also if the handler keeps the reference (qore#6953)
                 hash<auto> handler_cx = cx;
+                # what the handler's trusted authenticator added to the context and the handler's code does not get
+                # (qore#7303)
+                *hash<auto> platform_changes;
 
                 # preform any pre-processing on the request that can aid in authentication and has to be performed to
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.preprocessRequest(hview, \hdr, \handler_cx);
+                    if (restricted_handler) {
+                        # a copy without the credentials of the request, whose changes are taken over
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(handler_cx,
+                            hdr);
+                        hash<auto> fhdr = filtered.hdr;
+                        hash<auto> fcx = filtered.cx;
+                        ah = handler.preprocessRequest(hview, \fhdr, \fcx);
+                        hdr = http_merge_handler_changes(hdr, filtered.hdr, fhdr);
+                        handler_cx = http_merge_handler_changes(handler_cx, filtered.cx, fcx);
+                    } else {
+                        ah = handler.preprocessRequest(hview, \hdr, \handler_cx);
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
@@ -5631,7 +5651,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        ah = handler.authenticateRequest(hview, hdr, \handler_cx);
+                        if (restricted_handler && handler.handlerClassIsRestricted()) {
+                            # the handler's trusted authenticator consumes the credentials of the raw request; the
+                            # code of the handler gets the request without them (qore#7303); a handler of a trusted
+                            # class that serves a request for restricted code authenticates it itself, as before
+                            ah = handler.authenticateRestrictedRequest(hview, hdr, \handler_cx, \platform_changes);
+                        } else {
+                            ah = handler.authenticateRequest(hview, hdr, \handler_cx);
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         # log the error
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
@@ -5688,8 +5715,23 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # the socket that the handler gets (qore#6953); that of an HTTP/1.1 request ends when the
                     # handler's code returns, before the server sends the response and reads the next request on the
                     # connection (qore#7305)
-                    hash<auto!> hrv = handler.handleRequest(hview,
-                        request_helper.handler_sock ?? http_handler_connection_socket(s), cx, hdr, body);
+                    # a handler whose class is of a restricted Program, which trusted code serves the request to, gets
+                    # the request without its credentials (fails closed); the rest of its context is its own, as
+                    # before.  The code of the handler's base class filters what it dispatches to restricted code in
+                    # the other cases: a trusted handler that asks for it, and a request that is served for restricted
+                    # code (of a server that restricted code runs, or of a listener that was added for it), which is
+                    # that code's own (qore#7303)
+                    hash<auto!> hrv;
+                    if (restricted_handler) {
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                            platform_changes);
+                        hrv = handler.handleRequest(hview,
+                            request_helper.handler_sock ?? http_handler_connection_socket(s), filtered.cx,
+                            filtered.hdr, body);
+                    } else {
+                        hrv = handler.handleRequest(hview,
+                            request_helper.handler_sock ?? http_handler_connection_socket(s), cx, hdr, body);
+                    }
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
@@ -7905,7 +7947,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     hash<HttpServerAsyncIo::HttpRequestResultInfo> processInlineRequest(Socket sock, hash<auto> cx,
             hash<auto> hdr, AbstractHttpRequestHandler handler, hash<auto> header_info) {
         try {
-            hash<HttpResponseInfo> resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            # a handler of restricted code gets the request without its credentials (qore#7303)
+            hash<HttpResponseInfo> resp;
+            if (handler.handlerCodeIsRestricted()) {
+                hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr);
+                resp = handler.handleInlineRequest(filtered.cx, filtered.hdr, NOTHING);
+            } else {
+                resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            }
             # the handler released the last reference to the server, whose stop closed the connections: the request
             # has no response to give (qore#6508)
             if (!serv) {
@@ -10512,6 +10561,39 @@ Socket sub http_connection_alias(Socket s) {
     return s.isServerOwned() ? s.getServerAlias() : s;
 }
 
+#! Returns the handler's wantsBodyStreaming(), with the request without its credentials for a handler of restricted
+#! code (qore#7303)
+bool sub http_handler_wants_body_streaming(AbstractHttpRequestHandler handler, bool restricted, hash<auto> cx,
+        hash<auto> hdr) {
+    if (restricted) {
+        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr);
+        return handler.wantsBodyStreaming(filtered.cx, filtered.hdr);
+    }
+    return handler.wantsBodyStreaming(cx, hdr);
+}
+
+#! Returns the raw value with the changes that a handler made to its copy without the credentials of the request
+/** A key whose value the handler did not change keeps its raw value (with the credentials), a key that the handler
+    changed or added gets the handler's value, a key that the handler removed is removed, and a key that the copy
+    did not have (a credential that was withheld) keeps its raw value (qore#7303)
+
+    @param raw the raw value
+    @param filtered the copy that the handler got
+    @param changed the copy after the handler's code
+*/
+hash<auto> sub http_merge_handler_changes(hash<auto> raw, hash<auto> filtered, hash<auto> changed) {
+    hash<auto> rv = {};
+    foreach string key in (keys changed) {
+        rv{key} = (filtered.hasKey(key) && changed{key} === filtered{key}) ? raw{key} : changed{key};
+    }
+    foreach string key in (keys raw) {
+        if (!filtered.hasKey(key)) {
+            rv{key} = raw{key};
+        }
+    }
+    return rv;
+}
+
 #! Returns the socket of a connection that handler code gets: the connection socket for the server's alias of it
 /** The server does its own I/O on a connection through the alias of its socket (Socket::getServerAlias()); handler
     code gets the connection socket, which sandboxed code may not use (qore#7338)
@@ -12767,7 +12849,10 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         }
         HttpListener listener = cast<HttpListener>(info.listener);
         *AbstractHttpRequestHandler handler = listener.findHandlerForInlineCheck(info.hdr);
-        if (!handler || !handler.canHandleInline(info.cx, info.hdr)) {
+        if (!handler || !(handler.handlerCodeIsRestricted()
+                ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
+                    handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
+                : handler.canHandleInline(info.cx, info.hdr))) {
             return NOTHING;
         }
         return listener.processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);

@@ -126,10 +126,12 @@ public class GrpcProtocolAdapter {
             }
         }
 
-        # Extract metadata
+        # Extract metadata: restricted code gets it without the credentials of the request (qore#7303)
         hash<auto> metadata();
         map metadata{$1.key} = $1.value,
-            http_get_fields(hdr).pairIterator(),
+            http_get_fields(ConnectHandler::methodIsRestricted(method_info)
+                ? AbstractStreamRequest::filterRequest(cx, hdr, <HttpRequestFilterOptions>{}).hdr
+                : hdr).pairIterator(),
             $1.key !~ /^:/ && $1.key != "content-type" && $1.key != "te"
                 && $1.key != "grpc-timeout";
 
@@ -210,10 +212,12 @@ public class GrpcProtocolAdapter {
     static hash<HttpResponseInfo> handleGrpcWebRequest(Socket s, hash<auto> cx,
             hash<auto> hdr, *data body, hash<ConnectServerMethodInfo> method_info,
             AbstractConnectCodec codec) {
-        # Extract metadata
+        # Extract metadata: restricted code gets it without the credentials of the request (qore#7303)
         hash<auto> metadata();
         map metadata{$1.key} = $1.value,
-            http_get_fields(hdr).pairIterator(),
+            http_get_fields(ConnectHandler::methodIsRestricted(method_info)
+                ? AbstractStreamRequest::filterRequest(cx, hdr, <HttpRequestFilterOptions>{}).hdr
+                : hdr).pairIterator(),
             $1.key !~ /^:/ && $1.key != "content-type" && $1.key != "te";
 
         # Unframe the gRPC request, then call the handler; a request that cannot be decoded is answered with a gRPC

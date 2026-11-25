@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IsCodeFromRestrictedProgramTest
+
+#! Verifies SandboxManager::isCodeFromRestrictedProgram() (qore#7303)
+/** The method tells whether a sandbox that does not trust its code governs the code of a closure or call reference:
+    the Program whose code a call runs (the closure's, the class's of the method that a method reference calls, the
+    function's), or the code that created the reference; a sandbox that allows uncontrolled APIs does not make the code
+    restricted.  It is evaluated at each call
+*/
+class IsCodeFromRestrictedProgramTest inherits QUnit::Test {
+    public {
+        const Source = "%modern
+class Made {
+    string m() {
+        return \"m\";
+    }
+}
+string sub f() {
+    return \"f\";
+}
+code sub closure() {
+    return string sub () { return \"c\"; };
+}
+code sub method_ref() {
+    Made made();
+    return \\made.m();
+}
+code sub function_ref() {
+    return \\f();
+}
+code sub builtin_ref() {
+    return \\strlen();
+}
+code sub pass(code c) {
+    return c;
+}
+";
+    }
+
+    constructor() : Test("SandboxManager::isCodeFromRestrictedProgram()", "1.0", \ARGV) {
+        addTestCase("trusted code", \trustedTest());
+        addTestCase("a sandbox that allows everything", \permissiveTest());
+        addTestCase("a sandbox that does not trust its code", \restrictedTest());
+        addTestCase("a policy changed at run time", \laterTest());
+        set_return_value(main());
+    }
+
+    #! returns a Program with the test's source and the given sandbox
+    private Program getProgram(*SandboxManager sm) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(Source, "code");
+        return p;
+    }
+
+    #! returns a sandbox that allows everything, also uncontrolled APIs
+    private SandboxManager permissive() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    #! checks each kind of callable of the given Program
+    private checkAll(Program p, bool expect, string what) {
+        foreach string f in ("closure", "method_ref", "function_ref", "builtin_ref") {
+            assertEq(expect, SandboxManager::isCodeFromRestrictedProgram(p.callFunction(f)), what + ": " + f);
+        }
+    }
+
+    trustedTest() {
+        assertFalse(SandboxManager::isCodeFromRestrictedProgram(sub () {}), "the test's own closure");
+        assertFalse(SandboxManager::isCodeFromRestrictedProgram(\strlen()), "a builtin function reference");
+        checkAll(getProgram(), False, "a trusted Program");
+    }
+
+    permissiveTest() {
+        Program p = getProgram(permissive());
+        checkAll(p, False, "a sandbox that allows everything");
+        # the code that a sandbox governs, but that it trusts
+        assertTrue(p.callFunction("closure").typeCode() == NT_CLOSURE, "a closure of the sandboxed Program");
+    }
+
+    restrictedTest() {
+        # the default sandbox refuses uncontrolled APIs
+        Program p = getProgram(new SandboxManager());
+        checkAll(p, True, "a sandbox that does not trust its code");
+        # a closure of trusted code that the restricted code hands back is the trusted code's
+        code trusted = sub () {};
+        assertFalse(SandboxManager::isCodeFromRestrictedProgram(p.callFunction("pass", trusted)),
+            "trusted code handed back by restricted code");
+        # a sandbox that allows all I/O but does not trust its code
+        SandboxManager io();
+        io.setFilesystemDefaultPolicy(True);
+        io.setNetworkDefaultPolicy(True);
+        checkAll(getProgram(io), True, "a sandbox that allows all I/O");
+        # a sandbox that trusts its code but restricts its I/O
+        SandboxManager trusted_io();
+        trusted_io.setUncontrolledApiPolicy(True);
+        checkAll(getProgram(trusted_io), False, "a sandbox that trusts its code");
+    }
+
+    laterTest() {
+        SandboxManager sm = permissive();
+        Program p = getProgram(sm);
+        code c = p.callFunction("closure");
+        code m = p.callFunction("method_ref");
+        assertFalse(SandboxManager::isCodeFromRestrictedProgram(c), "closure, allowed");
+        # a policy tightened after the reference was created
+        sm.setUncontrolledApiPolicy(False);
+        assertTrue(SandboxManager::isCodeFromRestrictedProgram(c), "closure, tightened");
+        assertTrue(SandboxManager::isCodeFromRestrictedProgram(m), "method reference, tightened");
+        # and loosened again
+        sm.setUncontrolledApiPolicy(True);
+        assertFalse(SandboxManager::isCodeFromRestrictedProgram(c), "closure, loosened");
+    }
+}
