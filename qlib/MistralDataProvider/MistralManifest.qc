@@ -8545,11 +8545,11 @@ public class MistralManifest {
                         "allowed_values": (
                             <AllowedValueInfo>{
                                 "value": "asc",
-                                "display_name": "Asc",
+                                "display_name": "Ascending",
                             },
                             <AllowedValueInfo>{
                                 "value": "desc",
-                                "display_name": "Desc",
+                                "display_name": "Descending",
                             },
                         ),
                     },
@@ -9113,39 +9113,39 @@ public class MistralManifest {
                         "allowed_values": (
                             <AllowedValueInfo>{
                                 "value": "en",
-                                "display_name": "En",
+                                "display_name": "English",
                             },
                             <AllowedValueInfo>{
                                 "value": "fr",
-                                "display_name": "Fr",
+                                "display_name": "French",
                             },
                             <AllowedValueInfo>{
                                 "value": "es",
-                                "display_name": "Es",
+                                "display_name": "Spanish",
                             },
                             <AllowedValueInfo>{
                                 "value": "de",
-                                "display_name": "De",
+                                "display_name": "German",
                             },
                             <AllowedValueInfo>{
                                 "value": "it",
-                                "display_name": "It",
+                                "display_name": "Italian",
                             },
                             <AllowedValueInfo>{
                                 "value": "pt_br",
-                                "display_name": "Pt Br",
+                                "display_name": "Brazilian Portuguese",
                             },
                             <AllowedValueInfo>{
                                 "value": "pl",
-                                "display_name": "Pl",
+                                "display_name": "Polish",
                             },
                             <AllowedValueInfo>{
                                 "value": "ar",
-                                "display_name": "Ar",
+                                "display_name": "Arabic",
                             },
                             <AllowedValueInfo>{
                                 "value": "nl",
-                                "display_name": "Nl",
+                                "display_name": "Dutch",
                             },
                         ),
                     },
@@ -9198,7 +9198,7 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "github",
-                                "display_name": "Github",
+                                "display_name": "GitHub",
                             },
                             <AllowedValueInfo>{
                                 "value": "notion",
@@ -9222,7 +9222,7 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "whatsapp",
-                                "display_name": "Whatsapp",
+                                "display_name": "WhatsApp",
                             },
                             <AllowedValueInfo>{
                                 "value": "custom",
@@ -9276,11 +9276,11 @@ public class MistralManifest {
                         "allowed_values": (
                             <AllowedValueInfo>{
                                 "value": "sha256",
-                                "display_name": "Sha256",
+                                "display_name": "SHA-256",
                             },
                             <AllowedValueInfo>{
                                 "value": "sha1",
-                                "display_name": "Sha1",
+                                "display_name": "SHA-1",
                             },
                         ),
                     },
@@ -9312,7 +9312,7 @@ public class MistralManifest {
                         "allowed_values": (
                             <AllowedValueInfo>{
                                 "value": "hex",
-                                "display_name": "Hex",
+                                "display_name": "Hexadecimal",
                             },
                             <AllowedValueInfo>{
                                 "value": "base64",
@@ -9584,19 +9584,19 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "1min",
-                                "display_name": "1min",
+                                "display_name": "1 Minute",
                             },
                             <AllowedValueInfo>{
                                 "value": "5min",
-                                "display_name": "5min",
+                                "display_name": "5 Minutes",
                             },
                             <AllowedValueInfo>{
                                 "value": "15min",
-                                "display_name": "15min",
+                                "display_name": "15 Minutes",
                             },
                             <AllowedValueInfo>{
                                 "value": "30min",
-                                "display_name": "30min",
+                                "display_name": "30 Minutes",
                             },
                             <AllowedValueInfo>{
                                 "value": "hour",
@@ -9604,7 +9604,7 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "4hours",
-                                "display_name": "4hours",
+                                "display_name": "4 Hours",
                             },
                             <AllowedValueInfo>{
                                 "value": "day",
@@ -9740,19 +9740,19 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "CHAT",
-                                "display_name": "CHAT",
+                                "display_name": "Chat",
                             },
                             <AllowedValueInfo>{
                                 "value": "ON_PREMISE",
-                                "display_name": "ON PREMISE",
+                                "display_name": "On-Premises",
                             },
                             <AllowedValueInfo>{
                                 "value": "LICENSE",
-                                "display_name": "LICENSE",
+                                "display_name": "License",
                             },
                             <AllowedValueInfo>{
                                 "value": "MISTRAL_CODE",
-                                "display_name": "MISTRAL CODE",
+                                "display_name": "Mistral Code",
                             },
                         ),
                     },
@@ -9770,43 +9770,43 @@ public class MistralManifest {
                         "allowed_values": (
                             <AllowedValueInfo>{
                                 "value": "en",
-                                "display_name": "En",
+                                "display_name": "English",
                             },
                             <AllowedValueInfo>{
                                 "value": "fr",
-                                "display_name": "Fr",
+                                "display_name": "French",
                             },
                             <AllowedValueInfo>{
                                 "value": "es",
-                                "display_name": "Es",
+                                "display_name": "Spanish",
                             },
                             <AllowedValueInfo>{
                                 "value": "de",
-                                "display_name": "De",
+                                "display_name": "German",
                             },
                             <AllowedValueInfo>{
                                 "value": "it",
-                                "display_name": "It",
+                                "display_name": "Italian",
                             },
                             <AllowedValueInfo>{
                                 "value": "pt_br",
-                                "display_name": "Pt Br",
+                                "display_name": "Brazilian Portuguese",
                             },
                             <AllowedValueInfo>{
                                 "value": "pl",
-                                "display_name": "Pl",
+                                "display_name": "Polish",
                             },
                             <AllowedValueInfo>{
                                 "value": "ar",
-                                "display_name": "Ar",
+                                "display_name": "Arabic",
                             },
                             <AllowedValueInfo>{
                                 "value": "nl",
-                                "display_name": "Nl",
+                                "display_name": "Dutch",
                             },
                             <AllowedValueInfo>{
                                 "value": "ko",
-                                "display_name": "Ko",
+                                "display_name": "Korean",
                             },
                         ),
                     },
@@ -10256,11 +10256,11 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "us",
-                                "display_name": "Us",
+                                "display_name": "United States",
                             },
                             <AllowedValueInfo>{
                                 "value": "eu",
-                                "display_name": "Eu",
+                                "display_name": "European Union",
                             },
                         ),
                     },
@@ -10370,7 +10370,7 @@ public class MistralManifest {
                             },
                             <AllowedValueInfo>{
                                 "value": "vibe_code_cli_user",
-                                "display_name": "Vibe Code Cli User",
+                                "display_name": "Vibe Code CLI User",
                             },
                             <AllowedValueInfo>{
                                 "value": "cloud_user",
