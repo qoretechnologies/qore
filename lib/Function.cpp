@@ -10949,14 +10949,14 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
         struct ClosureObjectRef {
             QoreObject* obj = nullptr;
             ExceptionSink* xsink;
-            DLLLOCAL ClosureObjectRef(QoreObject* self, bool ref_obj, ExceptionSink* xsink) : xsink(xsink) {
+            ClosureObjectRef(QoreObject* self, bool ref_obj, ExceptionSink* xsink) : xsink(xsink) {
                 if (self && ref_obj && self != runtime_get_stack_object()
                         && qore_object_private::get(*self)->tryStartCall(xsink)) {
                     obj = self;
                 }
             }
             // released after the frame's helper is destroyed, as the helper releases its reference
-            DLLLOCAL ~ClosureObjectRef() {
+            ~ClosureObjectRef() {
                 if (obj) {
                     qore_object_private::get(*obj)->endCall(xsink);
                 }

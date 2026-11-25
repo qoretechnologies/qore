@@ -11337,6 +11337,7 @@ static int qore_ir_run_lvalue_path_ternary_round(const QoreIRLValuePathInstructi
                     lvh.removedValueThroughWeak(QoreValue(*removed_list));
                 }
             } else if (vt == NT_STRING) {
+                // note: safe; lvh.ensureUnique() above materializes any inline short string
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                 if (length_val.isNothing() && replacement_val.isNothing()) {
                     vs->splice(offset, xsink);
