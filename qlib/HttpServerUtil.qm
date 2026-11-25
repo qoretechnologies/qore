@@ -3030,7 +3030,7 @@ class HttpServerDispatchCapability {
         bool checked;
         #! a lock for the check
         Mutex lck();
-        #! resolves a path with the system policy (see check())
+        #! resolves the file of the loaded HttpServer module with the system policy (see check())
         *code resolve;
     }
 
@@ -3045,7 +3045,10 @@ class HttpServerDispatchCapability {
             # the check runs on the thread of the first request, which can be the thread of a listener that sandboxed
             # code added, whose filesystem policy is not this module's: the file of the loaded module is resolved
             # with the system policy, with a call made here, in the trusted initialization of the HttpServer module
-            resolve = SandboxManager::createSystemPolicyCall(string sub (string f) { return realpath(f); });
+            resolve = SandboxManager::createSystemPolicyCall(*string sub () {
+                *string filename = get_module_hash().HttpServer.filename;
+                return filename ? realpath(filename) : NOTHING;
+            });
         }
     }
 
@@ -3090,7 +3093,7 @@ class HttpServerDispatchCapability {
         *string rp;
         if (rec.filename) {
             try {
-                rp = resolve(rec.filename);
+                rp = resolve();
             } catch (hash<ExceptionInfo> ex) {
             }
         }

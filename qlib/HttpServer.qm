@@ -386,8 +386,10 @@ log("started listener on %s", lh.desc);
       after the response, so that the rest of the body cannot be taken for another request
       (<a href="https://github.com/qoretechnologies/qore/issues/7417">issue 7417</a>)
     - the handler of an HTTP/1.x request that is declared by sandboxed code, or that asks for it
-      (@ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"), gets a socket that
-      acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does, and code
+      (@ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"), or that serves a
+      request on a listener that sandboxed code added (whose threads the sandbox governs; issue #6843), gets a socket
+      that acts on the connection for its own request only, as the handler of an HTTP/2 or HTTP/3 request does (so a
+      socket handler's WebSocket upgrade there is served only through a WebSocketHandler with asynchronous I/O), and code
       that is not sandboxed aborts the connection with
       @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket;
       <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>); each send and read of that

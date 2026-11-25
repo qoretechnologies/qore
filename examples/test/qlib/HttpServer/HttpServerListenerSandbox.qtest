@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 and HTTP/2 over TLS connections to listeners that sandboxed code adds
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -33,6 +34,7 @@
 %requires QUnit
 %requires HttpServerUtil
 %requires HttpServer
+%requires HttpClientIo
 
 %exec-class HttpServerListenerSandboxTest
 
@@ -66,16 +68,73 @@ class SizeRequest inherits AbstractStreamRequest {
 
 #! a trusted stream handler
 class SizeHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the class of the socket that the code serving the last request got
+        *string socket_class;
+    }
+
     constructor() : AbstractHttpRequestHandler(NOTHING, True) {
     }
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
+        socket_class = s.className();
         return new SizeRequest(listener, self, s, cx, hdr, body);
     }
 }
 
 public class HttpServerListenerSandboxTest inherits QUnit::Test {
+    private {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
     constructor() : QUnit::Test("HttpServerListenerSandbox", "1.0") {
         addTestCase("listeners are governed by the caller's sandbox", \listenerSandboxTest());
         addTestCase("a listener that sandboxed code added serves the requests of trusted handlers",
@@ -104,9 +163,20 @@ int sub add_listener(object server, hash<auto> info) {
         HttpServer server(sub (string msg) {}, sub (string msg) {});
         on_exit server.stop();
         server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
-        server.setHandler("stream", "^stream", NOTHING, new SizeHandler());
+        SizeHandler stream_handler();
+        server.setHandler("stream", "^stream", NOTHING, stream_handler);
         int port = p.callFunction("add_listener", server, <HttpListenerOptionInfo>{"node": "127.0.0.1",
             "service": 0});
+        # a TLS listener that the sandboxed code adds, for HTTP/2
+        int tls_port = p.callFunction("add_listener", server, <HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": False,
+        });
+        # a listener that trusted code adds
+        int trusted_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         server.waitForAsyncIo();
 
         HTTPClient client({"url": "http://127.0.0.1:" + port});
@@ -120,6 +190,33 @@ int sub add_listener(object server, hash<auto> info) {
         resp = client.send("hello", "POST", "/stream", {"Content-Type": "text/plain"}, False, \info);
         assertEq(200, resp.status_code);
         assertEq("stream 5", resp.body);
+        # the code that serves it got a socket of its request, not the socket of the connection
+        assertNeq("Socket", stream_handler.socket_class);
+
+        # on the listener that trusted code added, the trusted handler gets the socket of the connection
+        HTTPClient trusted_client({"url": "http://127.0.0.1:" + trusted_port});
+        on_exit trusted_client.disconnect();
+        resp = trusted_client.send("hello", "POST", "/stream", {"Content-Type": "text/plain"}, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("Socket", stream_handler.socket_class);
+
+        # HTTP/2 on the listener that the sandboxed code added
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "max_connections_per_host": 1,
+        });
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d", tls_port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> h2 = stream.request("GET", "/plain", NOTHING, NOTHING, 30s);
+        assertEq(200, h2.status_code);
+        assertEq("plain", h2.body.typeCode() == NT_BINARY ? binary_to_string(h2.body) : h2.body);
+        stream = mgr.acquireStream(url);
+        h2 = stream.request("POST", "/stream", {"Content-Type": "text/plain"}, "hello", 30s);
+        assertEq(200, h2.status_code);
+        assertEq("stream 5", h2.body.typeCode() == NT_BINARY ? binary_to_string(h2.body) : h2.body);
+        assertNeq("Socket", stream_handler.socket_class);
     }
 
     listenerSandboxTest() {
