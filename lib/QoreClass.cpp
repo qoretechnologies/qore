@@ -13475,8 +13475,9 @@ QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodFunction::evalMethodImpl(Lexical
     if (check_self && qore_check_static_call_receiver(check_self, variant, mname, xsink)) {
         return QoreValue();
     }
-    // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
+    // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
+    // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
+    ObjectSubstitutionHelper osh(nullptr, cctx ? qore_given_class_ctx(cctx) : runtime_get_class());
     if constexpr (Lexical) return METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
     else return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
@@ -13510,8 +13511,9 @@ QoreValue StaticMethodFunction::evalMethodGivenArgs(ExceptionSink* xsink, Runtim
     if (*xsink) {
         return QoreValue();
     }
-    // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
+    // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
+    // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
+    ObjectSubstitutionHelper osh(nullptr, cctx ? qore_given_class_ctx(cctx) : runtime_get_class());
     return METHV_const(variant)->evalMethod(nullptr, ceh, xsink);
 }
 
@@ -13644,8 +13646,9 @@ static QoreValue eval_static_method_named(const StaticMethodFunction& f, Excepti
     if (check_self && qore_check_static_call_receiver(check_self, variant, f.getName(), xsink)) {
         return QoreValue();
     }
-    // issue #4964: set class ctx
-    ObjectSubstitutionHelper osh(nullptr, qore_given_class_ctx(cctx));
+    // issue #4964: set class ctx; a call that gives none (a variant resolved at run time) keeps the caller's, as
+    // CodeEvaluationHelper does, so that a builtin static method sees its caller's class context (qore#7146)
+    ObjectSubstitutionHelper osh(nullptr, cctx ? qore_given_class_ctx(cctx) : runtime_get_class());
     // a legacy AST call runs a builtin variant with its own semantic policy
     return policy.isDefault() ? METHV_const(variant)->evalMethod(nullptr, ceh, xsink)
         : METHV_const(variant)->evalLexicalMethod(nullptr, ceh, xsink);
