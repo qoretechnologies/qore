@@ -57,7 +57,7 @@ class SandboxTrustedPrivateAccessTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("SandboxTrustedPrivateAccessTest", "1.0", \ARGV) {
         # the driver is loaded in a child process, as the programs load it
-        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b -l sqlite3 -e 1",
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b -l sqlite3 -e 'exit(0);'",
             qore_bin));
         if (r.rc) {
             sqlite3_missing = sprintf("the sqlite3 driver cannot be loaded (%s): %y are not run",
