@@ -375,6 +375,10 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "scale": Type::Int,
             "default_value": Type::NothingType,
             "default_value_native": Type::Boolean,
+            "identity": Type::Boolean,
+            "identity_start": Type::Int,
+            "identity_increment": Type::Int,
+            "identity_generation": Type::String,
             "comment": Type::String,
             "notnull": Type::Boolean,
             "driver": Type::Hash,
@@ -1869,6 +1873,13 @@ list<auto> changes = source_table.getAlignSql(target);
             }
         }
 
+        # Oracle reports the index backing a primary key separately. Other databases create the index with
+        # the key and can reject a second object with the same name. Keep an independent index intact.
+        *string pk_index = desc.primary_key.driver.oracle.index;
+        if (pk_index && !inlist("oracle", drv) && pk_index == desc.primary_key.name
+                && desc.indexes{pk_index}.unique && desc.indexes{pk_index}.columns == desc.primary_key.columns) {
+            remove desc.indexes{pk_index};
+        }
         AbstractDatabase::checkDriverOptions(\desc.indexes, drv);
         AbstractDatabase::checkDriverOptions(\desc.primary_key, drv);
         AbstractDatabase::checkDriverOptions(\desc.unique_constraints, drv);
@@ -2186,10 +2197,7 @@ list l = table.getAddColumnSql("name", ("qore_type": Type::String, "size": 50), 
             throw "COLUMN-ERROR", sprintf("%s column %y: no native_type or qore_type keys in column option hash: %y",
                 getDesc(), cname, opt);
 
-        validateColumnOptions(cname, \opt, nullable);
-
-        # get the new column object
-        AbstractColumn c = addColumnImpl(cname, opt, nullable);
+        AbstractColumn c = makeColumn(cname, opt, nullable);
 
         # add column in table if the table is already known to be in the database
         lsql = c.getAddColumnSql(self);
@@ -2243,10 +2251,7 @@ table.modifyColumn("name", ("qore_type": Type::String, "size": 240), False);
         if (!opt.native_type && !opt.qore_type)
             throw "COLUMN-ERROR", sprintf("%s column %y: no native_type or qore_type keys in column option hash: %y", getDesc(), cname, opt);
 
-        validateColumnOptions(cname, \opt, nullable);
-
-        # get the new column object
-        AbstractColumn c = addColumnImpl(cname, opt, nullable);
+        AbstractColumn c = makeColumn(cname, opt, nullable);
 
         # add column in table if the table already exists in the DB
         execSql(lsql = columns{cname}.getModifySql(self, c));
@@ -2296,10 +2301,7 @@ list l = table.getModifyColumnSql("name", ("qore_type": Type::String, "size": 24
         if (!copt.native_type && !copt.qore_type)
             throw "COLUMN-ERROR", sprintf("%s column %y: no native_type or qore_type keys in column option hash: %y", getDesc(), cname, copt);
 
-        validateColumnOptions(cname, \copt, nullable);
-
-        # get the new column object
-        AbstractColumn c = addColumnImpl(cname, copt, nullable);
+        AbstractColumn c = makeColumn(cname, copt, nullable);
         # replaces the column in the internal column representation with the new definition
         on_success if (opt.sql_callback_executed)
             addColumnToTableUnlocked(c);
@@ -3852,6 +3854,37 @@ string sql = table.getDropTriggerSql("trig_mytable");
         checkUniqueConstraintName(err, cname);
         # validate options
         validateOptionsIntern(err, ropt, \opt);
+    }
+
+    # Build identity columns through the same factory for setup, add and modify.
+    private AbstractColumn makeColumn(string cname, hash<auto> opt, bool nullable) {
+        validateColumnOptions(cname, \opt, nullable);
+        if (!opt.identity) {
+            if (exists opt.identity_start || exists opt.identity_increment || exists opt.identity_generation) {
+                throw "COLUMN-ERROR", sprintf("column %y: identity options require identity", cname);
+            }
+            return addColumnImpl(cname, opt, nullable);
+        }
+        string driver = getDriverOptionKeys()[0];
+        if (exists opt.default_value && opt.default_value !== NULL) {
+            throw "COLUMN-ERROR", sprintf("identity column %y cannot also have a default", cname);
+        }
+        if (!inlist(driver, ("pgsql", "oracle", "mysql", "freetds", "firebird", "sqlite3"))) {
+            throw "UNSUPPORTED", sprintf("driver %y does not support identity columns", driver);
+        }
+        if (!inlist(opt.qore_type, (Type::Int, Type::Number)) || opt.scale) {
+            throw "COLUMN-ERROR", sprintf("identity column %y requires an integral column type", cname);
+        }
+        if (driver == "mysql") {
+            opt.auto_increment = True;
+        }
+        if (driver == "sqlite3") {
+            opt.native_type = "integer";
+        }
+        AbstractColumn c = addColumnImpl(cname, opt, False);
+        c.setIdentity(driver, opt.identity_start ?? 1, opt.identity_increment ?? 1,
+            opt.identity_generation ?? "by default");
+        return c;
     }
 
     #! validates column options

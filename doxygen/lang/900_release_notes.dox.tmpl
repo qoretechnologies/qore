@@ -2546,6 +2546,8 @@
     - @ref sqlutilintro "SqlUtil" module
       - @ref SqlUtil::AbstractTable::getSetLoggingSql() "table logging controls" support Oracle redo logging and
         PostgreSQL logged and unlogged tables (issue #2975)
+      - @ref sqlutil_identity_columns "identity columns" round-trip through schema descriptions and use the target
+        database's native auto-increment mechanism
       - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports sequence ownership and native type
         where the database provides them (<a href="https://github.com/qoretechnologies/qore/issues/7587">issue 7587</a>)
       - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
