@@ -513,6 +513,8 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::TakeHandedOverReturn, "TakeHandedOverReturn"     , true , false, false, OPCODE_MIN_OPERANDS(0), "Give a return the value that handlers run out of line past the inline cap handed over, if any", true , false, "ReturnStatement", true , false, false, false, false }, // 441
     { QoreIROpcode::ReleaseHandedOverReturn, "ReleaseHandedOverReturn"  , false, false, false, OPCODE_MIN_OPERANDS(0), "Release the value that handlers run out of line past the inline cap handed over, if any", true , true , "ReturnStatement", false, false, false, false, false }, // 442
     { QoreIROpcode::ReleasePlainLocalRead, "ReleasePlainLocalRead"  , false, false, false,  1, "Release an operator source read from a plain local", true , true , "ParseNode", false, false, false, false, false }, // 443
+    { QoreIROpcode::CopyCallArg, "CopyCallArg", false, false, false, 1, "Capture a call argument", true, false, "ParseNode", true, false, false, false, false }, // 444
+    { QoreIROpcode::ReleaseCallArgSource, "ReleaseCallArgSource", false, false, false, OPCODE_MIN_OPERANDS(1), "Release the source of an evaluated argument", true, false, "ParseNode", false, false, false, false, false }, // 445
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row
