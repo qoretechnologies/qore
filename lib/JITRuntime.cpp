@@ -7987,14 +7987,18 @@ static const AbstractQoreZoneInfo* qore_rt_resolve_date_zone(const char* zone_na
     // the zone of a date literal was loaded when the code was parsed (also from a zoneinfo path that the code's
     // %set-time-zone directive named): it is found by its name without access to a file
     if (*zone_name != '+' && *zone_name != '-') {
-        // a zoneinfo path in the literal of a restricted Program names only the Program's own zone: the global lookup
-        // would give it a zone that other code loaded from that path, without any check, and tell it that the path
-        // was loaded (qore#7566)
+        // a zoneinfo path in the literal of a restricted Program that names the Program's own zone (the path of its
+        // %set-time-zone directive, which its sandbox let it load) is that zone, not the zone that the name has in
+        // the global cache, which other code may have bound to another file at that path since (qore#7566); any
+        // other name is the zone of the literal when it was parsed (the Program's zone may have changed since), which
+        // the lookup below finds by its name as for any Program
         if (QoreTimeZoneManager::isPathName(zone_name)) {
             QoreProgram* pgm = getProgram();
             if (pgm && QoreTimeZoneManager::programRestricted(pgm)) {
                 const AbstractQoreZoneInfo* own = currentTZ();
-                return (own && !strcmp(AbstractQoreZoneInfo::getRegionName(own), zone_name)) ? own : nullptr;
+                if (own && !strcmp(AbstractQoreZoneInfo::getRegionName(own), zone_name)) {
+                    return own;
+                }
             }
         }
         if (const AbstractQoreZoneInfo* loaded = QTZM.findLoadedZone(zone_name)) {
