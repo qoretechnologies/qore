@@ -18,6 +18,66 @@ CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
 
 
 class UserModuleResourcesTest(unittest.TestCase):
+    def test_docs_fast_from_out_of_tree_build(self):
+        doxygen = shutil.which("doxygen")
+        qore = shutil.which(os.environ.get("QORE_BINARY", "qore"))
+        if not doxygen or not qore:
+            self.skipTest("Rendering a module requires Doxygen and Qore with the qdx modules")
+        with tempfile.TemporaryDirectory(prefix="qore-doc-assets-") as directory:
+            root = Path(directory)
+            source, build = root / "source tree", root / "separate build"
+            assets = source / "doxygen"
+            (assets / "qlib").mkdir(parents=True)
+            template = Path("qlib/Doxyfile.cmake.tmpl")
+            shutil.copyfile(ROOT / "doxygen" / template, assets / template)
+            for name in ("header_template.html", "footer_template.html", "dox_qore.css", "Qore-Q.ico",
+                         "qore-logo-55x151-white.png"):
+                shutil.copyfile(ROOT / "doxygen" / name, assets / name)
+            module = source / "qlib/DocFixture"
+            module.mkdir(parents=True)
+            (module / "DocFixture.qm").write_text('''module DocFixture {
+    version = "1.0";
+    desc = "Module documentation fixture";
+    author = "Qore";
+    url = "https://qore.org";
+    license = "MIT";
+}
+/** @mainpage Out-of-tree module documentation */
+''')
+            (module / "extra file.txt").write_text("module asset\n")
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(DocAssets NONE)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+set(QORE_BUILD_AOT_MODULES OFF)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE "{Path(doxygen).as_posix()}")
+set(QORE_QDX_COMMAND "{Path(qore).resolve().as_posix()}" "{ROOT.as_posix()}/doxygen/qdx")
+set(QORE_USER_MODULES_DIR share/qore-modules)
+foreach(target qore docs docs-lang docs-lib)
+    add_custom_target(${{target}})
+endforeach()
+qore_user_module("qlib/DocFixture" "extra file.txt")
+''')
+            env = os.environ.copy()
+            build_dir = Path(env.get("QORE_TEST_BUILD_DIR", Path(qore).resolve().parent))
+            module_dirs = [ROOT / "qlib", *sorted((build_dir / "modules").glob("*/"))]
+            if env.get("QORE_MODULE_DIR"):
+                module_dirs.extend(env["QORE_MODULE_DIR"].split(os.pathsep))
+            env["QORE_MODULE_DIR"] = os.pathsep.join(map(str, module_dirs))
+            for command in ([CMAKE, "-S", source, "-B", build],
+                            [CMAKE, "--build", build, "--target", "docs-fast-DocFixture"]):
+                result = subprocess.run(command, capture_output=True, text=True, timeout=90, env=env)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            html = build / "docs/modules/DocFixture/html"
+            page = (html / "index.html").read_text()
+            self.assertIn("Out-of-tree module documentation", page)
+            self.assertIn("custom footer", page)
+            self.assertIn("Qore-Q.ico", page)
+            for name in ("dox_qore.css", "Qore-Q.ico"):
+                self.assertEqual((assets / name).read_bytes(), (html / name).read_bytes())
+            self.assertEqual("module asset\n", (html / "extra file.txt").read_text())
+
     def test_build_time_configuration_and_reciprocal_links(self):
         doxygen = shutil.which("doxygen")
         if not doxygen:

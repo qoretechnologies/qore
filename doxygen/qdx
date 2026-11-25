@@ -159,13 +159,15 @@ class qdx {
             list<string> trg_list;
             foreach string file in (glob(src + DirSep + "*")) {
                 if (file =~ /\.qm$/ || file =~ /\.qc$/ || file =~ /\.ql$/) {
-                    file = sprintf("%s%s.dox.h", trg_dir, basename(file));
+                    file = sprintf('"%s%s.dox.h"', trg_dir, basename(file));
                     trg_list += file;
                 }
             }
 
             # replace target list for {input}
             trg = trg_list.join(" ");
+        } else {
+            trg = sprintf('"%s"', trg);
         }
 
         InputStreamLineIterator i(new FileInputStream(fn), NOTHING, NOTHING, False);
@@ -178,6 +180,10 @@ class qdx {
         while (i.next()) {
             string line = i.getValue();
 
+            # The line listing extra files also names an asset under the source root.
+            if (line =~ /{qore_src_dir}/) {
+                line = replace(line, "{qore_src_dir}", o.src_root);
+            }
             if (line =~ /{module}/)
                 line = replace(line, "{module}", name);
             else if (line =~ /{input}/)
@@ -188,12 +194,10 @@ class qdx {
                 line = replace(line, "{tags}", tags);
             else if (line =~ /{qore_version}/)
                 line = replace(line, "{qore_version}", QoreVer);
-            else if (line =~ /{qore_src_dir}/) {
-                line = replace(line, "{qore_src_dir}", o.src_root);
-            } else if (line =~ /{extra_files}/) {
+            else if (line =~ /{extra_files}/) {
                 string extra;
                 if (o.extra) {
-                    extra = (map sprintf("%s%s", o.extra_pfx, $1), o.extra).join(" ");
+                    extra = (map sprintf('"%s%s"', o.extra_pfx, $1), o.extra).join(" ");
                 }
                 line = replace(line, "{extra_files}", extra ?? "");
             }
