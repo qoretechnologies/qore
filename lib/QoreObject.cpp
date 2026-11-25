@@ -246,6 +246,9 @@ void qore_object_private::obliterateMembers(ExceptionSink* xsink) {
 
     // The caller retains ownership while recursive member references are released.
     status = OS_DELETED;
+    // detached with the lock held, as in doDeleteIntern()
+    KeyList* pd = privateData;
+    privateData = nullptr;
     cdmap_t* cdm = cdmap;
     cdmap = nullptr;
     QoreHashNode* td = data;
@@ -253,16 +256,25 @@ void qore_object_private::obliterateMembers(ExceptionSink* xsink) {
     removeInvalidateRSetIntern();
     sl.unlock();
 
-    cleanup(xsink, td, cdm);
+    cleanup(xsink, pd, td, cdm);
 }
 
-void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
-    if (privateData) {
-        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
-        privateData->derefAll(xsink);
-        delete privateData;
 #ifdef DEBUG
-        privateData = nullptr;
+std::atomic<qore_object_private::dbg_cleanup_t> qore_object_private::dbg_cleanup_hook{nullptr};
+#endif
+
+void qore_object_private::cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm) {
+    // the private data was detached from the object with its lock held, when the object was marked deleted: a thread
+    // that takes the lock later finds none, also while it is freed here
+    assert(!privateData);
+    if (pd) {
+        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, pd);
+        pd->derefAll(xsink);
+        delete pd;
+#ifdef DEBUG
+        if (dbg_cleanup_t hook = dbg_cleanup_hook.load(std::memory_order_acquire)) {
+            hook(*obj);
+        }
 #endif
     }
 
@@ -2566,6 +2578,7 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
     }
 
+    KeyList* pd;
     cdmap_t* cdm;
     QoreHashNode* td;
     {
@@ -2573,6 +2586,11 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         assert(status != OS_DELETED);
         assert(data);
         status = OS_DELETED;
+
+        // the private data is detached with the lock held: a thread that takes the lock once the object is marked
+        // deleted finds none, so it cannot use it while it is freed outside the lock
+        pd = privateData;
+        privateData = nullptr;
 
         cdm = cdmap;
         cdmap = nullptr;
@@ -2583,7 +2601,7 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         removeInvalidateRSetIntern();
     }
 
-    cleanup(xsink, td, cdm);
+    cleanup(xsink, pd, td, cdm);
 
     obj->deref(xsink);
 }
@@ -3765,10 +3783,12 @@ AbstractPrivateData* QoreObject::getAndClearPrivateData(qore_classid_t key, Exce
     QoreSafeVarRWWriteLocker sl(priv->rml);
 
     //printd(5, "QoreObject::getAndClearPrivateData this: %p, privateData: %p, key: %d, getkey: %p\n", this, priv->privateData, key, priv->privateData ? priv->privateData->getAndClearPtr(key): nullptr);
-    if (priv->privateData)
+    // a deleted object has no private data to give, also while it is freed (the caller raises OBJECT-ALREADY-DELETED)
+    if (priv->status != OS_DELETED && priv->privateData) {
         return priv->privateData->getAndClearPtr(key);
+    }
 
-    return 0;
+    return nullptr;
 }
 
 // called only during constructor execution, therefore no need for locking

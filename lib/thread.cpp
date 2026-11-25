@@ -95,6 +95,7 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#include "qore/intern/ql_debug.h"
 
 #include <string.h>
 
@@ -8685,6 +8686,12 @@ QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm,
         return nullptr;
     }
     QoreObject* o = const_cast<QoreObject*>(obj);
+#ifdef DEBUG
+    // tests hold the take-over here, after the binding of the arguments, to delete the object meanwhile
+    if (qore_dbg_program_take_over_hook_t hook = qore_dbg_program_take_over_hook.load(std::memory_order_acquire)) {
+        hook(*o, 2);
+    }
+#endif
     // the reference that the object held is the caller's now; held here until the object is deleted, so that it is
     // released if the deletion throws
     ReferenceHolder<QoreProgram> rv(reinterpret_cast<QoreProgram*>(o->getAndClearPrivateData(CID_PROGRAM, xsink)),
