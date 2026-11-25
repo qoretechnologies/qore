@@ -57,6 +57,15 @@ module ZohoInvoiceDataProvider {
                 "This integration supports invoices, recurring invoices, contacts, estimates, expenses, "
                 "recurring expenses, payments, projects, and items.",
             "scheme": "zohoinvoice",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "zohoapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://www.zoho.com/invoice/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": ZohoInvoiceLogo,
             "logo_file_name": "zohoinvoice-logo.svg",
             "logo_mime_type": MimeTypeSvg,

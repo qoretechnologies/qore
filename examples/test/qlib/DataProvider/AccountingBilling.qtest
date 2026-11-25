@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class AccountingBillingTest
+
+class AccountingBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Accounting provider billing") {
+        addVendor("Wave", "Wave", "waveapps.com", "unknown",
+            "https://www.waveapps.com/pricing");
+        addVendor("Xero", "Xero", "xero.com", "unknown",
+            "https://developer.xero.com/pricing");
+        addVendor("FreshBooks", "FreshBooks", "freshbooks.com", "subscription",
+            "https://www.freshbooks.com/pricing");
+        addVendor("Chargebee", "Chargebee", "chargebee.com", "unknown",
+            "https://www.chargebee.com/pricing/");
+        set_return_value(main());
+    }
+}

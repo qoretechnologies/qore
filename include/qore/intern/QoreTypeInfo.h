@@ -431,6 +431,37 @@ public:
     //! computes and caches the value returned by listElementTakesNothing()
     DLLLOCAL static bool listElementTakesNothingIntern(const QoreTypeInfo* lti);
 
+    //! returns true if checking a value against the type can bind a reference element (qore#7391)
+    /** True if the type is or contains, through list, softlist, hash and hashdecl member types and unions, a
+        reference type (reference<T>, *reference<T>), whose check binds a reference to an lvalue of a wider type; a
+        store whose target has such a type does not check its value with the target's lock held without a
+        QoreReferenceBindProbe.  Cached in the type: the normal path is one relaxed load and test of the cached byte
+        (see mayBindReferenceCached()), and a type with no type restriction ("auto", "any") caches 0 like any other
+        type that binds nothing.  A type that can bind, or whose byte is not known yet, is resolved out of line.
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool mayBindReference(const QoreTypeInfo* ti) {
+        if (!mayBindReferenceCached(ti)) [[likely]] {
+            return false;
+        }
+        return mayBindReferenceIntern(ti);
+    }
+
+    //! returns false if the type is known to bind no reference: one load and test of the cached byte (qore#7391)
+    /** Returns true if the type can bind a reference or if that is not known yet (the byte is -1 until the first
+        call of mayBindReference() for the type), so that the normal path costs a single test: a caller that finds true
+        calls mayBindReference() on its cold path for the answer
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool mayBindReferenceCached(const QoreTypeInfo* ti) {
+        return ti && ti->may_bind_reference_cache.load(std::memory_order_relaxed);
+    }
+
+    //! returns the value of mayBindReference() for a type whose cached byte is not 0: the byte if it is known (1),
+    //! otherwise it is computed and cached; out of line and cold
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static bool mayBindReferenceIntern(const QoreTypeInfo* ti);
+
+    //! returns true if \a ti can bind a reference; \a seen holds the types and hashdecls being walked
+    DLLLOCAL static bool mayBindReferenceWalk(const QoreTypeInfo* ti, std::vector<const void*>& seen);
+
     //! returns the list type whose element type is the or-nothing type of the element type of the complex list type
     //! \a lti (list<*int> for list<int>), or \a lti if its element type takes NOTHING; cached in the list type
     //! (qore#6435)
@@ -895,6 +926,12 @@ public:
         else
             str.sprintf("no value");
     }
+
+    //! Describes both types in a diagnostic, qualifying class names when their short forms collide.
+    DLLLOCAL static void describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right);
+    DLLLOCAL static bool diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right);
+    DLLLOCAL static std::string diagnosticTypePath(const QoreTypeInfo* ti);
 
     // static version of method, checking for null pointer; inlined explicitly: the fast path of the parameters of
     // every call, whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
@@ -1711,7 +1748,7 @@ protected:
             bool& may_not_match, bool& may_need_filter, bool& t_no_match, bool& ok, qore_type_result_e& max_result,
             bool known_initial_assignment);
 
-    DLLLOCAL static void getNodeType(QoreString& str, const QoreValue& n);
+    DLLLOCAL void describeTypeMismatch(QoreString& str, const QoreValue& n) const;
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name);
 
@@ -1751,6 +1788,8 @@ private:
     //! 1 if the walk of the declarations of the type is known to find none, otherwise 0 (not known yet or finds
     //! one); see namesNoDeclarations()
     mutable std::atomic<signed char> names_no_decl_cache {0};
+    //! whether checking a value against the type can bind a reference: -1 = not known yet; see mayBindReference()
+    mutable std::atomic<signed char> may_bind_reference_cache {-1};
     //! for a builtin type: the index of its or-nothing type + 1, otherwise 0; see getBuiltinOrNothingIndex()
     mutable uint16_t builtin_or_nothing_index = 0;
     //! for a complex list type: its list<*T> type; see getOrNothingListType()
@@ -3597,8 +3636,11 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    /** a reference leads to the closure-bound variable that it refers to, which can hold a reference back (qore#7329):
+        a variable of this type is not a leaf of the graph that the cycle collector walks
+    */
     DLLLOCAL virtual bool needsScanImpl() const {
-        return false;
+        return true;
     }
 };
 
@@ -3609,8 +3651,9 @@ public:
 
 protected:
     // returns true if this type could contain an object or a closure
+    // (a reference leads to the closure-bound variable that it refers to, see QoreReferenceTypeInfo)
     DLLLOCAL virtual bool needsScanImpl() const {
-        return false;
+        return true;
     }
 };
 
@@ -4892,10 +4935,12 @@ public:
     //! Constructor for explicit union types
     /** @param members the member types as declared (without duplicates)
     */
+    /** @param path the name with the paths of the member types (getPathImpl(), qore#7331)
+    */
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
-            const QoreString& name, type_vec_t members, bool or_nothing = false)
+            const QoreString& name, const QoreString& path, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
-            members(qore_orphanable_vec(members)) {
+            members(qore_orphanable_vec(members)), pname(path) {
         union_type = true;
     }
 
@@ -4940,9 +4985,17 @@ protected:
     //! compared by address only, and orphaned as the members are, so that the address of a freed declaration's type
     //! that a new type reuses is not taken for a member (issue #6419)
     orphanable_type_vec_t exact_members;
+    //! the name with the paths of the member types: the name has the names of the members, which are the same for
+    //! classes of the same name in different namespaces (qore#7331)
+    QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         concatName(str);
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        assert(!pname.empty());
+        return pname.c_str();
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise

@@ -376,7 +376,8 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::SetImplicitArgv, {G::Base}},
     {O::PopImplicitArg, {G::Base}},
     {O::PushImplicitElement, {G::Base}},
-    {O::PopImplicitElement, {G::Base}},
+    // with a second operand, the set of a foreach statement's next element (qore#7379)
+    {O::PopImplicitElement, {G::Base}, false, -1, 1, 2},
     {O::HashKeyAccess, {G::HashKeyAccess}, true},
     {O::HashKeyAccessInt, {G::HashKeyAccess}, true},
     {O::LoadSelfMember, {G::SelfMember}, true},
@@ -511,7 +512,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::UnwindTemps, {G::Base}},
     {O::CheckReturnValue, {G::Base, G::TypedBase}},
     {O::IteratorRelease, {G::Base}},
-    {O::ReleaseOwnedTemp, {G::Base}},
+    {O::ReleaseOwnedTemp, {G::Base, G::TypedBase}},
     {O::DebugStatement, {G::DebugStatement}},
     {O::ListSetCommonType, {G::Base, G::TypedBase}},
     {O::HashSetKeyValueFold, {G::Base}},
@@ -647,22 +648,6 @@ static std::string getAOTDateZoneName(const AbstractQoreZoneInfo* zone) {
 
     int utc_offset = AbstractQoreZoneInfo::getUTCOffset(zone);
     return utc_offset ? formatAOTDateOffset(utc_offset) : "UTC";
-}
-
-static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
-    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
-        return nullptr;
-    }
-
-    ExceptionSink xsink;
-    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
-        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
-        : QTZM.findLoadRegion(zone_name, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return nullptr;
-    }
-    return zone;
 }
 
 //! Returns the explicit type arguments of the call node of a call instruction read from serialized IR (qore#5865)
@@ -900,6 +885,11 @@ static std::unique_ptr<QoreIRInstruction> readTypedBase(
             return nullptr;
         }
     }
+    if (inst->opcode == QoreIROpcode::ReleaseOwnedTemp
+            && (inst->element_type != objectTypeInfo || operands.size() != 1)) {
+        ctx.error = "a typed ReleaseOwnedTemp requires object and one operand";
+        return nullptr;
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;
@@ -1050,8 +1040,19 @@ static std::unique_ptr<QoreIRInstruction> readConst(
                 ci->constant.rel_us = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
             } else {
                 const char* zone_name = ctx.reader.readStringRef(ctx.ptr);
-                if (zone_name && *zone_name) {
-                    ci->constant.date_zone = readAOTDateZone(zone_name);
+                if (!zone_name) {
+                    ctx.error = "invalid zone name in IR date literal";
+                    return nullptr;
+                }
+                if (*zone_name) {
+                    ExceptionSink xsink;
+                    ci->constant.date_zone = qore_aot_date_zone(zone_name, ctx.pgm, &xsink);
+                    if (xsink) {
+                        QoreStringValueHelper desc(xsink.getExceptionDesc());
+                        ctx.error = desc->c_str();
+                        xsink.clear();
+                        return nullptr;
+                    }
                     ci->constant.date_zone_set = true;
                 }
             }
@@ -1599,6 +1600,8 @@ static bool writeBackground(AOTInstWriteCtx& ctx) {
             return false;
         }
         ctx.writer.writeU8(bi->helper_uses_self);
+        // the callee of the expression (QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION, qore#7087)
+        ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_callee));
         ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_params.size()));
         for (LocalVar* lv : bi->helper_params) {
             auto i = bi->helper_ir->local_var_slots.find(lv);
@@ -1626,6 +1629,7 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     std::unique_ptr<QoreIRFunction> helper_ir;
     std::vector<LocalVar*> helper_params;
     QoreBackgroundHelperSelf helper_uses_self = QBHS_NONE;
+    int helper_callee = QBH_CALLEE_UNKNOWN;
     if (kind == QoreIRBackgroundKind::Helper) {
         uint8_t self_mode = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (self_mode > QBHS_HELD) {
@@ -1633,9 +1637,17 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
             return nullptr;
         }
         helper_uses_self = static_cast<QoreBackgroundHelperSelf>(self_mode);
+        // the callee of the expression (QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION, qore#7087)
+        helper_callee = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
         uint32_t num_params = QoreAOTBinaryReader::readU32(ctx.ptr);
         if (num_params != operands.size()) {
             ctx.error = "background helper parameter count differs from its operand count";
+            return nullptr;
+        }
+        // the callee is a parameter's index, QBH_CHECK_IN_THREAD or QBH_CALLEE_UNKNOWN
+        if (helper_callee < QBH_CHECK_IN_THREAD || (helper_callee >= 0
+                && static_cast<uint32_t>(helper_callee) >= num_params)) {
+            ctx.error = "invalid background helper callee " + std::to_string(helper_callee);
             return nullptr;
         }
         std::vector<uint32_t> param_slots;
@@ -1675,6 +1687,7 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     bi->helper_ir = std::move(helper_ir);
     bi->helper_params = std::move(helper_params);
     bi->helper_uses_self = helper_uses_self;
+    bi->helper_callee = helper_callee;
     bi->result = QoreIRValue(result_id);
     bi->operands = operands;
     bi->exception_target = exc_target;
@@ -1865,26 +1878,6 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
     return std::unique_ptr<QoreIRInstruction>(ci);
 }
 
-//! Returns a normal or static method of a class or of one of its base classes that is not committed yet, or nullptr
-static const QoreMethod* instRegistryFindPendingMethod(const qore_class_private& qcp, const char* method_name,
-        bool is_static) {
-    if (const QoreMethod* method = is_static ? qcp.parseFindLocalStaticMethod(method_name)
-            : qcp.parseFindLocalMethod(method_name)) {
-        return method;
-    }
-    if (qcp.scl) {
-        for (const BCNode* bc : *qcp.scl) {
-            if (bc && bc->sclass) {
-                if (const QoreMethod* method = instRegistryFindPendingMethod(*qore_class_private::get(*bc->sclass),
-                        method_name, is_static)) {
-                    return method;
-                }
-            }
-        }
-    }
-    return nullptr;
-}
-
 //! Returns the method of a direct method call, or nullptr if the class and its base classes have no such method
 /** A closure in a member initializer is read before the classes' methods are committed (see
     QoreAOTBinaryDeserializer::resolveTypesAndMembers()), and a method that is not committed yet is not found by name
@@ -1898,12 +1891,12 @@ static const QoreMethod* instRegistryFindDirectMethod(const QoreClass& qc, const
     if (const QoreMethod* method = qc.findStaticMethod(method_name)) {
         return method;
     }
-    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed
-    const qore_class_private& qcp = *qore_class_private::get(qc);
-    if (const QoreMethod* method = instRegistryFindPendingMethod(qcp, method_name, false)) {
+    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed; the
+    // hierarchy is walked without a recursion (qore#7553)
+    if (const QoreMethod* method = qore_aot_find_loading_method(&qc, method_name, false)) {
         return method;
     }
-    return instRegistryFindPendingMethod(qcp, method_name, true);
+    return qore_aot_find_loading_method(&qc, method_name, true);
 }
 
 // ============================================================================
@@ -4280,6 +4273,10 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
         step.slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
         const char* name = ctx.reader.readStringRef(ctx.ptr);
         step.name = name ? name : "";
+        // a constant hash key of an image is in UTF-8; the code uses it in the process encoding (qore#6840)
+        if (step.kind == LVPathStepKind::HashKeyConst) {
+            qore_aot_key_to_process_encoding(step.name);
+        }
         step.operand_idx = QoreAOTBinaryReader::readU32(ctx.ptr);
         // Slice steps: read the SSA id vector that writeLValuePath
         // serialized for HashKeySlice / ListIndexSlice / ListRangeSlice.

@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH2PumpIdle.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# An HTTP/2 connection whose response body the I/O thread sends from an InputStream, and whose stream cannot send
+# because the client grants no flow-control credit, waits without using the CPU (qoretechnologies/qore#7435).  The
+# client's withheld credit is simulated by holding the stream's data; the CPU time of the process is read from
+# /proc (Linux).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires FsUtil
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH2PumpIdleTest
+
+#! the time that the stream is held while the CPU time is measured
+const MeasureTime = 3s;
+
+#! responds with a body from a C++ InputStream, which the I/O thread sends, on a stream whose data is held
+class HeldBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! reports that the stream is held
+        Queue held();
+        #! a regular file to send from /limited
+        *string file_path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        int stream_id = cx."header-info".stream_id;
+        call_function("dbg_http2_hold_stream_data", stream_id);
+        InputStream is;
+        if (cx.raw_path == "/limited-memory") {
+            # a memory stream on a stream with its own send limit: a refused chunk is retained (qore#7460)
+            s.setHttp2StreamSendLimit(stream_id, 100000);
+            is = new BinaryInputStream(binary(strmul("x", 16 * 1024 * 1024)));
+        } else if (cx.raw_path == "/limited") {
+            # a stream with its own send limit, far below the default buffer, and a body that io_uring reads: a read
+            # that the limit refuses is retained until the buffer has room
+            s.setHttp2StreamSendLimit(stream_id, 100000);
+            is = new FileInputStream(file_path);
+        } else {
+            # far more than the stream's send buffer, so that the buffer is full while the stream is held; made before
+            # the measurement starts, which is slow under valgrind
+            is = new BinaryInputStream(binary(strmul("x", 16 * 1024 * 1024)));
+        }
+        held.push(True);
+        return AbstractHttpRequestHandler::makeResponse(200, is, {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class HttpServerH2PumpIdleTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerH2PumpIdle", "1.0") {
+        addTestCase("a pumped stream that cannot send leaves the I/O thread idle", \testIdle(), "/");
+        addTestCase("a pumped file on a stream with its own send limit leaves the I/O thread idle", \testIdle(),
+            "/limited");
+        addTestCase("a pumped memory stream on a stream with its own send limit leaves the I/O thread idle",
+            \testIdle(), "/limited-memory");
+        set_return_value(main());
+    }
+
+    #! returns the CPU time of the process in milliseconds
+    private int getCpuMs() {
+        list<string> f = (new ReadOnlyFile("/proc/self/stat")).read(-1).split(" ");
+        # utime and stime, in clock ticks, which are 10 ms on Linux
+        return (f[13].toInt() + f[14].toInt()) * 10;
+    }
+
+    testIdle(string path) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires a debug build");
+        }
+        if (!is_file("/proc/self/stat")) {
+            testSkip("requires /proc");
+        }
+        HeldBodyHandler h();
+        *TmpFile file;
+        if (path == "/limited") {
+            # the retained buffer that this case checks exists only on the io_uring path for regular files
+            if (!get_io_uring_debug_stats()) {
+                testSkip("requires io_uring");
+            }
+            file = new TmpFile("h2-pump-idle-");
+            file.file.write(binary(strmul("z", 16 * 1024 * 1024)));
+            h.file_path = file.path;
+        }
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("held", h);
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        hs.waitForAsyncIo();
+
+        # the CPU time of the server with no request, over the same time, as a baseline: a tool such as valgrind adds
+        # to it
+        int base_cpu;
+        {
+            int c = getCpuMs();
+            usleep(MeasureTime);
+            base_cpu = getCpuMs() - c;
+        }
+
+        Counter done(1);
+        # at the end, in this order: the release of the data, the stop of the server, which ends the client's request
+        # (the release itself does not wake the connection, as no frame comes from the client then), and the wait for
+        # the client
+        on_exit done.waitForZero(60s);
+        on_exit hs.stop();
+        background sub () {
+            on_exit done.dec();
+            try {
+                HTTPClient c({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False, "http_version": "2.0",
+                    "timeout": 60s});
+                on_exit c.disconnect();
+                c.send(NOTHING, "GET", path, NOTHING, False);
+            } catch (hash<ExceptionInfo> ex) {
+                # the server stops while the response is still held
+            }
+        }();
+        # the release lets the response end, so that the client and the server stop
+        on_exit call_function("dbg_http2_release_stream_data");
+
+        assertEq(True, h.held.get(30s), "the stream is held");
+        # the send buffer fills within this time
+        usleep(1s);
+        int start_cpu = getCpuMs();
+        int start = clock_get_monotonic_us();
+        usleep(MeasureTime);
+        int cpu = getCpuMs() - start_cpu;
+        int wall = (clock_get_monotonic_us() - start) / 1000;
+        # a spinning I/O thread uses nearly all of the time; a waiting one about as much as the idle server
+        assertLt(base_cpu + wall / 5, cpu, sprintf("CPU time while the stream cannot send: %d ms in %d ms (idle: %d "
+            "ms)", cpu, wall, base_cpu));
+    }
+}

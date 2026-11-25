@@ -1728,20 +1728,15 @@ static QoreValue read_expr_global_varref(AOTExprReadCtx& ctx) {
 
     `toStringRoundTrip()` is the right digit form rather than `toString()`: it is the shortest significand
     that reconstructs the source binary value when parsed at `getPrec()` bits, and it preserves signed zero.
-    It can fail, so the old form is kept as a fallback -- carrying the precision is what fixes the defect, and
-    that happens either way.
 */
 static bool write_expr_const_number(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         QoreString str;
-        ExceptionSink xsink;
-        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-            xsink.clear();
-            str.clear();
-            num->toString(str);
+        if (!qore_aot_format_number(*num, str)) {
+            return false;
         }
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         ctx.writer.writeStringRef(str.c_str());
         ctx.writer.writeU32(static_cast<uint32_t>(num->getPrec()));
         return true;
@@ -1915,7 +1910,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             QoreAOTValueLocalsHelper value_locals(ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals,
                 ctx.local_owner_pgm);
             std::string val_error;
-            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error, ctx.pgm);
             if (!val_error.empty() && default_error.empty()) {
                 // a closure without the default would run with another value
                 default_error = "closure parameter '" + param_names[p] + "' default: " + val_error;
@@ -2461,15 +2456,33 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
 
 // see QoreAOT.h
 const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static) {
-    const qore_class_private* qcp = qore_class_private::get(*qc);
-    const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
-    if (m) {
-        return m;
-    }
-    if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
-        for (const auto& i : *scl) {
-            if (i->sclass && (m = qore_aot_find_loading_method(i->sclass, name, is_static))) {
-                return m;
+    // the hierarchy is walked depth first, each class before its base classes and the base classes in their order,
+    // with a stack of its own instead of a recursion, as the depth of a hierarchy is not limited by the stack of the
+    // thread that loads it (qore#7553); a class reached through more than one path is searched once, as a second
+    // search could find nothing that the first one did not
+    typedef std::pair<BCList::const_iterator, BCList::const_iterator> base_range_t;
+    std::vector<base_range_t> bases;
+    std::unordered_set<const QoreClass*> visited;
+    while (qc) {
+        const qore_class_private* qcp = qore_class_private::get(*qc);
+        if (const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name)
+                : qcp->parseFindLocalMethod(name)) {
+            return m;
+        }
+        if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
+            bases.emplace_back(scl->begin(), scl->end());
+        }
+        // the next class is the first base class not searched yet of the most recently searched class that has one
+        qc = nullptr;
+        while (!qc && !bases.empty()) {
+            base_range_t& range = bases.back();
+            if (range.first == range.second) {
+                bases.pop_back();
+                continue;
+            }
+            const BCNode* bcn = *range.first++;
+            if (bcn && bcn->sclass && visited.insert(bcn->sclass).second) {
+                qc = bcn->sclass;
             }
         }
     }
@@ -4092,7 +4105,7 @@ static QoreValue read_expr_const_value(AOTExprReadCtx& ctx) {
     QoreValue rv;
     {
         QoreProgramContextHelper value_pch(ctx.pgm);
-        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error);
+        rv = ctx.reader.readValue(ctx.ptr, ctx.end, value_error, ctx.pgm);
     }
     if (!value_error.empty()) {
         ctx.error = value_error;

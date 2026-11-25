@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and linking of qcc executables and the load of their regex switch cases
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTRegexCaseLoadFailureTest
+
+#! Tests the report of a regex switch case of a qcc executable that cannot be compiled when it is loaded
+/** The cases of a function were compiled with one exception sink: the exception of a case that could not be
+    compiled stayed in it and was printed as an unhandled exception each time the function's context was built, even
+    when the program caught the error, and the error that the call raised named no cause ("unsupported AOT slot
+    metadata").  The error now names the case and the cause, and nothing else is printed (#7642).
+
+    No pattern that qcc compiles fails when the same library loads it, so the failure is provoked with the
+    \c QORE_AOT_TEST_FAIL_REGEX_CASE test hook, which compiles the case with the given pattern with an unmatched
+    \c ")" appended, as a PCRE2 library that refuses a pattern that the compiling one accepted would do.
+*/
+class AOTRegexCaseLoadFailureTest inherits QUnit::Test {
+    public {
+        const Script = "%modern
+string sub f(string s) {
+    switch (s) {
+        case /^a+1/: return \"a\";
+        case !~ /b/: return \"not b\";
+        case /^b[0-9]$/: return \"b\";
+        case /^bb/i: return \"bb\";
+    }
+    return \"none\";
+}
+try {
+    printf(\"%s %s %s %s\\n\", f(\"a1\"), f(\"x\"), f(\"b1\"), f(\"bBx\"));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught %s: %s\\n\", ex.err, ex.desc);
+}
+";
+
+        #! the output without a failure
+        const Expected = "a not b b bb\n";
+
+        #! the patterns of the cases: the first, a negated one, a middle one and the last one
+        const Patterns = ("^a+1", "b", "^b[0-9]$", "^bb");
+
+        #! the qcc optimization levels tested
+        const OptLevels = ("0", "3");
+    }
+
+    private {
+        #! the in-tree qcc executable, if available
+        *string qcc_bin;
+        #! the environment for child processes, so that they use the build's libqore (Linux and macOS)
+        string env;
+        #! every child process is ended after this time, so that a hang fails the test instead of outliving it
+        string timeout_prefix;
+        #! the compiled executables, by optimization level
+        hash<string, string> exes;
+        *TmpDir tmp;
+    }
+
+    constructor() : QUnit::Test("AOTRegexCaseLoadFailureTest", "1.0", \ARGV) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", quote(libqore_dir), quote(libqore_dir));
+        string timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        timeout_prefix = timeout_cmd.val() ? quote(timeout_cmd) + " -k 10s 240s " : "";
+
+        addTestCase("the cases compile and run without the hook", \testRuns());
+        addTestCase("negative: a hook matching no case changes nothing", \testHookNoMatch());
+        addTestCase("a case that cannot be compiled at load is reported once, with its cause", \testFailureReported());
+        set_return_value(main());
+    }
+
+    testRuns() {
+        foreach string opt in (OptLevels) {
+            hash<auto> rv = run(getExe(opt));
+            assertEq(0, rv.rc, "-O" + opt + ": " + rv.out);
+            assertEq(Expected, rv.out, "-O" + opt);
+        }
+    }
+
+    testHookNoMatch() {
+        foreach string opt in (OptLevels) {
+            hash<auto> rv = run(getExe(opt), "^no-such-case");
+            assertEq(0, rv.rc, "-O" + opt + ": " + rv.out);
+            assertEq(Expected, rv.out, "-O" + opt);
+        }
+    }
+
+    testFailureReported() {
+        foreach string opt in (OptLevels) {
+            foreach string pattern in (Patterns) {
+                string label = sprintf("-O%s %y", opt, pattern);
+                hash<auto> rv = run(getExe(opt), pattern);
+                # the program catches the error and ends normally
+                assertEq(0, rv.rc, label + ": " + rv.out);
+                # negative: the exception of the case is not printed as an unhandled exception
+                assertNRegex("unhandled", rv.out, label);
+                list<string> lines = rv.out.split("\n");
+                # the error is the only output
+                assertEq(1, lines.size(), label + ": " + rv.out);
+                # the error names the function, the case and the cause
+                assertRegex("^caught AOT-CONTEXT-ERROR: .*'f\\(string\\)'", lines[0], label);
+                assertRegex("regex case slot [0-9]+: REGEX-COMPILATION-ERROR: .*'\\Q" + pattern
+                    + ")\\E'.*unmatched closing parenthesis", lines[0], label);
+                # negative: the cause is not left out
+                assertNRegex("unsupported AOT slot metadata;", lines[0], label);
+            }
+        }
+    }
+
+    #! returns the executable of the script compiled at the given optimization level
+    private string getExe(string opt) {
+        if (!qcc_bin) {
+            testSkip("the in-tree qcc executable is not available; set QCC to test compiled code");
+        }
+        if (*string exe = exes{opt}) {
+            return exe;
+        }
+        if (!tmp) {
+            tmp = new TmpDir("qore-aot-regex-case-load-");
+        }
+        string src = tmp.path + DirSep + "cases.q";
+        if (!is_file(src)) {
+            File f();
+            f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(Script);
+            f.close();
+        }
+        string exe = tmp.path + DirSep + "cases-O" + opt;
+        int rc;
+        string out = backquote(sprintf("%s %s%s -O%s -o %s %s 2>&1", env, timeout_prefix, quote(qcc_bin), opt,
+            quote(exe), quote(src)), \rc);
+        assertEq(0, rc, "qcc -O" + opt + ": " + out);
+        return exes{opt} = exe;
+    }
+
+    #! runs @a exe, with the test hook set to @a fail_pattern if given; returns the exit code and the output
+    private hash<auto> run(string exe, *string fail_pattern) {
+        string hook = fail_pattern ? sprintf("QORE_AOT_TEST_FAIL_REGEX_CASE=%s ", quote(fail_pattern)) : "";
+        int rc;
+        string out = backquote(sprintf("%s%s %s%s 2>&1", hook, env, timeout_prefix, quote(exe)), \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    #! quotes @a str for the shell
+    private static string quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

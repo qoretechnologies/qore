@@ -237,6 +237,10 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                 "until the grace period after the deadline", mode), sub () { runHandoverCase(m, "never"); });
             addTestCase(sprintf("%s: code that work of the module cleanup hands itself over to and that is discarded "
                 "without running does not keep the cleanup waiting", mode), sub () { runHandoverCase(m, "drop"); });
+            addTestCase(sprintf("%s: code wrapped in work of the module cleanup runs on another thread as that work, "
+                "and the cleanup waits for it", mode), sub () { runHandoverCase(m, "wrap"); });
+            addTestCase(sprintf("%s: code wrapped in work of the module cleanup that raises an exception does not keep "
+                "the cleanup waiting", mode), sub () { runHandoverCase(m, "wrap-throw"); });
         }
         foreach string mode in (ExecModes) {
             string m = mode;
@@ -252,6 +256,16 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             string m = mode;
             addTestCase(sprintf("%s: a WebSocket server stream and an SSE stream refused their heartbeat timer at the "
                 "end of the process go on quietly", mode), sub () { runServersCase(m); });
+        }
+        foreach string mode in (ExecModes) {
+            string m = mode;
+            addTestCase(sprintf("%s: a task that work of the module cleanup posts to an asynchronous LLM call runs as "
+                "that work, and the cleanup waits for it", mode), sub () { runLlmPostCase(m); });
+            addTestCase(sprintf("%s: the completion of a WebSocketClient connection that the module cleanup canceled "
+                "is handed over to the running delivery task, and the cleanup waits for it", mode),
+                sub () { runClientGateCase(m); });
+            addTestCase(sprintf("%s: the after_send callback of a response that the module cleanup canceled runs in "
+                "work that the cleanup waits for", mode), sub () { runAfterSendCase(m); });
         }
         foreach string mode in (ExecModes) {
             foreach string http_version in (("2.0", "1.1")) {
@@ -405,8 +419,63 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
         # frame, and only then the cleanup deletes the data of the next module
         # (the lines of the test hook and the warnings of the cleanup, on stderr, can come in between)
         string other = "(?:(?:held module cleanup work|warning: )[^\n]*\n)*";
-        assertRegex("(^|\n)server frame blocked: work handed over: True\n" + other + "server got: again\n" + other
-            + "later module data deleted\n", out, "the cleanup waits for the thread that processes the frame: " + out);
+        assertRegex("(?s)(^|\n)server frame blocked: work handed over: True\n" + other + "server got: again: "
+            "nested hand-over: True\n.*later module data deleted\n", out, "the cleanup waits for the thread that "
+            "processes the frame, which processes it as the work handed over to it: " + out);
+        # the end of the connection that the cleanup canceled is handed over to the thread that runs it (qore#7339)
+        assertRegex("(?s)(^|\n)server connection closed: end handed over: True\n.*later module data deleted\n", out,
+            "the end of the connection runs in work that the cleanup waits for: " + out);
+        assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
+    }
+
+    #! the onComplete() of an operation that the module cleanup counts posts a task to an asynchronous LLM call
+    #! (LlmAsyncOperation) whose executor runs it on a thread of its own: the task runs as the work of the cleanup that
+    #! posted it, and the cleanup waits for it before it deletes the data of the next module (qore#7339)
+    private runLlmPostCase(string mode) {
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "llm-client.qr")), \status);
+        assertEq(0, status, out);
+        assertRegex("(?s)(^|\n)posted task ran: counted: True\n.*later module data deleted\n", out, "the posted "
+            "task runs as the work of the cleanup, which waits for it: " + out);
+        assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
+    }
+
+    #! a WebSocketClient's delivery task is blocked in its message callback when the module cleanup cancels the client's
+    #! connection: the completion of the canceled operation, work that the cleanup counts, hands itself over to the
+    #! running delivery task at its gate, and the cleanup waits for the task before it deletes the data of the next
+    #! module (qore#7339)
+    private runClientGateCase(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hand-over is waited for with a test hook of a debug build");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "client-gate-client.qr")), \status);
+        assertEq(0, status, out);
+        assertNRegex("did not block", out, "the client's callback blocks its delivery task: " + out);
+        assertRegex("(?s)(^|\n)client callback: work handed over: True\n.*later module data deleted\n", out,
+            "the completion is handed over to the delivery task, which the cleanup waits for: " + out);
+        assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
+    }
+
+    #! the module cleanup cancels a connection while its streamed response is being sent to a client that does not
+    #! read it: the work of the canceled connection hands itself over to the thread that calls the response's
+    #! after_send callback with the failed result, and the cleanup waits for it (qore#7339)
+    private runAfterSendCase(string mode) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hand-over is checked with a test hook of a debug build");
+        }
+        int status;
+        string out = backquote(sprintf("QORE_MODULE_CLEANUP_TIMEOUT=0 QORE_MODULE_DIR=%s %s --exec-mode=%s %s 2>&1",
+            shellQuote(module_dir), shellQuote(qore_bin), mode, shellQuote(get_script_dir() + DirSep
+            + "ModuleCleanupCancel" + DirSep + "aftersend-client.qr")), \status);
+        assertEq(0, status, out);
+        assertNRegex("was not sent", out, "the response is being sent when the cleanup cancels it: " + out);
+        assertRegex("(?s)(^|\n)after_send: sent: False, handed over: True\n.*later module data deleted\n", out,
+            "the after_send callback runs in work that the cleanup waits for: " + out);
         assertNRegex("unhandled [^\n]*exception", out, "nothing is reported: " + out);
     }
 
@@ -571,6 +640,8 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
             \status);
         assertEq(0, status, out);
         assertRegex("(^|\n)outside: handle 0, release: False\n", out, "outside of work of the cleanup: " + out);
+        assertRegex("(^|\n)outside: wrapped code is the code: True\n", out, "outside of work of the cleanup, "
+            "wrapped code is the code itself: " + out);
         assertRegex("(^|\n)handle taken: True\n", out, "in work of the cleanup: " + out);
         if (handover == "twice") {
             # (the warnings of the cleanup, on stderr, can come in between)
@@ -578,6 +649,22 @@ class ModuleCleanupCancelTest inherits QUnit::Test {
                 "released once: " + out);
             assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for it: " + out);
             assertRegex("(^|\n)later module data deleted\n", out, "the cleanup goes on with the next module: " + out);
+        } else if (handover == "wrap") {
+            assertRegex("(^|\n)wrapped: True, wrapped again: True\n", out, "the code is wrapped once: " + out);
+            # the wrapped code runs on another thread as work of the cleanup, which waits for it before it goes on
+            assertRegex("(?s)(^|\n)wrapped code ran: counted: True\n.*later module data deleted\n", out, "the cleanup "
+                "waits for the wrapped code, which runs as its work: " + out);
+            assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the cleanup does not wait for the grace period: "
+                + out);
+        } else if (handover == "wrap-throw") {
+            assertRegex("(?s)(^|\n)wrapped code raising\n.*later module data deleted\n", out, "the cleanup waits "
+                "for the wrapped code until it raises its exception: " + out);
+            # written after the handle was released with the exception: in any order with the cleanup's lines
+            assertRegex("(^|\n)wrapped code raised: WRAPPED-ERROR\n", out, "the exception reaches the caller: " + out);
+            assertRegex("(^|\n)wrapped code called again: MODULE-CLEANUP-WORK-ERROR\n", out, "the wrapped code runs "
+                "once: " + out);
+            assertNRegex("QORE_MODULE_CLEANUP_HANDOVER_GRACE", out, "the handle is released with the exception: "
+                + out);
         } else if (handover == "drop") {
             # (the warnings of the cleanup, on stderr, can come in between)
             assertRegex("(^|\n)release: True\n(?:warning: [^\n]*\n)*code discarded\n", out, "the code is discarded: "

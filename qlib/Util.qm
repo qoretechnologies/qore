@@ -108,6 +108,9 @@ module Util {
 
 
     @section util_3_0 Util 3.0
+    - @ref Util::substitute_env_vars() "substitute_env_vars()" and the \c $VAR references of a \c file:// URL of
+      @ref Util::get_file_from_url() "get_file_from_url()" expand no environment variables of the host for code
+      restricted from external information (see @ref sandbox_ambient_host_data)
     - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character in
       UTF-8 and other multi-byte encodings (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"; it was
       @ref False "False") (issue #6246)
@@ -2723,7 +2726,10 @@ public data sub get_file_from_url(string url, *hash<UrlRetrievalOptions> options
                 path += url_info.path;
             }
             # do environment variable substitution
-            map path = replace(path, "\$" + $1, ENV.$1), (path =~ x/\$(\w+)/g);
+            # the environment of the host only for a caller that could read it itself (qore#6844)
+            # (an empty value for each variable, as in the caller's own environment)
+            bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+            map path = replace(path, "\$" + $1, env_allowed ? ENV.$1 : ""), (path =~ x/\$(\w+)/g);
 
             if (exists options.default_path && !absolute_path(path)) {
                 path = options.default_path + DirSep + path;
@@ -2760,6 +2766,11 @@ public data sub get_file_from_url(string url, *hash<UrlRetrievalOptions> options
 
     @return the string with environment variables substituted; undefined variables are replaced with empty strings
 
+    For code restricted from external information (see @ref Qore::SandboxManager::callerMayReadExternalInfo()
+    "SandboxManager::callerMayReadExternalInfo()"), the environment is empty, as it is in that code itself: every
+    variable is replaced with an empty string (qore#6844); this also holds for the connection options, file locations
+    and paths that library code expands for such code
+
     Supports the following syntax:
     - \c $VAR - simple variable reference
     - \c ${VAR} - braced variable reference (allows adjacent text without spaces)
@@ -2777,6 +2788,8 @@ string s = substitute_env_vars("$UNDEFINED");        # returns "" (undefined var
     @since %Util 1.5.1
 */
 public string sub substitute_env_vars(string str) {
+    # a caller that could not read the environment itself gets no values from it (qore#6844)
+    hash<auto> env = SandboxManager::callerMayReadExternalInfo() ? ENV : {};
     while (True) {
         *list<string> x = (str =~ x/(\$[A-Za-z][A-Za-z0-9_]*)/);
         if (!x) {
@@ -2803,7 +2816,7 @@ public string sub substitute_env_vars(string str) {
             }
 
             # substitute environment variable
-            str = replace(str, match, ENV{var} ?? "");
+            str = replace(str, match, env{var} ?? "");
         }
     }
     return str;

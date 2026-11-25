@@ -832,7 +832,7 @@ void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
         for (const auto& inst : block->instructions) {
             if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::SetImplicitArgv
                     || inst->opcode == QoreIROpcode::PushImplicitElement)
-                    && inst->restore_on_exception_exit) {
+                    && inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None) {
                 any = true;
                 break;
             }
@@ -875,11 +875,14 @@ void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
             });
             if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::SetImplicitArgv
                     || inst->opcode == QoreIROpcode::PushImplicitElement)
-                    && inst->restore_on_exception_exit) {
+                    && inst->restore_on_exception_exit != QoreIRExceptionExitRestore::None) {
                 state.push_back(inst);
                 continue;
             }
-            if ((inst->opcode == QoreIROpcode::PopImplicitArg || inst->opcode == QoreIROpcode::PopImplicitElement)
+            // a PopImplicitElement with a second operand sets the next element of a foreach statement: its push
+            // stays open (qore#7379)
+            if ((inst->opcode == QoreIROpcode::PopImplicitArg
+                        || (inst->opcode == QoreIROpcode::PopImplicitElement && inst->operands.size() == 1))
                     && !inst->operands.empty()) {
                 uint32_t id = inst->operands[0].id;
                 for (size_t i = state.size(); i > 0; --i) {
@@ -3722,8 +3725,13 @@ struct QoreIRFixedAggregateScalarizationStats {
     size_t hashes = 0;
 };
 
+//! Replaces the members of local lists and hashes with a fixed layout with scalars
+/** @param forwarded_loads receives the results of the local loads with a native representation that the replacement
+    forwards to the reads of the members (see qore_ir_refine_local_value_facts())
+*/
 static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggregates(
-        QoreIRFunction& func, const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+        QoreIRFunction& func, const QoreIRControlFlowGraph& cfg, size_t& check_count,
+        std::unordered_set<uint32_t>& forwarded_loads) {
     QoreIRFixedAggregateScalarizationStats stats;
     const bool enable_lists =
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT");
@@ -3755,6 +3763,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     // locals written by an instruction other than a StoreLocal, an InstantiateLocal or an UninstantiateLocal, such as
     // an IncrementLocalInt: their value is not the one stored
     std::unordered_set<const LocalVar*> otherwise_written_locals;
+    // locals that a fused instruction reads or writes directly, not with a LoadLocal: their stores are kept, as such an
+    // access is not in local_accesses (qore#7634)
+    std::unordered_set<const LocalVar*> fused_accessed_locals;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -3763,6 +3774,17 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
             positions.emplace(inst, InstructionPosition{inst, block_id, offset});
+            if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                fused_accessed_locals.insert(fused->target);
+                fused_accessed_locals.insert(fused->source);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                fused_accessed_locals.insert(static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local);
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                const auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                fused_accessed_locals.insert(fused->lhs);
+                fused_accessed_locals.insert(fused->rhs);
+            }
             if (inst->opcode != QoreIROpcode::StoreLocal && inst->opcode != QoreIROpcode::InstantiateLocal
                     && inst->opcode != QoreIROpcode::UninstantiateLocal) {
                 if (const LocalVar* written = qore_ir_get_written_local(inst)) {
@@ -4981,7 +5003,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && hash_candidate
                         && inst->opcode == QoreIROpcode::HashKeyStore) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 2
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     if (valid_operation) {
                         const auto* store = static_cast<
@@ -5000,7 +5025,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && hash_candidate
                         && inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 3
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     std::string key;
                     valid_operation = valid_operation
@@ -5038,7 +5066,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && !hash_candidate
                         && inst->opcode == QoreIROpcode::ListIndexStore) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 3
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     int64_t index = 0;
                     valid_operation = valid_operation
@@ -5805,13 +5836,55 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     if (!scalarized) {
         return stats;
     }
+    // the values that the replacement forwards from the statement that built the aggregate to the statements that use
+    // the members, which the rewrite below gives uses that the use map does not have (qore#7356); and the local loads
+    // among them with a native representation: such a value is owned by its slot in the interpreter
+    // (QoreIRFunction::interpreter_slot_owned_values), not by the temp scope of its statement, which releases it at
+    // the statement's end; recorded before the commit below erases instructions
+    std::unordered_set<uint32_t> forwarded_values;
+    auto record_forwarded_load = [&](QoreIRValue value) {
+        if (!value.isValid()) {
+            return;
+        }
+        forwarded_values.insert(value.id);
+        auto definition = definitions.find(value.id);
+        if (definition == definitions.end() || definition->second.inst->opcode != QoreIROpcode::LoadLocal) {
+            return;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (facts && (facts->representation == QoreIRValueRepresentation::NativeInt
+                || facts->representation == QoreIRValueRepresentation::NativeFloat)) {
+            forwarded_loads.insert(value.id);
+        }
+    };
+    for (const auto& [from, to] : replacements) {
+        (void)from;
+        record_forwarded_load(to);
+    }
+    for (const auto& [inst, operation] : scalarized_path_operations) {
+        (void)inst;
+        record_forwarded_load(operation.left);
+        record_forwarded_load(operation.right);
+    }
+    for (const ScalarizedAggregatePhi& phi : scalarized_aggregate_phis) {
+        for (const auto& [value, predecessor] : phi.incoming) {
+            (void)predecessor;
+            record_forwarded_load(value);
+        }
+    }
+    for (const ScalarizedAggregateMaterialization& materialization : scalarized_aggregate_materializations) {
+        for (QoreIRValue value : materialization.values) {
+            record_forwarded_load(value);
+        }
+    }
     for (const auto& [local, accesses] : local_accesses) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR fixed-aggregate dead constant-local analysis")) {
             return {};
         }
         auto assignment = constant_local_assignments.find(local);
-        if (assignment == constant_local_assignments.end()) {
+        // a local that a fused instruction reads (the bound of a loop in a BranchIfLtLocalInt) needs its value
+        if (assignment == constant_local_assignments.end() || fused_accessed_locals.count(local)) {
             continue;
         }
         const QoreIRInstruction* store = assignment->second.store;
@@ -5826,6 +5899,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             if (access.inst->opcode != QoreIROpcode::LoadLocal) {
                 continue;
+            }
+            // a load whose value replaces a member's reads is used by their consumers after the rewrite: after a try
+            // statement, where the load of a local initialized with a constant is not forwarded from its store, the
+            // member's value was the load's, and the load was removed with the selectors (qore#7356)
+            if (forwarded_values.count(access.inst->result.id)) {
+                removable = false;
+                break;
             }
             auto load_uses = uses.find(access.inst->result.id);
             if (load_uses == uses.end()) {
@@ -9591,6 +9671,8 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_STRING_LOAD");
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
+    // the loads of each candidate local, for has_live_other_load()
+    std::unordered_map<LocalVar*, std::vector<const QoreIRInstruction*>> candidate_loads;
     using InstructionPosition = std::pair<size_t, size_t>;
     std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
@@ -9619,10 +9701,50 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                         // a handler that runs out of line can give a local that it references any value (#5951)
                         && !func.handler_ir_locals.count(reinterpret_cast<const void*>(local_inst->local))) {
                     candidate_locals.insert(local_inst->local);
+                    if (inst->opcode == QoreIROpcode::LoadLocal && inst->result.isValid()) {
+                        candidate_loads[local_inst->local].push_back(inst.get());
+                    }
                 }
             }
         }
     }
+
+    // true if a value that another load of the local gave is used at or after the append: native code borrows the
+    // local's string for such a load, so an append in place would change the value under it (as in (s, s += "c");
+    // qore#7627).  A load in another block that is used outside its block is counted, as its order is not known here
+    auto has_live_other_load = [&](const QoreIRInstruction& append, const QoreIRInstruction* own_load,
+            LocalVar* local) {
+        auto loads = candidate_loads.find(local);
+        if (loads == candidate_loads.end()) {
+            return false;
+        }
+        const InstructionPosition append_pos = positions.at(&append);
+        for (const QoreIRInstruction* load : loads->second) {
+            if (load == own_load) {
+                continue;
+            }
+            const InstructionPosition load_pos = positions.at(load);
+            auto use_it = uses.find(load->result.id);
+            if (use_it == uses.end()) {
+                continue;
+            }
+            const bool before_in_block = load_pos.first == append_pos.first && load_pos.second < append_pos.second;
+            for (const auto& use : use_it->second) {
+                auto use_pos = positions.find(use.inst);
+                if (use_pos == positions.end()) {
+                    return true;
+                }
+                if (before_in_block) {
+                    if (use_pos->second.first != append_pos.first || use_pos->second.second > append_pos.second) {
+                        return true;
+                    }
+                } else if (load_pos.first != append_pos.first && use_pos->second.first != load_pos.first) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
 
     // true if an instruction of the block in [begin, end) other than the append accesses the local
     auto accesses_local = [&](const QoreIRBasicBlock* block, size_t begin, size_t end,
@@ -9677,13 +9799,15 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 return false;
             }
             return !accesses_local(block, load_pos->second.second + 1, block->instructions.size(), append, local)
-                && !accesses_local(cfg.blocks[store_block_id], 0, store_pos->second.second, append, local);
+                && !accesses_local(cfg.blocks[store_block_id], 0, store_pos->second.second, append, local)
+                && !has_live_other_load(append, load_def->second, local);
         }
         if (append_pos->second.first != store_pos->second.first
                 || append_pos->second.second >= store_pos->second.second) {
             return false;
         }
-        return !accesses_local(block, load_pos->second.second + 1, store_pos->second.second, append, local);
+        return !accesses_local(block, load_pos->second.second + 1, store_pos->second.second, append, local)
+            && !has_live_other_load(append, load_def->second, local);
     };
     // true for a local copy-on-write string append: the binary op, or the invoke made for it in a try block
     auto is_string_append = [](const QoreIRInstruction& inst) {
@@ -10601,8 +10725,22 @@ static bool qore_ir_value_is_proven_assigned(
         && facts->never_nothing);
 }
 
+//! Refines the facts of the loads of local ints, floats and bools with a dataflow of the locals proven assigned
+/** @param forwarded_loads the results of the loads that the fixed-aggregate scalar replacement forwarded with a native
+    representation (see qore_ir_scalar_replace_fixed_aggregates()), which keep it.  The replacement forwards only a
+    value whose facts are native and never NOTHING; the lowering gives a local load such facts only where the read
+    itself is assigned: the parse records the assignment state of each read (qore#5937), and a read that may be
+    unassigned, or of a local that delete or remove can clear (qore#5710), has its type or NOTHING
+    (QoreIRLowering::getAnalysis()), so it is never NOTHING only where it has a value, and its value stays boxed
+    otherwise.  This dataflow is less precise (a handler entry starts with nothing known, and a call that can take
+    references clears what is known), and a forwarded value
+    that it took as possibly unassigned would get boxed facts, so the interpreter would keep it as a temp of the
+    statement that loaded it and release it there, before the reads of the members in later statements ran: they read
+    NOTHING (qore#7356)
+*/
 static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
-        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+        const QoreIRControlFlowGraph& cfg, size_t& check_count,
+        const std::unordered_set<uint32_t>* forwarded_loads = nullptr) {
     if (QORE_ENV_IS_SET("QORE_DISABLE_IR_LOCAL_VALUE_FACTS")
             || func.blocks.empty() || func.has_opaque_ast_local_access) {
         return 0;
@@ -10677,7 +10815,13 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                 return true;
             }
             std::unordered_set<uint32_t> visiting;
-            if (qore_ir_value_is_proven_assigned(func,
+            // a local whose type accepts NOTHING stores NULL as NOTHING (*int i = NULL;), so a value that can be NULL
+            // does not make it assigned (qore#7372)
+            const QoreIRValueFacts* value_facts = func.getValueFacts(store->operands[0]);
+            bool may_store_nothing = QoreTypeInfo::parseAcceptsReturns(store->local->getTypeInfo(), NT_NOTHING)
+                && (!value_facts || !QoreTypeInfo::hasType(value_facts->type_info)
+                    || QoreTypeInfo::parseReturns(value_facts->type_info, NT_NULL) != QTI_NOT_EQUAL);
+            if (!may_store_nothing && qore_ir_value_is_proven_assigned(func,
                     store->operands[0], definitions, &known, visiting,
                     check_count)) {
                 known.insert(store->local);
@@ -10856,7 +11000,12 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                         facts = *current;
                     }
                     QoreIRValueFacts refined_facts = facts;
-                    bool assigned = known.count(load->local);
+                    bool forwarded = forwarded_loads && forwarded_loads->count(inst->result.id);
+                    // the replacement recorded the load only with these facts, which nothing has changed since
+                    assert(!forwarded || (facts.never_nothing
+                        && (facts.representation == QoreIRValueRepresentation::NativeInt
+                            || facts.representation == QoreIRValueRepresentation::NativeFloat)));
+                    bool assigned = known.count(load->local) || forwarded;
                     // a load where the local may not have been assigned has its type or NOTHING (qore#5937): its
                     // declared type alone would let the optimizers take the value as one of the type
                     refined_facts.type_info = assigned
@@ -12802,10 +12951,12 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
         return;
     }
     QoreIRFixedAggregateScalarizationStats aggregate_stats;
+    // the local loads that the scalar replacement forwards with a native representation, which keep it
+    std::unordered_set<uint32_t> forwarded_loads;
     constexpr size_t max_aggregate_scalarization_rounds = 8;
     for (size_t round = 0; round < max_aggregate_scalarization_rounds; ++round) {
         QoreIRFixedAggregateScalarizationStats round_stats =
-            qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
+            qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count, forwarded_loads);
         aggregate_stats.lists += round_stats.lists;
         aggregate_stats.hashes += round_stats.hashes;
         if (!round_stats.lists && !round_stats.hashes) {
@@ -12817,7 +12968,7 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
     // the constant containers rebuilt for the scalar replacement that it left in place
     local_stats.constant_containers_loaded = qore_ir_load_read_only_constant_containers(func, check_count);
     local_stats.local_value_facts_refined =
-        qore_ir_refine_local_value_facts(func, cfg, check_count);
+        qore_ir_refine_local_value_facts(func, cfg, check_count, &forwarded_loads);
     QoreIRDenseListStats dense_list_stats =
         qore_ir_refine_dense_list_facts(func, cfg, check_count);
     local_stats.dense_list_facts_refined = dense_list_stats.loads;
@@ -16850,6 +17001,23 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                             == QoreIRValueRepresentation::NativeFloat
                         || facts->representation
                             == QoreIRValueRepresentation::NativeBool);
+                // the local holds the stored value only if its type keeps it unchanged: the local has no type, or its
+                // value type is the plain type of the stored value's representation; any other declared type can
+                // convert it on assignment (an int stored in a union<float | number, ...>, a number or softnumber, a
+                // *float, *number or *softfloat, or a softstring local, a float stored in a number local), and the
+                // local then holds the converted value, so its reads do not take the facts of the stored value
+                // (qore#7372)
+                if (native && store->local) {
+                    const QoreTypeInfo* local_type = store->local->getTypeInfo();
+                    const QoreTypeInfo* local_value_type = QoreTypeInfo::hasType(local_type)
+                        ? qore_get_value_type(local_type) : nullptr;
+                    native = !local_value_type
+                        || (facts->representation == QoreIRValueRepresentation::NativeInt
+                            ? QoreTypeInfo::isPlainType(local_value_type, NT_INT)
+                            : facts->representation == QoreIRValueRepresentation::NativeFloat
+                                ? QoreTypeInfo::isPlainType(local_value_type, NT_FLOAT)
+                                : QoreTypeInfo::isPlainType(local_value_type, NT_BOOLEAN));
+                }
                 if (store->local && !store->local->closureUse()
                         && !QoreTypeInfo::isReference(
                             store->local->getTypeInfo())

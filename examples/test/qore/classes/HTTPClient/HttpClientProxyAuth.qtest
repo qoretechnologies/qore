@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - it checks that the no_proxy entry "localhost" excludes "http://localhost:8000/" from the proxy, which resolves the URL without connecting to it; its servers listen on 127.0.0.1 and their clients connect to 127.0.0.1
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern

@@ -1014,7 +1014,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1031,7 +1031,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
                 ws_cnt.dec();
             }
         }, {
-            "url": "wss://localhost:" + test_port + "/ws",
+            "url": "wss://127.0.0.1:" + test_port + "/ws",
             "logger": mLogger,
             "http_version": "2.0",
             "ssl_verify_cert": False,
@@ -1048,9 +1048,9 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         # has no dedicated socket handler and so no handler task for the shutdown to wait on.
         {
             Socket raw();
-            raw.connectSSL("localhost:" + test_port, 10s);
+            raw.connectSSL("127.0.0.1:" + test_port, 10s);
             raw.sendHTTPMessage("GET", "/ws", "1.1", {
-                "Host": "localhost:" + test_port,
+                "Host": "127.0.0.1:" + test_port,
                 "Upgrade": "websocket",
                 "Connection": "Upgrade",
                 "Sec-WebSocket-Key": make_base64_string(get_random_bytes(16)),
@@ -1095,7 +1095,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -1113,7 +1113,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
                 ws_cnt.dec();
             }
         }, {
-            "url": "wss://localhost:" + test_port + "/ws",
+            "url": "wss://127.0.0.1:" + test_port + "/ws",
             "logger": mLogger,
             "http_version": "2.0",
             "ssl_verify_cert": False,
@@ -1135,7 +1135,7 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         # Verify regular HTTP/2 still works with active WebSocket
         {
             RestClient rc({
-                "url": "https://localhost:" + test_port,
+                "url": "https://127.0.0.1:" + test_port,
                 "ssl_verify_cert": False,
                 "http_version": "2.0",
                 "timeout": 10000,
@@ -1723,13 +1723,13 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("block", "/block", NOTHING, block_handler);
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
         test_server.waitForAsyncIo();
-        string url = "https://localhost:" + test_port;
+        string url = "https://127.0.0.1:" + test_port;
 
         # Launch concurrent HTTP/2 requests in background; each blocks in
         # handler until signalStop() is called.
@@ -1845,13 +1845,13 @@ class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
         test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
 
         int test_port = test_server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
         }).port;
         test_server.waitForAsyncIo();
-        string url = "https://localhost:" + test_port;
+        string url = "https://127.0.0.1:" + test_port;
 
         # Open H2 connection and complete one request; connection is now idle
         RestClient rc({

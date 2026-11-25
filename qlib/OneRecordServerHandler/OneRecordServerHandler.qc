@@ -95,14 +95,15 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
         *code notification_handler;
 
         #! Connection manager delivering notifications to subscriber callback URLs
-        /** Connections are reused across deliveries to the same host; cookies are not kept
+        /** Connections are reused across deliveries to the same host; cookies are not kept.  It is created when a
+            subscription with a callback URL is first created (@ref getNotificationConnectionManager()), or set by the
+            host (@ref setNotificationConnectionManager()), never by the constructor: code restricted from the
+            @ref Qore::Functional-Domains "NETWORK" functional domain may not create a connection manager.
         */
-        HttpClientIo::HttpClientConnectionManager notification_mgr(
-            <HttpClientIo::HttpClientConnectionManagerOptions>{
-                "connect_timeout": NotificationDeliveryTimeout,
-                "request_timeout": NotificationDeliveryTimeout,
-                "enable_cookies": False,
-            });
+        *HttpClientIo::HttpClientConnectionManager notification_mgr;
+
+        #! Serializes the creation and setting of @ref notification_mgr
+        Mutex notification_mgr_lock();
     }
 
     #! Creates the ONE Record server handler
@@ -964,6 +965,18 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
                 ?? True,
         };
 
+        # a subscription is accepted only when its notifications can be delivered: the manager is created now, so a
+        # handler whose code may not create one, and that the host gave none, refuses it instead of failing each
+        # delivery later
+        if (new_sub.callbackUrl.val()) {
+            try {
+                getNotificationConnectionManager();
+            } catch (hash<ExceptionInfo> ex) {
+                throw "ONE-RECORD-NOT-SUPPORTED", sprintf("notifications cannot be delivered by this server: %s: %s",
+                    ex.err, ex.desc), {"status_code": 501};
+            }
+        }
+
         string sub_id = storage.createSubscription(new_sub);
         string sub_uri = base_url + "/subscriptions/" + sub_id;
 
@@ -1333,6 +1346,50 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
         return notification_pool;
     }
 
+    #! Returns the options of the connection manager that delivers notifications to subscribers
+    /** A host that builds the manager itself (@ref setNotificationConnectionManager()) uses these options, so that its
+        deliveries behave as the handler's own: the notification delivery timeout and no cookies.
+
+        @return the options of the notification connection manager
+    */
+    static hash<HttpClientIo::HttpClientConnectionManagerOptions> getNotificationConnectionManagerOptions() {
+        return <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "connect_timeout": NotificationDeliveryTimeout,
+            "request_timeout": NotificationDeliveryTimeout,
+            "enable_cookies": False,
+        };
+    }
+
+    #! Sets the connection manager that delivers notifications to subscribers
+    /** For a handler constructed by code that may not create a connection manager (code restricted from the
+        @ref Qore::Functional-Domains "NETWORK" functional domain): the host creates the manager in its own context
+        (with @ref getNotificationConnectionManagerOptions()) and gives it to the handler.  The callback URLs come from
+        the subscribers, so the sandbox that governs the delivering code still applies to every connection the manager
+        makes.
+
+        @param mgr the connection manager
+
+        @throw ONE-RECORD-ERROR the handler already has a connection manager
+    */
+    setNotificationConnectionManager(HttpClientIo::HttpClientConnectionManager mgr) {
+        AutoLock al(notification_mgr_lock);
+        if (notification_mgr) {
+            throw "ONE-RECORD-ERROR", "the handler already has a notification connection manager";
+        }
+        notification_mgr = mgr;
+    }
+
+    #! Returns the connection manager that delivers notifications, creating it if the host set none
+    /** @throw PERMISSION-DENIED the calling code may not create a connection manager and the host set none
+    */
+    private HttpClientIo::HttpClientConnectionManager getNotificationConnectionManager() {
+        AutoLock al(notification_mgr_lock);
+        if (!notification_mgr) {
+            notification_mgr = new HttpClientIo::HttpClientConnectionManager(getNotificationConnectionManagerOptions());
+        }
+        return notification_mgr;
+    }
+
     #! Delivers notifications to all matching subscribers for a single event
     private deliverNotifications(string object_uri, *string object_type,
             string event_type, *hash<auto> object_data) {
@@ -1379,7 +1436,7 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
                     hdr.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", url_info.username,
                         url_info.password ?? ""));
                 }
-                hash<auto> resp = notification_mgr.request(s.callbackUrl, "POST",
+                hash<auto> resp = getNotificationConnectionManager().request(s.callbackUrl, "POST",
                     get_http_request_target(s.callbackUrl), hdr, make_json(notification));
                 if (resp.status_code < 200 || resp.status_code >= 300) {
                     log(Logger::LoggerLevel::ERROR,

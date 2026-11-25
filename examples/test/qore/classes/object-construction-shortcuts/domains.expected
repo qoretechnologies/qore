@@ -1,0 +1,36 @@
+unsandboxed mutex_sub 0: ok
+unsandboxed mutex_sub 1: ok
+unsandboxed mutex_sub 2: ok
+sandboxed mutex_sub 0: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ mkMutexSub:user:sandboxed:2 < mutex_sub:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+sandboxed mutex_sub 1: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ mkMutexSub:user:sandboxed:2 < mutex_sub:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+sandboxed mutex_sub 2: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ mkMutexSub:user:sandboxed:2 < mutex_sub:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+unsandboxed mutex_sub_ctor 0: ok
+unsandboxed mutex_sub_ctor 1: ok
+unsandboxed mutex_sub_ctor 2: ok
+sandboxed mutex_sub_ctor 0: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ MSC::constructor:user:DCMod.qm:34 < mkMutexSubCtor:user:sandboxed:3 < mutex_sub_ctor:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+sandboxed mutex_sub_ctor 1: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ MSC::constructor:user:DCMod.qm:34 < mkMutexSubCtor:user:sandboxed:3 < mutex_sub_ctor:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+sandboxed mutex_sub_ctor 2: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ MSC::constructor:user:DCMod.qm:34 < mkMutexSubCtor:user:sandboxed:3 < mutex_sub_ctor:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+unsandboxed socket_sub 0: ok
+unsandboxed socket_sub 1: ok
+unsandboxed socket_sub 2: ok
+sandboxed socket_sub 0: ok
+sandboxed socket_sub 1: ok
+sandboxed socket_sub 2: ok
+unsandboxed socket_sub_ctor 0: ok
+unsandboxed socket_sub_ctor 1: ok
+unsandboxed socket_sub_ctor 2: ok
+sandboxed socket_sub_ctor 0: ok
+sandboxed socket_sub_ctor 1: ok
+sandboxed socket_sub_ctor 2: ok
+unsandboxed mutex 0: ok
+unsandboxed mutex 1: ok
+unsandboxed mutex 2: ok
+sandboxed mutex 0: ok
+sandboxed mutex 1: ok
+sandboxed mutex 2: ok
+unsandboxed keep 0: deleted
+unsandboxed keep 1: deleted
+unsandboxed keep 2: deleted
+sandboxed keep 0: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ keepMutexSub:user:sandboxed:7 < keep:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+sandboxed keep 1: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ keepMutexSub:user:sandboxed:7 < keep:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38
+sandboxed keep 2: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Thread::Mutex::constructor()'; functional domain: THREAD_CLASS (restricted by PO_NO_THREAD_CLASSES) @ keepMutexSub:user:sandboxed:7 < keep:user:<builtin>:-1 < Program::callFunction:builtin:domains.q:38

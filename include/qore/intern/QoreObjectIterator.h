@@ -44,7 +44,8 @@ extern QoreClass* QC_OBJECTREVERSEITERATOR;
 // the c++ object
 class QoreObjectIterator : public QoreHashIterator {
 public:
-    DLLLOCAL QoreObjectIterator(const QoreObject* o) : QoreHashIterator(qore_object_private::get(*o)->getRuntimeMemberHash(0)) {
+    DLLLOCAL QoreObjectIterator(const QoreObject* o, const qore_class_private* class_ctx = runtime_get_class())
+            : QoreHashIterator(qore_object_private::get(*o)->getRuntimeMemberHash(nullptr, class_ctx)) {
     }
 
     DLLLOCAL QoreObjectIterator() {
@@ -60,7 +61,8 @@ public:
 // forwards and are used in the reverse sense by the Qore language class implementation below
 class QoreObjectReverseIterator : public QoreObjectIterator {
 public:
-    DLLLOCAL QoreObjectReverseIterator(const QoreObject* o) : QoreObjectIterator(o) {
+    DLLLOCAL QoreObjectReverseIterator(const QoreObject* o, const qore_class_private* class_ctx)
+            : QoreObjectIterator(o, class_ctx) {
     }
 
     DLLLOCAL QoreObjectReverseIterator() {

@@ -97,6 +97,8 @@ std::mutex qore_parse_options_values_mutex;
 static QoreForkStdMutex parse_options_values_fork_handler(qore_parse_options_values_mutex, QFLR_LEAF,
     "parse_options_values");
 
+std::atomic<bool> qore_no_external_info_used{false};
+
 // Optional callback invoked before program data is cleared (issue #4816)
 // Can be used by modules to perform cleanup before namespace data is freed
 // More than one module needs this notification, so it is a list; a single slot meant whichever
@@ -1094,6 +1096,9 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
+    // a Program created with no Program running is a host Program, whose code is not restricted for time zones
+    // (QoreTimeZoneManager::callerRestricted())
+    tz_host = !qore_thread_current_program_if_any();
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
@@ -1831,15 +1836,15 @@ const QoreProgramLocation* qore_program_private_base::getRuntimeLocation(const Q
     // the runtime locations are protected by the stripe lock alone, as the locations of parsed code
     // (getLocationIntern()); fork() waits for the change (see recordLock())
     std::lock_guard<std::mutex> rl(threadContainerLock());
-    loc_set_t::iterator i = rt_loc_set.find(&loc1);
-    if (i != rt_loc_set.end()) {
+    loc_set_t::iterator i = rt_loc_set.lower_bound(&loc1);
+    if (i != rt_loc_set.end() && !ltpgm()(&loc1, *i)) {
         return *i;
     }
     std::unique_ptr<QoreProgramLocation> lp(new QoreProgramLocation(loc1));
     rt_pgmloc.push_back(lp.get());
     // owned by rt_pgmloc from here on
     QoreProgramLocation* rv = lp.release();
-    rt_loc_set.insert(rv);
+    rt_loc_set.insert(i, rv);
     return rv;
 }
 
@@ -2247,6 +2252,7 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         std::swap(thr_init_po.override, po.override);
         // the init code runs for the code that set it, with its restrictions (qore#6844)
         std::swap(thr_init_po.caller_domain_restrictions, po.caller_domain_restrictions);
+        std::swap(thr_init_po.lent_to_domain_restrictions, po.lent_to_domain_restrictions);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -2880,6 +2886,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // valid (data not yet cleared, ptid == tid).  This bounds the leak an opaque reference can
         // cause to the lifetime of the Program that created it.
         clearOpaqueTargets(xsink);
+
+        // the values that library classes keep in the per-Program cache of the Program can hold objects of its
+        // classes, given by its code (a default value of a field, for example): they are released while the
+        // Program's code can still run, as its data is (qore#6843)
+        qore_program_cache_release_values(pgm, xsink);
 
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
@@ -3580,6 +3591,20 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
             const QoreClass* oc = qore_root_ns_private::runtimeFindClass(*from_pgm.RootNS,
                 new_name ? new_name : path, tcns);
             if (oc) {
+                // A method reference can resolve names in its creator's Program. The builtin frame records
+                // the calling Program, provided a Qore call made it directly (see thread_capability_call_refusal()).
+                const QoreStackLocation* frame = get_runtime_stack_location();
+                const QoreProgram* caller = frame ? frame->getProgram() : nullptr;
+                const QoreStackLocation* previous = frame ? frame->getNext() : nullptr;
+                const bool owns_classes = caller && frame->getCallType() == CT_BUILTIN
+                    && frame->getCallName() == "Program::importClass" && (!previous || previous->getCallType() == CT_USER)
+                    && qore_class_private::get(*c)->declaredBy(caller) && qore_class_private::get(*oc)->declaredBy(caller);
+                if (!owns_classes && (qore_program_code_is_untrusted(caller) || qore_caller_is_sandboxed()
+                        || qore_caller_is_untrusted() || qore_caller_restricts_domain(QDOM_ALL))) {
+                    xsink->raiseException("CLASS-IMPORT-ERROR", "only the declaring Program or trusted code may "
+                        "relate these classes by injection");
+                    return;
+                }
                 injectedClass = qore_class_private::get(*oc);
             }
             //printd(5, "qore_program_private::importClass() this: %p path: '%s' new_name: '%s' oc: %p\n", this, path,
@@ -4123,6 +4148,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
         std::swap(old_thr_init_po.po, thr_init_po.po);
         std::swap(old_thr_init_po.override, thr_init_po.override);
         std::swap(old_thr_init_po.caller_domain_restrictions, thr_init_po.caller_domain_restrictions);
+        std::swap(old_thr_init_po.lent_to_domain_restrictions, thr_init_po.lent_to_domain_restrictions);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);
@@ -4207,13 +4233,13 @@ void qore_program_private::del(ExceptionSink* xsink) {
 
     //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
-    for (name_section_sline_statement_map_t::iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {
+    for (name_section_sline_statement_map_t::const_iterator it = statementByFileIndex.begin(); it != statementByFileIndex.end(); it++) {
         it->second->sectionMap.clear();
         it->second->statementMap.clear();
         delete it->second;
     }
     statementByFileIndex.clear();
-    for (name_section_sline_statement_map_t::iterator it = statementByLabelIndex.begin(); it != statementByLabelIndex.end(); it++) {
+    for (name_section_sline_statement_map_t::const_iterator it = statementByLabelIndex.begin(); it != statementByLabelIndex.end(); it++) {
         it->second->sectionMap.clear();
         it->second->statementMap.clear();
         delete it->second;
@@ -4265,11 +4291,15 @@ int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, Exc
       return -1;
    }
 
-   LValueHelper lvh(xsink);
-   if (v->getLValue(lvh, false))
-      return -1;
-
-   return lvh.assign(holder.release(), "<API assignment>");
+   // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+   // held (qore#7391)
+   return qore_store_with_bind_retry(xsink, false, holder.release(),
+      [v](LValueHelper& lvh) -> int {
+         return v->getLValue(lvh, false);
+      },
+      [](LValueHelper& lvh, QoreValue val) -> int {
+         return lvh.assign(val, "<API assignment>");
+      });
 }
 
 QoreHashNode* qore_program_private::getTopLevelLocalVars(ExceptionSink* xsink) {
@@ -4333,7 +4363,7 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     if ((!statement && !section) || !key)
         return;
     section_sline_statement_map_t *sssm;
-    name_section_sline_statement_map_t::iterator it = statementIndex->find(key);
+    name_section_sline_statement_map_t::const_iterator it = statementIndex->find(key);
     if (it == statementIndex->end()) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d,'%s',%d) key not found, this: %p\n", statementIndex, key, offs, section ? section : (const char*)"(null)",sectionOffs, this);
         std::unique_ptr<section_sline_statement_map_t> new_sssm(new section_sline_statement_map_t());
@@ -4345,20 +4375,17 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
         sssm = new_sssm.release();
     } else {
         sssm = it->second;
-        if (statement && statement->loc) {
-            int line = statement->loc->start_line + offs;
-            sline_statement_map_t::iterator li = sssm->statementMap.find(line);
-            if (li != sssm->statementMap.end() && li->first == line) {
-                // The index stores raw statement pointers owned elsewhere; do not
-                // dereference existing entries here. First statement for a line wins.
-                printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) skipping line (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line, statement->loc->end_line, this);
-                return;
-            }
-        }
     }
     if (statement && statement->loc) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) insert line %d (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line+offs, statement->loc->start_line, statement->loc->end_line, this);
-        sssm->statementMap.insert(std::pair<int, AbstractStatement*>(statement->loc->start_line+offs, statement));
+        const auto& loc = *statement->loc;
+        int line = loc.start_line + offs;
+        // Keep the first statement as the line default. Compare saved spans without dereferencing earlier statements.
+        auto [first, inserted] = sssm->statementMap.try_emplace(line, IndexedStatement{
+            statement, loc.end_line - loc.start_line, loc.start_column, loc.end_column});
+        if (!inserted && loc.start_column >= 0 && !first->second.matches(loc)) {
+            sssm->otherSpans.try_emplace(section_sline_statement_map_t::spanKey(line, loc), statement);
+        }
     }
     if (section) {
         if (sssm->sectionMap.find(section) == sssm->sectionMap.end()) {
@@ -4368,28 +4395,13 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     }
 }
 
-AbstractStatement* qore_program_private::findStatementInIndexIntern(
-        const name_section_sline_statement_map_t& statementIndex, const char* key, int line) const {
-    if (!key) {
+AbstractStatement* qore_program_private::findIndexedStatementForLocation(const QoreProgramLocation& loc) const {
+    const char* key = loc.getSource() ? loc.getSource() : loc.getFile();
+    auto it = statementByFileIndex.find(key);
+    if (it == statementByFileIndex.end()) {
         return nullptr;
     }
-    name_section_sline_statement_map_t::const_iterator it = statementIndex.find(key);
-    if (it == statementIndex.end() || !it->second) {
-        return nullptr;
-    }
-    sline_statement_map_t::const_iterator li = it->second->statementMap.find(line);
-    return li == it->second->statementMap.end() ? nullptr : li->second;
-}
-
-AbstractStatement* qore_program_private::findIndexedStatementForLocation(const char* file, const char* source,
-        int start_line, int offset) const {
-    if (start_line <= 0) {
-        return nullptr;
-    }
-    if (source && *source) {
-        return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
-    }
-    return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+    return it->second->findSpan(loc.start_line + loc.offset, loc);
 }
 
 StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramLocation* loc) {
@@ -4901,6 +4913,22 @@ void ThreadLocalProgramData::dbgExit(const StatementBlock* statement, QoreValue&
 QoreProgram::~QoreProgram() {
     printd(5, "QoreProgram::~QoreProgram() this: %p, pgmid: " QLLD "\n", this, (int64)priv->getProgramId());
     delete priv;
+}
+
+// the execution mode requested for the process, or -1 if none (see qore_set_default_exec_mode())
+static std::atomic<int> qore_default_exec_mode{-1};
+
+void qore_set_default_exec_mode(qore_exec_mode_t mode) {
+    qore_default_exec_mode.store(static_cast<int>(mode), std::memory_order_release);
+}
+
+bool qore_get_default_exec_mode(qore_exec_mode_t& mode) {
+    int m = qore_default_exec_mode.load(std::memory_order_acquire);
+    if (m < 0) {
+        return false;
+    }
+    mode = static_cast<qore_exec_mode_t>(m);
+    return true;
 }
 
 // setup independent program object
@@ -5588,7 +5616,7 @@ void qore_program_private::clearThreadData(ExceptionSink* xsink) {
     printd(5, "qore_program_private::clearThreadData() this: %p h: %p (size: %d)\n", this, *h, (int)(h ? h->size() : 0));
     if (h) {
         // no lock is held here: clearing the hash can run destructors
-        qore_hash_private::get(**h)->clear(xsink, false);
+        qore_hash_private::get(**h)->clear(xsink);
     }
 }
 
@@ -6577,7 +6605,7 @@ QoreListNode* qore_program_private::findStatementIds(const char* name, int line,
                 continue;
             }
             const QoreProgramLocation* loc = s->loc;
-            // another statement of the line is one with a column, as a block or a statement of AOT code has none
+            // another statement of the line is one with a known column
             if (s != st && (loc->start_column < 0 || loc->start_line != sloc->start_line
                     || loc->offset != sloc->offset || !same_str(loc->getFile(), sloc->getFile())
                     || !same_str(loc->getSource(), sloc->getSource()))) {
@@ -7861,4 +7889,31 @@ void qore_drop_exit_hooks(QoreProgram* pgm) {
         i.code->deref(&xsink);
     }
     xsink.handleExceptions();
+}
+
+int QoreForeignCodeProgramHold::hold(QoreProgram* code_pgm, ExceptionSink* n_xsink) {
+    assert(!pgm);
+    int t = q_gettid();
+    if (qore_program_private::get(*code_pgm)->incThreadCount(t, n_xsink)) {
+        return -1;
+    }
+    pgm = code_pgm;
+    xsink = n_xsink;
+    tid = t;
+    return 0;
+}
+
+void QoreForeignCodeProgramHold::release() {
+    QoreProgram* p = pgm;
+    pgm = nullptr;
+    // a deletion of the Program that the code made while it was held is completed here (see deferDerefIfRunning()):
+    // the exceptions of the destructors that it runs go to the sink of the call; without one (see hold()), they are
+    // reported here, as no caller receives them
+    if (xsink) {
+        qore_program_private::decThreadCount(*p, tid, xsink);
+        return;
+    }
+    ExceptionSink local_xsink;
+    qore_program_private::decThreadCount(*p, tid, &local_xsink);
+    local_xsink.handleExceptions();
 }

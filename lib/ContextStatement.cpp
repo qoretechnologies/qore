@@ -125,7 +125,7 @@ int ContextStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     // execute the statements
     for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
         printd(4, "ContextStatement::exec() iteration %d/%d\n", context->pos, context->max_pos);
-        if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc = code->execLoopBody(return_value, xsink)) == RC_BREAK) || *xsink) {
             rc = 0;
             break;
         }
@@ -156,7 +156,7 @@ int ContextStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
     // execute the statements
     for (context->pos = 0; context->pos < context->max_pos && !xsink->isEvent(); ++context->pos) {
         printd(4, "ContextStatement::exec() iteration %d/%d\n", context->pos, context->max_pos);
-        if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc_state = code->execLoopBody(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
             rc_state = 0;
             break;
         }

@@ -227,8 +227,16 @@ static QoreValue read_node_EN_DATE(AOTExprNodeReadCtx& ctx) {
         std::string zname = readStr(ctx.ptr, ctx.end);
         readU16(ctx.ptr, ctx.end);
         ExceptionSink tz_xsink;
-        const AbstractQoreZoneInfo* zone = QTZM.findLoadRegion(
-            zname.c_str(), &tz_xsink);
+        if (zname.find('\0') != std::string::npos) {
+            ctx.failed = true;
+            return QoreValue();
+        }
+        const AbstractQoreZoneInfo* zone = qore_aot_date_zone(zname.c_str(), ctx.pgm, &tz_xsink);
+        if (tz_xsink) {
+            tz_xsink.clear();
+            ctx.failed = true;
+            return QoreValue();
+        }
         return QoreValue(DateTimeNode::makeAbsolute(
             zone, epoch, us));
     }

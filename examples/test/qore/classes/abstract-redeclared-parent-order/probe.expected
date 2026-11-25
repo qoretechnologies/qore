@@ -1,0 +1,33 @@
+U4a: m(): C3::m; direct: C3::m; via: C3::m
+U4b: m(): C3::m; direct: C3::m; via: C3::m
+U4pa: m(): C3::m; direct: C3::m; via: C3::m
+U4pb: m(): C3::m; direct: C3::m; via: C3::m
+U4ha: m(): C3::m; direct: C3::m; via: C3::m
+U4hb: m(): C3::m; direct: C3::m; via: C3::m
+U4ia: m(): C3::m; direct: C3::m; via: C3::m
+U4ib: m(): C3::m; direct: C3::m; via: C3::m
+U4ea: m(): METHOD-IS-PRIVATE; direct: METHOD-IS-PRIVATE; via: C3::m
+U4eb: m(): METHOD-IS-PRIVATE; direct: METHOD-IS-PRIVATE; via: C3::m
+U4fa: m(): METHOD-IS-PRIVATE; direct: METHOD-IS-PRIVATE; via: C3::m
+U4fb: m(): METHOD-IS-PRIVATE; direct: METHOD-IS-PRIVATE; via: C3::m
+U4ga: m(): METHOD-IS-PRIVATE; direct: METHOD-IS-PRIVATE; via: C3::m
+U4gb: m(): METHOD-IS-PRIVATE; direct: METHOD-IS-PRIVATE; via: C3::m
+U4ma: m(): C3::m; direct: C3::m; via: C3::m
+U4mb: m(): C3::m; direct: C3::m; via: C3::m
+U6a: m(): C3::m; direct: C3::m; via: C3::m
+U6b: m(): C3::m; direct: C3::m; via: C3::m
+U6c: m(): C3::m; direct: C3::m; via: C3::m
+U6d: m(): C3::m; direct: C3::m; via: C3::m
+UXa: m(): X3::m; direct: X3::m; via: X3::m
+UXb: m(): X3::m; direct: X3::m; via: X3::m
+UBa: m(integer): B3::m(int); direct: B3::m(int); via: B3::m(int); m(string): B3::m(string); direct: B3::m(string); via: B3::m(string)
+UBb: m(integer): B3::m(int); direct: B3::m(int); via: B3::m(int); m(string): B3::m(string); direct: B3::m(string); via: B3::m(string)
+UPa: m(bool): P2::m(bool) const; direct: P2::m(bool) const; via: P2::m(bool) const
+UPb: m(bool): P2::m(bool) const; direct: P2::m(bool) const; via: P2::m(bool) const
+W4a: m(): C3::m; direct: C3::m; via: C3::m
+W4b: m(): C3::m; direct: C3::m; via: C3::m
+ARO::N7: m(): C3::m; direct: C3::m; via: C3::m
+ARO::N8: m(): C3::m; direct: C3::m; via: C3::m
+ARO::N9: m(bool): P2::m(bool) const; direct: P2::m(bool) const; via: METHOD-DOES-NOT-EXIST
+V7: m(): C3::m; direct: C3::m; via: C3::m
+V8: m(): C3::m; direct: C3::m; via: C3::m

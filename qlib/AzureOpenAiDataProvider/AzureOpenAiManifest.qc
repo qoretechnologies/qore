@@ -36,6 +36,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "create-speech",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/audio/speech",
                 "operation_id": "createSpeech",
                 "display_name": "Create Speech",
@@ -179,6 +180,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "create-completion",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/completions",
                 "operation_id": "createCompletion",
                 "display_name": "Create Completion",
@@ -473,6 +475,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "embedding",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/embeddings",
                 "operation_id": "createEmbedding",
                 "display_name": "Create Embeddings",
@@ -786,6 +789,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "run-grader",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/fine_tuning/alpha/graders/run",
                 "operation_id": "runGrader",
                 "display_name": "Run Grader",
@@ -800,6 +804,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "validate-grader",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/fine_tuning/alpha/graders/validate",
                 "operation_id": "validateGrader",
                 "display_name": "Validate Grader",
@@ -1050,6 +1055,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "create-image-edit",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/images/edits",
                 "operation_id": "createImageEdit",
                 "display_name": "Create Image Edit",
@@ -1072,6 +1078,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "create-image",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/images/generations",
                 "operation_id": "createImage",
                 "display_name": "Create Image",
@@ -1630,6 +1637,7 @@ public class AzureOpenAiManifest {
             <RestSchemaActionInfo>{
                 "action": "search-vector-store",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/vector_stores/{vector_store_id}/search",
                 "operation_id": "searchVectorStore",
                 "display_name": "Search Vector Store",

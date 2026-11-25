@@ -571,12 +571,21 @@ DLLLOCAL bool qore_weak_shared_container(const AbstractQoreNode* n);
 DLLLOCAL bool qore_weak_shared_local_container(const AbstractQoreNode* n);
 //! returns true if \a n is a list or hash that a weak reference designates, whatever holds it (qore#7342)
 DLLLOCAL bool qore_weak_designated_container(const AbstractQoreNode* n);
+//! the number of the weak references to lists and hashes in the process (qore#7419)
+/** A list or hash that a weak reference designates counts it (its weak holders), and this count is raised before and
+    released after each container's (qore_weak_holder()); while it is zero, no container is weakly designated, and the
+    share tests (qore_weak_shared(), qore_weak_shared_local()) are false without reading the container.  Relaxed
+    ordering is enough: a thread that gets a container from another gets it through something that orders the
+    creation of a weak reference to it before (a lock of an lvalue, a queue)
+*/
+DLLLOCAL extern std::atomic<unsigned> qore_weak_container_holders;
+
 //! returns true if \a v is a list or hash that a new holder other than a local variable takes as a copy of its own: a
 //! weak reference designates it (David, qore#7342: every share point copies it, also when nothing else holds it); the
 //! tag and the type are tested inline
 static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared(const QoreValue& v) {
     // QoreValue::getType() is not inline
-    if (!v.isPlainPointer()) {
+    if (!v.isPlainPointer() || !qore_weak_container_holders.load(std::memory_order_relaxed)) {
         return false;
     }
     const AbstractQoreNode* n = v.getPtr();
@@ -588,7 +597,7 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared(const QoreValue& v) {
 //! weak reference designates it and another strong holder holds it; one that nothing else holds is moved, and the
 //! weak references follow it (David, qore#7342)
 static QORE_INTERN_ALWAYS_INLINE bool qore_weak_shared_local(const QoreValue& v) {
-    if (!v.isPlainPointer()) {
+    if (!v.isPlainPointer() || !qore_weak_container_holders.load(std::memory_order_relaxed)) {
         return false;
     }
     const AbstractQoreNode* n = v.getPtr();
@@ -630,6 +639,8 @@ DLLLOCAL void qore_weak_target_pin(const QoreValue& v);
 DLLLOCAL QoreValue qore_weak_source_container(const QoreValue& v);
 //! pins \a copy if \a orig, which it is a copy-on-write copy of, is pinned (qore#7318)
 DLLLOCAL void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy);
+//! Whether retaining a replaced return could postpone an object destructor (#5992, #7022).
+DLLLOCAL bool qore_return_release_observable(const QoreValue& value);
 
 //! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
 /** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
@@ -1197,6 +1208,27 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
 
+//! Returns the value that a weak assignment holds of its source while it resolves its target (qore#7405)
+/** A list or a hash, which an lvalue holds, is held through a weak reference: a strong reference of the assignment's
+    own would make the container shared, so that a copy-on-write step of the target's path, which can pass through it
+    (h.w := h), copied it, and the weak reference assigned, as every weak reference to the containers below it, would
+    designate the original, which nothing holds.  The store locks the weak reference after the path is resolved (see
+    LValueHelper::assign()).  A weak reference to an object is returned as its target, as the source is read in the
+    other execution modes; any other value is returned as it is.
+
+    @param v the value read from the source, with a reference that the call takes over
+*/
+DLLLOCAL QoreValue qore_weak_assignment_source(QoreValue v, ExceptionSink* xsink);
+
+//! qore_weak_assignment_source() for the value that a local with IR storage holds, which the caller keeps
+/** The value returned has a reference of its own.  A weak reference to a list or a hash is given as it is; a
+    reference, which the local holds in its slot, is resolved, and the lvalue that it designates is read as the unique
+    step of the source reads a variable: a shared list or hash is made unique first (qore#5756, qore#7405).
+
+    @return the operand of the weak assignment; NOTHING if an exception was raised
+*/
+DLLLOCAL QoreValue qore_weak_assignment_source_borrowed(const QoreValue& v, ExceptionSink* xsink);
+
 #ifndef HAVE_ATOLL
 #ifdef HAVE_STRTOIMAX
 static inline long long atoll(const char* str) {
@@ -1735,6 +1767,13 @@ DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsin
 DLLLOCAL int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation);
 
 #ifdef DEBUG
+//! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, while \a hold is true
+//! (see dbg_program_cache_hold_reads())
+DLLLOCAL void qore_dbg_program_cache_hold_reads(bool hold);
+
+//! Debug-only: waits until \a count reads of the per-Program cache are held; false if not after \a timeout_ms
+DLLLOCAL bool qore_dbg_program_cache_wait_held(int count, int64 timeout_ms);
+
 //! Debug-only: reports that a read or write of the descriptor starts waiting for it (see dbg_fd_wait_notify())
 DLLLOCAL void qore_dbg_fd_wait(int fd);
 
@@ -1824,6 +1863,16 @@ DLLLOCAL void qore_aot_runtime_init_once();
 //! the number of lookups of single environment variables by the library (SystemEnvironment::isSet() and
 //! QoreEnvironmentValue), for tests (dbg_environment_lookups(); qore#7086)
 DLLLOCAL extern std::atomic<uint64_t> qore_env_lookup_count;
+
+//! the number of resolutions of the type of an AOT instanceof (qore_rt_instanceof_by_type_path()), for tests
+//! (dbg_aot_instanceof_resolves(); qore#7416)
+DLLLOCAL extern std::atomic<uint64_t> qore_aot_instanceof_resolve_count;
+
+#ifdef DEBUG
+//! debug builds: maps every type path to one set of the AOT instanceof type cache, so that tests can make paths share
+//! a set whatever the layout of the compiled code (dbg_aot_instanceof_one_set(); qore#7416)
+DLLLOCAL extern std::atomic<bool> qore_aot_instanceof_one_set;
+#endif
 
 static inline bool q_env_is_set(const char* name) {
     return SystemEnvironment::isSet(name);
@@ -2875,6 +2924,149 @@ DLLLOCAL size_t q_find_last_path_sep(const QoreString& path);
 
 // reutrns the given file's mode or 0 if the stat() call fails
 DLLLOCAL int q_get_mode(const QoreString& path);
+
+class QoreSandboxManager;
+
+//! gets the canonical path of an open file and verifies that the path names that file now
+/** The path is taken from the descriptor (F_GETPATH on macOS, /proc/self/fd on Linux), not from the name it was
+    opened with: a name can reach a file other than the one it appears to name (ex: a descriptor alias such as
+    /dev/fd/N on macOS, which realpath() does not resolve).  The name is resolved with realpath() only where the
+    descriptor cannot be asked (no F_GETPATH and no procfs).
+
+    @param fd the descriptor of the open file
+    @param sbuf the status of the open file (fstat())
+    @param opened_path the path the file was opened with, or nullptr
+    @param canon the canonical path of the file
+
+    @return 0 for OK, -1 if the file has no path (a pipe, a socket, a removed file), the path cannot be determined
+    or it does not name the open file (it was replaced or moved)
+*/
+DLLLOCAL int q_get_open_file_path(int fd, const struct stat& sbuf, const char* opened_path, std::string& canon);
+
+//! checks the sandbox filesystem policy for the file actually opened by a name that the policy allowed
+/** The policy is checked for the canonical path of the open descriptor (q_get_open_file_path()) unless it is the name
+    that was checked before it was opened.  The exception names the file as given, not the file reached.
+
+    @param sm the sandbox manager whose policy applies
+    @param fd the descriptor opened
+    @param name the name it was opened with, which the policy allowed
+    @param access_mode the QSEC_* access requested
+    @param xsink exceptions are raised here: FILESYSTEM-ACCESS-DENIED if the file cannot be identified, or the error
+    of the policy check
+
+    @return 0 if the policy allows the access to the file opened, -1 if not (an exception has been raised)
+*/
+DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name, int access_mode,
+        ExceptionSink* xsink);
+
+//! opens a file descriptor (close-on-exec) for a name that the sandbox filesystem policy, if any, allowed
+/** With a policy, the file actually opened is checked too (q_check_opened_file_policy()), and O_TRUNC is applied only
+    once it is allowed; for code that opens a file by name outside of QoreFile
+
+    @param xsink a denial is raised here; if nullptr, the open fails with errno EACCES
+
+    @return the descriptor, or -1 for an error: errno is set, or an exception has been raised in xsink
+*/
+DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
+
+//! returns true if the file-system policy of a sandbox applies to the sources that the code on this thread reads by
+//! name (\c %include, modules loaded by path): a sandbox governs the code, and no library module is being loaded
+DLLLOCAL bool q_source_read_policy_applies();
+
+//! opens a source for reading with the file-system policy of the calling code (qore#7518)
+/** The file opened is the file that the policy checked; it must be a regular file
+
+    @return the stream, or nullptr: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL FILE* q_open_policy_checked_source(const char* fn, ExceptionSink* xsink);
+
+//! reads a source with the file-system policy of the calling code into \a out (see q_open_policy_checked_source())
+/** @return 0 for OK, -1 for an error: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL int q_read_policy_checked_source(const char* fn, std::string& out, ExceptionSink* xsink);
+
+//! the directory of a path that the sandbox filesystem policy allowed, pinned for a name-based operation (qore#7518)
+/** The operation acts relative to dirfd on leaf with the *at() functions without following a link, so that it reaches
+    the object that the policy checked even if a component of the path is replaced afterwards
+*/
+struct QoreSandboxPinnedPath {
+    //! the descriptor of the directory holding the object
+    int dirfd = -1;
+    //! the name of the object in the directory
+    std::string leaf;
+    //! the canonical path of the object, which the policy allowed
+    std::string canon;
+    //! true if the name requires a directory: for an entry operation, the leaf keeps the trailing '/' for it; for an
+    //! operation on the object, the object was checked to be a directory
+    bool dir_required = false;
+    //! true for a descriptor alias (/dev/fd/N on macOS) read through a duplicate of its descriptor (dirfd; the leaf is
+    //! empty)
+    bool alias = false;
+
+    DLLLOCAL QoreSandboxPinnedPath() = default;
+    DLLLOCAL ~QoreSandboxPinnedPath();
+    QoreSandboxPinnedPath(const QoreSandboxPinnedPath&) = delete;
+    QoreSandboxPinnedPath& operator=(const QoreSandboxPinnedPath&) = delete;
+};
+
+//! resolves and pins a path for a name-based operation that the sandbox filesystem policy allows (qore#7518)
+/** The canonical path is resolved (for an entry operation, the directory holding the entry, whose last component is
+    not followed; otherwise the object that the name reaches), the directory holding it is opened without following
+    any link (a component that has become a link denies the operation), and the policy is checked for the canonical
+    path again with the access given
+
+    @param sm the sandbox manager whose policy applies; the caller has checked the name with it
+    @param name the name given, which errors name
+    @param mode the QSEC_* access of the operation
+    @param entry true for an operation on the directory entry itself (unlink, rmdir, rename, mkdir, symlink, lchown),
+    false for one on the object that the name reaches (chmod, chown); in the second case, a name that requires a
+    directory (it ends with '/', '.' or '..') must reach one (otherwise the error is ENOTDIR)
+    @param pin the pinned path
+    @param xsink for exceptions
+    @param lookup true for an entry operation that looks the name up as lstat() does: a name that requires a
+    directory, or '/', reaches the object that it names, which is pinned as for an operation on the object
+
+    @return 0 for OK, -1 if an exception has been raised, -2 for an error of the operating system (errno is set)
+*/
+//! a flag for the mode of q_sandbox_pin_path(): the operation only queries the object, whatever access is checked
+#define QSEC_PIN_QUERY (1 << 30)
+
+DLLLOCAL int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool entry,
+        QoreSandboxPinnedPath& pin, ExceptionSink* xsink, bool lookup = false);
+
+//! gets the status of a path that the sandbox policy allows, pinned against a concurrent change (qore#7518)
+/** @param follow true for the object that the name reaches (stat()), false for the entry itself (lstat())
+
+    @return 0 for OK, -1 for an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_stat(QoreSandboxManager& sm, const char* name, bool follow, struct stat& sbuf,
+        ExceptionSink* xsink);
+
+#ifdef Q_HAVE_STATVFS
+//! gets the file system status of a path that the sandbox policy allows, pinned against a concurrent change
+/** @return 0 for OK, -1 for an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_statvfs(QoreSandboxManager& sm, const char* name, struct statvfs& vfs,
+        ExceptionSink* xsink);
+#endif
+
+//! checks the access of a path that the sandbox policy allows, pinned against a concurrent change
+/** @param mode the QSEC_* access checked by the policy
+    @param amode the access checked for the object (R_OK, W_OK)
+
+    @return 0 for access, -1 for no access or an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_access(QoreSandboxManager& sm, const char* name, int mode, int amode,
+        ExceptionSink* xsink);
+
+//! changes the mode of an entry of a pinned directory without following a link (see q_sandbox_pin_path())
+/** @return 0 for OK, -1 for an error (errno is set; ELOOP for a link)
+*/
+DLLLOCAL int q_fchmodat_nofollow(int dirfd, const char* leaf, int mode);
+
+//! test hook: a place where a concurrent change of the file system can replace the given name (see
+//! dbg_fs_swap_on_open() in a debug build; does nothing in other builds; qore#7498)
+DLLLOCAL void q_dbg_fs_swap_point(const char* name);
 //! returns the byte length of the next UTF-8 character, 0 for an invalid character (RFC 3629: also an overlong form,
 //! a surrogate or a code point above U+10FFFF) or minus the length of the character if the valid_len bytes are a
 //! valid start of it (qore#6604)
@@ -2888,6 +3080,13 @@ DLLLOCAL int64 get_ms_zero(const QoreValue& v);
 
 DLLLOCAL AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n);
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n);
+
+//! applies the element type of a list whose element type has no type (untyped or auto) to a pointer value
+/** as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment()): an untyped element (list, softlist,
+    list<any>) strips the complex type of a container, an auto element (list<auto>) keeps it; used by the IR
+    interpreter and native code, out of line so that a store of another value costs one test (qore#7573)
+*/
+DLLLOCAL void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry, ExceptionSink* xsink);
 
 // for IPv4/v6 only
 DLLLOCAL void* qore_get_in_addr(struct sockaddr *sa);

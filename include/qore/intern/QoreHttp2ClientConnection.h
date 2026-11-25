@@ -207,7 +207,14 @@ public:
         HttpClientEventSink* event_sink = nullptr) override;
 
     //! Push body data for a streaming send request (H2 DATA frame)
-    /** @since %Qore 3.0
+    /** A send that finds the stream's send buffer full waits for the peer's flow-control windows to let the data
+        go out and the buffer to drain (RFC 9113 section 5.2), and is then made again: no data is dropped however
+        slowly the peer reads (qore#7465).  The wait ends when the stream or the connection ends (ex: the peer resets
+        the stream or answers the request without reading its body) and when the thread is cancelled or its Program
+        interrupted, and raises \c HTTP2-FLOW-CONTROL only if the connection took none of the stream's data for the
+        request timeout of the connection's manager.
+
+        @since %Qore 3.0
     */
     DLLEXPORT void pushSendData(const void* data, size_t len, ExceptionSink* xsink) override;
 
@@ -287,6 +294,10 @@ private:
 
     //! Stream ID for the active streaming send request (-1 = none)
     int64_t streaming_send_stream_id = -1;
+
+    //! Sends data on the stream, waiting for the stream's send buffer to drain while it is full (see pushSendData())
+    DLLLOCAL void sendStreamDataWaitingForDrain(int64_t stream_id, const BinaryNode* data, bool end_stream,
+        ExceptionSink* xsink);
 
     //! Builds the C++ pieces and submits to the controller.
     DLLLOCAL int buildAndSubmit(ExceptionSink* xsink);

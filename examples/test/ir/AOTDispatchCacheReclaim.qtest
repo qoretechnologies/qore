@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and module loading, and cache entries read without a lock by threads while another thread frees them (memory ordering on arm64)
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTDispatchCacheReclaimTest
+
+#! The AOT method dispatch cache frees the entries it replaces (qore#7459)
+/** An AOT call site that calls a method by name caches the method found for the receiver in a small cache.  Its
+    entries are keyed by the IDs of the calling Program and the receiver's Program, which are never reused, and any
+    class destruction makes all entries stale.  A replaced entry was kept until the process ended, for the threads that
+    read the cache without a lock, so a process that kept creating and destroying Programs grew by an entry per call
+    site on each cycle: a Qorus server that reloaded a service every 14 seconds grew to 44 GB in 5 days (qorus#1148).
+
+    A replaced entry is now retired and freed once no reader can hold it.  The first test runs an AOT-compiled call site
+    over many destroyed Programs and checks, with a debug build of the library, that every entry it replaced was freed.
+    The second test looks up entries in reader threads while a writer replaces them; run it under valgrind or a
+    sanitizer to show that no entry is freed under a reader.
+*/
+class AOTDispatchCacheReclaimTest inherits QUnit::Test {
+    public {
+        #! the Programs created and destroyed behind the AOT call site
+        const Generations = 200;
+
+        #! the value that the target's method returns
+        const Value = 42;
+
+        #! the reader threads of the concurrent test
+        const StressThreads = 8;
+
+        #! the entries the writer of the concurrent test adds in each round; each one after the first replaces one
+        const StressIterations = 100000;
+
+        #! the rounds of the concurrent test
+        /** A round catches an entry freed under a reader (a broken reclamation) in about 95% of runs on a 32-thread
+            host, so three rounds miss it about once in ten thousand runs; a correct build passes every round
+        */
+        const StressRounds = 3;
+
+        #! the target classes: one per Program
+        const TargetSource = "%modern
+class Target {
+    int value() {
+        return " + Value + ";
+    }
+
+    int other() {
+        return 1;
+    }
+
+    int third() {
+        return 2;
+    }
+}
+
+Target sub make() {
+    return new Target();
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTDispatchCacheReclaimTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("an AOT call site over destroyed Programs frees the entries it replaces", \testProgramChurn());
+        addTestCase("lookups in reader threads stay correct while a writer retires entries", \testConcurrentRetire());
+
+        set_return_value(main());
+    }
+
+    testProgramChurn() {
+        TmpDir tmp("qore-aot-dispatch-reclaim-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = src_dir + "/AOTDispatchReclaimMod.qm";
+        writeFile(qm_path, ModuleSource);
+        string script_path = tmp.path + "/run.qr";
+        writeFile(script_path, ScriptSource);
+        string qmod_path = qmod_dir + "/AOTDispatchReclaimMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled the module: " + compile_out);
+
+        hash<auto> cached = run(qmod_dir, script_path);
+        assertEq(Value * Generations, cached.sum, "every call through the AOT call site returned the target's value");
+        hash<auto> uncached = run(qmod_dir, script_path, True);
+        assertEq(Value * Generations, uncached.sum, "the calls return the same value without the cache");
+%ifdef QoreDebug
+        # every Program destroyed makes the entry stale, and the next Program's call replaces it
+        assertGe(Generations - 1, cached.retired, "the call site's entry was replaced for each new Program");
+        assertEq(cached.retired, cached.reclaimed, "every replaced entry was freed");
+        assertEq(0, cached.pending, "no replaced entry is left to free");
+        assertEq(0, uncached.retired, "without the cache, no entry is made, so none is replaced");
+%endif
+    }
+
+    testConcurrentRetire() {
+%ifndef QoreDebug
+        testSkip("the concurrent test requires a debug build of the Qore library: "
+            "dbg_aot_dispatch_reclaim_stress() is only registered when the library is built with DEBUG");
+%endif
+%ifdef QoreDebug
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
+        pgm.parse(TargetSource, "aot-dispatch-reclaim-target");
+        object target = pgm.callFunction("make");
+        for (int round = 1; round <= StressRounds; ++round) {
+            hash<auto> r = dbg_aot_dispatch_reclaim_stress(target, StressThreads, StressIterations);
+            assertEq(0, r.wrong_hits, sprintf("round %d: all %d lookups that matched gave the method and variant of "
+                "the entry looked up", round, r.hits));
+            assertEq(StressIterations - 1, r.retired, sprintf("round %d: each entry after the first replaced one",
+                round));
+            assertEq(r.retired, r.reclaimed, sprintf("round %d: every replaced entry was freed once the readers "
+                "ended", round));
+            assertEq(0, r.pending, sprintf("round %d: no replaced entry is left to free", round));
+            assertEq(1, r.owned, sprintf("round %d: the cache owns only the entry in its slot", round));
+        }
+%endif
+    }
+
+    #! runs the script with the module in @p module_dir; returns the parsed result
+    private hash<auto> run(string module_dir, string script_path, bool disable_cache = False) {
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s%s -b --enable-debug %s %d 2>&1",
+            libqore_dir, module_dir, disable_cache ? "QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_CACHE=1 " : "",
+            qore_bin, script_path, Generations));
+        *list<*string> m = (out =~ x/^result: (-?[0-9]+)\|(-?[0-9]+)\|(-?[0-9]+)\|(-?[0-9]+)$/m);
+        if (!m) {
+            throw "TEST-ERROR", sprintf("unexpected output of %y: %s", script_path, out);
+        }
+        return {
+            "sum": m[0].toInt(),
+            "retired": m[1].toInt(),
+            "reclaimed": m[2].toInt(),
+            "pending": m[3].toInt(),
+        };
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+
+    #! the AOT-compiled call site: a method called by name on a receiver whose class is not known at compile time
+    const ModuleSource = "%modern
+
+module AOTDispatchReclaimMod {
+    version = \"1.0\";
+    desc = \"AOT method dispatch cache reclamation regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTDispatchReclaimMod {
+    public int sub callValue(auto receiver) {
+        return receiver.value();
+    }
+}
+";
+
+    #! creates and destroys a Program for each generation, calling the AOT call site with an object of each one
+    /** Prints the sum of the values returned and, with a debug build, the entries replaced and freed meanwhile and
+        the entries left to free; -1 for each without a debug build
+    */
+    const ScriptSource = "%modern
+%requires AOTDispatchReclaimMod
+
+const TargetSource = \"%modern\\nclass Target {\\n    int value() {\\n        return 42;\\n    }\\n}\\n\\nTarget sub make() {\\n    return new Target();\\n}\\n\";
+
+int generations = ARGV[0].toInt();
+%ifdef QoreDebug
+hash<auto> before = dbg_aot_dispatch_reclaim_stats();
+%endif
+int sum = 0;
+for (int i = 0; i < generations; ++i) {
+    Program p();
+    p.parse(TargetSource, \"aot-dispatch-reclaim-target-\" + i);
+    object o = p.callFunction(\"make\");
+    sum += AOTDispatchReclaimMod::callValue(o);
+    delete o;
+    delete p;
+}
+%ifdef QoreDebug
+hash<auto> after = dbg_aot_dispatch_reclaim_stats();
+printf(\"result: %d|%d|%d|%d\\n\", sum, after.retired - before.retired, after.reclaimed - before.reclaimed,
+    after.pending);
+%else
+printf(\"result: %d|-1|-1|-1\\n\", sum);
+%endif
+";
+}
