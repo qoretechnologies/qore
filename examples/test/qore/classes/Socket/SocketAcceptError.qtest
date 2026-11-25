@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketAcceptErrorTest
+
+#! The error of a failed accept() names no peer address: accept() writes none when it fails (qore#7565)
+/** A listening socket that is shut down wakes its accept, and accept() fails; the error was made from the peer address
+    of the call, which accept() did not write (uninitialized memory, which valgrind reports)
+*/
+class SocketAcceptErrorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("Socket accept error", "1.0", \ARGV) {
+        addTestCase("the error of a failed accept()", \acceptErrorTest());
+        addTestCase("the error of a failed asynchronous accept()", \asyncAcceptErrorTest());
+        set_return_value(main());
+    }
+
+    #! returns a listening socket that is shut down, or skips the test case where the OS does not wake its accept
+    private Socket getShutDownListener() {
+        if (Platform.OS != "Linux") {
+            testSkip("a listening socket that is shut down wakes its accept with an error on Linux only");
+        }
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        listener.shutdown();
+        return listener;
+    }
+
+    acceptErrorTest() {
+        Socket listener = getShutDownListener();
+        on_exit listener.close();
+        try {
+            listener.accept(10s);
+            fail("accept() of a listening socket that was shut down did not fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-ACCEPT-ERROR", ex.err, "the error");
+            assertRegex("^error in accept\\(\\)", ex.desc, "the description: " + ex.desc);
+            assertEq(-1, ex.desc.find("target"), "no peer address: " + ex.desc);
+        }
+    }
+
+    asyncAcceptErrorTest() {
+        Socket listener = getShutDownListener();
+        on_exit listener.close();
+        # the poll operation of the accept, which the I/O controller of a server drives
+        SocketPollOperation op = listener.startPollAccept();
+        try {
+            op.continuePoll();
+            fail("the accept of a listening socket that was shut down did not fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-ACCEPT-ERROR", ex.err, "the error");
+            assertEq(-1, ex.desc.find("target"), "no peer address: " + ex.desc);
+        }
+    }
+}

@@ -3921,7 +3921,8 @@ public:
                 return QSE_TIMEOUT;
             }
 
-            qore_socket_error(xsink, "SOCKET-ACCEPT-ERROR", "error in accept()", 0, 0, 0, addr);
+            // a failed accept() wrote no peer address to addr: the error has none (qore#7565)
+            qore_socket_error(xsink, "SOCKET-ACCEPT-ERROR", "error in accept()");
             return -1;
         }
     }
