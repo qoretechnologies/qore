@@ -224,6 +224,9 @@ class MysqlSequenceFunctionTest inherits QUnit::Test {
         if (!refused) {
             assertNothing(ex, sprintf("the function is created (log_bin: %y, log_bin_trust_function_creators: %y)",
                 vars.log_bin, vars.trust));
+            AbstractSequence seq = db.getSequence(prefix + "s1");
+            assertEq("standalone", seq.ownership.kind);
+            assertNothing(seq.data_type);
             assertEq(1, db.getNextSequenceValue(prefix + "s1"), "the emulated sequence gives its first value");
             return;
         }

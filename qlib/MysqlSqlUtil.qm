@@ -1585,7 +1585,9 @@ end";
                 + " where name = %v", name).name;
             if (!str)
                 return;
-            return new MysqlSequence(sequence_table, name);
+            MysqlSequence seq(sequence_table, name);
+            seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+            return seq;
         }
 
         private *AbstractView getViewImpl(string name) {

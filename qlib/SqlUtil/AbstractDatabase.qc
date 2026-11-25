@@ -1580,6 +1580,15 @@ list l = db.getAlignProcedureSql(f);
 *AbstractSequence seq = db.getSequence("seq_queues");
         @endcode
 
+        The returned sequence's @ref SqlUtil::AbstractSequence::ownership "ownership" describes a standalone
+        sequence or identifies its owning column. It is @ref nothing when the driver cannot determine ownership.
+        Its @ref SqlUtil::AbstractSequence::data_type "data_type" gives the native sequence type where available.
+        PostgreSQL distinguishes identity and owned sequences (including serial columns) from standalone sequences.
+        Oracle gives identity ownership when the identity sequence name and the owning column are visible.
+        Firebird lists user sequences and can describe an identity generator by its catalog name.
+        SQL Server sequences and MySQL's emulated sequences are standalone. PostgreSQL and SQL Server report
+        the declared sequence type.
+
         @param name the uniquely-identifying name of the sequence to retrieve
 
         @return an AbstractSequence argument for the given sequence name or @ref nothing if the sequence cannot be found

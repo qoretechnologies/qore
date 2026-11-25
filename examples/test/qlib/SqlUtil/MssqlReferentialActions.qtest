@@ -50,6 +50,7 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
         addTestCase("sequences are described from the catalog", \sequenceDescription());
         addTestCase("foreign constraint actions on the database", \actionsOnDatabase());
         addTestCase("sequence alignment on the database", \sequencesOnDatabase());
+        addTestCase("declared sequence types and column defaults on the database", \declaredSequenceType());
         set_return_value(main());
     }
 
@@ -280,13 +281,17 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
         assertEq({"start": 1n, "increment": 5n, "max": 1000n, "min": -10n, "cycle": True, "cache": 0},
             {"start": seq.start, "increment": seq.increment, "max": seq.max, "min": seq.min, "cycle": seq.cycle,
                 "cache": seq.cache});
+        assertEq("standalone", seq.ownership.kind);
+        assertEq("bigint", seq.data_type);
         MssqlSequence def = db.getSequence("mra_def");
         assertEq({"max": NOTHING, "min": NOTHING, "cycle": False, "cache": NOTHING},
             {"max": def.max, "min": def.min, "cycle": def.cycle, "cache": def.cache});
         MssqlSequence int_seq = db.getSequence("mra_int");
         assertEq({"max": NOTHING, "min": NOTHING, "cache": 15},
             {"max": int_seq.max, "min": int_seq.min, "cache": int_seq.cache});
+        assertEq("int", int_seq.data_type);
         MssqlSequence dec = db.getSequence("mra_dec");
+        assertEq("decimal(5,0)", dec.data_type);
         assertEq({"max": NOTHING, "min": NOTHING}, {"max": dec.max, "min": dec.min});
 
         # the sequences need no SQL for their own description
@@ -396,8 +401,29 @@ class MssqlReferentialActionsTest inherits QUnit::Test {
         assertEq((), alignSequence(ds, desc));
         assertEq(13, db.getNextSequenceValue("mra_seq"));
         MssqlSequence seq = db.getSequence("mra_seq");
+        assertEq("standalone", seq.ownership.kind);
+        assertEq("bigint", seq.data_type);
         assertEq({"start": 1n, "max": NOTHING, "min": -20n, "cycle": False, "cache": 10},
             {"start": seq.start, "max": seq.max, "min": seq.min, "cycle": seq.cycle, "cache": seq.cache});
+    }
+
+    declaredSequenceType() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        MssqlDatabase db(ds);
+        ds.execRaw("create type dbo.mra_alias from smallint");
+        on_exit {
+            ds.execRaw("drop type dbo.mra_alias");
+            ds.commit();
+        }
+        ds.execRaw("create sequence dbo.mra_typed as dbo.mra_alias");
+        on_exit dropSequence(ds, "mra_typed");
+        ds.execRaw("create table mra_typed_default (id bigint identity, num smallint default next value for dbo.mra_typed)");
+        on_exit dropTables(ds, ("mra_typed_default",));
+        AbstractSequence seq = db.getSequence("dbo.mra_typed");
+        assertEq("[dbo].[mra_alias]", seq.data_type);
+        assertEq("standalone", seq.ownership.kind);
+        assertNothing(seq.ownership.column);
     }
 
     #! Returns a datasource to the database given by QORE_DB_CONNSTR_FREETDS
