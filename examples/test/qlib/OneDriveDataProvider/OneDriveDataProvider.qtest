@@ -187,6 +187,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
     constructor() : Test("OneDriveDataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("sanity test", \sanityTest());
         addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("read-only actions", \readOnlyActionsTest());
         addTestCase("data types", \dataTypesTest());
         addTestCase("get drive info", \getDriveInfoTest());
         addTestCase("get item", \getItemTest());
@@ -237,6 +238,24 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         assertTrue(inlist("create-sharing-link", children), "has create-sharing-link child");
         assertTrue(inlist("copy-item", children), "has copy-item child");
         assertTrue(inlist("events", children), "has events child");
+    }
+
+    #! the actions that only read declare that they change nothing, and the write actions still do (qore#7454)
+    readOnlyActionsTest() {
+        # each of these makes only GET requests and stores nothing
+        foreach string name in (("get-drive-info", "get-item", "download-file")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(OneDriveDataProvider::OneDriveDataProvider::AppName, name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # the write actions keep the default of an API action, which changes state
+        foreach string name in (("upload-file", "delete-item", "create-sharing-link")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(OneDriveDataProvider::OneDriveDataProvider::AppName, name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     actionCatalogTest() {

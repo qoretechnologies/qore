@@ -1191,6 +1191,19 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
         assertTrue(exists newSalesOrderAction, "new-sales-order action should exist");
         assertEq(DPAT_EVENT, newSalesOrderAction.action_code);
         assertEq(ZohoInventoryDataProvider::EVENT_NEW_SALES_ORDER, newSalesOrderAction.action_val);
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-contact", "get-contact-person", "get-invoice", "get-item",
+            "get-item-adjustment", "get-item-group", "get-package", "get-purchase-order", "get-sales-order",
+            "get-shipment-order");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(createContactAction));
     }
 
     #! Integration tests - require Zoho Inventory credentials

@@ -142,7 +142,10 @@ public:
         int delegate_idx = -1;      //!< DELEGATE: index into delegate_ops table
         size_t recv_size = 0;       //!< RECV_EXACT: byte count
         int pattern_idx = -1;       //!< RECV_UNTIL: index into string_data table
-        bool recv_as_string = false;//!< RECV_EXACT/RECV_UNTIL/RECV_DATA: return as string
+        //! RECV_EXACT/RECV_UNTIL/RECV_DATA: return as string; RECV_HEADER: the header is that of a response, whose
+        //! status line is checked whatever it starts with; TRANSFORM/BRANCH: the step checks the status code of a
+        //! response, so the headers that the pipeline reads are those of responses (qore#7485)
+        bool recv_as_string = false;
 
         // BRANCH config
         BranchCondition condition;

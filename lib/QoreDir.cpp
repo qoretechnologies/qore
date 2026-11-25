@@ -156,10 +156,57 @@ int QoreDir::chdir(const char* ndir) {
 
 // create the directory with all the parent directories if they do not exist
 // return amount of created directories, -1 if error
+#ifndef _Q_WINDOWS
+//! creates the missing directories of a path under a sandbox policy, each in its parent as the policy checked it,
+//! pinned against a concurrent change (qore#7518); the policy was checked with QoreDir::checkCreatePolicy()
+/** @param xsink if not null, an error is raised here (DIR-CREATE-FAILURE, or the denial of the policy); if null, a
+    denial fails with errno EACCES
+
+    @return the number of directories created, or -1 for an error
+*/
+static int create_pinned(QoreSandboxManager& sm, const qore_qd_private& priv, int mode, ExceptionSink* xsink) {
+    if (priv.getDirname().empty()) {
+        if (xsink) {
+            xsink->raiseException("DIR-CREATE-ERROR", "cannot create directory; no directory is set");
+        }
+        return -1;
+    }
+    name_vec_t missing;
+    priv.getMissingDirs(missing);
+    int cnt = 0;
+    for (const std::string& path : missing) {
+        ExceptionSink local_xsink;
+        ExceptionSink* x = xsink ? xsink : &local_xsink;
+        QoreSandboxPinnedPath pin;
+        int rc = q_sandbox_pin_path(sm, path.c_str(), QSEC_CREATE, true, pin, x);
+        if (!rc) {
+            rc = mkdirat(pin.dirfd, pin.leaf.c_str(), mode);
+        }
+        if (rc) {
+            if (local_xsink) {
+                local_xsink.clear();
+                errno = EACCES;
+            } else if (xsink && !*xsink) {
+                xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'", path.c_str());
+            }
+            return -1;
+        }
+        ++cnt;
+    }
+    return cnt;
+}
+#endif
+
 int QoreDir::create(int mode, ExceptionSink* xsink) const {
     if (checkCreatePolicy(xsink)) {
         return -1;
     }
+#ifndef _Q_WINDOWS
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        return create_pinned(*smh.get(), *priv, mode, xsink);
+    }
+#endif
     return priv->create(mode, xsink);
 }
 
@@ -186,6 +233,14 @@ int QoreDir::checkCreatePolicy(ExceptionSink* xsink) const {
 // create the directory with all the parent directories if they do not exist
 // return amount of created directories, -1 if error
 int QoreDir::create(int mode) const {
+#ifndef _Q_WINDOWS
+    // under a policy, each missing directory is created in its parent as the policy checked it, pinned against a
+    // concurrent change (qore#7518); the policy was checked with checkCreatePolicy()
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        return create_pinned(*smh.get(), *priv, mode, nullptr);
+    }
+#endif
     return priv->create(mode);
 }
 
@@ -220,6 +275,19 @@ int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
         if (!smh->checkFilesystemAccess(path.c_str(), QSEC_CREATE, xsink)) {
             return -1;
         }
+#ifndef _Q_WINDOWS
+        // the directory is created in the directory that the policy checked, pinned against a concurrent change
+        // (qore#7518)
+        QoreSandboxPinnedPath pin;
+        int rc = q_sandbox_pin_path(*smh.get(), path.c_str(), QSEC_CREATE, true, pin, xsink);
+        if (!rc) {
+            rc = mkdirat(pin.dirfd, pin.leaf.c_str(), mode);
+        }
+        if (rc && !*xsink) {
+            xsink->raiseErrnoException("DIR-MKDIR-FAILURE", errno, "error creating directory '%s'", path.c_str());
+        }
+        return rc ? -1 : 0;
+#endif
     }
     return priv->mkdir(subdir, mode, xsink);
 }
@@ -237,6 +305,19 @@ int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
         if (!smh->checkFilesystemAccess(path.c_str(), QSEC_DELETE, xsink)) {
             return -1;
         }
+#ifndef _Q_WINDOWS
+        // the directory is removed from the directory that the policy checked, pinned against a concurrent change
+        // (qore#7518)
+        QoreSandboxPinnedPath pin;
+        int rc = q_sandbox_pin_path(*smh.get(), path.c_str(), QSEC_DELETE, true, pin, xsink);
+        if (!rc) {
+            rc = unlinkat(pin.dirfd, pin.leaf.c_str(), AT_REMOVEDIR);
+        }
+        if (rc && !*xsink) {
+            xsink->raiseErrnoException("DIR-RMDIR-FAILURE", errno, "error removing directory '%s'", path.c_str());
+        }
+        return rc ? -1 : 0;
+#endif
     }
     return priv->rmdir(subdir, xsink);
 }
@@ -260,6 +341,24 @@ int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
     if (check_dir_policy(*priv, QSEC_WRITE, xsink)) {
         return -1;
     }
+#ifndef _Q_WINDOWS
+    // the mode of the directory that the policy checked is changed, pinned against a concurrent change (qore#7518)
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        std::string path = priv->getDirname();
+        if (smh && !path.empty()) {
+            QoreSandboxPinnedPath pin;
+            int rc = q_sandbox_pin_path(*smh.get(), path.c_str(), QSEC_WRITE, false, pin, xsink);
+            if (!rc) {
+                rc = q_fchmodat_nofollow(pin.dirfd, pin.leaf.c_str(), mode);
+            }
+            if (rc && !*xsink) {
+                xsink->raiseErrnoException("DIR-CHMOD-FAILURE", errno, "error in Dir::chmod() on '%s'", path.c_str());
+            }
+            return rc ? -1 : 0;
+        }
+    }
+#endif
     return priv->chmod(mode, xsink);
 }
 
@@ -268,6 +367,25 @@ int QoreDir::chown(uid_t uid, gid_t gid, ExceptionSink* xsink) const {
     if (check_dir_policy(*priv, QSEC_WRITE, xsink)) {
         return -1;
     }
+#ifndef _Q_WINDOWS
+    // the ownership of the directory that the policy checked is changed, pinned against a concurrent change
+    // (qore#7518)
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        std::string path = priv->getDirname();
+        if (smh && !path.empty()) {
+            QoreSandboxPinnedPath pin;
+            int rc = q_sandbox_pin_path(*smh.get(), path.c_str(), QSEC_WRITE, false, pin, xsink);
+            if (!rc) {
+                rc = fchownat(pin.dirfd, pin.leaf.c_str(), uid, gid, AT_SYMLINK_NOFOLLOW);
+            }
+            if (rc && !*xsink) {
+                xsink->raiseErrnoException("DIR-CHOWN-FAILURE", errno, "error in Dir::chown() on '%s'", path.c_str());
+            }
+            return rc ? -1 : 0;
+        }
+    }
+#endif
     return priv->chown(uid, gid, xsink);
 }
 #endif

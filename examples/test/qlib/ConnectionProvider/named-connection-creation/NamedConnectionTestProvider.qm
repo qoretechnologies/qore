@@ -31,6 +31,7 @@ public ConnectionProvider::AbstractConnection sub get_mod_connection(string name
         # the targets of the sandbox case, which the test gives in the environment
         case "allowed":
         case "denied":
+            # live-provider-optin: NCC_ALLOWED_URL or NCC_DENIED_URL, the test's local servers on 127.0.0.1
             return new RestConnection(name, "named", getenv("NCC_" + name.upr() + "_URL"), {"monitor": False},
                 {"connect_timeout": 5000, "timeout": 5000});
     }

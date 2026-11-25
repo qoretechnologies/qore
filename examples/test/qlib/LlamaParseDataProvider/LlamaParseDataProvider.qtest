@@ -57,6 +57,7 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("llamaparse", "LLAMAPARSE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("the manifest agrees with the pinned schema", \schemaTest());
         addTestCase("generated action presentation", \actionPresentationTest());
         addTestCase("upload request contract", \uploadRequestTest());
@@ -82,6 +83,24 @@ public class LlamaParseDataProviderTest inherits QUnit::Test {
             "set the LlamaParse connection name; without it (and without the "
             "LLAMAPARSE_CONNECTION env var) the live test is skipped",
             OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("generate-extract-schema", "validate-extract-schema",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("LlamaParse", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("parse-file", "extract-from-document", "classify-document",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("LlamaParse", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {

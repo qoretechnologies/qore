@@ -179,6 +179,16 @@ DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_
 */
 DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
 
+//! set by dbg_http2_fail_next_submit(): the next request submitted on an HTTP/2 client session fails as when the
+//! session has no stream ID left (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE; qore#7443)
+DLLLOCAL extern std::atomic<bool> qore_dbg_h2_fail_next_submit;
+
+//! armed by dbg_fs_swap_on_open(): replaces a symbolic link before the next open of it that the sandbox filesystem
+//! policy checked, between the check of its name and the open (qore#7498)
+/** @param fn the name being opened; the link is replaced only if it is the name given to dbg_fs_swap_on_open()
+*/
+DLLLOCAL void qore_dbg_fs_swap_on_open(const char* fn);
+
 //! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
 //! see dbg_quic_stateless_reset_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
@@ -309,6 +319,14 @@ DLLLOCAL extern std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook
 //! dbg_fail_http1_header_read_op(), which names the site or none for any
 DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
 
+//! one-shot: returns true if the allocation of the text of an HTTP header received at \a site must fail; armed by
+//! dbg_fail_http_header_text_alloc(), which names the site (\c "read-header", \c "send-and-read-header" or
+//! \c "send-stream-and-read-header")
+DLLLOCAL bool qore_dbg_http_header_text_alloc_must_fail(const char* site);
+
+//! returns true if the buffer of a binary value must not grow to \a size bytes; set by dbg_fail_binary_reserve_over()
+DLLLOCAL bool qore_dbg_binary_reserve_must_fail(size_t size);
+
 //! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
 DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);
 
@@ -415,6 +433,9 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! the address family race of an HTTP/3 client connection found the connection attempt that wins, before the
     //! operation's socket takes it over (the I/O thread)
     Http3RaceWinner,
+    //! an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full and is about to wait
+    //! for it to drain (the sending thread; qore#7465)
+    SendDrainWait,
     //! the number of hold points
     Count,
 };

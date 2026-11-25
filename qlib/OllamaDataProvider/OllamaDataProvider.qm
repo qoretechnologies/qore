@@ -75,6 +75,7 @@ module OllamaDataProvider {
             "desc": "Sends a list of chat messages to a local Ollama model via the "
                 "OpenAI-compatible `/v1/chat/completions` endpoint.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Chat",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OllamaChatCompletionRequestDataType::Fields{"messages", "model",}, {
@@ -102,6 +103,7 @@ module OllamaDataProvider {
                 "model (e.g. `nomic-embed-text`, `mxbai-embed-large`, `snowflake-arctic-embed`) "
                 "via Ollama's native `/api/embed` endpoint.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OllamaEmbedRequestDataType::Fields{"input", "model",}, {
@@ -122,6 +124,7 @@ module OllamaDataProvider {
             "desc": "Returns the list of models installed in the local Ollama runtime, with "
                 "size, family, parameter count, and modification timestamps.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Admin",),
             "options": {},
             "output_type": OllamaListModelsDataProvider::ResponseType,

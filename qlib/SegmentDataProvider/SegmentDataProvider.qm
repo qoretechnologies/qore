@@ -100,6 +100,7 @@ module SegmentDataProvider {
             "short_desc": "Get a source by ID",
             "desc": "Retrieve a single Segment source by its unique ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentGetSourceDataProvider::RequestType.getFields(), {
                     "preselected": True,
@@ -210,6 +211,7 @@ module SegmentDataProvider {
             "short_desc": "Get a destination by ID",
             "desc": "Retrieve a single Segment destination by its unique ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentGetDestinationDataProvider::RequestType.getFields(), {
                     "preselected": True,
@@ -320,6 +322,7 @@ module SegmentDataProvider {
             "short_desc": "Get a warehouse by ID",
             "desc": "Retrieve a single Segment warehouse by its unique ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentGetWarehouseDataProvider::RequestType.getFields(), {
                     "preselected": True,
@@ -450,6 +453,7 @@ module SegmentDataProvider {
             "short_desc": "Get a tracking plan by ID",
             "desc": "Retrieve a single Segment tracking plan by its unique ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentGetTrackingPlanDataProvider::RequestType.getFields(), {
                     "preselected": True,

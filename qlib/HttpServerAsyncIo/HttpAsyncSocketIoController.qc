@@ -154,6 +154,14 @@ public class HttpAsyncSocketIoController {
     }
 
     private {
+        #! The HTTP/2 and HTTP/3 connections closed most recently, with why (qore#7443); see getRecentConnectionCloses()
+        list<hash<auto>> recent_closes = ();
+
+        #! Protects @ref recent_closes
+        Mutex recent_closes_lock();
+    }
+
+    private {
         #! Lock for atomic operations — RWLock allows concurrent read-only access
         RWLock m();
 
@@ -1171,10 +1179,12 @@ public class HttpAsyncSocketIoController {
         no-ops; subclasses such as the HttpServer integration override them to
         capture and restore framework-specific thread-local data.
 
-        The ThreadPool task takes no arguments. The pool hands off the
-        target/body pair through its queue.  This
-        avoids submitting a wrapper closure that captures request-local values
-        and can lose delayed dispatch state under heavy async scheduling.
+        The task that runs \a body is submitted to the pool by this call, so
+        \a body runs with the context (sandbox restrictions and provenance) of
+        the code that calls it: the task takes the target/body pair from a
+        handoff of this submission only, never the pair of another submission
+        (qore#7494), and releases them before it ends; the closure that the
+        pool keeps captures only the handoff.
 
         Exceptions raised by \a body are not caught here; callers may add their
         own try/catch inside \a body for dispatch-specific error handling.
@@ -1196,8 +1206,28 @@ public class HttpAsyncSocketIoController {
         # the cleanup waits until the body has run (qore#7339); code wrapped already is taken as it is
         body = AsyncIoController::wrapModuleCleanupWork(body);
         Priv::HttpHandlerPool pool = handler_pool;
-        pool.submit(handlerTaskRunner(pool));
-        pool.tasks.push({"target": target, "body": body});
+        # the runner takes the work item of this submission only: a task of the pool runs with the context (sandbox
+        # restrictions and provenance) of the code that submitted it, so the work item of another submission taken
+        # from a shared queue could run with the wrong context (qore#7494)
+        Priv::HttpHandlerHandoff handoff(target, body);
+        submitHandlerTask(pool, handlerTaskRunner(pool, handoff));
+    }
+
+    #! Submits a task that runs a work item of submitToHandlerPool() to the handler pool
+    /** The task runs with the context (sandbox restrictions and provenance) of the code that submits it: the code
+        that called submitToHandlerPool(), and an override of this method on the call stack.  An override must submit
+        the task by calling this method of HttpAsyncSocketIoController in the calling thread.
+
+        This is a test hook, not an extension point: a test holds a submission here, after its task was submitted, to
+        make submissions overlap at a point of its choice (qore#7494).
+
+        @param pool the handler pool
+        @param task the task to submit
+
+        @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
+    */
+    private submitHandlerTask(Qore::Thread::ThreadPool pool, code task) {
+        pool.submit(task);
     }
 
     #! Takes the handler-pool thread that runs the calling task out of the handler pool
@@ -1217,13 +1247,14 @@ public class HttpAsyncSocketIoController {
         return pool ? pool.detachCurrentThread() : False;
     }
 
-    #! Binds the worker to this generation of the pool, including its handoff queue. The request and body are
-    #! handed off separately so the submitted closure captures neither.
-    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool) {
-        return sub () { runHandlerPoolTask(pool); };
+    #! Binds the worker to this generation of the pool and to the handoff of its own submission (qore#7494). The
+    #! submitted closure captures the handoff, not the request and body: the worker takes them out of it, so that they
+    #! are released when the worker's task ends, not with the closure.
+    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool, Priv::HttpHandlerHandoff handoff) {
+        return sub () { runHandlerPoolTask(pool, handoff); };
     }
 
-    private runHandlerPoolTask(Priv::HttpHandlerPool pool) {
+    private runHandlerPoolTask(Priv::HttpHandlerPool pool, Priv::HttpHandlerHandoff handoff) {
         # ThreadPool clears thread-local variables after releasing the submitted callable. Leaving the pool
         # identity installed also recognizes a stop in a destructor run by that release.
         Priv::running_handler_pool = pool;
@@ -1236,19 +1267,13 @@ public class HttpAsyncSocketIoController {
                 count.dec();
             }
         }
-        runHandlerBody(pool);
+        runHandlerBody(handoff);
     }
 
-    #! The handoff, body, target and dispatch context are released before this worker drops its active count.
-    private runHandlerBody(Priv::HttpHandlerPool pool) {
-        hash<auto> task;
-        try {
-            task = pool.tasks.get(10s);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "handler-pool task handoff failed: %s: %s",
-                ex.err, ex.desc);
-            return;
-        }
+    #! The body, target and dispatch context are released before this worker drops its active count.
+    private runHandlerBody(Priv::HttpHandlerHandoff handoff) {
+        # the work item of this worker's own submission (qore#7494)
+        *hash<auto> task = handoff.take();
 
         *HttpAsyncTarget target = task.target;
         *code<nothing()> body = task.body;
@@ -3763,8 +3788,15 @@ public class HttpAsyncSocketIoController {
                 submitConnectionOp(uh, cinfo);
                 return;
             }
-            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
-                uh, orig_state, result.ex.err, result.ex.desc);
+            # where and why an HTTP/2 operation closed the connection (qore#7443)
+            *string close_reason = result.spop instanceof Http2PollOperation
+                ? cast<Http2PollOperation>(result.spop).getCloseReason()
+                : NOTHING;
+            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s%s",
+                uh, orig_state, result.ex.err, result.ex.desc, close_reason ? ": " + close_reason : "");
+            if (result.spop instanceof Http2PollOperation) {
+                recordConnectionClose(uh, "h2", close_reason ?? "the operation failed", result.ex);
+            }
             if (orig_state == HttpConnectionState::SendStreamResponse && cinfo.after_send) {
                 dispatchResponseSendResult(cinfo.target, cinfo.after_send, False);
             }
@@ -3892,7 +3924,11 @@ public class HttpAsyncSocketIoController {
                         submitConnectionOp(uh, new_cinfo);
                     }
                 } else if (h3op.isClosed() || h3op.hasError()) {
-                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y", uh);
+                    # why the listener's operation ended (qore#7443)
+                    *hash<auto> h3err = h3op.getError();
+                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y%s", uh,
+                        h3err ? sprintf(" (%s: %s)", h3err.err, h3err.desc) : "");
+                    recordConnectionClose(uh, "h3", "the HTTP/3 listener's operation ended", h3err);
                     # Notify stream listeners (e.g., WebSocketStreamProcessor) so
                     # handler threads blocked in stream_done.waitForZero() wake up
                     h3op.notifyStreamListenersClosed();
@@ -4178,6 +4214,20 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        # an HTTP/1.x request whose body has a transfer coding other than chunked is answered with 501 (Not
+        # Implemented), and the connection is closed, as its body cannot be framed (RFC 9112 section 6.1)
+        if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader)
+            && ex.err == "HTTP-UNSUPPORTED-TRANSFER-CODING"
+            && cinfo.sock.isOpen()) {
+            log(LoggerLevel::WARN, "HTTP request received on %s with an unsupported transfer coding: %s: %s; "
+                "answering with 501 (Not Implemented)", uh, ex.err, ex.desc);
+            if (sendBadRequest(uh, cinfo, ex.desc, 501, "Not Implemented")) {
+                return;
+            }
+        }
+
         # an HTTP/1.x request header that cannot be read, such as one with a NUL character, is answered with 400
         # (Bad Request), as RFC 9112 requires, and the connection is closed, as the rest of the request cannot be
         # framed; before, the connection was closed without a response
@@ -4215,7 +4265,7 @@ public class HttpAsyncSocketIoController {
         endConnectionSseStream(uh, cinfo);
     }
 
-    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request) or 431 (Request Header Fields Too Large), then closes the connection
+    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), 431 (Request Header Fields Too Large) or 501 (Not Implemented), then closes the connection
     /** @param uh the connection's unique hash
         @param cinfo the connection
         @param desc why the header could not be read; sent as the body of the response
@@ -6258,17 +6308,51 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! The number of closed connections kept for getRecentConnectionCloses()
+    const RecentCloseMax = 16;
+
+    #! Returns the HTTP/2 and HTTP/3 connections closed most recently, oldest first, with why (qore#7443)
+    /** For diagnostics: the reason is where and why the server's operation closed the connection.
+
+        @return a list of hashes with the keys \c connection (the connection's key), \c protocol (\c "h2" or
+        \c "h3"), \c reason, \c err and \c desc (the error, if any) and \c closed (when); at most the last 16
+    */
+    list<hash<auto>> getRecentConnectionCloses() {
+        AutoLock al(recent_closes_lock);
+        return recent_closes;
+    }
+
+    #! Records why a connection was closed (see getRecentConnectionCloses()); only called when it is closed
+    private recordConnectionClose(string uh, string protocol, string reason, *hash<auto> error) {
+        hash<auto> entry = {
+            "connection": uh,
+            "protocol": protocol,
+            "reason": reason,
+            "err": error.err,
+            "desc": error.desc,
+            "closed": now_us(),
+        };
+        AutoLock al(recent_closes_lock);
+        push recent_closes, entry;
+        if (recent_closes.size() > RecentCloseMax) {
+            splice recent_closes, 0, 1;
+        }
+    }
+
     #! Handles HTTP/2 connection closed
     private handleHttp2ConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo,
             Http2PollOperation h2op) {
         *hash<auto> error = h2op.getError();
+        # where and why the operation closed the connection (qore#7443)
+        string reason = h2op.getCloseReason() ?? "no reason recorded";
+        recordConnectionClose(uh, "h2", reason, error);
         if (error) {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s)",
-                uh, error.err, error.desc);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s): %s",
+                uh, error.err, error.desc, reason);
             dispatchOnError(cinfo.target, cinfo.sock, cast<hash<ExceptionInfo>>(error),
                 cinfo.listener, cinfo.cx, uh, "HTTP/2 connection close");
         } else {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y: %s", uh, reason);
         }
 
         signalPersistentQueuesForConnection(uh);
@@ -6388,15 +6472,34 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
-#! The pool and its queue stay together until the last worker of that generation returns.
+#! The pool stays until the last worker of that generation returns.
 class HttpHandlerPool inherits ThreadPool {
     public {
-        Queue tasks();
         Counter active();
     }
 
     constructor(hash<auto> opts) : ThreadPool(opts.max_handler_threads ?? 0,
             opts.min_idle_handler_threads ?? 0, opts.max_idle_handler_threads ?? 0) {
+    }
+}
+
+#! The work item of one submission to the handler pool, which only the worker of that submission takes (qore#7494)
+/** A task of the pool runs with the context (sandbox restrictions and provenance) of the code that submitted it: the
+    work item is handed to the worker of its own submission, never to a worker submitted by other code
+*/
+class HttpHandlerHandoff {
+    private {
+        *hash<auto> task;
+    }
+
+    constructor(object target, code body) {
+        task = {"target": target, "body": body};
+    }
+
+    #! Returns the work item and releases the handoff's reference to it; the worker calls it once
+    *hash<auto> take() {
+        *hash<auto> rv = remove task;
+        return rv;
     }
 }
 

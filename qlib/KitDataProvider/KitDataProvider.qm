@@ -514,6 +514,7 @@ module KitDataProvider {
             "short_desc": "Get statistics for a broadcast",
             "desc": "Get statistics for a specific broadcast in Kit",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": KitGetBroadcastStatsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return new KitBroadcastStatsDataType(); },
             "options": DataProviderActionCatalog::getActionOptionFromFields(

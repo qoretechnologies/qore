@@ -118,6 +118,8 @@ module GitLabDataProvider {
                 "short_desc": GitLabProjectIdByUrlDataProvider::ShortDesc,
                 "desc": GitLabProjectIdByUrlDataProvider::Desc,
                 "action_code": DPAT_API,
+                # resolves the URL with a GET request for the project (qore#7454)
+                "mutates_state": False,
                 "groups": (GitLabManifest::GroupProjects,),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     GitLabProjectIdByUrlDataProvider::RequestType.getFields()),

@@ -574,7 +574,7 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
             "enable_h3": False}).port;
         server.waitForAsyncIo();
 
-        HTTPClient client({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False,
+        HTTPClient client({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
             "http_version": "2.0", "pre_encoded_urls": True, "timeout": 30s});
         client.setHttp2Mode("required");
         foreach string target in (InvalidTargets) {
@@ -607,7 +607,7 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
             "enable_h3": True}).port;
         server.waitForAsyncIo();
 
-        HTTPClient client({"url": sprintf("https://localhost:%d", port), "ssl_verify_cert": False,
+        HTTPClient client({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
             "http3_mode": "required", "pre_encoded_urls": True, "timeout": 30s});
         foreach string target in (InvalidTargets) {
             hash<auto> info = send(client, target);

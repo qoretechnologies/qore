@@ -43,8 +43,9 @@ class MultiByteIconvParityTest inherits QUnit::Test {
                 "CP950": {"leads": "80", "count": 130},
                 "CN-BIG5": {"leads": "80", "count": 130},
             },
-            # the libiconv of macOS 15 (Darwin 24, the CI runner); the libiconv of macOS 26 (Darwin 25) decodes none of
-            # the EUC sequences below, and has no eucJP-ms or eucJP-win (see qore#7155 for its SJIS//IGNORE)
+            # the iconv of a Qore build on macOS: Apple's libiconv of macOS 15 (Darwin 24, the CI runner); GNU libiconv
+            # (MacPorts, on any macOS) decodes none of the EUC sequences below, has no eucJP-ms or eucJP-win, and has the
+            # same Shift_JIS differences; the program reports "apple" for both
             "apple": {
                 # the user-defined area of CP932 as private use characters: each of the lead bytes 0xf0 - 0xf9 followed
                 # by each of the 188 trail bytes

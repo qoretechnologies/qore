@@ -21,9 +21,7 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
     constructor() : Test("Provider index inventory warmup", "1.0", \ARGV) {
         root = make_tmp_dir("provider-index-inventory-");
         on_exit remove_tree(root);
-        # live-provider-optin: saves and restores the provider index directory variable
         *string old_directory = getenv(ProviderIndexEnvVar);
-        # live-provider-optin: saves and restores the provider index directory variable
         auto old_env = ENV{ProviderIndexEnvVar};
         int old_options = DataProvider::getOptions();
         on_exit {
@@ -34,10 +32,8 @@ class ProviderIndexInventoryWarmupTest inherits QUnit::Test {
                 unsetenv(ProviderIndexEnvVar);
             }
             if (exists old_env) {
-                # live-provider-optin: saves and restores the provider index directory variable
                 ENV{ProviderIndexEnvVar} = old_env;
             } else {
-                # live-provider-optin: saves and restores the provider index directory variable
                 remove ENV{ProviderIndexEnvVar};
             }
         }

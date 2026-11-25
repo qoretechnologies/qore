@@ -72,6 +72,7 @@ module DiscordDataProvider {
             "short_desc": "Get info about the current user",
             "desc": "Get info about the current user",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "output_type": DiscordUserDataType,
         });
@@ -92,6 +93,7 @@ module DiscordDataProvider {
                 },
             },
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "output_type": DiscordGuildDataType,
         });

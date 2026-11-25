@@ -68,9 +68,16 @@ const QSF_INCLUDE_STATIC_CLASS_VARS = QSF_INCLUDE_STATIC_CLASS_VARS;
 */
 ///@{
 //! Deserialize static class vars
+/** The deserialized value of each static class variable replaces its current value; see
+    @ref Qore::QDF_MERGE_STATIC_CLASS_VARS "QDF_MERGE_STATIC_CLASS_VARS" to merge hashes instead
+*/
 const QDF_STATIC_CLASS_VARS = QDF_STATIC_CLASS_VARS;
 
 //! Deserialize static class vars and merge hashes; implies QDF_STATIC_CLASS_VARS
+/** When both the current and the deserialized value of a static class variable are hashes, the deserialized hash
+    is merged into a copy of the current one, which then becomes the variable's value; any other deserialized value
+    replaces the current value
+*/
 const QDF_MERGE_STATIC_CLASS_VARS = QDF_MERGE_STATIC_CLASS_VARS;
 
 //! Register the character encoding of a string in binary serialized data that %Qore does not know
