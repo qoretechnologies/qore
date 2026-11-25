@@ -39,7 +39,7 @@ class IRBoundedPairScalarReplacementTest inherits QUnit::Test {
         #! in a loop and with a constant read as well
         const Replaced = ("boundedPair", "commutedPair", "multipleReads", "crossBlockPair", "inlinePair",
             "inlineCommutedPair", "inlineMultipleReads", "inlineCrossBlockPair", "loopPair", "inlineExtremes",
-            "wideConstantPair");
+            "rangePair", "maskLocalPair", "wideConstantPair");
 
         #! the functions whose list must stay: an index that can be another value, string members, a list that is
         #! changed, aliased, captured or passed by reference, members computed by calls with references

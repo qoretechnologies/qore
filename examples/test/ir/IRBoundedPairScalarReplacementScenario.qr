@@ -56,6 +56,20 @@ int sub inlineCrossBlockPair(int first, int second, int index, bool choose) {
     return values[(index + 1) & 1];
 }
 
+# an index that is not the result of an AND, but whose range the IR facts give as 0 to 1 (a product of two bits)
+int sub rangePair(int first, int second, int index) {
+    list<int> values = (first, second);
+    return values[(index & 1) * (second & 1)];
+}
+
+# an index that is the result of an AND with a mask held in a local with a single store, which has no range in the IR
+# facts: the AND itself proves the range
+int sub maskLocalPair(int first, int second, int index) {
+    int mask = 1;
+    list<int> values = (first, second);
+    return values[index & mask];
+}
+
 int sub loopPair(int count, int seed) {
     int sum = 0;
     for (int i = 0; i < count; ++i) {
@@ -166,6 +180,8 @@ foreach int first in ((-9223372036854775807 - 1, -1, 0, 1, 9223372036854775807))
             equal(expected, crossBlockPair(first, second, index, True));
             equal((index & 1) ? first : second, crossBlockPair(first, second, index, False));
             equal(expected, caughtPair(first, second, index));
+            equal(((index & 1) && (second & 1)) ? second : first, rangePair(first, second, index));
+            equal(expected, maskLocalPair(first, second, index));
         }
     }
 }

@@ -39,12 +39,14 @@ class IRFiniteHashKeySelectorElisionTest inherits QUnit::Test {
 
         #! the functions whose hashes are replaced, with the number of hashes
         const Replaced = {
+            "constMemberKey": 1, "literalMemberKey": 1,
             "finiteKey": 1, "directKey": 1, "linkedKey": 1, "repeatedKey": 1, "duplicateKey": 1, "unicodeKey": 1,
             "extremeKey": 1, "loopKey": 1, "observableKey": 1, "twoHashKey": 2, "copiedKey": 1, "sideEffectKey": 1,
             "wideKey": 1, "wideConstantKey": 1, "partialKey": 2, "floatKey": 1, "boolKey": 1, "autoKey": 1,
         };
         #! the functions whose key and its literals are removed too
-        const SelectorRemoved = ("finiteKey", "directKey", "repeatedKey", "duplicateKey", "unicodeKey", "extremeKey",
+        const SelectorRemoved = ("finiteKey", "constMemberKey", "literalMemberKey",
+            "directKey", "repeatedKey", "duplicateKey", "unicodeKey", "extremeKey",
             "loopKey", "twoHashKey", "sideEffectKey", "wideKey", "wideConstantKey", "partialKey", "floatKey", "boolKey",
             "autoKey");
         #! the functions whose key is used otherwise, so it stays while the hash is replaced
@@ -77,6 +79,7 @@ class IRFiniteHashKeySelectorElisionTest inherits QUnit::Test {
         });
         addTestCase("scalar replacement", \testScalarReplacement());
         addTestCase("aot", \testAot());
+        addTestCase("one member phi per key", \testMemberPhis());
 
         set_return_value(main());
     }
@@ -131,6 +134,24 @@ class IRFiniteHashKeySelectorElisionTest inherits QUnit::Test {
             }
             assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
                 shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(exe))), label + " output matches AST");
+        }
+    }
+
+    #! the reads of the same chosen key share one phi of the members' values
+    testMemberPhis() {
+        if (!qcc_bin) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-finite-hash-key-phis-");
+        string out = ExecModeHarness::run_any(sprintf("QORE_AOT_DUMP_IR=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "%s -O3 --strip-source -o %s %s", shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qcc_bin),
+            shellQuote(tmp.path + "/scenario"), shellQuote(fixture)));
+        # repeatedKey reads values{key} twice, linkedKey reads it through two locals with the same phi
+        foreach string name in (("repeatedKey", "linkedKey")) {
+            *list<*string> body = regex_extract(out, "(?s)=== IR for " + name + "\\([^\n]*\n(.*?)\n(?:===|$)");
+            assertTrue(exists body[0], name + " has an IR dump");
+            assertEq(1, (select (body[0] ?? "").split("\n"), $1 =~ /phi -> %[0-9]+<native-int>/).size(),
+                name + " has one phi of the members' values");
         }
     }
 

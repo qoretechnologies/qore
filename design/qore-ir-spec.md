@@ -302,7 +302,8 @@ a phi of the values of the selected members on the same edges, when:
 - the function has no handlers: the graph that the replacement uses has no
   exception edges, so its joins are not every path to the read.
 
-The hash is then removed as for constant keys.  The phi of keys, its literals and
+The reads with the same phi of keys share one phi of the members' values.  The
+hash is then removed as for constant keys.  The phi of keys, its literals and
 the string local that holds it (with its store, loads and releases) are removed
 too when nothing else uses them (`finite_hash_selector_removable()`); a key that
 is used otherwise (measured, copied, read through another local) stays.  A key
