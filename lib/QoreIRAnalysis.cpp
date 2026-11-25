@@ -5003,7 +5003,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && hash_candidate
                         && inst->opcode == QoreIROpcode::HashKeyStore) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 2
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     if (valid_operation) {
                         const auto* store = static_cast<
@@ -5022,7 +5025,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && hash_candidate
                         && inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 3
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     std::string key;
                     valid_operation = valid_operation
@@ -5060,7 +5066,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 } else if (valid_operation && !hash_candidate
                         && inst->opcode == QoreIROpcode::ListIndexStore) {
+                    // a store whose value is used (qore#7589) has a result, which the replaced
+                    // aggregate cannot define: the aggregate is not replaced
                     valid_operation = inst->operands.size() == 3
+                        && !inst->result.isValid()
                         && qore_ir_get_written_local(inst) == local;
                     int64_t index = 0;
                     valid_operation = valid_operation
@@ -18202,6 +18211,29 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         if (!safe_facts && !native_value && !fresh_boxed) {
             replacement = replacements.erase(replacement);
             continue;
+        }
+        // the parameter binds a list or hash that a weak reference designates as a copy of its own (qore#7342): a
+        // call is replaced with an argument that can be one only when the argument is the value of a variable or a
+        // member, which keeps holding it, so that a store of the result takes a copy as well, or a new list or hash,
+        // which no weak reference designates; a temporary that nothing else holds (the value of a call) keeps the
+        // call, as a store of the temporary would move it
+        if (!native_value && !fresh_boxed) {
+            bool holder_load = definition != definitions.end()
+                && (definition->second->opcode == QoreIROpcode::LoadLocal
+                    || definition->second->opcode == QoreIROpcode::LoadArg
+                    || definition->second->opcode == QoreIROpcode::LoadClosure
+                    || definition->second->opcode == QoreIROpcode::LoadGlobal
+                    || definition->second->opcode == QoreIROpcode::LoadThreadLocal
+                    || definition->second->opcode == QoreIROpcode::LoadStaticVar
+                    || definition->second->opcode == QoreIROpcode::LoadConstant
+                    || definition->second->opcode == QoreIROpcode::LoadSelfMember);
+            bool may_be_container = !facts || !QoreTypeInfo::hasType(facts->type_info)
+                || QoreTypeInfo::parseReturns(facts->type_info, NT_HASH) != QTI_NOT_EQUAL
+                || QoreTypeInfo::parseReturns(facts->type_info, NT_LIST) != QTI_NOT_EQUAL;
+            if (!holder_load && may_be_container) {
+                replacement = replacements.erase(replacement);
+                continue;
+            }
         }
         ++replacement;
     }

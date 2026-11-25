@@ -11238,6 +11238,14 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     // variable is not read again, as it can have been assigned in between (qore#5847).  The step of an untyped local
     // keeps the local in IR storage (see QoreIRFunction::computeIROnlyLocals()).
     QoreIRValue unique_source;
+    // a ?: or ?? operator that chooses a source that is made unique (qore#7342)
+    if (assign_mode == AssignmentMode::Weak && !qore_weak_assignment_source_made_unique(right_expr)
+            && qore_weak_assignment_source_chooses(right_expr)) {
+        unique_source = lowerWeakSource(right_expr, assign->loc, error);
+        if (!unique_source.isValid()) {
+            return QoreIRValue();
+        }
+    }
     if (assign_mode == AssignmentMode::Weak && qore_weak_assignment_source_made_unique(right_expr)) {
         QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, right_expr, nullptr, assign->loc,
             error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
@@ -11247,17 +11255,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             }
             return QoreIRValue();
         }
-        auto* source_var = dynamic_cast<const VarRefNode*>(right_expr.getInternalNode());
-        bool shared_source = !source_var;  // a class static variable
-        if (source_var) {
-            qore_var_t vt = source_var->getType();
-            shared_source = vt == VT_GLOBAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS
-                || ((vt == VT_LOCAL) && source_var->ref.id
-                    && (source_var->ref.id->closureUse() || source_var->ref.id->isTopLevel()));
-        }
-        if (shared_source) {
-            unique_source = unique;
-        }
+        // the operand is the value that the step gives, for every source: a list or a hash is held through a weak
+        // reference, as the assignment does not keep a container that an lvalue holds; a strong reference read
+        // again from the variable would make the container shared, so that a copy-on-write step of the target's
+        // path, which can pass through it (h.w := h), copied it and orphaned the weak references to it (qore#7405)
+        unique_source = unique;
     }
     // A weak reference observes the lifetime of its source. An already evaluated list or hash belongs to the
     // program; rebuilding it would leave the weak reference pointing at a temporary released after the statement.
@@ -11294,11 +11296,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             return loadVarRef(left_var, error, "assignment result", assign->getLeft());
         }
     } else if (assign->getLeft().hasNode()) {
-        // the fast paths below give the value assigned, while the value of the assignment is the value stored, which
-        // the element's type can convert (a softint element stores an integer for a string, an untyped element
-        // strips a complex type), as the AST interpreter gives it: an assignment whose value is used takes the lvalue
-        // path, which gives the value stored (qore#7575)
-        bool fast_store = !is_weak && !assign->needsReturnValue();
+        // the value of the assignment is the value stored, which the element's type can convert (a softint element
+        // stores an integer for a string, an untyped element strips a complex type), as the AST interpreter gives it
+        // (qore#7575): a store fast path whose value is used gives the value stored as its result (qore#7589)
+        bool fast_store = !is_weak;
+        bool needs_result = assign->needsReturnValue();
         // Fast path: const-key hash subscript → LoadLocal + HashKeyStore (no EXPR_TREE)
         const VarRefNode* container_var = nullptr;
         std::string key_name;
@@ -11306,20 +11308,20 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         if (fast_store && isConstKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_name,
                 key_expr)) {
             return emitHashKeyDirectStore(container_var, key_name, key_expr, right, expr,
-                assign->loc, error);
+                assign->loc, error, needs_result);
         }
         // Fast path: dynamic-key hash subscript → LoadLocal + HashKeyStoreDynamic (no EXPR_TREE)
         if (fast_store && isDynamicKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var,
                 key_expr)) {
             return emitHashKeyDynamicStore(container_var, key_expr, right, expr,
-                assign->loc, error);
+                assign->loc, error, needs_result);
         }
         // Fast path: const-index list subscript → LoadLocal + ListIndexStore (no EXPR_TREE)
         QoreValue index_expr;
         if (fast_store && isConstIndexListSubscript(foreach_element_locals, assign->getLeft(), container_var,
                 index_expr)) {
             return emitListIndexDirectStore(container_var, index_expr, right, expr,
-                assign->loc, error);
+                assign->loc, error, needs_result);
         }
         // LValuePath: structured path for all remaining lvalue cases (reference vars,
         // object vars, non-VarRef containers, nested member access, etc.)
@@ -17522,7 +17524,7 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
 QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
         const VarRefNode* container_var, const std::string& key_name, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error) {
+        const QoreProgramLocation* loc, std::string& error, bool needs_result) {
     // Load the hash container without refcount inflation (auto_ref=false)
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
@@ -17548,6 +17550,10 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
     }
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
+    if (needs_result) {
+        store_inst->result = builder.getFunction()->createValue();
+        return store_inst->result;
+    }
 
     return value;
 }
@@ -17557,7 +17563,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
 QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
         const VarRefNode* container_var, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error) {
+        const QoreProgramLocation* loc, std::string& error, bool needs_result) {
     // the key is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves the
     // container: an expression that assigns the container variable (h{(h = x).firstKey()} = v) then gives the container
     // written, and the container, loaded without a reference (auto_ref=false), is not released before its use
@@ -17593,6 +17599,10 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(key_val);
+    if (needs_result) {
+        store_inst->result = builder.getFunction()->createValue();
+        return store_inst->result;
+    }
 
     return value;
 }
@@ -17824,7 +17834,7 @@ void QoreIRLowering::emitPartialSliceRemove(QoreIRBasicBlock* partial_block, con
 QoreIRValue QoreIRLowering::emitListIndexDirectStore(
         const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error) {
+        const QoreProgramLocation* loc, std::string& error, bool needs_result) {
     // the index is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves
     // the container: an expression that assigns the container variable (l[(l = x).size() - 1] = v) then gives the
     // container written, and the container, loaded without a reference (auto_ref=false), is not released before its use
@@ -17860,6 +17870,10 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     store_inst->operands.push_back(list_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(index_val);
+    if (needs_result) {
+        store_inst->result = builder.getFunction()->createValue();
+        return store_inst->result;
+    }
 
     return value;
 }
@@ -27949,6 +27963,96 @@ QoreIRValue QoreIRLowering::lowerValueCoalescing(const QoreValue& expr, std::str
         {right_value, rhs_exit_block},
     };
     return builder.createPhi(incoming)->result;
+}
+
+QoreIRValue QoreIRLowering::lowerWeakUniqueSource(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    QoreIRValue unique = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary, expr, nullptr, loc, error,
+        AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::EnsureUnique);
+    if (!unique.isValid()) {
+        if (error.empty()) {
+            error = "unsupported variable for weak assignment IR lowering";
+        }
+        return QoreIRValue();
+    }
+    // the value that the step gives, for every source: a list or a hash is held through a weak reference, as the
+    // assignment does not keep a container that an lvalue holds; a strong reference read again from a local would
+    // make the container shared, so that a copy-on-write step of the target's path copied it (qore#7405)
+    return unique;
+}
+
+QoreIRValue QoreIRLowering::lowerWeakSource(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!ensureBuilderContext(error)) {
+        return QoreIRValue();
+    }
+    if (auto* ternary = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        QoreIRValue cond_bool = lowerConsumedTruthValue(ternary->get(0), ternary->loc, error);
+        if (!cond_bool.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* left_block = createBlock("weak.ternary.then");
+        QoreIRBasicBlock* right_block = createBlock("weak.ternary.else");
+        QoreIRBasicBlock* merge_block = createBlock("weak.ternary.merge");
+        if (!left_block || !right_block || !merge_block) {
+            error = "IR builder failed to create blocks for the ternary source of a weak assignment";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(cond_bool, left_block, right_block);
+        builder.setBlock(left_block);
+        QoreIRValue left_value = lowerWeakSource(ternary->get(1), loc, error);
+        if (!left_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* left_exit_block = builder.getBlock();
+        builder.createBranch(merge_block);
+        builder.setBlock(right_block);
+        QoreIRValue right_value = lowerWeakSource(ternary->get(2), loc, error);
+        if (!right_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* right_exit_block = builder.getBlock();
+        builder.createBranch(merge_block);
+        setJoinBlock(merge_block);
+        std::vector<QoreIRPhiIncoming> incoming = {
+            {left_value, left_exit_block},
+            {right_value, right_exit_block},
+        };
+        return builder.createPhi(incoming)->result;
+    }
+    if (auto* coalesce = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        QoreIRValue left_value = lowerWeakSource(coalesce->getLeft(), loc, error);
+        if (!left_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRValue is_null = builder.createUnaryOp(QoreIROpcode::IsNullOrNothing, left_value)->result;
+        QoreIRBasicBlock* left_block = builder.getBlock();
+        QoreIRBasicBlock* rhs_block = createBlock("weak.coalesce.rhs");
+        QoreIRBasicBlock* merge_block = createBlock("weak.coalesce.merge");
+        if (!rhs_block || !merge_block) {
+            error = "IR builder failed to create blocks for the null coalescing source of a weak assignment";
+            return QoreIRValue();
+        }
+        builder.createBranchIf(is_null, rhs_block, merge_block);
+        builder.setBlock(rhs_block);
+        QoreIRValue right_value = lowerWeakSource(coalesce->getRight(), loc, error);
+        if (!right_value.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRBasicBlock* rhs_exit_block = builder.getBlock();
+        builder.createBranch(merge_block);
+        setJoinBlock(merge_block);
+        std::vector<QoreIRPhiIncoming> incoming = {
+            {left_value, left_block},
+            {right_value, rhs_exit_block},
+        };
+        return builder.createPhi(incoming)->result;
+    }
+    if (qore_weak_assignment_source_made_unique(expr)) {
+        return lowerWeakUniqueSource(expr, loc, error);
+    }
+    return lowerExpression(expr, error);
 }
 
 QoreIRValue QoreIRLowering::lowerQuestionMark(const QoreValue& expr, std::string& error) {

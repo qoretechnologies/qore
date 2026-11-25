@@ -473,6 +473,14 @@ public:
     QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    //! lowers the source of a weak assignment that is a ?: or ?? operator choosing a source that is made unique
+    //! (qore_weak_assignment_source_chooses(), qore#7342): the chosen operand is made unique if it is such a source,
+    //! and lowered as an expression otherwise
+    QoreIRValue lowerWeakSource(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
+    //! lowers the unique step of a source of a weak assignment that is made unique
+    //! (qore_weak_assignment_source_made_unique()) and gives its value: the value that the step read for a source that
+    //! another thread can assign (a global, a closure variable, a class static, a path), or the variable read again
+    QoreIRValue lowerWeakUniqueSource(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     //! Lowers a typed hash or list construction whose initializer is lowered as the operand \a init
     /** @param type_only a NewComplexHashNode or NewComplexListNode of the type without an initializer */
     QoreIRValue lowerNewComplexFromOperand(QoreIROpcode opcode, const QoreValue& type_only, QoreIRValue init,
@@ -751,15 +759,17 @@ private:
     QoreIRValue emitListKeyCompoundOp(const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    //! the store fast paths of an assignment; with \a needs_result, the store gives the value stored as its result,
+    //! which is returned as the value of the assignment (qore#7589); otherwise \a value is returned
     QoreIRValue emitHashKeyDirectStore(const VarRefNode* container_var, const std::string& key_name,
         const QoreValue& key_expr, const QoreIRValue& value,
-        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue emitHashKeyDynamicStore(const VarRefNode* container_var, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue emitListIndexDirectStore(const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
     bool tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
         QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target);
