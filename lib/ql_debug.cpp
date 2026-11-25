@@ -28248,6 +28248,25 @@ private:
 #endif
 };
 
+#ifdef __APPLE__
+extern std::atomic<bool> qore_dbg_unix_pin_no_thread_cwd;
+#endif
+
+//! Debug-only: enables or disables the use of the per-thread working directory (macOS pthread_fchdir_np()) to reach
+//! the UNIX socket paths pinned under a sandbox policy, so that the fallback is tested (qore#7518)
+/** @return True if the per-thread working directory is used after the call (macOS with pthread_fchdir_np()), False
+    otherwise
+*/
+static QoreValue f_dbg_unix_socket_pin_thread_cwd(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef __APPLE__
+    qore_dbg_unix_pin_no_thread_cwd.store(!get_param_value(params, 0).getAsBool(), std::memory_order_relaxed);
+    return qore_pthread_fchdir_np() != nullptr;
+#else
+    return false;
+#endif
+}
+
 //! Debug-only: runs the unit tests of the bind of a UNIX socket address (qore#7518)
 static QoreValue f_dbg_run_unix_sockaddr_bind_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -34493,7 +34512,11 @@ void qore_dbg_fs_swap_on_open(const char* fn) {
         target = std::move(dbg_fs_swap_target);
     }
 #ifndef _Q_WINDOWS
-    unlink(link.c_str());
+    // a directory is moved aside (to "<name>.dbg-moved"), as a concurrent rename would, so that a link can replace it
+    // (qore#7518)
+    if (unlink(link.c_str()) && (errno == EISDIR || errno == EPERM)) {
+        rename(link.c_str(), (link + ".dbg-moved").c_str());
+    }
     if (symlink(target.c_str(), link.c_str())) {
         fprintf(stderr, "dbg_fs_swap_on_open(): symlink(%s, %s) failed: %s\n", target.c_str(), link.c_str(),
             strerror(errno));
@@ -37355,6 +37378,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_unix_sockaddr_bind_tests", f_dbg_run_unix_sockaddr_bind_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_unix_socket_pin_thread_cwd", f_dbg_unix_socket_pin_thread_cwd, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, softBoolTypeInfo, QORE_PARAM_NO_ARG, "enable");
 #endif
     qns.addBuiltinVariant("dbg_run_variant_search_tests", f_dbg_run_variant_search_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);

@@ -33,6 +33,9 @@
 
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
+#ifdef __APPLE__
+#include <dlfcn.h>
+#endif
 #include <cerrno>
 #include <cctype>
 #include <climits>
@@ -10455,6 +10458,18 @@ int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
                 : !::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un))) {
             break;
         }
+#elif defined(__APPLE__)
+        int crc;
+        if (upin.thread_cwd) {
+            // a name relative to the directory held is connected to with the thread's working directory set to it
+            QoreThreadCwdHelper cwd(upin.fchdir_np, upin.fd);
+            crc = cwd ? ::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un)) : -1;
+        } else {
+            crc = ::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un));
+        }
+        if (!crc) {
+            break;
+        }
 #else
         if (!::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un))) {
             break;
@@ -14735,6 +14750,25 @@ int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* pat
     return 0;
 }
 
+#ifdef __APPLE__
+#ifdef DEBUG
+//! debug builds: true if the per-thread working directory is not used, so that the fallback is tested (qore#7518)
+std::atomic<bool> qore_dbg_unix_pin_no_thread_cwd{false};
+#endif
+
+int (*qore_pthread_fchdir_np())(int) {
+    // a private function of libSystem (macOS 10.12+), resolved once at run time: not linked, so that a system without
+    // it uses the fallback
+    static int (*fchdir_np)(int) = reinterpret_cast<int (*)(int)>(dlsym(RTLD_DEFAULT, "pthread_fchdir_np"));
+#ifdef DEBUG
+    if (qore_dbg_unix_pin_no_thread_cwd.load(std::memory_order_relaxed)) {
+        return nullptr;
+    }
+#endif
+    return fchdir_np;
+}
+#endif
+
 int qore_socket_pin_unix_path(QoreSandboxManager& sm, const char* path, bool bind, struct sockaddr_un& addr,
         QoreUnixSocketPin& upin, ExceptionSink* xsink) {
     assert(upin.fd < 0);
@@ -14826,15 +14860,23 @@ int qore_socket_pin_unix_path(QoreSandboxManager& sm, const char* path, bool bin
     // the address is relative to the directory held (bindat(), connectat())
     if (pin.leaf.size() >= sizeof(addr.sun_path)) {
 #else
-    // macOS can neither bind nor connect relative to a directory: the canonical path checked is used, whose
-    // components were opened without following a link, and the directory held removes the socket file on close
-    if (pin.canon.size() >= sizeof(addr.sun_path)) {
+    // macOS binds and connects relative to the directory held through the working directory of the thread
+    // (pthread_fchdir_np(), when available); otherwise, the canonical path checked is used, whose components were
+    // opened without following a link; the directory held removes the socket file on close
+    int (*fchdir_np)(int) = qore_pthread_fchdir_np();
+    bool thread_cwd = fchdir_np;
+    if ((thread_cwd ? pin.leaf.size() : pin.canon.size()) >= sizeof(addr.sun_path)) {
 #endif
         sock_set_raw_error(ENAMETOOLONG);
 #ifdef __FreeBSD__
         xsink->raiseException(err, "UNIX socket name '%s' is too long", pin.leaf.c_str());
 #else
-        xsink->raiseException(err, "the canonical path of UNIX socket '%s' is too long: '%s'", path, pin.canon.c_str());
+        if (thread_cwd) {
+            xsink->raiseException(err, "UNIX socket name '%s' is too long", pin.leaf.c_str());
+        } else {
+            xsink->raiseException(err, "the canonical path of UNIX socket '%s' is too long: '%s'", path,
+                pin.canon.c_str());
+        }
 #endif
         return -1;
     }
@@ -14855,7 +14897,9 @@ int qore_socket_pin_unix_path(QoreSandboxManager& sm, const char* path, bool bin
     upin.at = true;
     strncpy(addr.sun_path, upin.leaf.c_str(), sizeof(addr.sun_path) - 1);
 #else
-    strncpy(addr.sun_path, pin.canon.c_str(), sizeof(addr.sun_path) - 1);
+    upin.thread_cwd = thread_cwd;
+    upin.fchdir_np = fchdir_np;
+    strncpy(addr.sun_path, thread_cwd ? upin.leaf.c_str() : pin.canon.c_str(), sizeof(addr.sun_path) - 1);
 #endif
     return 0;
 #else
