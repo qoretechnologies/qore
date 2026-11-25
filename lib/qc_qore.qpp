@@ -238,10 +238,12 @@ const PlatformCPU =   qore(new QoreStringNode(TARGET_ARCH));
 const PlatformOS =    qore(new QoreStringNode(TARGET_OS));
 
 //! The host name of the host used to build the %Qore library
-const BuildHost =     qore(new QoreStringNode(qore_build_host));
+/** Requires the @ref no-external-info "EXTERNAL_INFO" functional domain. */
+const BuildHost =     qore_domain(new QoreStringNode(qore_build_host), QDOM_EXTERNAL_INFO);
 
 //! A string giving the C++ compiler used to build %Qore
-const Compiler =      qore(new QoreStringNode(qore_cplusplus_compiler));
+/** Requires the @ref no-external-info "EXTERNAL_INFO" functional domain. */
+const Compiler =      qore_domain(new QoreStringNode(qore_cplusplus_compiler), QDOM_EXTERNAL_INFO);
 
 //! A string giving the version of LLVM that the %Qore library was built with for its JIT and AOT compilers
 /** A program that is compiled against the library's internal headers, or that links LLVM in the same process as
@@ -253,12 +255,15 @@ const LLVMVersion =   qore(new QoreStringNode(LLVM_VERSION_STRING));
 
 //! A string giving the C++ compiler flags used to build %Qore
 /** On macOS this includes the deployment target the library was built for (\c -mmacosx-version-min), so that a
-    program compiled against the library with these flags targets the same macOS version
+    program compiled against the library with these flags targets the same macOS version.
+
+    Requires the @ref no-external-info "EXTERNAL_INFO" functional domain.
 */
-const CFLAGS =        qore(new QoreStringNode(qore_cflags));
+const CFLAGS =        qore_domain(new QoreStringNode(qore_cflags), QDOM_EXTERNAL_INFO);
 
 //! A string giving the linker flags used to build %Qore
-const LDFLAGS =       qore(new QoreStringNode(qore_ldflags));
+/** Requires the @ref no-external-info "EXTERNAL_INFO" functional domain. */
+const LDFLAGS =       qore_domain(new QoreStringNode(qore_ldflags), QDOM_EXTERNAL_INFO);
 
 //! @ref True if the current machine uses <a href="http://en.wikipedia.org/wiki/Most_significant_bit">big-endian or MSB byte order</a> or @ref False if the current machine uses <a href="http://en.wikipedia.org/wiki/Least_significant_bit">little-endian or LSB byte order</a>
 const MACHINE_MSB =   bool(Q_MACHINE_MSB);

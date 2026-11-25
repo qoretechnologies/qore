@@ -489,11 +489,15 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         # to avoid circular dependencies, this object loads the HttpClientDataProvider module and creates the data
         # provider object dynamically
+        # for restricted code that was lent the connection: its creator's file path options, and no data provider
+        # options that name files (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         load_module("HttpClientDataProvider");
-        hash<auto> req_opts = (map {$1: opts{$1}}, DataProviderRequestOptions, exists opts{$1}) ?? {};
-        if (opts.username.val() && opts.password.val() && (!urlh.username.val() || !urlh.password.val())) {
-            req_opts.username = opts.username;
-            req_opts.password = opts.password;
+        hash<auto> req_opts = (map {$1: src.opts{$1}}, DataProviderRequestOptions, exists src.opts{$1}) ?? {};
+        if (src.opts.username.val() && src.opts.password.val()
+                && (!src.urlh.username.val() || !src.urlh.password.val())) {
+            req_opts.username = src.opts.username;
+            req_opts.password = src.opts.password;
         }
         if (constructor_options.headers) {
             req_opts.headers = (req_opts.headers ?? {}) + constructor_options.headers;
@@ -594,6 +598,15 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     /** @param connect if @ref True "True" then a connection is made by calling @ref Qore::HTTPClient::connect() before returning the object
         @param rtopts this connection type does not accept any runtime option, so this parameter is ignored
     */
+    #! Returns @ref True: the clients of the connection are bound to its creator's target by its creator proof
+    /** The HTTP client that the connection creates for restricted code that was lent it is the creator's, bound to its
+        origin and proxy (qore#7262), so AbstractConnection::getLentTargetSource() does not confine such code to the
+        members that the connection's creator set (qore#7327)
+    */
+    private bool hasCreatorBoundClients() {
+        return True;
+    }
+
     private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
         checkRawHttpNegotiateUnsupported();
         HTTPClient sc(getConnectionOptions());

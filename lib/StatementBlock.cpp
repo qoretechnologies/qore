@@ -333,6 +333,131 @@ int StatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excepti
     return execIntern(rc, return_value, xsink);
 }
 
+namespace {
+// An outer return can survive a debugger's break or continue that drops a nested return. Data values can
+// be retained for that path. A value whose release can run a destructor has to be released by the return
+// statement that replaced it (#5992). Observe its slot without taking a reference to it.
+class PendingReturnSnapshot {
+public:
+    explicit PendingReturnSnapshot(ExceptionSink* xsink) : saved(xsink) {
+    }
+
+    ~PendingReturnSnapshot() {
+        stopObserving();
+    }
+
+    //! the innermost active snapshot of the thread (qore_pending_return_snapshot_tls)
+    static PendingReturnSnapshot* getActive() {
+        return static_cast<PendingReturnSnapshot*>(qore_pending_return_snapshot_tls);
+    }
+
+    void capture(QoreValue& slot) {
+        assert(!observed);
+        if (!slot.isNothing()) {
+            observed = &slot;
+            previous = getActive();
+            qore_pending_return_snapshot_tls = this;
+            replaced = false;
+        }
+    }
+
+    void reset() {
+        stopObserving();
+        saved = QoreValue();
+    }
+
+    void restore(QoreValue& slot, ExceptionSink* xsink) {
+        bool unchanged = observed && !replaced;
+        stopObserving();
+        if (!unchanged) {
+            replacing(slot);
+            ValueHolder abandoned(slot, xsink);
+            slot = saved.release();
+        }
+    }
+
+    static void replacing(QoreValue& slot) {
+        for (auto* p = getActive(); p; p = p->previous) {
+            if (p->observed == &slot && !p->replaced) {
+                if (!qore_return_release_observable(slot)) {
+                    p->saved = slot.refSelf();
+                }
+                p->replaced = true;
+            }
+        }
+    }
+
+private:
+    QoreValue* observed = nullptr;
+    PendingReturnSnapshot* previous = nullptr;
+    bool replaced = false;
+    ValueHolder saved;
+
+    void stopObserving() {
+        if (observed) {
+            assert(getActive() == this);
+            qore_pending_return_snapshot_tls = previous;
+            observed = nullptr;
+        }
+    }
+};
+
+}
+
+constinit thread_local void* qore_pending_return_snapshot_tls = nullptr;
+
+constinit thread_local QoreHandlerRun* qore_handler_run_tls = nullptr;
+
+bool StatementBlock::requestTakenInFunction(int rc, const QoreValue& return_value) const {
+    assert(rc == RC_BREAK || rc == RC_CONTINUE);
+    if (loopTakesRequest(rc)) {
+        return true;
+    }
+    // the request goes on as one of each handler around the block: a later handler of a handler that is not the last
+    // takes it, or a loop or switch statement around the block that declares the handler
+    // the walk follows the return slot of the code around the block: a try statement's blocks have one of their own,
+    // which a request passes as it is (QoreTryReturnSlotHelper)
+    const QoreValue* slot = &return_value;
+    for (const QoreHandlerRun* r = qore_handler_run_tls; r && r->slot == slot; r = r->previous) {
+        if (r->alias_of) {
+            slot = r->alias_of;
+            continue;
+        }
+        if (!r->last || r->block->loopTakesRequest(rc)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void qore_replacing_return_notify(QoreValue& slot) {
+    PendingReturnSnapshot::replacing(slot);
+}
+
+void StatementBlock::releaseAbandonedReturn(QoreValue& return_value, ExceptionSink* xsink) {
+    // the snapshots that observe this slot (none in a loop with no pending return: kept for consistency) are told
+    PendingReturnSnapshot::replacing(return_value);
+    ValueHolder abandoned(return_value, xsink);
+    return_value = QoreValue();
+}
+
+int StatementBlock::execLoopBody(QoreValue& return_value, ExceptionSink* xsink, bool takes_continue) {
+    return execLoopBody(rc_get_current_ref(), return_value, xsink, takes_continue);
+}
+
+int StatementBlock::execLoopBodyPending(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+        bool takes_continue) {
+    // A loop inside an exit handler can already have an enclosing return. Restore it when this iteration
+    // abandons a different return, before the next iteration or the statement following the loop (#7022).
+    PendingReturnSnapshot enclosing(xsink);
+    enclosing.capture(return_value);
+    int flow = execImpl(rc, return_value, xsink);
+    if (flow == RC_BREAK || (takes_continue && flow == RC_CONTINUE)) {
+        enclosing.restore(return_value, xsink);
+    }
+    return flow;
+}
+
 int StatementBlock::execIntern(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execIntern(rc, return_value, xsink);
@@ -380,73 +505,132 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
             if (stmt_rc) break;
         }
     }
-    // execute "on block exit" code if applicable
-    if (obe) {
-        ExceptionSink obe_xsink;
-        int nrc = 0;
-        bool error = xsink->isException();
-        int ast_on_exit_count = 0;
-        for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
-            enum obe_type_e type = (*i).first;
-            if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-                if ((*i).second) {
-                    ast_on_exit_count++;
-                    {
-                        // instantiate exception for on_error blocks as an implicit arg
-                        std::unique_ptr<SingleArgvContextHelper> argv_helper;
-                        std::unique_ptr<CatchExceptionHelper> ex_helper;
-                        if (type == OBE_Error) {
-                            QoreException* except = qore_exception_sink_ops(xsink).getException();
-                            assert(except);
-                            ex_helper.reset(new CatchExceptionHelper(except));
-                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
-                        }
-                        {
-                            // the handler is a statement of its own
-                            QoreStatementTempScope temps(&obe_xsink);
-                            // a handler that completes normally keeps the return of a handler that ran before it
-                            // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
-                            // takes the request of the last handler run (a debugger's break or continue: #6201)
-                            int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
-                            if (hrc || nrc != RC_RETURN) {
-                                nrc = hrc;
-                            }
-                        }
-                        if (type == OBE_Error) {
-                            if (qore_es_private::get(obe_xsink)->rethrown) {
-                                qore_es_private::clearForRethrow(*xsink);
-                            }
-                        }
-                    }
-                    // bug 380: make sure and merge every exception after every conditional execution to ensure
-                    // that all on_(exit|error) statements are executed even if exceptions are thrown
-                    if (obe_xsink) {
-                        xsink->assimilate(obe_xsink);
-                        // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
-                        // when the block raises it itself (#5893)
-                        if (!error && xsink->isException())
-                            error = true;
-                    }
+    return obe ? execExitHandlers(rc, stmt_rc, return_value, xsink) : stmt_rc;
+}
+
+int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& return_value, ExceptionSink* xsink) {
+    ExceptionSink obe_xsink;
+    int nrc = 0;
+    // A break or continue from a handler carries its value until it reaches a loop or another
+    // handler replaces its request. Keep the return that was pending before that handler (#7022).
+    PendingReturnSnapshot before_request(&obe_xsink);
+    // the flow of the handlers before the handler that made a request: a return of a handler that ran before it
+    // resumes with its value when a later handler takes the request, as compiled code resumes it (#7022)
+    int nrc_before_request = 0;
+    // a return of this block, or of one of its handlers, gave the value of the return slot
+    bool own_return = stmt_rc == RC_RETURN;
+    bool error = xsink->isException();
+    int ast_on_exit_count = 0;
+    for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
+        enum obe_type_e type = (*i).first;
+        auto runs = [&type, &error]() -> bool {
+            return type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error);
+        };
+        if (runs() && (*i).second && (nrc == RC_BREAK || nrc == RC_CONTINUE)) {
+            // this handler takes the request of the handler that ran before it: the return that the request
+            // abandoned is released (#7022), which can run a destructor that throws; its exception is merged as one
+            // of a handler (bug 380), so that it is not in the sink that the handler runs with, and this handler runs
+            // only if it still runs with that exception
+            ExceptionSink restore_xsink;
+            before_request.restore(return_value, &restore_xsink);
+            nrc = nrc_before_request;
+            if (restore_xsink) {
+                xsink->assimilate(restore_xsink);
+                if (!error && xsink->isException()) {
+                    error = true;
                 }
             }
         }
-        if (ast_on_exit_count > 0) {
-            static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {
-                QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
-                const char* debug_env = debug_env_holder.c_str();
-                return debug_env && strstr(debug_env, "on_exit");
-            });
-            const bool debug_on_exit = debug_on_exit_setting.get();
-            if (debug_on_exit) {
-                fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
-                fflush(stderr);
+        if (runs()) {
+            if ((*i).second) {
+                ast_on_exit_count++;
+                {
+                    // instantiate exception for on_error blocks as an implicit arg
+                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                    std::unique_ptr<CatchExceptionHelper> ex_helper;
+                    if (type == OBE_Error) {
+                        QoreException* except = qore_exception_sink_ops(xsink).getException();
+                        assert(except);
+                        ex_helper.reset(new CatchExceptionHelper(except));
+                        argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
+                    }
+                    {
+                        // the handler is a statement of its own
+                        QoreStatementTempScope temps(&obe_xsink);
+                        // a handler that completes normally keeps the return of a handler that ran before it
+                        // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
+                        // takes the request of the last handler run (a debugger's break or continue: #6201); the
+                        // return that a request abandoned was released above
+                        if (std::next(i) != e) {
+                            before_request.capture(return_value);
+                        }
+                        nrc_before_request = nrc;
+                        // the last handler that runs at the exit: no later one runs in the state of the exit, and the
+                        // exit is not an error exit, as compiled code decides (QoreIRLowering's last_run; #7022)
+                        bool last_run = !error;
+                        if (last_run) {
+                            for (block_list_t::iterator j = std::next(i); j != e; ++j) {
+                                const obe_type_e jtype = (*j).first;
+                                if ((*j).second && (jtype == OBE_Unconditional || jtype == OBE_Success)) {
+                                    last_run = false;
+                                    break;
+                                }
+                            }
+                        }
+                        QoreHandlerRunHelper handler_run(return_value, this, last_run);
+                        int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
+                        if (hrc != RC_BREAK && hrc != RC_CONTINUE) {
+                            before_request.reset();
+                        }
+                        if (hrc == RC_RETURN) {
+                            own_return = true;
+                        }
+                        if (hrc || nrc != RC_RETURN) {
+                            nrc = hrc;
+                        }
+                    }
+                    if (type == OBE_Error) {
+                        if (qore_es_private::get(obe_xsink)->rethrown) {
+                            qore_es_private::clearForRethrow(*xsink);
+                        }
+                    }
+                }
+                // bug 380: make sure and merge every exception after every conditional execution to ensure
+                // that all on_(exit|error) statements are executed even if exceptions are thrown
+                if (obe_xsink) {
+                    xsink->assimilate(obe_xsink);
+                    // a thread_exit is not an exception: the block's on_error handlers do not run after it, as
+                    // when the block raises it itself (#5893)
+                    if (!error && xsink->isException())
+                        error = true;
+                }
             }
         }
-        if (nrc)
-            stmt_rc = nrc;
     }
-
-    return stmt_rc;
+    // a request in the last handler run leaves the block with a break or a continue: if something in the function
+    // takes it (a loop or switch statement, or a later handler), it abandons the return of the block or of its
+    // handlers, whose value is released here, when the return is abandoned, as compiled code releases it (an object
+    // or a value that owns one at once: #5992), so that the handlers of the blocks around it, which the request
+    // passes, do not run with it as a pending return; the snapshots that observe the slot without a replacement keep
+    // the data of an enclosing pending return, which resumes; a request that ends the function leaves the return,
+    // which goes on with its value (#6949, #7022)
+    if ((nrc == RC_BREAK || nrc == RC_CONTINUE) && own_return && !return_value.isNothing()
+            && requestTakenInFunction(nrc, return_value)) {
+        releaseAbandonedReturn(return_value, xsink);
+    }
+    if (ast_on_exit_count > 0) {
+        static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {
+            QoreEnvironmentValue debug_env_holder("QORE_IR_DEBUG");
+            const char* debug_env = debug_env_holder.c_str();
+            return debug_env && strstr(debug_env, "on_exit");
+        });
+        const bool debug_on_exit = debug_on_exit_setting.get();
+        if (debug_on_exit) {
+            fprintf(stderr, "[ON_EXIT-AST] executed %d on_exit handlers\n", ast_on_exit_count);
+            fflush(stderr);
+        }
+    }
+    return nrc ? nrc : stmt_rc;
 }
 
 // top-level block (program) execution member function
@@ -610,6 +794,9 @@ LocalVar* find_local_var(const char* name, bool& in_closure, bool include_top_le
 
 int StatementBlock::parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start) {
     QORE_TRACE("StatementBlock::parseInitIntern");
+    // a handler's body starts with no target of a break or a continue (OnBlockExitStatement), as the top block of a
+    // function does
+    request_targets = parse_context.pflag & (PF_BREAK_OK | PF_CONTINUE_OK);
 
     AbstractStatement* ret = nullptr;
 

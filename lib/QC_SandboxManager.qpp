@@ -555,6 +555,22 @@ hashdecl NetworkSecurityConfigInfo {
     list<hash<PortRangeInfo>> allowed_ports;
 }
 
+//! The time zone path budget of a sandbox and its use (qore#7566)
+/** @see SandboxManager::getTimeZonePathLimits()
+
+    @since %Qore 3.0
+*/
+hashdecl SandboxTimeZonePathInfo {
+    //! the most time zones that code governed by the sandbox may load from paths; 0 = path zones are refused
+    int max_zones = 0;
+    //! the most memory in bytes that those zones may use; 0 = path zones are refused
+    int max_bytes = 0;
+    //! the time zone name entries charged to the sandbox
+    int zones = 0;
+    //! the time zone memory in bytes charged to the sandbox
+    int bytes = 0;
+}
+
 //! Full sandbox configuration
 /** @since %Qore 3.0
 */
@@ -924,6 +940,50 @@ nothing SandboxManager::setMemoryLimit(int max_memory_bytes) [flags=NAMED_ARGS] 
         return QoreValue();
     }
     sm->setMemoryLimit(max_memory_bytes);
+}
+
+//! Sets the budget of the sandbox for time zones loaded from paths
+/** Code governed by the sandbox can load a time zone from a path (with @ref Qore::TimeZone::constructor(string)
+    "TimeZone::constructor()", @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" or the
+    @ref set-time-zone "%set-time-zone" parse directive) only if every sandbox that governs it has a budget, and only a
+    path that its file system policy allows.  Time zones are never freed, so the memory of every time zone and name
+    that such code loads is charged to each of its sandboxes for the life of the sandbox; a zone or name that is
+    loaded already costs nothing.  See @ref sandbox_time_zone_paths.
+
+    @param max_zones the most time zones (names) that the code can load from paths; 0 = none (the default)
+    @param max_bytes the most memory in bytes that they can use; 0 = none (the default)
+
+    @par Example:
+    @code{.py}
+sm.setTimeZonePathLimits(16, 4 * 1024 * 1024);
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR a limit is negative, or the sandbox is a composite of sandboxes
+    @throw SANDBOX-ACCESS-ERROR restricted code tried to raise a limit: only code that is not restricted can raise
+    them, also of a sandbox that restricted code created; restricted code can lower them
+
+    @note a copy of a sandbox (see copy()) has no budget until one is set
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setTimeZonePathLimits(int max_zones, int max_bytes) [flags=NAMED_ARGS] {
+    qore_sandbox_set_tz_path_limits(sm, max_zones, max_bytes, xsink);
+}
+
+//! Returns the budget of the sandbox for time zones loaded from paths and its use
+/** @return the limits (0 if path zones are refused) and the zones and memory charged to the sandbox; see
+    setTimeZonePathLimits()
+
+    @since %Qore 3.0
+*/
+hash<SandboxTimeZonePathInfo> SandboxManager::getTimeZonePathLimits() [flags=CONSTANT] {
+    QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+    QoreHashNode* rv = new QoreHashNode(hashdeclSandboxTimeZonePathInfo, xsink);
+    rv->setKeyValue("max_zones", account->tz_max_zones.load(), xsink);
+    rv->setKeyValue("max_bytes", account->tz_max_bytes.load(), xsink);
+    rv->setKeyValue("zones", account->tz_zones.load(), xsink);
+    rv->setKeyValue("bytes", account->tz_bytes.load(), xsink);
+    return rv;
 }
 
 //! Gets the memory limit of the sandbox
@@ -2831,6 +2891,102 @@ if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
 */
 static bool SandboxManager::isLentToRestricted(softint domain) [flags=RET_VALUE_ONLY] {
     return qore_caller_lent_to_restricts_domain(domain);
+}
+
+//! Returns @ref True if the calling code could read the host's environment and other ambient information itself
+/** Library code that resolves data of the host for its caller rather than taking it from the caller (environment
+    variables, instance or container metadata, application default credential files, the process's default
+    credentials, options taken from the environment) does so only if this method returns @ref True: a module's code
+    runs with its own %Program's options, so without the check it would give a caller what the caller may not read
+    itself (see @ref sandbox_ambient_host_data).
+
+    It returns @ref False if the calling code is restricted from @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO"
+    (for example with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" or
+    @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN"), as isLentToRestricted() resolves it: the code of the module on the way,
+    and of the objects and callbacks that restricted code created, counts as isCallerRestricted() counts it, but a
+    method of an object that the host lent (see @ref sandbox_lent_objects) lends nothing here, so a restricted
+    borrower gets no ambient data through it.  The host grants access with a policy barrier (callWithSystemPolicy())
+    or a capability (createSystemPolicyCall()): only the code that runs inside the grant counts then.  A sandbox that
+    governs the code without restricting the domain does not make it return @ref False; see
+    callerMayReceiveHostSecrets() for credentials that sandboxed code must not receive either.
+
+    The host's own code (not a module's) that restricted code calls answers for itself, as a policy barrier does:
+    the restrictions of its caller do not count for it, so a host must not expose code of its own that resolves the
+    host's credentials to restricted code unless it means to grant them; sandboxed callers are refused regardless
+    (see @ref sandbox_ambient_host_data).
+
+    It reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @return @ref True if the calling code could read the host's environment itself, or the host granted it;
+    @ref False if not
+
+    @par Example:
+    @code{.py}
+# a setting from the environment only for a caller that could read it itself
+*string region = SandboxManager::callerMayReadExternalInfo() ? ENV.SERVICE_REGION : NOTHING;
+    @endcode
+
+    @see
+    - callerMayReceiveHostSecrets()
+    - isLentToRestricted()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::callerMayReadExternalInfo() [flags=RET_VALUE_ONLY] {
+    return qore_caller_may_read_external_info();
+}
+
+//! Returns @ref True if the calling code may receive secrets of the host, such as credentials resolved from the host
+/** As callerMayReadExternalInfo(), and in addition @ref False if the calling code is sandboxed: a sandboxed %Program
+    is on the way (also one that sandboxed code created), a sandbox governs the code, or the code of an object or
+    callback that sandboxed code created runs.  Library code that resolves a credential of the host for its caller
+    (a key from the environment, a token of an instance metadata service, the process's default Kerberos
+    credential) and hands it to the caller, or acts with it for the caller, asks it first (see
+    @ref sandbox_ambient_host_data).
+
+    The host grants access with a policy barrier (callWithSystemPolicy()) or a capability
+    (createSystemPolicyCall()): only the code that runs inside the innermost grant counts then (the %Programs entered
+    inside it, the sandbox that governs that code, and the provenance of the objects and callbacks whose code runs:
+    all of it under a policy barrier, the frames inside a capability's boundary), so trusted code can use a
+    credential of the host for a sandboxed caller; a method of an object that the host lent lends nothing here.  It
+    fails closed: @ref False if the sandbox that governs the code cannot be resolved.
+
+    The library's refusal protects a credential of the host from sandboxed code that is not restricted from external
+    information only where such code cannot reach it otherwise: the credentials of the host's environment are read by
+    such code itself (getenv()), and the metadata endpoints of the clouds are protected only by the network policy of
+    its sandbox; an embedder that runs untrusted code restricts its Programs from
+    @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO" to protect the environment (a sandbox does not by default); the
+    default Kerberos credential, cache and keytab, the non-file Kerberos credential stores and SqlUtil's resolved
+    credentials are refused regardless, while a file-backed Kerberos store that the caller names is protected only as
+    far as its file system policy is (see
+    @ref sandbox_ambient_host_data).
+
+    The host's own code (not a module's) that restricted code calls answers for itself, as a policy barrier does:
+    the restrictions of its caller do not count for it, so a host must not expose code of its own that resolves the
+    host's credentials to restricted code unless it means to grant them; sandboxed callers are refused regardless
+    (see @ref sandbox_ambient_host_data).
+
+    It reveals only whether the calling code is sandboxed or restricted, so it is not restricted itself.
+
+    @return @ref True if the calling code may receive the host's secrets, or the host granted it; @ref False if not
+
+    @par Example:
+    @code{.py}
+# the host's credentials only for a caller that may receive them
+if (!SandboxManager::callerMayReceiveHostSecrets()) {
+    throw "CREDENTIALS-ERROR", "no credentials were given, and the host's credentials are not available to the "
+        "calling code";
+}
+    @endcode
+
+    @see
+    - callerMayReadExternalInfo()
+    - isSandboxed()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::callerMayReceiveHostSecrets() [flags=RET_VALUE_ONLY] {
+    return qore_caller_may_receive_host_secrets();
 }
 
 //! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions

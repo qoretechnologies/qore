@@ -103,6 +103,22 @@ public:
 
     DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 
+    //! sets the default value of a member that was added without it, which it takes over
+    /** used for the expression default values of the members of a hashdecl deserialized from an AOT binary, which are
+        read after the members are added (qore#7493)
+
+        @param e the default value, which the member takes over
+        @param receiver_type_info the type of the instantiation of a generic hashdecl whose member this is, or nullptr
+        (see getDefaultReceiverTypeInfo())
+    */
+    DLLLOCAL void setDeferredDefault(QoreValue e, const QoreTypeInfo* receiver_type_info = nullptr) {
+        assert(!exp);
+        exp = e;
+        if (exp) {
+            default_receiver_type_info = receiver_type_info;
+        }
+    }
+
     //! Returns the type that the default value of the member is evaluated with as the receiver, or nullptr
     /** The member of an instantiation of a generic hashdecl (HD<string> of HD<X>) shares the initializer of the
         generic hashdecl, whose types can name its type parameters (new hash<HD2<X, int>>()); they are the type
@@ -258,7 +274,7 @@ public:
         if (orig == other.orig) {
             return true;
         }
-        if (name != other.name || members.size() != other.members.size())
+        if (name != other.name || path != other.path || members.size() != other.members.size())
             return false;
 
         for (HashDeclMemberMap::const_iterator ti = members.member_list.begin(),
@@ -555,7 +571,7 @@ public:
         releases the references
     */
     DLLLOCAL void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             typed_hash_decl_private* p = get(*i.second);
             p->ref();
@@ -641,7 +657,7 @@ public:
     */
     DLLLOCAL void setNotModuleDecl() {
         not_module_decl = true;
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             get(*i.second)->not_module_decl = true;
         }
@@ -664,6 +680,43 @@ public:
         return members.find(name);
     }
 
+    //! sets the default value of the local member \a name of a hashdecl deserialized from an AOT binary (qore#7493)
+    /** The expression default values of the members are read after the members are added, when the functions, global
+        variables, static class members and methods that they can reference are registered; the instantiations of a
+        generic hashdecl made before then, whose members share the initializers of the hashdecl (see
+        HashDeclMemberInfo::instantiate()), take the default value too
+
+        @param name the name of the member, which must have no default value
+        @param val the default value, which the member takes over
+    */
+    DLLLOCAL void setAOTMemberDefault(const char* name, QoreValue val) {
+        ValueHolder holder(val, nullptr);
+        HashDeclMemberInfo* mi = members.find(name);
+        assert(mi);
+        if (!mi || !val) {
+            return;
+        }
+        mi->setDeferredDefault(holder.release());
+        // the initializers have changed
+        code_init.store(-1, std::memory_order_relaxed);
+        hier_code_init.store(-1, std::memory_order_relaxed);
+        if (parameterized_base) {
+            // a concrete declaration holds no cache, and its lock is a stripe that its generic's loop below holds
+            // (qore#7554)
+            return;
+        }
+        std::lock_guard<std::mutex> lock(cacheLock());
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private* p = get(*i.second);
+            HashDeclMemberInfo* imi = p->members.find(name);
+            if (imi && !imi->exp) {
+                imi->setDeferredDefault(mi->exp.refSelf(), p->thd->getTypeInfo());
+                p->code_init.store(-1, std::memory_order_relaxed);
+                p->hier_code_init.store(-1, std::memory_order_relaxed);
+            }
+        }
+    }
+
     DLLLOCAL HashDeclMemberInfo* findLocalMember(const char* name) {
         return members.find(name);
     }
@@ -673,7 +726,11 @@ public:
         // C++ modules may instantiate a generic before attaching it to a namespace. Namespace
         // publication (under parse ownership) must bind every cached instance as one operation;
         // cancellation cannot leave only part of the declaration family attached.
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (parameterized_base) {
+            // a concrete declaration holds no cache, and its lock is a stripe that its generic's loop below holds
+            return;
+        }
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             get(*i.second)->setNamespace(n);
         }
@@ -697,7 +754,11 @@ public:
         // Concrete generic declarations are owned by this cache, not by HashDeclList. They can
         // also survive in hash values after namespace teardown. Cleanup must finish even when
         // the Program has been cancelled, so this traversal is deliberately not cancellable.
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (parameterized_base) {
+            // a concrete declaration holds no cache, and its lock is a stripe that its generic's loop below holds
+            return;
+        }
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             get(*i.second)->namespaceDeleted(n);
         }
@@ -1067,7 +1128,11 @@ protected:
             return 0;
         }
     };
-    mutable std::mutex parameterized_hashdecl_cache_lock;
+    //! the lock of the cache: a stripe of a lock array that the fork handlers acquire before fork() (qore#7554)
+    /** See qore_cache_stripe_lock(); it is held only around a read or a change of the cache itself, and a concrete
+        declaration never holds a cache (its generic does), so no holder takes the lock of another declaration
+    */
+    DLLLOCAL std::mutex& cacheLock() const;
     mutable std::map<parameterized_hashdecl_key_t, TypedHashDecl*, parameterized_hashdecl_key_less_t>
         parameterized_hashdecl_cache;
     //! The registration of parameterized_hashdecl_cache by the types of its keys (issue #5765)
@@ -1082,7 +1147,7 @@ protected:
     private:
         const typed_hash_decl_private& hd;
     };
-    //! created with the first concrete declaration, under parameterized_hashdecl_cache_lock; unregistered by the
+    //! created with the first concrete declaration, under cacheLock(); unregistered by the
     //! destructor
     mutable std::unique_ptr<ParameterizedHashDeclCache> parameterized_hashdecl_registration;
     const TypedHashDecl* parameterized_base = nullptr;

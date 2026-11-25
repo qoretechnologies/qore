@@ -67,6 +67,10 @@ LoggerAppenderWithLayout::constructor(*string name, LoggerLayout layout) {
 
 //! Assigns a layout to the appender
 /** @param layout the layout for the appender
+
+    @note if code restricted from external information sets the layout (here or when it creates the appender), the
+    layout formats no values of the host (\c %%h, \c %%P, \c %%E of a @ref Qore::Logger::LoggerLayoutPattern
+    "LoggerLayoutPattern") for the appender (see @ref sandbox_ambient_host_data)
 */
 LoggerAppenderWithLayout::setLayout(LoggerLayout layout) {
     a->setLayout(xsink, layout);

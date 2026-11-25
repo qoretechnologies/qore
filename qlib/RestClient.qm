@@ -5960,7 +5960,10 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         } else {
             new_opts.validator = new NullRestSchemaValidator(logger);
         }
-        return setupRestClientConfig(cast<RestClient>(getImpl(False, new_opts)));
+        # for restricted code that was lent the connection, the client is created with its creator's file and location
+        # options (qore#7327)
+        return setupRestClientConfig(cast<RestClient>(cast<AbstractRestConnection>(getLentTargetSource(new_opts))
+            .getImpl(False, new_opts)));
     }
 
     #! gets options
@@ -6121,7 +6124,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         }
         auto ping_body = getPingBody();
 
-        hash<auto> ping_opts = real_opts + {
+        # the options of the ping's client: for restricted code that was lent the connection, its creator's file and
+        # location options (qore#7327)
+        hash<auto> ping_opts = cast<AbstractRestConnection>(getLentTargetSource()).real_opts + {
             "ping_path": ping_path,
             "ping_body": ping_body,
         };

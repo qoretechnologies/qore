@@ -448,8 +448,11 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
         # read from the provider rather than listed here, so an option added there keeps working
         hash<auto> supported = Class::forName("GoogleCloudStorageDataProvider::GoogleCloudStorageDataProviderBase")
             .getConstant("ConstructorOptions").getValue();
+        # for restricted code that was lent the connection: its creator's file path options, and no data provider
+        # options that name files (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         return create_object("GoogleCloudStorageDataProvider",
-            (constructor_options ?? {}) + getConnectionOptions(){keys supported});
+            (constructor_options ?? {}) + src.getConnectionOptions(){keys supported});
     }
 
     #! Returns a GCP access token for this connection's credential and access level
@@ -457,10 +460,13 @@ public class GoogleCloudStorageRestConnection inherits RestClient::RestConnectio
         exchange happens.
     */
     string getAccessToken() {
-        if (opts.gcp_access_token.val()) {
-            return opts.gcp_access_token;
+        # the credential file is read from the connection's options: for restricted code that was lent the
+        # connection, from its creator's (qore#7327)
+        AbstractConnection src = getLentTargetSource();
+        if (src.opts.gcp_access_token.val()) {
+            return src.opts.gcp_access_token;
         }
-        return GcpAuth::getAccessToken(opts.gcp_sa_json_path, gcsScopes(opts.gcp_storage_access));
+        return GcpAuth::getAccessToken(src.opts.gcp_sa_json_path, gcsScopes(src.opts.gcp_storage_access));
     }
 
     #! Verifies the connection with an authenticated Google Cloud Storage metadata request

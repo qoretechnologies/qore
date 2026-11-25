@@ -75,6 +75,13 @@ public:
         return slice;
     }
 
+    //! Returns the value of the operator for the evaluated operands \a l and \a r, as evalImpl() gives it
+    /** A hash gives the value of the key (or a slice for a list of keys), an object the member (through
+        memberGate() and its accessors), any other value no value.  The source of a weak assignment whose path an lvalue
+        cannot take reads the rest of the path with it (qore#7351).
+    */
+    DLLLOCAL static QoreValue evalOnValues(const QoreValue l, const QoreValue r, ExceptionSink* xsink);
+
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
         return copyBackgroundExplicit<QoreHashObjectDereferenceOperatorNode>(xsink);
     }
