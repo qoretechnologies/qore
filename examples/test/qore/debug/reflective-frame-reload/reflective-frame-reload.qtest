@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes
+# test-platform: macos - JIT code generation of local reloads in frames that reflection can change
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class ReflectiveFrameReloadTest
+
+#! compiled code reads a local or a parameter again after code that it runs replaced it with set_local_var_value()
+/** In a Program that allows the debugger, a callee or a destructor run by a release can replace a local or a parameter
+    of a frame by name: the JIT did not reload a read lowered before its first call (a receiver read at the top of a
+    loop body), and the IR interpreter and the JIT did not reload the locals after a release that ran a destructor
+    (qore#7646).  Every execution mode must print what the AST interpreter prints for each worker.  Programs compiled
+    with qcc are not checked here: AOT code keeps some locals in native code (see the AOT local variables in the
+    documentation of the execution modes).
+*/
+class ReflectiveFrameReloadTest inherits QUnit::Test {
+    public {
+        const Workers = ("class-param-cache", "object-param-cache", "optional-class-locals", "loop-reload",
+            "release-reload");
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ReflectiveFrameReload", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        foreach string worker in (Workers) {
+            addTestCase(worker, sub () { checkWorker(worker); });
+        }
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private checkWorker(string name) {
+        string worker = quote(get_script_dir() + "/" + name + ".qr");
+        string ast = ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=ast " + worker,
+            ExecModeHarness::NativeCheck::None);
+        assertTrue(ast.val(), name + ": the AST interpreter prints the results");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=" + mode
+                + " " + worker, ExecModeHarness::NativeCheck::None), name + ": " + mode);
+        }
+        assertEq(ast, ExecModeHarness::run_ir_tier(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode=tiered "
+            + worker), name + ": " + ExecModeHarness::IRTierName);
+    }
+}

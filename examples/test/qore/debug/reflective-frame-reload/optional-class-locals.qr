@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+%allow-weak-references
+
+class OptionalBase {
+    int next(int value) { return value + 1; }
+}
+class OptionalDerived inherits OptionalBase {
+    int next(int value) { return value + 10; }
+}
+class OptionalReplacer inherits OptionalBase {
+    int next(int value) {
+        set_local_var_value(1, "receiver", new OptionalDerived());
+        return value + 1;
+    }
+}
+class OptionalBox<T> {
+    public { T value; }
+    constructor(T value) { self.value = value; }
+}
+our *OptionalBase optional_target = new OptionalDerived();
+our string optional_events = "";
+
+# A class argument keeps a normal observable helper frame in the baseline too.
+sub optionalWrite(OptionalBase frame, auto value) { set_local_var_value(1, "receiver", value); }
+sub optionalInstallReference(OptionalBase frame) {
+    set_local_var_value(1, "receiver", \optional_target);
+}
+sub optionalMoveReference(OptionalBase value) { optional_target = value; }
+sub optionalDelete(OptionalBase value) { delete value; }
+
+class OptionalTracked {
+    private { string name; }
+    constructor(string name) { self.name = name; optional_events += name + "+ "; }
+    destructor() { optional_events += name + "- "; }
+}
+class OptionalMutator {
+    destructor() { set_local_var_value(1, "receiver", new OptionalDerived()); }
+}
+
+int sub optionalReplace(*OptionalBase receiver) {
+    int first = receiver.next(0);
+    optionalWrite(new OptionalBase(), new OptionalDerived());
+    return first * 100 + receiver.next(0);
+}
+int sub optionalLoop(*OptionalBase receiver) {
+    int sum = 0;
+    for (int i = 0; i < 6; ++i) { sum += receiver.next(0); }
+    return sum;
+}
+int sub optionalWrittenLoop(*OptionalBase receiver) {
+    receiver = new OptionalReplacer();
+    int sum = 0;
+    for (int i = 0; i < 6; ++i) { sum += receiver.next(0); }
+    return sum;
+}
+string sub optionalNothing(*OptionalBase receiver) {
+    string first = type(receiver);
+    optionalWrite(new OptionalBase(), new OptionalDerived());
+    int middle = receiver.next(0);
+    optionalWrite(new OptionalBase(), NOTHING);
+    return sprintf("%s:%d:%s", first, middle, type(receiver));
+}
+# A reflective write is assigned with the type of the local: a value of another type is refused and the
+# receiver keeps its value.
+string sub optionalInvalid(*OptionalBase receiver) {
+    int first = receiver.next(0);
+    try {
+        optionalWrite(new OptionalBase(), 42);
+        return "unexpected";
+    } catch (hash<auto> ex) {
+        return sprintf("%d:%s:%d", first, ex.err, receiver.next(0));
+    }
+}
+int sub optionalReference(*OptionalBase receiver) {
+    int sum = receiver.next(0);
+    try { optionalInstallReference(new OptionalBase()); }
+    catch (hash<auto> ex) {
+        if (ex.err != "RUNTIME-TYPE-ERROR") { rethrow; }
+        sum += 1000;
+    }
+    sum += receiver.next(0);
+    optionalWrite(new OptionalBase(), new OptionalDerived());
+    sum += receiver.next(0);
+    # No reference was installed: a change of the former referent does not change the receiver.
+    optionalMoveReference(new OptionalBase());
+    sum += receiver.next(0);
+    return sum;
+}
+int sub optionalDestructor(*OptionalBase receiver) {
+    int first = receiver.next(0);
+    OptionalMutator token();
+    delete token;
+    return first * 100 + receiver.next(0);
+}
+int sub optionalGeneric(*OptionalBox<int> receiver) {
+    int first = int(receiver.value);
+    optionalWrite(new OptionalBase(), new OptionalBox<int>(2));
+    return first * 100 + int(receiver.value);
+}
+string sub optionalDeleted(*OptionalBase receiver) {
+    int first = receiver.next(0);
+    optionalDelete(receiver);
+    try { return sprintf("unexpected-%d", receiver.next(0)); }
+    catch (hash<auto> ex) { return sprintf("%d:%s", first, ex.err); }
+}
+int sub optionalCaptured(*OptionalBase receiver) {
+    code<int()> read = int sub () { return receiver.next(0); };
+    receiver = new OptionalDerived();
+    return read();
+}
+int sub optionalWeak(*OptionalBase receiver, OptionalBase owner) {
+    receiver := owner;
+    return receiver.next(0);
+}
+sub optionalLifetime(bool fail) {
+    {
+        *OptionalTracked first = new OptionalTracked("first");
+        *OptionalTracked second;
+        second = new OptionalTracked("second");
+        optional_events += "body ";
+        if (fail) { throw "OPTIONAL-LIFETIME", "unwind"; }
+    }
+    optional_events += "after ";
+}
+
+if ((ARGV[0] ?? "") != "lifetime") {
+    printf("replace:%d\n", optionalReplace(new OptionalBase()));
+    printf("loop:%d:%d\n", optionalLoop(new OptionalReplacer()), optionalWrittenLoop(new OptionalBase()));
+    printf("nothing:%s\n", optionalNothing(NOTHING));
+    printf("invalid:%s\n", optionalInvalid(new OptionalBase()));
+    printf("reference:%d\n", optionalReference(new OptionalBase()));
+    printf("destructor:%d\n", optionalDestructor(new OptionalBase()));
+    printf("generic:%d\n", optionalGeneric(new OptionalBox<int>(1)));
+    printf("deleted:%s\n", optionalDeleted(new OptionalBase()));
+    printf("captured:%d\n", optionalCaptured(new OptionalBase()));
+    OptionalDerived owner();
+    *OptionalBase weak := owner;
+    printf("weak:%d:%d\n", optionalLoop(weak), optionalWeak(new OptionalBase(), owner));
+}
+optionalLifetime(False);
+printf("normal:%s\n", optional_events);
+optional_events = "";
+try { optionalLifetime(True); }
+catch (hash<auto> ex) { optional_events += ex.err; }
+printf("unwind:%s\n", optional_events);
