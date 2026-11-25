@@ -5186,6 +5186,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     uh.c_str(), it->second.owner.c_str());
                 PollInfo old_pinfo = t.takeOpKeepingId(it);
                 inherited_key_token = old_pinfo.key_token;
+                // the replacing operation owns the key before any result of the replaced one can be observed
+                key_registry.update(uh, inherited_key_token, app_id, spop_obj);
                 // the new submission waits for the step: no second step of the operation may run meanwhile, and
                 // the step's result, for the same operation ID, is the new submission's
                 step_in_flight = old_pinfo.continue_poll_in_flight;
@@ -5195,6 +5197,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     uh.c_str(), it->second.owner.c_str());
                 PollInfo old_pinfo = t.takeOpKeepingId(it);
                 inherited_key_token = old_pinfo.key_token;
+                // the replacing operation owns the key before any result of the replaced one can be observed
+                key_registry.update(uh, inherited_key_token, app_id, spop_obj);
                 if (old_pinfo.continue_poll_in_flight) {
                     // a step of the replaced operation is still running on a worker: its cancellation (abort() and
                     // the canceled result) waits for the step's result, as a Cancel does, and the replacing
@@ -5248,10 +5252,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // the key token: the reservation, or the one of the operation of this thread that is replaced
         pinfo.key_token = key_token ? key_token : (inherited_key_token ? inherited_key_token
             : key_registry.adopt(uh, t.thread_idx, app_id, spop_obj));
-        // an operation that takes over the token of the one it replaced on this thread is the key's owner now
-        if (!key_token && pinfo.key_token) {
-            key_registry.update(uh, pinfo.key_token, app_id, spop_obj);
-        }
         pinfo.continue_poll_in_flight = step_in_flight;
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
@@ -11543,6 +11543,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 resubmitted_id = it->second.op_id;
                                 PollInfo old_pinfo = t.takeOpKeepingId(it);
                                 inherited_key_token = old_pinfo.key_token;
+                                key_registry.update(cmd.key, inherited_key_token, cmd.submit_app_id,
+                                    cmd.submit_spop_obj);
                                 // the new submission waits for the step: no second step of the operation may run
                                 // meanwhile, and the step's result, for the same operation ID, is the new
                                 // submission's
@@ -11569,6 +11571,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 // operation and clean up; the replacing operation takes over its key token
                                 inherited_key_token = it->second.key_token;
                                 it->second.key_token = 0;
+                                // the replacing operation owns the key before any result of the replaced one can be
+                                // observed
+                                key_registry.update(cmd.key, inherited_key_token, cmd.submit_app_id,
+                                    cmd.submit_spop_obj);
                                 PollInfo old_pinfo = retireOp(t, it, xsink);
                                 if (old_pinfo.continue_poll_in_flight) {
                                     // a step of the replaced operation is still running on a worker: its
@@ -11592,15 +11598,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.app_pgm_id = cmd.submit_app_id;
                     // the key token: the reservation of the submission, or the one of the operation of this thread
                     // that it replaces (qore#7624); the reservation passes to the operation
-                    const bool key_reserved = cmd.submit_key_token != 0;
-                    pinfo.key_token = key_reserved ? cmd.submit_key_token : (inherited_key_token
+                    pinfo.key_token = cmd.submit_key_token ? cmd.submit_key_token : (inherited_key_token
                         ? inherited_key_token : key_registry.adopt(cmd.key, t.thread_idx, cmd.submit_app_id,
                             cmd.submit_spop_obj));
                     cmd.submit_key_token = 0;
-                    // an operation that takes over the token of the one it replaced on this thread is the key's owner now
-                    if (!key_reserved && pinfo.key_token) {
-                        key_registry.update(cmd.key, pinfo.key_token, cmd.submit_app_id, cmd.submit_spop_obj);
-                    }
                     pinfo.continue_poll_in_flight = step_in_flight;
                     pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
                     pinfo.sock = cmd.submit_sock;               // ownership transferred
