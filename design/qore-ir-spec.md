@@ -261,3 +261,23 @@ unused (the bound of a loop or the source of an addition then read a local that
 was never assigned).  `IRScalarFusedLocals.qtest` checks loop bounds and
 counters, additions and increments next to replaced lists and hashes in every
 execution mode and compiled code.
+
+### Integer pairs read with a bounded index
+
+A local `list<int>` of two members whose reads have an index that is not a
+constant but can only be 0 or 1 (a native integer with a known range of 0 to 1,
+or the result of an AND with the constant 1, such as `pair[x & 1]`) is replaced
+like a list read with constant indexes: the list is not built, and each such read
+becomes `first ^ ((first ^ second) & -index)`, which selects a member without a
+branch; `-index` is 0 or -1, so no operation can overflow, whatever the members'
+values.  The members are native integers, which the interpreter's slots own
+whether they are inline or boxed (see above), so the selection can use them in
+later statements and loops.  Any other index (an AND with another mask, or an
+index that can be negative or larger), other element types and every condition
+of the replacement of a list read (one store of the list, no mutation, alias,
+capture, reference or handler on the read) keep the list.
+`QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT` disables it.
+`IRBoundedPairScalarReplacement.qtest` checks members in and out of the inline
+range, reads in one or more blocks and in a loop, and the lists that must stay,
+in every execution mode and compiled code, with the optimizer's statistics and the
+compiled code's calls to build lists.

@@ -3738,6 +3738,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT");
     const bool enable_return_materialization =
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION");
+    // the reads of an integer pair whose index is 0 or 1 but not a constant (ex: pair[x & 1])
+    const bool enable_bounded_pair_reads =
+        !QORE_ENV_IS_SET("QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT");
     if (!enable_lists && !enable_hashes) {
         return stats;
     }
@@ -3991,6 +3994,34 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::unordered_map<const QoreIRInstruction*, ScalarizedLiteralIntQuery>
         scalarized_literal_int_queries;
+    //! the read of an integer pair with an index that is 0 or 1, which the rewrite replaces by an arithmetic selection
+    //! of one of the two members: first ^ ((first ^ second) & -index)
+    struct ScalarizedBoundedPairRead {
+        QoreIRValue first;
+        QoreIRValue second;
+        QoreIRValue index;
+    };
+    std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
+        scalarized_bounded_pair_reads;
+    //! returns true if \a selector is a native integer that is 0 or 1: a known range, or the result of an AND with 1
+    auto is_bit_selector = [&](QoreIRValue selector) {
+        const QoreIRValueFacts* facts = func.getValueFacts(selector);
+        if (!facts || facts->representation != QoreIRValueRepresentation::NativeInt
+                || facts->assigned_state != QoreIRAssignedState::Assigned || !facts->never_nothing) {
+            return false;
+        }
+        if (facts->int_range_known && facts->int_range_min >= 0 && facts->int_range_max <= 1) {
+            return true;
+        }
+        auto definition = definitions.find(selector.id);
+        if (definition == definitions.end() || definition->second.inst->opcode != QoreIROpcode::AndInt
+                || definition->second.inst->operands.size() != 2) {
+            return false;
+        }
+        int64_t mask = 0;
+        return (resolve_int_selector(definition->second.inst->operands[0], mask) && mask == 1)
+            || (resolve_int_selector(definition->second.inst->operands[1], mask) && mask == 1);
+    };
     std::unordered_set<const LocalVar*> scalarized_container_locals;
     size_t scalarized = 0;
 
@@ -4408,6 +4439,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             candidate_aggregate_materializations;
         std::unordered_map<const QoreIRInstruction*,
             ScalarizedLiteralIntQuery> candidate_literal_int_queries;
+        std::unordered_map<const QoreIRInstruction*, ScalarizedBoundedPairRead>
+            candidate_bounded_pair_reads;
         std::unordered_map<std::string, QoreIRValue> hash_values;
         if (hash_candidate) {
             for (size_t i = 0; i < hash_keys.size(); ++i) {
@@ -5515,6 +5548,18 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         int64_t index = 0;
                         if (!resolve_int_selector(
                                 use.inst->operands[1], index)) {
+                            // an integer pair read with an index that is 0 or 1: the members are native integers,
+                            // owned by their slots in the interpreter, so the selection can use them after the
+                            // statement that built the list
+                            if (enable_bounded_pair_reads && element_type == bigIntTypeInfo
+                                    && aggregate_values.size() == 2
+                                    && is_bit_selector(use.inst->operands[1])) {
+                                candidate_bounded_pair_reads.emplace(use.inst,
+                                    ScalarizedBoundedPairRead{aggregate_values[0], aggregate_values[1],
+                                        use.inst->operands[1]});
+                                // rewritten in place, not removed
+                                continue;
+                            }
                             invalid = true;
                             break;
                         }
@@ -5755,7 +5800,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         if (invalid || (candidate_replacements.empty()
                 && candidate_path_operations.empty()
                 && candidate_literal_int_queries.empty()
-                && candidate_owned_aggregate_reads.empty())) {
+                && candidate_owned_aggregate_reads.empty()
+                && candidate_bounded_pair_reads.empty())) {
             continue;
         }
         if (!retain_aggregate_owner) {
@@ -5812,6 +5858,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         scalarized_literal_int_queries.insert(
             candidate_literal_int_queries.begin(),
             candidate_literal_int_queries.end());
+        scalarized_bounded_pair_reads.insert(candidate_bounded_pair_reads.begin(),
+            candidate_bounded_pair_reads.end());
         if (has_mutation && !retain_aggregate_owner) {
             scalarized_container_locals.insert(local);
         }
@@ -5866,6 +5914,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         for (QoreIRValue value : materialization.values) {
             record_forwarded_load(value);
         }
+    }
+    for (const auto& [inst, read] : scalarized_bounded_pair_reads) {
+        (void)inst;
+        record_forwarded_load(read.first);
+        record_forwarded_load(read.second);
     }
     for (const auto& [local, accesses] : local_accesses) {
         if (qore_ir_analysis_cancelled(check_count,
@@ -6090,6 +6143,48 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             if (eliminated.count(it->get())) {
                 it = instructions.erase(it);
             } else {
+                auto pair_read = scalarized_bounded_pair_reads.find(it->get());
+                if (pair_read != scalarized_bounded_pair_reads.end()) {
+                    const QoreIRInstruction* old = it->get();
+                    // first ^ ((first ^ second) & -index) is first for an index of 0 and second for 1, without a
+                    // branch; -index is 0 or -1, so no operation can overflow, whatever the members' values
+                    QoreIRValueFacts facts;
+                    facts.type_info = bigIntTypeInfo;
+                    facts.representation = QoreIRValueRepresentation::NativeInt;
+                    facts.assigned_state = QoreIRAssignedState::Assigned;
+                    facts.never_nothing = true;
+                    // replaces the read with one instruction per call; the last takes the read's result
+                    auto emit = [&](QoreIROpcode opcode, QoreIRValue left, QoreIRValue right, bool last) {
+                        auto inst = std::make_unique<QoreIRInstruction>(opcode);
+                        inst->loc = old->loc;
+                        inst->stmt_loc = old->stmt_loc;
+                        inst->cached_start_line = old->cached_start_line;
+                        inst->temp_scope_id = old->temp_scope_id;
+                        inst->result = last ? old->result : func.createValue();
+                        func.max_value_id = std::max(func.max_value_id, inst->result.id);
+                        inst->operands.push_back(left);
+                        if (right.isValid()) {
+                            inst->operands.push_back(right);
+                        }
+                        (void)qore_ir_rewrite_value_operands(*inst, replacements, check_count, false);
+                        QoreIRValue result = inst->result;
+                        func.setValueFacts(result, facts);
+                        if (last) {
+                            *it = std::move(inst);
+                        } else {
+                            it = instructions.insert(it, std::move(inst));
+                            ++it;
+                        }
+                        return result;
+                    };
+                    const ScalarizedBoundedPairRead read = pair_read->second;
+                    QoreIRValue mask = emit(QoreIROpcode::UnaryMinusInt, read.index, QoreIRValue(), false);
+                    QoreIRValue diff = emit(QoreIROpcode::XorInt, read.first, read.second, false);
+                    QoreIRValue selected = emit(QoreIROpcode::AndInt, diff, mask, false);
+                    emit(QoreIROpcode::XorInt, read.first, selected, true);
+                    ++it;
+                    continue;
+                }
                 auto owned_read =
                     scalarized_owned_aggregate_reads.find(it->get());
                 if (owned_read

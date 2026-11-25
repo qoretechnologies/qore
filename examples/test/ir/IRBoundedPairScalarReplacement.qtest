@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation of the arithmetic selection that replaces the reads of integer pairs
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRBoundedPairScalarReplacementTest
+
+#! The fixed-aggregate scalar replacement of a list of two integers read with an index that is 0 or 1
+/** A read of a local list<int> of two members with an index that is not a constant but can only be 0 or 1 (x & 1)
+    is replaced by first ^ ((first ^ second) & -index), so that the list is not built; the members are native
+    integers, which the interpreter's slots own (inline or not), so the selection can use them in later statements.
+    The scenario must print in every tier and as a compiled executable what the AST tier prints; the optimizer's
+    statistics and the LLVM IR of the compiled functions show which lists are replaced.
+*/
+class IRBoundedPairScalarReplacementTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! disables the replacement of the reads of a pair with a bounded index
+        const Gate = "QORE_DISABLE_IR_BOUNDED_PAIR_SCALAR_REPLACEMENT=1 ";
+
+        #! the functions whose pair is replaced: with members in and out of the inline range, in one or two blocks,
+        #! in a loop and with a constant read as well
+        const Replaced = ("boundedPair", "commutedPair", "multipleReads", "crossBlockPair", "inlinePair",
+            "inlineCommutedPair", "inlineMultipleReads", "inlineCrossBlockPair", "loopPair", "inlineExtremes",
+            "wideConstantPair");
+
+        #! the functions whose list must stay: an index that can be another value, string members, a list that is
+        #! changed, aliased, captured or passed by reference, members computed by calls with references
+        const Kept = ("uncheckedPair", "wideMaskPair", "negativeMaskPair", "boxedPair", "mutatedPair", "aliasedPair",
+            "capturedPair", "referencedPair", "sideEffectPair");
+    }
+
+    constructor() : QUnit::Test("IRBoundedPairScalarReplacementTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "";
+        fixture = get_script_dir() + "/IRBoundedPairScalarReplacementScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("ir without the replacement", sub () {
+            assertEq(astOutput(), run("ir", Gate), "exec-mode=ir output with the replacement disabled matches AST");
+        });
+        addTestCase("scalar replacement", \testScalarReplacement());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        string output = astOutput();
+        assertRegex("^loop: 133300224; bounded pair checks passed$", output.split("\n")[6] ?? "", output);
+        assertEq("index 1: 8 8 8", output.split("\n")[3], output);
+        assertEq("index 2: null null null", output.split("\n")[4], output);
+    }
+
+    testScalarReplacement() {
+        string stats = run("ir", "QORE_IR_OPT_STATS=1 ");
+        foreach string name in (Replaced) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-lists=1 ", stats, name + " list replaced");
+        }
+        foreach string name in (Kept) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-lists=0 ", stats, name + " list kept");
+        }
+        string disabled = run("ir", Gate + "QORE_IR_OPT_STATS=1 ");
+        foreach string name in (Replaced) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-lists=0 ", disabled, name + " list kept when disabled");
+        }
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-bounded-pair-");
+        foreach hash<auto> i in ((("level": 0, "env": ""), ("level": 3, "env": ""), ("level": 3, "env": Gate))) {
+            string exe = sprintf("%s/scenario-O%d%s", tmp.path, i.level, i.env ? "-disabled" : "");
+            string out = ExecModeHarness::run_any(sprintf("%sQORE_DUMP_LLVM_IR=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s", i.env, shellQuote(libqore_dir),
+                shellQuote(libqore_dir), shellQuote(qcc_bin), i.level, shellQuote(exe), shellQuote(fixture)));
+            string label = sprintf("AOT -O%d%s", i.level, i.env ? " disabled" : "");
+            assertTrue(is_file(exe), sprintf("%s compile produced an executable: %s", label, out.substr(-2000)));
+            if (i.level == 3) {
+                foreach string name in (Replaced) {
+                    assertEq(!!i.env, allocatesList(out, name), sprintf("%s: %s allocates its list", label, name));
+                }
+                foreach string name in (Kept) {
+                    assertTrue(allocatesList(out, name), sprintf("%s: %s allocates its list", label, name));
+                }
+            }
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(exe))), label + " output matches AST");
+        }
+    }
+
+    #! returns True if the LLVM definition of the function calls the runtime to build a list
+    private bool allocatesList(string ir, string name) {
+        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+        assertTrue(exists body[0], name + " has an LLVM definition");
+        return regex(body[0] ?? "", "(?:call|invoke) [^\n]*@qore_rt_make_list");
+    }
+
+    private string run(string mode, string env = "") {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s", env, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
