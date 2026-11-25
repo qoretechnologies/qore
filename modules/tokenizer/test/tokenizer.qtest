@@ -56,6 +56,10 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("the input is converted to UTF-8", \inputEncodingTest());
         addTestCase("a Split match error is raised", \splitMatchErrorTest());
 
+        addTestCase("Unicode pre-tokenizers", \unicodePreTokens());
+        addTestCase("Unicode Replace patterns", \unicodeReplace());
+        addTestCase("decoder chains preserve token boundaries", \decoderChain());
+
         set_return_value(main());
     }
 
@@ -1166,33 +1170,108 @@ class TokenizerTest inherits QUnit::Test {
         # valid text is still split
         assertEq(("a", "-", "b", "-", "c"), tok.encode("a-b-c").tokens);
 
-        # a Replace normalizer whose std::regex pattern removes the second byte of "é" (C3 A9) gives the Split
-        # pre-tokenizer text that is not valid UTF-8: the match error is raised
+        # Exercise Split's match-error propagation on a short, valid input with an explicit match limit.
         hash<auto> config = {
-            "model": {
-                "type": "WordPiece",
-                "vocab": {"[UNK]": 0, "a": 1, "b": 2, "-": 3},
-                "unk_token": "[UNK]",
-                "continuing_subword_prefix": "##",
-            },
-            "normalizer": {
-                "type": "Replace",
-                "pattern": {"Regex": "\\xa9"},
-                "content": "",
-            },
-            "pre_tokenizer": {
-                "type": "Split",
-                "pattern": {"Regex": "-"},
-                "behavior": "Isolated",
-                "invert": False,
-            },
+            "model": {"type": "WordPiece", "vocab": {"[UNK]": 0}, "unk_token": "[UNK]"},
+            "pre_tokenizer": {"type": "Split", "pattern": {"Regex": "(*NO_JIT)(*LIMIT_MATCH=1)(a|b)c"},
+                "behavior": "Isolated"},
         };
-        Tokenizer::HFTokenizer cut_tok(config);
-        assertThrows("PRETOKENIZER-MATCH-ERROR", "Split pre-tokenizer: regular expression match error",
-            \cut_tok.encode(), "a-é-b");
-        assertThrows("PRETOKENIZER-MATCH-ERROR", \cut_tok.encodeBatch(), (("a-é-b",),));
-        assertThrows("PRETOKENIZER-MATCH-ERROR", \cut_tok.encodeForModel(), "a-é-b");
-        # text that the normalizer leaves valid is split
-        assertEq(("a", "-", "b"), cut_tok.encode("a-b").tokens);
+        Tokenizer::HFTokenizer limited(config);
+        assertThrows("PRETOKENIZER-MATCH-ERROR", \limited.encode(), "ac");
+        assertThrows("PRETOKENIZER-MATCH-ERROR", \limited.encodeBatch(), (("ac",),));
+        assertThrows("PRETOKENIZER-MATCH-ERROR", \limited.encodeForModel(), "ac");
+    }
+
+    # Reference outputs from Hugging Face tokenizers 0.23.3. Its Python API reports character offsets,
+    # converted here to Qore's half-open UTF-8 byte ranges.
+    unicodePreTokens() {
+        hash<auto> config = {"model": {"type": "WordPiece", "unk_token": "[UNK]", "vocab": {
+            "[UNK]": 0, "é": 1, "«": 2, "٣²Ⅳ": 3, "。": 4, "+": 5, "$": 6, "猫": 7,
+            "é«": 8, "。+$猫": 9, "٣": 10, "²": 11, "Ⅳ": 12,
+        }}};
+        string text = "é«٣²Ⅳ。+$猫";
+        hash<auto> punctuation = {"type": "Punctuation", "behavior": "Isolated"};
+        hash<auto> digits = {"type": "Digits", "individual_digits": False};
+        foreach hash<auto> pre in ((punctuation, {"type": "Sequence", "pretokenizers": (punctuation, digits)})) {
+            config.pre_tokenizer = pre;
+            Tokenizer::HFTokenizer tok(config);
+            hash<auto> enc = tok.encode(text);
+            assertEq(("é", "«", "٣²Ⅳ", "。", "+", "$", "猫"), enc.tokens);
+            assertEq(((0, 2), (2, 4), (4, 11), (11, 14), (14, 15), (15, 16), (16, 19)), enc.offset_mapping);
+        }
+        config.pre_tokenizer = digits;
+        Tokenizer::HFTokenizer grouped(config);
+        hash<auto> enc = grouped.encode(text);
+        assertEq(("é«", "٣²Ⅳ", "。+$猫"), enc.tokens);
+        assertEq(((0, 4), (4, 11), (11, 19)), enc.offset_mapping);
+        config.pre_tokenizer.individual_digits = True;
+        Tokenizer::HFTokenizer individual(config);
+        enc = individual.encode(text);
+        assertEq(("é«", "٣", "²", "Ⅳ", "。+$猫"), enc.tokens);
+        assertEq(((0, 4), (4, 6), (6, 8), (8, 11), (11, 19)), enc.offset_mapping);
+    }
+
+    unicodeReplace() {
+        foreach list<auto> row in ((
+            ({"Regex": "."}, "$1", "é🦊", "$1$1"),
+            ({"Regex": "\\p{N}+"}, "猫", "é٣²Ⅳ", "é猫"),
+            ({"Regex": "\\xa9"}, "X", "é©", "éX"),
+            ({"String": "."}, "猫", "a.é", "a猫é"),
+            ({"Regex": "a*"}, "!", "aaé", "!é!"),
+            ({"String": ""}, "!", "é猫", "!é!猫!"),
+        )) {
+            hash<auto> vocab = {"[UNK]": 0};
+            vocab{row[3]} = 1;
+            hash<auto> config = {"model": {"type": "WordPiece", "unk_token": "[UNK]", "vocab": vocab},
+                "normalizer": {"type": "Replace", "pattern": row[0], "content": row[1]}};
+            Tokenizer::HFTokenizer tok(config);
+            assertEq((row[3],), tok.encode(row[2]).tokens);
+        }
+        hash<auto> cfg = {"model": {"type": "WordPiece", "unk_token": "[UNK]", "vocab": {"[UNK]": 0, "ac": 1}},
+            "normalizer": {"type": "Replace", "pattern": {"Regex": "("}, "content": ""}};
+        assertThrows("TOKENIZER-NORMALIZER-ERROR", sub () { new Tokenizer::HFTokenizer(cfg); });
+        cfg.normalizer.pattern.Regex = "(*LIMIT_MATCH=1)(a|b)c";
+        Tokenizer::HFTokenizer limited(cfg);
+        assertThrows("TOKENIZER-NORMALIZER-ERROR", \limited.encode(), "ac");
+        cfg.decoder = cfg.normalizer;
+        Tokenizer::HFTokenizer decoder(cfg);
+        assertThrows("TOKENIZER-DECODER-ERROR", sub () { decoder.decode((1,)); });
+        assertThrows("TOKENIZER-DECODER-ERROR", sub () { decoder.decodeBatch(((1,),)); });
+    }
+
+    decoderChain() {
+        Tokenizer::HFTokenizer llama(parse_json(ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/tinyllama-tokenizer.json")));
+        list<int> ids = (1, 904, 6468, 29871, 243, 162, 169, 141);
+        assertEq("élan 🦊", llama.decode(ids, True));
+        assertEq("<s> élan 🦊", llama.decode(ids));
+        assertEq(("élan 🦊", "Hello 😀"), llama.decodeBatch((ids, (1, 15043, 29871, 243, 162, 155, 131)), True));
+        hash<auto> mark = {"type": "Replace", "pattern": {"Regex": "^"}, "content": ":"};
+        foreach list<auto> row in ((
+            ({"type": "BPEDecoder", "suffix": "</w>"}, ("café</w>", "x</w>"), ":café :x"),
+            ({"type": "WordPiece", "prefix": "##", "cleanup": True}, ("t", "##é"), ":t:é"),
+            ({"type": "Metaspace", "replacement": "▁", "prepend_scheme": "always"}, ("▁a▁b", "▁x"), ":ab: x"),
+            ({"type": "Strip", "content": "é", "start": 1, "stop": 1}, ("éa", "bé"), ":a:b"),
+            ({"type": "ByteFallback"}, ("<0xFF>", "<0xFE>", "é"), ":�:�:é"),
+            ({"type": "BPEDecoder"}, ("<0xC3>", "<0xA9>"), ":é"),
+            ({"type": "Fuse"}, ("a", "é"), ":aé"),
+            ({"type": "ByteLevel"}, ("Ã", "©"), ":é"),
+            ({"type": "ByteLevel"}, ("Ã",), ":�"),
+            ({"type": "Replace", "pattern": {"Regex": "\\p{N}"}, "content": "$1"}, ("a٢", "٣b"), ":a$1:$1b"),
+            ({"type": "Replace", "pattern": {"String": "é"}, "content": ""}, ("éa", "bé"), ":a:b"),
+            ({"type": "Replace", "pattern": "é", "content": "x"}, ("éa", "bé"), ":xa:bx"),
+        )) {
+            hash<auto> vocab = {"[UNK]": 0};
+            list<int> input;
+            foreach string token in (row[1]) {
+                vocab{token} = input.size() + 1;
+                input += vocab{token};
+            }
+            hash<auto> cfg = {"model": {"type": "WordPiece", "unk_token": "[UNK]", "vocab": vocab},
+                "decoder": {"type": "Sequence", "decoders": ({"type": "Sequence", "decoders": (row[0],)}, mark)}};
+            Tokenizer::HFTokenizer tok(cfg);
+            assertEq(row[2], tok.decode(input));
+            assertEq((row[2],), tok.decodeBatch((input,)));
+        }
     }
 }
