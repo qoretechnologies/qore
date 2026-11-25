@@ -178,6 +178,9 @@ public const string DP_OP_TO_UPPER = "upr";
 #! Join list elements with a separator string
 public const string DP_OP_JOIN = "join";
 
+#! Function-call name for the list join operator
+public const string DP_FUNC_JOIN = DP_OP_JOIN;
+
 #! Convert string/binary to hex string
 public const string DP_OP_TO_HEX = "to-hex";
 
@@ -351,6 +354,27 @@ public const string DP_FUNC_MIN = "min";
 
 #! Returns the largest numeric, date, or string list element
 public const string DP_FUNC_MAX = "max";
+
+#! Counts list elements satisfying an item-scoped predicate
+public const string DP_FUNC_COUNT_IF = "count_if";
+
+#! Returns the first occurrence of each distinct projected value
+public const string DP_FUNC_DISTINCT = "distinct";
+
+#! Stably sorts values or records by an optional field path
+public const string DP_FUNC_SORT = "sort";
+
+#! Groups the original list elements by a field path
+public const string DP_FUNC_GROUP_BY = "group_by";
+
+#! Returns the greatest of the supplied values
+public const string DP_FUNC_GREATEST = "greatest";
+
+#! Returns the least of the supplied values
+public const string DP_FUNC_LEAST = "least";
+
+#! Returns the median of the numeric values in a list
+public const string DP_FUNC_MEDIAN = "median";
 
 #! Returns the first non-NOTHING argument
 public const string DP_FUNC_COALESCE = "coalesce";

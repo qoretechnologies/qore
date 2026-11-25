@@ -701,7 +701,26 @@ auto sub dp_list_reduce(hash<auto> rec, hash<DataProviderExpression> exp, *hash<
     string name = exp.exp;
     list<auto> source = dp_list_source(name, dp_eval_arg(rec, exp, 0, tc));
     list<hash<auto>> path = dp_list_path(name, dp_eval_arg(rec, exp, 1, tc));
-    bool numeric_only = name == DP_FUNC_SUM || name == DP_FUNC_AVG;
+    return dp_reduce_values(name, source, path);
+}
+
+#! Compares scalar arguments using the same promotion and absence rules as list extrema
+auto sub dp_scalar_extreme(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    list<auto> values = map AbstractDataProvider::evalGenericExpressionValue(rec, $1, tc), exp.args;
+    return dp_reduce_values(exp.exp, values, ());
+}
+
+#! Returns an integral result as an integer when it fits
+auto sub dp_list_numeric_result(auto value, int common) {
+    if (common == NT_INT && value >= MININT && value <= MAXINT && value == value.toInt()) {
+        return value.toInt();
+    }
+    return value;
+}
+
+#! Applies a reducer to a list of already evaluated values
+auto sub dp_reduce_values(string name, list<auto> source, list<hash<auto>> path) {
+    bool numeric_only = name == DP_FUNC_SUM || name == DP_FUNC_AVG || name == DP_FUNC_MEDIAN;
     list<auto> values = ();
     int common = NT_NOTHING;
     foreach auto item in (source) {
@@ -715,14 +734,30 @@ auto sub dp_list_reduce(hash<auto> rec, hash<DataProviderExpression> exp, *hash<
         return name == DP_FUNC_SUM ? 0 : NOTHING;
     }
     if (!numeric_only) {
+        bool minimum = name == DP_FUNC_MIN || name == DP_FUNC_LEAST;
         auto best = dp_list_promote(values[0], common);
         foreach auto item in (values) {
             auto value = dp_list_promote(item, common);
-            if (name == DP_FUNC_MIN ? value < best : value > best) {
+            if (minimum ? value < best : value > best) {
                 best = value;
             }
         }
         return best;
+    }
+    if (name == DP_FUNC_MEDIAN) {
+        list<auto> sorted = sort(map dp_list_promote($1, common), values);
+        int mid = sorted.size() / 2;
+        if (sorted.size() % 2) {
+            return sorted[mid];
+        }
+        auto left = sorted[mid - 1];
+        auto right = sorted[mid];
+        if (common == NT_FLOAT) {
+            # Halve before adding only when the sum overflows.
+            float sum = left + right;
+            return sum.infp() ? left / 2.0 + right / 2.0 : sum / 2.0;
+        }
+        return dp_list_numeric_result((left.toNumber() + right.toNumber()) / 2, common);
     }
     # Accumulate integer inputs as numbers so an intermediate sum cannot wrap.
     auto total = common == NT_FLOAT ? 0.0 : 0n;
@@ -730,12 +765,116 @@ auto sub dp_list_reduce(hash<auto> rec, hash<DataProviderExpression> exp, *hash<
         total += dp_list_promote(value, common);
     }
     if (name == DP_FUNC_AVG) {
+        if (common == NT_FLOAT && total.infp()) {
+            # The total can exceed the float range even when the mean fits.
+            number wide = 0n;
+            foreach auto value in (values) {
+                wide += value.toNumber();
+            }
+            return (wide / values.size()).toFloat();
+        }
         total /= values.size();
     }
-    if (common == NT_INT && total >= MININT && total <= MAXINT && total == total.toInt()) {
-        return total.toInt();
+    return dp_list_numeric_result(total, common);
+}
+
+#! Returns distinct projected values in source order, using strict equality
+list<auto> sub dp_list_distinct(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    list<auto> source = dp_list_source(exp.exp, dp_eval_arg(rec, exp, 0, tc));
+    list<hash<auto>> path = dp_list_path(exp.exp, dp_eval_arg(rec, exp, 1, tc));
+    list<auto> result = ();
+    hash<string, bool> seen;
+    list<auto> other = ();
+    foreach auto item in (source) {
+        auto value = dp_find_in_value(item, path);
+        if (!exists value || value === NULL) {
+            continue;
+        }
+        # Use exact string keys for common identifiers. Other types use Qore strict equality directly.
+        if (value.typeCode() == NT_STRING || value.typeCode() == NT_INT) {
+            string key = sprintf("%s:%s", value.type(), value);
+            if (seen{key}) {
+                continue;
+            }
+            seen{key} = True;
+        } else {
+            if (any $1 === value, other) {
+                continue;
+            }
+            push other, value;
+        }
+        push result, value;
     }
-    return total;
+    return result;
+}
+
+#! Stably sorts original elements on their projected keys and retains unkeyed elements at the end
+list<auto> sub dp_list_sort(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    list<auto> source = dp_list_source(exp.exp, dp_eval_arg(rec, exp, 0, tc));
+    list<hash<auto>> path = dp_list_path(exp.exp, dp_eval_arg(rec, exp, 1, tc));
+    auto direction = dp_eval_arg(rec, exp, 2, tc) ?? "asc";
+    if (direction !== "asc" && direction !== "desc") {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("sort direction must be asc or desc, got %y (%s)",
+            direction, direction.fullType());
+    }
+    list<hash<auto>> keyed = ();
+    list<auto> missing = ();
+    int common = NT_NOTHING;
+    foreach auto item in (source) {
+        auto key = dp_find_in_value(item, path);
+        if (!exists key || key === NULL) {
+            push missing, item;
+            continue;
+        }
+        common = dp_list_value_type(exp.exp, common, key, False);
+        push keyed, {"key": key, "item": item};
+    }
+    for (int i = 0; i < keyed.size(); ++i) {
+        keyed[i].key = dp_list_promote(keyed[i].key, common);
+    }
+    int sign = direction == "asc" ? 1 : -1;
+    auto sorted = sort_stable(keyed, int sub (hash<auto> a, hash<auto> b) {
+        return sign * (a.key <=> b.key);
+    });
+    list<auto> result = map $1.item, sorted;
+    return result + missing;
+}
+
+#! Groups original elements in source order under string or integer keys
+hash<auto> sub dp_list_group(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    list<auto> source = dp_list_source(exp.exp, dp_eval_arg(rec, exp, 0, tc));
+    auto location = dp_eval_arg(rec, exp, 1, tc);
+    if (location.typeCode() != NT_STRING) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("group_by expects a string field path, got %s",
+            location.fullType());
+    }
+    list<hash<auto>> path = dp_find_in_location(location);
+    hash<string, list<auto>> groups = {};
+    foreach auto item in (source) {
+        auto key = dp_find_in_value(item, path);
+        if (!exists key || key === NULL) {
+            continue;
+        }
+        if (key.typeCode() != NT_STRING && key.typeCode() != NT_INT) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("group_by expects string or integer keys, got %s",
+                key.fullType());
+        }
+        push groups{key.toString()}, item;
+    }
+    return groups;
+}
+
+#! Counts matches in the predicate's item context
+int sub dp_count_if(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    list<auto> source = dp_list_source(exp.exp, dp_eval_arg(rec, exp, 0, tc));
+    int matches = 0;
+    foreach auto item in (source) {
+        if (AbstractDataProvider::evalGenericExpressionValue(dp_stream_list_record(item), exp.args[1],
+                dp_item_context(tc, item, $#, source.size())).toBool()) {
+            ++matches;
+        }
+    }
+    return matches;
 }
 
 #! Argument information for reducers accepting an optional path into each record
@@ -821,6 +960,130 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
             "arg_info": DpListPathArgs,
             "return_type": new QoreUnionDataType(("*int", "float", "number", "date", "string")),
+        },
+        "impl": \dp_list_reduce(),
+    },
+    DP_FUNC_COUNT_IF: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_COUNT_IF,
+            "display_name": "count_if",
+            "short_desc": "Counts list elements satisfying an item-scoped predicate",
+            "desc": "Counts list elements satisfying an item-scoped predicate",
+            "symbol": "count_if()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureAnyType),
+            "arg_info": (DpListPathArgs[0], <DataProviderArgInfo>{"display_name": "Predicate",
+                "short_desc": "Condition to count", "desc": "Evaluated against each list element"},),
+            "min_args": 2,
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": \dp_count_if(),
+    },
+    DP_FUNC_DISTINCT: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_DISTINCT,
+            "display_name": "distinct",
+            "short_desc": "Returns the first occurrence of each distinct projected value",
+            "desc": "Returns the first occurrence of each distinct projected value",
+            "symbol": "distinct()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs,
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": \dp_list_distinct(),
+    },
+    DP_FUNC_SORT: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_SORT,
+            "display_name": "sort",
+            "short_desc": "Stably sorts values or records by an optional field path",
+            "desc": "Stably sorts values or records by an optional field path",
+            "symbol": "sort()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType,
+                DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs + (<DataProviderArgInfo>{"display_name": "Order",
+                "short_desc": "Sort direction", "desc": "Use asc (default) or desc"},),
+            "return_type_first_arg": True,
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": \dp_list_sort(),
+    },
+    DP_FUNC_GROUP_BY: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GROUP_BY,
+            "display_name": "group_by",
+            "short_desc": "Groups the original list elements by a field path",
+            "desc": "Groups the original list elements by a field path",
+            "symbol": "group_by()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureStringType),
+            "arg_info": (DpListPathArgs[0], <DataProviderArgInfo>{"display_name": "Group key",
+                "short_desc": "Path to the group key", "desc": "A path to a string or integer field"},),
+            "return_type": AbstractDataProviderTypeMap."hash",
+        },
+        "impl": \dp_list_group(),
+    },
+    DP_FUNC_GREATEST: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GREATEST,
+            "display_name": "greatest",
+            "short_desc": "Returns the greatest of the supplied values",
+            "desc": "Returns the greatest of the supplied values",
+            "symbol": "greatest()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (<DataProviderArgInfo>{"display_name": "Value", "short_desc": "Value to compare",
+                "desc": "A numeric value, date, or string"},),
+            "varargs": True,
+            "min_args": 1,
+            "return_type": new QoreUnionDataType(("*int", "float", "number", "date", "string")),
+        },
+        "impl": \dp_scalar_extreme(),
+    },
+    DP_FUNC_LEAST: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_LEAST,
+            "display_name": "least",
+            "short_desc": "Returns the least of the supplied values",
+            "desc": "Returns the least of the supplied values",
+            "symbol": "least()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (<DataProviderArgInfo>{"display_name": "Value", "short_desc": "Value to compare",
+                "desc": "A numeric value, date, or string"},),
+            "varargs": True,
+            "min_args": 1,
+            "return_type": new QoreUnionDataType(("*int", "float", "number", "date", "string")),
+        },
+        "impl": \dp_scalar_extreme(),
+    },
+    DP_FUNC_MEDIAN: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MEDIAN,
+            "display_name": "median",
+            "short_desc": "Returns the median of the numeric values in a list",
+            "desc": "Returns the median of the numeric values in a list",
+            "symbol": "median()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs,
+            "return_type": new QoreUnionDataType(("*int", "float", "number")),
         },
         "impl": \dp_list_reduce(),
     },
@@ -1718,7 +1981,11 @@ public const hash<auto> ExtendedExpressionImplementations = {
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             softlist<auto> l = dp_eval_arg(rec, exp, 0, tc);
-            string sep = dp_eval_arg(rec, exp, 1, tc);
+            auto sep = dp_eval_arg(rec, exp, 1, tc);
+            if (sep.typeCode() != NT_STRING) {
+                throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("join expects a string separator, got %s",
+                    sep.fullType());
+            }
             return l.join(sep);
         },
     },

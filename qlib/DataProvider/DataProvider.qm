@@ -1239,6 +1239,35 @@ auto has_2 = AbstractDataProvider::evalGenericExpressionValue(rec,
     outside that range is a number. Both \c min and \c max also accept lists of dates or lists of strings.
     Mixing dates or strings with another type raises a data provider expression error.
 
+    @subsection dpql_list_functions Other list and aggregate functions
+
+    |!Function|!Example|!Result
+    |<tt>count_if(list, condition)</tt>|<tt>count_if(\@lines, \@disputed)</tt>|Count of disputed lines
+    |<tt>distinct(list [, path])</tt>|<tt>distinct(\@lines, "carrier")</tt>|Carrier names in first-seen order
+    |<tt>sort(list [, path [, order]])</tt>|<tt>sort(\@lines, "amount", "desc")</tt>|Lines ordered by decreasing amount
+    |<tt>group_by(list, path)</tt>|<tt>group_by(\@lines, "postcode")</tt>|Original lines grouped by postcode
+    |<tt>join(list, separator)</tt>|<tt>join(\@reasons, ", ")</tt>|A single string such as "late, damaged"
+    |<tt>greatest(value, ...)</tt>|<tt>greatest(\@quote, \@minimum)</tt>|Higher charge
+    |<tt>least(value, ...)</tt>|<tt>least(\@quote, \@cap)</tt>|Lower charge
+    |<tt>median(list [, path])</tt>|<tt>median(\@lines, "amount")</tt>|Middle amount, averaging the central pair for an even count
+
+    The predicate of \c count_if reads the fields of each record or <tt>\@value</tt> for a scalar element.
+    Its result is zero for an empty list. The \c distinct function skips absent values and compares both type
+    and value. Its result contains the projected values. The \c sort function keeps the original elements.
+    Equal keys retain their input order, with missing or null keys last in both directions.
+    The default order is ascending. Use an empty path to sort scalar values in descending order.
+
+    The \c group_by function skips absent keys and accepts string or integer keys. Hash keys are strings,
+    so integer 1 and string "1" share a group. Within each group, elements retain their input order.
+    For example, <tt>sum(key(group_by(\@lines, "postcode"), "10001"), "dispute.amount")</tt> totals the disputed
+    amounts for that postcode when the group exists. Empty inputs give an empty hash for \c group_by, an
+    empty list for \c distinct and \c sort, and an empty string for \c join. The existing \c join operator
+    converts each element to a string, retaining an empty field for a null or missing value.
+
+    The scalar extrema accept one or more values with the comparison and promotion rules of \c min and \c max.
+    The \c median function accepts numeric values with the promotion rules of \c avg.
+    All three skip missing or null values and return @ref nothing when no values remain.
+
     @section dpql_examples DPQL Examples
 
     @par Simple Comparison
@@ -1771,6 +1800,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_13 DataProvider v3.13
+    - added @ref dpql_list_functions "DPQL list functions" for grouping, sorting, selecting distinct values,
+      counting matches, and finding medians and scalar extrema
     - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
