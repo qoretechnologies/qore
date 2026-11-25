@@ -113,11 +113,6 @@
     for restricted code gets a placeholder in place of the socket of an HTTP/1.x connection (see
     @ref httpserverutil_request_credentials).
 
-    @par Stream Requests Are Served Only in the Dispatch of an HTTP Server
-    A stream request (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is served only in the dispatch
-    of an @ref HttpServer::HttpServer "HttpServer" or of trusted host code that claims a dispatch capability
-    (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"): other code that calls a
-    stream request handler directly gets \c HTTP-SERVER-ERROR (see @ref httpserverutil_request_credentials).
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or

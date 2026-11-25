@@ -179,6 +179,27 @@ class Host {
         return rv;
     }
 
+    #! a scope that ends on another thread than the one that created it
+    static hash<auto> otherThread(AbstractHttpRequestHandler h) {
+        hash<auto> rv;
+        object a = cap.enter({"id": 1, "orig_path": "/stream", "header-info": {}}, {"method": "POST"});
+        rv."before" = Host::serve(h, 1);
+        # a scope of the other thread with the same token as this thread's scope
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            object b = cap.enter({"id": 2, "orig_path": "/stream", "header-info": {}}, {"method": "POST"});
+            rv."other ends" = Host::attempt(sub () { delete a; });
+            # the raw requests of the thread on which the scope ended are not changed
+            rv."other thread after" = Host::serve(h, 2);
+            delete b;
+        }();
+        done.waitForZero();
+        # the raw request of the scope is no longer current on the thread that created it
+        rv."this thread after" = Host::serve(h, 1);
+        return rv;
+    }
+
     #! nested scopes up to the limit and one more
     static hash<auto> nesting(AbstractHttpRequestHandler h) {
         hash<auto> rv;
@@ -495,6 +516,14 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
             "inner after": "HTTP-SERVER-ERROR",
             "inner ends": "HTTP-SERVER-ERROR",
         }, Host::scopeOrder(stream_handler));
+        # a scope that ends on another thread fails closed: its request is no longer current on its thread, and the
+        # other thread's requests are not changed
+        assertEq({
+            "before": "OK",
+            "other ends": "HTTP-SERVER-ERROR",
+            "other thread after": "OK",
+            "this thread after": "HTTP-SERVER-ERROR",
+        }, Host::otherThread(stream_handler));
         # at most MaxDepth requests are current at once; the nested scopes end in order
         assertEq({
             "refused": "9: HTTP-SERVER-ERROR",

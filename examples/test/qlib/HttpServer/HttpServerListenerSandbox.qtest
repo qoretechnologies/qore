@@ -36,15 +36,90 @@
 
 %exec-class HttpServerListenerSandboxTest
 
+#! a trusted handler that answers a plain request
+class PlainHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "plain"};
+    }
+}
+
+#! a trusted stream request that answers with the size of the body that it read
+class SizeRequest inherits AbstractStreamRequest {
+    private {
+        int size = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (exists v.data) {
+            size += v.data.size();
+        }
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{"code": 200, "body": sprintf("stream %d", size)};
+    }
+}
+
+#! a trusted stream handler
+class SizeHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new SizeRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
 public class HttpServerListenerSandboxTest inherits QUnit::Test {
     constructor() : QUnit::Test("HttpServerListenerSandbox", "1.0") {
         addTestCase("listeners are governed by the caller's sandbox", \listenerSandboxTest());
+        addTestCase("a listener that sandboxed code added serves the requests of trusted handlers",
+            \sandboxedListenerServesTest());
         set_return_value(main());
     }
 
     #! Adds a listener in a sandboxed Program and returns the error, if any
     private *hash<ExceptionInfo> addListener(Program p, HttpServer server, string bind) {
         return p.callFunction("add_listener", server, bind, <HttpListenerOptionInfo>{});
+    }
+
+    sandboxedListenerServesTest() {
+        # a sandbox that does not trust its code (it refuses uncontrolled APIs), which allows the loopback network
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("%modern
+int sub add_listener(object server, hash<auto> info) {
+    return server.addListener(info).port;
+}
+", "http-listener-serves");
+
+        HttpServer server(sub (string msg) {}, sub (string msg) {});
+        on_exit server.stop();
+        server.setHandler("plain", "^plain", NOTHING, new PlainHandler());
+        server.setHandler("stream", "^stream", NOTHING, new SizeHandler());
+        int port = p.callFunction("add_listener", server, <HttpListenerOptionInfo>{"node": "127.0.0.1",
+            "service": 0});
+        server.waitForAsyncIo();
+
+        HTTPClient client({"url": "http://127.0.0.1:" + port});
+        on_exit client.disconnect();
+        hash<auto> info;
+        # a plain request to a trusted handler
+        hash<auto> resp = client.send(NOTHING, "GET", "/plain", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("plain", resp.body);
+        # a request to a trusted stream handler
+        resp = client.send("hello", "POST", "/stream", {"Content-Type": "text/plain"}, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("stream 5", resp.body);
     }
 
     listenerSandboxTest() {

@@ -193,7 +193,8 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
     registered, or when it runs the code of objects of classes of a sandboxed Program
     (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()", decided for each
-    request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
+    request), or when the request arrives on a listener that sandboxed code added, whose threads the sandbox governs
+    (decided for each request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
     gets a socket of its request when one of its REST classes is of a class of a sandboxed Program, whoever made the
     handler and whenever the class was added, when it is declared by sandboxed code, or when it asked for it, and
     gives that socket to its REST classes and their stream handlers (\c cx.socketobject).  A
@@ -5477,9 +5478,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # runs the code of other objects (such as the REST classes of a RestHandler) can get objects of classes of
             # a sandboxed Program at any time: decided again for each request, which costs a native call, and a call
             # of the handler for one that runs the code of other objects
+            # the handler of a request on a listener that sandboxed code added, whose thread the sandbox governs, gets
+            # one as well: the code that runs on the thread is governed by the sandbox (qore#6843)
             if (!handler_socket_view && handler && !is_multiplexed) {
                 handler_socket_view = SandboxManager::isFromSandboxedProgram(handler)
-                    || (hosts_code && handler.hostsSandboxedCode());
+                    || (hosts_code && handler.hostsSandboxedCode()) || SandboxManager::isSandboxed();
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
                 startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");

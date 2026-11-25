@@ -2855,6 +2855,17 @@ thread_local *list<hash<auto>> http_raw_requests;
 #! The last token of a raw request scope on the thread; see HttpRawRequestScope
 thread_local int http_raw_request_seq;
 
+#! The state of the entry of a raw request scope in the raw requests of its thread (qore#6843)
+/** Not public: a scope that ends on another thread than the one that created it invalidates its entry, which then
+    gives no raw request (see HttpRawRequestScope::current())
+*/
+class HttpRawRequestState {
+    public {
+        #! False once the scope ended on another thread
+        bool valid = True;
+    }
+}
+
 #! Keeps the raw request of a request current on the thread while the code that serves it runs (qore#6843)
 /** Not public: only the code of this module creates it, for the HTTP server's own dispatch of a request
     (HttpServerDispatchCapability), so that no other code can make a request current, such as a request that it
@@ -2875,6 +2886,10 @@ class HttpRawRequestScope {
         bool active;
         #! the token of the scope's entry in the raw requests of the thread
         int token;
+        #! the thread that created the scope, on which it ends
+        int tid;
+        #! the state of the scope's entry
+        HttpRawRequestState state();
     }
 
     #! makes the raw request current on the thread
@@ -2885,12 +2900,14 @@ class HttpRawRequestScope {
         @throw HTTP-SERVER-ERROR @ref MaxDepth raw requests are current on the thread already
     */
     constructor(hash<auto> cx, hash<auto> hdr, *Socket s) {
+        HttpRawRequestScope::dropInvalid();
         if (http_raw_requests.size() >= MaxDepth) {
             throw "HTTP-SERVER-ERROR", sprintf("more than %d requests cannot be dispatched in the dispatch of other "
                 "requests on a thread", MaxDepth);
         }
         token = ++http_raw_request_seq;
-        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "token": token},);
+        tid = gettid();
+        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "token": token, "state": state},);
         active = True;
     }
 
@@ -2912,15 +2929,23 @@ class HttpRawRequestScope {
 
     #! the raw request is no longer current
     /** The scopes end in the reverse order of their creation on the thread that created them; a scope that is not the
-        innermost one of the thread when it ends fails closed: no raw request is current on the thread any more
+        innermost one of the thread when it ends fails closed: no raw request is current on the thread any more; a
+        scope that ends on another thread fails closed as well: its entry gives no raw request on the thread that
+        created it, and the raw requests of the thread on which it ends are not changed
 
-        @throw HTTP-SERVER-ERROR the scope is not the innermost one of the thread
+        @throw HTTP-SERVER-ERROR the scope is not the innermost one of the thread, or it ends on another thread
     */
     destructor() {
         if (!active) {
             return;
         }
         active = False;
+        if (gettid() != tid) {
+            state.valid = False;
+            throw "HTTP-SERVER-ERROR", "a raw request scope ended on another thread than the one that created it; its "
+                "raw request is no longer current";
+        }
+        HttpRawRequestScope::dropInvalid();
         if (http_raw_requests && http_raw_requests.last().token == token) {
             pop http_raw_requests;
             return;
@@ -2931,13 +2956,31 @@ class HttpRawRequestScope {
     }
 
     #! returns the raw request of the request being served on the thread, if any
+    /** The innermost entry of the thread; none if its scope ended on another thread (fails closed)
+    */
     static *hash<auto> current() {
-        return http_raw_requests ? http_raw_requests.last() - "token" : NOTHING;
+        HttpRawRequestScope::dropInvalid();
+        if (!http_raw_requests) {
+            return;
+        }
+        hash<auto> h = http_raw_requests.last();
+        if (!h.state.valid) {
+            return;
+        }
+        return h - ("token", "state");
     }
 
     #! returns the number of the raw requests current on the thread
     static int depth() {
+        HttpRawRequestScope::dropInvalid();
         return http_raw_requests.size();
+    }
+
+    #! drops the entries of the scopes that ended on another thread from the raw requests of this thread
+    private:internal static dropInvalid() {
+        if (http_raw_requests && (select http_raw_requests, !$1.state.valid)) {
+            http_raw_requests = select http_raw_requests, $1.state.valid;
+        }
     }
 
     #! returns @ref True if the calling code is sandboxed; fails closed: @ref True if it cannot be decided
@@ -2987,13 +3030,23 @@ class HttpServerDispatchCapability {
         bool checked;
         #! a lock for the check
         Mutex lck();
+        #! resolves a path with the system policy (see check())
+        *code resolve;
     }
 
     #! creates the object for the HttpServer module at the given canonical path, or for a host without a path
+    /** Created by trusted code only (see AbstractHttpRequestHandler::claimServerDispatch() and claimHostDispatch())
+    */
     constructor(*string path) {
         self.path = path;
         # a host's capability is not checked against the HttpServer module
         checked = !path;
+        if (path) {
+            # the check runs on the thread of the first request, which can be the thread of a listener that sandboxed
+            # code added, whose filesystem policy is not this module's: the file of the loaded module is resolved
+            # with the system policy, with a call made here, in the trusted initialization of the HttpServer module
+            resolve = SandboxManager::createSystemPolicyCall(string sub (string f) { return realpath(f); });
+        }
     }
 
     #! Makes the raw request of a request current on the thread until the object returned is destroyed
@@ -3003,13 +3056,20 @@ class HttpServerDispatchCapability {
 
         @return the object that keeps the raw request current
 
-        @throw HTTP-SERVER-ERROR the calling code is sandboxed (fails closed: also if this cannot be decided), the
-        capability does not belong to the loaded HttpServer module, or too many requests are dispatched in the dispatch
-        of others on the thread
+        The capability of a host (claimHostDispatch()) refuses sandboxed callers, so that a host capability that
+        trusted code exposes by mistake makes no request current for sandboxed code.  The capability of the HTTP
+        server (claimServerDispatch()), which only the HTTP server's own dispatch holds, works on the thread of every
+        listener, also of a listener that sandboxed code added, whose threads a sandbox governs: the request is
+        filtered for the restricted code that serves it there (see @ref httpserverutil_request_credentials), and
+        AbstractHttpRequestHandler::getRawRequest() refuses restricted callers.
+
+        @throw HTTP-SERVER-ERROR the capability of a host is used by sandboxed code (fails closed: also if this cannot
+        be decided), the capability of the server does not belong to the loaded HttpServer module, or too many
+        requests are dispatched in the dispatch of others on the thread
     */
     object enter(hash<auto> cx, hash<auto> hdr, *Socket s) {
-        # a capability that trusted code exposes by mistake still makes no request current for sandboxed code
-        if (HttpRawRequestScope::callerIsSandboxed()) {
+        # a host's capability that trusted code exposes by mistake still makes no request current for sandboxed code
+        if (!path && HttpRawRequestScope::callerIsSandboxed()) {
             throw "HTTP-SERVER-ERROR", "sandboxed code cannot make a raw request current";
         }
         if (!checked) {
@@ -3030,7 +3090,7 @@ class HttpServerDispatchCapability {
         *string rp;
         if (rec.filename) {
             try {
-                rp = realpath(rec.filename);
+                rp = resolve(rec.filename);
             } catch (hash<ExceptionInfo> ex) {
             }
         }
@@ -3324,6 +3384,11 @@ public class AbstractStreamRequest {
         request context that the request handler filtered for the code that serves the request (see
         @ref httpserverutil_request_credentials) is given as filterRequest() gave it, with the platform's
         authorization context that it kept; else the request metadata of the request (see filterContext())
+
+        @note The request context that a filtered stream request gives is the one that the code that created the
+        object gave its constructor: for a stream request that restricted code created, values that the code chose.
+        A platform does not base decisions (authorization, accounting) on the getContext() of a stream request that
+        other code created: it reads the request that it dispatched itself
 
         @return a copy of the request context without the server's objects and the credentials
 
