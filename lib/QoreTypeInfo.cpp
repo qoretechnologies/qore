@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -657,11 +657,11 @@ const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
         case NT_HASH:
             return static_cast<const QoreHashNode*>(n)->getTypeInfo();
         case NT_WEAKREF_HASH:
-            return static_cast<const WeakHashReferenceNode*>(n)->get()->getTypeInfo();
+            return static_cast<const WeakHashReferenceNode*>(n)->borrow()->getTypeInfo();
         case NT_LIST:
             return static_cast<const QoreListNode*>(n)->getTypeInfo();
         case NT_WEAKREF_LIST:
-            return static_cast<const WeakListReferenceNode*>(n)->get()->getTypeInfo();
+            return static_cast<const WeakListReferenceNode*>(n)->borrow()->getTypeInfo();
         case NT_REFERENCE:
             return static_cast<const ReferenceNode*>(n)->getTypeInfo();
         default:
@@ -1293,7 +1293,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                     break;
                 }
             } else if (t == NT_WEAKREF_HASH) {
-                const TypedHashDecl* hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+                const TypedHashDecl* hd = n.get<const WeakHashReferenceNode>()->borrow()->getHashDecl();
                 if (hd && typed_hash_decl_private::get(*hd)->equal(*typed_hash_decl_private::get(*u.hd))) {
                     ok = true;
                     break;
@@ -1358,9 +1358,11 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                     ok = true;
                     break;
                 }
-                QoreHashNode* h = n.get<WeakHashReferenceNode>()->get();
+                // checked with a reference of its own, or as a new empty hash if it was released: a weak reference
+                // does not keep the entries of its target
+                ReferenceHolder<QoreHashNode> h(n.get<WeakHashReferenceNode>()->lock(), xsink);
                 bool err = false;
-                ok = acceptInputComplexHash(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h, err);
+                ok = acceptInputComplexHash(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, *h, err);
                 if (err) {
                     return true;
                 }
@@ -1561,7 +1563,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             if (ot == NT_HASH) {
                 hd = n.get<const QoreHashNode>()->getHashDecl();
             } else if (ot == NT_WEAKREF_HASH) {
-                hd = n.get<const WeakHashReferenceNode>()->get()->getHashDecl();
+                hd = n.get<const WeakHashReferenceNode>()->borrow()->getHashDecl();
             }
             if (hd && typed_hash_decl_private::get(*u.hd)->equal(*typed_hash_decl_private::get(*hd))) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
@@ -1577,7 +1579,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 ti = n.get<const QoreHashNode>()->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_HASH) {
                 ok = true;
-                ti = n.get<const WeakHashReferenceNode>()->get()->getValueTypeInfo();
+                ti = n.get<const WeakHashReferenceNode>()->borrow()->getValueTypeInfo();
             }
             if (ok && u.ti == autoTypeInfo) {
                 return QTI_NEAR;
@@ -1597,7 +1599,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 ti = n.get<const QoreListNode>()->getValueTypeInfo();
             } else if (ot == NT_WEAKREF_LIST) {
                 ok = true;
-                ti = n.get<const WeakListReferenceNode>()->get()->getValueTypeInfo();
+                ti = n.get<const WeakListReferenceNode>()->borrow()->getValueTypeInfo();
             }
             if (ok && u.ti == autoTypeInfo) {
                 return QTI_NEAR;
@@ -1640,7 +1642,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 if (ot == NT_HASH) {
                     h = qore_hash_private::get(*n.get<const QoreHashNode>());
                 } else if (ot == NT_WEAKREF_HASH) {
-                    h = qore_hash_private::get(*n.get<const WeakHashReferenceNode>()->get());
+                    h = qore_hash_private::get(*n.get<const WeakHashReferenceNode>()->borrow());
                 }
                 if (h) {
                     if (h->hashdecl || h->complexTypeInfo) {
@@ -1654,7 +1656,7 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 if (ot == NT_LIST) {
                     l = qore_list_private::get(*n.get<const QoreListNode>());
                 } else if (ot == NT_WEAKREF_LIST) {
-                    l = qore_list_private::get(*n.get<const WeakListReferenceNode>()->get());
+                    l = qore_list_private::get(*n.get<const WeakListReferenceNode>()->borrow());
                 }
                 if (l) {
                     if (l->complexTypeInfo) {

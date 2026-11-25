@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -400,6 +400,18 @@ public:
     DLLLOCAL void setClosure(RObject* c) {
         robj = c;
     }
+
+    //! Returns a new reference to the list of the weak reference that the lvalue holds, held until the helper ends
+    /** or a new empty list that cannot be changed if its last reference was released (see
+        WeakListReferenceNode::lock())
+    */
+    DLLLOCAL QoreListNode* lockWeakList();
+
+    //! Returns a new reference to the hash of the weak reference that the lvalue holds, held until the helper ends
+    /** or a new empty hash that cannot be changed if its last reference was released (see
+        WeakHashReferenceNode::lock())
+    */
+    DLLLOCAL QoreHashNode* lockWeakHash();
 
     DLLLOCAL void saveTemp(QoreValue n);
 

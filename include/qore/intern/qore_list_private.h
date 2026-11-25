@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -582,6 +582,26 @@ struct qore_list_private {
             return true;
         }
         return false;
+    }
+
+    //! Returns a new reference to a list that a weak reference holds, or a new empty list that cannot be changed if
+    //! its last reference was released (see WeakListReferenceNode::lock())
+    /** Once the reference count of the list has reached zero, its entries are being freed (possibly by a destructor
+        that is reading the list through a weak reference) or have been freed, so the list must never be referenced
+        again: a reference is only taken while the count is not zero (QoreReferenceCounter::optRef()).
+    */
+    DLLLOCAL static QoreListNode* lockWeak(QoreListNode& l) {
+        if (l.optRef()) {
+            return &l;
+        }
+        return getFreedStandIn(l);
+    }
+
+    //! Returns a new empty list with the type of a list whose last reference was released, which cannot be changed
+    DLLLOCAL static QoreListNode* getFreedStandIn(const QoreListNode& l) {
+        QoreListNode* rv = l.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
     }
 
     DLLLOCAL static void setNeedsEval(QoreListNode& l) {

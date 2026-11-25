@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -185,19 +185,25 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
         }
 
         case NT_WEAKREF_HASH: {
-            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
+            // a new reference, or a new empty container if it was released: a weak reference does not keep the
+            // entries of its target
+            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->lock();
             if (needs_deref) {
-                h->ref();
                 rv.discard(xsink);
+            } else {
+                needs_deref = true;
             }
             return h;
         }
 
         case NT_WEAKREF_LIST: {
-            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
+            // a new reference, or a new empty container if it was released: a weak reference does not keep the
+            // entries of its target
+            QoreListNode* l = rv.get<WeakListReferenceNode>()->lock();
             if (needs_deref) {
-                l->ref();
                 rv.discard(xsink);
+            } else {
+                needs_deref = true;
             }
             return l;
         }

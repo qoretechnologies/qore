@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,15 +43,20 @@ public:
         h->weakRef();
     }
 
-    DLLLOCAL QoreHashNode* operator*() const {
-       return h;
-    }
+    //! Returns a new reference to the hash, or a new empty hash that cannot be changed if its last reference was released
+    /** A weak reference does not keep the entries of its hash: once the last reference to the hash has been
+        released, its entries are being freed or have been freed, and the hash must never be referenced again; the
+        hash returned then has its type, reads as empty, and changing it raises \c HASH-ERROR.
 
-    DLLLOCAL QoreHashNode* operator->() const {
-       return h;
-    }
+        Every value read through a weak reference that the reader can keep or whose entries it reads is read with this
+        call.
+    */
+    DLLLOCAL QoreHashNode* lock() const;
 
-    DLLLOCAL QoreHashNode* get() const {
+    //! Returns the hash without a reference, for reads of its type or its address only
+    /** Its entries must not be read through the pointer returned, as they can be freed while it is read.
+    */
+    DLLLOCAL QoreHashNode* borrow() const {
         return h;
     }
 
@@ -69,33 +74,22 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
         assert(needs_deref);
-        needs_deref = false;
-        return h;
+        return lock();
     }
 
-    DLLLOCAL virtual bool getAsBoolImpl() const {
-        return h->getAsBoolImpl();
-    }
+    DLLLOCAL virtual bool getAsBoolImpl() const;
 
-    DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
-        return h->getAsString(str, foff, xsink);
-    }
+    DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
-        return h->getAsString(del, foff, xsink);
-    }
+    DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual AbstractQoreNode* realCopy() const {
         return new WeakHashReferenceNode(*this);
     }
 
-    DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-        return h->is_equal_soft(v, xsink);
-    }
+    DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const;
 
-    DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
-        return h->is_equal_hard(v, xsink);
-    }
+    DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const char* getTypeName() const {
         return "weak hash reference";

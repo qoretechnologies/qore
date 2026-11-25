@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -187,13 +187,17 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            needs_deref = false;
-            return val.get<WeakHashReferenceNode>()->get();
+            // a new reference, or a new empty container if it was released: a weak reference does not keep the
+            // entries of its target
+            needs_deref = true;
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            needs_deref = false;
-            return val.get<WeakListReferenceNode>()->get();
+            // a new reference, or a new empty container if it was released: a weak reference does not keep the
+            // entries of its target
+            needs_deref = true;
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue(needs_deref);
@@ -215,11 +219,11 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            return val.get<WeakHashReferenceNode>()->get()->refSelf();
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            return val.get<WeakListReferenceNode>()->get()->refSelf();
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue();
@@ -296,13 +300,17 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            needs_deref = false;
-            return val.get<WeakHashReferenceNode>()->get();
+            // a new reference, or a new empty container if it was released: a weak reference does not keep the
+            // entries of its target
+            needs_deref = true;
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            needs_deref = false;
-            return val.get<WeakListReferenceNode>()->get();
+            // a new reference, or a new empty container if it was released: a weak reference does not keep the
+            // entries of its target
+            needs_deref = true;
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue();
@@ -322,11 +330,13 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            return val.get<WeakHashReferenceNode>()->get();
+            // eval() returns a referenced value
+            return val.get<WeakHashReferenceNode>()->lock();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            return val.get<WeakListReferenceNode>()->get();
+            // eval() returns a referenced value
+            return val.get<WeakListReferenceNode>()->lock();
         }
 
         return val.getReferencedValue();

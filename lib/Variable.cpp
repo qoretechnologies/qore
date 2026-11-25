@@ -4,7 +4,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -244,9 +244,9 @@ QoreValue Var::eval() const {
             case NT_WEAKREF:
                 return static_cast<WeakReferenceNode*>(val.v.n)->get()->refSelf();
             case NT_WEAKREF_HASH:
-                return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
+                return static_cast<WeakHashReferenceNode*>(val.v.n)->lock();
             case NT_WEAKREF_LIST:
-                return static_cast<WeakListReferenceNode*>(val.v.n)->get()->refSelf();
+                return static_cast<WeakListReferenceNode*>(val.v.n)->lock();
         }
         return val.getReferencedValue();
     }
@@ -255,9 +255,9 @@ QoreValue Var::eval() const {
         case NT_WEAKREF:
             return static_cast<WeakReferenceNode*>(val.v.n)->get()->refSelf();
         case NT_WEAKREF_HASH:
-            return static_cast<WeakHashReferenceNode*>(val.v.n)->get()->refSelf();
+            return static_cast<WeakHashReferenceNode*>(val.v.n)->lock();
         case NT_WEAKREF_LIST:
-            return static_cast<WeakListReferenceNode*>(val.v.n)->get()->refSelf();
+            return static_cast<WeakListReferenceNode*>(val.v.n)->lock();
     }
     return val.getReferencedValue();
 }
@@ -408,6 +408,28 @@ int LValueHelper::set(const ReferenceNode& ref, bool for_remove) {
     return *vl.xsink ? -1 : 0;
 }
 
+QoreListNode* LValueHelper::lockWeakList() {
+    QoreListNode* l = getValue().get<WeakListReferenceNode>()->lock();
+    try {
+        tvec.push_back(l);
+    } catch (...) {
+        l->deref(nullptr);
+        throw;
+    }
+    return l;
+}
+
+QoreHashNode* LValueHelper::lockWeakHash() {
+    QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->lock();
+    try {
+        tvec.push_back(h);
+    } catch (...) {
+        h->deref(nullptr);
+        throw;
+    }
+    return h;
+}
+
 void LValueHelper::saveTemp(QoreValue val) {
     if (!val.isReferenceCounted()) {
         return;
@@ -459,7 +481,9 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         l = getValue().get<QoreListNode>();
     } else if (getType() == NT_WEAKREF_LIST) {
         ensureUnique();
-        l = getValue().get<WeakListReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made: a weak reference does not keep the
+        // entries of its target
+        l = lockWeakList();
     } else {
         if (for_remove)
             return -1;
@@ -515,7 +539,9 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         h = getValue().get<QoreHashNode>();
     } else if (t == NT_WEAKREF_HASH) {
         ensureUnique();
-        h = getValue().get<WeakHashReferenceNode>()->get();
+        // held by the helper while the change through the weak reference is made: a weak reference does not keep the
+        // entries of its target
+        h = lockWeakHash();
     } else {
         if (for_remove)
             return -1;
