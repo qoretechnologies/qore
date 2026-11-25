@@ -30832,7 +30832,8 @@ void dbg_object_cleanup_hold_hook(QoreObject& obj) {
 //! holds the cleanup of an object when it is deleted, once its private data is freed and before its members are released
 /** The thread that deletes the object waits until \a release reaches zero, after the object is marked deleted and its
     lock released; tests use this to make a call that another thread makes with the object meanwhile deterministic.
-    The hold is used once.
+    The hold is used once; the caller keeps a reference to the object until the hold is used (the hold matches the
+    object by its address).
 
     @param obj the object
     @param held decremented once the cleanup is held
@@ -30874,7 +30875,7 @@ std::mutex program_take_over_hold_lock;
 //! the holds of dbg_hold_program_take_over(), guarded by program_take_over_hold_lock
 std::vector<ProgramTakeOverHold> program_take_over_holds;
 
-//! runs at a point of a Program method that takes over its own object; holds it if a hold is armed for the point
+//! runs at a point of a call that takes over a Program object; holds it if a hold is armed for the point
 void dbg_program_take_over_hold_hook(QoreObject& obj, int phase) {
     ExceptionSink xsink;
     ReferenceHolder<Counter> held(&xsink);
@@ -30900,15 +30901,18 @@ void dbg_program_take_over_hold_hook(QoreObject& obj, int phase) {
 }
 }
 
-//! holds the next call of a Program method that takes over its own object at the given point
+//! holds the next call that takes over a Program object at the given point
 /** Program::loadApplyToUserModule() and the related methods remove the private data from their object and give it to
     the module that they load; the call waits until \a release reaches zero at the point: 0, after the call setup and
-    before the private data is removed; 1, once it is removed and before the module is loaded.  Tests use this to make
-    another call with the object deterministic.  The hold is used once; the caller keeps a reference to the object
-    until the hold is used (the hold matches the object by its address).
+    before the private data is removed; 1, once it is removed and before the module is loaded.  The functions and
+    methods that take over a Program object as the container of a module (load_user_module_with_program(),
+    Program::loadUserModuleWithProgram()) wait at point 2 for the object, after the binding of their arguments and
+    before they take the private data from it.  Tests use this to make another call with the object deterministic.
+    The hold is used once; the caller keeps a reference to the object until the hold is used (the hold matches the
+    object by its address).
 
     @param obj the Program object
-    @param phase the point: 0 or 1
+    @param phase the point: 0, 1 or 2
     @param held decremented once the call is held
     @param release the call goes on when this Counter reaches zero
 */

@@ -85,6 +85,13 @@ class ProgramTakeOverConcurrentTest inherits QUnit::Test {
         background q.push(ProgramTakeOverConcurrentTest::take(form, p));
     }
 
+    #! decrements the Counter if it has not reached zero
+    static release(Counter c) {
+        if (c.getCount()) {
+            c.dec();
+        }
+    }
+
     #! waits for a Counter to reach zero; fails the test if it does not
     private waitFor(Counter c, string what) {
         if (c.waitForZero(Timeout)) {
@@ -106,6 +113,8 @@ class ProgramTakeOverConcurrentTest inherits QUnit::Test {
             # the second call: held after its call setup, before it removes the private data
             Counter held2(1);
             Counter release2(1);
+            # a held thread is released also when the test fails
+            on_exit ProgramTakeOverConcurrentTest::release(release2);
             call_function("dbg_hold_program_take_over", p, 0, held2, release2);
             Queue q2();
             ProgramTakeOverConcurrentTest::takeInBackground(form, p, q2);
@@ -114,6 +123,7 @@ class ProgramTakeOverConcurrentTest inherits QUnit::Test {
             # the first call: held once it has removed the private data, before it loads the module
             Counter held1(1);
             Counter release1(1);
+            on_exit ProgramTakeOverConcurrentTest::release(release1);
             call_function("dbg_hold_program_take_over", p, 1, held1, release1);
             Queue q1();
             ProgramTakeOverConcurrentTest::takeInBackground(form, p, q1);
@@ -140,6 +150,8 @@ class ProgramTakeOverConcurrentTest inherits QUnit::Test {
             # the private data, before the object is marked deleted
             Counter running(1);
             Counter done(1);
+            # the thread running in the Program and the held take-over are released also when the test fails
+            on_exit ProgramTakeOverConcurrentTest::release(done);
             Counter in_done(1);
             background sub () {
                 on_exit in_done.dec();
@@ -150,6 +162,7 @@ class ProgramTakeOverConcurrentTest inherits QUnit::Test {
             # the take-over: held after its call setup
             Counter held(1);
             Counter release(1);
+            on_exit ProgramTakeOverConcurrentTest::release(release);
             call_function("dbg_hold_program_take_over", p, 0, held, release);
             Queue q();
             ProgramTakeOverConcurrentTest::takeInBackground(form, p, q);

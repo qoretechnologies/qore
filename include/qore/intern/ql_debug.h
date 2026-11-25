@@ -121,8 +121,9 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook
 
 //! called by the Program methods that take over their own object (Program::loadApplyToUserModule() and the related
 //! methods) at \a phase 0, after the call setup and before the private data is removed from the object, and at
-//! \a phase 1, once it is removed and before the module is loaded; called with no lock held; set by
-//! dbg_hold_program_take_over()
+//! \a phase 1, once it is removed and before the module is loaded, and by qore_take_module_container() at \a phase 2,
+//! after the binding of the arguments and before the private data is taken from the object; called with no lock
+//! held; set by dbg_hold_program_take_over()
 typedef void (*qore_dbg_program_take_over_hook_t)(QoreObject& obj, int phase);
 DLLLOCAL extern std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_take_over_hook;
 
