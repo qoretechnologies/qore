@@ -110,6 +110,25 @@ static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink)
       if (smh && !smh->checkFilesystemAccess(tfn.c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
          return false;
       }
+      if (smh) {
+         // the probe file is created and removed in the directory that the policy checked, pinned against a
+         // concurrent change, and never through a link (qore#7518)
+         QoreSandboxPinnedPath pin;
+         if (q_sandbox_pin_path(*smh.get(), tfn.c_str(), QSEC_CREATE | QSEC_DELETE, true, pin, xsink)) {
+            return false;
+         }
+         // a new file only: an existing entry of that name is neither opened nor removed, and makes the directory
+         // count as writable, as a file could be created there
+         rc = openat(pin.dirfd, pin.leaf.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+            S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+         if (rc != -1) {
+            close(rc);
+            unlinkat(pin.dirfd, pin.leaf.c_str(), 0);
+            return true;
+         }
+         // an existing entry of that name: a file could be created if the directory can be written to
+         return errno == EEXIST && !faccessat(pin.dirfd, ".", W_OK | X_OK, AT_EACCESS);
+      }
       rc = open(tfn.getBuffer(), O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
       if (rc != -1) {
          close(rc);
@@ -609,7 +628,24 @@ nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FIL
       }
    }
 
-   int rc = rename(source_path->getBuffer(), target_path->getBuffer());
+   int rc;
+#ifndef _Q_WINDOWS
+   // the entries are renamed in the directories that the policy checked, pinned against a concurrent change
+   // (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath spin, tpin;
+      if (q_sandbox_pin_path(*smh.get(), source_path->c_str(), QSEC_DELETE, true, spin, xsink)
+            || q_sandbox_pin_path(*smh.get(), target_path->c_str(), QSEC_CREATE | QSEC_DELETE, true, tpin, xsink)) {
+         if (!*xsink) {
+            xsink->raiseErrnoException("RENAME-ERROR", errno, "rename('%s', '%s') failed", source_path->getBuffer(),
+               target_path->getBuffer());
+         }
+         return QoreValue();
+      }
+      rc = renameat(spin.dirfd, spin.leaf.c_str(), tpin.dirfd, tpin.leaf.c_str());
+   } else
+#endif
+   rc = rename(source_path->getBuffer(), target_path->getBuffer());
    if (rc)
       xsink->raiseErrnoException("RENAME-ERROR", errno, "rename('%s', '%s') failed", source_path->getBuffer(), target_path->getBuffer());
 
@@ -923,6 +959,16 @@ int unlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
          return -1;
       }
    }
+#ifndef _Q_WINDOWS
+   // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_DELETE, true, pin, xsink)) {
+         return -1;
+      }
+      return unlinkat(pin.dirfd, pin.leaf.c_str(), 0);
+   }
+#endif
    return unlink(path->getBuffer());
 }
 
@@ -993,6 +1039,15 @@ int mkdir(string path, softint mode = 0777, bool parents = False) [flags=NAMED_A
         if (!smh->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
             return -1;
         }
+#ifndef _Q_WINDOWS
+        // the directory is created in the directory that the policy checked, pinned against a concurrent change
+        // (qore#7518)
+        QoreSandboxPinnedPath pin;
+        if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_CREATE, true, pin, xsink)) {
+            return -1;
+        }
+        return mkdirat(pin.dirfd, pin.leaf.c_str(), (int)mode);
+#endif
     }
 
     if (parents) {
@@ -1068,7 +1123,21 @@ nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [flags=
 #ifdef _Q_WINDOWS
     int rc = _mkdir(path->c_str());
 #else
-    int rc = mkdir(path->c_str(), mode);
+    int rc;
+    // the directory is created in the directory that the policy checked, pinned against a concurrent change
+    // (qore#7518)
+    if (smh) {
+        QoreSandboxPinnedPath pin;
+        rc = q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_CREATE, true, pin, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!rc) {
+            rc = mkdirat(pin.dirfd, pin.leaf.c_str(), mode);
+        }
+    } else {
+        rc = mkdir(path->c_str(), mode);
+    }
 #endif
     if (rc) {
         xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'", path->c_str());
@@ -1103,6 +1172,16 @@ int rmdir(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
          return -1;
       }
    }
+#ifndef _Q_WINDOWS
+   // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_DELETE, true, pin, xsink)) {
+         return -1;
+      }
+      return unlinkat(pin.dirfd, pin.leaf.c_str(), AT_REMOVEDIR);
+   }
+#endif
    return rmdir(path->getBuffer());
 }
 
@@ -1132,6 +1211,16 @@ int chmod(string path, softint mode) [flags=NAMED_ARGS;dom=FILESYSTEM] {
          return -1;
       }
    }
+#ifndef _Q_WINDOWS
+   // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_WRITE, false, pin, xsink)) {
+         return -1;
+      }
+      return q_fchmodat_nofollow(pin.dirfd, pin.leaf.c_str(), (int)mode);
+   }
+#endif
    return chmod(path->getBuffer(), (int)mode);
 }
 
@@ -1228,6 +1317,16 @@ int mkfifo(string path, softint mode = 0600) [flags=NAMED_ARGS;dom=FILESYSTEM] {
          return -1;
       }
    }
+#ifndef _Q_WINDOWS
+   // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_CREATE, true, pin, xsink)) {
+         return -1;
+      }
+      return mkfifoat(pin.dirfd, pin.leaf.c_str(), mode);
+   }
+#endif
    return mkfifo(path->getBuffer(), mode);
 #else
    return missing_function_error("mkfifo", "UNIX_FILEMGT", xsink);
@@ -1267,6 +1366,16 @@ int chown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARGS
          return -1;
       }
    }
+#ifndef _Q_WINDOWS
+   // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_WRITE, false, pin, xsink)) {
+         return -1;
+      }
+      return fchownat(pin.dirfd, pin.leaf.c_str(), (uid_t)owner, (uid_t)group, AT_SYMLINK_NOFOLLOW);
+   }
+#endif
    return chown(path->getBuffer(), (uid_t)owner, (uid_t)group);
 #else
    return missing_function_error("chown", "UNIX_FILEMGT", xsink);
@@ -1306,6 +1415,16 @@ int lchown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARG
          return -1;
       }
    }
+#ifndef _Q_WINDOWS
+   // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_WRITE, true, pin, xsink)) {
+         return -1;
+      }
+      return fchownat(pin.dirfd, pin.leaf.c_str(), (uid_t)owner, (uid_t)group, AT_SYMLINK_NOFOLLOW);
+   }
+#endif
    return lchown(path->getBuffer(), (uid_t)owner, (uid_t)group);
 #else
    return missing_function_error("lchown", "UNIX_FILEMGT", xsink);
@@ -1421,7 +1540,22 @@ nothing symlink(string target_path, string link_path) [flags=NAMED_ARGS;dom=FILE
       }
    }
 
-   int rc = symlink(target_path->getBuffer(), link_path->getBuffer());
+   int rc;
+#ifndef _Q_WINDOWS
+   // the link is created in the directory that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), link_path->c_str(), QSEC_CREATE, true, pin, xsink)) {
+         if (!*xsink) {
+            xsink->raiseErrnoException("SYMLINK-ERROR", errno, "symlink('%s', '%s') failed", target_path->getBuffer(),
+               link_path->getBuffer());
+         }
+         return QoreValue();
+      }
+      rc = symlinkat(target_path->getBuffer(), pin.dirfd, pin.leaf.c_str());
+   } else
+#endif
+   rc = symlink(target_path->getBuffer(), link_path->getBuffer());
    if (rc)
       xsink->raiseErrnoException("SYMLINK-ERROR", errno, "symlink('%s', '%s') failed", target_path->getBuffer(), link_path->getBuffer());
 

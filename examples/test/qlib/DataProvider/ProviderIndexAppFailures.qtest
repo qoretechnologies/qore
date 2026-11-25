@@ -114,11 +114,9 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
         }
         if (exists value) {
             setenv(var, value);
-            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             ENV{var} = value;
         } else {
             unsetenv(var);
-            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             remove ENV{var};
         }
     }
@@ -128,11 +126,9 @@ public class ProviderIndexAppFailuresTest inherits QUnit::Test {
         foreach hash<auto> i in (saved_env.pairIterator()) {
             if (exists i.value) {
                 setenv(i.key, i.value);
-                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 ENV{i.key} = i.value;
             } else {
                 unsetenv(i.key);
-                # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
                 remove ENV{i.key};
             }
         }
