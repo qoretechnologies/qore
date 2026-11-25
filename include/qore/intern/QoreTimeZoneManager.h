@@ -566,6 +566,11 @@ private:
     DLLLOCAL static void raiseSandboxPathError(const char* name, bool directive, const char* reason,
             ExceptionSink* xsink);
 
+    //! checks the name against the file-system policy of each of the charge's policy managers (qore#7566)
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int checkPolicyManagers(const char* name, const SandboxTzCharge& charge, ExceptionSink* xsink);
+
 public:
     //! returns true if the calling code, which is restricted, may load a path at all: every sandbox that governs it
     //! grants a budget (qore#7566); code restricted only by its parse options cannot

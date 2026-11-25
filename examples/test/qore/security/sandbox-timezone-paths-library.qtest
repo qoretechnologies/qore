@@ -40,8 +40,18 @@ class SandboxTimeZonePathsLibraryTest inherits QUnit::Test {
             + quote(dir + DirSep + "worker.q") + " " + quote(allowed.path);
         # without a budget, the initialization of library code that the sandboxed code loads cannot load a path
         assertEq("init=ILLEGAL-FILESYSTEM-ACCESS zones=0\n", backquote(cmd + " none 2>&1"));
-        # with one, the library code (whose module directory is trusted, and whose initialization reads with its own
-        # trust) loads it, and the sandbox of the code that loaded it pays
-        assertEq("init=loaded zones=1\n", backquote(cmd + " budget 2>&1"));
+        # with one, the policy of the sandbox of the code that loaded it still decides: a path outside of it is denied
+        assertEq("init=FILESYSTEM-ACCESS-DENIED zones=0\n", backquote(cmd + " budget 2>&1"));
+        # and a path that it allows is loaded and charged to that sandbox
+        string inside = allowed.path + "/inside.tz";
+        File f();
+        f.open2(inside, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readBinaryFile(zone));
+        f.close();
+        string prefix2 = sprintf("QORE_MODULE_DIR=%s:%s:${QORE_MODULE_DIR} QORE_TZLIB_PATH=%s ",
+            quote(dir + DirSep + "lib"), quote(qlib), quote(inside));
+        string cmd2 = prefix2 + quote(TestInterpreter::qore_interpreter()) + " -b --enable-debug "
+            + quote(dir + DirSep + "worker.q") + " " + quote(allowed.path);
+        assertEq("init=loaded zones=1\n", backquote(cmd2 + " budget 2>&1"));
     }
 }
