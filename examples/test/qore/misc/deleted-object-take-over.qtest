@@ -3,57 +3,182 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
+%allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 
 %exec-class DeletedObjectTakeOverTest
 
-#! A call that takes over an object that another thread is deleting
-/** Once an object is marked deleted, another thread can take the object's lock while the thread that deletes it frees
-    its private data.  A call that takes over the object then raises OBJECT-ALREADY-DELETED and does not use the
-    private data that is being freed.  The test holds the deletion after the private data is freed with a debug hook,
-    so it runs only in debug builds.
+#! A call that takes over an object that another thread deletes after the call has bound its arguments (qore#7528)
+/** The calls that take over a Program object (as the container of a module, or the object that they are called on)
+    take its private data after the binding of their arguments, which checks that the object is not deleted.  Another
+    thread can delete the object in between.  The take-over must then raise OBJECT-ALREADY-DELETED and must not use
+    the private data that the deletion frees: the deletion marks the object deleted with its lock held, and frees the
+    private data after the lock.
+
+    dbg_hold_program_take_over() holds the take-over after the binding, and dbg_hold_object_cleanup() holds the
+    deletion once it has freed the private data, so the test runs only in debug builds.  Before the private data was
+    detached from the object with its lock held, the take-over read the freed private data in that window.
+
+    That old read shows only under a memory checker (valgrind or ASan): a plain run of the old code passes, as the
+    destructor of a Program object removes its private data entry before the private data is freed, so the read of
+    the freed data still finds no entry and gives the same exception.  Check a change to this code under valgrind.
 */
 class DeletedObjectTakeOverTest inherits QUnit::Test {
     public {
-        #! the module that the call loads: it does not exist
+        #! the module that the calls load: it does not exist
         const NoModule = "deleted-object-take-over-no-such-module";
+
+        #! the calls that take over a Program object, with the point of dbg_hold_program_take_over() after the binding
+        const Forms = {
+            "load_user_module_with_program": 2,
+            "loadUserModuleWithProgram": 2,
+            "loadUserModuleWithProgramWarn": 2,
+            "loadApplyToUserModule": 0,
+            "loadApplyToUserModuleWarn": 0,
+            "loadApplyToPrivateUserModule": 0,
+            "loadApplyToPrivateUserModuleWarn": 0,
+        };
+
+        #! the description of the exception of a call that takes over the container of a module
+        const ContainerDesc = "the Program object given as the container of a module has already been deleted";
+
+        #! the description of the exception of a method that takes over its own object
+        const SelfDesc = "attempt to access an already-deleted object of class 'Program'";
+
+        #! the longest wait for another thread, in milliseconds
+        const Timeout = 60000;
     }
 
-    constructor() : QUnit::Test("deleted object take over", "1.0") {
-        addTestCase("take over an object being deleted", \takeOverTest());
+    constructor() : QUnit::Test("deleted object take over", "1.0", \ARGV) {
+        addTestCase("deleted after the binding", \deletedTest());
+        addTestCase("being deleted after the binding", \beingDeletedTest());
         set_return_value(main());
     }
 
-    takeOverTest() {
-        if (!Option::HAVE_LIBRARY_DEBUGGING) {
-            testSkip("the hook that holds the deletion of an object is only in debug builds");
-        }
-
-        Program p();
-        Counter held(1);
-        Counter release(1);
-        Counter done(1);
-        call_function("dbg_hold_object_cleanup", p, held, release);
-
-        code del = sub (Program x) {
-            on_exit done.dec();
-            delete x;
-        };
-        background del(p);
-        held.waitForZero();
-
-        string err;
+    #! takes over the Program object with the given call; returns "ok" or the exception code and description
+    static string take(string form, Program p) {
         try {
-            load_user_module_with_program(NoModule, p);
-            err = "ok";
+            switch (form) {
+                case "load_user_module_with_program":
+                    load_user_module_with_program(NoModule, p);
+                    break;
+                case "loadUserModuleWithProgram": {
+                    Program t();
+                    t.loadUserModuleWithProgram(NoModule, p);
+                    break;
+                }
+                case "loadUserModuleWithProgramWarn": {
+                    Program t();
+                    t.loadUserModuleWithProgramWarn(NoModule, p);
+                    break;
+                }
+                case "loadApplyToUserModule":
+                    p.loadApplyToUserModule(NoModule);
+                    break;
+                case "loadApplyToUserModuleWarn":
+                    p.loadApplyToUserModuleWarn(NoModule);
+                    break;
+                case "loadApplyToPrivateUserModule":
+                    p.loadApplyToPrivateUserModule(NoModule);
+                    break;
+                case "loadApplyToPrivateUserModuleWarn":
+                    p.loadApplyToPrivateUserModuleWarn(NoModule);
+                    break;
+                default:
+                    throw "UNKNOWN-FORM", form;
+            }
+            return "ok";
         } catch (hash<ExceptionInfo> ex) {
-            err = ex.err;
+            return ex.err + ": " + ex.desc;
         }
-        release.dec();
-        done.waitForZero();
+    }
 
-        assertEq("OBJECT-ALREADY-DELETED", err);
+    #! makes a take-over in a background thread; its result is pushed on the queue
+    static takeInBackground(string form, Program p, Queue q) {
+        background q.push(DeletedObjectTakeOverTest::take(form, p));
+    }
+
+    #! decrements the Counter if it has not reached zero
+    static release(Counter c) {
+        if (c.getCount()) {
+            c.dec();
+        }
+    }
+
+    #! returns the expected result of a take-over of a deleted object with the given call
+    static string expected(string form) {
+        return "OBJECT-ALREADY-DELETED: " + (Forms{form} == 2 ? ContainerDesc : SelfDesc);
+    }
+
+    #! waits for a Counter to reach zero; fails the test if it does not
+    private waitFor(Counter c, string what) {
+        if (c.waitForZero(Timeout)) {
+            throw "TIMEOUT", sprintf("timed out waiting for %s", what);
+        }
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that hold a take-over and a deletion are only in debug builds");
+        }
+    }
+
+    #! the object is deleted while the take-over is held after the binding
+    deletedTest() {
+        checkDebug();
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            Program p();
+            Counter held(1);
+            Counter release(1);
+            # a held thread is released also when the test fails
+            on_exit DeletedObjectTakeOverTest::release(release);
+            call_function("dbg_hold_program_take_over", p, i.value, held, release);
+            Queue q();
+            DeletedObjectTakeOverTest::takeInBackground(i.key, p, q);
+            waitFor(held, i.key + ": the take-over held");
+
+            # the other reference keeps the deleted object
+            Program d = p;
+            delete d;
+
+            release.dec();
+            assertEq(DeletedObjectTakeOverTest::expected(i.key), q.get(Timeout), i.key);
+        }
+    }
+
+    #! the deletion is held once it has freed the private data while the take-over goes on
+    beingDeletedTest() {
+        checkDebug();
+        foreach hash<auto> i in (Forms.pairIterator()) {
+            Program p();
+            Counter held(1);
+            Counter release(1);
+            on_exit DeletedObjectTakeOverTest::release(release);
+            call_function("dbg_hold_program_take_over", p, i.value, held, release);
+            Queue q();
+            DeletedObjectTakeOverTest::takeInBackground(i.key, p, q);
+            waitFor(held, i.key + ": the take-over held");
+
+            # the deletion: held once the object is marked deleted, its lock released and its private data freed
+            Counter cleanup_held(1);
+            Counter cleanup_release(1);
+            on_exit DeletedObjectTakeOverTest::release(cleanup_release);
+            call_function("dbg_hold_object_cleanup", p, cleanup_held, cleanup_release);
+            Counter deleted(1);
+            Program d = p;
+            background sub () {
+                on_exit deleted.dec();
+                delete d;
+            }();
+            waitFor(cleanup_held, i.key + ": the deletion held");
+
+            release.dec();
+            assertEq(DeletedObjectTakeOverTest::expected(i.key), q.get(Timeout), i.key);
+
+            cleanup_release.dec();
+            waitFor(deleted, i.key + ": the deletion");
+        }
     }
 }
