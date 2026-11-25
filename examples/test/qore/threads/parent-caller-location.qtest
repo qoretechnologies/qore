@@ -60,10 +60,28 @@ class C {
     }
 }
 
+#! the code of another Program
+const OtherSource = "%new-style
+hash<auto> sub frames() {
+    list<hash<CallStackInfo>> cs = get_thread_call_stack();
+    list<auto> pcl = ();
+    for (int i = 0; i <= cs.size() + 1; ++i) {
+        pcl += get_parent_caller_location(i);
+    }
+    return {'cs': cs, 'pcl': pcl, 'negative': get_parent_caller_location(-1), 'default': get_parent_caller_location()};
+}
+
+hash<auto> sub outer() {
+    return frames();
+}
+";
+
 class ParentCallerLocationTest inherits QUnit::Test {
     constructor() : QUnit::Test("ParentCallerLocationTest", "1.0") {
         addTestCase("functions", \functionTest());
         addTestCase("methods and closures", \methodTest());
+        addTestCase("frames of another Program", \programTest());
+        addTestCase("a background thread", \threadTest());
         set_return_value(main());
     }
 
@@ -90,6 +108,31 @@ class ParentCallerLocationTest inherits QUnit::Test {
         assertEq("g", h.pcl[2].function);
         assertEq("f", h.pcl[3].function);
         check(h, "functions");
+    }
+
+    programTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(OtherSource, "other");
+        hash<auto> h = p.callFunction("outer");
+        assertEq("frames", h.pcl[1].function);
+        assertEq("outer", h.pcl[2].function);
+        check(h, "another Program");
+        # the frames of the other Program and those of this one below them
+        assertEq(p.getProgramId(), h.pcl[2].programid);
+        assertNeq(p.getProgramId(), h.pcl[h.cs.size() - 1].programid);
+    }
+
+    threadTest() {
+        hash<auto> h;
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            h = f();
+        }();
+        c.waitForZero();
+        assertEq("g", h.pcl[2].function);
+        assertEq("f", h.pcl[3].function);
+        check(h, "a background thread");
     }
 
     methodTest() {
