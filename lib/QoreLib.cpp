@@ -30,6 +30,10 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreAllocFailure.h"
+
+#include <exception>
+#include <unistd.h>
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
@@ -5900,3 +5904,124 @@ const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xs
 void qore_apply_rounding_heuristic(QoreString& str, int round_threshold_1, int round_threshold_2) {
     return qore_number_private::applyRoundingHeuristicToString(str, round_threshold_1, round_threshold_2);
 }
+
+void qore_throw_bad_alloc() {
+    throw std::bad_alloc();
+}
+
+//! the size of the memory held back for the exception of an allocation that failed: address space only, as it is not
+//! written; without memory, each allocation of a thread whose malloc() arena cannot grow takes a page of its own
+static constexpr size_t QORE_ALLOC_FAILURE_RESERVE = 8 * 1024 * 1024;
+
+//! memory held back for the exception of an allocation that failed (qore#7466)
+/** When the memory is used up by the operation that failed, the exception that reports the failure cannot be allocated
+    either; the reserve is released then, and taken again when an allocation fails later and the memory is there
+*/
+static std::atomic<void*> qore_alloc_failure_reserve{nullptr};
+
+//! raises the exception; returns false if it could not be allocated
+static bool qore_raise_allocation_failure_intern(ExceptionSink* xsink, const char* context) noexcept {
+    try {
+        xsink->raiseException("MEMORY-ALLOCATION-ERROR", "%s could not allocate the memory that it needed", context);
+        return true;
+    } catch (...) {
+        // the exception could not be allocated
+        return false;
+    }
+}
+
+//! true while the reserve is released
+static std::atomic<bool> qore_alloc_failure_reserve_released{false};
+
+static void qore_init_allocation_failure_reserve() {
+    if (!qore_alloc_failure_reserve.load(std::memory_order_relaxed)) {
+        void* p = malloc(QORE_ALLOC_FAILURE_RESERVE);
+        if (!p) {
+            return;
+        }
+        void* expected = nullptr;
+        if (!qore_alloc_failure_reserve.compare_exchange_strong(expected, p)) {
+            free(p);
+        }
+    }
+    qore_alloc_failure_reserve_released.store(false, std::memory_order_relaxed);
+}
+
+void qore_check_allocation_failure_reserve() {
+    if (qore_alloc_failure_reserve_released.load(std::memory_order_relaxed)) {
+        qore_init_allocation_failure_reserve();
+    }
+}
+
+void qore_raise_allocation_failure(ExceptionSink* xsink, const char* context) noexcept {
+    if (qore_raise_allocation_failure_intern(xsink, context)) {
+        return;
+    }
+    // the memory held back is released for the exception
+    if (void* p = qore_alloc_failure_reserve.exchange(nullptr)) {
+        // taken again when an exception is deleted after the memory is there again (see
+        // qore_check_allocation_failure_reserve())
+        qore_alloc_failure_reserve_released.store(true, std::memory_order_relaxed);
+        free(p);
+        if (qore_raise_allocation_failure_intern(xsink, context)) {
+            return;
+        }
+    }
+    static const char msg[] = "qore: MEMORY-ALLOCATION-ERROR: no memory is left, not even for the exception of an "
+        "allocation that failed; the process ends\n";
+    ssize_t rc = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    (void)rc;
+    abort();
+}
+
+//! the terminate handler that was installed before qore_terminate_handler()
+static std::terminate_handler qore_prev_terminate_handler = nullptr;
+
+//! Reports a std::bad_alloc that no code could handle before the process ends (qore#7466)
+/** Called by std::terminate() where the exception has found no handler, before the stack is unwound, so that a core
+    dump shows where the allocation failed; the handler that was installed before it then ends the process
+*/
+[[noreturn]] static void qore_terminate_handler() {
+    if (std::exception_ptr ep = std::current_exception()) {
+        try {
+            std::rethrow_exception(ep);
+        } catch (const std::bad_alloc&) {
+            // no memory is allocated: the message is written as it is
+            static const char msg[] = "qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that "
+                "cannot fail with a Qore exception (std::bad_alloc); the process ends\n";
+            ssize_t rc = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+            (void)rc;
+        } catch (...) {
+        }
+    }
+    if (qore_prev_terminate_handler) {
+        qore_prev_terminate_handler();
+    }
+    abort();
+}
+
+void qore_install_terminate_handler() {
+    static bool installed = false;
+    if (installed) {
+        return;
+    }
+    installed = true;
+    qore_prev_terminate_handler = std::set_terminate(qore_terminate_handler);
+    qore_init_allocation_failure_reserve();
+}
+
+#ifdef DEBUG
+//! the allocations of a string's or a list's storage left in this thread before one fails; 0: none fails
+static thread_local int64 qore_dbg_alloc_fail_countdown = 0;
+//! the size from which an allocation counts for qore_dbg_alloc_fail_countdown
+static thread_local size_t qore_dbg_alloc_fail_min_size = 0;
+
+void qore_dbg_fail_allocation(int64 n, size_t min_size) {
+    qore_dbg_alloc_fail_countdown = n > 0 ? n : 0;
+    qore_dbg_alloc_fail_min_size = min_size;
+}
+
+bool qore_dbg_allocation_fails(size_t size) {
+    return qore_dbg_alloc_fail_countdown && size >= qore_dbg_alloc_fail_min_size && !--qore_dbg_alloc_fail_countdown;
+}
+#endif

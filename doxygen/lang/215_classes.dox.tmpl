@@ -520,6 +520,34 @@ string s = a.create(1);
     An abstract method can also be defined by another parent class of a class that inherits more than one class; a
     call of the method, also an unqualified or qualified call through \c self, then calls that definition, also when
     the class that declares the abstract variant has concrete variants of the method as well.\n\n
+    @anchor abstract_same_signature Abstract declarations of a method with the same parameter types in several parent
+    classes are one abstract variant of a class that inherits them, whatever the names of their parameters and the
+    names that they give the types (a class with or without its namespace path, a @ref typedef_keyword "typedef" or
+    the type that it names, \c object<C> or \c C), and whether their classes were parsed or loaded from a module
+    compiled with \c qcc \c -m; declarations with different parameter types are different abstract variants:
+    @code{.py}
+namespace NS { class Foo {} }
+class I1 { abstract string m(NS::Foo f); }
+class I2 { abstract string m(object<NS::Foo> o); }
+class I3 { abstract string m(*string s); }
+# one abstract variant m(NS::Foo), and m(*string)
+class C inherits I1, I2, I3 {}
+    @endcode
+    @anchor abstract_own_implementation A concrete variant of a class's own method implements the abstract variant
+    with its signature of each of its parent classes, also when other parent classes declare other overloads of the
+    method that the class itself does not implement, whatever the order of the parent classes and whether they were
+    parsed with the class or loaded from a module, also one compiled with \c qcc \c -m; the class's own variant then
+    overrides a parent class's variant with its signature (since %Qore 3.0):
+    @code{.py}
+class Sint { string m(int i) { return "Sint::m(int)"; } }
+class I1 { abstract string m(int i); }
+class I2 { abstract string m(string s); }
+class C3 inherits Sint, I1, I2 { string m(string s) { return "C3::m(string)"; } }  # Sint implements I1's m(int)
+
+C3 c3();
+c3.m(1);     # "Sint::m(int)"
+c3.m("a");   # "C3::m(string)"
+    @endcode
     @anchor abstract_parent_implementation A concrete variant of a parent class of the class that declares an abstract
     variant implements it for that class and its subclasses, also a @ref private_methods "private" variant: the method
     then has the access of the variants that implement it, so that a public abstract method implemented by a private
@@ -538,6 +566,65 @@ class X1 inherits A1, B1, C1 {}
 X1 x1();
 x1.m();       # "C1::m": P1::m() is private
 x1.viaB();    # "P1::m": B1's code can call P1::m()
+    @endcode
+    Each variant that implements an abstract variant has the more restrictive of its own access (in the method of the
+    class that has it) and of the access of the abstract declaration, also when another parent class declares the
+    abstract variant or a subclass declares it again, except that a variant of a class that a public path reaches keeps
+    its own access (see @ref multiple_path_inheritance).  This also applies when the class that declares the abstract
+    method inherits the implementing class with @ref private_inheritance "private" or <tt><b>private:internal</b></tt> access: the method
+    is a method of that class, declared by its abstract declaration, as a method that it implements with a method of
+    its own, so a public abstract method that a public method of a privately inherited class implements is public, as
+    the class declares it (the inherited class itself stays private: an object of the class is not an instance of it),
+    and a private or <tt><b>private:internal</b></tt> abstract method implemented in the same way is private or
+    <tt><b>private:internal</b></tt> (since %Qore 3.0).  A <tt><b>private:internal</b></tt> variant of a parent class
+    also implements an abstract variant, but it can only be called from its own class (see @ref private_methods), so
+    that a call from the code of any other class raises an exception:
+    @code{.py}
+class P2 { string m() { return "P2::m"; } }
+class A2 inherits private:internal P2 { abstract string m(); }          # public: P2::m() implements it for A2
+class B2 inherits private:internal P2 { private abstract string m(); }  # private, also implemented by P2::m()
+
+(new A2()).m();   # "P2::m"
+(new B2()).m();   # METHOD-IS-PRIVATE
+    @endcode
+    The access of an abstract declaration of a parent class is also at least that of the least restrictive path from
+    the class to the class that declares it, the access of a path being that of its most restrictive inheritance edge:
+    an abstract method that a class reaches only through @ref private_inheritance "private" or
+    <tt><b>private:internal</b></tt> inheritance does not make the method that implements it public, so that a method
+    of a class that the class also inherits privately stays inaccessible from outside the class hierarchy.  When
+    several parent classes declare the abstract variant, the least restrictive of these declarations applies, in any
+    order of the parent classes, unless the class declares it itself, as its own declaration overrides them.  A
+    subclass or another parent class that declares the abstract variant again does not make a method that implements
+    it private in a parent class public: the variant keeps that access (since %Qore 3.0):
+    @code{.py}
+class Secret { string m() { return "Secret::m"; } }
+class Iface { abstract string m(); }
+class X3 inherits private Secret, private Iface {}  # private: Iface is reached through private inheritance only
+class Y3 inherits private Secret, Iface {}          # public: Iface is inherited publicly
+class IfaceB { abstract string m(); }
+class W3 inherits private Secret, private Iface, IfaceB {}  # public: IfaceB is inherited publicly
+class Z3 inherits X3 { abstract string m(); }       # private: X3's method is private
+
+(new X3()).m();   # METHOD-IS-PRIVATE
+(new Y3()).m();   # "Secret::m"
+(new W3()).m();   # "Secret::m"
+(new Z3()).m();   # METHOD-IS-PRIVATE
+    @endcode
+    A variant of a class that a parent class inherits with <tt><b>private:internal</b></tt> access does not implement
+    an abstract variant of that parent class's subclasses, as that class is not in their class hierarchy (see
+    @ref private_inheritance): the class stays abstract unless a method of its own, a method of a parent class (also
+    one that the parent class implements with that variant) or a class that another path reaches implements it; the
+    class that inherits the class with <tt><b>private:internal</b></tt> access itself can implement an abstract
+    variant with it, as above (since %Qore 3.0):
+    @code{.py}
+class K4 inherits private:internal Secret {}
+class J4 inherits K4, Iface {}           # abstract: J4 does not reach Secret
+class P4 inherits K4, Secret, Iface {}   # Secret::m() implements m(): Secret is inherited publicly
+class Q4 inherits private:internal Secret, Iface {}
+class R4 inherits Q4, IfaceB {}          # Q4's method implements IfaceB's m()
+
+create_object("J4");   # ABSTRACT-CLASS-ERROR
+(new R4()).m();        # "Secret::m"
     @endcode
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
@@ -580,14 +667,27 @@ x1.viaB();    # "P1::m": B1's code can call P1::m()
 	- @ref memberNotification_methods "memberNotification()": these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 	- methodGate(): these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 
-    An inherited <b><tt>final</tt></b> method reserves its name in subclasses. A subclass declaring an
-    instance or static method with that name gets a parse error, even when its parameter types, names or arity
-    differ. The declaring class can provide several overloads itself. A <b><tt>private:internal</tt></b>
-    final variant is visible only in its declaring class and does not reserve the name in subclasses.
+    A <b><tt>final</tt></b> method holds for the whole class hierarchy: a call of the method's name on an object of
+    any subclass with arguments that the <b><tt>final</tt></b> variant accepts selects that variant.  Overload
+    resolution considers the variants of a class's own method first, then those of its parent classes in the order
+    in which they are listed, each with its own parent classes (depth first), and an earlier variant wins a tie, so
+    the following are parse errors in a subclass of a class with a <b><tt>final</tt></b> method:
+    - a method with the same signature (an override)
+    - a variant of the same name with another signature that accepts arguments that the <b><tt>final</tt></b> variant
+      accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
+      arguments; a variant whose parameters accept none of the same arguments is allowed (a new variant of this kind,
+      which a call that the <b><tt>final</tt></b> variant cannot take selects, is reported by the strict
+      @ref warning-language-traps "language-traps" warning, unless it overrides a variant that a parent class already
+      has under that name)
+    - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
+      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
+      position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a
+      <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
+    - a parent class listed before the class with the <b><tt>final</tt></b> method that declares or inherits a method
+      of the same name, as the subclass's calls of the name are then resolved in that method, or one of its variants
+      is selected first
 
-    In multiple inheritance, a call accepting the final variant's arguments must still reach that variant.
-    Parent classes are searched depth first in declaration order. A parent listed before the final method's
-    class that redirects the call to another method also causes a parse error.
+    <b><tt>final</tt></b> variants declared <b><tt>private:internal</tt></b> are not inherited and are not affected.
 
     @par Example:
     @code{.py}
@@ -608,8 +708,8 @@ class T2 inherits Base, Other {}
 class C inherits Base {
     # parse error: a call with a string argument could select this variant
     string log(data msg) { return "c"; }
-    # parse error: Base's final method reserves the name for static methods and disjoint overloads too
-    static string log(int code) { return "c"; }
+    # OK: accepts none of the arguments of Base::log()
+    string log(int code) { return "c"; }
 }
     @endcode
 
@@ -717,6 +817,41 @@ while (i.next) {}  # parse exception: the call is i.next()
     Members declared <b><tt>private</tt></b> can only be accessed within the class hierarchy; trying to access private members form outside the class hierarchy will result in either a parse or runtime exception, depending on when the illegal access is caught.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n
     Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.  A <tt><b>private:internal</b></tt> member is separate from the members with the same name declared by other classes in the hierarchy: each class reads and writes its own, which is initialized in every object of the class or of a subclass, however deep the hierarchy, and whatever the order of the parent classes in the <tt><b>inherits</b></tt> clauses of the hierarchy.\n\n
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
+
+    @subsection sandboxed_class_private_access Private Access of Classes Declared by Sandboxed Code
+    A class declared in a @ref Qore::Program "Program" with a @ref sandbox_manager "sandbox manager" (or that sandboxed
+    code creates) has no private access to the private members, methods, static class variables and constants that a class
+    declared by trusted code (a module's code, or a Program without a sandbox manager) declares, on any object, also on
+    the objects of the class itself: for it they are as if they were <tt><b>private:internal</b></tt>.  An access that
+    can be resolved when parsing raises a parse error; an access resolved at run time (through a value without a type,
+    a member name computed at run time, the conversion of the object to a hash or its keys, a
+    @ref call_reference "call reference", or the reflection API) raises the same
+    exception as an access from outside the class hierarchy.
+
+
+    The class can still use its own members and methods and the public members and methods that it inherits, implement
+    and override the private (abstract) methods of the trusted class, which the trusted class then calls, and call the
+    version of a method that it overrides in a base class (<tt>Base::method()</tt>).  Code of the trusted class keeps
+    its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
+    library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
+    need as public members and methods.  The access is decided by the state of the class's Program when the class is
+    committed (see @ref sandbox_private_access).\n\n
+    The standard modules give such subclasses public methods in place of the private declarations that their
+    subclasses use: \c DataProvider (\c AbstractDataProvider::checkOptions(),
+    \c processSearchParameters(), \c getWrappedExceptionArg(), \c AbstractDataProviderType::checkChange(),
+    \c AbstractDataProviderRecordIterator::doMemberGate() and \c matchGeneric(),
+    \c AbstractWatchDataProviderBase::isStopping() and \c logPollError(),
+    \c AbstractTimestampWatchDataProvider::getEventName() and \c getWatchRecordTimestamp(),
+    \c Observable::hasObservers() and \c getObserverCount()), \c FtpPoller (\c setFatal() and \c isFatal()),
+    \c HttpServerUtil (\c AbstractStreamRequest::getContext(), \c getHeaders() and \c getBody()) and \c RestHandler
+    (\c AbstractRestStreamRequestHandler::getContext() and \c getArgs()); a context that they give is a copy with the
+    request metadata only.  These methods are @ref final_methods "final": a subclass method with the name and the
+    signature of one of them is a parse error (a method of the name with other parameters, or a static method of the
+    name, is a method of its own, which a call with the signature of the final method does not call).  The private methods that change shared state or reach the host's resources stay private:
+    a data provider subclass declared by sandboxed code cannot call \c AbstractDataProvider::resolveValue() or
+    \c valueNeedsResolution() (the host's dynamic value resolution) or
+    \c AbstractWatchDataProviderBase::persistCheckpoint() (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7032">issue 7032</a>).
 
     @subsection private_access_class_identity Private Access and the Identity of Classes
     The private and <tt><b>private:internal</b></tt> members and methods of an object can be used by the code of a
@@ -954,7 +1089,7 @@ class Y inherits C, D {}   # (new Y()).call() returns "D", as (new Y()).m() does
 
     A class can be reached through more than one path of a class hierarchy: through two parent classes that each inherit it, or directly and through a parent class that inherits it.  It is inherited once (see @ref inheritance), and when the paths give it different access (one inherits it with <tt><b>private</b></tt> or <tt><b>private:internal</b></tt> access, and another one publicly), the least restrictive path applies, at parse time and at run time and in every @ref execution_modes "execution mode":
     - <b>methods</b>: a method of the class can be called from outside the class hierarchy if a public path reaches its class, whether the call is resolved at parse time (an object with a declared class) or at run time (an object of an unknown class, @ref Qore::call_object_method() "call_object_method()", @ref call_reference "call references", @ref Qore::zzz8objectzzz9::hasCallableMethod() "hasCallableMethod()"); a call from outside the class hierarchy (also through a call reference made outside it) finds the method in the @ref multiple_inheritance_order "method resolution order" of the public paths only, as a private path is not accessible to it, while a call from inside the class hierarchy uses the method resolution order of all its paths
-    - <b>inherited variants</b>: a method declared by a class has the variants of the methods with the same name of its ancestors (see @ref overloading) with the access of the least restrictive path from that class to them; they are those of the hierarchy of the class that declares the method, also when it is called on an object of a subclass that reaches an ancestor through another path
+    - <b>inherited variants</b>: a method declared by a class has the variants of the methods with the same name of its ancestors (see @ref overloading) with the access of the least restrictive path from that class to them; they are those of the hierarchy of the class that declares the method, also when it is called on an object of a subclass that reaches an ancestor through another path; a caller that cannot access an ancestor (such as code outside the class hierarchy and an ancestor inherited privately) can call the variants of the ancestors after it that it can access (since %Qore 3.0)
     - <b>classes</b>: an object is an instance of the class for @ref instanceof "instanceof", @ref cast "cast<>" and parameter and variable types if a public path reaches it
     - <b>members</b>: a member of the class is one member of the object, with the access of the least restrictive path: if one of the paths makes it accessible (it is not reached through <tt><b>private:internal</b></tt> inheritance only), every class in the hierarchy that sees this declaration reads and writes the same value as code outside the hierarchy, also the classes on a <tt><b>private:internal</b></tt> path; a member of a class that only <tt><b>private:internal</b></tt> paths reach is kept apart from the members with the same name of the rest of the hierarchy, in one place for all the classes on those paths
     - <b>static variables</b>: a static variable has the access of the least restrictive path to the class that declares it; as constants, it is found in the method resolution order of all the paths

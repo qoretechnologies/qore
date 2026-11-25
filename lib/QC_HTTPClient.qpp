@@ -648,11 +648,16 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c ssl_key_password: the password to the private key given with \c ssl_key_path
     - \c ssl_ca_file: a file with one or more CA certificates in PEM format; if set, the server's certificate is
       verified against these CA certificates instead of the default CA certificates of the system (see
-      @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()"); if this option is used, then the calling
-      context must not be restricted with sandbox restriction @ref Qore::PO_NO_FILESYSTEM which is checked at runtime
+      @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()"); if this option is used, then neither
+      the current %Program nor the code that calls it may be restricted with sandbox restriction
+      @ref Qore::PO_NO_FILESYSTEM, which is checked at runtime
     - \c ssl_ca_path: a directory with CA certificates in PEM format named by the hash of their subject names; if
       set, the server's certificate is verified against these CA certificates instead of the default CA certificates
-      of the system; the same restrictions apply as with \c ssl_ca_file
+      of the system; the same restrictions apply as with \c ssl_ca_file; under a sandbox file-system policy, the
+      certificates of \c ssl_ca_file and \c ssl_ca_path are read when the client is created, into an in-memory
+      trust store, so that no file is read by its name when a certificate is verified (only the files with hashed
+      names of \c ssl_ca_path are read, each of which, or the file that it links to, the policy must allow to be
+      read)
     - \c ssl_trust_store: an @ref Qore::SSLTrustStore "SSLTrustStore" object: the server's certificate is verified
       against its CA certificates, which were read when it was created, instead of \c ssl_ca_file, \c ssl_ca_path and
       the default CA certificates of the system, on every connection path (HTTP/1.1, HTTP/2, HTTP/3); no file is read
@@ -669,7 +674,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     @throw HTTP-CLIENT-URL-ERROR invalid URL string, or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol passed in URL
     @throw ILLEGAL-FILESYSTEM-ACCESS if the current Program or a caller is restricted from filesystem access
-    and supplies \c ssl_cert_path or \c ssl_key_path (see @ref Qore::PO_NO_FILESYSTEM)
+    and supplies \c ssl_cert_path, \c ssl_key_path, \c ssl_ca_file or \c ssl_ca_path (see
+    @ref Qore::PO_NO_FILESYSTEM); the code that calls the method of a lent object counts as a caller (see
+    @ref sandbox_lent_objects)
     @throw HTTP-CLIENT-URL-ERROR the URL host contains a NUL character; see @ref path_nul_characters
     @throw HTTP-CLIENT-OPTION-ERROR a path given with \c ssl_cert_path, \c ssl_key_path, \c ssl_ca_file or
     \c ssl_ca_path contains a NUL character; see @ref path_nul_characters

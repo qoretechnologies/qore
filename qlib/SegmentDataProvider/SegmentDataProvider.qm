@@ -56,6 +56,15 @@ module SegmentDataProvider {
                 "- Connect data warehouses\n"
                 "- Define and enforce tracking plans\n"
                 "- Organize resources with labels",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "segmentapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://www.twilio.com/en-us/pricing/customer-data",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "segment",
             "logo": SegmentLogo,
             "logo_file_name": "segment-logo.svg",

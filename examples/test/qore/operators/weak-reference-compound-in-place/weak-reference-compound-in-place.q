@@ -131,7 +131,7 @@ auto sub scalars() {
 }
 printf("scalar: %y\n", scalars());
 
-# the weak holder is itself changed: the target is the container
+# the weak holder is changed: the container that it designates is changed, and it keeps the weak reference (qore#7297)
 auto sub holder() {
     auto src = map $1, (1, 2);
     auto w := src;

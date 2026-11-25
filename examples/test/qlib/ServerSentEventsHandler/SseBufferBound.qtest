@@ -270,6 +270,10 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
         #! the IDs of the deregistered connections, and the thread that deregistered each of them
         hash<string, int> gone = {};
 
+        #! the bound of the data held for the client of each registered connection when it was registered, keyed like
+        #! @ref conns
+        hash<string, int> reg_bound = {};
+
         #! while set, a deregistration made on another thread than @ref allowed_tid waits until it reaches zero
         *Counter gate;
 
@@ -285,13 +289,18 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
         AutoLock al(rm);
         conns = {};
         gone = {};
+        reg_bound = {};
     }
 
     connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
         string key = conn.hdr.path;
         key =~ s/^\///;
+        # the bound applies to every event of the stream, also to those sent by the hooks of its registration
+        *HttpServerAsyncIo::HttpSseStreamPollOperation poll_op = conn.getAsyncPollOp();
+        int bound = poll_op ? poll_op.getMaxBufferSize() : conn.getAsyncSseConnection().getMaxBufferSize();
         AutoLock al(rm);
         conns{key} = conn;
+        reg_bound{key} = bound;
         rc.broadcast();
     }
 
@@ -312,6 +321,13 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
             rc.wait(rm, deadline - microseconds(clock_get_monotonic_us()));
         }
         return conns{path};
+    }
+
+    #! Returns the bound of the connection of the request with the given path when it was registered
+    int boundAtRegistration(string path) {
+        waitConn(path);
+        AutoLock al(rm);
+        return reg_bound{path};
     }
 
     #! Returns True if the connection has been deregistered
@@ -695,6 +711,11 @@ class SseBufferBoundTest inherits QUnit::Test {
         assertEq(12345, override_handler.waitConn("override").getAsyncPollOp().getMaxBufferSize());
         assertEq(LargeBound, handler.waitConn("read2").getAsyncSseConnection().getMaxBufferSize());
         assertEq(SmallBound, handler.waitConn("read3").getAsyncSseConnection().getMaxBufferSize());
+        # the bound is applied by the handler's setup, before the connection is registered
+        assertEq(SmallBound, handler.boundAtRegistration("read"));
+        assertEq(12345, override_handler.boundAtRegistration("override"));
+        assertEq(LargeBound, handler.boundAtRegistration("read2"));
+        assertEq(SmallBound, handler.boundAtRegistration("read3"));
 
         # an error in the message itself is raised by a send to all connections
         assertThrows("SSE-EVENT-ERROR", \handler.sendAll(), <SseMessageInfo>{"event": "a\nb", "data": "x"});

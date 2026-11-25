@@ -113,9 +113,7 @@ int QoreBinaryXorOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)) {
             QoreStringNode* desc = new QoreStringNode("neither side of the binary xor (^) expression can be " \
                 "converted to an integer (left hand side is ");
-            QoreTypeInfo::getThisType(lti, *desc);
-            desc->concat("; right hand side is ");
-            QoreTypeInfo::getThisType(parse_context.typeInfo, *desc);
+            QoreTypeInfo::describeTypeComparison(*desc, lti, "; right hand side is ", parse_context.typeInfo);
             desc->concat("), therefore the entire expression will always return a constant 0");
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_INVALID_OPERATION, "INVALID-OPERATION",
                 desc);

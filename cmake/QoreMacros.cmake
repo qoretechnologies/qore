@@ -1976,10 +1976,15 @@ endfunction()
 # set(MY_QPP foo.qpp bar.qpp)
 # qore_wrap_qpp_value(MY_CPP ${MY_QPP})
 # qore_wrap_qpp_value(MY_CPP DOXLIST MY_DOX METALIST MY_META STUBLIST MY_STUB ${MY_QPP})
+# qore_wrap_qpp_value(MY_CPP APILIST MY_API ${MY_QPP})
+#
+# APILIST <var> also writes each file's API metadata (<name>.api.json: the metadata without documentation and source
+# path, qpp --api-metadata) and appends its path to <var>; libqore's builtin API identity is a digest of them
+# (cmake/QoreWriteBuiltinApiIdentity.cmake, qore#7183)
 #
 MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
     set(options)
-    set(oneValueArgs DOXLIST METALIST STUBLIST)
+    set(oneValueArgs DOXLIST METALIST STUBLIST APILIST)
     set(multiValueArgs OPTIONS)
 
     cmake_parse_arguments(_WRAP_QPP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -2017,14 +2022,23 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
             SET(_stub_outputs ${_stubfile})
         ENDIF(_WRAP_QPP_STUBLIST)
 
+        # API metadata output is opt-in, as stub output is (APILIST <var>)
+        SET(_api_arg)
+        SET(_api_outputs)
+        IF(_WRAP_QPP_APILIST)
+            SET(_apifile ${CMAKE_CURRENT_BINARY_DIR}/${_outfile}.api.json)
+            SET(_api_arg --api-metadata=${_apifile})
+            SET(_api_outputs ${_apifile})
+        ENDIF(_WRAP_QPP_APILIST)
+
         SET(_table_arg)
         IF(QORE_DOX_TABLE_STRICT)
             SET(_table_arg --table-strict)
         ENDIF(QORE_DOX_TABLE_STRICT)
 
-        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs}
+        ADD_CUSTOM_COMMAND(OUTPUT ${_cppfile} ${_doxfile} ${_metafile} ${_stub_outputs} ${_api_outputs}
                            COMMAND ${QORE_QPP_EXECUTABLE}
-                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_qore_qpp_prefix_args} ${_infile}
+                           ARGS --javadoc=${CMAKE_CURRENT_BINARY_DIR}/java --output=${_cppfile} --dox-output=${_doxfile} --metadata=${_metafile} ${_table_arg} ${_stub_arg} ${_api_arg} ${_qore_qpp_prefix_args} ${_infile}
                            MAIN_DEPENDENCY ${_infile}
                            DEPENDS ${QORE_QPP_EXECUTABLE}
                            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -2040,6 +2054,9 @@ MACRO (QORE_WRAP_QPP_VALUE _cpp_files)
         IF(_WRAP_QPP_STUBLIST)
            SET(${_WRAP_QPP_STUBLIST} ${${_WRAP_QPP_STUBLIST}} ${_stubfile})
         ENDIF(_WRAP_QPP_STUBLIST)
+        IF(_WRAP_QPP_APILIST)
+           SET(${_WRAP_QPP_APILIST} ${${_WRAP_QPP_APILIST}} ${_apifile})
+        ENDIF(_WRAP_QPP_APILIST)
         #MESSAGE(STATUS "DEBUG D: " _WRAP_QPP_DOXLIST " ${D}:" ${_WRAP_QPP_DOXLIST} " ${${D}}:" ${${_WRAP_QPP_DOXLIST}})
     ENDFOREACH (it)
 
@@ -3262,6 +3279,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     if (DEFINED QORE_AOT_RUNTIME_IDENTITY_HEADER)
         list(APPEND _qmod_probe_dep ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
     endif()
+    # and on the builtin API identity header, which qore-builtin-api-identity rewrites only when the API metadata of
+    # libqore's qpp files changes (a domain, flag or signature of a builtin class, function or constant): a qmod
+    # older than the header was compiled against other builtin metadata, which it may have built into its code, and
+    # the libqore built with the header loads its source instead (qore#7183)
+    if (DEFINED QORE_BUILTIN_API_IDENTITY_HEADER)
+        list(APPEND _qmod_probe_dep ${QORE_BUILTIN_API_IDENTITY_HEADER})
+    endif()
     # With the qmod build cache (QORE_QMOD_CACHE_DIR, see design/qmod-build-cache.md), qcc runs through the cache
     # tool, which supplies the module from the cache when every input is unchanged; without it the command is qcc's
     set(_qmod_cache_launcher "")
@@ -3923,58 +3947,26 @@ MACRO (QORE_USER_MODULE _module_file)
                 "@INCLUDE = \"${MOD_DOXYFILE}\"\nWARN_IF_DOC_ERROR = NO\n")
         endif()
 
-        # add CMake target for the documentation
-        if (WIN32 AND (NOT MINGW) AND (NOT MSYS))
-            add_custom_target(docs-${f}
+        set(_html "${CMAKE_BINARY_DIR}/docs/modules/${f}/html")
+        set(_prune_search)
+        if (QORE_DOC_PRUNE_SEARCH)
+            set(_prune_search COMMAND ${QORE_DOC_PRUNE_SEARCH} "${_html}")
+        endif()
+        foreach(_target docs-${f} docs-fast-${f})
+            add_custom_target(${_target}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
+                ${_prune_search}
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post "${_html}/*.html" "${_html}/*.js"
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post "${_html}/search/*.html" "${_html}/search/*.js"
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
-            add_dependencies(docs-${f} qore)
-            add_custom_target(docs-fast-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-fast-${f} qore)
-        else (WIN32 AND (NOT MINGW) AND (NOT MSYS))
-            add_custom_target(docs-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-${f} qore)
-            add_custom_target(docs-fast-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-fast-${f} qore)
-        endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
+            add_dependencies(${_target} qore)
+        endforeach()
         if (QORE_GENERATE_JAVA_BINDINGS)
             _qore_java_bindings_clean(docs-${f})
             _qore_java_bindings_clean(docs-fast-${f})
@@ -4220,8 +4212,13 @@ function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
             file(WRITE "${_base}.final"
                 "@INCLUDE = \"${_base}\"\nTAGFILES += ${_quoted_doc_tags}\n"
                 "WARN_IF_DOC_ERROR = YES\nGENERATE_TAGFILE =\n")
+            set(_prune_search)
+            if (QORE_DOC_PRUNE_SEARCH)
+                set(_prune_search COMMAND ${QORE_DOC_PRUNE_SEARCH} "${_html}")
+            endif()
             add_custom_target(docs-${_mod}-final
                 COMMAND ${DOXYGEN_EXECUTABLE} "${_base}.final"
+                ${_prune_search}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND}
                     --post "${_html}" "${_html}/search"
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"

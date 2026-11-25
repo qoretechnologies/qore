@@ -87,7 +87,7 @@ class QoreObject;
     @param spans true if a base class of the object's class has the code of another Program
 */
 DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr,
-    bool spans = false);
+    bool spans = false, bool* capability = nullptr);
 //! Returns the functional-domain restrictions that an object or call reference created now records (qore#6844)
 /** Its code runs for the code that creates it: the restrictions of that code are recorded if the code that it runs
     is the code of a module (a library module or one loaded by its path, also when module code creates it), whose
@@ -111,6 +111,18 @@ DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode
     that of the code that created the Program count (qore_program_private::getSandboxManagerRef())
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the Program of the class of the object, now
+//! (qore#6843)
+/** The sandboxes are those of qore_object_program_is_sandboxed(); a sandbox does not trust its code if it refuses
+    uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); for a composition, if any member refuses them), as
+    for SandboxManager::isRestricted().  Fails closed: true if the sandboxes cannot be resolved, and for a Program
+    marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
+*/
+DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the given Program; fails closed (qore#7303)
+/** As qore_object_program_is_restricted(), for a Program; false for nullptr (builtin code)
+*/
+DLLLOCAL bool qore_program_is_restricted(const QoreProgram* pgm);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
     object (SandboxManager::getSandboxedProgramId(); qore#7110)

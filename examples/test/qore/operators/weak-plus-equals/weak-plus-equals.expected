@@ -1,0 +1,26 @@
+auto variable: src [1, 2, 3, 4, 5] lvalue [1, 2, 3, 4, 5] (list<int>)
+typed variables: [1, 2, 3, 4, 5, 6, 7]
+value: [1, 2, 3, 4, 5, 6, 7, 8] (list<int>)
+string added: RUNTIME-TYPE-ERROR; src [1, 2, 3, 4, 5, 6, 7, 8]
+lvalues: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+read through them: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+added to itself: 28 elements
+added to itself twice: 56 elements, [1, 2, 3, 4]
+nothing added: RUNTIME-TYPE-ERROR; 56 elements
+own entry: 101 elements, last 99
+released: [] [] [] [] [] [] [] []
+freed: LIST-ERROR
+freed typed: LIST-ERROR
+hash: {a: 1, b: 2, c: 3, d: 4}
+value: {a: 1, b: 2, c: 3, d: 4, e: 5} (hash<string, int>)
+added to itself: {a: 1, b: 2, c: 3, d: 4, e: 5}
+object merged: {a: 1, x: 1, y: "y"}
+hashdecl: {a: 1, b: 2} (hash<Decl>)
+hashdecl through an auto lvalue: {a: 1, b: 3} (hash<Decl>)
+hashdecl unknown key: HASHDECL-KEY-ERROR; {a: 1, b: 3}
+released: {} {} {}
+freed: HASH-ERROR
+freed auto: HASH-ERROR
+added through the entry: 2 elements
+destroyed: ["added", "holder"]
+cycle destroyed: ["added", "holder", "cycle"]

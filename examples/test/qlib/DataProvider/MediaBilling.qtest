@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class MediaBillingTest
+
+class MediaBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Media provider billing") {
+        addVendor("Bfl", "BlackForestLabs", "bfl.ai", "metered",
+            "https://docs.bfl.ai/quick_start/pricing", {
+                "generate-image": "credit",
+                "generate-video": "credit",
+                "get-credits": "included",
+                "wait-for-result": "included",
+                "make-api-call": "metered",
+            });
+        addVendor("StabilityAi", "StabilityAi", "stability.ai", "metered",
+            "https://platform.stability.ai/pricing", {
+                "generate-image": "credit",
+                "generate-core": "credit",
+                "get-upscale-result": "included",
+                "make-api-call": "metered",
+            });
+        set_return_value(main());
+    }
+}

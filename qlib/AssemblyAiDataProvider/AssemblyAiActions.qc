@@ -41,6 +41,11 @@ public class AssemblyAiActions {
                 if (!action.output_type && !action.get_output_type) {
                     action.output_type = EmptyResponseType;
                 }
+                if (action.action == "create-chat-completion") {
+                    action.billing = <DataProviderBillingInfo>{"unit": "token"};
+                } else if (set.getOperationEx(action.action).getMethod().upr() == "GET") {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
                 result += action;
             }
         }

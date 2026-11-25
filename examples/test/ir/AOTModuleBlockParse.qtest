@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc .qmod compilation, linking and dylib loading of the compiled modules
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTModuleBlockParseTest
+
+#! qcc reads a module block as the module loader does (qore#7315)
+/** qcc took the values of a module block (version, desc, author, url, license) from a scan of the source text that
+    ended the block at its first \c "}" and each value at its next \c '"', so that it refused modules that the module
+    loader accepts (a brace or an escaped quote in a string, a closure in the block, a single-quoted string) and could
+    take a value from a comment or another string.  It takes them from the block as the parser reads it, as the
+    loader does, and refuses the blocks that the loader refuses with the loader's diagnostics, in each of its module
+    modes: a module file, a separated module, its per-file objects with the module built from them, and an archive.
+
+    The modules are in the AOTModuleBlockParse directory next to this test.
+*/
+class AOTModuleBlockParseTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        #! the directory of the test modules
+        string mod_dir;
+
+        #! the separator of the values that a child prints
+        const Sep = "\x1f";
+
+        #! the code that prints the metadata of a module, given as its first argument
+        const MetaCode = "string m = ARGV[0]; load_module(m); hash<auto> h = get_module_hash(){m}; "
+            "print((h.version, h.desc, h.author, h.url ?? \"\", h.license ?? \"\").join(\"\\x1f\"));";
+
+        #! the expected metadata of BlockBraces
+        const BracesMeta = ("1.0", "a {} in the \"description\" with } and { and \\ and 'quotes'; author = \"no\"",
+            "single {quoted} \"author\"", "https://qore.org/{x}", "MIT");
+
+        #! the expected metadata of BlockSplit
+        const SplitMeta = ("2.1", "split {module} with an escaped \" and a }", "Qore {Technologies}",
+            "https://qore.org", "LGPL");
+
+        #! the modules that the loader refuses, with the diagnostic that it refuses each with
+        const Refused = {
+            "BlockNoDesc": "missing description",
+            "BlockEmptyDesc": "missing description",
+            "BlockNoVersion": "missing version",
+            "BlockNoAuthor": "missing author",
+            "BlockIntDesc": "module key 'desc' assigned type 'integer' (expecting 'string')",
+            "BlockBadKey": "module key 'colour' is invalid",
+            "BlockDupKey": "module key 'desc' was given multiple times",
+        };
+    }
+
+    constructor() : QUnit::Test("AOTModuleBlockParseTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        mod_dir = realpath(get_script_dir() + "AOTModuleBlockParse");
+
+        addTestCase("a module file with braces, quotes and a closure in its block", \moduleFileTest());
+        addTestCase("a separated module with braces and quotes in its block", \separatedModuleTest());
+        addTestCase("the per-file objects, the module built from them and an archive", \objectModesTest());
+        addTestCase("blocks that the loader refuses", \refusedTest());
+        set_return_value(main());
+    }
+
+    moduleFileTest() {
+        TmpDir tmp("qore-aot-module-block-");
+        # the loader takes the block as written
+        assertEq(BracesMeta, meta(mod_dir, "BlockBraces"), "source");
+        assertEq("1", initDone(mod_dir), "source init closure");
+
+        string qmod = tmp.path + DirSep + "BlockBraces.qmod";
+        string out = qcc(sprintf("-m -o %s %s", qmod, mod_dir + DirSep + "BlockBraces.qm"));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        # the compiled module has the same metadata, and its init closure ran
+        assertEq(BracesMeta, meta(tmp.path, "BlockBraces"), "qmod");
+        assertEq("1", initDone(tmp.path), "qmod init closure");
+    }
+
+    separatedModuleTest() {
+        TmpDir tmp("qore-aot-module-block-");
+        assertEq(SplitMeta, meta(mod_dir, "BlockSplit"), "source");
+
+        string qmod = tmp.path + DirSep + "BlockSplit.qmod";
+        string out = qcc(sprintf("-m -o %s %s", qmod, mod_dir + DirSep + "BlockSplit"));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        assertEq(SplitMeta, meta(tmp.path, "BlockSplit"), "qmod");
+    }
+
+    objectModesTest() {
+        TmpDir tmp("qore-aot-module-block-");
+        string dir = mod_dir + DirSep + "BlockSplit";
+        string obj_dir = tmp.path + DirSep + "obj";
+        mkdir(obj_dir);
+        list<string> objs = ();
+        # each per-file compile parses the module's block
+        foreach string file in (("BlockSplit.qm", "F.qc")) {
+            string obj = obj_dir + DirSep + file + ".qo";
+            string out = qcc(sprintf("-c --context=%s -o %s %s", dir, obj, dir + DirSep + file));
+            assertTrue(is_file(obj), "per-file compile of " + file + ": " + out);
+            objs += obj;
+        }
+
+        string art_dir = tmp.path + DirSep + "art";
+        mkdir(art_dir);
+        string qmod = art_dir + DirSep + "BlockSplit.qmod";
+        string out = qcc(sprintf("-m --from-objects --context=%s -o %s %s", dir, qmod, objs.join(" ")));
+        assertTrue(is_file(qmod), "module from objects: " + out);
+        assertEq(SplitMeta, meta(art_dir, "BlockSplit"), "module from objects");
+
+        string qoa = tmp.path + DirSep + "BlockSplit.qoa";
+        out = qcc(sprintf("-a --context=%s -o %s %s", dir, qoa, objs.join(" ")));
+        assertTrue(is_file(qoa), "archive: " + out);
+    }
+
+    refusedTest() {
+        TmpDir tmp("qore-aot-module-block-");
+        foreach hash<auto> i in (Refused.pairIterator()) {
+            string name = i.key;
+            string path = mod_dir + DirSep + name + ".qm";
+            # the loader refuses the module with the diagnostic
+            *hash<ExceptionInfo> ex = loadError(path);
+            assertEq(Type::Hash, ex.type(), name + ": refused by the loader");
+            assertRegex(quoteRegex(i.value), ex.desc, name + ": loader diagnostic");
+
+            # qcc refuses it with the same diagnostic, and builds no module
+            string qmod = tmp.path + DirSep + name + ".qmod";
+            int rc;
+            string out = qcc(sprintf("-m -o %s %s", qmod, path), \rc);
+            assertNeq(0, rc, name + ": qcc exit code: " + out);
+            assertFalse(is_file(qmod), name + ": no qmod");
+            assertRegex(quoteRegex(i.value), out, name + ": qcc diagnostic");
+            # the diagnostic of the loader for a module without a value names the module as the loader does
+            if (i.value =~ /^missing /) {
+                string msg = sprintf("module '%s': feature '%s': %s", path, name, i.value);
+                assertEq(msg, ex.desc, name + ": loader message");
+                assertRegex(quoteRegex("error: " + msg), out, name + ": qcc message");
+            }
+        }
+    }
+
+    #! returns the metadata of a module loaded by a child process from the given module directory
+    private list<string> meta(string dir, string name) {
+        int rc;
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -ne '%s' %s 2>&1", env, dir, qore_bin, MetaCode,
+            name), \rc);
+        assertEq(0, rc, "load of " + name + " from " + dir + ": " + out);
+        return out.split(Sep);
+    }
+
+    #! returns whether the init closure of BlockBraces ran in a child process that loads it from the given directory
+    private string initDone(string dir) {
+        int rc;
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -ne 'load_module(\"BlockBraces\"); "
+            "print(call_function(\"BlockBraces::init_done\").toString());' 2>&1", env, dir, qore_bin), \rc);
+        assertEq(0, rc, "init closure of BlockBraces from " + dir + ": " + out);
+        return out;
+    }
+
+    #! returns the exception raised when the module at the given path is loaded from source in a new Program
+    private *hash<ExceptionInfo> loadError(string path) {
+        try {
+            Program p();
+            p.parse(sprintf("%%requires %s\n", path), "load");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! runs qcc with the given arguments and returns its output
+    private string qcc(string args) {
+        int rc;
+        return qcc(args, \rc);
+    }
+
+    #! runs qcc with the given arguments and returns its output, setting its exit code
+    private string qcc(string args, reference<int> rc) {
+        return backquote(sprintf("%s %s -O0 %s 2>&1", env, qcc_bin, args), \rc);
+    }
+
+    #! returns a regular expression that matches the given text
+    private static string quoteRegex(string text) {
+        return regex_subst(text, "([\\\\^$.|?*+()\\[\\]{}])", "\\\\$1", Qore::RE_Global);
+    }
+}

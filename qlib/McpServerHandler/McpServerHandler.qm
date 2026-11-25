@@ -131,7 +131,7 @@ module McpServerHandler {
     %requires HttpServer
 
     Logger logger("mcp-server", LoggerLevel::getLevelInfo());
-    McpServerHandler::McpServerHandler handler(logger);
+    McpServerHandler::McpServerHandler handler();
 
     # register a tool
     handler.registerTool("echo", "Echo a message", NOTHING, sub (hash<auto> args) {
@@ -256,6 +256,8 @@ hash<auto> sub myTool(*hash<auto> args) {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_1 McpServerHandler v1.1
+    - the no-argument @ref McpServerHandler::McpServerHandler::constructor() "constructor" initializes the
+      JSON-RPC handler and registers its MCP methods (issue #7596)
     - added @ref McpServerHandler::McpServerHandler::addCallCancelHandler() "McpServerHandler::addCallCancelHandler()"
       and @ref McpServerHandler::McpServerHandler::removeCallCancelHandler() "removeCallCancelHandler()": code
       called at once when the current request is cancelled, so a cancel can end a blocking call in progress
