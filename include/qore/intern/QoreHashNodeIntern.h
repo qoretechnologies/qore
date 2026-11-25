@@ -35,6 +35,7 @@
 
 #include "qore/intern/QoreSandboxMemory.h"
 #include <iterator>
+#include <limits>
 
 #include <unordered_map>
 #include "qore/intern/xxhash.h"
@@ -124,7 +125,7 @@ public:
 */
 class DLLLOCAL qhlist_t {
 public:
-    //! a bidirectional iterator; end() is the null member
+    //! a forward iterator; end() is the null member
     class iterator {
     public:
         using iterator_category = std::forward_iterator_tag;
@@ -327,6 +328,8 @@ private:
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
     DLLLOCAL static size_t bucketsFor(size_t n) {
+        // a power of 2 of at least n exists
+        assert(n <= (std::numeric_limits<size_t>::max() >> 1) + 1);
         size_t b = MinBuckets;
         while (b < n) {
             b <<= 1;
@@ -1112,6 +1115,8 @@ public:
             return false;
         }
         HashMember* member = p->member_list.front();
+        // removed from the key map too, so that the size of the hash stays that of its member list (qore#7272)
+        p->hm.erase(member);
         p->member_list.unlink(member);
         qore_container_free_helper::freeEntry(member->val, xsink);
         delete member;
@@ -1222,11 +1227,15 @@ public:
     */
     DLLLOCAL void takeFreeMemberForClear(ExceptionSink* xsink);
 
+    //! the number of members: the members in the key map, which are those of the member list (except in
+    //! freeMembers(), which empties both at its end)
     DLLLOCAL size_t size() const {
+        assert(hm.empty() == member_list.empty());
         return hm.size();
     }
 
     DLLLOCAL bool empty() const {
+        assert(hm.empty() == member_list.empty());
         return member_list.empty();
     }
 
