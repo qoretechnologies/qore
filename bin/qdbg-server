@@ -161,6 +161,8 @@ class DebugWrapper {
             mServer = new HttpServer(http_opts);
             mServer.setHandler("ws-handler", opt.path ?? "", wsHandler.getContentType(), wsHandler);
             mServer.setDefaultHandler("ws-handler", wsHandler);
+            # the port of the default listener, written when the server can serve the program it was given
+            *int port;
             if (opt.listen) {
                 foreach string l in (opt.listen) {
                     mServer.addListener(http_get_listener_options_from_bind(l));
@@ -173,21 +175,29 @@ class DebugWrapper {
                     }
                 }
             } else {
-                # only local clients by default
-                int port = mServer.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).port;
-                stdout.printf("debug server listening on port %d\n", port);
+                # only local clients by default; the port is written when the program has been created (see below)
+                port = mServer.addListener(http_get_listener_options_from_bind("127.0.0.1:0")).port;
             }
 
             # the output of the debugged programs is sent to the clients and written to the terminal
             dpc.captureOutput();
+            # the program is created before the port is written, so that a client that connects when it reads the
+            # line finds the program (qore#7610)
+            *Program pgm;
             if (exists fileName) {
-                Program pgm = dpc.createProgram(fileName, opt, ARGV);
+                pgm = dpc.createProgram(fileName, opt, ARGV);
+            }
+            if (exists port) {
+                stdout.printf("debug server listening on port %d\n", port);
+            }
+            if (pgm) {
+                Program run_pgm = pgm;
                 logger.info("run program");
                 background sub () {
                     # all output of the program is sent before the server ends with it
                     on_exit dpc.stopOutputCapture();
                     try {
-                        pgm.run();
+                        run_pgm.run();
                     } catch (hash<ExceptionInfo> ex) {
                         # a program that a client ended; the thread is no longer cancelled
                         if (DebugProgramControl::isTerminateException(ex)) {
