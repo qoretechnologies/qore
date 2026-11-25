@@ -254,8 +254,18 @@ static_assert(sizeof(void*) != 8 || sizeof(qore_hash_member_map) == 24, "the key
 
 void qore_hash_member_map::reserve(size_t n) {
     if (n > bucket_count()) {
+        size_t b = bucketsFor(n);
+        if (!buckets) {
+            // the first buckets of a map, which has no members and is not hardened: nothing to move
+            if (b > MaxBuckets) {
+                throw std::bad_alloc();
+            }
+            buckets = new HashMember*[b]();
+            setMaskLimit(static_cast<uint32_t>(b - 1), static_cast<uint32_t>(b));
+            return;
+        }
         // rehash() refuses more than MaxBuckets
-        rehash(bucketsFor(n));
+        rehash(b);
     }
 }
 
