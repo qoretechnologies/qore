@@ -64,6 +64,7 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "abandonedNested": "RESULT:null LOG:[\"outer\", \"inner\"]",
             "abandonedNestedTry": "RESULT:null LOG:[\"outer\", \"inner\"]",
             "abandonedNestedHit1": "RESULT:null LOG:[]",
+            "abandonedNestedTryHit1": "RESULT:null LOG:[]",
             "dtorThrowLoop": "RESULT:MARKER-ERROR: the destructor threw LOG:[\"throw\"]",
             # a request that ends the function leaves the return, which goes on with its object (#6949)
             "endsFunctionObject": "RESULT:{<ReturnMarker object>: {}} LOG:[\"outer\", \"released\"]",
@@ -92,9 +93,9 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             ("abandonedNested", "continue", "abandoned_nested_inner", 1, "return", "abandoned_nested_outer", 2),
             ("abandonedNestedTry", "continue", "abandoned_try_inner", 1, "return", "abandoned_try_outer", 2),
             ("abandonedNestedHit1", "continue", "abandoned_nested_inner", 1, "return", "abandoned_nested_outer", 1),
-            # (abandonedNestedTryHit1, the same requests with a try statement in the inner handler: a qcc executable
-            # does not take the second request, in the outer handler on the path of the first one from the try
-            # statement; a second request during the handlers of another request is qore#7008, which adds the case)
+            # the same requests with a try statement in the inner handler: the second request, in the outer handler
+            # on the path of the first one from the try statement, is taken in every mode (qore#7008)
+            ("abandonedNestedTryHit1", "continue", "abandoned_try_inner", 1, "return", "abandoned_try_outer", 1),
             ("dtorThrowLoop", "break", "dtor_throw_loop", 1),
             ("endsFunctionObject", "break", "ends_function_object", 1),
             ("onErrorAfterExit", "break", "on_error_after_exit", 1),
