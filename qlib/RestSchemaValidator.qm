@@ -4264,6 +4264,13 @@ setCatalogType(AbstractRestSchemaObject so, AbstractDataProviderType t) {
                     "in": data sub (data s) { return s; },
                 ),
 
+                # newline-delimited JSON is a sequence of JSON values, one per line, and not one JSON document: it
+                # is returned as text, which the caller splits into its records (qore#6503)
+                "application/x-ndjson": (
+                    "code": "ndjson",
+                    "in": data sub (data s) { return s; },
+                ),
+
                 MimeTypeOctetStream: {
                     "code": "bin",
                     "in": binary sub (data s) {

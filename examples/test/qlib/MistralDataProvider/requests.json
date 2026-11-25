@@ -1127,6 +1127,10 @@
   "unharden-workflow-deployment": {
     "deployment_id": "00000000-0000-0000-0000-000000000001"
   },
+  "generate-search-index-summary": {
+    "language": "en",
+    "index_name": "test-value"
+  },
   "list-webhooks": {},
   "create-webhook": {
     "provider": "slack",

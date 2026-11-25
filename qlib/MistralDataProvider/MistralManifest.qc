@@ -9077,7 +9077,7 @@ public class MistralManifest {
                 "operation_id": "unharden_deployment_v1_workflows_deployments__deployment_id__unharden_post",
                 "display_name": "Unharden Workflow Deployment",
                 "short_desc": "Unharden Workflow Deployment",
-                "desc": "Unharden Deployment.",
+                "desc": "Unharden Deployment. Manage automated workflows and inspect their execution.",
                 "groups": ("Workflows Deployments",),
                 "fields": {
                     "deployment_id": <RestSchemaFieldOverlayInfo>{
@@ -9092,6 +9092,73 @@ public class MistralManifest {
                         "short_desc": "Workspace ID to scope the request to. Defaults to the caller's context.",
                         "ref_data": "my-workspaces",
                         "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "generate-search-index-summary",
+                "method": "POST",
+                "response_content_type": "application/x-ndjson",
+                "path": "/v1/context/search-indexes/{index_name}/summary_field/{language}",
+                "operation_id": "generate_managed_index_summary_post_v1_context_search_indexes__index_name__summary_field__language__post",
+                "display_name": "Generate Search Index Summary",
+                "short_desc": "Generate Search Index Summary",
+                "desc": "Generate the summary field of a managed index in a language and return it as the list of its records: the summary metadata first, then the chunks of content to join, or an error record. With force, an existing summary is regenerated.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Search Indexes",),
+                "fields": {
+                    "language": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Language",
+                        "short_desc": "Language",
+                        "desc": "The `language` value for this operation.",
+                        "allowed_values": (
+                            <AllowedValueInfo>{
+                                "value": "en",
+                                "display_name": "En",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "fr",
+                                "display_name": "Fr",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "es",
+                                "display_name": "Es",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "de",
+                                "display_name": "De",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "it",
+                                "display_name": "It",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "pt_br",
+                                "display_name": "Pt Br",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "pl",
+                                "display_name": "Pl",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "ar",
+                                "display_name": "Ar",
+                            },
+                            <AllowedValueInfo>{
+                                "value": "nl",
+                                "display_name": "Nl",
+                            },
+                        ),
+                    },
+                    "index_name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Index Name",
+                        "short_desc": "Index Name",
+                        "desc": "The `index_name` value for this operation.",
+                        "ref_data": "search-indexes",
+                        "supports_custom_values": True,
+                    },
+                    "force": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Force",
+                        "short_desc": "Regenerate the summary even if one already exists for this language",
                     },
                 },
             },

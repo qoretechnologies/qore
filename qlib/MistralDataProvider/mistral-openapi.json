@@ -20303,6 +20303,145 @@
           }
         }
       },
+      "post": {
+        "operationId": "generate_managed_index_summary_post_v1_context_search_indexes__index_name__summary_field__language__post",
+        "summary": "Generate a summary field for a managed index",
+        "description": "Streams a summary for the managed index in chunks of json.\n\nThe first chunk contains metadata for the summary, the following contain\nchunks of 'content' that should be joined together to form a full summary.\n\nIf force is true, regenerate the requested language even if a summary\nalready exists.",
+        "tags": [
+          "beta.context.search_indexes"
+        ],
+        "parameters": [
+          {
+            "name": "language",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Language",
+              "enum": [
+                "en",
+                "fr",
+                "es",
+                "de",
+                "it",
+                "pt_br",
+                "pl",
+                "ar",
+                "nl"
+              ]
+            }
+          },
+          {
+            "name": "index_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Index Name"
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "description": "Regenerate the summary even if one already exists for this language",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Force",
+              "description": "Regenerate the summary even if one already exists for this language",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "title": "SummaryStatus",
+                          "enum": [
+                            "handwritten",
+                            "generated",
+                            "generated_confirmed"
+                          ]
+                        },
+                        "translated": {
+                          "type": "boolean",
+                          "title": "Translated"
+                        }
+                      },
+                      "title": "SummaryMetadata",
+                      "required": [
+                        "status",
+                        "translated"
+                      ],
+                      "description": "Summary content. Expected to be the first value returned."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "content": {
+                          "type": "string",
+                          "title": "Content"
+                        }
+                      },
+                      "title": "SummaryChunk",
+                      "required": [
+                        "content"
+                      ],
+                      "description": "Regular content."
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "string",
+                          "title": "Error"
+                        }
+                      },
+                      "title": "SummaryError",
+                      "required": [
+                        "error"
+                      ],
+                      "description": "If an error is encountered while streaming responses this is returned."
+                    }
+                  ],
+                  "title": "SummaryStreamTypes"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Index not found"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "500": {
+            "description": "Internal server error"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "operationId": "set_managed_index_summary_v1_context_search_indexes__index_name__summary_field__language__put",
         "summary": "Set Managed Index Summary",
@@ -74664,6 +74803,148 @@
                 "additionalProperties": false
               }
             }
+          }
+        }
+      ]
+    },
+    {
+      "reason": "The application/x-ndjson response of POST /v1/context/search-indexes/{index_name}/summary_field/{language} declares its record types under a local $defs but refers to them as #/$defs/..., which in an OpenAPI 3.1 document without $id resolves against the document root, where no $defs exist, so the references dangle (qore#6503, as for the speech response above). Inline the local definitions, keeping the record types unchanged. Source: https://docs.mistral.ai/openapi.yaml",
+      "operations": [],
+      "add_parameters": [],
+      "replace_parameters": [],
+      "relax_oneof": [],
+      "replace_required": [],
+      "rename_paths": {},
+      "replace_values": [
+        {
+          "pointer": "#/paths/~1v1~1context~1search-indexes~1{index_name}~1summary_field~1{language}/post/responses/200/content/application~1x-ndjson/schema",
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SummaryMetadata"
+              },
+              {
+                "$ref": "#/$defs/SummaryChunk"
+              },
+              {
+                "$ref": "#/$defs/SummaryError"
+              }
+            ],
+            "$defs": {
+              "SummaryChunk": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "title": "Content"
+                  }
+                },
+                "title": "SummaryChunk",
+                "required": [
+                  "content"
+                ],
+                "description": "Regular content."
+              },
+              "SummaryError": {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string",
+                    "title": "Error"
+                  }
+                },
+                "title": "SummaryError",
+                "required": [
+                  "error"
+                ],
+                "description": "If an error is encountered while streaming responses this is returned."
+              },
+              "SummaryMetadata": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "$ref": "#/$defs/SummaryStatus"
+                  },
+                  "translated": {
+                    "type": "boolean",
+                    "title": "Translated"
+                  }
+                },
+                "title": "SummaryMetadata",
+                "required": [
+                  "status",
+                  "translated"
+                ],
+                "description": "Summary content. Expected to be the first value returned."
+              },
+              "SummaryStatus": {
+                "type": "string",
+                "title": "SummaryStatus",
+                "enum": [
+                  "handwritten",
+                  "generated",
+                  "generated_confirmed"
+                ]
+              }
+            },
+            "title": "SummaryStreamTypes"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "title": "SummaryStatus",
+                    "enum": [
+                      "handwritten",
+                      "generated",
+                      "generated_confirmed"
+                    ]
+                  },
+                  "translated": {
+                    "type": "boolean",
+                    "title": "Translated"
+                  }
+                },
+                "title": "SummaryMetadata",
+                "required": [
+                  "status",
+                  "translated"
+                ],
+                "description": "Summary content. Expected to be the first value returned."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "title": "Content"
+                  }
+                },
+                "title": "SummaryChunk",
+                "required": [
+                  "content"
+                ],
+                "description": "Regular content."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string",
+                    "title": "Error"
+                  }
+                },
+                "title": "SummaryError",
+                "required": [
+                  "error"
+                ],
+                "description": "If an error is encountered while streaming responses this is returned."
+              }
+            ],
+            "title": "SummaryStreamTypes"
           }
         }
       ]

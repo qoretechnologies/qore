@@ -112,6 +112,10 @@ class MistralWireHandler inherits AbstractHttpRequestHandler {
         if (hdr.path =~ /^v1\/audio\/sessions\// && hdr.method == "DELETE") {
             return makeResponse(204, NOTHING);
         }
+        if (hdr.path =~ /\/summary_field\//) {
+            return makeResponse(200, "{\"status\":\"generated\",\"translated\":false}\n{\"content\":\"An index \"}\n"
+                "{\"content\":\"of invoices.\"}\n", {"Content-Type": "application/x-ndjson"});
+        }
         return makeResponse(200, "{}", {"Content-Type": "application/json"});
     }
     hash<auto> getRequest() {
@@ -177,9 +181,9 @@ public class MistralDataProviderTest inherits QUnit::Test {
     constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
         conn_name = LiveProvider::get("mistral", "MISTRAL_CONNECTION", m_options.conn);
 
-        addTestCase("factory + app + 346 actions registered", \registrationTest());
+        addTestCase("factory + app + 347 actions registered", \registrationTest());
         addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
-        addTestCase("root provider lists 346 children",       \rootProviderTest());
+        addTestCase("root provider lists 347 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
@@ -267,7 +271,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions = select
             DataProvider::DataProviderActionCatalog::getActions("MistralAi"),
             $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(346, actions.size());
+        assertEq(347, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(sort(map $1.action, MistralManifest::Manifest), action_names);
     }
@@ -788,6 +792,14 @@ public class MistralDataProviderTest inherits QUnit::Test {
             ("create-response", "POST", "/v1/responses"),
             ("count-response-input-tokens", "POST", "/v1/responses/input_tokens"),
             ("list-voices-v2", "GET", "/v2/audio/voices"),
+            ("whoami", "GET", "/v1/whoami"),
+            ("admin-list-users", "GET", "/v1/admin/users"),
+            ("create-webhook", "POST", "/v1/webhooks"),
+            ("activate-connector-for-user", "POST", "/v1/connectors/{connector_id}/{consumer_scope}/activate"),
+            ("delete-all-user-credentials-for-a-connector", "DELETE",
+                "/v1/connectors/{connector_id_or_name}/user/credentials"),
+            ("generate-search-index-summary", "POST",
+                "/v1/context/search-indexes/{index_name}/summary_field/{language}"),
             ("list-prompts", "GET", "/v2/prompts"),
             ("create-prompt", "POST", "/v2/prompts"),
             ("get-prompt", "GET", "/v2/prompts/{prompt_id}"),
@@ -921,6 +933,11 @@ public class MistralDataProviderTest inherits QUnit::Test {
                 assertEq("invoices", result[0].name);
             } else if (action == "stop-audio-session") {
                 assertNothing(result);
+            } else if (action == "generate-search-index-summary") {
+                # the newline-delimited JSON response is the list of its records
+                assertEq(({"status": "generated", "translated": False}, {"content": "An index "},
+                    {"content": "of invoices."}), result);
+                assertEq("application/x-ndjson", hdr.accept, action);
             }
         }
     }
