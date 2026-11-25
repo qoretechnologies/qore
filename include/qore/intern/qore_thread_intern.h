@@ -2104,10 +2104,14 @@ public:
         thread or callback (QoreThreadRuntimeParseOptionsHelper), which has no caller that receives exceptions when it
         ends
 
+        @param on_stack true if the hold records that the code runs on the thread's stack
+        (qore_thread_push_foreign_code_entry()); false for a caller that enters \a code_pgm right after the hold (a
+        direct call of a closure, see UserClosureFunction::evalForeignClosure()), whose Program context records it
+
         @return 0 for OK, -1 if the Program cannot be entered (its deletion has started, or code is parsed in it), with
         PROGRAM-ERROR raised if \a xsink is given
     */
-    DLLLOCAL QORE_INTERN_NOINLINE int hold(QoreProgram* code_pgm, ExceptionSink* xsink);
+    DLLLOCAL QORE_INTERN_NOINLINE int hold(QoreProgram* code_pgm, ExceptionSink* xsink, bool on_stack = true);
 
     //! releases the hold, if any
     DLLLOCAL void reset() {
@@ -2121,6 +2125,8 @@ private:
     //! receives the exceptions of the release, or nullptr (see hold())
     ExceptionSink* xsink = nullptr;
     int tid = 0;
+    //! true if the hold recorded the code on the thread's stack (see hold())
+    bool entry = false;
 
     DLLLOCAL QORE_INTERN_NOINLINE void release();
 };

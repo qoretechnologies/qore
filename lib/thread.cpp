@@ -1167,7 +1167,8 @@ public:
     /** One entry per hold of such a Program (ProgramThreadCountContextHelper::holdForeignCodeProgram(),
         QoreForeignCodeProgramHold) while the hold lasts: such code enters no Program context, and the code that it
         calls clears QoreRuntimePoState::code_pgm, so only these entries tell that it is on the stack (see
-        qore_thread_sandboxed_entered_since()); only used by the thread itself
+        qore_thread_sandboxed_entered_since()); not for a direct call of a closure, which enters the Program that
+        compiled it (its Program context records it); only used by the thread itself
     */
     std::vector<const QoreProgram*> foreign_code_entries;
     // A Program switch which would otherwise hide a restriction on loading native code.
