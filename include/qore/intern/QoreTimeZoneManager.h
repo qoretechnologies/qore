@@ -385,6 +385,12 @@ struct QoreProgramTzQuota {
     //! their memory
     int64_t bytes = 0;
 };
+
+//! returns the time zone quota of the tenant of the code that runs if it is restricted, otherwise nullptr
+/** A Program or a sandbox manager that such code creates belongs to the same tenant; the host Program's code and code
+    that is not restricted create tenants of their own
+*/
+DLLLOCAL std::shared_ptr<QoreProgramTzQuota> qore_tz_caller_tenant_quota();
 struct stat;
 
 #ifdef _Q_WINDOWS

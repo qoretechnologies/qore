@@ -1456,6 +1456,8 @@ public:
         restricted code creates share its limit (QoreTimeZoneManager::loadPath(), loadRegion())
     */
     std::shared_ptr<QoreProgramTzQuota> tz_quota;
+    //! true if the Program is a host Program: created with no Program running; its code is not limited
+    bool tz_host = false;
 
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see

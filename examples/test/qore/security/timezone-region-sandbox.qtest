@@ -142,6 +142,13 @@ nothing sub remove_file(string p) { unlink(p); }
         addTestCase("a sandboxed path load that cannot open the file gets the policy error", \testSandboxedOpen());
         addTestCase("a region beyond a limit is named by its path in the zoneinfo directory",
             \testRegionFallbackName());
+        addTestCase("sandboxes that restricted code creates count against its tenant", \testNewManagerChildren());
+        addTestCase("%set-time-zone in a sandbox that restricted code created counts against its tenant",
+            \testNewManagerChildDirective());
+        addTestCase("region spellings in a sandbox that restricted code created are bounded by its tenant",
+            \testNewManagerChildSpellings());
+        addTestCase("a host that restricts itself is not limited and its Programs are tenants of their own",
+            \testSelfRestrictedHost());
         addTestCase("the policy applies to the file that a path reaches", \testPathPolicyTarget());
         set_return_value(main());
     }
@@ -1158,7 +1165,7 @@ int sub load_all(list<string> paths) {
         for (int i = 0; i < 256; ++i) {
             r.callFunction("offset", paths[i]);
         }
-        assertThrows("TZINFO-ERROR", "the Program has loaded the maximum of time zones", \r.callFunction(),
+        assertThrows("TZINFO-ERROR", "the tenant has loaded the maximum of time zones", \r.callFunction(),
             ("offset", paths[256]), "a restricted Program is limited");
         # a Program that is not restricted is not limited
         Program t(PO_NEW_STYLE);
@@ -1360,5 +1367,154 @@ int sub child_load(list<string> paths) {
         assertTrue(name == subname + "/S/Real" || name == subname + "/Real",
             "the zone is named by the region or by its path in the zoneinfo directory: " + name);
         assertEq(-1, name.find(root), "the zone is not named by a host path: " + name);
+    }
+
+    #! returns a Program restricted by its parse options that creates Programs with sandboxes of its own
+    static Program restrictedManagerParent() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(TenantCode + "
+#! loads paths in a new Program with a new SandboxManager that may read the directory; returns the number loaded
+int sub sm_child_load(string dir, list<string> paths) {
+    Program c(PO_NEW_STYLE);
+    SandboxManager sm();
+    sm.setFilesystemDefaultPolicy(False);
+    sm.addFilesystemAllowedPath(dir, QSEC_READ);
+    c.setSandboxManager(sm);
+    c.parse(\"int sub f(string p) { return (new TimeZone(p)).UTCOffset(); } string sub r(string p) { return (new TimeZone(p)).region(); }\", \"child\");
+    int n = 0;
+    foreach string path in (paths) {
+        try {
+            c.callFunction(\"f\", path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc !~ /has loaded the maximum of time zones/) {
+                rethrow;
+            }
+            break;
+        }
+        ++n;
+    }
+    return n;
+}
+#! returns the regions of the names in a new Program with a new SandboxManager
+list<string> sub sm_child_regions(list<string> names) {
+    Program c(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+    c.setSandboxManager(new SandboxManager());
+    c.parse(\"string sub r(string p) { return (new TimeZone(p)).region(); }\", \"child\");
+    return map c.callFunction(\"r\", $1), names;
+}
+#! parses the source in a new Program with a new SandboxManager; returns the error or the Program's region
+string sub sm_child_parse(string src) {
+    try {
+        Program c(PO_NEW_STYLE);
+        c.setSandboxManager(new SandboxManager());
+        c.parse(src + \"\\nstring sub r() { return TimeZone::get().region(); }\", \"child\");
+        return c.callFunction(\"r\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+", "restricted-manager-parent");
+        return p;
+    }
+
+    #! returns a restricted Program whose children with sandboxes of their own used up the tenant's limit
+    Program exhaustedManagerParent(string name) {
+        int max = 256;
+        string d = dir + "/" + name;
+        list<string> paths = makeCopies(name, zoneinfo, 2 * max);
+        Program parent = restrictedManagerParent();
+        # each child has a sandbox of its own, which restricted code created: they all count against its tenant
+        int total = 0;
+        for (int c = 0; c < 4; ++c) {
+            total += parent.callFunction("sm_child_load", d, paths[c * 100..c * 100 + 99]);
+        }
+        assertEq(max, total, "the children with sandboxes of their own share the tenant's limit");
+        assertEq(0, parent.callFunction("sm_child_load", d, paths[400..410]), "the limit is reached");
+        return parent;
+    }
+
+    testNewManagerChildren() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        exhaustedManagerParent("manager-children");
+    }
+
+    testNewManagerChildDirective() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        Program parent = exhaustedManagerParent("manager-directive");
+        # the directive in a child with a sandbox of its own counts against the tenant as well
+        string rv = parent.callFunction("sm_child_parse", "%set-time-zone Pacific/Chatham");
+        assertRegex("has loaded the maximum of time zones", rv, "%set-time-zone in a child with a new sandbox");
+    }
+
+    testNewManagerChildSpellings() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        # the probe uses another region, as a spelling that trusted code loads stays cached
+        try {
+            TimeZone t("asia/thimphu");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the file system distinguishes the case of names");
+        }
+        Program parent = exhaustedManagerParent("manager-spellings");
+        # the region's file is loaded already, so a spelling beyond the limit gets the file's zone
+        TimeZone loaded("Asia/Yangon");
+        list<string> spellings = caseSpellings("Asia/Yangon", 64);
+        list<string> regions = parent.callFunction("sm_child_regions", spellings);
+        for (int i = 0; i < spellings.size(); ++i) {
+            if (spellings[i] != "Asia/Yangon") {
+                assertEq("Asia/Yangon", regions[i], "a spelling beyond the tenant's limit: " + spellings[i]);
+            }
+        }
+    }
+
+    #! returns the Qore source of a list of strings
+    static string qoreList(list<string> l) {
+        return "(" + (map sprintf("%y", $1), l).join(", ") + ")";
+    }
+
+    testSelfRestrictedHost() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        list<string> paths = makeCopies("self-restricted-host", zoneinfo, 300);
+        string script = dir + "/self-restricted-host.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.write(sprintf("%%new-style
+%%no-network
+list<string> regions = %s;
+list<string> paths = %s;
+string code = \"string sub tz(string r) { return (new TimeZone(r)).region(); }\";
+Program a(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+a.parse(code, \"a\");
+Program b(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+b.parse(code, \"b\");
+list<string> out = ();
+# A uses up its limit
+bool limited = False;
+foreach string r in (regions) {
+    try { a.callFunction(\"tz\", r); } catch (hash<ExceptionInfo> ex) { if (ex.desc =~ /maximum of time zones/) { limited = True; break; } }
+}
+out += \"a:\" + (limited ? \"limited\" : \"unlimited\");
+# B and the host still load
+try { out += \"b:\" + b.callFunction(\"tz\", \"Indian/Mauritius\"); } catch (hash<ExceptionInfo> ex) { out += \"b:\" + ex.err; }
+try { out += \"host:\" + (new TimeZone(\"Indian/Reunion\")).region(); } catch (hash<ExceptionInfo> ex) { out += \"host:\" + ex.err; }
+# the host is not limited
+int m = 0;
+foreach string p in (paths) {
+    try { TimeZone t(p); ++m; } catch (hash<ExceptionInfo> ex) { break; }
+}
+out += \"host-paths:\" + m;
+print(out.join(\"|\"));
+", qoreList(TimeZoneRegions), qoreList(paths)));
+        f.close();
+        string out = backquote(sprintf("'%s' '%s' 2>&1", qore_bin, script));
+        assertEq("a:limited|b:Indian/Mauritius|host:Indian/Reunion|host-paths:300", trim(out),
+            "a Program cannot keep another one or the host from loading time zones");
     }
 }

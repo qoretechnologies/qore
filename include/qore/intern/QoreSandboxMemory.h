@@ -35,6 +35,7 @@
 #define _QORE_INTERN_QORESANDBOXMEMORY_H
 
 #include <atomic>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -46,6 +47,8 @@ class ExceptionSink;
 /** Referenced by its manager and by every charge that charges it, so it outlives the manager while data charged to
     it is alive.  \c used includes the bytes that threads have borrowed and not used yet (see QoreSandboxMemTls).
 */
+struct QoreProgramTzQuota;
+
 class QoreSandboxMemoryAccount {
 public:
     DLLLOCAL QoreSandboxMemoryAccount() = default;
@@ -81,6 +84,11 @@ public:
     unsigned tz_path_zones = 0;
     //! the memory of the time zones that code the sandbox governs loaded from paths
     int64_t tz_path_bytes = 0;
+    //! the time zone quota of the tenant whose restricted code created the sandbox, if any
+    /** Code that the sandbox governs is charged to it as well, so that restricted code cannot get a quota of its own
+        by creating a sandbox (QoreTimeZoneManager); set when the sandbox is created
+    */
+    std::shared_ptr<QoreProgramTzQuota> tz_tenant_quota;
 
 private:
     std::atomic<int> refs{1};

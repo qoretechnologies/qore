@@ -2503,8 +2503,8 @@ struct QoreZoneCharger {
     std::string domain;
     //! true if the code is restricted (sandboxed or restricted by parse options)
     bool restricted = false;
-    //! the quota charged when no sandbox governs restricted code: that of the restricted root Program
-    std::shared_ptr<QoreProgramTzQuota> quota;
+    //! the tenant quotas charged: that of the Program and those of the sandboxes that restricted code created
+    std::vector<std::shared_ptr<QoreProgramTzQuota>> quotas;
     //! true if the memory is charged directly to the accounts (no sandbox call of the thread runs the code)
     bool direct = false;
 
@@ -2527,9 +2527,10 @@ struct QoreZoneCharger {
             addManager(own_ref);
             addManager(creator_ref);
             direct = true;
-            restricted = policy || qore_tz_po_restricted(qore_program_private::readParseOptions(*pgm));
-            if (restricted && !policy) {
-                quota = priv->tz_quota;
+            restricted = policy
+                || (!priv->tz_host && qore_tz_po_restricted(qore_program_private::readParseOptions(*pgm)));
+            if (restricted) {
+                addQuota(priv->tz_quota);
             }
             return;
         }
@@ -2542,9 +2543,11 @@ struct QoreZoneCharger {
                 addManager(sm_ref);
             }
         }
-        restricted = policy || qore_tz_po_restricted(runtime_get_parse_options());
-        if (restricted && !policy && pgm) {
-            quota = qore_program_private::get(*pgm)->tz_quota;
+        // the code of the host Program is not limited, whatever its parse options
+        qore_program_private* priv = pgm ? qore_program_private::get(*pgm) : nullptr;
+        restricted = policy || (priv && !priv->tz_host && qore_tz_po_restricted(runtime_get_parse_options()));
+        if (restricted && priv) {
+            addQuota(priv->tz_quota);
         }
     }
 
@@ -2573,11 +2576,43 @@ private:
         } else {
             accounts.push_back(sm->getMemoryAccount());
         }
+        // a sandbox that restricted code created counts against the quota of that code's tenant
+        for (QoreSandboxMemoryAccount* account : accounts) {
+            if (account->tz_tenant_quota) {
+                addQuota(account->tz_tenant_quota);
+            }
+        }
         if (domain.empty()) {
             domain = sm->getIsolationDomain();
         }
     }
+
+    //! adds a tenant quota once
+    DLLLOCAL void addQuota(const std::shared_ptr<QoreProgramTzQuota>& q) {
+        if (!q) {
+            return;
+        }
+        for (const auto& i : quotas) {
+            if (i == q) {
+                return;
+            }
+        }
+        quotas.push_back(q);
+    }
 };
+
+std::shared_ptr<QoreProgramTzQuota> qore_tz_caller_tenant_quota() {
+    QoreProgram* pgm = qore_thread_current_program_if_any();
+    if (!pgm) {
+        return nullptr;
+    }
+    qore_program_private* priv = qore_program_private::get(*pgm);
+    // the host Program's code and code that is not restricted creates tenants of its own
+    if (priv->tz_host || !qore_calling_code_is_untrusted()) {
+        return nullptr;
+    }
+    return priv->tz_quota;
+}
 
 QoreTimeZoneManager::ChargeResult QoreTimeZoneManager::checkCharge(const QoreZoneCharger& c, int64_t size) {
     if (!c.restricted) {
@@ -2602,8 +2637,10 @@ QoreTimeZoneManager::ChargeResult QoreTimeZoneManager::checkCharge(const QoreZon
             return CHARGE_DOMAIN;
         }
     }
-    if (c.quota && (c.quota->zones >= MaxProgramPathZones || c.quota->bytes + size > MaxProgramPathZoneBytes)) {
-        return CHARGE_PROGRAM;
+    for (const auto& q : c.quotas) {
+        if (q->zones >= MaxProgramPathZones || q->bytes + size > MaxProgramPathZoneBytes) {
+            return CHARGE_PROGRAM;
+        }
     }
     return CHARGE_OK;
 }
@@ -2640,9 +2677,9 @@ void QoreTimeZoneManager::commitCharge(const QoreZoneCharger& c, int64_t size) n
         ++i->second.zones;
         i->second.bytes += size;
     }
-    if (c.quota) {
-        ++c.quota->zones;
-        c.quota->bytes += size;
+    for (const auto& q : c.quotas) {
+        ++q->zones;
+        q->bytes += size;
     }
     // the memory stays charged to the sandbox calls with memory limits of the thread, as zones are never freed
     if (!c.direct) {
@@ -2673,10 +2710,10 @@ void QoreTimeZoneManager::raiseCharge(ChargeResult result, const char* name, Exc
     switch (result) {
         case CHARGE_SANDBOX: who = "the sandbox"; break;
         case CHARGE_DOMAIN: who = "the isolation domain"; break;
-        default: who = "the Program"; break;
+        default: who = "the tenant"; break;
     }
     xsink->raiseException("TZINFO-ERROR", "cannot load time zone '%s': %s has loaded the maximum of time zones (%u "
-        "zones or %u MiB per sandbox, isolation domain or restricted Program with the Programs it created)", name,
+        "zones or %u MiB per sandbox, isolation domain or tenant)", name,
         who, MaxSandboxPathZones, static_cast<unsigned>(MaxSandboxPathZoneBytes / (1024 * 1024)));
 }
 
@@ -2748,24 +2785,31 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name
         size += static_cast<int64_t>(sizeof(QoreAliasZoneInfo) + name.capacity());
         result = checkCharge(charger, size);
         if (result == CHARGE_OK) {
+            // every allocation is made before the maps refer to a new zone: a failure (std::bad_alloc) leaves no
+            // entry without a zone, which a lookup would return as UTC
             prepareCharge(charger);
-            if (i == aliases.end()) {
-                i = aliases.emplace(name, AliasZone{nullptr, id}).first;
+            if (i != aliases.end()) {
+                retired_zones.reserve(retired_zones.size() + 1);
             }
             if (tzi) {
-                identity_map[id] = tzi.get();
+                // the zone stays owned by tzi if the insertion fails
+                identity_map.emplace(id, tzi.get());
                 tzi.release();
                 ++tzsize;
             }
-            // nothing below can fail
             rv = alias.get();
-            if (i->second.zone) {
+            if (i != aliases.end()) {
                 // the name reaches another file or other data now: the old zone stays valid for the dates that
-                // refer to it
+                // refer to it; nothing here can fail
                 retired_zones.push_back(i->second.zone);
+                i->second.zone = alias.release();
+                i->second.id = id;
+            } else {
+                // the alias is inserted last, with its zone; it stays owned by alias if the insertion fails
+                aliases.emplace(name, AliasZone{alias.get(), id});
+                alias.release();
             }
-            i->second.zone = alias.release();
-            i->second.id = id;
+            // nothing below can fail
             commitCharge(charger, size);
         } else if (region && pi != identity_map.end()) {
             // a limit is reached, but the region's file is loaded already: the zone of the file, named by its path in

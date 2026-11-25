@@ -1290,6 +1290,8 @@ void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
     if (!sm || !qore_calling_code_is_untrusted()) {
         return;
     }
+    // the code that the manager governs counts against the time zone quota of the creating code's tenant
+    sm->getMemoryAccount()->tz_tenant_quota = qore_tz_caller_tenant_quota();
     qore_program_id_t id = qore_sandbox_caller_pgm_id();
     std::lock_guard<std::mutex> lck(untrusted_creators_lock);
     untrusted_creators[sm] = id;

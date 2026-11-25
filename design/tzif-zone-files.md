@@ -27,19 +27,25 @@ parsed from memory (`QoreZoneInfo::init()`):
   a path only when its identity is unchanged (a changed file gets a new zone; the old one is kept in
   `retired_zones`, as dates refer to it). New zones are inserted under the write lock; when another thread
   inserted the same data first, its zone is used.
-- Quotas (`QoreZoneCharger`, `checkCharge()`, `prepareCharge()`, `commitCharge()`): a new zone (the parsed data
-  if new, plus the name's zone) is charged with its memory to restricted code only, and each tenant has limits of
-  its own (there is no process-wide limit that one tenant could exhaust for others): code that a sandbox governs
-  to each member of the sandbox (`QoreSandboxMemoryAccount::tz_path_zones`/`tz_path_bytes`, 256 zones / 32 MiB)
-  and to its isolation domain (`domain_path_quota`, the same); a Program restricted by parse options that no
-  sandbox governs to its `qore_program_private::tz_quota`, which a Program created by restricted code shares with
-  its creator (the same limits). The restrictions are those of the code that runs (`CallerMode`), or of the
-  Program for the `%set-time-zone` directive (`ProgramMode`: the Program's own parse options and sandbox managers,
-  as the directive is processed while other code parses the Program). Memory is checked against and charged to
-  the thread's sandbox charge chain (`qore_sb_check_alloc()`, `QoreSandboxCharge::add()`, released at shutdown);
-  in `ProgramMode` it is charged to the accounts of the Program's sandboxes directly. Everything that can fail is
-  done in `prepareCharge()` before the maps are changed; `commitCharge()` cannot fail. Exceptions are built after
-  the lock is released. Code that is not restricted is not limited. When a limit is reached, another name of a
+- Tenants and quotas (`QoreZoneCharger`, `checkCharge()`, `prepareCharge()`, `commitCharge()`). The rule:
+  1. A Program created with no Program running is a host Program (`qore_program_private::tz_host`); its code is
+     never charged, whatever its parse options.
+  2. A Program created by the host Program or by code that is not restricted is a tenant root with a quota of its
+     own (`qore_program_private::tz_quota`). A Program created by restricted code of a non-host Program shares that
+     code's tenant quota (`qore_tz_caller_tenant_quota()`), and so does a `SandboxManager` that such code creates
+     (`QoreSandboxMemoryAccount::tz_tenant_quota`, set in `qore_sandbox_manager_record_creator()`), so restricted
+     code can never obtain a fresh quota.
+  3. A new zone (the parsed data if new, plus the name's zone) loaded by restricted code is charged with its memory
+     to the tenant quota of the Program, to each member of the governing sandbox
+     (`QoreSandboxMemoryAccount::tz_path_zones`/`tz_path_bytes`) and the tenant quota that member carries, and to
+     the isolation domain (`domain_path_quota`): 256 zones / 32 MiB each. There is no process-wide pool.
+  The restrictions are those of the code that runs (`CallerMode`), or of the Program for the `%set-time-zone`
+  directive (`ProgramMode`: the Program's own parse options and sandbox managers, as the directive is processed
+  while other code parses the Program). Memory is checked against and charged to the thread's sandbox charge chain
+  (`qore_sb_check_alloc()`, `QoreSandboxCharge::add()`, released at shutdown); in `ProgramMode` it is charged to
+  the accounts of the Program's sandboxes directly. Everything that can fail is done before the maps refer to a new
+  zone; `commitCharge()` cannot fail. Exceptions are built after the lock is released. Each new name entry counts
+  against the limits, so the entries a tenant creates are bounded. When a limit is reached, another name of a
   region whose file is loaded already gets the file's zone named by its path in the zoneinfo directory
   (`region_identity_aliases`, one per file). On Windows, where the file is not identified by its handle, code that
   a sandbox governs cannot load a path; trusted code's paths are made absolute, read without the lock and cached by

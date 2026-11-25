@@ -1094,14 +1094,15 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
-    // the time zones that a restricted Program that no sandbox governs loads count against the limit of the Program
-    // whose restricted code created it, so that such code cannot multiply its limit by creating Programs
+    // time zone tenants (see QoreTimeZoneManager): a Program created with no Program running is a host Program,
+    // whose code is not limited; a Program that restricted code of a Program that is not a host Program creates
+    // belongs to that code's tenant and shares its quota; any other Program (created by the host Program or by code
+    // that is not restricted) is a tenant of its own
     {
-        QoreProgram* creator = getProgram();
-        if (creator && creator != n_pgm
-                && runtime_get_parse_options().hasAny(QoreParseOptions(QDOM_ALL & ~(QDOM_INJECTION | QDOM_DEBUGGER
-                    | QDOM_IN_MODULE)))) {
-            tz_quota = qore_program_private::get(*creator)->tz_quota;
+        QoreProgram* creator = qore_thread_current_program_if_any();
+        tz_host = !creator;
+        if (creator && creator != n_pgm) {
+            tz_quota = qore_tz_caller_tenant_quota();
         }
         if (!tz_quota) {
             tz_quota = std::make_shared<QoreProgramTzQuota>();
