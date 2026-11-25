@@ -55,6 +55,9 @@ void QoreLoggerAppenderWithLayout::setLayout(ExceptionSink* xsink, const QoreObj
     this->layout = const_cast<QoreObject*>(layout);
     self->setMemberValue("layout", QC_LOGGERAPPENDERWITHLAYOUT, layout->objectRefSelf(), xsink);
 
+    // the values of the host only for an appender whose layout code that may read them set (qore#7586)
+    host_info = QoreLoggerLayoutPattern::callerMayReadExternalInfo();
+
     const QoreClass* cls = layout->getClass();
     if (cls->isEqual(*QC_LOGGERLAYOUTPATTERN)) {
         llp = layout->tryGetReferencedPrivateData<QoreLoggerLayoutPattern>(CID_LOGGERLAYOUTPATTERN, xsink);
@@ -76,8 +79,9 @@ QoreValue QoreLoggerAppenderWithLayout::serializeImpl(ExceptionSink* xsink, cons
         layout = this->layout->objectRefSelf();
     }
     // the layout formats the event for the appender: an appender of the host keeps its fields whatever code logs
-    // through it (qore#7586)
-    QoreLoggerAppenderFormatHelper appender_format_helper;
+    // through it, and an appender whose layout code restricted from external information set gets none of them
+    // (qore#7586)
+    QoreLoggerAppenderFormatHelper appender_format_helper(host_info);
     if (e && llp) {
         return llp->format(xsink, event, event, e);
     }

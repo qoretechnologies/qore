@@ -180,6 +180,9 @@ hash<auto> may_read = {
     # an appender of the host keeps its fields whatever code logs through it
     "lent_logger_line": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
     "smtp_async": "connected",
+    "own_appender": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
+    "vcwd_big": True,
+    "vcwd_up": "../../../etc/passwd",
     "smtp_async_ehlo": "EHLO " + hostname,
     "qls_expand": ENV.Q7586_SECRET + "/" + ENV.Q7586_SECRET + "/d",
     "qls_moddirs": QLS::DocumentLinks::getEnvModuleDirs(),
@@ -238,6 +241,7 @@ hash<auto> may_not_read = may_read + {
     # a lent layout lends nothing: the code that calls its format methods gets no host values
     "lent_layout": "||",
     "lent_layout_set": "||",
+    "own_appender": "||",
     "smtp_async_ehlo": "EHLO localhost",
     "qls_expand": "//d",
     "qls_moddirs": (),
@@ -251,7 +255,7 @@ hash<auto> may_not_read = may_read + {
 
 # the values must differ, or the checks would not show what the code gets
 foreach string k in (keys may_read) {
-    if (may_read{k} === may_not_read{k} && k !~ /^(norm_abs|norm_explicit|rel|rel_abs|rel_dot|rel_dotdir|rel_sib|smtp|smtp_async|edifact_explicit|grant_.*|lent_logger_line|file_resolved.*)$/) {
+    if (may_read{k} === may_not_read{k} && k !~ /^(norm_abs|norm_explicit|rel|rel_abs|rel_dot|rel_dotdir|rel_sib|smtp|smtp_async|edifact_explicit|grant_.*|lent_logger_line|file_resolved.*|vcwd_.*)$/) {
         check("setup/" + k, "distinct values", "the same value");
     }
 }
@@ -275,6 +279,16 @@ Logger::Logger host_logger2("q7586-host2", Logger::LoggerLevel::getLevelInfo());
     Logger::LoggerAppenderStream app("host2", new Logger::LoggerLayoutPattern("%m%n"),
         new StreamWriter(new StringOutputStream()));
     host_logger2.addAppender(app);
+}
+# the token of the virtual working directory of the process, as restricted code sees it in its file URIs
+*string vtoken;
+{
+    Program tp(PO_MODERN);
+    tp.loadModule("FileLocationHandler");
+    tp.setParseOptions(PO_NO_EXTERNAL_INFO);
+    tp.parse("string sub uri() { return FileLocationHandler::AbstractFileLocationHandler::getFileUri(\"x\"); }",
+        "vtoken");
+    vtoken = (tp.callFunction("uri") =~ x/qore-cwd-([a-z0-9]+)-/)[0];
 }
 string requires = (map sprintf("%%requires %s\n", $1), Modules + ("AmbientCallers",)).join("");
 
@@ -314,6 +328,7 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
         p.setGlobalVarValue("q_logger", host_logger);
         p.setGlobalVarValue("q_logger2", host_logger2);
         p.setGlobalVarValue("q_reldir", ENV.Q7586_RELDIR);
+        p.setGlobalVarValue("q_vtoken", vtoken);
         p.setGlobalVarValue("q_r", {});
         int log_size = host_log_stream.getData().size();
         p.run();

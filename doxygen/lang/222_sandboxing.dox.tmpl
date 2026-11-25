@@ -979,8 +979,9 @@ authenticate();
       handlers are left out for an object that such code created and while such code calls one of the host; the
       \c %%h, \c %%P and \c %%E fields of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" are empty
       for a layout that such code created or whose pattern it set, and in what such code gets from the layout's
-      format methods, also from a layout of the host; the appender of a layout of the host formats them whatever code
-      logs through it, as the file names of the Logger file appenders are kept; the \c host field of the documents of
+      format methods and from an appender whose layout such code set (when it created the appender or with
+      \c setLayout()), also from a layout of the host; an appender whose layout the host set formats them whatever
+      code logs through it, as the file names of the Logger file appenders are kept; the \c host field of the documents of
       the ElasticSearch and OpenSearch logger appenders is left out for an appender that such code created
 
     The host grants this information as it grants ambient data, with a policy barrier or a capability, and an object
@@ -988,6 +989,11 @@ authenticate();
     nothing of it (ex: the temporary file names of its own atomic writes, its own diagnostics that a host enables with
     environment variables, and the environment variables with which the host restricts what the library does, such as
     \c QORE_FILE_LOCATION_CONNECTIONS) is not affected.
+
+    The token of the virtual working directory of the \c file:// URIs is the same for all code of a process, so two
+    restricted callers of one process can tell that they share it.  An object of the host that restricted code can
+    reach (a logger and its appenders and layouts, for example) can also be changed by it: setting the layout of an
+    appender or the pattern of a layout makes it format no values of the host, also for the host.
 
     This applies to every module that the code can call, whether the host loaded it into the code's %Program before
     it restricted it, or the code requires it itself (also a module that the host's process had loaded before, which

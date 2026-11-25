@@ -1786,7 +1786,7 @@ if (errors) {
         @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
         modules of the \c QORE_DATA_PROVIDERS environment variable are loaded as for other code, but the failures
         name no module of the environment: \c module is \c "QORE_DATA_PROVIDERS[<n>]" (the position of the module in
-        the variable), \c description is a generic text and \c argument is not set, as the module names, their paths
+        the variable, or \c "QORE_DATA_PROVIDERS (nested)" for a provider module that such a module names), \c description is a generic text and \c argument is not set, as the module names, their paths
         and the texts of their errors are information about the host (see @ref sandbox_ambient_host_data)
 
         @since DataProvider 3.8
@@ -1815,7 +1815,8 @@ if (errors) {
                 }
                 hidden += <DataProviderEnvironmentLoadFailureInfo>{
                     "phase": failure.phase,
-                    "module": sprintf("QORE_DATA_PROVIDERS[%d]", pos),
+                    # a module that a module of the environment names has no position in it
+                    "module": pos >= 0 ? sprintf("QORE_DATA_PROVIDERS[%d]", pos) : "QORE_DATA_PROVIDERS (nested)",
                     "error": failure.error,
                     "description": "a data provider module of the environment could not be loaded",
                 };

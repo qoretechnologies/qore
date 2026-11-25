@@ -62,11 +62,18 @@ bool QoreLoggerHostInfoHelper::suppressed() {
     return logger_host_info_suppressed > 0 && !logger_appender_formats;
 }
 
-QoreLoggerAppenderFormatHelper::QoreLoggerAppenderFormatHelper() : prev(logger_appender_formats) {
-    logger_appender_formats = true;
+QoreLoggerAppenderFormatHelper::QoreLoggerAppenderFormatHelper(bool host_info) : prev(logger_appender_formats),
+        suppressing(!host_info) {
+    logger_appender_formats = host_info;
+    if (suppressing) {
+        ++logger_host_info_suppressed;
+    }
 }
 
 QoreLoggerAppenderFormatHelper::~QoreLoggerAppenderFormatHelper() {
+    if (suppressing) {
+        --logger_host_info_suppressed;
+    }
     logger_appender_formats = prev;
 }
 

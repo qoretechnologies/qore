@@ -32,7 +32,7 @@ class ModuleHostInfoTest inherits QUnit::Test {
         #! the execution modes of the worker's Programs
         const Modes = 4;
         #! the checks of each Program
-        const Cases = 61;
+        const Cases = 64;
     }
 
     private {

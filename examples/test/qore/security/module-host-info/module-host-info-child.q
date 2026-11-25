@@ -14,6 +14,7 @@ our *object q_layout;
 our *object q_logger;
 our *object q_logger2;
 our *string q_reldir;
+our *string q_vtoken;
 our hash<auto> q_r;
 
 # subclasses that reach the protected methods of the modules' classes
@@ -51,6 +52,23 @@ class Q7586Os inherits OpenSearchLoggerAppender::OpenSearchLoggerAppender {
 
     hash<auto> doc(Logger::LoggerEvent ev) {
         return createDocument(ev);
+    }
+}
+
+# an appender of the code's own that takes a layout of the host
+class Q7586OwnAppender inherits Logger::LoggerAppenderWithLayout {
+    public {
+        list<auto> got = ();
+    }
+
+    constructor(Logger::LoggerLayout l) : LoggerAppenderWithLayout("own", l) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            got += params;
+        }
     }
 }
 
@@ -203,6 +221,16 @@ try {
     q_r.lent_layout_set = ex.err;
 }
 
+# an appender of the code's own with the layout of a host appender gets no host values from it
+try {
+    Q7586OwnAppender own(cast<Logger::LoggerAppenderWithLayout>(q_logger.getAppenders()[0]).getLayout());
+    own.post(new Logger::LoggerEvent("q7586", "q7586", Logger::LoggerLevel::getLevelInfo(), "m"));
+    own.close();
+    q_r.own_appender = trim(own.got.join(""));
+} catch (hash<ExceptionInfo> ex) {
+    q_r.own_appender = ex.err + ": " + ex.desc;
+}
+
 # the asynchronous SMTP connection (a poll operation run by the async I/O controller)
 try {
     SmtpClient::SmtpConnection conn("q7586", "", sprintf("smtp://127.0.0.1:%d", q_smtp_port));
@@ -246,6 +274,19 @@ try {
         resolve_url(res.info.effective_location, "../schema/b.yaml")));
 } catch (hash<ExceptionInfo> ex) {
     q_r.file_eff = ex.err + ": " + ex.desc;
+}
+
+# URIs of the virtual working directory that the code crafts: a level that getFileUri() does not create is no
+# virtual working directory (and costs nothing), one that it does maps to the parents of the working directory
+try {
+    string t = q_vtoken ?? "none";
+    date start = now_us();
+    q_r.vcwd_big = FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri("file:///qore-cwd-" + t
+        + "-10000000/x") == "/qore-cwd-" + t + "-10000000/x" && (now_us() - start) < 10s;
+    q_r.vcwd_up = FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri("file:///qore-cwd-" + t
+        + "-3/etc/passwd");
+} catch (hash<ExceptionInfo> ex) {
+    q_r.vcwd_big = ex.err + ": " + ex.desc;
 }
 
 # the host's grants: a policy barrier and a system-policy capability (the host's values for every caller)

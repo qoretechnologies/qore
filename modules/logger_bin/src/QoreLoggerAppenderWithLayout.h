@@ -32,6 +32,8 @@
 
 #define _QORE_MODULE_LOGGER_LOGGERAPPENDERWITHLAYOUT_H
 
+#include <atomic>
+
 // forward references
 class QoreLoggerLayoutPattern;
 
@@ -52,6 +54,12 @@ protected:
     //! The layout object; referenced by the layout internal member, or here after the object is destroyed
     QoreObject* layout = nullptr;
     QoreLoggerLayoutPattern* llp = nullptr;
+    //! if the layout may format the values of the host (%h, %P, %E) for this appender
+    /** Decided for the code that sets the layout (when the appender is created, or with setLayout()): not if it
+        is restricted from external information, so an appender of such code gets no values of the host from a layout
+        of the host (qore#7586)
+    */
+    std::atomic<bool> host_info{false};
 
     using QoreLoggerAppender::derefIntern;
     DLLLOCAL virtual void derefIntern(ExceptionSink* xsink);

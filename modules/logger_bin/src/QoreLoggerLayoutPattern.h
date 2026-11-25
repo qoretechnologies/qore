@@ -108,17 +108,21 @@ private:
     bool set = false;
 };
 
-//! Marks the formatting of an appender in this thread: QoreLoggerHostInfoHelper does not apply in it
+//! Marks the formatting of an appender in this thread
+/** For an appender that may format the host's values (see QoreLoggerAppenderWithLayout::host_info),
+    QoreLoggerHostInfoHelper does not apply in it; for one that may not, the host's values are left out in it
+*/
 class QoreLoggerAppenderFormatHelper {
 public:
-    DLLLOCAL QoreLoggerAppenderFormatHelper();
+    DLLLOCAL QoreLoggerAppenderFormatHelper(bool host_info);
     DLLLOCAL ~QoreLoggerAppenderFormatHelper();
 
-    //! returns true if an appender formats in this thread
+    //! returns true if an appender that may format the host's values formats in this thread
     DLLLOCAL static bool active();
 
 private:
     bool prev;
+    bool suppressing;
 };
 
 #endif

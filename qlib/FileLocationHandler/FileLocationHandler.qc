@@ -225,6 +225,9 @@ public class AbstractFileLocationHandler {
 
         #! the number of parent directories of the virtual working directory beyond those that a path names
         const VirtualCwdSlack = 8;
+
+        #! the maximum number of parent directories of the virtual working directory (a path naming more is refused)
+        const VirtualCwdMaxLevel = 4096;
     }
 
     public {
@@ -660,9 +663,12 @@ public class AbstractFileLocationHandler {
         may not read the current working directory, a relative path is resolved against a virtual working directory
         instead: a directory of the root of the URI whose name (\c "qore-cwd-<token>-<n>", with a token of the
         process) stands for the current working directory, below as many virtual parent directories as the path
-        names plus 8 more.  Relative references resolved against such a URI behave as for the path as given, and
+        names plus 8 more (at most 4096; a path that names more parent directories raises \c LOCATION-ERROR).
+        Relative references resolved against such a URI behave as for the path as given, and
         @ref getPathFromFileUri() returns the relative path of the target; a reference that climbs above all virtual
-        parent directories resolves to a path of the root (see @ref sandbox_ambient_host_data).
+        parent directories resolves to a path of the root.  The token is the same for all code of the process, so
+        restricted code learns nothing of the host from it, but two restricted callers of one process can tell that
+        they share the process (see @ref sandbox_ambient_host_data).
 
         @par Example:
         @code{.py}
@@ -773,6 +779,10 @@ string path = AbstractFileLocationHandler::getPathFromFileUri("file:///var/data/
             }
             ++up;
         }
+        if (up + VirtualCwdSlack > VirtualCwdMaxLevel) {
+            throw "LOCATION-ERROR", sprintf("relative path %y names more than %d parent directories", rel,
+                VirtualCwdMaxLevel - VirtualCwdSlack);
+        }
         list<string> path = ();
         for (int level = up + VirtualCwdSlack; level >= 0; --level) {
             push path, AbstractFileLocationHandler::getVirtualCwdName(level);
@@ -797,21 +807,26 @@ string path = AbstractFileLocationHandler::getPathFromFileUri("file:///var/data/
         if (!m || m[0] != cwd_token) {
             return;
         }
+        # no more levels than getVirtualCwdPath() creates: a larger level is not a virtual working directory
+        if (m[1].size() > 4 || m[1].toInt() > VirtualCwdMaxLevel) {
+            return;
+        }
         int level = m[1].toInt();
         int i = 2;
         while (level > 0 && i < segs.size() && segs[i] == AbstractFileLocationHandler::getVirtualCwdName(level - 1)) {
             --level;
             ++i;
         }
-        list<string> rv = ();
-        for (int n = 0; n < level; ++n) {
-            push rv, "..";
+        list<string> rest = select segs[i..], $1 != "";
+        string rv = strmul(".." + DirSep, level);
+        if (rest) {
+            return (level ? rv : "." + DirSep) + rest.join(DirSep);
         }
-        rv += select segs[i..], $1 != "";
-        if (!rv) {
+        if (!level) {
             return ".";
         }
-        return (level ? "" : "." + DirSep) + rv.join(DirSep);
+        # without the trailing separator
+        return rv.substr(0, -1);
     }
 
     #! Returns HTTP headers with lower-case names, each with the list of values received
