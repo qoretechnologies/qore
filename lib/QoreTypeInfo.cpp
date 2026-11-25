@@ -3401,12 +3401,46 @@ QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* 
     pname = build_parameterized_class_name(base_class, args, or_nothing, true).c_str();
     for (const QoreTypeInfo* arg : args) {
         if (qore_type_needs_decl_pin(arg)) {
-            user_type_args = true;
-            unsafe_receiver = true;
+            user_type_args.store(true, std::memory_order_relaxed);
+            unsafe_receiver.store(true, std::memory_order_relaxed);
             // tested with the type parameter flags by the calls with this receiver
             setUnsafeReceiverCache();
             break;
         }
+    }
+}
+
+void QoreParameterizedClassTypeInfo::upgradeUserTypeArgs() {
+    if (user_type_args.load(std::memory_order_relaxed)) {
+        return;
+    }
+    for (const QoreTypeInfo* arg : getTypeArgs().toVector()) {
+        if (qore_type_needs_decl_pin(arg)) {
+            // stored before the value of the cache is read; see setUnsafeReceiverCache()
+            unsafe_receiver.store(true, std::memory_order_seq_cst);
+            user_type_args.store(true, std::memory_order_relaxed);
+            setUnsafeReceiverCache();
+            return;
+        }
+    }
+}
+
+void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types) {
+    AutoLocker al(ctl);
+    // a type that names a declaration, directly or in a type that it contains, is a derived type of one of its types,
+    // which is then a key of derived_type_keys: the parameterized class types are scanned only if one is
+    bool keyed = false;
+    for (const QoreTypeInfo* t : marked_types) {
+        if (t && derived_type_keys.count(t)) {
+            keyed = true;
+            break;
+        }
+    }
+    if (!keyed) {
+        return;
+    }
+    for (auto& i : parameterized_class_map) {
+        i.second->upgradeUserTypeArgs();
     }
 }
 
@@ -3872,6 +3906,59 @@ public:
         return walk<true>(nullptr, ti, 0);
     }
 
+    //! References the mortal declarations that \a ti and the types in it name, also through the target of a reference
+    //! type; the caller holds the type lock (qore#7540)
+    /** A mortal declaration is one that the declaration lifetime system decides (QoreTypeOwner::isTypeOwnerSystem() is
+        false): the builtin declarations of a static namespace or of a module are not referenced.  The marks of
+        QoreTypeInfo::namesNoDeclarations() are not used, as they do not cover the targets of reference types.
+    */
+    DLLLOCAL static void addMortal(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreTypeInfo* ti,
+            int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+                if (!hp->type_owner.isTypeOwnerSystem()) {
+                    get(p).addHashDecl(hd);
+                }
+                // the type arguments of an instance of a generic hashdecl, which an immortal instance made before
+                // they became mortal does not keep
+                for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                    addMortal(p, arg, depth + 1);
+                }
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                addMortalClass(p, pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    addMortal(p, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                addMortalClass(p, qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                if (!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem()) {
+                    get(p).addEnum(ed);
+                }
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                addMortal(p, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                addMortal(p, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            addMortal(p, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                addMortal(p, param, depth + 1);
+            }
+        }
+        if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+            if (target != ti) {
+                addMortal(p, target, depth + 1);
+            }
+        }
+    }
+
     DLLLOCAL ~qore_type_decl_refs_private() {
         for (QoreClass* c : classes) {
             qore_class_private::derefClass(*c, false, false, false);
@@ -3979,6 +4066,13 @@ private:
             qore_enum_decl_private::get(*ed)->ref();
         }
     }
+
+    //! References a class for addMortal() if it is mortal
+    DLLLOCAL static void addMortalClass(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreClass* qc) {
+        if (qc && !qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
+            get(p).addClass(qc);
+        }
+    }
 };
 
 //! Returns true if \a ti is null or marked as naming no declaration (QoreTypeInfo::namesNoDeclarations())
@@ -4044,6 +4138,24 @@ void QoreTypeDeclRefs::add(const type_vec_t& types) {
         for (const QoreTypeInfo* ti : types) {
             qore_type_decl_refs_private::add(p, ti, 0);
         }
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::addMortal(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return;
+    }
+    std::unique_ptr<qore_type_decl_refs_private> p(priv);
+    priv = nullptr;
+    try {
+        // under the type lock, as for add()
+        AutoLocker al(ctl);
+        qore_type_decl_refs_private::addMortal(p, ti, 0);
+    } catch (...) {
+        // the references already taken are kept: the variant still reads the declarations that they keep
+        priv = p.release();
+        throw;
     }
     priv = p.release();
 }

@@ -54,6 +54,9 @@ protected:
     QoreFunction* func;
     std::string name;
     qore_ns_private* ns;
+    //! true if the function is shared with a namespace that no Program owns (the static system namespace or the
+    //! namespace of a module), directly or through the namespace that it was copied from (qore#7540)
+    bool shared_unowned = false;
 
     DLLLOCAL ~FunctionEntry() {
         func->deref();
@@ -81,6 +84,16 @@ public:
 
     DLLLOCAL qore_ns_private* getNamespace() const {
         return ns;
+    }
+
+    //! Returns true if the function is shared with a namespace that no Program owns (qore#7540)
+    DLLLOCAL bool isSharedUnowned() const {
+        return shared_unowned;
+    }
+
+    //! Records whether the function is shared with a namespace that no Program owns
+    DLLLOCAL void setSharedUnowned(bool shared) {
+        shared_unowned = shared;
     }
 
     DLLLOCAL QoreFunction* getFunction() const {

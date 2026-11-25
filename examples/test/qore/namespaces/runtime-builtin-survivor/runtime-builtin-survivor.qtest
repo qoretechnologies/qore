@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the checks run in child processes of the binary that end the process normally
+# test-platform: macos - native module compilation, loading and unloading at library cleanup
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%exec-class RuntimeBuiltinSurvivorTest
+
+#! A value that names a class that a binary module added to a Program at run time can be kept to library cleanup
+/** The class's constructor, destructor, method, static variable and private data are the module's: the value is
+    released after the modules' cleanup (as the static namespace's module classes are freed then too), and the process
+    must end normally (qore#7540).  The value is kept with the debug function dbg_keep_until_cleanup(), so the test
+    needs a library with debugging.
+*/
+class RuntimeBuiltinSurvivorTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        *string modules;
+        #! the build directory of the module, removed with the test
+        *TmpDir tmp;
+    }
+
+    constructor() : QUnit::Test("RuntimeBuiltinSurvivor", "1.0", \ARGV) {
+        addTestCase("an object of the class kept to library cleanup", \objectTest());
+        addTestCase("a call reference to a function naming the class kept to library cleanup", \callRefTest());
+        addTestCase("a Program with the class kept to library cleanup", \programTest());
+        addTestCase("an object of the class and a Program with the class kept to library cleanup", \bothTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string checked(string command) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command, False);
+        assertEq(0, result.rc, sprintf("child exited normally: %s\n%s", command, result.out));
+        return result.out;
+    }
+
+    #! builds the module once; returns its directory
+    private string build() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_keep_until_cleanup")) {
+            testSkip("the library has no debugging");
+        }
+        if (!trim(backquote("command -v cmake 2>/dev/null || true"))) {
+            testSkip("cmake is unavailable");
+        }
+        if (modules) {
+            return modules;
+        }
+        tmp = new TmpDir("runtime-builtin-survivor-");
+        string dir = tmp.path + DirSep + "build";
+        string config = ENV.Qore_DIR ?? (libdir + "/cmake");
+        string config_file = config + "/QoreConfig.cmake";
+        if (!is_file(config_file)) {
+            fail(sprintf("%y does not exist; set Qore_DIR to the directory of the QoreConfig.cmake of the Qore under "
+                "test (%s)", config_file, qore_bin));
+        }
+        checked("cmake -S " + quote(get_script_dir()) + " -B " + quote(dir) + " -DQore_DIR="
+            + quote(realpath(config)));
+        checked("cmake --build " + quote(dir) + " --target rtsurv -j2");
+        return modules = dir;
+    }
+
+    private run(string which) {
+        string dir = build();
+        string mods = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string out = checked(prefix + "QORE_MODULE_DIR=" + quote(mods) + " " + quote(qore_bin) + " -b --enable-debug "
+            + quote(get_script_dir() + DirSep + "RuntimeBuiltinSurvivor.q") + " " + which);
+        assertEq("ok\n", out, which);
+    }
+
+    objectTest() {
+        run("object");
+    }
+
+    callRefTest() {
+        run("callref");
+    }
+
+    programTest() {
+        run("program");
+    }
+
+    bothTest() {
+        run("both");
+    }
+}

@@ -1,0 +1,280 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeBuiltinLifetimeTest
+
+#! The builtin functions of a namespace added to a Program at run time keep the declarations that they name
+/** A binary module can add a namespace with builtin classes, hashdecls, enums and functions to a Program at run time
+    (QoreNamespace::addNamespace()); those declarations are owned by that Program and are freed with it.  A builtin
+    function of such a namespace can be imported into another Program (Program::importFunction()) or copied into a child
+    Program that does not inherit the classes (PO_NO_INHERIT_SYSTEM_CLASSES), and it can outlive the Program: it keeps
+    the declarations that its signature names, so that a call checks its arguments against valid types (qore#7540).  The
+    namespace is added with the debug function dbg_add_runtime_namespace(), so the test needs a library with debugging.
+*/
+public class RuntimeBuiltinLifetimeTest inherits QUnit::Test {
+    public {
+        const AddSource = "sub add(string name, int variant) { dbg_add_runtime_namespace(name, variant); }
+object sub child(int po) {
+    Program c(PO_NEW_STYLE | po);
+    string src = 'auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }
+code sub ref(string f) { return get_call_reference(f); }';
+    # a child that inherits the system classes can make a grandchild
+    if (!po) {
+        src += 'object sub grandchild() {
+    Program g(PO_NEW_STYLE | PO_NO_INHERIT_SYSTEM_CLASSES);
+    g.parse(\"auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }\", \"grandchild\");
+    return g;
+}';
+    }
+    c.parse(src, 'child');
+    return c;
+}
+sub imp(Program q, string f = \"DbgRtNs::dbg_rt_new\") { q.importFunction(f); }
+sub impc(Program q, string c, *string n) { q.importClass(c, n); }
+object sub childsrc(string src) { Program c(PO_NEW_STYLE); c.parse(src, 'childsrc'); return c; }";
+
+        const CallSource = "auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }";
+    }
+
+    constructor() : QUnit::Test("runtime builtin lifetime", "1.0") {
+        addTestCase("an imported function outlives its Program", \importTest());
+        addTestCase("a function copied into a child without the classes outlives its parent", \childTest());
+        addTestCase("a function copied into a grandchild outlives its parent and grandparent", \grandchildTest());
+        addTestCase("a call reference to the function outlives its Program", \callRefTest());
+        addTestCase("imported functions naming the class through a reference and a code type", \refCodeTest());
+        addTestCase("a user subclass of a class added at run time outlives the Program", \subclassTest());
+        addTestCase("an instance of a generic hashdecl added at run time outlives the Program", \genericTest());
+        addTestCase("a namespace added at run time into a copy of a system namespace", \systemMergeTest());
+        addTestCase("hashdecl, enum and generic hashdecl instance parameters", \declParamTest());
+        addTestCase("functions added before the classes that they name", \lateClassTest());
+        addTestCase("imported copies of a class added at run time and of a system class", \importClassTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_namespace")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! returns a Program that has added the namespace, once or twice (a merge), with variant 1 (or \a variant)
+    private static Program getSource(int adds, int variant = 1) {
+        Program p(PO_NEW_STYLE);
+        p.parse(AddSource, "add");
+        if (adds == 2) {
+            p.callFunction("add", "DbgRtNs", 0);
+        }
+        p.callFunction("add", "DbgRtNs", variant);
+        return p;
+    }
+
+    #! returns the number of declarations of Programs that are not freed, after freeing the retired ones, or -1
+    private static int liveDecls() {
+        call_function("dbg_type_retirement_free");
+        return call_function("dbg_live_type_declarations");
+    }
+
+    #! runs a case and checks that the declarations that it made are freed when it is done
+    private checkFreed(code scenario, string label) {
+        int before = liveDecls();
+        scenario();
+        int after = liveDecls();
+        if (before >= 0) {
+            assertEq(before, after, label + ": the declarations are freed");
+        }
+    }
+
+    #! checks the calls of a function imported into \a q with a parameter type that names a declaration
+    private checkImported(Program q, string f, string type_name) {
+        assertThrows("RUNTIME-OVERLOAD-ERROR", type_name, \q.callFunction(), ("call", f, ("x",)),
+            f + ": a wrong argument");
+        assertEq(1, q.callFunction("call", f, (NOTHING,)), f + ": NOTHING");
+    }
+
+    declParamTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p = getSource(1);
+            foreach string f in ("DbgRtNs::dbg_rt_hash", "DbgRtNs::dbg_rt_enum", "DbgRtNs::dbg_rt_gen") {
+                p.callFunction("imp", q, f);
+            }
+            delete p;
+            checkImported(q, "DbgRtNs::dbg_rt_hash", "DbgRtHash");
+            checkImported(q, "DbgRtNs::dbg_rt_enum", "DbgRtEnum");
+            checkImported(q, "DbgRtNs::dbg_rt_gen", "DbgRtGen");
+        }, "decl params");
+    }
+
+    lateClassTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p = getSource(1, 2);
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_late");
+            p.callFunction("imp", q, "DbgRtNsF::dbg_rt_lateb");
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_late2");
+            delete p;
+            checkImported(q, "DbgRtNs::dbg_rt_late", "DbgRtLate");
+            checkImported(q, "DbgRtNs::dbg_rt_late2", "DbgRtLate");
+            checkImported(q, "DbgRtNsF::dbg_rt_lateb", "DbgRtLateB");
+        }, "late classes");
+    }
+
+    importClassTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q(PO_NEW_STYLE);
+            Program p = getSource(1);
+            p.callFunction("impc", q, "DbgRtNs::DbgRtClass", NOTHING);
+            p.callFunction("impc", q, "Qore::Thread::Mutex", "DbgImpMutex");
+            delete p;
+            q.parse("int sub mk() { DbgRtNs::DbgRtClass o(); return o.className() == \"DbgRtClass\" ? 1 : 0; }
+int sub mtx() { DbgImpMutex m(); m.lock(); m.unlock(); return 1; }", "q");
+            assertEq(1, q.callFunction("mk"), "an object of the imported class");
+            assertEq(1, q.callFunction("mtx"), "an object of the imported system class");
+        }, "imported classes");
+    }
+
+    #! checks that a call of the function with the wrong argument raises the overload error, which reads the type of
+    #! its parameter, and that one with NOTHING succeeds
+    private checkCalls(code call, string label) {
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtNs::DbgRtClass", call, ("DbgRtNs::dbg_rt_new", ("x",)),
+            label + ": a wrong argument");
+        assertEq(1, call("DbgRtNs::dbg_rt_new", (NOTHING,)), label + ": NOTHING");
+    }
+
+    importTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            foreach int adds in (1, 2) {
+                Program q(PO_NEW_STYLE);
+                q.parse(CallSource, "q");
+                Program p = getSource(adds);
+                p.callFunction("imp", q);
+                delete p;
+                checkCalls(auto sub (string f, list<auto> args) { return q.callFunction("call", f, args); },
+                    sprintf("import, %d add(s)", adds));
+            }
+        }, "importTest");
+    }
+
+    childTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            foreach int adds in (1, 2) {
+                Program p = getSource(adds);
+                object c = p.callFunction("child", PO_NO_INHERIT_SYSTEM_CLASSES);
+                delete p;
+                checkCalls(auto sub (string f, list<auto> args) { return c.callFunction("call", f, args); },
+                    sprintf("child, %d add(s)", adds));
+            }
+        }, "childTest");
+    }
+
+    grandchildTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource(1);
+            object c = p.callFunction("child", 0);
+            object g = c.callFunction("grandchild");
+            delete p;
+            delete c;
+            checkCalls(auto sub (string f, list<auto> args) { return g.callFunction("call", f, args); }, "grandchild");
+        }, "grandchildTest");
+    }
+
+    refCodeTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p = getSource(1);
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_ref");
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_code");
+            delete p;
+            foreach string f in ("DbgRtNs::dbg_rt_ref", "DbgRtNs::dbg_rt_code") {
+                assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtNs::DbgRtClass", \q.callFunction(), ("call", f, ("x",)),
+                    f + ": a wrong argument");
+                assertEq(1, q.callFunction("call", f, (NOTHING,)), f + ": NOTHING");
+            }
+        }, "refCodeTest");
+    }
+
+    subclassTest() {
+        skipIfNoDebugging();
+        list<auto> l;
+        checkFreed(sub () {
+            Program p = getSource(1);
+            # a child that inherits the class declares a subclass of it
+            object s = p.callFunction("childsrc", "class Sub inherits DbgRtNs::DbgRtClass {}
+int sub mk() { Sub o(); return o instanceof DbgRtNs::DbgRtClass ? 1 : 0; }
+list<Sub> sub mkl() { return (new Sub(),); }");
+            l = s.callFunction("mkl");
+            delete p;
+            assertEq(1, s.callFunction("mk"), "an object of the subclass");
+            delete s;
+            # the type of the list names the subclass and its parent after both Programs are deleted
+            assertEq("list<object<Sub>>", l.fullType(), "a list of the subclass");
+            remove l;
+        }, "subclass");
+    }
+
+    genericTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource(1);
+            object g = p.callFunction("childsrc", "int sub hx(*hash<DbgRtNs::DbgRtGen<int>> h) { return h ? h.a : -1; }
+int sub mk() { return hx(cast<hash<DbgRtNs::DbgRtGen<int>>>({\"a\": 3})); }");
+            delete p;
+            assertEq(3, g.callFunction("mk"), "an instance of the generic hashdecl");
+            assertEq(-1, g.callFunction("hx", NOTHING), "NOTHING");
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtGen<int>", \g.callFunction(), ("hx", {"a": 1}),
+                "a plain hash");
+        }, "generic hashdecl");
+    }
+
+    systemMergeTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            # the namespace Qore of a Program is a copy of the static system namespace: the namespace added into it is
+            # owned by the Program, the system declarations are not
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p(PO_NEW_STYLE);
+            p.parse(AddSource + "\nsub imp2(Program q) { q.importFunction(\"Qore::DbgRtInner::dbg_rt_new\"); }", "add");
+            p.callFunction("add", "Qore::DbgRtInner", 1);
+            p.callFunction("imp2", q);
+            delete p;
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtInner::DbgRtClass", \q.callFunction(),
+                ("call", "Qore::DbgRtInner::dbg_rt_new", ("x",)), "a wrong argument");
+            assertEq(1, q.callFunction("call", "Qore::DbgRtInner::dbg_rt_new", (NOTHING,)), "NOTHING");
+        }, "systemMergeTest");
+    }
+
+    callRefTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p = getSource(1);
+            object c = p.callFunction("child", 0);
+            code ref = c.callFunction("ref", "DbgRtNs::dbg_rt_new");
+            # the reference checks its argument against the type of the class after the Program that added it is deleted
+            delete p;
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtNs::DbgRtClass", ref, ("x",),
+                "call reference: a wrong argument");
+            assertEq(1, ref(NOTHING), "call reference: NOTHING");
+            # a call through the reference is refused once the Program of the reference is deleted
+            delete c;
+            assertThrows("PROGRAM-ERROR", ref, (NOTHING,), "call reference: its Program is deleted");
+        }, "call reference");
+    }
+}

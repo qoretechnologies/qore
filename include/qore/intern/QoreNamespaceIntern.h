@@ -49,6 +49,7 @@
 #include <atomic>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <list>
 
@@ -686,6 +687,18 @@ public:
 
     DLLLOCAL void addModuleNamespace(qore_ns_private* nns, QoreModuleContext& qmc);
     DLLLOCAL void addCommitNamespaceIntern(qore_ns_private* nns);
+
+    //! Returns true if a declaration added to this namespace is owned by a Program: it is attached to a Program's
+    //! root namespace, and it is not the namespace of a module (qore#7540)
+    DLLLOCAL bool ownedByProgram() const;
+
+    //! Marks the original builtin declarations of the namespace tree \a tree as Program-local, if this namespace, to
+    //! which it is added, is owned by a Program (ownedByProgram(); qore#7540)
+    /** Called before the tree is published, under the runtime namespace write lock: a class whose own namespace is in
+        the tree, a hashdecl that is not a copy and an enum that is the original are marked; copies of declarations of a
+        module or of the static system namespace, which share their private data, are not.
+    */
+    DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();
@@ -1490,6 +1503,17 @@ class qore_root_ns_private : public qore_ns_private {
     friend class QoreNamespace;
 
 protected:
+    //! The builtin variants of the namespace functions that the Program owns (not added to a namespace that no Program
+    //! owns), referenced (qore#7540)
+    /** Their references to the mortal declarations that they name are refreshed whenever a declaration of the Program
+        becomes mortal (refRuntimeVariantDecls()), so that a variant added before a declaration that it names is marked
+        references it too.  Written under the runtime namespace write lock; not copied into a child Program, which
+        does not own them
+    */
+    std::vector<AbstractQoreFunctionVariant*> runtime_variants;
+    //! the variants of runtime_variants, for the test of membership
+    std::unordered_set<const AbstractQoreFunctionVariant*> runtime_variant_set;
+
     //! Protects committed namespace containers during cold runtime module merges
     mutable QoreRWLock runtime_namespace_lock;
     mutable std::atomic<int> runtime_namespace_writer_tid{-1};
@@ -2662,7 +2686,20 @@ public:
     DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
     DLLLOCAL ~qore_root_ns_private() {
+        releaseRuntimeVariants();
     }
+
+    //! Adds a builtin variant of a namespace function that the Program owns to runtime_variants, with a reference
+    //! (qore#7540)
+    DLLLOCAL void addRuntimeVariant(AbstractQoreFunctionVariant* v);
+
+    //! Makes each variant of runtime_variants reference the mortal declarations that it names
+    //! (BuiltinFunctionVariantBase::refMortalDecls()), from the variant with the index \a start; called whenever a
+    //! declaration of the Program becomes mortal
+    DLLLOCAL void refRuntimeVariantDecls(size_t start = 0);
+
+    //! Releases the references of runtime_variants
+    DLLLOCAL void releaseRuntimeVariants();
 
     DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {
         RuntimeNamespaceReadLocker rnl(*this);

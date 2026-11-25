@@ -394,11 +394,12 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
 //! Adds a namespace with a builtin function, a constant, a class and a hashdecl to the root namespace of the calling
 //! Program at run time, through the public C++ API that a binary module calls (qore#7530)
 /** With a name \c "outer::inner", the declarations are in the subnamespace \c inner of the namespace \c outer that is
-    added.  With \c variant 1, the function also has a variant with a string parameter, and the namespace has a function
-    \c dbg_rt_new() with a parameter of the type of its class.  Adding a namespace with the same name again merges it
-    with the one that the Program has: a declaration that the Program already has is not added again (it is kept with
-    the namespace, as the declarations that are added can use its type), and nothing reaches the parse-error path, as
-    there is no parse
+    added. With \c variant 1, the function also has a variant with a string parameter, and the namespace has a
+    function \c dbg_rt_new() with a parameter of the type of its class, \c dbg_rt_ref() and \c dbg_rt_code() that name
+    it through a reference type and a typed code type, and a generic hashdecl \c DbgRtGen<T>. Adding a namespace with
+    the same name again merges it with the one that the Program has: a declaration that the Program already has is not
+    added again (it is kept with the namespace, as the declarations that are added can use its type), and nothing
+    reaches the parse-error path, as there is no parse
 */
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     // a short string value is inline: read through the helper
@@ -409,6 +410,9 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    if (variant == 2 && sep != std::string::npos) {
+        return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 2 takes a name without '::'");
+    }
     std::unique_ptr<QoreNamespace> ns(new QoreNamespace(inner.c_str()));
     ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     if (variant == 1) {
@@ -422,17 +426,75 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         // a function that uses the type of the class of this namespace, which is not added when the Program has it
         ns->addBuiltinVariant("dbg_rt_new", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
             qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        // functions that name the class through a reference type and a typed code type (qore#7540)
+        ns->addBuiltinVariant("dbg_rt_ref", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_complex_reference_or_nothing_type(qc->getOrNothingTypeInfo()), QORE_PARAM_NO_ARG, "ref");
+        type_vec_t code_params = {qc->getOrNothingTypeInfo()};
+        ns->addBuiltinVariant("dbg_rt_code", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_complex_code_or_nothing_type(qc->getOrNothingTypeInfo(), code_params), QORE_PARAM_NO_ARG,
+            "code");
+        // a generic hashdecl, whose instances are made by the code that names them
+        TypedHashDecl* gen = new TypedHashDecl("DbgRtGen", (path + "::DbgRtGen").c_str());
+        gen->addTypeParameter("T");
+        gen->addMember("a", bigIntTypeInfo, QoreValue());
+        ns->addSystemHashDecl(gen);
+        // an instance of the generic hashdecl made before the namespace is added, in a signature
+        ns->addBuiltinVariant("dbg_rt_gen", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            gen->getTypeInfo(type_vec_t{bigIntTypeInfo}, true), QORE_PARAM_NO_ARG, "h");
+        // an enum and a function with a parameter of its type
+        QoreEnumDecl* en = new QoreEnumDecl("DbgRtEnum", (path + "::DbgRtEnum").c_str(), bigIntTypeInfo);
+        en->addMember("A", static_cast<int64>(1));
+        en->addMember("B", static_cast<int64>(2));
+        ns->addSystemEnum(en);
+        ns->addBuiltinVariant("dbg_rt_enum", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            en->getTypeInfo(true), QORE_PARAM_NO_ARG, "e");
     }
     // the namespace takes the hashdecl and the class (their destructors are not public)
     TypedHashDecl* hd = new TypedHashDecl("DbgRtHash", (path + "::DbgRtHash").c_str());
     hd->addMember("a", bigIntTypeInfo, QoreValue(static_cast<int64>(variant)));
     ns->addSystemHashDecl(hd);
+    if (variant == 1) {
+        // a function with a parameter of the type of the hashdecl
+        ns->addBuiltinVariant("dbg_rt_hash", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            hd->getTypeInfo(true), QORE_PARAM_NO_ARG, "h");
+    }
+    // variant 2: functions added before the classes that they name are added (qore#7540): DbgRtLate is added to the
+    // namespace after it was added to the Program, and DbgRtLateB is in the namespace <name>C, which is added after
+    // the namespace <name>F with the function that names it
+    QoreClass* late = nullptr;
+    std::unique_ptr<QoreNamespace> late_fns;
+    std::unique_ptr<QoreNamespace> late_cns;
+    if (variant == 2) {
+        late = new QoreClass("DbgRtLate", (path + "::DbgRtLate").c_str());
+        ns->addBuiltinVariant("dbg_rt_late", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        late_fns.reset(new QoreNamespace((inner + "F").c_str()));
+        late_cns.reset(new QoreNamespace((inner + "C").c_str()));
+        QoreClass* lateb = new QoreClass("DbgRtLateB", (std::string("::") + inner + "C::DbgRtLateB").c_str());
+        late_cns->addSystemClass(lateb);
+        late_fns->addBuiltinVariant("dbg_rt_lateb", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateb->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+    }
     if (sep != std::string::npos) {
         std::unique_ptr<QoreNamespace> outer(new QoreNamespace(full.substr(0, sep).c_str()));
         outer->addNamespace(ns.release());
         ns.reset(outer.release());
     }
-    getProgram()->getRootNS()->addNamespace(ns.release());
+    RootQoreNamespace* root = getProgram()->getRootNS();
+    root->addNamespace(ns.release());
+    if (variant == 2) {
+        // the class is added to the namespace that the Program has now
+        QoreNamespace* added = root->findLocalNamespace(inner.c_str());
+        assert(added);
+        added->addSystemClass(late);
+        // a variant added twice to the namespace that the Program has: the function keeps the first one only
+        for (int i = 0; i < 2; ++i) {
+            added->addBuiltinVariant("dbg_rt_late2", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+                late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        }
+        root->addNamespace(late_fns.release());
+        root->addNamespace(late_cns.release());
+    }
     return QoreValue();
 }
 
@@ -726,6 +788,34 @@ static QoreValue f_dbg_type_retirement_blockers(const QoreListNode* params, Runt
         l->push(h.release(), xsink);
     }
     return l.release();
+}
+
+//! the value that dbg_keep_until_cleanup() keeps, in a list, released by qore_cleanup()
+static std::atomic<QoreListNode*> dbg_cleanup_holder{nullptr};
+
+void qore_dbg_release_cleanup_holder() {
+    QoreListNode* l = dbg_cleanup_holder.exchange(nullptr, std::memory_order_acq_rel);
+    if (l) {
+        ExceptionSink xsink;
+        l->deref(&xsink);
+        // nothing can report an exception at library cleanup
+        xsink.clear();
+    }
+}
+
+//! Debug-only: keeps a value until library cleanup, after the binary modules are deleted (qore#7540)
+/** The value replaces the one kept before, which is released; qore_cleanup() releases it where it clears the Programs
+    that their owners keep beyond that point, so that a test can check what a value that something keeps to the end
+    of the process does then
+*/
+static QoreValue f_dbg_keep_until_cleanup(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+    l->push(get_param_value(params, 0).refSelf(), xsink);
+    QoreListNode* old = dbg_cleanup_holder.exchange(l.release(), std::memory_order_acq_rel);
+    if (old) {
+        old->deref(xsink);
+    }
+    return QoreValue();
 }
 
 //! Returns the number of class, hashdecl and enum declarations of Programs that are not freed, or -1 if the library
@@ -37160,6 +37250,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
+    qns.addBuiltinVariant("dbg_keep_until_cleanup", f_dbg_keep_until_cleanup, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,

@@ -346,6 +346,20 @@ DLLLOCAL size_t qore_type_epoch_hold_count();
 */
 DLLLOCAL bool qore_type_owner_released(QoreTypeOwner* owner);
 
+//! Sets the flags of the parameterized class types made before a declaration that a type argument names became mortal
+//! (QoreParameterizedClassTypeInfo::upgradeUserTypeArgs(); qore#7540)
+/** @param marked_types the types of the declarations that became mortal; nothing is scanned if no derived type was
+    made from one of them
+*/
+DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types);
+
+
+#ifdef DEBUG
+//! Releases the value that dbg_keep_until_cleanup() keeps, if any; called by qore_cleanup() after the binary modules
+//! are deleted, where the Programs that their owners keep are cleared (qore#7540)
+DLLLOCAL void qore_dbg_release_cleanup_holder();
+#endif
+
 //! Called by the destructor of a declaration: releases the names that it counted, which can free retired ones
 DLLLOCAL void qore_type_owner_destroyed(QoreTypeOwner* owner);
 

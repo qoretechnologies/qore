@@ -430,6 +430,10 @@ static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
       there
     - a module that also supports %Qore versions without QoreModuleInfo::ns tests @ref QORE_HAS_MODULE_NS_PURGE and
       calls QoreNamespace::clear() in its \c del function otherwise
+    - the classes of the module can be freed after the \c del function has run: those of the static system namespace,
+      and those that the module added to a Program at run time when something keeps them to the end of the process
+      (an object or a Program held in static storage); the \c del function must leave what their constructors,
+      destructors, methods and private data use valid, as the module's code is never unloaded
 
     @code{.cpp}
     static QoreNamespace MyModuleNS("Qore::mymodule");

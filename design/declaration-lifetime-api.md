@@ -20,6 +20,26 @@ Program's namespace data.
 - An unattached declaration has no Program owner. A reference-counted declaration
   that survives its namespace also has no owner after namespace teardown.
   Consequently, a null result alone does not prove process-wide lifetime.
+- An original builtin declaration that a binary module adds to a namespace that a
+  Program owns at run time (`QoreNamespace::addNamespace()`, `addSystemClass()`,
+  `addSystemHashDecl()`, `addSystemEnum()` outside the static system namespace and the
+  namespace of a module) is owned by that Program and is mortal: it is marked
+  `program_local` before it is published (`qore_ns_private::markProgramLocal()`), and
+  the declaration lifetime system treats it as a user declaration
+  (`isTypeOwnerSystem()` is false; `isSystem()` is unchanged). The import copy of a
+  builtin class and the instances of a mortal generic hashdecl are mortal too. A
+  builtin variant of a function of such a namespace references the mortal
+  declarations that its signature names
+  (`BuiltinFunctionVariantBase::refMortalDecls()`), so that the variant can be
+  imported into another Program or copied into a child Program that does not inherit
+  the classes and outlive the Program; such a declaration can therefore outlive its
+  Program (qore#7540). One that something keeps to the end of the process (a value
+  kept in static storage, a Program with static storage duration) is freed after
+  the modules' `del` functions have run, as the static namespace's module classes
+  are: binary modules are never unloaded, and a module's `del` function must leave
+  what the destructors, methods and module data of its classes need valid until then
+  (`doxygen/lib/70_qore_modules.doxygen`, Releasing Module State at Shutdown;
+  `examples/test/qore/namespaces/runtime-builtin-survivor`).
 
 The accessors follow the existing namespace back-pointer; they add exported
 methods without changing the public object layout. No reference is acquired.

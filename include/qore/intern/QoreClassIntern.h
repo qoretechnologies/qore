@@ -3523,6 +3523,14 @@ public:
         */
         not_module_decl : 1 = false
         ;
+    //! true for an original builtin declaration that a binary module added to a Program's namespace at run time
+    //! (qore#7540)
+    /** It is owned by that Program's namespace, not by a module or the static system namespace, so it is mortal: the
+        declaration lifetime system treats it as it treats a user declaration (isTypeOwnerSystem() is false).  Set
+        under the runtime namespace write lock, and never cleared; atomic, as the declaration lifetime system can read
+        it in another thread through a derived type that was made before it was set (released and acquired)
+    */
+    std::atomic<bool> program_local{false};
 
     std::vector<QoreGenericTypeParam> type_params;
     //! the resolved bounds of the type parameters (nullptr for a parameter without one), resolved when the class is
@@ -6856,7 +6864,7 @@ protected:
     }
 
     DLLLOCAL bool isTypeOwnerSystem() const {
-        return sys;
+        return sys && !program_local.load(std::memory_order_acquire);
     }
 
     //! A builtin class that is not one of the static system namespace (Qore::), a pseudo-class or a tombstone: a
@@ -6864,11 +6872,31 @@ protected:
     /** Decided by ownership, not by the module context of its creation: a binary module can create builtin classes
         after its initialization (module-jni and module-python create them when they are first needed, with no module
         context or with that of a user module being parsed); a class shares its private data with its copies in
-        Programs, and an imported copy keeps the flag of its source
+        Programs, and an imported copy keeps the flag of its source; a class that a binary module added to a Program at
+        run time, and the imported copy of a builtin class, are the Program's (program_local, qore#7540)
     */
     DLLLOCAL bool isTypeOwnerModule() const {
-        return sys && !not_module_decl;
+        // a class that a binary module added to a Program at run time is the Program's (qore#7540)
+        return isTypeOwnerSystem() && !not_module_decl;
     }
+
+public:
+    //! Marks a builtin class as owned by the Program to whose namespace it is added; returns true if it was marked now
+    //! and adds its types to \a marked_types (qore#7540)
+    /** A class made with a type of its module (QoreClass(..., const QoreTypeInfo*)) is not marked and stays immortal:
+        the types derived from that type cannot be orphaned when the class is freed (getTypeOwnerType() is nullptr)
+    */
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types) {
+        if (!sys || !owns_typeinfo || program_local.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        marked_types.push_back(getTypeInfo());
+        marked_types.push_back(getOrNothingTypeInfo());
+        program_local.store(true, std::memory_order_release);
+        return true;
+    }
+
+protected:
 
     DLLLOCAL bool keepsTypeOwnerMembers() const {
         return false;

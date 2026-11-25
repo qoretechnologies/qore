@@ -563,7 +563,12 @@ Debug builds assert that a runtime type check (`QoreTypeInfo::acceptInputInternI
 a user declaration directly is made in a thread that publishes an epoch (`qore_type_check_epoch_assert()`); a
 declaration's own type is not checked, as it is read from an owner that keeps the declaration.  Modules outside this
 repository that check values in threads of their own (registered with `q_register_foreign_thread()`) must enter a
-Program for it.
+Program for it.  The builtin declarations that a binary module adds to a Program at run time are mortal as user
+declarations are (qore#7540, see `design/declaration-lifetime-api.md`): the threads of such a module that check values
+against types that name them must enter a Program as well.  Such a declaration that something keeps to the end of
+the process is not retired at library cleanup: it is freed whole after the modules' `del` functions have run, as the
+module classes of the static system namespace are (binary modules are never unloaded; retiring a class that is still in
+use, with live objects or a Program that shares its static variables, would release what they use).
 
 ### Child processes created with fork()
 
