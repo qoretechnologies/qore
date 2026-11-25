@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# deletes a Program while a step of its async I/O operation is in flight (qore#6703); with the argument "owner", the
+# operation is canceled by its owner first; with "barrier", another thread waits in a cancel of the operation's socket
+# for the step while the Program is deleted, and the operation's abort() closes the socket; needs a debug build of the
+# library; with "socket", that thread uses the socket as soon as its cancel returns, while the operation's abort() waits
+# for it; with "native", the same with an operation that has no abort() in Qore code
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+#! the code of the Program: an operation whose first step completes it, and whose onComplete() is code of the Program
+const Code = "
+class Op inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+    abort() {
+        # a socket cancel has returned before this abort() runs
+        if (abort_gate) {
+            abort_gate.waitForZero(20s);
+        }
+        printf(\"abort\\n\");
+        flush();
+        # as the abort() of an operation that closes its connection does: this waits for no socket cancel that ended
+        # when the operation was handed back
+        if (close_in_abort) {
+            AsyncIoController::cancelAndClose(notifier);
+        }
+    }
+    onComplete(hash<SocketPollResultInfo> result) {
+        printf(\"onComplete: canceled: %y\\n\", result.canceled);
+        flush();
+    }
+}
+
+# an operation whose abort() is the builtin one
+class NativeOp inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+}
+
+# the code of a Program that is only called (callFunction()) does not run its top-level statements
+our *EventNotifier notifier;
+our *bool close_in_abort;
+our *Counter abort_gate;
+
+sub start_socket(Socket s, Counter gate, bool native) {
+    abort_gate = gate;
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": s,
+        \"spop\": native ? new NativeOp() : new Op(),
+        \"owner\": \"teardown-deferred-cancel\",
+        \"to\": -1s,
+    });
+}
+
+EventNotifier sub start(*bool close) {
+    close_in_abort = close;
+    notifier = new EventNotifier();
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new Op(),
+        \"owner\": \"teardown-deferred-cancel\",
+        \"to\": -1s,
+    });
+    return notifier;
+}
+";
+
+# the worker that takes the operation's first step waits before it enters the Program, until the Program's
+# cancellation has seen the step in flight; the I/O thread waits before it runs the cancellation deferred until the
+# step's result, as a slow I/O thread does
+call_function("dbg_async_io_pause_cancel_point", 0, True);
+call_function("dbg_async_io_pause_cancel_point", 1, True);
+on_exit {
+    call_function("dbg_async_io_pause_cancel_point", 0, False);
+    call_function("dbg_async_io_pause_cancel_point", 1, False);
+    call_function("dbg_async_io_pause_cancel_point", 2, False);
+    call_function("dbg_async_io_pause_cancel_point", 3, False);
+}
+bool use_socket = ARGV[0] == "socket" || ARGV[0] == "native";
+bool barrier = ARGV[0] == "barrier" || use_socket;
+Counter cancel_done(1);
+# an I/O thread that stops ends the socket cancels that wait: only the hand-back may end this one
+if (barrier) {
+    AsyncIoController::setAutostop(False);
+}
+on_exit if (barrier) {
+    AsyncIoController::setAutostop(True);
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-deferred-cancel");
+# a connected socket, whose claim by the operation makes a synchronous call fail
+Socket listener();
+Socket client();
+*Socket accepted;
+Counter gate(1);
+AbstractPollableIoObjectBase target;
+int abort_calls = call_function("dbg_async_io_abort_calls");
+if (use_socket) {
+    listener.bindINET("127.0.0.1", 0, True);
+    listener.listen();
+    client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+    accepted = listener.accept();
+    p.callFunction("start_socket", client, gate, ARGV[0] == "native");
+    target = client;
+} else {
+    target = p.callFunction("start", barrier);
+}
+printf("step paused: %y\n", call_function("dbg_async_io_wait_cancel_point", 0, 20s));
+if (use_socket) {
+    printf("socket claimed: %y\n", call_function("dbg_socket_has_async_io_owner", client));
+}
+if (barrier) {
+    # another thread cancels the operation's socket: the cancel waits for the step
+    call_function("dbg_async_io_pause_cancel_point", 2, True);
+    # the thread that deletes the Program does not clean the operation up before the claim is read below
+    if (use_socket) {
+        call_function("dbg_async_io_pause_cancel_point", 3, True);
+    }
+    background sub () {
+        on_exit cancel_done.dec();
+        on_exit gate.dec();
+        # also if the code below raises an exception: the thread that deletes the Program waits for this
+        on_exit call_function("dbg_async_io_pause_cancel_point", 3, False);
+        AsyncIoController::cancel(target);
+        if (use_socket) {
+            # the canceled operation's claim on the socket has ended when its cancel returns
+            printf("socket claimed: %y\n", call_function("dbg_socket_has_async_io_owner", client));
+            flush();
+        }
+    }();
+    printf("socket cancel waits: %y\n", call_function("dbg_async_io_wait_cancel_point", 2, 20s));
+    call_function("dbg_async_io_pause_cancel_point", 2, False);
+}
+if (ARGV[0] == "owner") {
+    # the operation is canceled by its owner first: its cancellation is deferred until the step's result before the
+    # Program's teardown cancels the Program's operations
+    AsyncIoController::cancelByOwner("teardown-deferred-cancel");
+}
+# the Program's teardown cancels its operations: the operation's step is in flight, so its cancellation waits for the
+# step's result; the worker then sends it, and the I/O thread waits before it runs the cancellation
+delete p;
+# the I/O thread runs the cancellation now if it waits, when the Program has been deleted (with the fix, the
+# cancellation of the Program waited until it had run, and the I/O thread did not wait)
+call_function("dbg_async_io_pause_cancel_point", 1, False);
+# the I/O thread processes this synchronous command after the cancellation, whose callbacks the workers then process
+AsyncIoController::cancelByOwner("teardown-deferred-cancel-barrier");
+AsyncIoController::flushCallbacks();
+if (barrier) {
+    printf("socket cancel returned: %y\n", !cancel_done.waitForZero(20s));
+}
+if (ARGV[0] == "native") {
+    # the builtin abort() runs once, on the I/O thread at the hand-back, and not again in the caller's cancellation
+    printf("native abort calls: %d\n", call_function("dbg_async_io_abort_calls") - abort_calls);
+}
+printf("done\n");

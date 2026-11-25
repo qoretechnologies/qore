@@ -68,6 +68,7 @@ module WeaviateDataProvider {
             "desc": "Calls `GET /v1/schema` to enumerate the configured Weaviate classes "
                 "(name, properties, vectorizer, sharding config).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Admin",),
             "options": {},
             "output_type": WeaviateListClassesDataProvider::ResponseType,

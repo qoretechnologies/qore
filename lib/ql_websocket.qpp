@@ -59,6 +59,10 @@ binary frame = ws_encode_frame("hello", WSOP_Text, True);
     @note the payload of a close frame (\c WSOP_Close) is cut to 125 bytes (RFC 6455 section 5.5): a longer reason
     is cut at the start of a UTF-8 character, so that the reason has at most 123 bytes
 
+    @note a string given for a text frame (\c WSOP_Text) or a close frame (\c WSOP_Close) is converted to UTF-8 if it
+    has another encoding, as the payload of a text frame and the reason of a close frame are UTF-8 (RFC 6455 sections
+    5.5.1 and 5.6; qore#6775); the bytes of a string given for another opcode are sent as they are
+
     @since %Qore 3.0
 */
 binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin = True, int rsv_bits = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
@@ -69,9 +73,19 @@ binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin =
         switch (message.getType()) {
             case NT_STRING: {
                 QoreStringValueHelper str(message);
+                uint8_t rsv = static_cast<uint8_t>((rsv_bits >> 4) & 0x07);
+                // the payload of a text frame and the reason of a close frame are UTF-8 (RFC 6455 sections 5.5.1 and
+                // 5.6): a string in another encoding is converted (qore#6775)
+                if (opcode == WSOP_TEXT || opcode == WSOP_CLOSE) {
+                    TempEncodingHelper utf8(*str, QCS_UTF8, xsink);
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                    return WebSocketFrameEncoder::encode(
+                        static_cast<WsOpcode>(opcode), utf8->c_str(), utf8->size(), (bool)fin, (bool)masked, rsv);
+                }
                 payload = str->c_str();
                 payload_len = str->size();
-                uint8_t rsv = static_cast<uint8_t>((rsv_bits >> 4) & 0x07);
                 return WebSocketFrameEncoder::encode(
                     static_cast<WsOpcode>(opcode), payload, payload_len, (bool)fin, (bool)masked, rsv);
             }

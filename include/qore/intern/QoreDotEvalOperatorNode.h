@@ -89,6 +89,12 @@ protected:
     DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     template <bool Lexical>
     DLLLOCAL QoreValue evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const;
+    //! the part of evalWithBaseCommon() for a receiver that is not an object (a pseudo-method, or a method found by
+    //! name in the pseudo-class of the value's type \a bt); out of line, so that the call of a method of an object in
+    //! evalWithBaseCommon() stays inlined there
+    template <bool Lexical>
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalPseudoWithBase(LexicalSemanticPolicy policy, QoreValue base,
+            qore_type_t bt, ExceptionSink* xsink) const;
 
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);

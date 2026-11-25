@@ -230,6 +230,8 @@ class OAuth2AuthFeatureTest inherits QUnit::Test {
         });
         hash<auto> info = cc.getExtendedInfoAsData();
         assertFalse(info.up, "an incomplete client credentials configuration cannot connect");
+        # it is marked as unable to connect, not just never checked (issue #7236)
+        assertRegex("oauth2_token_url", info.status, "the status gives the missing option");
         assertTrue(info.oauth2, "but it still says that it authenticates with OAuth2");
         assertTrue(info.oauth2_client_credentials, "and which grant it uses");
 

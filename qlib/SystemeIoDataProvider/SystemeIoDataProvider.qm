@@ -55,6 +55,15 @@ module SystemeIoDataProvider {
                 "This integration supports managing contacts, tags, custom fields, course "
                 "enrollments, community memberships, and subscriptions.",
             "scheme": "systemeio",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "systeme.io",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://systeme.io/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": SystemeIoLogo,
             "logo_file_name": "systemeio-logo.svg",
             "logo_mime_type": MimeTypeSvg,

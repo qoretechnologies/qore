@@ -1,0 +1,31 @@
+remove wo.a: 1 o.a null
+remove wo{"b"}: 2 o.b null
+remove wo.(c, a): {c: 3, a: null} o.c null
+remove wo.i: 4
+o.i null
+remove wo.oi: 5 o.oi null
+remove wo.l[0]: 1 o.l [null, 2]
+remove wu.x: 7 keys ["y"]
+remove wu.none: null
+remove wob.p (private): PRIVATE-MEMBER
+remove wob.none (undeclared): INVALID-MEMBER
+o.p 6
+removeOwnPrivate: 6 o.p null
+destroy d
+after delete wo.d: o.d null
+destroy d2
+after delete wo{d}: o.d null
+remove h.w.a: 1 o2.a null
+closure remove wo.b: 22 o.b null
+remove gw.b: 2 o2.b null
+remove S::ws.c: 3 o2.c null
+remove wg.a: 1 g.a null
+remove deleted: OBJECT-ALREADY-DELETED
+delete deleted: OBJECT-ALREADY-DELETED
+remove l[0].a: 1 n.a null
+remove n2.w.b: 2 n.b null
+remove n3.w.a: 1 n3.a null
+remove wn.h.k: 2 n3.h {j: 1, m: 3}
+remove wn.h.(j): 1 n3.h {m: 3}
+remove wn.l[0..1]: [1, 2] n3.l [3]
+end

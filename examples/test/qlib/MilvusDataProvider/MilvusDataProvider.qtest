@@ -90,6 +90,10 @@ public class MilvusDataProviderTest inherits QUnit::Test {
             $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("list-collections", actions[0].action);
+        # listing the collections sends only the POST list query, which reads: the action declares that it is read-only (qore#7454)
+        assertEq(NT_BOOLEAN, actions[0].mutates_state.typeCode());
+        assertFalse(actions[0].mutates_state);
+        assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(actions[0]));
     }
 
     private listCollectionsTest() {

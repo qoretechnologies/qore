@@ -205,6 +205,13 @@ public:
         return h2_state == H2ServerState::CLOSED || error_info != nullptr;
     }
 
+    //! Returns why the operation closed the connection, or nullptr while it has not (qore#7443)
+    /** A static description of the place that closed it: the details of an error are in @ref getErrorInfo()
+    */
+    DLLLOCAL const char* getCloseReason() const {
+        return close_reason.load(std::memory_order_acquire);
+    }
+
     //! Returns error information if an error occurred (ref'd)
     DLLLOCAL QoreHashNode* getErrorInfo() const {
         AutoLocker al(op_lock);
@@ -438,6 +445,15 @@ private:
     //! The state; atomic: goalReached(), isClosed() and the other accessors read it without op_lock, from other
     //! threads too, while the I/O thread and abort() change it with op_lock held
     std::atomic<H2ServerState> h2_state;
+    //! why the connection was closed: a static string, set once, so that recording it costs nothing (qore#7443)
+    std::atomic<const char*> close_reason{nullptr};
+
+    //! closes the connection for the given reason (a static string); the first reason given is kept
+    DLLLOCAL void setClosed(const char* reason) {
+        const char* none = nullptr;
+        close_reason.compare_exchange_strong(none, reason, std::memory_order_acq_rel);
+        h2_state = H2ServerState::CLOSED;
+    }
     //! set by startDrain(); read on every read cycle, so only the drain itself pays for the session check
     std::atomic<bool> drain_requested{false};
 

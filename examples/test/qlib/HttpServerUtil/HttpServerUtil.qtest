@@ -64,6 +64,7 @@ class ListenerRefcountHandler inherits AbstractHttpSocketHandlerInterface {
 
 public class HttpServerUtilTest inherits QUnit::Test {
     constructor() : Test("HttpServerUtilTest", "1.0") {
+        addTestCase("bind URL user information", \bindUrlUserInfo());
         addTestCase("funcs", \funcTests());
         addTestCase("http_mask_data", \maskDataTest());
         addTestCase("http_mask_value", \maskValueTest());
@@ -72,6 +73,16 @@ public class HttpServerUtilTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks the process's return value
         set_return_value(main());
+    }
+
+    bindUrlUserInfo() {
+        assertEq("https://reader:sample@localhost:8011",
+            http_get_url_from_bind("https://reader:sample@localhost:8011"));
+        assertEq("https://reader@localhost:8011", http_get_url_from_bind("https://reader@localhost:8011"));
+        assertEq("https://reader:@localhost:8011", http_get_url_from_bind("https://reader:@localhost:8011"));
+        assertEq("https://:sample@localhost:8011", http_get_url_from_bind("https://:sample@localhost:8011"));
+        assertEq("https://reader%40test:a%3Ab@localhost:8011",
+            http_get_url_from_bind("https://reader%40test:a%3Ab@localhost:8011"));
     }
 
     funcTests() {

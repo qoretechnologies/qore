@@ -6,7 +6,8 @@
 # "ok" if the call returned, else the code of the exception.  An allowed call opens a datasource of a driver that does
 # not exist, so it fails with LOAD-MODULE-ERROR when the connection is used; a refused call raises PERMISSION-DENIED
 # (module code reached for the caller, qore#6257), INVALID-FUNCTION-ACCESS (a call of a variant in the DATABASE domain
-# made at run time) or a PARSE-EXCEPTION for the DATABASE domain (a direct call)
+# made at run time) or a PARSE-EXCEPTION for the DATABASE domain (a direct call); a subclass that a sandboxed case
+# declares cannot use the private members of the trusted connection class (qore#6843: PARSE-EXCEPTION-PRIVATE)
 %modern
 %requires SqlUtil
 %requires PgsqlSqlUtilBase
@@ -156,9 +157,14 @@ string sub run_case(int po, bool sandbox, string code) {
         p.parse(Prefix + code, "case");
     } catch (hash<ExceptionInfo> ex) {
         # a direct call of a variant in the DATABASE domain is refused when it is parsed
-        return ex.err == "PARSE-EXCEPTION" && ex.desc =~ /functional domain: DATABASE/
-            ? "PARSE-EXCEPTION-DATABASE"
-            : sprintf("%s: %s", ex.err, ex.desc);
+        if (ex.err == "PARSE-EXCEPTION" && ex.desc =~ /functional domain: DATABASE/) {
+            return "PARSE-EXCEPTION-DATABASE";
+        }
+        # a class declared by sandboxed code cannot use the private declarations of a trusted class (qore#6843)
+        if (ex.err == "PARSE-EXCEPTION" && ex.desc =~ /a class declared by sandboxed code cannot use the private/) {
+            return "PARSE-EXCEPTION-PRIVATE";
+        }
+        return sprintf("%s: %s", ex.err, ex.desc);
     }
     return p.callFunction("t");
 }

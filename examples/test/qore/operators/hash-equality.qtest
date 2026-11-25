@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class HashEqualityTest
+
+#! The soft (==, !=) and hard (===, !==) comparisons of hashes give the same results in every mode (qore#7266)
+/** The comparison walks the member lists of both hashes together while their keys are the same and looks the other
+    keys up from the first key that differs, and compares ints, floats and short strings without the generic
+    comparison.  The probes (hash-equality/probes.q) compare hashes with the same keys in the same and in other orders
+    (with the first, last or middle keys moved), with a value or a key that differs at the first, a middle or the
+    last key, of different sizes, with values that a soft comparison converts (int, float, string, bool, number,
+    date) and a hard one does not, NaN values (also nested and in the same hash, which is not equal to itself),
+    NOTHING and NULL, strings in other encodings, binaries, dates, nested hashes and lists, objects, hashdecl and typed
+    hashes, weak references and comparisons that raise exceptions, also with inlist(), list comparisons and a switch
+    case; each comparison both ways, untyped and as hashes.  They run in each execution mode in a child process, with
+    tiered execution at the IR tier and promoted to native code, and as qcc-compiled executables (-O0, -O3).  The
+    expected output is hash-equality/expected.txt.
+*/
+class HashEqualityTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("HashEquality", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        string lines = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "hash-equality" + DirSep
+            + "expected.txt");
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d:\n%s", i, lines);
+        }
+
+        addTestCase("hash equality", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-hash-equality-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "hash-equality" + DirSep + "probes.q")
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d:\\n%s\\n\", i, probes());\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+}

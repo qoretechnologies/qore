@@ -139,7 +139,6 @@ class PgsqlTestIsolationTest inherits QUnit::Test {
         on_exit unlink(ready);
         string out = backquote(sprintf("PGSQL_TEST_ISOLATION_READY=%s %s -ne '%%requires %s\nprintf(\"%%s "
             "%%y\\n\", PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, \"ready\"), "
-            # live-provider-optin: a variable that the test sets for its child
             "getenv(\"PGSQL_TEST_ISOLATION_READY\"));' 2>&1", ready, shellQuote(getQoreExecutable()), module));
         (string schema, string env) = trim(out).split(" ");
         assertRegex("^qtest_ready_[a-z0-9]+_[0-9]+_[0-9]+$", schema);

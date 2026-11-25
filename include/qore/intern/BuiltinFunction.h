@@ -36,6 +36,8 @@
 #include <vector>
 #include <string>
 
+#include "qore/intern/QoreAllocFailure.h"
+
 class BCList;
 class BCEAList;
 
@@ -56,7 +58,15 @@ template <typename F>
 DLLLOCAL QoreValue qore_eval_builtin_call(ExceptionSink* xsink, F&& call) {
     assert(xsink);
     bool prior_exception = static_cast<bool>(*xsink);
-    QoreValue rv = call();
+    QoreValue rv;
+    try {
+        rv = call();
+    } catch (const std::bad_alloc&) {
+        // the memory that the builtin code needed could not be allocated: the call fails with a Qore exception, which
+        // the calling code can catch, and the process goes on (qore#7466)
+        qore_raise_allocation_failure(xsink, "a call of builtin code");
+        return QoreValue();
+    }
     if (!prior_exception && *xsink) {
         rv.discard(xsink);
         return QoreValue();

@@ -103,4 +103,23 @@ public:
     DLLLOCAL static bool scanNode(RSetHelper& rsh, QoreValue vexp);
 };
 
+//! Returns whether binding a reference to a parameter of type \c reference<target_ti> leaves its lvalue as it is
+/** QoreTypeSpec::acceptInputImpl() reads the referenced value and assigns it back with the parameter's referenced type
+    to apply that type; this returns 1 when that read and assignment are known to change nothing and to raise nothing,
+    so that they can be skipped (qore#7264):
+    - \a target_ti is \c hash<auto>, \c *hash<auto>, \c list<auto> or \c *list<auto>, whose acceptance of a value
+      of their own type neither converts nor rejects it (see the QTS_COMPLEXHASH and QTS_COMPLEXLIST cases of
+      QoreTypeSpec::acceptInputImpl()), and which LValueHelper::assign() stores as it is;
+    - the reference's lvalue is a closure-bound variable itself (a local variable or a closure variable, not an
+      element, a key or a member of one), which is not read-only, holds no reference (its type is not a reference
+      type, so it cannot change, see ClosureVarValue::getReference()), and whose type is \a target_ti, so that its
+      value is one that \a target_ti accepted;
+    - resolving the reference raises nothing (qore_reference_resolution_check())
+
+    @return 1 if the read and assignment can be skipped, 0 if not, -1 if resolving the reference raised an exception in
+    \a xsink (the exception that the resolution with LValueHelper would raise)
+*/
+DLLLOCAL int qore_reference_binding_keeps_value(const ReferenceNode* r, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink);
+
 #endif

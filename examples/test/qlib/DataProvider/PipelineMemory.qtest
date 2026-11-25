@@ -298,7 +298,7 @@ public class PipelineMemoryTest inherits QUnit::Test {
         verbose_memory = m_options."verbose-memory" ?? False;
 
 %ifndef NoProcess
-        if (ENV{WorkerEnv}) { # live-provider-optin: WorkerEnv, set by the test for its worker child
+        if (ENV{WorkerEnv}) {
             addTestCase("single pipeline memory stability", sub () { runMeasured(\singlePipeline()); });
             addTestCase("repeated pipelines memory stability", sub () { runMeasured(\repeatedPipelines()); });
             addTestCase("multi-processor pipeline memory stability",

@@ -56,9 +56,15 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             "MongoDbConnection get": ("MongoDbDataProvider::MongoDbConnection", "mongodb", "get"),
         };
 
+        #! the connections whose synchronous client is not given to restricted code, as it is not bound to the target of
+        #! the connection's creator (qore#7262)
+        const UnboundSyncClients = {
+            "RestConnection get": True,
+            "ServerSentEventConnection get": True,
+        };
+
         #! the connections whose client is, or creates, an HttpClientIo connection manager
         const ManagerClients = {
-            "RestConnection getAsync": True,
             "ConnectConnection get": True,
             "DataStreamConnectionIo get": True,
         };
@@ -94,8 +100,13 @@ class ConnectionCreatorDomainsTest inherits QUnit::Test {
             string rv = p.callFunction("client", c, i.value[2]);
             # a client that is or creates an HttpClientIo connection manager is created for the calling code, which
             # cannot create a manager if it is restricted from the network (qore#6981), unless the connection gives it
-            # the proof of the code that created it, bound to the connection's target (HttpConnection::getAsync(),
-            # qore#7262; see lent-client-creator-proof.qtest)
+            # the proof of the code that created it, bound to the connection's target (HttpConnection::getAsync() and
+            # RestConnection::getAsync(), qore#7262; see lent-client-creator-proof.qtest)
+            if (UnboundSyncClients{i.key}) {
+                assertRegex("^PERMISSION-DENIED: connection .*synchronous client is not bound", rv,
+                    sprintf("%s, %s", i.key, mode));
+                continue;
+            }
             if (ManagerClients{i.key}) {
                 assertRegex("^PERMISSION-DENIED: the calling code may not create an HTTP client connection manager",
                     rv, sprintf("%s, %s", i.key, mode));

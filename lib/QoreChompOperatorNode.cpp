@@ -85,7 +85,7 @@ static QORE_INTERN_NOINLINE int64 qore_chomp_container(LValueHelper& val, qore_t
     HashIterator hi(vh);
     while (hi.next()) {
         if (hi.get().getType() == NT_STRING) {
-            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            QoreValue& v = qhi_priv::get(hi)->i->val;
             // note that no exception can happen here
             ensure_unique(v, xsink);
             assert(!*xsink);
@@ -100,6 +100,11 @@ QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     LValueHelper val(exp, xsink);
     if (!val)
         return QoreValue();
+
+    // a weak reference to a list or a hash: its container is changed (qore#7297)
+    if (val.viewWeakContainer()) {
+        return QoreValue();
+    }
 
     qore_type_t vtype = val.getType();
     if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)

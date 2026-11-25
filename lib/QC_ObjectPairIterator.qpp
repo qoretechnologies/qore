@@ -78,7 +78,7 @@ ObjectPairIterator i(obj);
     @endcode
  */
 ObjectPairIterator::constructor(object object_value) [flags=NAMED_ARGS] {
-   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(object_value), xsink);
+   ReferenceHolder<QoreObjectIterator> p(new QoreObjectIterator(object_value, runtime_get_caller_class()), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_OBJECTPAIRITERATOR, p.release());
 }

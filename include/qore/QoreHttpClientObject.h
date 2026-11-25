@@ -490,6 +490,17 @@ public:
     */
     DLLEXPORT QoreStringNode* getProxyURL();
 
+    //! returns the proxy connection parameters as a URL with the given parts (or 0 if there is none)
+    /**
+        @param code the parts of the URL to include, a bitfield of @ref UC_TARGET and the other \c UC_* values (see
+        @ref URL_NORMAL)
+
+        @return the proxy connection parameters as a URL with the given parts, caller owns the reference count returned
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreStringNode* getProxyURL(int code);
+
     //! returns the proxy connection parameters as a URL without any password (or 0 if there is none)
     /**
         @return the proxy connection parameters as a URL without any password, caller owns the reference count returned

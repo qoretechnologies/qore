@@ -161,7 +161,9 @@ public class FreshsalesRestClientOAuth2Test inherits QUnit::Test {
             },
         });
         hash<auto> info = conn.getInfo();
-        assertTrue(info.up);
+        # a connection that was never checked is not up (issue #7236); one that cannot connect has an error status
+        assertFalse(info.up);
+        assertEq("not checked", info.status);
         assertFalse(conn.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
         # nor does it need authorization (qore#6901)
         assertFalse(conn.needsAuth());

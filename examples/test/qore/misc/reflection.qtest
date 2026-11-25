@@ -1387,7 +1387,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "submitRequestStreaming",
             ("method", "path", "headers", "body", "channel", "max_streams", "streaming", "body_streaming",
                 "notifier", "sse_install_eligible"));
-        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "pushSendData", ("data",));
+        assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "pushSendData", ("data", "timeout_ms"));
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "setTrailers", ("trailers",));
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "submitRequestSse",
             ("method", "path", "headers", "body", "queue", "max_streams", "notifier"));
@@ -1579,6 +1579,8 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("AsyncIoController", "setMaxIoThreads", ("max_threads",));
         assertNamedClassMethodVariantCount("AbstractPollOperation", "onComplete", ("result",));
         assertNamedConstructorVariantCount("DelegatingPollOperation", ("operation", "on_complete", "done_counter"));
+        assertNamedConstructorVariantCount("DelegatingPollOperation", ("operation", "on_complete", "done_counter",
+            "response_stall_timeout", "response_min_rate", "response_rate_window"));
         assertNamedClassMethodVariantCount("DelegatingPollOperation", "onComplete", ("result",));
         assertNamedConstructorVariantCount("FilePollOperation", ("file", "path", "as_string", "num_bytes"));
         assertNamedConstructorVariantCount("SocketPollOperation", ("socket", "goal", "options"));

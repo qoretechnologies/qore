@@ -82,7 +82,7 @@ static QORE_INTERN_NOINLINE int qore_trim_container(LValueHelper& val, qore_type
     HashIterator hi(vh);
     while (hi.next()) {
         if (hi.get().getType() == NT_STRING) {
-            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            QoreValue& v = qhi_priv::get(hi)->i->val;
             ensure_unique(v, xsink);
             QoreStringNode* vs = v.get<QoreStringNode>();
             if (vs->trim(xsink)) {
@@ -98,6 +98,11 @@ QoreValue QoreTrimOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     LValueHelper val(exp, xsink);
     if (!val)
         return QoreValue();
+
+    // a weak reference to a list or a hash: its container is changed (qore#7297)
+    if (val.viewWeakContainer()) {
+        return QoreValue();
+    }
 
     qore_type_t vtype = val.getType();
     if (vtype != NT_LIST && vtype != NT_STRING && vtype != NT_HASH)

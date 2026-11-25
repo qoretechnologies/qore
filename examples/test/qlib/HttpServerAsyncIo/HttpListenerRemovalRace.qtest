@@ -92,6 +92,21 @@ class RemovalSignal inherits LoggerAppenderWithLayout {
     }
 }
 
+#! Writes the warnings and errors of the server to the test's output, so that a failure shows what the server did
+/** For example a bind of the paired QUIC listener of an HTTP/3 listener that failed (qore#7420)
+*/
+class ServerWarnings inherits LoggerAppenderWithLayout {
+    constructor() : LoggerAppenderWithLayout("server-warnings", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /(WARNING|ERROR)/) {
+            stderr.printf("server: %s\n", params);
+        }
+    }
+}
+
 #! Records the SSE connections registered with the handler
 class RaceSseHandler inherits ServerSentEventHandler::ServerSentEventHandler {
     public {
@@ -218,6 +233,7 @@ class HttpListenerRemovalRaceTest inherits QUnit::Test {
         RemovalSignal signal(proto == "h3" ? 2 : 1);
         Logger logger("listener-removal-race", LoggerLevel::getLevelInfo());
         logger.addAppender(signal);
+        logger.addAppender(new ServerWarnings());
         RaceServer srv(<HttpServerOptionInfo>{"logger": logger});
         srv.setHandler("race", path, NOTHING, handler);
         hash<HttpListenerOptionInfo> lopts = <HttpListenerOptionInfo>{"node": "localhost", "service": 0};
@@ -241,6 +257,11 @@ class HttpListenerRemovalRaceTest inherits QUnit::Test {
         srv.race.lid = li.id;
         srv.race.srv = srv;
         srv.waitForAsyncIo();
+        if (proto == "h3") {
+            # the client connects to the QUIC listener paired with the TCP listener, on the same port (qore#7420)
+            assertEq((li.port, li.port), (map $1.port, srv.getListeners().values()),
+                "the HTTP/3 listener has its QUIC listener on its port");
+        }
         return {"srv": srv, "port": li.port};
     }
 

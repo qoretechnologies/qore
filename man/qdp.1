@@ -113,6 +113,13 @@ Common commands include \fBlist\fP for listing child providers, \fBinfo\fP,
 \fBinteractive\fP, \fBpipeline\fP, and many more.
 .PP
 Run \fBqdp\fP without arguments or with \fB\-h\fP for the complete command list.
+.PP
+\fBlisten\fP prints events until a key is pressed, when stdin is a terminal and
+\fBqdp\fP runs in its foreground; otherwise (stdin from a file, a pipe or
+\fI/dev/null\fP, or a background job) until it receives \fBSIGINT\fP or
+\fBSIGTERM\fP.  It also stops when the event source ends or after the
+\fB\-\-timeout\fP, if given.  \fBinteractive\fP requires a terminal in the
+foreground.
 .SH PROVIDER FORMATS
 .TP
 .I connection

@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerH2PumpLimit.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# An HTTP/2 response body that the I/O thread sends from an InputStream, on a stream with its own send limit, arrives
+# complete at a client with a small flow-control window: a chunk that the limit refuses is kept and sent later, not
+# dropped (qoretechnologies/qore#7460).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH2PumpLimitTest
+
+#! the size of the body
+const BodySize = 16 * 1024 * 1024;
+
+#! a body whose bytes depend on their position, so that lost or reordered data changes its hash
+const Body = get_body();
+
+#! the send limit of the stream, far below the default buffer
+const StreamLimit = 100000;
+
+#! responds with a body from a C++ InputStream on a stream with its own send limit
+class LimitedBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! a regular file to send from /file
+        *string file_path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        s.setHttp2StreamSendLimit(cx."header-info".stream_id, StreamLimit);
+        InputStream is = cx.raw_path == "/file"
+            ? new FileInputStream(file_path)
+            : new BinaryInputStream(Body);
+        # no Content-Length: a body that is cut short would otherwise end as a complete response
+        return AbstractHttpRequestHandler::makeResponse(200, is, {"Content-Type": "application/octet-stream"});
+    }
+}
+
+#! returns the body: the decimal offset of every 16th byte, padded to 16 bytes
+binary sub get_body() {
+    string s = "";
+    for (int i = 0; i < BodySize; i += 16) {
+        s += sprintf("%015d\n", i);
+    }
+    return binary(s);
+}
+
+#! returns the SHA-256 digest of the data in hex
+string sub get_hash(data d) {
+    return SHA256_bin(d).toHex();
+}
+
+class HttpServerH2PumpLimitTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerH2PumpLimit", "1.0") {
+        addTestCase("a memory stream body on a stream with a send limit arrives complete", \testComplete(), "/memory");
+        addTestCase("a file body on a stream with a send limit arrives complete", \testComplete(), "/file");
+        set_return_value(main());
+    }
+
+    testComplete(string path) {
+        LimitedBodyHandler h();
+        TmpFile file("h2-pump-limit-");
+        file.file.write(Body);
+        h.file_path = file.path;
+        HttpServer hs(<HttpServerOptionInfo>{});
+        on_exit hs.stop();
+        hs.setDefaultHandler("limited", h);
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        hs.waitForAsyncIo();
+
+        foreach int window in ((16384, 65535)) {
+            HTTPClient c({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False, "http_version": "2.0",
+                "timeout": 120s});
+            on_exit c.disconnect();
+            # a small window makes the client take the data in small steps, so that the stream's limit refuses reads
+            c.setHttp2Settings({"initial_window_size": window});
+            hash<auto> resp = c.send(NOTHING, "GET", path, NOTHING, False);
+            assertEq(200, resp.status_code, sprintf("window %d: the status", window));
+            assertEq(BodySize, resp.body.size(), sprintf("window %d: the whole body arrived", window));
+            assertEq(get_hash(Body), get_hash(resp.body),
+                sprintf("window %d: the body arrived in order", window));
+        }
+    }
+}
