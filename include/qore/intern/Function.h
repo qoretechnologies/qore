@@ -188,11 +188,9 @@ public:
     }
 
     //! appends the key of the signature as an abstract variant (MethodVariantBase::getAbstractSignature())
-    /** The key is made from the parameter types (with the path of a class, hashdecl or other named type) and the
-        \c const qualifiers of the parameters only, without the parameter names and default values: a declaration has
-        the same key whether its class was parsed or loaded from an AOT image (qore#7331).  As the key made from the
-        parse types of a signature that is not resolved yet, it has neither the default arguments nor the varargs of
-        the signature.
+    /** The parameter types (including their paths), const qualifiers, presence of default arguments by position,
+        and declared ellipsis distinguish inherited method contracts. Parameter names and the values of defaults
+        are not part of the key. Parsed and AOT-loaded declarations use the same representation (qore#7331, #7404).
 
         @return true if the key is made from the resolved types, false if from the parse types of a signature that
         is not resolved yet, in which case it is made again when the signature has been resolved
@@ -207,6 +205,12 @@ public:
                 str.append("const ");
             }
             str.append(QoreTypeInfo::getPath(typeList[i]));
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
+        }
+        if (varargs) {
+            str.append("...");
         }
         return true;
     }
@@ -285,8 +289,8 @@ public:
         parameters in \a sig: they are substituted before the types are compared (an abstract method of a generic class
         implemented in a subclass of a specialization; issue #5773)
     */
-    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const;
+    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match,
+            const QoreTypeInfo* receiver, bool implements_abstract) const;
 
     DLLLOCAL bool hasVarargs() const {
         return varargs;
@@ -779,6 +783,12 @@ public:
             } else {
                 str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
             }
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
+        }
+        if (varargs) {
+            str.append("...");
         }
         return false;
     }
@@ -1550,10 +1560,10 @@ public:
 
     //! @param receiver see AbstractFunctionSignature::compare()
     DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const {
+            const QoreTypeInfo* receiver = nullptr, bool implements_abstract = false) const {
         //printd(5, "AbstractQoreFunctionVariant::isSignatureIdentical() this: %p '%s' == '%s': %d\n", this,
         //  getSignature()->getSignatureText(), sig.getSignatureText(), *(getSignature()) == sig);
-        return getSignature()->compare(sig, relaxed_match, receiver);
+        return getSignature()->compare(sig, relaxed_match, receiver, implements_abstract);
     }
 
     // only returns a non-nullptr value for normal user method variants

@@ -1127,7 +1127,13 @@ AbstractMethod::~AbstractMethod() {
         i.second->deref();
 }
 
-static bool method_const_contract_satisfied(const MethodVariantBase* required, const MethodVariantBase* candidate) {
+static bool method_contract_satisfied(const MethodVariantBase* required, const MethodVariantBase* candidate) {
+    // With %broken-varargs an abstract user method without an ellipsis is marked as accepting extra
+    // arguments implicitly. Preserve that mode's exact match on the declared ellipsis.
+    if (required->isUser() && required->isAbstract() && required->hasVarargs()
+            && !required->getSignature()->hasVarargs() && candidate->getSignature()->hasVarargs()) {
+        return false;
+    }
     return !required->isConstMethod() || candidate->isConstMethod();
 }
 
@@ -1247,7 +1253,7 @@ void AbstractMethod::parseOverride(MethodVariantBase* v) {
     const char* sig = v->getAbstractSignature();
     vmap_t::iterator vi = vlist.find(sig);
     if (vi != vlist.end()) {
-        if (!method_const_contract_satisfied(vi->second, v)) {
+        if (!method_contract_satisfied(vi->second, v)) {
             return;
         }
         pending_save.insert(vmap_t::value_type(sig, vi->second));
@@ -1408,7 +1414,7 @@ void AbstractMethod::override(MethodVariantBase* v) {
     const char* sig = v->getAbstractSignature();
     vmap_t::iterator vi = vlist.find(sig);
     if (vi != vlist.end()) {
-        if (!method_const_contract_satisfied(vi->second, v)) {
+        if (!method_contract_satisfied(vi->second, v)) {
             return;
         }
         vi->second->deref();
@@ -12612,7 +12618,13 @@ void MethodFunctionBase::replaceAbstractVariantIntern(MethodVariantBase* variant
 
     for (vlist_t::iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         (*i)->parseResolveUserSignature();
-        if ((*i)->isSignatureIdentical(sig, relaxed_match)) {
+        // For an abstract entry the concrete implementation is the signature accepting its calls.
+        const MethodVariantBase* entry = METHVB_const(*i);
+        bool match = entry->isAbstract()
+            ? variant->isSignatureIdentical(*entry->getSignature(), relaxed_match, nullptr, true)
+                && method_contract_satisfied(entry, variant)
+            : entry->isSignatureIdentical(sig, relaxed_match);
+        if (match) {
             pending_save.push_back(*i);
             vlist.erase(i);
             vlist.push_back(variant);
@@ -12701,8 +12713,8 @@ MethodVariantBase* MethodFunctionBase::parseHasVariantWithSignature(MethodVarian
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         (*i)->parseResolveUserSignature();
         MethodVariantBase* candidate = reinterpret_cast<MethodVariantBase*>(*i);
-        if (candidate->isSignatureIdentical(sig, relaxed_match, receiver)
-                && method_const_contract_satisfied(v, candidate)) {
+        if (candidate->isSignatureIdentical(sig, relaxed_match, receiver, v->isAbstract() && !candidate->isAbstract())
+                && method_contract_satisfied(v, candidate)) {
             return candidate;
         }
     }
@@ -12739,7 +12751,8 @@ MethodVariantBase* MethodFunctionBase::runtimeHasVariantWithSignature(MethodVari
     AbstractFunctionSignature& sig = *(v->getSignature());
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         MethodVariantBase* candidate = reinterpret_cast<MethodVariantBase*>(*i);
-        if (candidate->isSignatureIdentical(sig, relaxed_match) && method_const_contract_satisfied(v, candidate)) {
+        if (candidate->isSignatureIdentical(sig, relaxed_match, nullptr, v->isAbstract() && !candidate->isAbstract())
+                && method_contract_satisfied(v, candidate)) {
             return candidate;
         }
     }
