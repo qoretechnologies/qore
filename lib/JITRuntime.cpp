@@ -19523,6 +19523,26 @@ static QORE_INTERN_ALWAYS_INLINE bool qore_rt_int_list_compound_in_place(const Q
     return true;
 }
 
+//! The generic path of qore_rt_lv_path_int_list_compound_impl(), out of line
+/** Calls qore_rt_lv_path_compound_consume() or qore_rt_lv_path_compound(), given the index as the dynamic operand of
+    the path if it has one (a constant index is in the path); the static implementation that they share is not called
+    from another place, so that the compiler's choices for them and for the rest of the library stay as they were
+*/
+static QORE_INTERN_NOINLINE uint64_t qore_rt_lv_path_int_list_compound_generic(QoreIRLValuePathInstruction* inst,
+        int64_t index, uint64_t rhs_bits, int32_t consume_rhs, ExceptionSink* xsink) {
+    uint64_t* dyn_vals = nullptr;
+    uint64_t index_bits[1];
+    // the index as the path's dynamic operand; a large int is held in a node, which this function releases
+    ValueHolder index_holder(xsink);
+    if (inst->path[1].operand_idx != UINT32_MAX) {
+        index_holder = QoreValue(index);
+        index_bits[0] = index_holder->rawBits();
+        dyn_vals = index_bits;
+    }
+    return consume_rhs ? qore_rt_lv_path_compound_consume(inst, dyn_vals, rhs_bits, xsink)
+        : qore_rt_lv_path_compound(inst, dyn_vals, rhs_bits, xsink);
+}
+
 //! Makes an integer compound assignment to an element of a list<int> local with a native index
 /** In place with qore_rt_int_list_compound_in_place() where it can, otherwise with the generic path, given the index
     as the dynamic operand of the path if it has one (a constant index is in the path).  The reference to the operand
@@ -19543,14 +19563,7 @@ static uint64_t qore_rt_lv_path_int_list_compound_impl(QoreIRLValuePathInstructi
         // an inline integer operand has no reference to release
         return toBits(result);
     }
-    ValueHolder rhs_holder(consume_rhs ? rhs : rhs.refSelf(), xsink);
-    if (inst->path[1].operand_idx == UINT32_MAX) {
-        return qore_rt_lv_path_compound_impl(inst, nullptr, rhs_holder, xsink);
-    }
-    // the index as the path's dynamic operand; a large int is held in a node, which this function releases
-    ValueHolder index_holder(QoreValue(index), xsink);
-    uint64_t dyn_vals[] = {index_holder->rawBits()};
-    return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
+    return qore_rt_lv_path_int_list_compound_generic(inst, index, rhs_bits, consume_rhs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_int_list_compound(QoreIRLValuePathInstruction* inst, int64_t index,
