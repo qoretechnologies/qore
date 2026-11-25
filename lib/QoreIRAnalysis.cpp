@@ -3983,6 +3983,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     //! the phis that select the keys of the hash reads that are projected to phis of the members (see
     //! resolve_finite_hash_key below)
     std::unordered_set<const QoreIRPhiInstruction*> finite_hash_selectors;
+    //! set when the analysis is cancelled in a helper that returns no status of its own; the caller returns
+    //! without changing the function
+    bool finite_hash_cancelled = false;
     enum class ScalarizedAggregateMaterializationKind {
         List,
         Hash,
@@ -4538,6 +4541,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             std::unordered_set<size_t> seen;
             for (size_t i = 0; i < selector_phi->incoming.size(); ++i) {
                 if (qore_ir_analysis_cancelled(check_count, "IR finite hash key analysis")) {
+                    finite_hash_cancelled = true;
                     return QoreIRValue();
                 }
                 const QoreIRPhiIncoming& incoming = selector_phi->incoming[i];
@@ -4595,6 +4599,11 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             phi.facts.assigned_state = QoreIRAssignedState::Assigned;
             phi.facts.never_nothing = true;
+            // the facts that the members do not share are not the phi's: those of a native value made by the IR
+            // builder
+            phi.facts.list_density = QoreIRListDensity::Unknown;
+            phi.facts.ownership = phi.facts.representation == QoreIRValueRepresentation::NativeBool
+                ? QoreIRValueOwnership::ReferenceFree : QoreIRValueOwnership::Unknown;
             phi.facts.int_range_known = range_known;
             if (!range_known) {
                 phi.facts.int_range_min = phi.facts.int_range_max = 0;
@@ -5660,6 +5669,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             if (!resolve_string_selector(
                                     use.inst->operands[1], key)) {
                                 replacement = resolve_finite_hash_key(use.inst, read_position->second);
+                                if (finite_hash_cancelled) {
+                                    return {};
+                                }
                                 if (replacement.isValid()) {
                                     candidate_replacements.emplace(use.inst->result.id, replacement);
                                     reads.push_back(use.inst);
@@ -6086,14 +6098,17 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     // returns true if \a phi is a key selector of the projected hash reads whose uses are all removed, or are
     // \a store, and whose literal keys have no other use, so that the phi and its literals can be removed too
     auto finite_hash_selector_removable = [&](const QoreIRInstruction* phi, const QoreIRInstruction* store) {
+        // a phi that the rewrite forwards to other uses, which the use map does not have, is not removable
         if (!enable_finite_hash_selector_elision || phi->opcode != QoreIROpcode::Phi
-                || !finite_hash_selectors.count(static_cast<const QoreIRPhiInstruction*>(phi))) {
+                || !finite_hash_selectors.count(static_cast<const QoreIRPhiInstruction*>(phi))
+                || forwarded_values.count(phi->result.id)) {
             return false;
         }
         auto phi_uses = uses.find(phi->result.id);
         if (phi_uses != uses.end()) {
             for (const QoreIRScalarUse& use : phi_uses->second) {
                 if (qore_ir_analysis_cancelled(check_count, "IR finite hash selector use analysis")) {
+                    finite_hash_cancelled = true;
                     return false;
                 }
                 if (!use.inst || (use.inst != store && !eliminated.count(use.inst))) {
@@ -6103,6 +6118,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         }
         for (QoreIRValue operand : phi->operands) {
             if (qore_ir_analysis_cancelled(check_count, "IR finite hash selector literal analysis")) {
+                finite_hash_cancelled = true;
                 return false;
             }
             auto literal = definitions.find(operand.id);
@@ -6195,6 +6211,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         // removed with the selector, which has no other use
         bool finite_hash_selector = !exact_constant && local->getTypeInfo() == stringTypeInfo
             && finite_hash_selector_removable(constant, store);
+        if (finite_hash_cancelled) {
+            return {};
+        }
         if (!exact_constant && !finite_hash_selector) {
             continue;
         }
@@ -6240,6 +6259,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 }
                 if (!eliminated.count(inst.get()) && finite_hash_selector_removable(inst.get(), nullptr)) {
                     remove_finite_hash_selector(inst.get());
+                }
+                if (finite_hash_cancelled) {
+                    return {};
                 }
             }
         }
