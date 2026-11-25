@@ -25643,41 +25643,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             del_c.discard(nullptr);
         }
-        // the modules that each module requires, directly or through other modules
-        std::map<std::string, std::set<std::string>> requires_map;
+        // in the order of the teardown of the data of the module Programs, as the closures of AOT modules run: a cycle
+        // is broken at one of its own modules, never at a module that it requires (qore#7445)
+        QMM.orderModulesDependentsFirst(del_modules);
         for (const std::string& name : del_modules) {
-            std::set<std::string> all;
-            std::vector<std::string> todo{name};
-            while (!todo.empty()) {
-                std::string cur = std::move(todo.back());
-                todo.pop_back();
-                std::set<std::string> deps;
-                QMM.getModuleDependencies(cur.c_str(), deps);
-                for (const std::string& d : deps) {
-                    if (all.insert(d).second) {
-                        todo.push_back(d);
-                    }
-                }
-            }
-            requires_map[name] = std::move(all);
-        }
-        std::vector<std::string> ordered;
-        while (!del_modules.empty()) {
-            size_t pick = 0;
-            for (size_t i = 0; i < del_modules.size(); ++i) {
-                bool required = false;
-                for (size_t j = 0; j < del_modules.size() && !required; ++j) {
-                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
-                }
-                if (!required) {
-                    pick = i;
-                    break;
-                }
-            }
-            ordered.push_back(del_modules[pick]);
-            del_modules.erase(del_modules.begin() + pick);
-        }
-        for (const std::string& name : ordered) {
             QoreAbstractModule* mod = QMM.findModule(name.c_str());
             QoreUserModule* user_mod = dynamic_cast<QoreUserModule*>(mod);
             assert(user_mod);

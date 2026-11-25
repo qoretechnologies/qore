@@ -1283,6 +1283,17 @@ public:
     */
     DLLLOCAL void getModuleDependencies(const char* name, strset_t& deps);
 
+    //! Orders the given modules so that each comes before the modules that it requires (qore#7432, qore#7445)
+    /** The order of the teardown of the data of the module Programs (delUser()): a module requires the modules that it
+        requires directly or through other modules, user modules (loaded from source or AOT modules) and binary
+        modules alike, also those recorded at run time (getTeardownModuleDependencies()).  A cycle is broken at one of
+        its own modules, never at a module that it requires, preferring one that no module left requires statically
+        (qore#7451); other ties are resolved in the given order.  Takes the mutex.
+
+        @param names the names of the modules, reordered
+    */
+    DLLLOCAL void orderModulesDependentsFirst(std::vector<std::string>& names);
+
     //! Returns true if the module dependency map already has a path from \a from to \a to
     /** A path from \a from to \a to means that \a to must be deleted before \a from; adding the reverse edge
         would make a cycle, which module teardown (delUser()) cannot resolve.  The mutex must be held when
