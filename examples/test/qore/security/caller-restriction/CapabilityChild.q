@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# the checks of caller-restriction-capability.qtest: the host lends a connection of library code to a restricted
+# Program; ARGV[0] is "restricted" or "unrestricted"; prints one line per result: the key, "=", and the value (%y)
+
+%modern
+%no-child-restrictions
+%requires CapProbe
+%requires CapInherit
+%requires CapRegistry
+%requires ConnectionProvider
+%requires RestClient
+%requires SmtpClient
+
+int po = PO_NEW_STYLE;
+if (ARGV[0] == "restricted") {
+    po |= PO_NO_NETWORK | PO_NO_UNCONTROLLED_APIS | PO_NO_PROCESS_CONTROL;
+}
+Program p(po);
+p.parse("%modern
+%requires CapProbe
+%requires CapRegistry
+class Sub inherits CapProbe::Conn {
+}
+# a request of a connection manager: its error code, or DONE
+string sub req(object m, string url) {
+    try {
+        m.request(url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+# connections of the library that the host lends: their client is created when they are used
+string sub lent_client(object c, bool async) {
+    try {
+        async ? c.getAsync(False) : c.get(False);
+        return \"client\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+hash<auto> sub run(CapProbe::Conn lent, code host_ref, hash<string, list<auto>> lent_connections, code make_in_grant,
+        CapProbe::DtorProbe dtor) {
+    hash<auto> h;
+    # the destructor of a lent object that the restricted code deletes is not called as a capability
+    delete dtor;
+    h.lent_destructor = CapProbe::destructor_probes()[0];
+    # library code that acts on a connection of the host, which it holds or which the restricted code gives it, is
+    # checked against the code that calls the library: only the code that the object was handed to uses it as a
+    # capability
+    h.registry_get = CapRegistry::registered_get();
+    h.helper_get = CapRegistry::helper_get(lent);
+    # a connection that trusted module code creates under a host grant for the restricted code is not lent: the grant
+    # does not outlive itself
+    object made = make_in_grant();
+    h.made_in_grant_get = made.get();
+    # the async client of a lent HTTP connection uses the network for the restricted code (the lent capability), but
+    # only to the target of the connection's creator (qore#7262): its own target is reached (nothing listens there),
+    # another origin is refused
+    {
+        object m = lent_connections.bound[0].getAsync(False);
+        h.lent_bound_own = req(m, lent_connections.bound[2]);
+        h.lent_bound_other = req(m, lent_connections.bound[3]);
+    }
+    foreach hash<auto> i in (lent_connections.pairIterator()) {
+        h{\"lent_connection_\" + i.key} = lent_client(i.value[0], i.value[1]);
+    }
+    # a connection that the host lent: its methods do what they do
+    h.lent_get = lent.get();
+    h.lent_probe = lent.probe();
+    h.lent_nested_get = lent.nested().get();
+    h.lent_nested_probe = lent.nested().probe();
+    h.lent_thread = lent.threadProbe();
+    h.lent_native = lent.nativeProbe();
+    h.lent_process = lent.processProbe();
+    # a factory of the lent connection that creates an object of the class that the restricted code names: only an
+    # object of the lent module's own class is lent, not one of another module's class
+    h.factory_other_probe = lent.make(\"CapGadget::Gadget\").probe();
+    # isLentToRestricted() in a method of the lent connection answers for the code that it was lent to (qore#7262),
+    # and follows a policy barrier that the module's code establishes in the method
+    h.lent_to_restricted = lent.lentToRestricted();
+    h.lent_to_restricted_barrier = lent.lentToRestrictedUnderBarrier();
+    # a copy of a lent object is the copying code's, not lent
+    h.copy_probe = lent.copy().probe();
+    h.factory_own_get = lent.make(\"CapProbe::Conn\").get();
+    # a module loaded for the first time in a lent method: what its initialization creates is not lent
+    lent.loadLazy();
+    h.lazy_shared_get = CapProbe::lazy_shared().get();
+    # code of the restricted Program that a lent connection calls is restricted
+    h.lent_callback = lent.callback(bool sub () { return SandboxManager::isCallerRestricted(DOM_NETWORK); });
+    # a reference to a method of the lent connection: restricted if the restricted Program created it
+    h.own_ref_to_lent = (\\lent.probe())();
+    h.host_ref_to_lent = host_ref();
+    # the library's own shared state, created in its initialization, is not lent: it is checked against its caller
+    h.library_shared_get = CapProbe::shared().get();
+    h.library_shared_probe = CapProbe::shared().probe();
+    # connections that the restricted Program created itself are restricted
+    CapProbe::Conn mine();
+    h.own_get = mine.get();
+    h.own_probe = mine.probe();
+    Sub s();
+    h.own_subclass_get = s.get();
+    return h;
+}
+", ARGV[0]);
+CapProbe::Conn lent();
+Socket listener();
+listener.bind("127.0.0.1:0");
+listener.listen();
+int port = listener.getSocketInfo().port;
+hash<string, list<auto>> lent_connections = {
+    "http": (new ConnectionProvider::HttpConnection("c", "d", sprintf("http://127.0.0.1:%d", port),
+        {"monitor": False}), True),
+    "rest": (new RestClient::RestConnection("c", "d", sprintf("http://127.0.0.1:%d", port), {"monitor": False}),
+        True),
+    "smtp": (new SmtpClient::SmtpConnection("c", "d", sprintf("smtp://127.0.0.1:%d", port), {"monitor": False}),
+        False),
+};
+# a lent HTTP connection to a port where nothing listens: its target and another origin (qore#7262)
+{
+    Socket s();
+    s.bind("127.0.0.1:0");
+    int closed = s.getSocketInfo().port;
+    s.close();
+    string own = sprintf("http://127.0.0.1:%d/", closed);
+    lent_connections.bound = (new ConnectionProvider::HttpConnection("b", "d", own, {"monitor": False}), True, own,
+        sprintf("http://localhost:%d/", closed));
+}
+CapRegistry::register(lent);
+code make_in_grant = SandboxManager::createSystemPolicyCall(\CapRegistry::make());
+map printf("%s=%y\n", $1.key, $1.value), p.callFunction("run", lent, \lent.probe(), lent_connections,
+    make_in_grant, new CapProbe::DtorProbe()).pairIterator();
+# code restricted from the file system that was lent a REST connection cannot choose the files that its client loads:
+# the file system is not lent for that (qore#7262)
+{
+    Program pf(ARGV[0] == "restricted" ? po | PO_NO_FILESYSTEM : po);
+    pf.parse("%modern
+string sub lent_rest_tls(object conn, string path) {
+    try {
+        hash<auto> rtopts = {};
+        rtopts.ssl_cert_path = path;
+        conn.getAsync(False, rtopts);
+        return \"CLIENT\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", "fs-restricted");
+    printf("lent_rest_tls_path=%y\n", pf.callFunction("lent_rest_tls", lent_connections.rest[0], "/etc/hosts"));
+}
+# the host's own call of the connection's method: nothing is lent to restricted code (qore#7262)
+printf("host_lent_to_restricted=%y\n", lent.lentToRestricted());
+# a sandboxed Program (its sandbox allows the network) with the same restrictions connects through the lent
+# connection: its sandbox still governs the connection, but its parse options are what the lent object lends
+{
+    SandboxManager sm();
+    sm.setNetworkDefaultPolicy(True);
+    Program s(po);
+    s.setSandboxManager(sm);
+    s.parse("%modern
+string sub connect(object c) {
+    try {
+        c.get(True);
+        return \"connected\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", "sandboxed");
+    printf("sandboxed_lent_connect=%y\n", s.callFunction("connect", lent_connections.http[0]));
+}
+# the restricted code's top-level code calls the lent connection in every execution mode: JIT-compiled code calls the
+# methods of objects without a creation context directly, which must not bypass the capability boundary (nor the
+# restrictions of the restricted code's own objects)
+# also as a sandboxed Program, whose module calls the JIT and IR fast paths set the caller's restrictions for after they
+# entered the method's Program
+foreach hash<auto> i in ({"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED, "sbast": EM_AST,
+        "sbir": EM_IR, "sbjit": EM_JIT, "sbtiered": EM_TIERED}.pairIterator()) {
+    Program q(po);
+    if (i.key =~ /^sb/) {
+        SandboxManager qsm();
+        qsm.setNetworkDefaultPolicy(True);
+        q.setSandboxManager(qsm);
+    }
+    q.setExecMode(i.value);
+    q.parse("%modern
+%requires CapProbe
+our object lent;
+our object inh;
+our hash<auto> result;
+result.lent_get = lent.get();
+result.lent_probe = lent.probe();
+# a factory of the lent connection: only an object of a class of the lent method's module is lent
+result.factory_other_probe = lent.make(\"CapGadget::Gadget\").probe();
+result.factory_own_get = lent.make(\"CapProbe::Conn\").get();
+# a lent object of a class of another module that inherits CapProbe's: an inherited method lends the classes of the
+# module of its code (CapProbe), the subclass's own method those of its module
+result.inherited_base_get = inh.make(\"CapProbe::Conn\").get();
+result.inherited_own_probe = inh.makeOwn().probe();
+# CapProbe's method calls the subclass's override from module code: the object is created in CapProbe's lent method
+# and is not of CapProbe's classes, so it is not lent
+result.inherited_override_probe = inh.makeHooked().probe();
+CapProbe::Conn own();
+result.own_get = own.get();
+", "top-level-" + i.key);
+    q.setGlobalVarValue("lent", lent);
+    q.setGlobalVarValue("inh", new CapInherit::Sub());
+    q.run();
+    hash<auto> res = q.getGlobalVariable("result");
+    map printf("top_%s_%s=%y\n", i.key, $1.key, $1.value), res.pairIterator();
+}
+listener.close();

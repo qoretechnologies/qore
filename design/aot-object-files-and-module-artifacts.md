@@ -394,6 +394,58 @@ with its own descriptor-revision error (`native ABI version 2 is incompatible
 with runtime version 1; rebuild the module`) instead of failing in `dlopen()`
 on an unresolved symbol.
 
+Executables and script objects are checked the same way (issue #6898). The
+generated `main()` of an executable passes the identity of the compiling
+libqore to `qore_aot_run_v4()`, and the register functions of a script-context
+`.qo` pass it to `qore_aot_script_register_v2()` and
+`qore_aot_script_register_native_v2()`. Each compares it with
+`qore_aot_runtime_identity` before anything else (one string comparison per
+image): before the runtime is initialized for an executable, and before
+anything of the object is read or registered for a script object. A mismatch
+is refused with an `AOT-RUNTIME-MISMATCH` error on stderr that names the image,
+both identities and the libqore version: the executable exits with status 2,
+and a refused object makes the batch of its Program fail in
+`qore_aot_script_end_batch()` (14) before anything of the batch runs. The older
+entry points of executables (`qore_aot_run()`, `qore_aot_run_v2()`,
+`qore_aot_run_v3()`) only refuse: an executable that calls one was compiled
+before the check, so it records another identity than a runtime whose
+fingerprinted sources define `qore_aot_run_v4()`. The public host API
+`qore_aot_script_register()` reads the identity from the image's `BUILD_INFO`,
+which opens the image once more before it is registered (the registration
+already opens it once for each of its steps; the generated code never takes this
+path).
+
+The executable references `qore_aot_run_v4()` weakly and reports the mismatch
+itself (with `write(2)`) when it does not resolve: the library could not be
+loaded or predates the check. On macOS, `qcc` links executables with
+`-weak-lqore`, so that dyld does not end an executable run with a libqore that
+lacks a helper it imports (`Symbol not found`) before `main()` can refuse it.
+On Linux the executables that `qcc` links bind every symbol at load (the
+default toolchains of Ubuntu and of hardened Fedora builds link PIE executables
+with `BIND_NOW`, and musl always binds at load), so a libqore that lacks a
+helper the executable imports is reported by the dynamic loader before `main()`
+runs; a libqore that has every helper but another identity, or lacks only
+`qore_aot_run_v4()`, is refused by the check. Lazy binding (`-z lazy`) is not
+used to extend this, as it would weaken RELRO. An executable linked statically
+(`qcc -S`) references the entry strongly, as a weak reference would not pull it
+out of `libqore_static.a`. The host that `qcc -o` writes for script objects
+links libqore normally, so there a libqore that lacks a symbol the objects
+import is still reported by the dynamic loader. A host that calls the register
+functions of script objects without a batch only gets the error on stderr (they
+return nothing); the refused object registers nothing. Tests:
+`examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest`.
+
+The definitions of the runtime helpers (`lib/JITRuntime.cpp` and the other
+files that define `qore_rt_*` functions) are not identity sources: their
+declarations are (`JITRuntime.h`, and the declarations that `QoreIRToLLVM.cpp`
+and `QoreAOT.cpp` emit), so a change to a helper's contract changes the
+identity, while a fix in a helper's body keeps every compiled artifact
+loadable, as intended for runtime-only fixes. A libqore built without the
+definition of a declared helper therefore keeps its identity; on macOS, where
+executables link libqore weakly, such an executable fails at its first call of
+the helper instead of in dyld. Such a library is a broken build, not a library
+of another runtime contract, which the identity does not cover.
+
 Outside the Qore tree, `QORE_USER_MODULE_AOT_RULES()` (cmake/QoreMacros.cmake)
 makes every `.qmod` depend on a build-local `qcc-format.stamp` that
 `cmake/QoreWriteQccRuntimeStamp.cmake` rewrites whenever qcc, `QORE_LIBRARY`
@@ -411,6 +463,64 @@ rebuild for a new Qore library ...") covers both.
 Inputs of an aggregated `.qmod` (`qcc -m --from-objects`) are not checked
 individually: the glue object records the identity of the aggregating qcc, and
 the build-system contract below keeps the `.qo` inputs current.
+
+## AOT Module Builtin API Identity
+
+A qmod's code can have the metadata of the builtin classes, functions and
+constants that it uses built in, and that metadata is defined in libqore's qpp
+files, whose code is not part of the runtime identity: the functional domains
+that a class of the module inherits from a builtin base class are stored with
+the class, the functional domains that the module's code uses are stored in
+the image and checked against the restrictions of a Program loading it, and
+the IR optimizer folds, hoists and merges calls of builtin variants by their
+code flags and functional domains. So a module compiled before a builtin class
+gained a functional domain keeps its old domains (a restricted Program that
+would refuse the module's source at parse time loads the module), and one whose
+call of a builtin function was folded keeps the folded value (qore#7183). Such
+a module is out of date, as one whose source has changed:
+
+- **Identity.** qpp writes the API metadata of a qpp file with
+  `--api-metadata` (`<name>.api.json`): the metadata of `--metadata` without the
+  documentation and the source path, so the names, parents, functional domains,
+  code flags, signatures, access and modifiers of its classes and methods, and
+  its functions, constants, hashdecls and enums. The libqore build writes it for
+  every qpp file of the library (`qore_wrap_qpp_value(... APILIST ...)`), and
+  `cmake/QoreWriteBuiltinApiIdentity.cmake` hashes (SHA-256) the names and
+  contents of those files, in the order of their names, into
+  `include/qore/intern/qore_builtin_api_identity.h`;
+  `lib/qore_aot_runtime_identity.cpp` defines it as
+  `qore_builtin_api_identity`. A change to the documentation or the code of a
+  builtin method or function, or to any other source of libqore, does not
+  change it. Builtin classes, functions and constants that C++ code defines
+  without qpp are not covered.
+- **Recording.** qcc records the identity of its libqore in the module metadata
+  record (version 5, `QoreAOTModuleFileInfo::builtin_api_identity`; see
+  "Module Metadata Section"), and in `BUILD_INFO` (`builtin-api-identity`) for
+  inspection; `qcc --version` and `qcc --dump-info` print it. Tests compile a
+  module against other builtin API metadata with
+  `QORE_AOT_TEST_BUILTIN_API_IDENTITY`
+  (`examples/test/ir/AOTModuleBuiltinApiIdentity.qtest`).
+- **Checking.** `QoreModuleManager::loadBinaryModuleFromPath()` reads the record
+  before mapping the module and raises `AOT-MODULE-STALE` for a module that
+  records another identity than the runtime's, naming both: the source module
+  beside it is loaded instead with a `BINARY-MODULE-SOURCE-FALLBACK` warning,
+  and without one the module is not loaded. Unlike the runtime identity, the
+  module is never mapped. A module registered statically in an executable
+  (`qore_aot_register_into_program_v2()`) is refused the same way, as it has no
+  source. The program code of an executable that qcc links (`qore_aot_run_v3()`)
+  is not checked: only its `BUILD_INFO` records the identity, and it must be
+  linked again after its Qore library's builtin API has changed.
+- **Rebuilding.** The `qore-builtin-api-identity` target rewrites the header in
+  every build, only when the identity changes, and every qmod of the Qore build
+  depends on the header, so the qmods are compiled again exactly when the API
+  metadata changes. `qcc --check-module-sources`, which the build of the AOT
+  modules runs before compiling them (qore#6598), also finds a module of
+  another identity out of date, so a build tree or a module build outside the
+  Qore tree compiles it again for the libqore that checks it.
+
+The qmod build cache (`design/qmod-build-cache.md`) keys on the content of every
+file of `lib/`, the qpp files included, so it never supplies a module compiled
+against other builtin API metadata.
 
 ## Module Metadata Section
 
@@ -482,8 +592,13 @@ option list, which came with AOT format version 44
 (`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), and version 4 the three
 fields of the declared domains, with AOT format version 45
 (`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
-reports tells which record it has; a runtime reads only its own record version
-and refuses any other, asking for the module to be rebuilt. Every string is
+reports tells which record it has; version 5 adds the builtin API identity of
+the compiling libqore (64 lowercase hexadecimal digits; see "AOT Module Builtin
+API Identity"), with AOT format version 52
+(`QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION`). A runtime reads only its own record version and refuses any
+other, asking for the module to be rebuilt; `qcc --check-module-sources` finds
+a module whose record it cannot read out of date, so the build compiles it
+again. Every string is
 nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
 per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
 documents the layout.
@@ -997,8 +1112,11 @@ compiler's outlining pass no longer calls into it.
 
 Both halves of the binary format belong in the fingerprint, not just the
 writer. The reader checks that a `.qo` is within its supported version
-range. Batch AO sets the minimum to v51, so artifacts from AN (v50) and
-earlier require recompilation; a qcc executable checks the version of the
+range. Each format bump sets the minimum to the version that it writes: v52,
+whose format changes the AOT-identity batch shares (owner-qualified wildcard
+bounds, qore#7184; the declaration index of METHODS records, qore#7169; the
+callee of each background helper, qore#7087), is the minimum, so artifacts from
+v51 and earlier require recompilation; a qcc executable checks the version of the
 program image that it embeds when it starts, before it reads anything else. A reader change within the supported range
 still needs to invalidate cached artifacts when it changes their interpretation.
 

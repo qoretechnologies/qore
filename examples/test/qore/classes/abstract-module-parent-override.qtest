@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved at run time, module loading
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractModuleParentOverrideTest
+
+#! a class's own method overrides the method of the same signature of a parent class loaded from a module, also when
+#! other parent classes declare and implement the method's other overloads (qore#7337)
+/** With \c N8 (whose parent class \c Q declares the abstract \c m(string) that \c N8 implements and inherits \c m(int)
+    from an abstract and a concrete parent class) in a module, <tt>class U8 inherits private N8, I2, I1, Sint
+    { string m(string s) }</tt> called \c N8::m(string) instead of its own method (also typed, through call
+    references, call_object_method() and from the code of the class, and its subclasses too), and classes with a
+    further abstract parent class that they implement could not be instantiated, while the same classes declared in
+    one program called their own methods; fixed by the changes for qore#7330 and qore#7331.
+
+    The output of every execution mode, of qcc executables (-O0, -O3) and of the program whose parent classes are
+    loaded from the modules' sources and from qcc -m .qmods must be the same: probe.expected.  The programs, the
+    classes that they share (users.ql) and the modules are in \c abstract-module-parent-override/.
+*/
+class AbstractModuleParentOverrideTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-module-parent-override";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractModuleParentOverrideTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the parent classes in modules and in qcc -m .qmods", \testModule());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode, string script = Name, *string module_dir) {
+        return sprintf("%s%s -b --enable-debug --exec-mode=%s %s/%s.q", module_dir ? "QORE_MODULE_DIR="
+            + module_dir + " " : "", qore_bin, mode, dir, script);
+    }
+
+    private string run(string mode, string script = Name, *string module_dir) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode, script, module_dir));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testModule() {
+        # the modules' sources
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode, "module-user", dir), "source modules: " + mode);
+        }
+
+        # the modules compiled by qcc -m, whose abstract methods the AOT loader merges and resolves
+        TmpDir tmp("qore-abstract-module-parent-override-qmod-");
+        foreach string mod in (("AbstractModuleParentA", "AbstractModuleParentB")) {
+            int rc;
+            # the second module requires the first one's .qmod
+            string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -m -o %s/%s.qmod %s/%s.qm 2>&1", tmp.path,
+                qccBin(), tmp.path, mod, dir, mod), \rc);
+            if (rc || !is_file(tmp.path + "/" + mod + ".qmod")) {
+                testSkip("qcc is not available or cannot compile the module " + mod + ": " + out);
+            }
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode, "module-user", tmp.path), "qmods: " + mode);
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
+        TmpDir tmp("qore-abstract-module-parent-override-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}
