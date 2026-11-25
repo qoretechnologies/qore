@@ -8778,9 +8778,11 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
     // the frames in which a closure or call reference that restricted code created was called: the provenance frames
     // applied after frame i was entered (sw[i].head) and before frame i - 1 was entered (sw[i - 1].head) were applied
     // while the code of frame i ran; those of the bottom frame are all that are older (fail closed)
-    std::vector<bool> tainted;
+    // (not std::vector<bool>: its out-of-line fill would be shared with the interpreter's inlined uses in the single
+    // compilation unit, which then call it)
+    std::vector<unsigned char> tainted;
     try {
-        tainted.resize(n + 1, false);
+        tainted.resize(n + 1, 0);
     } catch (std::bad_alloc&) {
         return -1;
     }
@@ -8790,14 +8792,14 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
             const QoreSandboxProvenanceHelper* stop = i < n ? sw[i].head : nullptr;
             while (p && p != stop) {
                 if (qore_provenance_taints(p)) {
-                    tainted[i] = true;
+                    tainted[i] = 1;
                 }
                 p = p->getPrevious();
             }
             if (p != stop) {
                 // the frame at the switch is not on the thread's chain of provenance frames: fail closed
                 for (size_t j = i; j <= n; ++j) {
-                    tainted[j] = true;
+                    tainted[j] = 1;
                 }
                 break;
             }
@@ -8825,7 +8827,7 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
     bool restricted = qore_immediate_caller_pgm_restricted(pgm, foreign);
     // the running code and the immediate caller were not called through code that restricted code chose
     for (size_t i = 0; i <= j && !restricted; ++i) {
-        restricted = tainted[i];
+        restricted = tainted[i] != 0;
     }
     info.pgm = pgm;
     info.pgm_id = pgm->getProgramId();
