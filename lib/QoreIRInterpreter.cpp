@@ -1050,6 +1050,17 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
 static thread_local QoreIROpcode tls_last_silent_fail_opcode = QoreIROpcode::ConstNothing;
 static thread_local const QoreProgramLocation* tls_last_silent_fail_loc = nullptr;
 
+//! records the instruction that execute() dispatches, for silent-failure tracing
+/** Out of line, as qore_ir_restore_innermost_tls(): an inline store in execute()'s dispatch loop lets GCC keep the
+    address of the thread-local variables of this file live across execute(), in a slot of its frame, when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2, issue #7006); only called with tracing enabled
+*/
+static QORE_INTERN_NOINLINE void qore_ir_record_silent_fail(const QoreIRInstruction* inst) {
+    assert(inst);
+    tls_last_silent_fail_opcode = inst->opcode;
+    tls_last_silent_fail_loc = inst->loc;
+}
+
 void QoreIRInterpreter::dumpLastSilentFail(const char* tag) {
     const QoreProgramLocation* loc = tls_last_silent_fail_loc;
     fprintf(stderr, "[ir-silent-fail:%s] opcode=%d @ %s:%d\n",
@@ -2315,6 +2326,18 @@ static thread_local const std::vector<const LocalVar*>* tls_innermost_ir_instant
 int64 q_get_ir_innermost_instantiated_local_entries() {
     return tls_innermost_ir_instantiated_locals
         ? static_cast<int64>(tls_innermost_ir_instantiated_locals->size()) : 0;
+}
+
+//! restores the innermost cleanup vector and instantiated locals of the caller of execute() on every exit of it
+/** Out of line: with the store at execute()'s exit inline, GCC keeps the address of the thread-local variables of
+    this file, which the stores at its entry computed, live across execute() in a slot of its frame when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2), which each level of a recursion of interpreted code pays
+    (issue #7006); a call here computes the address itself, as the stores at the entry do
+*/
+static QORE_INTERN_NOINLINE void qore_ir_restore_innermost_tls(const IRCleanupSlots* prev,
+        const std::vector<const LocalVar*>* prev_instantiated_locals) noexcept {
+    tls_innermost_ir_cleanup = prev;
+    tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
@@ -11133,8 +11156,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const IRCleanupSlots* prev;
         const std::vector<const LocalVar*>* prev_instantiated_locals;
         ~CleanupTlsGuard() {
-            tls_innermost_ir_cleanup = prev;
-            tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+            qore_ir_restore_innermost_tls(prev, prev_instantiated_locals);
         }
     } cleanup_tls_guard{tls_innermost_ir_cleanup, tls_innermost_ir_instantiated_locals};
     tls_innermost_ir_cleanup = &cleanup;
@@ -12955,8 +12977,7 @@ next_instruction:
         // the caller (StatementBlock::execImpl / evalTiered fallback) can
         // read it post-return without plumbing it through the return value.
         if (trace_silent_fail) {
-            tls_last_silent_fail_opcode = inst->opcode;
-            tls_last_silent_fail_loc = inst->loc;
+            qore_ir_record_silent_fail(inst);
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
