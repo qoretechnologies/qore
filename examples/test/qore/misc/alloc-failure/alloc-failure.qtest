@@ -16,14 +16,23 @@
 #! on (issue #7466)
 /** The allocation fails with dbg_fail_allocation() (debug builds only) in the storage of a string or a list.  Before
     the fix, the storage was replaced with a null pointer and the process ended with SIGSEGV, or the std::bad_alloc of
-    the allocation ended it with std::terminate().  The scenarios run in child processes in each execution mode and
-    compiled with qcc.
+    the allocation ended it with std::terminate(); in the IR, JIT and tiered modes and in code compiled with qcc, an
+    operation of the code itself (not of builtin code) ended the process with std::terminate() until the call of the
+    code failed with the exception.  The scenarios run in child processes in each execution mode and compiled with
+    qcc.
 */
 class AllocFailureTest inherits QUnit::Test {
     public {
         #! the scenarios of the child and what each prints
         const Scenarios = {
             "builtin": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
+            # an operation of compiled code itself fails the call, which the caller catches
+            "compiled": "list: caught MEMORY-ALLOCATION-ERROR\nlist: again: 100000\n"
+                "string: caught MEMORY-ALLOCATION-ERROR\nstring: again: 100000\n"
+                "closure-local: caught MEMORY-ALLOCATION-ERROR\nclosure-local: again: 100000\n"
+                "nested: caught MEMORY-ALLOCATION-ERROR\nnested: again: 100000\n"
+                "method: caught MEMORY-ALLOCATION-ERROR\nmethod: again: 100000\n"
+                "caller local: caller\n",
             "callback": "caught MEMORY-ALLOCATION-ERROR\nagain: 10\n",
             "thread": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
             "server": "ping: 200 pong\nfail: 503 MEMORY-ALLOCATION-ERROR\nping: 200 pong\n"
@@ -31,17 +40,27 @@ class AllocFailureTest inherits QUnit::Test {
         };
 
         const Modes = ("ast", "ir", "jit", "tiered");
+
+        #! the scenarios of an allocation of native code that no runtime helper handles
+        const UnhandledScenarios = ("unhandled-direct", "unhandled-nested");
+
+        #! what such a scenario prints when the call fails with the exception
+        const UnhandledCaught = "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n";
     }
 
     private {
         string child = get_script_dir() + "/alloc-failure-child.q";
         FsUtil::TmpDir tmp("alloc-failure-");
+
+        #! the child compiled with qcc for each optimization level, once compiled
+        hash<string, string> exes;
     }
 
     constructor() : Test("AllocFailureTest", "1.0") {
         addTestCase("operations that fail for lack of memory", \operationTest());
         addTestCase("a statement that fails for lack of memory", \statementTest());
         addTestCase("compiled code", \compiledTest());
+        addTestCase("allocations of native code that no runtime helper handles", \unhandledTest());
         set_return_value(main());
     }
 
@@ -56,19 +75,28 @@ class AllocFailureTest inherits QUnit::Test {
         }
     }
 
-    #! the AST interpreter fails the statement; the other modes end the process with a message that says why
+    #! the operation fails with the exception, which the try block around it in the same function catches: in the AST
+    #! interpreter the statement, in the other modes and in compiled code the runtime helper of the operation
     statementTest() {
         checkDebug();
+        list<hash<auto>> runs;
         foreach string mode in (Modes) {
-            hash<auto> r = run(sprintf("%s statement", interpreter(mode)), True);
-            if (mode == "ast") {
-                assertEq(0, r.rc, sprintf("%s: the process goes on: %s", mode, r.out));
-                assertEq("caught MEMORY-ALLOCATION-ERROR\nlist: True\ncaught MEMORY-ALLOCATION-ERROR\nstring: True\n"
-                    "again: 100000\n", r.out, mode);
-            } else {
-                assertNeq(0, r.rc, mode);
-                assertRegex("qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated", r.out, mode);
+            runs += {"name": mode, "cmd": interpreter(mode)};
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (qcc) {
+            foreach int opt in ((0, 3)) {
+                *string exe = compiledChild(qcc, opt);
+                if (exe) {
+                    runs += {"name": sprintf("qcc -O%d", opt), "cmd": quote(exe)};
+                }
             }
+        }
+        foreach hash<auto> c in (runs) {
+            hash<auto> r = run(sprintf("%s statement", c.cmd), True);
+            assertEq(0, r.rc, sprintf("%s: the process goes on: %s", c.name, r.out));
+            assertEq("caught MEMORY-ALLOCATION-ERROR\nlist: True\ncaught MEMORY-ALLOCATION-ERROR\nstring: True\n"
+                "again: 100000\n", r.out, c.name);
         }
     }
 
@@ -79,10 +107,8 @@ class AllocFailureTest inherits QUnit::Test {
             testSkip("no qcc");
         }
         foreach int opt in ((0, 3)) {
-            string exe = sprintf("%s/child-O%d", tmp.path, opt);
-            hash<auto> c = run(sprintf("%s -O%d -o %s %s", quote(qcc), opt, quote(exe), quote(child)), True);
-            assertEq(0, c.rc, sprintf("qcc -O%d: %s", opt, c.out));
-            if (c.rc) {
+            *string exe = compiledChild(qcc, opt);
+            if (!exe) {
                 continue;
             }
             foreach hash<auto> s in (Scenarios.pairIterator()) {
@@ -91,6 +117,55 @@ class AllocFailureTest inherits QUnit::Test {
                 assertEq(s.value, r.out, sprintf("qcc -O%d, %s", opt, s.key));
             }
         }
+    }
+
+    #! the call fails with the exception, which the caller catches, or the process ends with the message of the
+    #! terminate handler (SIGABRT), when frames of native code were left; never with another signal or an assertion
+    unhandledTest() {
+        checkDebug();
+        list<hash<auto>> runs;
+        foreach string mode in (Modes) {
+            runs += {"name": mode, "cmd": interpreter(mode)};
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (qcc) {
+            foreach int opt in ((0, 3)) {
+                *string exe = compiledChild(qcc, opt);
+                if (exe) {
+                    runs += {"name": sprintf("qcc -O%d", opt), "cmd": quote(exe)};
+                }
+            }
+        }
+        foreach hash<auto> c in (runs) {
+            foreach string scenario in (UnhandledScenarios) {
+                string name = sprintf("%s, %s", c.name, scenario);
+                hash<auto> r = run(sprintf("%s %s", c.cmd, scenario), True);
+                if (!r.rc) {
+                    assertEq(UnhandledCaught, r.out, name);
+                } else {
+                    assertEq(134, r.rc, sprintf("%s: SIGABRT: %s", name, r.out));
+                    assertRegex("qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that cannot "
+                        "fail", r.out, name);
+                    assertNRegex("Assertion|Segmentation", r.out, name);
+                }
+            }
+        }
+    }
+
+    #! returns the child compiled with qcc at the given optimization level, compiled once, or nothing if it could not
+    #! be compiled
+    private *string compiledChild(string qcc, int opt) {
+        string key = opt.toString();
+        if (exes{key}) {
+            return exes{key};
+        }
+        string exe = sprintf("%s/child-O%d", tmp.path, opt);
+        hash<auto> c = run(sprintf("%s -O%d -o %s %s", quote(qcc), opt, quote(exe), quote(child)), True);
+        assertEq(0, c.rc, sprintf("qcc -O%d: %s", opt, c.out));
+        if (c.rc) {
+            return;
+        }
+        return exes{key} = exe;
     }
 
     private string interpreter(string mode) {
