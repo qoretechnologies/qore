@@ -5499,6 +5499,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # the methods of a handler of restricted code get the request without its credentials (qore#7303)
             bool restricted_handler = handler && handler.handlerCodeIsRestricted();
             request_helper.restricted_handler = restricted_handler;
+            # the helper of a persistent connection serves each of its requests: no earlier request's changes are
+            # kept (qore#7303)
+            remove request_helper.platform_changes;
 
             if (handler && http_get_field(hdr, "expect")) {
                 if (http_get_field(hdr, "expect") == "100-continue") {
@@ -10052,8 +10055,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Send a 200 OK response and exit the loop; the on_exit
                 # block will call phi.clear() → persistentClosed() →
                 # release any handler-held context.
+                # a handler of restricted code gets the header fields of the request without its credentials, as
+                # its other methods do (qore#7303)
                 if (phi.handler
-                        && phi.handler.isPersistentSessionEndRequest(req_hdr)) {
+                        && phi.handler.isPersistentSessionEndRequest(phi.handler.handlerCodeIsRestricted()
+                            ? phi.handler.withholdCredentialsForDispatch({}, req_hdr).hdr
+                            : req_hdr)) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;

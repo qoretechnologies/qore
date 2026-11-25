@@ -5991,6 +5991,8 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             remove rcx{key};
         }
         map rcx{$1.key} = $1.value, platform_changes.changed.pairIterator();
+        # the raw Authorization value is never given back, also not as a value from before the authentication
+        remove rcx.auth;
         return <HttpFilteredRequestInfo>{
             "cx": rcx,
             "hdr": filtered.hdr,

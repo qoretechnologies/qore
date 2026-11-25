@@ -463,7 +463,11 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         } catch (hash<ExceptionInfo> ex) {
             restricted = True;
         }
-        return restricted ? filterRequestForHandler(cx, cx.hdr ?? {}).cx : cx;
+        if (!restricted) {
+            return cx;
+        }
+        # the method's context marker and function are the handler's own keys
+        return filterRequestForHandler(cx, cx.hdr ?? {}).cx + cx{"cmark", "function"};
     }
 
     private hash<HttpResponseInfo> callMethod(hash<auto> cx0, auto params) {
@@ -505,7 +509,10 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         if (found.include_context) {
             # add the context hash as the first argument; the code of a restricted Program gets it without the
             # credentials of the request (qore#7303)
-            args = (found.function.typeCode() == NT_STRING ? cx : getContextForCode(found.function, cx),) + params;
+            # a method that is not code (an internal method, which takes no context) gets it filtered as well
+            args = (found.function.typeCode() == NT_STRING
+                ? filterRequestForHandler(cx, cx.hdr ?? {}).cx + cx{"cmark", "function"}
+                : getContextForCode(found.function, cx),) + params;
         } else {
             args = params;
         }

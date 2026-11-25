@@ -443,7 +443,11 @@ public namespace YamlRpcHandler {
             } catch (hash<ExceptionInfo> ex) {
                 restricted = True;
             }
-            return restricted ? filterRequestForHandler(cx, cx.hdr ?? {}).cx : cx;
+            if (!restricted) {
+            return cx;
+        }
+        # the method's context marker and function are the handler's own keys
+        return filterRequestForHandler(cx, cx.hdr ?? {}).cx + cx{"cmark", "function"};
         }
         final private hash<auto> callMethod(hash cx, auto params) {
             @assert(cx.method);
