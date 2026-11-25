@@ -100,6 +100,11 @@ public class DpqlWebSocketHandler inherits WebSocketHandler::WebSocketHandler {
 
     #! Handle incoming HTTP request for WebSocket upgrade
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
+        # a request whose method cannot open a WebSocket is refused before it counts or is authenticated (qore#7668)
+        *hash<auto> refused = WebSocketHandler::checkRequestMethod(cx, hdr);
+        if (refused) {
+            return refused;
+        }
         {
             count_lock.lock();
             on_exit count_lock.unlock();

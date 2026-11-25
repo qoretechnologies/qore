@@ -140,6 +140,10 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - @ref WebSocketHandler::WebSocketHandler::handleRequest() "handleRequest()" opens a WebSocket only on a \c GET
+      request (HTTP/1.1) or an extended \c CONNECT (HTTP/2 and HTTP/3); a request of any other method that carries the
+      upgrade headers gets <tt>405 Method Not Allowed</tt> (see
+      @ref WebSocketHandler::WebSocketHandler::checkRequestMethod() "checkRequestMethod()")
     - added @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()":
       the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request (see
       @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView()) is set up without the connection's
@@ -3263,6 +3267,12 @@ handler.setCloseTimeout(2s);
         #logDebug("websocket request: cx: %Y", cx);
         #logDebug("websocket request: hdr: %Y", hdr);
 
+        # only GET (HTTP/1.1) and extended CONNECT (HTTP/2, HTTP/3) open a WebSocket
+        *hash<auto> refused = checkRequestMethod(cx, hdr);
+        if (refused) {
+            return refused;
+        }
+
         # RFC 8441 / RFC 9220: HTTP/2 or HTTP/3 WebSocket uses CONNECT with :protocol=websocket
         bool is_extended_connect = is_websocket_extended_connect(cx, hdr);
         if (is_extended_connect) {
@@ -3342,6 +3352,38 @@ handler.setCloseTimeout(2s);
         return {
             "code": 101,
             "hdr": rhdr,
+        };
+    }
+
+    #! Returns the response that refuses a request whose method cannot open a WebSocket, or @ref nothing
+    /** A WebSocket is opened only by a \c GET request on HTTP/1.1 (RFC 6455 section 4.1) and by an extended \c CONNECT
+        with <tt>:protocol websocket</tt> on HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220); a request of any other method
+        that carries the upgrade headers (ex: an \c OPTIONS request, which an application may handle without
+        authentication as a CORS preflight request) gets <tt>405 Method Not Allowed</tt> with an \c Allow header, and
+        no connection is created.
+
+        handleRequest() calls it first; a subclass that overrides handleRequest() and does work of its own before it
+        calls the parent's method (counting connections, authenticating the request) calls it first as well
+
+        @param cx the call context hash of the request
+        @param hdr the header hash of the request
+
+        @return a 405 response hash for a request whose method cannot open a WebSocket, @ref nothing otherwise
+
+        @since WebSocketHandler 2.8
+    */
+    static *hash<auto> checkRequestMethod(hash<auto> cx, hash<auto> hdr) {
+        # an extended CONNECT is a request of a multiplexed connection only, and GET of an HTTP/1.1 connection only
+        bool multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
+        if (multiplexed ? is_websocket_extended_connect(cx, hdr) : hdr.method == "GET") {
+            return;
+        }
+        string allow = multiplexed ? "CONNECT" : "GET";
+        return {
+            "code": 405,
+            "hdr": {"Allow": allow},
+            "body": sprintf("cannot open WebSocket connection with a %s request; use %s", hdr.method ?? "(none)",
+                multiplexed ? "an extended CONNECT request with :protocol websocket" : "a GET request"),
         };
     }
 
