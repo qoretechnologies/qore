@@ -9,7 +9,9 @@ cmake/QoreWriteBuiltinDomainTable.cmake writes the table of the domains that the
 declare, which the qcc format fingerprint and so the identity cover: a change of the domains of a builtin changes the
 identity, and nothing else in those sources does.  The tests check the script, its use by
 qore_aot_runtime_identity_targets() (cmake/QoreMacrosIntern.cmake) in a project with stand-ins for the generated
-sources, and the table and fingerprint of a build of Qore (QORE_TEST_BUILD_DIR, by default build/).
+sources, and the table and fingerprint of a build of Qore (QORE_TEST_BUILD_DIR, by default build/), which also covers
+the values of the functional domains and parse restrictions (include/qore/Restrictions.h and
+lib/QoreParseOptions.cpp, qore#7526).
 """
 
 import os
@@ -59,10 +61,90 @@ DLLLOCAL QoreClass* initSocketClass(QoreNamespace& qns) {
 
 # declarations of each kind with and without domains, for the qpp of the build (the table depends on its output)
 QPP_FIXTURES = {
-    "QC_DomFixtureBase.qpp": '/** @file QC_DomFixtureBase.qpp fixture */\n\n//! class\n/**\n */\nqclass DomFixtureBase [arg=DomFixtureBase* b; ns=Qore; dom=NETWORK];\n\n//! Constructor\n/**\n */\npublic DomFixtureBase::constructor() [dom=PROCESS] {\n}\n\n',
-    "QC_DomFixture.qpp": '/** @file QC_DomFixture.qpp fixture */\n\n//! class\n/**\n */\nqclass DomFixture [arg=DomFixture* f; ns=Qore; vparent=DomFixtureBase];\n\n//! Constructor\n/**\n */\npublic DomFixture::constructor() {\n}\n\n//! method\n/**\n */\npublic nothing DomFixture::connect(string host) [dom=EXTERNAL_PROCESS] {\n}\n\n//! const method\n/**\n */\npublic string DomFixture::name() [flags=CONSTANT;dom=EXTERNAL_INFO] {\n   return QoreValue();\n}\n\n//! static method\n/**\n */\npublic static string DomFixture::lookup(string host) [dom=NETWORK] {\n   return QoreValue();\n}\n\n//! plain method\n/**\n */\npublic nothing DomFixture::plain() {\n}\n',
-    "QC_DomPar.qpp": '/** @file QC_DomPar.qpp fixture */\n\n//! class\n/**\n */\nqclass DomPar [arg=DomPar* f; ns=Qore; vparent=Future<int>];\n\n//! Constructor\n/**\n */\npublic DomPar::constructor() {\n}\n',
-    "ql_domfixture.qpp": '/** @file ql_domfixture.qpp fixture */\n\n/** @defgroup dom_fixture_functions Domain Fixture Functions\n */\n///@{\n//! function\n/**\n */\nnothing dom_fixture_process(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {\n}\n\n//! function without a domain\n/**\n */\nnothing dom_fixture_plain() {\n}\n///@}\n',
+    "QC_DomFixtureBase.qpp": '''/** @file QC_DomFixtureBase.qpp fixture */
+
+//! class
+/**
+ */
+qclass DomFixtureBase [arg=DomFixtureBase* b; ns=Qore; dom=NETWORK];
+
+//! Constructor
+/**
+ */
+public DomFixtureBase::constructor() [dom=PROCESS] {
+}
+
+''',
+    "QC_DomFixture.qpp": '''/** @file QC_DomFixture.qpp fixture */
+
+//! class
+/**
+ */
+qclass DomFixture [arg=DomFixture* f; ns=Qore; vparent=DomFixtureBase];
+
+//! Constructor
+/**
+ */
+public DomFixture::constructor() {
+}
+
+//! method
+/**
+ */
+public nothing DomFixture::connect(string host) [dom=EXTERNAL_PROCESS] {
+}
+
+//! const method
+/**
+ */
+public string DomFixture::name() [flags=CONSTANT;dom=EXTERNAL_INFO] {
+   return QoreValue();
+}
+
+//! static method
+/**
+ */
+public static string DomFixture::lookup(string host) [dom=NETWORK] {
+   return QoreValue();
+}
+
+//! plain method
+/**
+ */
+public nothing DomFixture::plain() {
+}
+''',
+    "QC_DomPar.qpp": '''/** @file QC_DomPar.qpp fixture */
+
+//! class
+/**
+ */
+qclass DomPar [arg=DomPar* f; ns=Qore; vparent=Future<int>];
+
+//! Constructor
+/**
+ */
+public DomPar::constructor() {
+}
+''',
+    "ql_domfixture.qpp": '''/** @file ql_domfixture.qpp fixture */
+
+/** @defgroup dom_fixture_functions Domain Fixture Functions
+ */
+///@{
+//! function
+/**
+ */
+nothing dom_fixture_process(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
+}
+
+//! function without a domain
+/**
+ */
+nothing dom_fixture_plain() {
+}
+///@}
+''',
 }
 
 
@@ -257,6 +339,19 @@ qore_aot_runtime_identity_targets(STAMP "${{CMAKE_BINARY_DIR}}/qcc-format.stamp"
         sources = (BUILD / "qore-builtin-domain-sources.txt").read_text().splitlines()
         self.assertIn(str(BUILD / "ql_misc.cpp"), sources)
         self.assertNotIn(str(BUILD / "ql_alloc_tracking.cpp"), sources)
+
+
+    def test_build_fingerprint_covers_the_restriction_values(self):
+        # an AOT module records functional domains and parse options as the bits that Restrictions.h and
+        # QoreParseOptions.cpp define, so the identity covers them, and a module compiled before a value or the mapping
+        # of a domain changed is refused (qore#7526)
+        labels = BUILD / "qcc-format-source-labels.txt"
+        if not labels.is_file():
+            self.skipTest("no build with a qcc format fingerprint; set QORE_TEST_BUILD_DIR")
+        stamp = (BUILD / "qcc-format.stamp").read_text()
+        for source in ("include/qore/Restrictions.h", "lib/QoreParseOptions.cpp"):
+            self.assertIn(source, labels.read_text().splitlines())
+            self.assertRegex(stamp, r"(?m)^" + re.escape(source) + r"\t[0-9]+\t[0-9a-f]{64}$")
 
 
 if __name__ == "__main__":

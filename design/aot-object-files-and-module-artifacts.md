@@ -358,6 +358,14 @@ automatically:
   built from the same sources. A change to a file that is not fingerprinted
   never changes the identity, so rebuilding libqore for unrelated fixes keeps
   every installed AOT module loadable.
+- **Domain and restriction values.** A module records the functional domains
+  that its code uses, those its header declares, the parse options of its
+  header and of its module commands and the restrictions of its dependencies as
+  the bits of `include/qore/Restrictions.h` (`QDOM_*`, `PO_*`) and of
+  `lib/QoreParseOptions.cpp` (the extended options above bit 63, and the masks
+  of the positive and free options, with which the loader compares them), which
+  are therefore in `_qcc_format_sources`: a change of a value, of a mask or of
+  the restriction that a domain maps to changes the identity (qore#7526).
 - **Builtin functional domains.** An AOT module records the functional domains
   that its code used when it was compiled (`FUNCTIONAL_DOMAIN`), and loading it
   into a restricted Program checks that record; the builtins that it calls are
