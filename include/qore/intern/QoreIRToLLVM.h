@@ -385,9 +385,17 @@ private:
     // Calls in the same activation reuse the buffer after the preceding method returns.
     llvm::AllocaInst* native_method_context_storage = nullptr;
 
-    // Exact-class checks for stable local receivers, materialized once in the
-    // logical function entry. Object validity remains guarded at each call.
-    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
+    // Exact-class checks for receivers in locals that the code does not write, made once in the logical function
+    // entry for the value of the local there; set_local_var_value() can still replace the value (of a parameter, for
+    // example), so each call reuses the result only for that receiver (qore#7631).  Object validity remains guarded
+    // at each call.
+    struct AotExactClassGuard {
+        //! the receiver in the local at the entry, which the entry cleanup of the local holds until the function exits
+        llvm::Value* receiver;
+        //! whether the class of that receiver is the exact class of the call target
+        llvm::Value* matches;
+    };
+    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
