@@ -411,17 +411,30 @@ static QoreValue f_dbg_shared_target_str(const QoreListNode* params, RuntimeConf
     return static_cast<int64>(2);
 }
 
-//! Debug-only: adds a variant with a string parameter to the function dbg_shared_target() of the current Program's
-//! namespace Qore at run time, as a binary module can (qore#7588)
-/** The function is shared with the static system namespace: the variant is the Program's only
+//! the variant of Qore::dbg_shared_target() that dbg_add_shared_variant(1) adds at run time: returns 3 (qore#7588)
+static QoreValue f_dbg_shared_target_list(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(3);
+}
+
+//! Debug-only: adds a variant to the function dbg_shared_target() of the current Program's namespace Qore at run
+//! time, as a binary module can (qore#7588)
+/** The function is shared with the static system namespace (and with the Program's child Programs): the variant is
+    the Program's only.  Kind 0: a variant with a string parameter, which returns 2; kind 1: a variant with a list
+    parameter, which returns 3
 */
 static QoreValue f_dbg_add_shared_variant(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 kind = get_param_value(params, 0).getAsBigInt();
     QoreNamespace* qns = getProgram()->findNamespace(QoreString("::Qore"));
     if (!qns) {
         return xsink->raiseException("DBG-ADD-SHARED-VARIANT-ERROR", "the Program has no namespace Qore");
     }
-    qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_str, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo,
-        1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    if (kind == 1) {
+        qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_list, QCF_NO_FLAGS, QDOM_DEFAULT,
+            bigIntTypeInfo, 1, listTypeInfo, QORE_PARAM_NO_ARG, "l");
+    } else {
+        qns->addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_str, QCF_NO_FLAGS, QDOM_DEFAULT,
+            bigIntTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    }
     return QoreValue();
 }
 
@@ -37504,7 +37517,7 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_shared_target", f_dbg_shared_target_int, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "i");
     qns.addBuiltinVariant("dbg_add_shared_variant", f_dbg_add_shared_variant, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo);
+        nothingTypeInfo, 1, bigIntTypeInfo, QoreValue(static_cast<int64>(0)), "kind");
     // a static generic builtin class (qore#7540)
     dbg_rt_box = new QoreClass("DbgRtBox", "::Qore::DbgRtBox");
     dbg_rt_box->addTypeParameter("T");

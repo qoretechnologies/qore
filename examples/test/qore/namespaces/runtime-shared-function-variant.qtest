@@ -17,13 +17,21 @@
     (the static system namespace or a module's), the function is shared with it: the Program's entry gets a copy of
     the function first, so that the variant is not added to every Program that shares the function (qore#7588). The
     variant is added with the debug function dbg_add_shared_variant() to Qore::dbg_shared_target(int), which returns
-    1; the variant (dbg_shared_target(string)) returns 2. The test needs a library with debugging.
+    1; the variant (dbg_shared_target(string)) returns 2, and dbg_shared_target(list), which dbg_add_shared_variant(1)
+    adds, returns 3. Calls are made with call_function(), which resolves the function when it runs: native code
+    compiled before a variant is added keeps calling the function that it was compiled with. The test needs a library
+    with debugging.
 */
 public class RuntimeSharedFunctionVariantTest inherits QUnit::Test {
     public {
-        const Source = "sub add() { dbg_add_shared_variant(); }
+        const Source = "sub add(int kind = 0) { dbg_add_shared_variant(kind); }
 auto sub call(auto v) { return call_function(\"dbg_shared_target\", v); }
-auto sub direct(auto v) { return dbg_shared_target(v); }";
+object sub child() {
+    Program c(PO_NEW_STYLE);
+    c.parse('sub add(int kind = 0) { dbg_add_shared_variant(kind); }
+auto sub call(auto v) { return call_function(\"dbg_shared_target\", v); }', 'child');
+    return c;
+}";
 
         const CallSource = "auto sub call(auto v) { return call_function(\"dbg_shared_target\", v); }";
     }
@@ -31,7 +39,7 @@ auto sub direct(auto v) { return dbg_shared_target(v); }";
     constructor() : QUnit::Test("runtime shared function variant", "1.0") {
         addTestCase("the variant is the adding Program's", \ownTest());
         addTestCase("other Programs and the static namespace do not get the variant", \otherTest());
-        addTestCase("a call parsed before the variant was added calls it", \parsedBeforeTest());
+        addTestCase("a child Program and its parent", \childTest());
         addTestCase("adding the variant twice", \twiceTest());
         set_return_value(main());
     }
@@ -76,13 +84,19 @@ auto sub direct(auto v) { return dbg_shared_target(v); }";
         assertEq(2, p.callFunction("call", "x"), "the adding Program");
     }
 
-    parsedBeforeTest() {
+    childTest() {
         skipIfNoDebugging();
+        # a child Program shares its parent's functions: a variant that either adds is its own only
         Program p = getProgram();
-        # direct() was parsed when only dbg_shared_target(int) existed; its call is resolved at run time
-        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("direct", "x"), "before the add");
+        object c1 = p.callFunction("child");
         p.callFunction("add");
-        assertEq(2, p.callFunction("direct", "x"), "after the add");
+        assertEq(2, p.callFunction("call", "x"), "the parent's variant");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \c1.callFunction(), ("call", "x"), "a child created before");
+        object c2 = p.callFunction("child");
+        c2.callFunction("add", 1);
+        assertEq(3, c2.callFunction("call", ()), "the child's variant");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("call", ()), "the parent");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \c1.callFunction(), ("call", ()), "the other child");
     }
 
     twiceTest() {

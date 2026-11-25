@@ -12777,7 +12777,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits,
 // --- Phase 5: Fast-call builtin variants (skip QoreListNode allocation) ---
 
 bool qore_rt_is_qore_builtin_function(const FunctionEntry* fe) {
-    if (!fe || !fe->hasBuiltin() || fe->getFunction()->hasUser()) {
+    if (!fe) {
+        return false;
+    }
+    // the function is read once: the entry's pointer is atomic (qore#7588)
+    const QoreFunction* f = fe->getFunction();
+    if (!f->hasBuiltin() || f->hasUser()) {
         return false;
     }
     const qore_ns_private* ns = fe->getNamespace();

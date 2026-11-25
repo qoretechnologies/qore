@@ -907,6 +907,31 @@ void qore_root_ns_private::releaseRuntimeVariants() {
     runtime_variant_set.clear();
 }
 
+//! Returns true if the function has a variant with the parameter types of \a v, which QoreFunction::addBuiltinVariant()
+//! frees as a duplicate (qore#7588)
+static bool function_has_signature(const QoreFunction& f, const AbstractQoreFunctionVariant& v) {
+    const AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant&>(v).getSignature();
+    QoreFunctionIterator fi(f);
+    while (fi.next()) {
+        const AbstractFunctionSignature* vs = const_cast<AbstractQoreFunctionVariant*>(fi.getVariant())->getSignature();
+        unsigned tp = vs->numParams();
+        if (tp != sig->numParams()) {
+            continue;
+        }
+        bool different = false;
+        for (unsigned pi = 0; pi < tp; ++pi) {
+            if (vs->getParamTypeInfo(pi) != sig->getParamTypeInfo(pi)) {
+                different = true;
+                break;
+            }
+        }
+        if (!different) {
+            return true;
+        }
+    }
+    return false;
+}
+
 //! Returns true if the function has the variant
 static bool function_has_variant(const QoreFunction& f, const AbstractQoreFunctionVariant* v) {
     QoreFunctionIterator fi(f);
@@ -1083,8 +1108,10 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
     // that no Program owns (its copy of the static system namespace or of a module's), is the Program's: the entry
     // gets its own copy of the function first (copy on write), as adding it to the shared function would add it to
     // every namespace that shares it and keep what it names in the static namespace (qore#7588)
+    // the same applies to a function that the namespace shares with a child Program's or a parent Program's; a
+    // variant with the signature of one that the function has, which the function frees, gets no copy
     bool owned = ownedByProgram();
-    if (fe && fe->isSharedUnowned() && owned) {
+    if (fe && owned && fe->sharesFunction() && !function_has_signature(*fe->getFunction(), *v)) {
         // the copy takes every variant of the function; replaceFunction() does not throw
         fe->replaceFunction(new QoreFunction(*fe->getFunction(), QoreParseOptions(), true));
     }
