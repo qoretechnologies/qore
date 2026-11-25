@@ -2235,38 +2235,61 @@ QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
 }
 
 namespace {
+//! Returns true if the code that declares the class is sandboxed (see qore_class_declared_by_sandboxed_code())
+bool qore_class_own_code_sandboxed(const qore_class_private& qc, qore_program_id_t* id) {
+    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram()); a builtin
+    // class without a source Program and without a released state gives false
+    std::lock_guard<std::mutex> al(qc.dataLock());
+    QoreProgram* p = qc.spgm.load();
+    if (p) {
+        if (!qore_program_is_sandboxed(p)) {
+            return false;
+        }
+        if (id) {
+            *id = qore_program_private::get(*p)->getProgramId();
+        }
+        return true;
+    }
+    if (!qc.released_sandboxed.load()) {
+        return false;
+    }
+    if (id) {
+        *id = qc.released_spgm_id.load();
+    }
+    return true;
+}
+
 //! Returns true if the code that declares the class, or one of its base classes, is sandboxed (qore#7576)
 /** The Program whose code declares a class is its source Program (qore_class_private::spgm), also for a class that
     was imported into another Program, whose namespace then holds it; once that Program has released the class, the
-    state that it had then is used (see qore_class_private::isSandboxedCode()).  A builtin class is trusted.
+    state that it had then is used (see qore_class_private::isSandboxedCode()).
+
+    The hierarchy is walked depth first, the class before its base classes, in the order of their declaration, each
+    class once: a class reached through more than one path is not looked at again, so that the walk is linear in the
+    number of classes of the hierarchy
 
     @param qc the class
-    @param id if not null, set to the ID of the Program that declares the first sandboxed class found, the class
-    itself before its base classes
+    @param id if not null, set to the ID of the Program that declares the first sandboxed class found
 */
 bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_program_id_t* id) {
-    if (!qc.sys) {
-        // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
-        std::lock_guard<std::mutex> al(qc.dataLock());
-        QoreProgram* p = qc.spgm.load();
-        if (p) {
-            if (qore_program_is_sandboxed(p)) {
-                if (id) {
-                    *id = qore_program_private::get(*p)->getProgramId();
-                }
-                return true;
-            }
-        } else if (qc.released_sandboxed.load()) {
-            if (id) {
-                *id = qc.released_spgm_id.load();
-            }
+    std::vector<const qore_class_private*> stack{&qc};
+    std::vector<const qore_class_private*> visited;
+    while (!stack.empty()) {
+        const qore_class_private* c = stack.back();
+        stack.pop_back();
+        if (std::find(visited.begin(), visited.end(), c) != visited.end()) {
+            continue;
+        }
+        visited.push_back(c);
+        if (qore_class_own_code_sandboxed(*c, id)) {
             return true;
         }
-    }
-    if (qc.scl) {
-        for (const auto& i : *qc.scl) {
-            if (i->sclass && qore_class_declared_by_sandboxed_code(*qore_class_private::get(*i->sclass), id)) {
-                return true;
+        if (c->scl) {
+            // pushed in reverse, so that the first base class is looked at first
+            for (auto i = c->scl->rbegin(), e = c->scl->rend(); i != e; ++i) {
+                if ((*i)->sclass) {
+                    stack.push_back(qore_class_private::get(*(*i)->sclass));
+                }
             }
         }
     }

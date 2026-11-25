@@ -91,6 +91,10 @@ public object sub class_provenance_test_module_make() {
         addTestCase("a sandbox set on the declaring Program later", \laterTest());
         addTestCase("a module loaded into a Program that sandboxed code created", \moduleTest());
         addTestCase("classes of the host", \hostTest());
+        addTestCase("multiple inheritance", \multipleInheritanceTest());
+        addTestCase("a class imported again from the Program it was imported into", \importChainTest());
+        addTestCase("classes of two tenants", \tenantsTest());
+        addTestCase("a hierarchy with many paths to its base classes", \latticeTest());
         set_return_value(main());
     }
 
@@ -191,6 +195,95 @@ object sub make_host() {
         Program u = getUsing(t);
         assertFalse(SandboxManager::isFromSandboxedProgram(u.callFunction("make_derived")), "trusted Programs");
         assertNothing(SandboxManager::getSandboxedProgramId(u.callFunction("make")), "trusted Programs");
+    }
+
+    multipleInheritanceTest() {
+        Program s = getSandboxed();
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s.callFunction("export_class", t);
+        t.parse("%modern
+class TrustedBase {
+}
+class TrustedMiddle inherits TrustedBase {
+}
+# the sandboxed code's class is the second base class
+class Multi inherits TrustedMiddle, Declared {
+}
+class Top inherits Multi {
+}
+object sub make() {
+    return new Top();
+}
+", "multiple");
+        object o = t.callFunction("make");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o));
+        assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o));
+    }
+
+    importChainTest() {
+        Program s = getSandboxed();
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        s.callFunction("export_class", t);
+        t.parse(UsingSource + "
+sub export_classes(Program target) {
+    target.importClass(\"Declared\");
+    target.importClass(\"Derived\");
+}
+", "reexport");
+        Program u(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.callFunction("export_classes", u);
+        u.parse("%modern
+class Further inherits Derived {
+}
+object sub make() {
+    return new Declared();
+}
+object sub make_further() {
+    return new Further();
+}
+", "chain");
+        foreach string func in ("make", "make_further") {
+            object o = u.callFunction(func);
+            assertTrue(SandboxManager::isFromSandboxedProgram(o), func);
+            assertEq(s.getProgramId(), SandboxManager::getSandboxedProgramId(o), func);
+        }
+    }
+
+    tenantsTest() {
+        Program a = getSandboxed();
+        Program b(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        b.setSandboxManager(new SandboxManager());
+        a.callFunction("export_class", b);
+        b.parse("%modern
+class OwnDerived inherits Declared {
+}
+object sub make() {
+    return new Declared();
+}
+object sub make_own() {
+    return new OwnDerived();
+}
+", "tenant-b");
+        # the class of tenant A, used by tenant B
+        assertEq(a.getProgramId(), SandboxManager::getSandboxedProgramId(b.callFunction("make")));
+        # tenant B's own class, which inherits tenant A's
+        assertEq(b.getProgramId(), SandboxManager::getSandboxedProgramId(b.callFunction("make_own")));
+    }
+
+    #! each class is looked at once, however many paths lead to it: the walk ends also for a lattice with 2^41 paths
+    latticeTest() {
+        int levels = 40;
+        string src = "%modern\nclass L0A {\n}\nclass L0B {\n}\n";
+        for (int i = 1; i <= levels; ++i) {
+            src += sprintf("class L%dA inherits L%dA, L%dB {\n}\nclass L%dB inherits L%dA, L%dB {\n}\n", i, i - 1,
+                i - 1, i, i - 1, i - 1);
+        }
+        src += sprintf("object sub make() {\n    return new L%dA();\n}\n", levels);
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.parse(src, "lattice");
+        object o = t.callFunction("make");
+        assertFalse(SandboxManager::isFromSandboxedProgram(o));
+        assertNothing(SandboxManager::getSandboxedProgramId(o));
     }
 
     #! returns a sandboxed Program with the declaring code
