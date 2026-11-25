@@ -271,6 +271,29 @@ const TypedHashDecl* hashdeclMLCapabilities;
 // Forward declarations for function init (generated from ql_ml.qpp)
 DLLLOCAL void init_ml_functions(QoreNamespace& ns);
 
+#if defined(DEBUG) && defined(HAVE_ONNXRUNTIME)
+// debug builds: records a failure of an automatically selected provider as a model's failure records it
+static QoreValue f_ml_dbg_onnx_record_auto_provider_failure(const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringValueHelper provider(args->retrieveEntry(0));
+    return qore_ml_onnx_record_auto_provider_failure(provider->c_str());
+}
+
+// debug builds: returns true if a failure of the provider is recorded for all models
+static QoreValue f_ml_dbg_onnx_auto_provider_disabled(const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringValueHelper provider(args->retrieveEntry(0));
+    return qore_ml_onnx_auto_provider_disabled(provider->c_str());
+}
+
+// debug builds: forgets the recorded failures
+static QoreValue f_ml_dbg_onnx_clear_auto_provider_failures(const QoreListNode* args, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_ml_onnx_clear_auto_provider_failures();
+    return QoreValue();
+}
+#endif
+
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     if (qore_ml_onnx_register_fork_handlers(&xsink)) {
         return;
@@ -432,6 +455,15 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
+#if defined(DEBUG) && defined(HAVE_ONNXRUNTIME)
+    // debug builds: the record of the failed automatic ONNX Runtime providers, for tests (qore#7672)
+    MLNS.addBuiltinVariant("ml_dbg_onnx_record_auto_provider_failure", f_ml_dbg_onnx_record_auto_provider_failure,
+        QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "provider");
+    MLNS.addBuiltinVariant("ml_dbg_onnx_auto_provider_disabled", f_ml_dbg_onnx_auto_provider_disabled,
+        QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "provider");
+    MLNS.addBuiltinVariant("ml_dbg_onnx_clear_auto_provider_failures", f_ml_dbg_onnx_clear_auto_provider_failures,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
+#endif
 
     // Register algorithm deserializers for model persistence
     MLSerialization::registerAlgorithm("KMeans", [](const uint8_t* data, size_t len,
