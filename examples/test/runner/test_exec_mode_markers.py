@@ -375,7 +375,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modules loaded from source and compiled with qcc
         # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
         #   as the checks are of the exit of the process that holds the Program
+        # - AOTEmptyRegex (#7623): its checks run in child processes that set their own execution modes and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",

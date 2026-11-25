@@ -38924,7 +38924,13 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const CaseNodeRegex* cnode = reinterpret_cast<const CaseNodeRegex*>(ptr);
         AOTRegexCaseSlotId& rcid = out.regex_cases[slot];
         QoreRegex* re = cnode->getRegex();
-        rcid.pattern = re->getPatternCStr();
+        // every case regex has its pattern saved, which is an empty string for an empty pattern (#7623)
+        const char* pattern = re ? re->getPatternCStr() : nullptr;
+        assert(pattern);
+        if (!pattern) {
+            continue;
+        }
+        rcid.pattern = pattern;
         rcid.options = re->getOptions();
         // Check if it's a negated regex case
         rcid.is_negated = dynamic_cast<const CaseNodeNegRegex*>(cnode) != nullptr;

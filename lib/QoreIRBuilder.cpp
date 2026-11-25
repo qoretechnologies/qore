@@ -2211,6 +2211,8 @@ QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const C
         ExceptionSink xsink;
         cloned_re = new QoreRegex(re->getPatternCStr(), re->getOptions(), &xsink);
         if (xsink) {
+            // the function is not lowered and runs in the AST interpreter, which reports any error itself
+            xsink.clear();
             delete cloned_re;
             return nullptr;
         }
