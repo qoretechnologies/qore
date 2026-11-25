@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - fork() in the abort() and the destructor of an asynchronous operation canceled with its Program
+# test-exec-mode: children - every check runs in child processes of the interpreter, which run in the default mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+%exec-class AsyncIoCancelForkTest
+
+#! A child forked during the cancellation of a Program's operations does not touch the parent's controller (qore#7224)
+/** The deletion of a Program cancels its asynchronous operations in the deleting thread.  An operation's abort() that
+    called fork() left the child in the rest of the cancellation, which released the parent's operation and could wait
+    for the controller's locks, held by threads that do not exist in the child.  The child script prints what ran in
+    each process: the operation and an object released after it must be released in the parent only.  When the
+    operation's destructor forks, the child ends the cancellation at once, as it did before.  Each case runs in a
+    process of its own, whose output is read until both processes have ended.
+*/
+class AsyncIoCancelForkTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoCancelForkTest", "1.0") {
+        addTestCase("a child forked in abort() does not release the parent's operation", \abortTest());
+        addTestCase("a child forked in the operation's destructor ends the cancellation", \destructorTest());
+        set_return_value(main());
+    }
+
+    private string run(string fork_at) {
+        if (!Option::HAVE_FORK) {
+            testSkip("fork() is not available");
+        }
+        string script = get_script_dir() + DirSep + "asyncio-cancel-fork" + DirSep + "cancel-fork.q";
+        int status;
+        string out = backquote(sprintf("%s -b %s %s 2>&1", TestInterpreter::qore_interpreter(), script, fork_at),
+            \status);
+        assertEq(0, status, out);
+        assertNRegex("unhandled|exception", out, "nothing is reported: " + out);
+        assertRegex("(^|\n)parent: deletion returned\n", out, "the parent's deletion returns: " + out);
+        assertRegex("(^|\n)child: deletion returned\n", out, "the child's deletion returns: " + out);
+        assertRegex("(^|\n)operation released in parent\n", out, "the parent releases the operation: " + out);
+        assertRegex("(^|\n)marker released in parent\n", out, "the parent releases what follows it: " + out);
+        return out;
+    }
+
+    abortTest() {
+        string out = run("abort");
+        assertRegex("(^|\n)forked in abort\\(\\)\n", out, "the abort() forked: " + out);
+        assertNRegex("(^|\n)operation released in child\n", out, "the child does not release the operation: " + out);
+        assertNRegex("(^|\n)marker released in child\n", out, "the child does not release its data: " + out);
+    }
+
+    destructorTest() {
+        string out = run("destructor");
+        assertRegex("(^|\n)forked in the destructor\n", out, "the destructor forked: " + out);
+    }
+}
