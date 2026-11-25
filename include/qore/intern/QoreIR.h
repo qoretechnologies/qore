@@ -2141,7 +2141,10 @@ struct TypeProfile {
     std::atomic<uint32_t> bool_count{0};
     std::atomic<uint32_t> nothing_count{0};
     std::atomic<uint32_t> other_count{0};
-    mutable std::mutex extended_mutex;
+    //! the lock of the extended counts: a stripe of a lock array that the fork handlers acquire before fork()
+    /** See qore_cache_stripe_lock() (qore#7554); it is held only around a read or a change of the counts themselves
+    */
+    DLLLOCAL std::mutex& extendedMutex() const;
     //! the counts of the types of the values that are not of a builtin type, by type identity
     std::unique_ptr<std::unordered_map<TypeProfileTypeKey, uint32_t, TypeProfileTypeKeyHash>> extended_type_counts;
     //! the cache that evicts the types of this profile when they are destroyed (owned by the function), if any
@@ -2173,7 +2176,7 @@ struct TypeProfile {
     DLLLOCAL void recordNewTypeInfo(const TypeProfileTypeKey& key);
 
     uint32_t getTypeInfoCount(const QoreTypeInfo* type_info) const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             return 0;
         }
@@ -2183,7 +2186,7 @@ struct TypeProfile {
 
     //! removes the counts of the dead types; called by the function's cache with the registry locked
     void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead) {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             return;
         }
@@ -2198,13 +2201,13 @@ struct TypeProfile {
 
     //! returns the number of types counted, for debug checks
     size_t getTypeCount() const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         return extended_type_counts ? extended_type_counts->size() : 0;
     }
 
     void recordPluginTypeInfo(std::string module_name, uint16_t local_type_id, const QoreTypeInfo* type_info) {
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (!plugin_type_counts) {
                 plugin_type_counts = std::make_unique<std::unordered_map<QoreIRPluginTypeProfileId, uint32_t,
                     QoreIRPluginTypeProfileIdHash>>();
@@ -2216,7 +2219,7 @@ struct TypeProfile {
     }
 
     uint32_t getPluginTypeCount(const std::string& module_name, uint16_t local_type_id) const {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!plugin_type_counts) {
             return 0;
         }
@@ -2250,7 +2253,7 @@ struct TypeProfile {
         const QoreTypeInfo* dominant_type_info = nullptr;
         uint32_t dominant_count = 0;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (extended_type_counts) {
                 for (const auto& i : *extended_type_counts) {
                     if (i.second > dominant_count) {
@@ -2269,7 +2272,7 @@ struct TypeProfile {
         QoreIRPluginTypeProfileId dominant_plugin;
         uint32_t dominant_plugin_count = 0;
         {
-            std::lock_guard<std::mutex> lock(extended_mutex);
+            std::lock_guard<std::mutex> lock(extendedMutex());
             if (plugin_type_counts) {
                 uint32_t n = 0;
                 for (const auto& i : *plugin_type_counts) {

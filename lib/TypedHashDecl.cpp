@@ -39,6 +39,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
 
@@ -374,7 +375,7 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     // the type arguments are live, so their identities can be read; they are compared with the cached keys as they
     // are, without making a key; see parameterized_hashdecl_key_t and parameterized_hashdecl_key_less_t
     {
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
                 && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
@@ -423,7 +424,7 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     TypedHashDecl* existing = nullptr;
     ParameterizedHashDeclCache* registration;
     {
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         if (!parameterized_hashdecl_registration) {
             parameterized_hashdecl_registration.reset(new ParameterizedHashDeclCache(*this));
         }
@@ -432,7 +433,7 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     // issue #5765: the declaration is added with the registry locked, so it is removed from the cache when one of its
     // type arguments is destroyed
     qore_generic_cache_insert(registration, args, [&] () {
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
                 && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
@@ -460,9 +461,13 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     return priv->thd;
 }
 
+std::mutex& typed_hash_decl_private::cacheLock() const {
+    return qore_cache_stripe_lock(this);
+}
+
 void typed_hash_decl_private::ParameterizedHashDeclCache::evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
         qore_generic_cache_release_list_t& release) {
-    std::lock_guard<std::mutex> lock(hd.parameterized_hashdecl_cache_lock);
+    std::lock_guard<std::mutex> lock(hd.cacheLock());
     for (auto i = hd.parameterized_hashdecl_cache.begin(), e = hd.parameterized_hashdecl_cache.end(); i != e;) {
         bool is_dead = false;
         for (auto ti = i->first.begin(), te = i->first.end(); !is_dead && ti != te; ++ti) {

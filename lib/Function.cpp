@@ -8474,9 +8474,17 @@ static bool irBlockHasTerminatorFunc(const QoreIRBasicBlock* block) {
     return isTerminator(block->instructions.back()->opcode);
 }
 
+std::mutex& UserVariantBase::specializedIRMutex() const {
+    return qore_cache_stripe_lock(this);
+}
+
+//! serializes the building of the call names of user variants; a leaf lock that a child of fork() gets free (qore#7554)
+static std::mutex user_variant_call_name_lock;
+static QoreForkStdMutex user_variant_call_name_fork_handler(user_variant_call_name_lock, QFLR_LEAF,
+    "function_call_names");
+
 void UserVariantBase::buildCallName() const {
-    static std::mutex lck;
-    std::lock_guard<std::mutex> lock(lck);
+    std::lock_guard<std::mutex> lock(user_variant_call_name_lock);
     if (call_name_ready.load(std::memory_order_relaxed)) {
         return;
     }
@@ -9614,7 +9622,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     // the call's types are live; the cache is searched with them as they are, without making a key
     const QoreGenericSpecializationView view(receiver_type_info, type_param_instantiation);
     {
-        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        std::lock_guard<std::mutex> lock(specializedIRMutex());
         auto it = specialized_ir_cache.find(view);
         if (it != specialized_ir_cache.end()) {
             return it->second;
@@ -9651,7 +9659,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     }
     SpecializedIRCache* registration;
     {
-        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        std::lock_guard<std::mutex> lock(specializedIRMutex());
         if (!specialized_ir_registration) {
             specialized_ir_registration.reset(new SpecializedIRCache(*this));
         }
@@ -9662,7 +9670,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
     QoreSpecializedIRRef loser;
     // issue #5765: the entry is added with the registry locked, so it is removed when one of its types is destroyed
     qore_generic_cache_insert(registration, key_types, [&] () {
-        std::lock_guard<std::mutex> lock(specialized_ir_mutex);
+        std::lock_guard<std::mutex> lock(specializedIRMutex());
         auto it = specialized_ir_cache.emplace(std::move(key), rv).first;
         if (it->second.get() != rv.get()) {
             loser = std::move(rv);
@@ -9674,7 +9682,7 @@ QoreSpecializedIRRef UserVariantBase::getOrCreateSpecializedIR(const char* name,
 
 void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
         qore_generic_cache_release_list_t& release) {
-    std::lock_guard<std::mutex> lock(v.specialized_ir_mutex);
+    std::lock_guard<std::mutex> lock(v.specializedIRMutex());
     for (auto i = v.specialized_ir_cache.begin(), e = v.specialized_ir_cache.end(); i != e;) {
         bool is_dead = dead.count(i->first.receiver);
         for (auto ti = i->first.type_args.begin(), te = i->first.type_args.end(); !is_dead && ti != te; ++ti) {
