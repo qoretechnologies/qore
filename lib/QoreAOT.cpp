@@ -12783,12 +12783,22 @@ static bool qore_aot_collect_int_expression_summaries(
                     }
                     auto nested = batch_callees.find(call.variant);
                     assert(nested != batch_callees.end());
-                    if (!allow_fallible_operations && nested->second.int_expression
+                    // the nodes of a composed summary run in the inline frame of the call of this function, with no
+                    // frame of the nested callee and at the location of the statement of the call here: a nested
+                    // callee whose summary can raise an exception is called, so that the exception has the callee's
+                    // frame and the location of its operation (qore#7632)
+                    if ((nested->second.int_expression
                             && std::any_of(nested->second.int_expression.nodes.begin(),
                                 nested->second.int_expression.nodes.end(),
                                 [&](const AOTIntExpressionNodeInfo& node) {
                                     return is_fallible_node(node.kind);
-                                })) {
+                                }))
+                            || (!nested->second.int_expression
+                                && nested->second.scalar_leaf.kind == AOTScalarLeafKind::IntBinary
+                                && (nested->second.scalar_leaf.opcode
+                                        == static_cast<uint16_t>(QoreIROpcode::DivInt)
+                                    || nested->second.scalar_leaf.opcode
+                                        == static_cast<uint16_t>(QoreIROpcode::ModInt)))) {
                         return false;
                     }
                     std::vector<int> args;
@@ -13629,21 +13639,23 @@ static bool qore_aot_collect_float_expression_summaries(
                     }
                     auto nested = batch_callees.find(call.variant);
                     assert(nested != batch_callees.end());
-                    if (!allow_division
-                            && ((nested->second.float_expression
-                                    && std::any_of(
-                                        nested->second.float_expression.nodes.begin(),
-                                        nested->second.float_expression.nodes.end(),
-                                        [](const AOTFloatExpressionNodeInfo& node) {
-                                            return node.kind
-                                                == AOTFloatExpressionNodeKind::Div;
-                                        }))
-                                || (!nested->second.float_expression
-                                    && nested->second.scalar_leaf.kind
-                                        == AOTScalarLeafKind::FloatBinary
-                                    && nested->second.scalar_leaf.opcode
-                                        == static_cast<uint16_t>(
-                                            QoreIROpcode::DivFloat)))) {
+                    // as for an integer summary: a nested callee whose summary can raise an exception (a division
+                    // or a hash projection) is called, so that the exception has the callee's frame and the location
+                    // of its operation (qore#7632)
+                    if ((nested->second.float_expression
+                            && std::any_of(
+                                nested->second.float_expression.nodes.begin(),
+                                nested->second.float_expression.nodes.end(),
+                                [](const AOTFloatExpressionNodeInfo& node) {
+                                    return node.kind == AOTFloatExpressionNodeKind::Div
+                                        || node.kind == AOTFloatExpressionNodeKind::HashKeyFloat;
+                                }))
+                            || (!nested->second.float_expression
+                                && nested->second.scalar_leaf.kind
+                                    == AOTScalarLeafKind::FloatBinary
+                                && nested->second.scalar_leaf.opcode
+                                    == static_cast<uint16_t>(
+                                        QoreIROpcode::DivFloat))) {
                         return false;
                     }
                     std::vector<int> args;
