@@ -4823,6 +4823,12 @@
       raises \c OBJECT-ALREADY-DELETED when another call takes the object over or deletes it before or at the same
       time, instead of using or releasing the Program again
       (<a href="https://github.com/qoretechnologies/qore/issues/7528">issue 7528</a>)
+    - the key of an @ref Qore::AsyncIoController "AsyncIoController" operation is unique in the controller, not only
+      on one I/O thread: @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" and
+      @ref Qore::AsyncIoController::exec() "AsyncIoController::exec()" with \c replace_existing, and the checks of a
+      submission that is refused or replaces another application's operation, now see an operation with the key on the
+      I/O thread of another socket, which left two operations with one key
+      (<a href="https://github.com/qoretechnologies/qore/issues/7624">issue 7624</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
