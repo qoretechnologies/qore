@@ -101,6 +101,7 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+
     @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
     REST classes and stream requests whose sandbox does not trust their code get the request context without the
     server's objects and the credentials of the request (with the platform's authorization context), and trusted code
@@ -265,6 +266,11 @@
     aborts the connection with @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's
     socket that other handlers get is refused to sandboxed code (see @ref httpserver_handler_socket; issues
     <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
+
+    @par A Trusted RestHandler Whose Sandboxed Classes Are Below Trusted Ones Calls setHandlerSocketView()
+    A trusted @ref RestHandler::RestHandler "RestHandler" that hands its HTTP/1.x requests to REST classes or stream
+    handlers of a sandboxed %Program below its trusted classes calls @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"
+    in its constructor, or such a request is refused (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7620">issue 7620</a>).
 
     @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
     The HTTP/1.1 WebSocket connection of such a handler is set up without the connection's socket, and another socket
