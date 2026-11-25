@@ -1,0 +1,42 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# classes of abstract-private-impl-subclass.qtest in a module, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractImplSubclass {
+    version = "1.0";
+    desc = "subclasses of a class that implements its abstract methods with a privately inherited class";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AIS {
+public class Impl {
+    string m(int i) { return "Impl::m(int)"; }
+    string m(string s) { return "Impl::m(string)"; }
+}
+public class A {
+    private abstract string m(int i);
+    abstract string m(string s);
+}
+public class X inherits A, private Impl {}
+public class Y3 inherits X {
+    string m(bool b) { return "Y3::m(bool)"; }
+    string via(auto a) { return m(a); }
+}
+public class Y0 inherits X {}
+public class Z3 inherits Y3 {}
+public class XI inherits A, private:internal Impl {}
+public class YI3 inherits XI {
+    string m(bool b) { return "YI3::m(bool)"; }
+}
+# control: the class implements the abstract methods itself
+public class Xc inherits A {
+    private string m(int i) { return "Xc::m(int)"; }
+    string m(string s) { return "Xc::m(string)"; }
+}
+public class Yc inherits Xc {
+    string m(bool b) { return "Yc::m(bool)"; }
+}
+}

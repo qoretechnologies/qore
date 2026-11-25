@@ -1088,27 +1088,58 @@ static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
     return ti == referenceOrNothingTypeInfo ? anyTypeInfo : ti;
 }
 
-QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
-    const_iterator aqfi, bool& internal_access, bool& stop) const {
-    stop = internal_access && (*aqfi).access == Internal;
-
-    QoreFunction* rv = (!last_class || ((*aqfi).access == Public) || stop
-                        || (class_ctx && (*aqfi).access == Private)) ? (*aqfi).func : nullptr;
-
-    if (rv) {
-        const QoreClass* fc = rv->getClass();
-        if (fc) {
-            // get the function's class
-            last_class = qore_class_private::get(*fc);
-            if (last_class && class_ctx) {
-                // set the internal access flag
-                // by identity, never by name and signature (qore#7036)
-                internal_access = last_class->sameClass(*class_ctx);
-            }
+bool IList::hasInternalBefore(const_iterator aqfi) const {
+    assert(aqfi != begin());
+    for (const_iterator i = begin() + 1; i != aqfi; ++i) {
+        if ((*i).access == Internal) {
+            return true;
         }
     }
+    return false;
+}
 
+QoreFunction* IList::getFunctionAt(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator aqfi, bool& internal_access) const {
+    QoreFunction* rv = (*aqfi).func;
+    const QoreClass* fc = rv->getClass();
+    if (fc) {
+        // get the function's class
+        last_class = qore_class_private::get(*fc);
+        if (last_class && class_ctx) {
+            // set the internal access flag
+            // by identity, never by name and signature (qore#7036)
+            internal_access = last_class->sameClass(*class_ctx);
+        }
+    }
     return rv;
+}
+
+QoreFunction* IList::getNextFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const {
+    // an ancestor that the context cannot access is skipped: the search continues with the ancestors after it, as a
+    // path that it cannot access does not hide another path from it; the ancestors on the inaccessible path have its
+    // access or a more restrictive one, unless another path reaches them (qore#7381)
+    for (; aqfi != aqfe; ++aqfi) {
+        if (last_class && (*aqfi).access != Public && !(class_ctx && (*aqfi).access == Private)
+                && ((*aqfi).access != Internal || !internal_access || hasInternalBefore(aqfi))) {
+            continue;
+        }
+        return getFunctionAt(class_ctx, last_class, aqfi, internal_access);
+    }
+    return nullptr;
+}
+
+// inline (as before qore#7381): the run-time variant search calls it for every call whose variant was not resolved
+// at parse time; an entry that the context can access without the search (the function itself, a public ancestor,
+// a private one from a class context) is taken here without a call, and only the search past an inaccessible
+// ancestor is one
+inline QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const {
+    assert(aqfi != aqfe);
+    if (!last_class || (*aqfi).access == Public || (class_ctx && (*aqfi).access == Private)) {
+        return getFunctionAt(class_ctx, last_class, aqfi, internal_access);
+    }
+    return getNextFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
 }
 
 bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match,
@@ -1929,7 +1960,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module_inline(pgm_ctx)) {
             module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
-        set(xsink, pgm_ctx, true);
+        set(xsink, pgm_ctx, true, self);
         if (*xsink) {
             return;
         }
@@ -2295,6 +2326,9 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
     if (qc && func->getClass()) {
         const MethodVariant* mv = reinterpret_cast<const MethodVariant*>(variant);
         ClassAccess va = mv->getAccess();
+        // the access that a variant of a parent class has in a method whose abstract variant it implements is checked
+        // when the variant is selected (skip_method_variant()): the variant object is also in the parent class's
+        // method, from which the selection may have taken it (qore#7277)
         if ((va > Public && !class_ctx) || (va == Internal
             && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
@@ -3252,6 +3286,22 @@ int UserSignature::resolveTypes() {
     return err;
 }
 
+UserSignature::~UserSignature() {
+    // type-parameter types are cached by signature address, which the next signature allocated can reuse
+    qore_purge_derived_types(this, nullptr, nullptr);
+    for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i) {
+        delete* i;
+    }
+    delete parseReturnTypeInfo;
+}
+
+const QoreTypeInfo* UserSignature::parseGetReturnTypeInfo(int& err) const {
+    if (const_cast<UserSignature*>(this)->resolve() && !err) {
+        err = -1;
+    }
+    return returnTypeInfo;
+}
+
 int UserSignature::resolve() {
     if (resolved) {
         return 0;
@@ -3284,9 +3334,7 @@ int UserSignature::resolve() {
             if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
                 QoreStringNode* desc = new QoreStringNode;
                 desc->sprintf("parameter '%s' expects ", names[i].c_str());
-                QoreTypeInfo::getThisType(typeList[i], *desc);
-                desc->concat(", but the default value is ");
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, typeList[i], ", but the default value is ", argTypeInfo);
                 desc->concat(" instead");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
                 if (!err) {
@@ -3359,11 +3407,18 @@ static QoreStringNode* getNoopError(const QoreFunction* func, const QoreFunction
     return desc;
 }
 
-static bool skip_method_variant(const AbstractQoreFunctionVariant* v, const qore_class_private* class_ctx,
-        bool internal_access) {
+//! \a f is the method whose variant list has \a v
+static bool skip_method_variant(const QoreFunction* f, const AbstractQoreFunctionVariant* v,
+        const qore_class_private* class_ctx, bool internal_access) {
     assert(dynamic_cast<const MethodVariantBase*>(v));
+    assert(dynamic_cast<const MethodFunctionBase*>(f));
     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
     ClassAccess va = mvb->getAccess();
+    // a variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
+    const MethodFunctionBase* mf = static_cast<const MethodFunctionBase*>(f);
+    if (mf->hasImplementedVariantAccess()) {
+        va = mf->getVariantAccess(v, va);
+    }
     // skip if the variant is not accessible
     return ((!class_ctx && va > Public) || (va == Internal && !internal_access));
 }
@@ -4294,14 +4349,13 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     QoreParseOptions po = parse_get_parse_options();
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
 
@@ -4395,7 +4449,7 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
             }
         }
 
-        if (stop || best.type_info) {
+        if (best.type_info) {
             break;
         }
     }
@@ -4713,8 +4767,7 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
@@ -4736,7 +4789,7 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
             // skip if the variant is not accessible or abstract
             if (last_class
-                && (skip_method_variant(*i, class_ctx, internal_access)
+                && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
             }
@@ -4862,7 +4915,7 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
             }
         }
         // issue 1229: stop searching the class hierarchy if a match found
-        if (stop || variant) {
+        if (variant) {
             break;
         }
     }
@@ -4912,15 +4965,14 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
             // add variants tested
             // iterate through inheritance list
             for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-                bool stop;
-                aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+                aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
                 if (!aqf)
                     break;
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
                     // skip if the variant is not accessible or abstract
                     if (last_class
-                        && (skip_method_variant(*i, class_ctx, internal_access)
+                        && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                             || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                             continue;
                     }
@@ -4940,8 +4992,6 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
                     add_variant_call_signature(*desc, *i, aqf->className(), getName(), (*i)->getSignature(),
                         receiver_type_info, display_inst, true);
                 }
-                if (stop)
-                    break;
             }
         }
         xsink->raiseException("RUNTIME-OVERLOAD-ERROR", desc);
@@ -5048,8 +5098,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
@@ -5063,7 +5112,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             // skip if the variant is not accessible or abstract
             if (last_class
-                && (skip_method_variant(*i, class_ctx, internal_access)
+                && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
             }
@@ -5137,7 +5186,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             }
         }
         // issue 1229: stop searching the class hierarchy if a match found
-        if (stop || variant)
+        if (variant)
             break;
     }
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant, receiver_type_info,
@@ -5175,15 +5224,14 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
         // add variants tested
         // iterate through inheritance list
         for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-            bool stop;
-            aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+            aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
             if (!aqf)
                 break;
 
             for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
                 // skip if the variant is not accessible or abstract
                 if (last_class
-                    && (skip_method_variant(*i, class_ctx, internal_access)
+                    && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                         || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                         continue;
                 }
@@ -5198,9 +5246,6 @@ const AbstractQoreFunctionVariant* QoreFunction::checkVariant(ExceptionSink* xsi
                         explicit_type_param_inst);
                 add_variant_call_signature(*desc, *i, aqf->className(), getName(), (*i)->getSignature(),
                     receiver_type_info, display_inst, true);
-            }
-            if (stop) {
-                break;
             }
         }
         xsink->raiseException("VARIANT-MATCH-ERROR", desc);
@@ -5234,8 +5279,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
@@ -5251,7 +5295,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             // skip if the variant is not accessible or abstract
             if (last_class
-                && (skip_method_variant(*i, class_ctx, internal_access)
+                && (skip_method_variant(aqf, *i, class_ctx, internal_access)
                     || static_cast<const MethodVariantBase*>(*i)->isAbstract())) {
                     continue;
             }
@@ -5298,7 +5342,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
             variant = *i;
         }
         // issue 1229: stop searching the class hierarchy if a match found
-        if (stop || variant)
+        if (variant)
             break;
     }
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant);
@@ -5365,15 +5409,14 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     NamedArgBindFailure best_failure;
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
         assert(!aqf->vlist.empty());
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
 
@@ -5589,7 +5632,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             assert(!variant);
             break;
         }
-        if (stop || variant) {
+        if (variant) {
             break;
         }
     }
@@ -5608,14 +5651,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             last_class = 0;
             internal_access = false;
             for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-                bool stop;
-                aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+                aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
                 if (!aqf) {
                     break;
                 }
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                    if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                         continue;
                     }
                     bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -5637,9 +5679,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                             accessibleParamNames.push_back(name);
                         }
                     }
-                }
-                if (stop) {
-                    break;
                 }
             }
         }
@@ -5690,14 +5729,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             last_class = 0;
             internal_access = false;
             for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-                bool stop;
-                aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+                aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
                 if (!aqf) {
                     break;
                 }
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                    if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                         continue;
                     }
                     bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -5725,9 +5763,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                     }
                     add_variant_call_signature(*desc, *i, aqf->className(), getName(), sig, receiver_type_info,
                         display_inst, false);
-                }
-                if (stop) {
-                    break;
                 }
             }
         }
@@ -5915,14 +5950,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
     bool has_possible_match = false;
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
 
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
 
@@ -6093,7 +6127,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(c
             assert(!variant);
             break;
         }
-        if (stop || variant) {
+        if (variant) {
             break;
         }
     }
@@ -6236,14 +6270,13 @@ bool QoreFunction::parseHasExplicitTypeArgsVariant(const qore_class_private* cla
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if ((last_class && skip_method_variant(v, class_ctx, internal_access))
+            if ((last_class && skip_method_variant(aqf, v, class_ctx, internal_access))
                     || !qore_get_variant_generic_signature(v)) {
                 continue;
             }
@@ -6262,9 +6295,6 @@ bool QoreFunction::parseHasExplicitTypeArgsVariant(const qore_class_private* cla
                     explicit_type_args)) {
                 return true;
             }
-        }
-        if (stop) {
-            break;
         }
     }
     return false;
@@ -6305,14 +6335,13 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if (v == chosen || (last_class && skip_method_variant(v, class_ctx, internal_access))) {
+            if (v == chosen || (last_class && skip_method_variant(aqf, v, class_ctx, internal_access))) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6371,9 +6400,6 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
                 }
             }
         }
-        if (stop) {
-            break;
-        }
     }
     return found;
 }
@@ -6385,14 +6411,13 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if ((last_class && skip_method_variant(v, class_ctx, internal_access)) || !v->isNamedCallable()) {
+            if ((last_class && skip_method_variant(aqf, v, class_ctx, internal_access)) || !v->isNamedCallable()) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6419,9 +6444,6 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
             if (!rv) {
                 return nullptr;
             }
-        }
-        if (stop) {
-            break;
         }
     }
     return rv;
@@ -6519,16 +6541,15 @@ const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_pr
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop = false;
         QoreFunction* aqf = all_variants
             ? (*aqfi).func
-            : ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+            : ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if (!all_variants && last_class && skip_method_variant(v, class_ctx, internal_access)) {
+            if (!all_variants && last_class && skip_method_variant(aqf, v, class_ctx, internal_access)) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6547,9 +6568,6 @@ const QoreTypeInfo* QoreFunction::parseRuntimeCallReturnType(const qore_class_pr
             if (!rv) {
                 return nullptr;
             }
-        }
-        if (stop) {
-            break;
         }
     }
     return rv;
@@ -6603,14 +6621,13 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        QoreFunction* aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             const AbstractQoreFunctionVariant* v = *i;
-            if (v == bind_variant || (last_class && skip_method_variant(v, class_ctx, internal_access))) {
+            if (v == bind_variant || (last_class && skip_method_variant(aqf, v, class_ctx, internal_access))) {
                 continue;
             }
             bool strict_args = static_cast<bool>(v->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
@@ -6683,9 +6700,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseNamedBindingConflict(
                 return v;
             }
         }
-        if (stop) {
-            break;
-        }
     }
     return nullptr;
 }
@@ -6755,8 +6769,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
     // iterate through inheritance list
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-        bool stop;
-        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
         if (!aqf) {
             break;
         }
@@ -6766,7 +6779,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
         // check committed list
         for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
             // skip if the variant is not accessible
-            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+            if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                 continue;
             }
             AbstractFunctionSignature* sig = (*i)->getSignature();
@@ -7007,7 +7020,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             break;
         }
         // issue 1229: stop searching the class hierarchy if a match found
-        if (stop || variant) {
+        if (variant) {
             break;
         }
     }
@@ -7059,15 +7072,14 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             // add variants tested
             // iterate through inheritance list
             for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
-                bool stop;
-                aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+                aqf = ilist.getFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
                 if (!aqf) {
                     break;
                 }
 
                 for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
                     // skip if the variant is not accessible
-                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                    if (last_class && skip_method_variant(aqf, *i, class_ctx, internal_access)) {
                         continue;
                     }
 
@@ -7086,9 +7098,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                             candidate_inst, explicit_type_args);
                     add_variant_call_signature(*desc, *i, aqf->className(), getName(), (*i)->getSignature(),
                         receiver_type_info, display_inst, false);
-                }
-                if (stop) {
-                    break;
                 }
             }
         }

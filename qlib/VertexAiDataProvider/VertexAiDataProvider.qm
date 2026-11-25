@@ -72,6 +72,15 @@ module VertexAiDataProvider {
                 "Tokens are cached and refreshed transparently by `GcpAuth`.\n\n"
                 "Project: <https://cloud.google.com/vertex-ai>",
             "scheme": "vertex-ai",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": VertexAiLogo,
             "logo_file_name": "vertex-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -144,9 +153,8 @@ module VertexAiDataProvider {
     Gemini chat completions and Gecko embeddings are discoverable from
     <tt>qctl</tt>, the Qorus action catalog, and DPQL expressions.
 
-    Gemini 3.x generation requests omit the sampling parameters and numeric thinking budgets that Gemini 3.x
-    deprecates; use thinking levels instead.  Gemini 2.5 requests keep their sampling parameters and numeric
-    thinking budgets; see @ref geminibodyshapegeneration.
+    Gemini 3.x and 4.x generation requests omit sampling parameters and use thinking levels. Gemini 2.5 requests keep
+    their sampling parameters and numeric thinking budgets; see @ref geminibodyshapegeneration.
 
     @par Provided children
 

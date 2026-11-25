@@ -997,6 +997,35 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
+# The thread-local variables of libqore are accessed through TLS descriptors on x86_64 Linux (issue #7006).  libqore
+# is a shared library that is also loaded with dlopen() (the Python module loads it so), so it cannot use the
+# initial-exec TLS model; with the general-dynamic model of -fPIC, every access of a thread-local variable called
+# __tls_get_addr(), about 5% of the instructions of code that runs mostly in the library (AOT-compiled modules).  A
+# TLS descriptor (-mtls-dialect=gnu2, the default on aarch64) resolves to a few instructions when the library's TLS
+# block is in the static TLS area, as it is when the library is linked, and keeps working when it is loaded with
+# dlopen().  glibc and musl support them on x86_64; only Linux is enabled, as the other ELF systems (FreeBSD and the
+# like) are not tested with them.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the AOT
+# identity (qcc-format-config.txt).  It is decided here, before the jemalloc build below, which is compiled with it
+# too: jemalloc's thread-specific data (je_tsd_tls), accessed by every malloc() and free(), is linked into libqore,
+# and would otherwise keep the general-dynamic model.  get_qore_library_info() reports it (TlsDescriptors).  The LLVM
+# libraries linked into libqore are taken as the distribution built them; a general-dynamic thread-local variable in
+# them would keep an R_X86_64_DTPMOD64 relocation in libqore, which qore/misc/tls-descriptors.qtest reports.
+option(QORE_TLS_DESCRIPTORS "access libqore's thread-local variables through TLS descriptors on x86_64 Linux" ON)
+set(QORE_TLS_DESCRIPTORS_USED FALSE)
+if (QORE_TLS_DESCRIPTORS AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"
+        AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    include(CheckCXXCompilerFlag)
+    check_cxx_compiler_flag(-mtls-dialect=gnu2 QORE_HAVE_TLS_DIALECT_GNU2)
+    if (QORE_HAVE_TLS_DIALECT_GNU2)
+        set(QORE_TLS_DESCRIPTORS_USED TRUE)
+    endif()
+endif()
+if (QORE_TLS_DESCRIPTORS_USED)
+    set(QORE_LIB_TLS_DESCRIPTORS_VALUE 1)
+else()
+    set(QORE_LIB_TLS_DESCRIPTORS_VALUE 0)
+endif()
+
 set(QORE_JEMALLOC_LIBRARY)
 if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     if (QORE_REQUIRE_SYSTEM_DEPENDENCIES)
@@ -1037,6 +1066,12 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     set(QORE_JEMALLOC_URL "" CACHE STRING
         "Local path or URL of the pinned jemalloc source archive, instead of the mirror or upstream source")
     qore_third_party_source_args(jemalloc _qore_jemalloc_source OVERRIDE "${QORE_JEMALLOC_URL}")
+    # jemalloc's thread-specific data is accessed as libqore's own thread-local variables are (QORE_TLS_DESCRIPTORS
+    # above); EXTRA_CFLAGS is appended to jemalloc's own flags (CFLAGS would replace its optimization flags)
+    set(_qore_jemalloc_extra_cflags)
+    if (QORE_TLS_DESCRIPTORS_USED)
+        set(_qore_jemalloc_extra_cflags "EXTRA_CFLAGS=-mtls-dialect=gnu2")
+    endif()
     ExternalProject_Add(jemalloc_ext
         ${_qore_jemalloc_source}
         ${QORE_FETCHCONTENT_URL_OPTIONS}
@@ -1050,6 +1085,7 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
             --disable-shared
             --enable-static
             "CC=${CMAKE_C_COMPILER}"
+            ${_qore_jemalloc_extra_cflags}
         BUILD_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) build_lib_static
         INSTALL_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) install_lib_static install_include
         BUILD_BYPRODUCTS ${QORE_JEMALLOC_STATIC_LIBRARY}
@@ -1677,10 +1713,13 @@ if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
     set(LIBQORE_QPP_SRC ${LIBQORE_QPP_SRC} lib/ql_alloc_tracking.qpp)
 endif ()
 
-qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${LIBQORE_QPP_SRC})
-qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC ${PSEUDO_QPP_SRC})
+qore_wrap_qpp_value(LIBQORE_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC APILIST QPP_API_SRC
+    ${LIBQORE_QPP_SRC})
+qore_wrap_qpp_value(PSEUDO_QPP_CPP_SRC DOXLIST QPP_DOX_SRC METALIST QPP_META_SRC APILIST QPP_API_SRC
+    ${PSEUDO_QPP_SRC})
 
-add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC})
+# the API metadata files too, which qore-builtin-api-identity reads after this target (qore#7183)
+add_custom_target(QPP_GENERATED_FILES DEPENDS ${LIBQORE_QPP_CPP_SRC} ${PSEUDO_QPP_CPP_SRC} ${QPP_API_SRC})
 
 # install qpp metadata files into per-module subdirectory
 install(FILES ${QPP_META_SRC}
@@ -1877,6 +1916,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRToLLVMOwnedEntries.cpp
     lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
     lib/QoreIRTakeOver.cpp
@@ -2599,9 +2639,12 @@ if (SINGLE_COMPILATION_UNIT)
     # - QoreIRTakeOver.cpp, QoreClassGivenArgs.cpp, JITRuntimeTakeOver.cpp: the analysis of the parameters that take
     #   their arguments over, and the calls with the arguments given to them of the code that a member holds and of
     #   the callees that the JIT runtime finds at run time (issue #5958), for the same reason
+    # - QoreIRToLLVMOwnedEntries.cpp: the copies of the AOT fast entries that take their arguments over (issue
+    #   #6105), compiled with hidden visibility (below), so that the LLVM templates that it instantiates are not
+    #   exported
     set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
         lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
-        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp)
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp lib/QoreIRToLLVMOwnedEntries.cpp)
     if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
         # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
         list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
@@ -2640,6 +2683,12 @@ else (SINGLE_COMPILATION_UNIT)
 endif (SINGLE_COMPILATION_UNIT)
 # an edit made while a libqore object compiles must not be lost (issue #6951)
 qore_compile_race_guard(libqore)
+# the copies of the AOT fast entries that take their arguments over (issue #6105): the LLVM templates that the copy
+# instantiates are not exported from libqore
+if (NOT MSVC)
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVMOwnedEntries.cpp
+        PROPERTIES COMPILE_OPTIONS "-fvisibility=hidden;-fvisibility-inlines-hidden")
+endif ()
 
 add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
@@ -2799,6 +2848,11 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# the TLS descriptors of libqore's own code (QORE_TLS_DESCRIPTORS_USED, decided before the jemalloc build above)
+if (QORE_TLS_DESCRIPTORS_USED)
+    target_compile_options(libqore PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-mtls-dialect=gnu2>)
+endif()
+
 # warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions
 # that nothing calls were never reported (ten were found by a manual sweep, qore#6163); a static function whose only
 # caller is itself is still not reported by the compilers, only by a sweep
@@ -2932,6 +2986,10 @@ add_executable(qore-aot-dot-target-test examples/test/ir/aot_dot_target.cpp)
 target_include_directories(qore-aot-dot-target-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-dot-target-test PRIVATE libqore)
+add_executable(qore-user-signature-link-test examples/test/ir/user_signature_link.cpp)
+target_include_directories(qore-user-signature-link-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-user-signature-link-test PRIVATE libqore)
 add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_validation.cpp)
 target_include_directories(qore-aot-ir-instruction-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
@@ -3304,6 +3362,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVMOwnedEntries.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
@@ -3461,8 +3520,44 @@ qore_aot_runtime_identity_targets(
     INPUT_LABELS ${_qcc_format_sources_labels}
     HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 add_dependencies(qcc qcc-format-version)
+
+# The builtin API identity of libqore: a digest of the API metadata of its qpp files (qpp --api-metadata: the
+# metadata of its builtin classes, functions, constants, hashdecls and enums without documentation), which qcc records
+# in every AOT module it compiles; the module loader takes a module recorded with another identity for out of date
+# and loads its source instead, or refuses it, as its code can have builtin metadata built in, such as the functional
+# domains that a class inherits from a builtin base class (see cmake/QoreWriteBuiltinApiIdentity.cmake and
+# design/aot-object-files-and-module-artifacts.md "AOT Module Builtin API Identity", qore#7183).  As for the AOT
+# runtime identity, the header is only rewritten when the identity changes, by a target that runs in every build;
+# only a change to the API metadata changes it, so every qmod, which depends on the header, is rebuilt only then.
+set(QORE_BUILTIN_API_IDENTITY_HEADER ${CMAKE_BINARY_DIR}/include/qore/intern/qore_builtin_api_identity.h)
+set(_qore_builtin_api_files ${CMAKE_BINARY_DIR}/qore-builtin-api-files.txt)
+string(REPLACE ";" "\n" _qore_builtin_api_files_content "${QPP_API_SRC}")
+string(APPEND _qore_builtin_api_files_content "\n")
+if (EXISTS "${_qore_builtin_api_files}")
+    file(READ "${_qore_builtin_api_files}" _qore_builtin_api_files_old)
+else()
+    set(_qore_builtin_api_files_old "")
+endif()
+if (NOT _qore_builtin_api_files_old STREQUAL _qore_builtin_api_files_content)
+    file(WRITE "${_qore_builtin_api_files}" "${_qore_builtin_api_files_content}")
+endif()
+add_custom_target(qore-builtin-api-identity
+    COMMAND ${CMAKE_COMMAND}
+        -DINPUT_LIST=${_qore_builtin_api_files}
+        -DOUTPUT=${QORE_BUILTIN_API_IDENTITY_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteBuiltinApiIdentity.cmake
+    BYPRODUCTS ${QORE_BUILTIN_API_IDENTITY_HEADER}
+    COMMENT "Checking the builtin API identity"
+    VERBATIM
+)
+# the API metadata files are written by the qpp commands of QPP_GENERATED_FILES; the target names none of them in its
+# DEPENDS, as the Makefile generators would give it its own copy of the qpp rules, which could run at the same time as
+# those of QPP_GENERATED_FILES or before qpp is built
+add_dependencies(qore-builtin-api-identity QPP_GENERATED_FILES)
+add_dependencies(qore-aot-runtime-identity qore-builtin-api-identity)
+add_dependencies(qcc qore-builtin-api-identity)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
-    PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+    PROPERTIES OBJECT_DEPENDS "${QORE_AOT_RUNTIME_IDENTITY_HEADER};${QORE_BUILTIN_API_IDENTITY_HEADER}")
 
 set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
 add_custom_command(

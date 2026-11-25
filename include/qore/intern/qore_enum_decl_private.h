@@ -121,7 +121,20 @@ public:
     }
 
     DLLLOCAL bool isTypeOwnerSystem() const {
-        return sys && orig == this;
+        return sys && orig == this && !program_local.load(std::memory_order_acquire);
+    }
+
+    //! Marks an original builtin enum as owned by the Program to whose namespace it is added; returns true if it was
+    //! marked now and adds its types to \a marked_types (qore#7540)
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
+        if (!sys || orig != this || program_local.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        marked_types.push_back(getTypeInfo(false));
+        marked_types.push_back(getTypeInfo(true));
+        marked_owners.push_back(&type_owner);
+        program_local.store(true, std::memory_order_release);
+        return true;
     }
 
     //! An original builtin enum that is not one of the static system namespace (Qore::) or a tombstone: a binary
@@ -354,6 +367,13 @@ public:
         return instance_serial;
     }
 
+    //! Returns the number that gives the order in which the enum was declared
+    /** It is the serial number of the original declaration, which a copy shares (issue #7171).
+    */
+    DLLLOCAL uint64_t getDeclSeq() const {
+        return decl_seq;
+    }
+
 protected:
     // references
     mutable QoreReferenceCounter refs;
@@ -376,8 +396,13 @@ protected:
     // the module that defined this enum, if any
     std::string from_module;
 
-    // original declaration
+    // original declaration; only its address is used (isSystem()): the original can be freed with its Program while a
+    // copy in the namespace of another Program lives on, so nothing is read through it
     const qore_enum_decl_private* orig;
+
+    //! the order of declaration: the serial number of the original declaration, which a copy keeps by value (issue
+    //! #7171, #7347)
+    uint64_t decl_seq = instance_serial;
 
     // type information
     QoreEnumTypeInfo* typeInfo = nullptr;
@@ -399,6 +424,14 @@ protected:
         whenever it is created, is a binary module's (isTypeOwnerModule(), qore#7533)
     */
     bool not_module_decl = false;
+    //! true for an original builtin declaration that a binary module added to a Program's namespace at run time
+    //! (qore#7540)
+    /** It is owned by that Program's namespace, not by a module or the static system namespace, so it is mortal: the
+        declaration lifetime system treats it as it treats a user declaration (isTypeOwnerSystem() is false).  Set
+        under the runtime namespace write lock, and never cleared; atomic, as the declaration lifetime system can read
+        it in another thread through a derived type that was made before it was set (released and acquired)
+    */
+    std::atomic<bool> program_local{false};
     //! copied into this Program by importing a module; never exported again
     bool mod_imported = false;
 

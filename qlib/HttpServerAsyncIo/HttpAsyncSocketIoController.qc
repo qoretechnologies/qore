@@ -333,7 +333,8 @@ public class HttpAsyncSocketIoController {
     */
     static dbgSetDrainSnapshotHook(*code<nothing(HttpAsyncSocketIoController)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the drain snapshot hook of HTTP servers");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set the drain snapshot hook of HTTP servers from a context with "
                 "restricted process control";
         }
@@ -354,7 +355,8 @@ public class HttpAsyncSocketIoController {
     static dbgSetLingeringCloseHook(*code<nothing(HttpAsyncSocketIoController, string)> hook)
             [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the lingering close hook of HTTP connections");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set the lingering close hook of HTTP connections from a context with "
                 "restricted process control";
         }
@@ -373,7 +375,8 @@ public class HttpAsyncSocketIoController {
     */
     static dbgSetDestructorHook(*code<nothing(HttpAsyncSocketIoController)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the destructor hook of HTTP I/O controllers");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set the destructor hook of HTTP I/O controllers from a context with "
                 "restricted process control";
         }

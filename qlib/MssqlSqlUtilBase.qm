@@ -744,6 +744,10 @@ public class MssqlColumn inherits SqlUtil::AbstractColumn {
         byte_size = bs;
     }
 
+    private string getIdentitySql(AbstractTable t) {
+        return sprintf(" identity(%d,%d)", identity_start, identity_increment);
+    }
+
     #! returns a list of sql strings that can be used to add the column to an existing table
     /** @par Example:
         @code{.py}
@@ -1779,8 +1783,11 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         *hash<auto> row = ds.selectRow("select convert(varchar(64), seq.start_value) start_value, "
             "convert(varchar(64), seq.increment) increment, convert(varchar(64), seq.minimum_value) minimum_value, "
             "convert(varchar(64), seq.maximum_value) maximum_value, seq.is_cycling, seq.is_cached, seq.cache_size, "
-            "t.name type_name, seq.precision from sys.sequences seq join sys.schemas s on s.schema_id = seq.schema_id "
-            "join sys.types t on t.user_type_id = seq.system_type_id where s.name = %v and seq.name = %v", schema,
+            "t.name type_name, seq.precision, case when dt.is_user_defined = 1 then "
+            "quotename(schema_name(dt.schema_id)) + '.' + quotename(dt.name) end alias_type "
+            "from sys.sequences seq join sys.schemas s on s.schema_id = seq.schema_id "
+            "join sys.types t on t.user_type_id = seq.system_type_id "
+            "join sys.types dt on dt.user_type_id = seq.user_type_id where s.name = %v and seq.name = %v", schema,
             sname);
         if (!row) {
             return;
@@ -1794,6 +1801,9 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         MssqlSequence seq(name, row.start_value.toNumber(), row.increment.toNumber(),
             max == limits.max ? NOTHING : max, min == limits.min ? NOTHING : min, row.is_cycling.toBool(), cache);
         seq.setTypeLimits(limits.min, limits.max);
+        seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+        seq.data_type = row.alias_type.val() ? row.alias_type : (row.type_name == "decimal" || row.type_name == "numeric"
+            ? sprintf("%s(%d,0)", row.type_name, row.precision) : row.type_name);
         return seq;
     }
 
@@ -3210,8 +3220,11 @@ so.name = %v", name);
 
     private Columns describeMssqlImpl() {
         # get column descriptions
-        *hash qh = ds.select("select * from information_schema.columns where table_schema = %v and "
-            "table_name = %v order by ordinal_position", schema, name);
+        *hash qh = ds.select("select c.*, convert(bigint, ic.seed_value) as identity_start, "
+            "convert(bigint, ic.increment_value) as identity_increment from information_schema.columns c "
+            "left join sys.identity_columns ic on ic.object_id = object_id(quotename(c.table_schema) + '.' "
+            "+ quotename(c.table_name)) and ic.name = c.column_name "
+            "where c.table_schema = %v and c.table_name = %v order by c.ordinal_position", schema, name);
         if (!qh.column_name)
             throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", getSqlName(),
                 dsdesc);
@@ -3251,6 +3264,9 @@ so.name = %v", name);
                 c = new MssqlColumn(row.column_name, row.data_type, th.qore, exists size ? size : 0,
                     row.is_nullable == "YES", defval, NOTHING, row.character_octet_length);
 
+            if (exists row.identity_start && row.identity_start !== NULL) {
+                c.setIdentity("freetds", row.identity_start, row.identity_increment);
+            }
             rv.(row.column_name) = c;
         }
 

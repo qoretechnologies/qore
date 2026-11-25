@@ -572,6 +572,10 @@ public hashdecl RestSchemaActionInfo {
     /** Use when an action deliberately selects one representation, such as a complete JSON response from an
         operation that also declares streamed events. The selected schema supplies the output contract and
         the request sends the corresponding \c Accept header. Omit to publish all declared representations.
+
+        A sequence of JSON records, one per line (\c application/x-ndjson), is read as a complete response and
+        published as the list of its records, each of the type that the schema declares; @ref response_fields
+        apply to each record, and @ref response_unwrap cannot be given.
     */
     *string response_content_type;
 

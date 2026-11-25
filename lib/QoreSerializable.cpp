@@ -978,7 +978,10 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                     }
                     return QoreValue();
                 }
-                QoreObject* obj = new QoreObject(cls, pgm);
+                // the object has the Program of its class, as a constructed or copied object does; the deserializing
+                // Program only for a class without one
+                QoreProgram* obj_pgm = cls->getProgram();
+                QoreObject* obj = new QoreObject(cls, obj_pgm ? obj_pgm : pgm);
                 v = oh->getKeyValue("_object_type");
                 if (v) {
                     if (v.getType() != NT_STRING) {
@@ -2591,20 +2594,9 @@ DateTimeNode* QoreSerializable::deserializeAbsDateFromStream(StreamReader& reade
             return nullptr;
         }
 
-        bool is_path = (!region.empty() && region.c_str()[0] == '.') || q_absolute_path(region.c_str());
-        if (QoreTimeZoneManager::checkRegion(region, is_path, xsink)) {
-            return nullptr;
-        }
-        if (is_path && runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot create a TimeZone object from absolute path "
-                "'%s' when sandboxing restriction PO_NO_FILESYSTEM is set", region.c_str());
-            return nullptr;
-        }
-
-        zone = is_path
-            ? QTZM.findLoadRegionFromPath(region.c_str(), xsink)
-            : QTZM.findLoadRegion(region.c_str(), xsink);
-
+        // a zone named in data is a region or the local zone, never a path: a path raises the error of an unknown
+        // region
+        zone = QTZM.findDataRegion(region, xsink);
         if (*xsink) {
             return nullptr;
         }

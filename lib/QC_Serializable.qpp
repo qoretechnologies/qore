@@ -194,6 +194,15 @@ hashdecl ListSerializationInfo {
     deserializes to the class that the data was written from; unqualified types in data written by %Qore 2.x are
     also accepted.  An empty list keeps its declared element type.
 
+    @anchor serializable_time_zones
+    The time zone of an absolute date and a @ref Qore::TimeZone "TimeZone" object are serialized by their region
+    name or UTC offset.  When they are deserialized, the name is data and never opens a file: it is a time zone region
+    (see @ref sandbox_fs_tz_regions), the name of the local time zone (the local zone, also when its name is a path)
+    or a UTC offset; any other name, such as the path of a zone that was loaded from a zoneinfo file given as a path,
+    raises \c TZINFO-ERROR <tt>unknown time zone region</tt>, as an unknown region does.  A date or a
+    @ref Qore::TimeZone "TimeZone" whose zone was loaded from a path therefore does not round-trip through
+    serialization unless the receiver loads that zone by its path itself.
+
     @anchor serializable_rejected_input
     When deserialization rejects its input, the error that rejected it is raised, and the objects created for the
     rejected data are discarded without running their destructors, also when they reference each other or

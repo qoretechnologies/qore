@@ -15,11 +15,52 @@ Program's namespace data.
 - A declaration copied into a child Program or imported into another Program
   reports the receiving Program. Identity with the original declaration does
   not imply the same allocation or lifetime.
+- A child Program references the mortal declarations of its parent
+  (`isTypeOwnerSystem()` is false: user declarations and those of the next item)
+  that the copy of the parent's namespaces did not copy (`PO_NO_INHERIT_USER_CLASSES`,
+  `PO_NO_INHERIT_SYSTEM_CLASSES`, `PO_NO_ENUM`, a declaration that is not public),
+  as the functions, constants, typedefs and global variables that it inherits can
+  name them and the child can outlive its parent
+  (`qore_root_ns_private::refLeftOutDecls()`, released when the child's root
+  namespace is destroyed; qore#7607). Its enums are referenced also when they are
+  copied, as the copy of a user enum does not keep its original, and the
+  declarations that the parent keeps so are passed on to the child, whose own
+  children inherit the same functions. A child thus keeps every enum copy of its
+  parent, and a child created with `PO_NO_INHERIT_SYSTEM_HASHDECLS` every hashdecl
+  copy (a copy is never a builtin type owner), for its lifetime.
 - Static system declarations have no Program owner. Copies of builtin declarations
   in a Program do have that Program as their owner, even though `isSystem()` is true.
 - An unattached declaration has no Program owner. A reference-counted declaration
   that survives its namespace also has no owner after namespace teardown.
   Consequently, a null result alone does not prove process-wide lifetime.
+- An original builtin declaration in a namespace tree that a binary module attaches to
+  a namespace that a Program owns at run time (`QoreNamespace::addNamespace()`, outside
+  the static system namespace and the namespace of a module) is owned by that Program
+  and is mortal: it is marked `program_local` before the tree is published
+  (`qore_ns_private::markProgramLocal()`), and
+  the declaration lifetime system treats it as a user declaration
+  (`isTypeOwnerSystem()` is false; `isSystem()` is unchanged). The import copy of a
+  builtin class and the instances of a mortal generic hashdecl are mortal too. A
+  builtin variant of a function of such a namespace references the mortal
+  declarations that its signature names
+  (`BuiltinFunctionVariantBase::refMortalDecls()`), so that the variant can be
+  imported into another Program or copied into a child Program that does not inherit
+  the classes and outlive the Program; such a declaration can therefore outlive its
+  Program (qore#7540). An attach refreshes the references of the variants that it
+  adds and of the variants added before it that name a declaration that it marks,
+  which the Program indexes by the declarations that they name that are not mortal
+  yet (`qore_root_ns_private::unmarked_decl_variants`), not those of every variant
+  of the Program (qore#7608); a variant of one Program that names a declaration
+  that a module attaches to another Program is not refreshed by that attach. A builtin declaration that a module adds one at a time to a
+  namespace already attached to a Program (`addSystemClass()`, `addSystemHashDecl()`,
+  `addSystemEnum()`) is not marked: it keeps the lifetime handling of a system
+  declaration (module-jni shares such classes between Programs; qore#7649, qore#7650). One that something keeps to the end of the process (a value
+  kept in static storage, a Program with static storage duration) is freed after
+  the modules' `del` functions have run, as the static namespace's module classes
+  are: binary modules are never unloaded, and a module's `del` function must leave
+  what the destructors, methods and module data of its classes need valid until then
+  (`doxygen/lib/70_qore_modules.doxygen`, Releasing Module State at Shutdown;
+  `examples/test/qore/namespaces/runtime-builtin-survivor`).
 
 The accessors follow the existing namespace back-pointer; they add exported
 methods without changing the public object layout. No reference is acquired.

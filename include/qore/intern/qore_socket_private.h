@@ -1346,6 +1346,11 @@ struct QoreUnixSocketPin {
     std::string canon;
     //! true if the address is relative to the directory held (bindat(), connectat())
     bool at = false;
+    //! true if the address is relative to the directory held through the working directory of the thread (macOS:
+    //! pthread_fchdir_np())
+    bool thread_cwd = false;
+    //! the function that sets the working directory of the thread, decided when the path was pinned (macOS)
+    int (*fchdir_np)(int) = nullptr;
     //! the name of the socket file in the directory held (bind)
     std::string leaf;
 
@@ -1359,6 +1364,47 @@ struct QoreUnixSocketPin {
         }
     }
 };
+
+#ifdef __APPLE__
+//! Returns the private macOS function that sets the working directory of the calling thread (pthread_fchdir_np()),
+//! resolved at run time, or nullptr if it is not available (qore#7518)
+DLLLOCAL int (*qore_pthread_fchdir_np())(int);
+
+//! Sets the working directory of the calling thread to a directory for the life of the object, and restores the
+//! process working directory for the thread when it is destroyed (macOS; qore#7518)
+/** The thread then uses the working directory of the process: a working directory of its own that an application
+    that embeds the library set for the thread is not kept (Qore sets none)
+*/
+class QoreThreadCwdHelper {
+public:
+    DLLLOCAL QoreThreadCwdHelper(int (*fchdir_np)(int), int dirfd) : fchdir_np(fchdir_np) {
+        set = fchdir_np && !fchdir_np(dirfd);
+        if (!fchdir_np) {
+            errno = ENOSYS;
+        }
+    }
+
+    DLLLOCAL ~QoreThreadCwdHelper() {
+        if (set) {
+            int err = errno;
+            fchdir_np(-1);
+            errno = err;
+        }
+    }
+
+    QoreThreadCwdHelper(const QoreThreadCwdHelper&) = delete;
+    QoreThreadCwdHelper& operator=(const QoreThreadCwdHelper&) = delete;
+
+    //! returns true if the working directory of the thread is the directory given
+    DLLLOCAL operator bool() const {
+        return set;
+    }
+
+private:
+    int (*fchdir_np)(int);
+    bool set = false;
+};
+#endif
 
 //! Pins a UNIX socket path that the sandbox rules allowed, and gives the address that reaches it (qore#7518)
 /** @param bind true for a bind (the socket file is created), false for a connection
@@ -4741,6 +4787,18 @@ public:
         } else
 #endif
         {
+#ifdef __APPLE__
+            // a name relative to the directory held is bound with the thread's working directory set to it
+            std::unique_ptr<QoreThreadCwdHelper> cwd;
+            if (upin && upin->thread_cwd) {
+                cwd.reset(new QoreThreadCwdHelper(upin->fchdir_np, upin->fd));
+                if (!*cwd) {
+                    xsink->raiseErrnoException("SOCKET-BIND-ERROR", errno, "cannot bind UNIX socket '%s'", name);
+                    close();
+                    return -1;
+                }
+            }
+#endif
             struct sockaddr_un baddr = pinned_addr ? *pinned_addr : addr;
             // the error of a pinned bind names the path as given, not the address of the path pinned
             if (bindIntern(reinterpret_cast<struct sockaddr*>(&baddr), sizeof(struct sockaddr_un), -1, false, nullptr,

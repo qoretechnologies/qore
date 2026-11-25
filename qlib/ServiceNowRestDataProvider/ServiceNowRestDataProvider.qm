@@ -54,6 +54,15 @@ module ServiceNowRestDataProvider {
             "desc": "ServiceNow® cloud APIs; ServiceNow is a trademark of ServiceNow, Inc.",
             "scheme": "snrests",
             # NOTE: the logo is an SVG with "SN" in the middle - not the ServiceNow logo
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "service-now.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "contract",
+                "source": "https://www.servicenow.com/products/itsm/pricing.html",
+                "effective_date": 2026-11-25,
+            },
             "logo": ServiceNowWhiteLogo,
             "logo_file_name": "sn.svg",
             "logo_mime_type": MimeTypeSvg,

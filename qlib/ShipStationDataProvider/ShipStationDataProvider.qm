@@ -62,6 +62,15 @@ module ShipStationDataProvider {
                 "- Warehouse management\n"
                 "- Store and marketplace connections\n"
                 "- Real-time webhooks for orders and shipments",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "shipstation.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.shipstation.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "shipstation",
             "logo": ShipStationLogo,
             "logo_file_name": "shipstation-logo.svg",

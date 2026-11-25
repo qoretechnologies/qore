@@ -45,5 +45,6 @@ DLLLOCAL TypedHashDecl* init_hashdecl_FilesystemPathInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_FilesystemSecurityConfigInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_NetworkSecurityConfigInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SandboxConfigInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SandboxTimeZonePathInfo(QoreNamespace& ns);
 
 #endif // _QORE_CLASS_QC_SANDBOXMANAGER_H

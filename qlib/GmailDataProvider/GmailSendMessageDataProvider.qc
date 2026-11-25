@@ -95,6 +95,9 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
         map msg.addCC($1), req.cc;
         map msg.addBCC($1), req.bcc;
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
+        if (exists req."plain-body") {
+            msg.addPlainAlternative(req."plain-body");
+        }
         map msg.attach($1."data".name, $1."data".mime_type, parse_base64_string($1."data".content), $1.encoding,
             $1.hdr), req.attachments;
         if (req.in_reply_to.val()) {
@@ -264,6 +267,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "desc": "One or more `Bcc:` addresses for the email",
             },
             "subject": {
+                "metadata": {"message_role": "subject"},
                 "display_name": "Subject",
                 "type": StringType,
                 "short_desc": "The subject for the email",
@@ -271,6 +275,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "required": True,
             },
             "body": {
+                "metadata": {"message_role": "text"},
                 "display_name": "Message Body",
                 "type": StringType,
                 "short_desc": "The message body",
@@ -282,6 +287,14 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "type": new SoftListDataType(GmailSendMessageAttachmentDataType, True),
                 "short_desc": "Message attachments",
                 "desc": "Any attachments for the message",
+            },
+            "plain-body": {
+                "metadata": {"message_role": "text"},
+                "display_name": "Plain-Text Alternative",
+                "type": StringOrNothingType,
+                "short_desc": "Plain-text representation of the HTML body",
+                "desc": "With a nonempty text/html string body, send this nonempty plain text first in a "
+                    "multipart/alternative message. Omit it to send the body by itself.",
             },
             "body-encoding": {
                 "display_name": "Body Encoding",
@@ -296,6 +309,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "allowed_values": BodyEncodingList,
             },
             "body-mime-type": {
+                "metadata": {"message_role": "selector"},
                 "display_name": "Body Mime Type",
                 "type": StringOrNothingType,
                 "short_desc": "The MIME type of the message body",

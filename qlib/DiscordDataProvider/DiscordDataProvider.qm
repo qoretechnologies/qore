@@ -56,6 +56,15 @@ module DiscordDataProvider {
             "display_name": "Discord",
             "short_desc": "Discord messaging services",
             "desc": "Discord messaging services",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "discord.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://discord.com/developers/docs/policies-and-agreements/developer-terms-of-service",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "discord",
             "logo": DiscordLogo,
             "logo_file_name": "Discord-logo.svg",
@@ -146,6 +155,8 @@ module DiscordDataProvider {
     @section Discorddataprovider_relnotes Release Notes
 
     @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    - @ref DiscordDataProvider::DiscordMessageSend provides outbound rich embed and mention policy types and validates
+      channel and webhook message limits (<a href="https://github.com/qoretechnologies/qore/issues/6881">issue 6881</a>)
     - \c DiscordDataProvider::registerChild() cannot be called by sandboxed code: its registry is process-wide
       (\c SANDBOX-REGISTRATION-ERROR; see @ref sandbox_process_wide_registries)
       (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)

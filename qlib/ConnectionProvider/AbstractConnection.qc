@@ -999,7 +999,7 @@ conn.checkSandboxAccess(True);
         # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
         # restricted code that runs while it calls (a callback, for example) can take the connection's
         *HttpClientIo::HttpClientCreatorProofGrant grant;
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             # a client that the connection's code creates from its members, which the restricted code can change,
             # connects only to the target that the connection's creator gave (qore#7262)
             checkLentClientTarget();
@@ -1060,7 +1060,7 @@ conn.checkSandboxAccess(True);
         # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
         # restricted code that runs while it calls (a callback, for example) can take the connection's
         *HttpClientIo::HttpClientCreatorProofGrant grant =
-            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
+            creator_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
         if (!connect) {
             object o = getAsyncImpl(False, rtopts);
             postProcess(o);
@@ -1256,7 +1256,7 @@ conn.checkSandboxAccess(True);
     */
     object getPollImpl() {
         # the client is handed to the caller as get()'s is: it is checked for code restricted from NETWORK (qore#7262)
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             checkLentClientTarget();
         }
         return getImpl(False);
@@ -1411,7 +1411,7 @@ conn.checkSandboxAccess(True);
         @since %ConnectionProvider 3.1
     */
     final private checkLentNetworkTarget(string url, *string proxy_url) {
-        if (!SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (!SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             return;
         }
         # the origin (TLS or not, canonical host, port; the schemes that are mapped to HTTP, such as ws and rest, as

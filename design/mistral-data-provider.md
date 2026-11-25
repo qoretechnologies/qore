@@ -1,6 +1,6 @@
 # Mistral data provider
 
-MistralDataProvider 1.1 exposes 264 completed-response actions from Mistral's official
+MistralDataProvider 1.1 exposes 347 completed-response actions from Mistral's official
 OpenAPI document, vendored in the module (see below).
 The original `chat-completion`, `create-embeddings`, and `ocr` action IDs and public
 provider classes are retained. Their request and response classes now use the
@@ -9,15 +9,16 @@ Chat responses retain the original epoch-to-date conversion of `created`.
 
 The committed schema determines paths, HTTP methods, requiredness, nested types,
 validation, and wire formats. `MistralManifest` selects stable action names and adds
-presentation, finite choices, examples, and 42 resource dropdowns. Nullable enums
+presentation, finite choices, examples, and 52 resource dropdowns. Nullable enums
 and arrays retain the same choices and element lookups as their non-nullable forms.
 Parent-scoped dropdowns require the selected library, agent, conversation, or dataset. Listings fetch one
 page; custom identifiers remain accepted and normal action options expose pagination. Dataset-record selectors enumerate one page of records
 for each dataset in the first dataset page, because records are addressed globally but listed per dataset.
 Evaluation selectors likewise list evaluations per project. Audio agent versions are scoped to the selected audio agent.
 
-The 264 actions cover 260 of the pinned document's 347 operations. Two connector operations each
-support three scope-specific actions. The provider covers models, chat, code completion,
+The 347 actions cover 338 of the pinned document's 347 operations. Connector operations with a
+`{consumer_scope}` path parameter support one action per scope (organization, workspace, user, as the
+operation allows). The provider covers models, chat, code completion,
 embeddings, moderation, files, batch inference, OCR, audio sessions and agents, conversations,
 libraries, connectors, prompts, skills, and evaluation datasets. Observability actions cover projects,
 evaluations, runs, records, optimizations, trials and scorers as well as logs, traces, spans and
@@ -25,10 +26,20 @@ evaluation pipelines. Workflow actions cover executions, schedules, deployments,
 RAG actions manage ingestion configurations and deployment metrics. Context actions manage search indexes,
 documents, chunks and summaries. Trigger actions manage subscriptions and list the events they receive.
 
-The 87 operations outside the manifest include deprecated and streaming-only operations,
-administration, service accounts, additional connector operations, client session credentials,
-deployment hardening, account and billing details, and webhooks (qore#6503). The index summary
-can be read and set through the provider. Generating it returns an NDJSON stream.
+Administration actions (prefixed `admin-`) use the organization administration API, which requires an admin
+API key: users, invitations and roles, workspaces and their members, user groups, API keys, spend and rate limits,
+usage, audit logs, SCIM synchronization and Vibe Work and Vibe Code analytics. Service account, webhook, identity,
+billing and client session actions complete the account-level API. API keys, webhook signing secrets and
+verification tokens, client session secrets and connector credentials are marked sensitive in requests and responses.
+
+The 9 operations outside the manifest are the streaming-only operations (streamed transcription, conversation
+streams, workflow event, execution and deployment log streams) and the deprecated group-to-workspace provisioning
+(qore#6503).
+
+Generating a search index summary returns newline-delimited JSON (`application/x-ndjson`): the
+`generate-search-index-summary` action selects that response and returns the list of its records, the summary
+metadata first, then the content chunks to join (`RestSchemaActionInfo.response_content_type`; the REST client
+returns such a body as text).
 
 The Responses and agent completion actions return a complete JSON response. Prompt and skill versions are listed for the selected parent. The v2 voice listing accepts a cursor, and library and document updates send only supplied metadata.
 
@@ -61,7 +72,7 @@ QORE_MODULE_DIR=qlib tools/rest-schema-import.qr --spec qlib/MistralDataProvider
 
 Review provenance and run the importer drift
 check against `MistralSchema::getActionSet()` before adopting a newer revision.
-The import records four reviewed upstream defects:
+The import records five reviewed upstream defects:
 
 - `SharingDelete` requires an absent `level` property. The official SDK requires
   only `share_with_uuid` and `share_with_type`. The repair checks the old required list.
@@ -71,6 +82,8 @@ The import records four reviewed upstream defects:
   sources, and changed parameter counts fail the import.
 - The `text/event-stream` response of `POST /v1/audio/speech` refers to its local `$defs` as `#/$defs/...`, which
   resolves against the document root. The repair drops that streaming response; `generate-speech` does not stream.
+- The `application/x-ndjson` response of the search index summary operation refers to its local `$defs` as
+  `#/$defs/...` as well; the repair inlines the definitions.
 - The Responses streaming schema references missing event types. The completed `create-response` action keeps
   the JSON response and omits the streaming representation during import.
 

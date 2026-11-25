@@ -187,12 +187,44 @@ module SqlUtil {
     restore data with code that may use the connections that the data can name; code restricted from the
     \c DATABASE domain cannot restore a datasource at all
 
+    See @subpage sqlutil_identity_columns for portable auto-increment columns.
+
     See @subpage sqlutil_relnotes "Release Notes for the SqlUtil Module" for the changes in each version.
+*/
+/** @page sqlutil_identity_columns Portable identity columns
+
+    Set \c identity to \c True on an integer column to let the database generate its value.
+    @code{.py}
+    {"columns": {"id": {"qore_type": "integer", "identity": True}},
+        "primary_key": {"name": "items_pk", "columns": ("id",)}}
+    @endcode
+
+    PostgreSQL, Oracle and Firebird create a generated identity column. SQL Server uses IDENTITY, MySQL uses
+    AUTO_INCREMENT and SQLite uses INTEGER PRIMARY KEY AUTOINCREMENT. On SQLite this column must be the only
+    primary key column. An identity column supplies its own default value.
+
+    The optional integer keys \c identity_start and \c identity_increment default to 1. The generation policy
+    \c identity_generation defaults to \c "by default". PostgreSQL, Oracle and Firebird also support
+    \c "always", and Oracle supports \c "by default on null". A destination that cannot represent the requested
+    settings reports an error. MySQL and SQLite support the default start and increment through this option.
+
+    @ref SqlUtil::AbstractTable::getDescriptionHash() "getDescriptionHash()" returns the portable option and keeps
+    the source's native type under its driver key. Reading a table after inserting rows preserves the declared
+    start. PostgreSQL recognizes the owned sequence that supplies a serial default. A default referencing an
+    independent sequence keeps its expression. See @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()".
 */
 /** @page sqlutil_relnotes Release Notes for the SqlUtil Module
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - @ref sqlutil_identity_columns "Identity columns" can be read from one database and created on another
+      with its native auto-increment mechanism (issue #7633)
+    - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports column ownership and the native
+      sequence type where the database supplies them (issue #7587)
+    - @ref table_desc_hash "Table descriptions" can align named CHECK constraints on PostgreSQL and Oracle
+      (<a href="https://github.com/qoretechnologies/qore/issues/1616">issue 1616</a>)
+    - @ref SqlUtil::AbstractTable::getAlignSql() "getAlignSql()" removes an Oracle primary key before dropping its
+      supporting index when both are absent from the template (<a href="https://github.com/qoretechnologies/qore/issues/1482">issue 1482</a>)
     - serialized objects keep no credentials of their datasource: the default serializer keeps its masked
       configuration, and a datasource is restored with a registered deserializer or the new
       @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()"; data of
@@ -2677,6 +2709,14 @@ db_table.getAlignSql(template_table, callback_opts);
       under the \c drivers key and the driver key name under that; see below for an example
     - \c foreign_constraints: (optional) a hash of foreign constraint information keyed by constraint name; the values
       are @ref fk_desc_hash "foreign constraint hashes"
+    - \c check_constraints: on PostgreSQL and Oracle, a hash mapping constraint names to SQL predicate strings,
+      for example <tt>{"positive_qty": "qty > 0"}</tt>. Alignment creates, replaces, and removes checks by name.
+      An empty hash removes every representable check. Checks with special catalog attributes are preserved and
+      identified by the alignment info callback (including PostgreSQL NOT VALID, NO INHERIT, or inherited checks,
+      and Oracle disabled or unvalidated checks). Their expressions are omitted from exported descriptions.
+      Expressions are compared as SQL text; when PostgreSQL rewrites a predicate, use the expression returned by
+      @ref SqlUtil::AbstractTable::getDescriptionHash() "getDescriptionHash()" for a stable comparison. Omitting the key uses the existing constraint alignment,
+      which can drop undeclared catalog checks. Other drivers reject this key.
     - \c unique_constraints: (optional) a hash of unique constraint information keyed by constraint name; the values
       are @ref uk_desc_hash "unique constraint hashes"
     - \c partition_strategy: (optional) a @ref SqlUtil::PartitionStrategy "partition strategy hash"; Phase 1
@@ -2767,6 +2807,9 @@ hash table_desc = (
       used by the PgsqlSqlUtil module to create trigger functions used by the table's trigger.
 
     @subsection column_desc_hash Column Description Hash
+
+    Use @ref sqlutil_identity_columns "identity columns" for a database-generated integer. The column can declare
+    its initial value and increment with \c identity_start and \c identity_increment.
 
     Column description hashes have the following structure:
     - \c qore_type: a qore type string that will be converted to a native DB type with some default conversion
@@ -3244,6 +3287,14 @@ public namespace SqlUtil {
         bool notnull = False;
         #! this key can optionally contain a hash keyed by driver name which contains a hash of values that will be added to the column description hash before processing; this way a column description hash can contain all the information required for the column including driver-specific options; any driver-specific options will overwrite values in the top level of the hash if there are duplicate hash keys
         hash<string, hash> driver;
+        #! Generate integer values using the destination database's native identity mechanism
+        *bool identity;
+        #! First generated value (default 1); this is independent of the current sequence value
+        *int identity_start;
+        #! Difference between generated values (default 1)
+        *int identity_increment;
+        #! Identity generation policy: "by default", "always", or Oracle's "by default on null"
+        *string identity_generation;
         #! @ref True "True" for DBs that support an auto-increment column
         *bool auto_increment;
     }
@@ -10053,6 +10104,15 @@ column.setDdlName("order");
             #! the scale for numeric columns
             *int scale;
 
+            #! The database family that generates this column's values, if it is an identity column
+            *string identity_driver;
+            #! First generated value
+            int identity_start = 1;
+            #! Difference between generated values
+            int identity_increment = 1;
+            #! Policy for explicitly supplied values
+            string identity_generation = "by default";
+
             #! Default VARCHAR column size
             const DefaultVarcharSize = 80;
         }
@@ -10070,6 +10130,22 @@ column.setDdlName("order");
             def_val = dv;
             comment = c;
             self.scale = scale;
+        }
+
+        #! Records identity settings from a column declaration or from the database catalog
+        setIdentity(string driver, int start = 1, int increment = 1, string generation = "by default") {
+            if (!increment || !inlist(generation, ("by default", "always", "by default on null"))) {
+                throw "COLUMN-ERROR", sprintf("column %y has an invalid identity increment or generation policy", name);
+            }
+            if (((driver == "mysql" || driver == "sqlite3") && (start != 1 || increment != 1))
+                    || (inlist(driver, ("mysql", "sqlite3", "freetds")) && generation != "by default")
+                    || (generation == "by default on null" && driver != "oracle")) {
+                throw "UNSUPPORTED", sprintf("driver %y cannot represent the identity settings of column %y", driver, name);
+            }
+            identity_driver = driver;
+            identity_start = start;
+            identity_increment = increment;
+            identity_generation = generation;
         }
 
         #! Returns a description hash of the column
@@ -10098,6 +10174,29 @@ column.setDdlName("order");
                 rv.comment = comment;
             }
 
+            if (identity_driver) {
+                rv.identity = True;
+                if (identity_start != 1) {
+                    rv.identity_start = identity_start;
+                }
+                if (identity_increment != 1) {
+                    rv.identity_increment = identity_increment;
+                }
+                if (identity_generation != "by default") {
+                    rv.identity_generation = identity_generation;
+                }
+                # Retain the source's exact type for a same-driver readback. Other drivers choose an integer type.
+                hash<auto!> native = {"native_type": remove rv.native_type};
+                if (rv.size) {
+                    native.size = remove rv.size;
+                }
+                if (rv.scale) {
+                    native.scale = remove rv.scale;
+                }
+                rv.driver{identity_driver} = native;
+                rv.qore_type = Type::Int;
+                remove rv.default_value;
+            }
             return rv;
         }
 
@@ -10119,11 +10218,23 @@ column.setDdlName("order");
         #! returns an sql string that can be used to add the column to a table
         string getCreateSql(AbstractTable t) {
             string sql = sprintf("%s %s", ddl_name, getNativeTypeString());
-            if (exists def_val)
-                sql += " default " + def_val + "";
+            if (identity_driver) {
+                sql += getIdentitySql(t);
+            } else if (exists def_val) {
+                sql += " default " + def_val;
+            }
             if (!nullable)
                 sql += " not null";
             return sql;
+        }
+
+        #! SQL standard identity clause; drivers with a different syntax override this method
+        private string getIdentitySql(AbstractTable t) {
+            string clause = " generated " + identity_generation + " as identity";
+            if (identity_start != 1 || identity_increment != 1) {
+                clause += sprintf(" (start with %d increment by %d)", identity_start, identity_increment);
+            }
+            return clause;
         }
 
         #! returns a list of sql strings that can be used to add the column to an existing table
@@ -10160,6 +10271,9 @@ list l = col.getModifySql(t, newcol);
         list<auto> getModifySql(AbstractTable t, AbstractColumn c, *hash<auto> opt) {
             if (equal(c)) {
                 return ();
+            }
+            if (!sameIdentity(c) && !canModifyIdentity(c)) {
+                throw "UNSUPPORTED", sprintf("changing the identity definition of existing column %y requires an explicit migration", name);
             }
             list l = getModifySqlImpl(t, c, opt);
 
@@ -10202,7 +10316,8 @@ string str = col.getRenameSql(t, "new_name");
         bool equal(AbstractColumn c) {
             if (self.className() != c.className() || name != c.name || native_type != c.native_type || size != c.size
                 || (scale ?? 0) != (c.scale ?? 0)
-                || nullable != c.nullable || def_val != c.def_val || comment != c.comment) {
+                || nullable != c.nullable || (!identity_driver && def_val != c.def_val) || comment != c.comment
+                || !sameIdentity(c)) {
                 #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
                 return False;
             }
@@ -10212,6 +10327,16 @@ string str = col.getRenameSql(t, "new_name");
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
         private abstract bool equalImpl(AbstractColumn c);
+
+        #! Whether this driver can align the target identity definition through getModifySqlImpl()
+        private bool canModifyIdentity(AbstractColumn target) {
+            return False;
+        }
+
+        private bool sameIdentity(AbstractColumn c) {
+            return identity_driver == c.identity_driver && (!identity_driver || (identity_start == c.identity_start
+                && identity_increment == c.identity_increment && identity_generation == c.identity_generation));
+        }
 
         #! returns a list of sql strings that can be used to modify the column to the new definition
         /** If the column definitions are identical then an empty list is returned
@@ -10666,12 +10791,23 @@ AbstractConstraint ix = constraints.uk_jobs;
         public {
             #! the source of the check clause
             string src;
+            #! An attribute that a check description cannot express, if any
+            *string preserve_reason;
+            #! Columns that must remain present to preserve this catalog check
+            *list<string> catalog_columns;
         }
 
         #! creates the object and sets its name and the check clause source
         constructor(string n, string n_src) : AbstractConstraint(n) {
             name = n;
             src = n_src;
+        }
+
+        #! Returns the SQL predicate to use in a table description
+        /** @since SqlUtil 3.11.0
+        */
+        string getDescriptionExpression() {
+            return src;
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -11241,6 +11377,18 @@ string sql = constraint.getDeferrabilitySql();
         }
     }
 
+    #! The ownership of a database sequence as reported by its catalog
+    public hashdecl SqlSequenceOwnershipInfo {
+        #! \c standalone, \c identity (generated for an identity column), or \c owned (bound to a column)
+        string kind;
+        #! The catalog spelling of the owning schema, if the database has schemas and there is an owner
+        *string schema;
+        #! The catalog spelling of the owning table, if any
+        *string table;
+        #! The catalog spelling of the owning column, if any
+        *string column;
+    }
+
     #! base class for sequences
     public class AbstractSequence inherits Qore::Serializable {
         public {
@@ -11255,6 +11403,16 @@ string sql = constraint.getDeferrabilitySql();
 
             #! the ending number
             *number max;
+
+            #! Column ownership returned by getSequence(), or @ref nothing when the driver cannot determine it
+            /** A standalone sequence can supply a column default. Ownership means the catalog associates the
+                sequence's lifetime with a particular column. A sequence constructed from a description has no
+                catalog ownership information.
+            */
+            *hash<SqlSequenceOwnershipInfo> ownership;
+
+            #! Native SQL sequence type returned by getSequence(), or @ref nothing when there is no declared type
+            *string data_type;
         }
 
         #! creates the object from the arguments

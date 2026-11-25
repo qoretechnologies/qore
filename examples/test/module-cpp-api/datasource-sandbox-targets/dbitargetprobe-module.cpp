@@ -61,6 +61,8 @@
 #include <qore/QoreSandboxManager.h>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <netinet/in.h>
 
 #include <atomic>
@@ -80,6 +82,8 @@ std::atomic<int64> probe_target_calls{0};
 //! the connection of a driver: the checked destinations that it was given when it was opened
 struct ProbeConnection {
     QoreListNode* checked = nullptr;
+    //! the first line of the database file read through its pinned path (dbipinprobe)
+    std::string content;
 
     ~ProbeConnection() {
         if (checked) {
@@ -160,6 +164,77 @@ int probe_local_open(Datasource* ds, ExceptionSink* xsink) {
     return probe_open(ds, xsink);
 }
 
+//! dbipinprobe: pins the database name, if it is an absolute path, with qore_dbi_pin_connect_path() and reads the
+//! first line of the file opened with qore_dbi_pinned_path_open(); for a name ending with ".new", the file and a file that
+//! belongs to it ("-journal") are created and written through the pinned path (qore#7518)
+int probe_pin_open(Datasource* ds, ExceptionSink* xsink) {
+    std::string content;
+#ifdef QORE_HAS_DBI_PIN_CONNECT_PATH
+    const char* db = ds->getDBName();
+    if (db && db[0] == '/') {
+        // a database name ending with ".new" is created
+        size_t len = strlen(db);
+        bool create = len > 4 && !strcmp(db + len - 4, ".new");
+        QoreDbiPinnedPath* pin = qore_dbi_pin_connect_path(ds, db, create ? (QSEC_READ | QSEC_WRITE | QSEC_CREATE)
+            : QSEC_READ, xsink);
+        if (!pin) {
+            return -1;
+        }
+        int fd;
+        if (create) {
+            fd = qore_dbi_pinned_path_open(pin, nullptr, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd >= 0) {
+                (void)!write(fd, "created\n", 8);
+                close(fd);
+                fd = qore_dbi_pinned_path_open(pin, "-journal", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (fd >= 0) {
+                    (void)!write(fd, "journal\n", 8);
+                    close(fd);
+                }
+            }
+            if (fd >= 0) {
+                fd = qore_dbi_pinned_path_open(pin, nullptr, O_RDONLY, 0);
+            }
+        } else {
+            fd = qore_dbi_pinned_path_open(pin, nullptr, O_RDONLY, 0);
+        }
+        int err = errno;
+        std::string checks;
+        if (!create && fd >= 0) {
+            // a path checked for reading is not opened for writing, and a suffix cannot leave the directory
+            int wfd = qore_dbi_pinned_path_open(pin, nullptr, O_WRONLY, 0);
+            checks += (wfd < 0 && errno == EACCES) ? "|ro" : "|RW!";
+            if (wfd >= 0) {
+                close(wfd);
+            }
+            int sfd = qore_dbi_pinned_path_open(pin, "/../escape", O_RDONLY, 0);
+            checks += (sfd < 0 && errno == EINVAL) ? "|slash" : "|SLASH!";
+            if (sfd >= 0) {
+                close(sfd);
+            }
+        }
+        qore_dbi_pinned_path_free(pin);
+        if (fd < 0) {
+            xsink->raiseErrnoException("DBIPINPROBE-ERROR", err, "cannot open '%s'", db);
+            return -1;
+        }
+        char buf[256];
+        ssize_t n = read(fd, buf, sizeof buf - 1);
+        close(fd);
+        if (n > 0) {
+            buf[n] = '\0';
+            content = buf;
+        }
+        content += checks;
+    }
+#endif
+    if (probe_open(ds, xsink)) {
+        return -1;
+    }
+    ds->getPrivateData<ProbeConnection>()->content = content;
+    return 0;
+}
+
 QoreValue probe_select(Datasource* ds, const QoreString* sql, const QoreListNode* args, ExceptionSink* xsink) {
     ProbeConnection* conn = ds->getPrivateData<ProbeConnection>();
     assert(conn);
@@ -169,6 +244,9 @@ QoreValue probe_select(Datasource* ds, const QoreString* sql, const QoreListNode
     }
     if (!strcmp(str->c_str(), "checked")) {
         return conn->checked ? conn->checked->listRefSelf() : QoreValue();
+    }
+    if (!strcmp(str->c_str(), "content")) {
+        return new QoreStringNode(conn->content);
     }
 #ifdef QDBI_METHOD_GET_CONNECT_TARGETS
     if (!strcmp(str->c_str(), "current")) {
@@ -274,6 +352,11 @@ void dbitargetprobe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink
 #endif
     );
     probe_register("dbinotargetprobe", probe_open, false, DBI_CAP_TRANSACTION_MANAGEMENT);
+    probe_register("dbipinprobe", probe_pin_open, false, DBI_CAP_TRANSACTION_MANAGEMENT
+#ifdef DBI_CAP_LOCAL_ONLY
+        | DBI_CAP_LOCAL_ONLY
+#endif
+    );
 }
 
 void dbitargetprobe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

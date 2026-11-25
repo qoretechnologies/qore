@@ -74,7 +74,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     */
     constructor(object client, *string url, *hash<auto> opts) {
         # the handler is not a capability of the host if code restricted from the network bound it (qore#6959)
-        bound_by_restricted = SandboxManager::isCallerRestricted(DOM_NETWORK);
+        bound_by_restricted = SandboxManager::isLentToRestricted(DOM_NETWORK);
         bound_client = client;
         if (client instanceof HTTPClient) {
             HTTPClient hc = cast<HTTPClient>(client);

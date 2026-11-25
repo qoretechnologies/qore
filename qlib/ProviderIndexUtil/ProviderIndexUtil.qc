@@ -4705,14 +4705,18 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 (map {$1.key: $1.value - "return_type"}, rv.expressions.pairIterator()), map {
                 $1.key: {
                     "args": (exists $1.value.args ? map ctx.dp_sig_info_th.doCastWithOverrides($1 - "type", {
-                        "type_info": getTypeInfoForName($1.type, ctx),
+                        "type_info": exists $1.type_info
+                            ? IndexedTypeTable::restoreTypeInfo($1.type_info, ctx, NOTHING)
+                            : getTypeInfoForName($1.type, ctx),
                     }), $1.value.args : NOTHING),
                     "arg_info": (exists $1.value.arg_info ? map ctx.dp_arg_info_th.doCastWithOverrides($1, {
                         "allowed_values": (exists $1.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.allowed_values
                             : NOTHING),
                     }), $1.value.arg_info : NOTHING),
-                    "return_type_info": getTypeInfoForName($1.value.return_type, ctx),
+                    "return_type_info": exists $1.value.return_type_info
+                        ? IndexedTypeTable::restoreTypeInfo($1.value.return_type_info, ctx, NOTHING)
+                        : getTypeInfoForName($1.value.return_type, ctx),
                 }
             }, rv.expressions.pairIterator()) : NOTHING),
             "events": (exists rv.events ? deserializeDataProviderMessages(rv.events, ctx) : NOTHING),
@@ -4873,7 +4877,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
         # the index and its configuration are process-wide (qore#6747)
         ProviderIndexUtil::checkChange("set the test hook of");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
         }
         # test hooks are for trusted test code only
