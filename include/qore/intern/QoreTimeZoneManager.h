@@ -41,6 +41,8 @@
 #include <string>
 #include <vector>
 
+class QoreSandboxMemoryAccount;
+
 #ifndef LOCALTIME_LOCATION
 #define LOCALTIME_LOCATION "/etc/localtime"
 #endif
@@ -487,9 +489,60 @@ private:
     //! zones whose name reaches another file or other data now; kept as dates refer to them
     std::vector<AbstractQoreZoneInfo*> retired_zones;
 
+public:
+    //! What a time zone that code governed by a sandbox loads from a path is charged to (qore#7566)
+    /** The accounts of every member of the sandbox that governs the calling code (the composite of all its
+        sandboxes; never the account of a composite, which is new for each resolution) and the isolation domain of
+        that code.  Zones are never freed, so the charges are permanent.
+    */
+    class SandboxTzCharge {
+    public:
+        DLLLOCAL SandboxTzCharge() = default;
+        DLLLOCAL SandboxTzCharge(const SandboxTzCharge&) = delete;
+        DLLLOCAL SandboxTzCharge& operator=(const SandboxTzCharge&) = delete;
+        DLLLOCAL ~SandboxTzCharge();
+
+        //! the referenced accounts of the members of the governing sandbox
+        std::vector<QoreSandboxMemoryAccount*> accounts;
+        //! the isolation domain of the calling code; empty if none
+        std::string domain;
+    };
+
+    //! the most time zone names that code of one isolation domain can load from paths (qore#7566)
+    static constexpr int64_t MaxDomainPathZones = 256;
+    //! the most memory in bytes that the time zones that code of one isolation domain loads from paths can use
+    static constexpr int64_t MaxDomainPathBytes = 32 * 1024 * 1024;
+
+private:
+    //! the time zone names and memory charged to each isolation domain (qore#7566); changed under rwl
+    std::map<std::string, std::pair<int64_t, int64_t>> domain_tz_use;
+
+    //! the result of charging a new zone name to a sandbox (qore#7566)
+    enum TzChargeResult { TZC_OK, TZC_SANDBOX_ZONES, TZC_SANDBOX_BYTES, TZC_DOMAIN };
+
+    //! checks that every account and the domain have room for a new zone name of \a bytes; called under rwl
+    /** Creates the domain's entry, so that the commit cannot fail; changes no counter
+    */
+    DLLLOCAL TzChargeResult checkSandboxZone(const SandboxTzCharge& charge, int64_t bytes);
+    //! charges a new zone name of \a bytes to every account and the domain; called under rwl after
+    //! checkSandboxZone(); cannot fail
+    DLLLOCAL void commitSandboxZone(const SandboxTzCharge& charge, int64_t bytes) noexcept;
+
+    //! raises the error of a charge that failed
+    DLLLOCAL static void raiseChargeError(TzChargeResult res, const char* name, ExceptionSink* xsink);
+
     DLLLOCAL const AbstractQoreZoneInfo* getZone(const std::string& name, const std::string& data,
             const struct stat& sbuf, const std::string& primary_name, bool region, alias_map_t& aliases,
-            const char* label, ExceptionSink* xsink);
+            const char* label, ExceptionSink* xsink, const SandboxTzCharge* charge = nullptr);
+
+    //! prepares the charge of a path zone that the calling code, which a sandbox governs, loads (qore#7566)
+    /** Fails closed: raises an exception if the name is not an absolute path without \c ".", \c ".." or empty
+        components, if no sandbox governs the code (code restricted only by its parse options cannot load paths), if
+        any of its sandboxes has no time zone path budget, or if its isolation domain is mixed
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int prepareSandboxCharge(const char* name, SandboxTzCharge& charge, ExceptionSink* xsink);
 
     //! raises the error for a path that the policy does not permit
     DLLLOCAL static void raisePathDenied(const char* name, const char* code, ExceptionSink* xsink);
@@ -546,7 +599,8 @@ private:
         @param path the absolute path
         @param xsink an exception is raised here if the file cannot be loaded
     */
-    DLLLOCAL const AbstractQoreZoneInfo* loadPath(const char* name, const std::string& path, ExceptionSink* xsink);
+    DLLLOCAL const AbstractQoreZoneInfo* loadPath(const char* name, const std::string& path, ExceptionSink* xsink,
+            const SandboxTzCharge* charge = nullptr);
 
     //! checks the path against the file-system policy of the calling code; errors name the path as given
     DLLLOCAL static int checkPathPolicy(const char* name, const std::string& path, ExceptionSink* xsink);
