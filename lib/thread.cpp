@@ -12971,6 +12971,10 @@ QoreListNode* qore_get_thread_call_stack() {
 
 QoreHashNode* qore_get_parent_caller_location(size_t offset) {
     ThreadData* td = thread_data.get();
+    // a thread that is not registered with Qore (module code in a thread of its own) has no call stack (qore#7594)
+    if (!td) {
+        return nullptr;
+    }
     return thread_list.getParentCallerLocation(td->current_stack_location.load(std::memory_order_relaxed), offset);
 }
 
