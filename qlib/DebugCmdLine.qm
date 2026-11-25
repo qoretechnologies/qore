@@ -327,7 +327,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                 }
                                 string full_cmd = fl[0..(last_param - 1)].join(" ");
                                 @debug {
-                                    printfImpl("fl: %y lp: %y full_cmd: %Y\n", fl, last_param, full_cmd);
+                                    debug("fl: %y lp: %y full_cmd: %Y", fl, last_param, full_cmd);
                                 }
                                 if (cmd.cmd) {
                                     *string desc = DebugCommandLine::getCmdDesc(cmd.cmd);
@@ -410,7 +410,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                             'cmd <command> [<hash>]',
                         'action': sub(DebugCommandLine dcl, softlist path, softlist args) {
                             @debug {
-                                printfImpl("path: %y args: %y\n", path, args);
+                                debug("path: %y args: %y", path, args);
                             }
                             hash<auto> data;
                             try {
@@ -1757,7 +1757,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
             foreach hash<auto> h in (ph.pairIterator()) {
                 if (!h.value.scriptName.val()) {
                     @debug {
-                        printfImpl("MISSING: %y = %y\n", h.key, h.value);
+                        debug("MISSING: %y = %y", h.key, h.value);
                     }
                     delete ph{h.key};
                     continue;
@@ -3348,11 +3348,11 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                 : "";
             if (cmd.cmd) {
                 @debug {
-                    printfImpl("line:%y\n", line);
+                    debug("line:%y", line);
                 }
                 if (cmd.cmd.action) {
                     @debug {
-                        printfImpl("exec:%y\n", cmd);
+                        debug("exec:%y", cmd);
                     }
                     try {
                         auto rc = cmd.cmd.action(self, cmd.path, cmd.args);
@@ -3768,7 +3768,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         public loadSession(*string fn) {
             if (exists fn) {
                 @debug {
-                    printfImpl("Load session: %y\n", fn);
+                    debug("Load session: %y", fn);
                 }
                 auto d;
                 try {
@@ -3777,7 +3777,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     throw "DEBUG-COMMAND", sprintf("%y is not a session file of the debugger: %s", fn, ex.desc);
                 }
                 @debug {
-                    printfImpl("Load session data:\n%Y\n", d);
+                    debug("Load session data:\n%Y", d);
                 }
                 if (d.typeCode() != NT_HASH || (!exists d.session && !exists d.settings)) {
                     throw "DEBUG-COMMAND", sprintf("%y is not a session file of the debugger", fn);

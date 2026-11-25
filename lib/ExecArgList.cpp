@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ExecArgList.h"
+#include "qore/intern/QoreAllocFailure.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -124,8 +125,9 @@ void ExecArgList::addArgIntern(char* str) {
     //printd(5, "ExecArgList::addArgIntern() '%s'\n", str);
     // resize args
     if (len == allocated) {
+        // memory that cannot be allocated fails with std::bad_alloc and leaves the list unchanged (qore#7466)
+        arg = static_cast<char**>(qore_realloc_or_throw(arg, sizeof(char*) * (allocated + ARG_BLOCK)));
         allocated += ARG_BLOCK;
-        arg = (char**)realloc(arg, sizeof(char*) * allocated);
     }
     arg[len] = str;
     ++len;

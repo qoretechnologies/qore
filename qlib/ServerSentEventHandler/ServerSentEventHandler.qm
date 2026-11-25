@@ -89,6 +89,12 @@ hash<HttpHandlerResponseInfo> getEvents(hash<auto> cx, *hash<auto> ah) {
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
     @subsection serversenteventhandler_v1_2_0 Version 1.2.0
+    - the HTTP/1.x event stream of a handler that gets the socket of its request is set up without the
+      connection's socket by
+      @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionForRequest() "setupAsyncSseConnectionForRequest()":
+      the server keeps the stream's poll operation, and the handler, its connection and its event source get the
+      socket of the request only
+      (<a href="https://github.com/qoretechnologies/qore/issues/7376">issue 7376</a>)
     - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
       built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
       option \c http_fields_at_top_level set to @ref False

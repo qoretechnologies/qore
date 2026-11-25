@@ -1,0 +1,3 @@
+a change of a process-wide registry while the sandbox cannot be resolved is allowed: False
+the tenant changes a type that trusted code created while its sandbox could not be resolved: SANDBOX-REGISTRATION-ERROR
+the type: null

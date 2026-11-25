@@ -347,10 +347,10 @@ class StreamSendBoundTest inherits QUnit::Test {
         HttpServer hs(<HttpServerOptionInfo>{});
         on_exit hs.stop();
         assertThrows("HTTPSERVER-ADDLISTENER-ERROR", "stream_send_min_rate", sub () {
-            hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0, "stream_send_min_rate": -1});
+            hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0, "stream_send_min_rate": -1});
         });
         assertThrows("HTTPSERVER-ADDLISTENER-ERROR", "stream_send_min_rate_window", sub () {
-            hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+            hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
                 "stream_send_min_rate_window": 500us});
         });
         assertEq(1024, (<HttpListenerOptionInfo>{}).stream_send_min_rate, "on by default");
@@ -415,9 +415,9 @@ class StreamSendBoundTest inherits QUnit::Test {
         on_exit hs.stop();
         ViewHandler h();
         hs.setDefaultHandler("view", h);
-        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+        int port = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
             "stream_send_min_rate": 4096, "stream_send_min_rate_window": 7s}).port;
-        HTTPClient c({"url": "http://localhost:" + port, "timeout": 30s});
+        HTTPClient c({"url": "http://127.0.0.1:" + port, "timeout": 30s});
         on_exit c.disconnect();
         c.get("/");
         hash<auto> v = h.q.get(30s);
@@ -482,12 +482,12 @@ class StreamSendBoundTest inherits QUnit::Test {
         HttpServer hs(<HttpServerOptionInfo>{});
         on_exit hs.stop();
         hs.setDefaultHandler("settings", h);
-        int dflt = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
-        int on = hs.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0,
+        int dflt = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        int on = hs.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0,
             "stream_send_min_rate": 2048, "stream_send_min_rate_window": 5s}).port;
         foreach hash<auto> i in (({"port": dflt, "rate": 1024, "window": 60s},
                  {"port": on, "rate": 2048, "window": 5s})) {
-            HTTPClient c({"url": "http://localhost:" + i.port, "timeout": 30s});
+            HTTPClient c({"url": "http://127.0.0.1:" + i.port, "timeout": 30s});
             on_exit c.disconnect();
             c.get("/");
             hash<auto> v = h.settings.get(30s);

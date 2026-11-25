@@ -1,0 +1,42 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# classes of abstract-private-inheritance-declaration.qtest in a module, loaded from the source and as a qcc -m
+# .qmod (qore#7288)
+
+%modern
+
+module AbstractPrivDecl {
+    version = "1.0";
+    desc = "abstract declarations reached through private inheritance (qore#7288)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace APD {
+public class Secret {
+    string m() { return "Secret::m"; }
+}
+public class Iface {
+    abstract string m();
+}
+public class IfaceB {
+    abstract string m();
+}
+public class IfaceC {
+    abstract string m() const;
+}
+public class SecretC {
+    string m() const { return "SecretC::m"; }
+}
+# private
+public class X1 inherits private Secret, private Iface {}
+public class Y1 inherits X1 {}
+public class A5 inherits private Secret, private Iface, private IfaceB {}
+public class XC3 inherits private SecretC, private IfaceC, private IfaceB {}
+# public: a public declaration in any order, also beside a const one
+public class X2 inherits private Secret, Iface {}
+public class A1 inherits private Secret, private Iface, IfaceB {}
+public class A2 inherits private Secret, IfaceB, private Iface {}
+public class XC1 inherits private SecretC, IfaceB, private IfaceC {}
+public class XC2 inherits private SecretC, private IfaceC, IfaceB {}
+}

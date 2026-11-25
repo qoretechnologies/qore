@@ -1464,8 +1464,9 @@ static void print_usage(const char* prog) {
            "                         For the build of AOT modules: rewrite <qmod>.sources.stamp\n"
            "                         for each module that the module loader would find out of\n"
            "                         date (a source or dependency of its depfile with another\n"
-           "                         content, or an optional module that is available now);\n"
-           "                         fails if a module cannot be checked\n");
+           "                         content, an optional module that is available now, or\n"
+           "                         another builtin API identity than that of this Qore\n"
+           "                         library); fails if a module cannot be checked\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s script.qr                   # Compile to 'script' executable\n", prog);
@@ -1491,6 +1492,7 @@ static void print_version() {
     printf("qcc (Qore Code Compiler) v%s\n", QCC_VERSION);
     printf("Using Qore library v%s\n", qore_version_string);
     printf("AOT runtime identity: %s\n", qore_aot_runtime_identity);
+    printf("Builtin API identity: %s\n", qore_builtin_api_identity);
     // the version of the format of the images that this qcc writes (a test skips what an earlier format lacks)
     printf("AOT binary format: %u\n", (unsigned)QORE_AOT_BINARY_VERSION);
     // the build checks the AOT modules with this qcc (QoreMacros.cmake, qore#6598)
@@ -8614,6 +8616,7 @@ static void print_aot_module_info(const char* path) {
     for (const std::string& dir : info.appended_module_paths) {
         printf("      %s\n", dir.c_str());
     }
+    printf("    builtin API identity: %s\n", info.builtin_api_identity.c_str());
 }
 
 static int dump_aot_info_for_file(const char* path) {

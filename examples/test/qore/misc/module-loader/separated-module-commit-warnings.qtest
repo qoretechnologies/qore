@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SeparatedModuleCommitWarningsTest
+
+#! Tests that a separated module raises the warnings found when it is committed as a single-file module does
+/** The module loader parses a single-file module with the caller's warning sink, which is its error sink unless the
+    module is loaded with load_module_warn(), so every warning of the module's warning mask makes the load fail.  A
+    separated module was committed without a warning sink, so the warnings found when its code is committed (most of
+    those of \c WARN_MODULES, such as \c INVALID-OPERATION) were dropped, and it was accepted with code that the same
+    module in a single file is refused for; its parse-time warnings were always raised as exceptions, also by
+    load_module_warn() (issue #7324).
+*/
+class SeparatedModuleCommitWarningsTest inherits QUnit::Test {
+    public {
+        #! a method that raises \c INVALID-OPERATION when the module is committed: \c required is not a hash
+        const BadMethod = "static bool get(bool required, string k) { return required{k} ?? False; }";
+
+        #! the same method without the warning
+        const GoodMethod = "static bool get(bool required, string k) { return required ?? False; }";
+
+        #! the warning that BadMethod raises
+        const Warning = "INVALID-OPERATION";
+    }
+
+    private {
+        int seq = 0;
+    }
+
+    constructor() : QUnit::Test("SeparatedModuleCommitWarningsTest", "1.0", \ARGV) {
+        addTestCase("a commit-time warning refuses a module in a single file or in a directory", \refused());
+        addTestCase("a module without warnings is loaded in either form", \accepted());
+        addTestCase("load_module() refuses a module with a commit-time warning in either form", \runTimeRefused());
+        addTestCase("load_module_warn() returns a module's warning in either form", \runTimeWarn());
+        addTestCase("warning directives apply to the commit-time warnings of a separated module", \directives());
+        set_return_value(main());
+    }
+
+    refused() {
+        TmpDir tmp("qore-module-commit-warnings-");
+        foreach hash<auto> form in (forms(tmp.path, "Bad", BadMethod)) {
+            *hash<ExceptionInfo> ex = parseLoadError(form.path);
+            assertEq(Warning, ex.err, form.desc);
+            assertEq(form.file, basename(ex.file ?? ""), form.desc);
+        }
+    }
+
+    accepted() {
+        TmpDir tmp("qore-module-commit-warnings-");
+        foreach hash<auto> form in (forms(tmp.path, "Good", GoodMethod)) {
+            assertTrue(parseLoad(form.path, form.name, True), form.desc);
+        }
+    }
+
+    runTimeRefused() {
+        TmpDir tmp("qore-module-commit-warnings-");
+        foreach hash<auto> form in (forms(tmp.path, "RtBad", BadMethod)) {
+            Program p();
+            p.parse("%modern\nsub load(string path) { load_module(path); }", "load");
+            assertThrows(Warning, \p.callFunction(), ("load", form.path), form.desc);
+        }
+        # without the warning, the module is loaded at run time
+        foreach hash<auto> form in (forms(tmp.path, "RtGood", GoodMethod)) {
+            Program p();
+            p.parse("%modern\nsub load(string path) { load_module(path); }", "load");
+            p.callFunction("load", form.path);
+            assertTrue(p.getFeatureList().contains(form.name), form.desc);
+        }
+    }
+
+    runTimeWarn() {
+        TmpDir tmp("qore-module-commit-warnings-");
+        foreach hash<auto> form in (forms(tmp.path, "RtWarn", BadMethod)) {
+            Program p();
+            p.parse("%modern\n*hash<ExceptionInfo> sub load(string path) { return load_module_warn(path); }",
+                "load");
+            *hash<ExceptionInfo> warn = p.callFunction("load", form.path);
+            assertEq(Warning, warn.err, form.desc);
+            assertEq(form.file, basename(warn.file ?? ""), form.desc);
+            assertTrue(p.getFeatureList().contains(form.name), form.desc);
+        }
+
+        # a parse-time warning (an unknown warning name, which %modern enables) is returned as well, and the module
+        # is loaded
+        string single = uniqueName("RtWarnParseSingle");
+        string path = tmp.path + DirSep + single + ".qm";
+        writeFile(path, moduleHeader("", single) + "%disable-warning no-such-warning\n"
+            + classSource(single, "C", GoodMethod));
+        string name = uniqueName("RtWarnParseQc");
+        list<hash<auto>> parse_forms = (
+            {"desc": "single-file module, parse-time warning", "name": single, "path": path,
+                "file": single + ".qm"},
+            {"desc": "separated module, parse-time warning", "name": name, "file": "C.qc",
+                "path": makeSeparated(tmp.path, name, "", "", {
+                    "C.qc": "%disable-warning no-such-warning\n" + classSource(name, "C", GoodMethod),
+                }),
+            },
+        );
+        foreach hash<auto> form in (parse_forms) {
+            Program p();
+            p.parse("%modern\n*hash<ExceptionInfo> sub load(string path) { return load_module_warn(path); }",
+                "load");
+            *hash<ExceptionInfo> warn = p.callFunction("load", form.path);
+            assertEq("UNKNOWN-WARNING", warn.err, form.desc);
+            assertEq(form.file, basename(warn.file ?? ""), form.desc);
+            assertTrue(p.getFeatureList().contains(form.name), form.desc);
+        }
+    }
+
+    directives() {
+        TmpDir tmp("qore-module-commit-warnings-");
+        # a file's own %disable-warning applies to its commit-time warnings
+        string name = uniqueName("DirFile");
+        string dir = makeSeparated(tmp.path, name, "", "", {
+            "C.qc": "%disable-warning invalid-operation\n" + classSource(name, "C", BadMethod),
+        });
+        assertFalse(parseLoad(dir, name), "file directive");
+
+        # and only to them
+        name = uniqueName("DirLocal");
+        dir = makeSeparated(tmp.path, name, "", "", {
+            "C.qc": "%disable-warning invalid-operation\n" + classSource(name, "C", BadMethod),
+            "D.qc": classSource(name, "D", BadMethod),
+        });
+        *hash<ExceptionInfo> ex = parseLoadError(dir);
+        assertEq(Warning, ex.err, "file-local directive");
+        assertEq("D.qc", basename(ex.file ?? ""), "file-local directive");
+
+        # the .qm file's %disable-warning applies to all of the module's files
+        name = uniqueName("DirQm");
+        dir = makeSeparated(tmp.path, name, "%disable-warning invalid-operation\n", "", {
+            "C.qc": classSource(name, "C", BadMethod),
+        });
+        assertFalse(parseLoad(dir, name), ".qm directive");
+    }
+
+    #! returns the module in each form with a class with the given method, in a file of its own
+    /** a single-file module, a separated module with the class in a .qc file, and one with it in its .qm file
+    */
+    private list<hash<auto>> forms(string tmp_dir, string prefix, string method) {
+        list<hash<auto>> rv = ();
+
+        string name = uniqueName(prefix + "Single");
+        string path = tmp_dir + DirSep + name + ".qm";
+        writeFile(path, moduleHeader("", name) + classSource(name, "C", method));
+        rv += {"desc": "single-file module", "name": name, "path": path, "file": name + ".qm"};
+
+        name = uniqueName(prefix + "Qc");
+        path = makeSeparated(tmp_dir, name, "", "", {
+            "B.qc": classSource(name, "B", GoodMethod),
+            "C.qc": classSource(name, "C", method),
+        });
+        rv += {"desc": "separated module, in a .qc file", "name": name, "path": path, "file": "C.qc"};
+
+        name = uniqueName(prefix + "Qm");
+        path = makeSeparated(tmp_dir, name, "", classSource(name, "C", method), {
+            "B.qc": classSource(name, "B", GoodMethod),
+        });
+        rv += {"desc": "separated module, in its .qm file", "name": name, "path": path, "file": name + ".qm"};
+        return rv;
+    }
+
+    #! loads the module with %requires in a new Program and returns what its get() method returns
+    private bool parseLoad(string path, string name, bool arg = True) {
+        Program p();
+        p.parse(sprintf("%%modern\n%%requires %s\nbool sub get(bool b) { return %s::C::get(b, \"k\"); }\n", path,
+            name), "load");
+        return p.callFunction("get", arg);
+    }
+
+    #! returns the exception raised when loading the module with %requires, or nothing if it was loaded
+    private *hash<ExceptionInfo> parseLoadError(string path) {
+        try {
+            Program p();
+            p.parse(sprintf("%%modern\n%%requires %s\n", path), "load");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! writes a separated module with the given directives and code in its .qm file and the given other files
+    private static string makeSeparated(string tmp_dir, string name, string directives, string qm_code,
+            hash<string, string> files) {
+        string dir = tmp_dir + DirSep + name;
+        mkdir(dir);
+        writeFile(dir + DirSep + name + ".qm", moduleHeader(directives, name) + qm_code);
+        map writeFile(dir + DirSep + $1.key, $1.value), files.pairIterator();
+        return dir;
+    }
+
+    #! returns the directives and the module declaration of a module
+    private static string moduleHeader(string directives, string name) {
+        return "%modern\n" + directives + sprintf("module %s {
+    version = \"1.0\";
+    desc = \"module commit warning test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+", name);
+    }
+
+    #! returns the source of a public class with the given method in the module's namespace
+    private static string classSource(string name, string cls, string method) {
+        return sprintf("public namespace %s {\npublic class %s {\n    %s\n}\n}\n", name, cls, method);
+    }
+
+    private string uniqueName(string prefix) {
+        return sprintf("%s%d%d", prefix, getpid(), ++seq);
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

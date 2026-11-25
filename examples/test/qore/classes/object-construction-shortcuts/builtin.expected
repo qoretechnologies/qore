@@ -1,0 +1,54 @@
+SB0: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:65 StreamBase::constructor:builtin:builtin.q:65 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:65
+SB1: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:66 StreamBase::constructor:builtin:builtin.q:66 < SB1::constructor:user:builtin.q:66 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:66
+SB2: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:67 StreamBase::constructor:builtin:builtin.q:67 < SB1::constructor:user:builtin.q:67 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:67
+M0 delete locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:68 Mutex::destructor:builtin:builtin.q:68 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:68
+M0 scope locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:56 Mutex::destructor:builtin:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:69
+M1 frames: get_thread_call_stack:builtin:builtin.q:34 < M1::constructor:user:builtin.q:70 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:70
+M1 destructor frames: get_thread_call_stack:builtin:builtin.q:38 < M1::destructor:user:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:70
+M1: False
+M1 frames: get_thread_call_stack:builtin:builtin.q:34 < M1::constructor:user:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+M1 destructor frames: get_thread_call_stack:builtin:builtin.q:38 < M1::destructor:user:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+M1 delete locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:71 Mutex::destructor:builtin:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+S0: [False, null, ["source", "source_host", "n"]]
+S1 0 frames: get_thread_call_stack:builtin:builtin.q:50 < S1::constructor:user:builtin.q:73 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:73
+S1: False
+copy: False
+Socket: False
+Mutex: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:56 Mutex::destructor:builtin:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:76
+deleted: PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::lockOwner() has been defined @ builtin.q:77 <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:77
+SB0: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:65 StreamBase::constructor:builtin:builtin.q:65 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:65
+SB1: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:66 StreamBase::constructor:builtin:builtin.q:66 < SB1::constructor:user:builtin.q:66 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:66
+SB2: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:67 StreamBase::constructor:builtin:builtin.q:67 < SB1::constructor:user:builtin.q:67 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:67
+M0 delete locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:68 Mutex::destructor:builtin:builtin.q:68 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:68
+M0 scope locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:56 Mutex::destructor:builtin:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:69
+M1 frames: get_thread_call_stack:builtin:builtin.q:34 < M1::constructor:user:builtin.q:70 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:70
+M1 destructor frames: get_thread_call_stack:builtin:builtin.q:38 < M1::destructor:user:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:70
+M1: False
+M1 frames: get_thread_call_stack:builtin:builtin.q:34 < M1::constructor:user:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+M1 destructor frames: get_thread_call_stack:builtin:builtin.q:38 < M1::destructor:user:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+M1 delete locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:71 Mutex::destructor:builtin:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+S0: [False, null, ["source", "source_host", "n"]]
+S1 1 frames: get_thread_call_stack:builtin:builtin.q:50 < S1::constructor:user:builtin.q:73 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:73
+S1: False
+copy: False
+Socket: False
+Mutex: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:56 Mutex::destructor:builtin:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:76
+deleted: PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::lockOwner() has been defined @ builtin.q:77 <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:77
+SB0: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:65 StreamBase::constructor:builtin:builtin.q:65 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:65
+SB1: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:66 StreamBase::constructor:builtin:builtin.q:66 < SB1::constructor:user:builtin.q:66 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:66
+SB2: STREAMBASE-CONSTRUCTOR-ERROR: this class is an abstract class and cannot be constructed directly or inherited directly by a user-defined class @ builtin.q:67 StreamBase::constructor:builtin:builtin.q:67 < SB1::constructor:user:builtin.q:67 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:67
+M0 delete locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:68 Mutex::destructor:builtin:builtin.q:68 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:68
+M0 scope locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:56 Mutex::destructor:builtin:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:69
+M1 frames: get_thread_call_stack:builtin:builtin.q:34 < M1::constructor:user:builtin.q:70 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:70
+M1 destructor frames: get_thread_call_stack:builtin:builtin.q:38 < M1::destructor:user:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:70
+M1: False
+M1 frames: get_thread_call_stack:builtin:builtin.q:34 < M1::constructor:user:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+M1 destructor frames: get_thread_call_stack:builtin:builtin.q:38 < M1::destructor:user:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+M1 delete locked: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:71 Mutex::destructor:builtin:builtin.q:71 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:71
+S0: [False, null, ["source", "source_host", "n"]]
+S1 2 frames: get_thread_call_stack:builtin:builtin.q:50 < S1::constructor:user:builtin.q:73 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:73
+S1: False
+copy: False
+Socket: False
+Mutex: LOCK-ERROR: TID 1 deleted Mutex object while holding the lock @ builtin.q:56 Mutex::destructor:builtin:builtin.q:56 < <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:76
+deleted: PSEUDO-METHOD-DOES-NOT-EXIST: no pseudo method <nothing>::lockOwner() has been defined @ builtin.q:77 <anonymous closure>:user:builtin.q:56 < run:user:builtin.q:77

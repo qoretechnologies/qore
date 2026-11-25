@@ -672,7 +672,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
                     checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
                         ? client.getProxyURL() : NOTHING);
                 }
-            } else if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            } else if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
                 throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                     "functional domain, and the target of the connection's client cannot be checked", name);
             }

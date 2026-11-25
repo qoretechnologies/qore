@@ -191,7 +191,7 @@ public class RestClientResponseLimitTest inherits QUnit::Test {
 
     testBodylessContentLengths() {
         Socket listener();
-        listener.bind("localhost:0", True);
+        listener.bind("127.0.0.1:0", True);
         listener.listen();
         int raw_port = listener.getSocketInfo().port;
         Counter done(1);
@@ -216,7 +216,7 @@ public class RestClientResponseLimitTest inherits QUnit::Test {
         }
 
         RestClient::RestClient client = new RestClient::RestClient({
-            "url": sprintf("http://localhost:%d", raw_port),
+            "url": sprintf("http://127.0.0.1:%d", raw_port),
             "content_encoding": "identity",
             "data": "text",
         });
@@ -230,7 +230,7 @@ public class RestClientResponseLimitTest inherits QUnit::Test {
         assertFalse(response.hasKey("body"), "a 204 response must not have a response body");
 
         RestClient::RestClient passthru_client = new RestClient::RestClient({
-            "url": sprintf("http://localhost:%d", raw_port),
+            "url": sprintf("http://127.0.0.1:%d", raw_port),
             "content_encoding": "identity",
             "data": "text",
             "error_passthru": True,

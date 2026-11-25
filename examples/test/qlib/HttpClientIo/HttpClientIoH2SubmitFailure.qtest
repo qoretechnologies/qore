@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 connections over TLS that carry several streams at once
+
+/*  HttpClientIoH2SubmitFailure.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7443: a request whose submit failed with an error that ends the connection's use (here: the session has no
+    stream ID left, injected with dbg_http2_fail_next_submit(), debug builds) marked its HTTP/2 connection closed, and
+    the next checkout closed it with the streams of the other requests in progress on it: an idempotent request was
+    sent again on another connection (its handler ran twice), another one failed.  The connection now drains: it takes
+    no new request, its streams in progress complete on it, and it is closed once they have.  The close reasons that
+    the manager keeps (getStats().recent_closes) name the path.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoH2SubmitFailureTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Holds the requests for "/held" until they are released, and counts their entries
+class HoldingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter entries();
+        Queue reached();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "held") {
+            entries.inc();
+            reached.push(True);
+            release.get(HangGuard);
+            return makeResponse(200, "held-ok", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+class HttpClientIoH2SubmitFailureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientIoH2SubmitFailureTest", "1.0") {
+        addTestCase("a submit that fails for the connection does not end the streams in progress on it",
+            \submitFailureTest());
+        set_return_value(main());
+    }
+
+    submitFailureTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the submit failure is injected only with dbg_http2_fail_next_submit()");
+        }
+        HoldingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("holding", handler);
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+        # the requests held by the handler are released however the test ends
+        on_exit {
+            handler.release.push(True);
+            handler.release.push(True);
+        }
+        string url = "https://127.0.0.1:" + port;
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "connect_timeout": HangGuard,
+            "request_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection is up");
+        int conn_id = mgr.getConnectionInfo()[0].connection_id;
+
+        # a request in progress on the connection
+        auto held = mgr.requestAsync(url, "GET", "/held");
+        assertTrue(handler.reached.get(HangGuard), "the server received the held request");
+
+        # the next request's submit fails as when the session has no stream ID left: the request is sent on another
+        # connection, and the connection of the held request takes no new request
+        call_function("dbg_http2_fail_next_submit");
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the request whose submit failed is sent again");
+
+        # the held request completes on its connection: its handler was entered once
+        handler.release.push(True);
+        assertEq(200, held.get(HangGuard).status_code, "the held request completes");
+        assertEq(1, handler.entries.getCount(), "the held request was not sent again");
+
+        # the drained connection is closed once its stream completed, with the reason of the failure
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "a later request");
+        list<hash<auto>> closes = mgr.getStats().recent_closes;
+        *hash<auto> close = (select closes, $1.connection_id == conn_id)[0];
+        assertTrue(exists close, sprintf("the drained connection was closed: %y", closes));
+        assertEq(0, close.active_streams, "with no stream in progress");
+        assertRegex("^a request could not be submitted \\(HTTP2-ERROR: .*\\), and the streams in progress were "
+            "completed first$", close.reason);
+        assertFalse(inlist(conn_id, (map $1.connection_id, mgr.getConnectionInfo())),
+            "the drained connection left the pool");
+    }
+}

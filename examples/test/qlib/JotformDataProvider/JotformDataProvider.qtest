@@ -297,12 +297,12 @@ public class JotformDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeJotformHandler handler();
         server.setHandler("jotform", "", NOTHING, handler);
         server.setDefaultHandler("jotform", handler);
 
-        JotformRestClient::JotformRestClientIo rest({"apikey": "test-key", "url": "http://localhost:" + port});
+        JotformRestClient::JotformRestClientIo rest({"apikey": "test-key", "url": "http://127.0.0.1:" + port});
         JotformDataProvider::JotformDataProvider provider(rest);
         assertTrue(provider.getRestClient() instanceof JotformRestClient::JotformRestClientIo);
 

@@ -94,7 +94,7 @@ public class Http2ClientDuplex inherits QUnit::Test {
         mux.continuePoll();
         assertEq("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", peer.recvBinary(24, Guard).toString());
         hash<auto> headers = {
-            ":method": websocket ? "CONNECT" : "GET", ":scheme": "https", ":authority": "localhost", ":path": "/",
+            ":method": websocket ? "CONNECT" : "GET", ":scheme": "https", ":authority": "127.0.0.1", ":path": "/",
         };
         if (websocket) {
             headers.":protocol" = "websocket";
@@ -116,7 +116,7 @@ public class Http2ClientDuplex inherits QUnit::Test {
             }
             assertEq(200, accepted.status_code, "the extended CONNECT handshake is complete");
         }
-        headers = {":method": "POST", ":scheme": "https", ":authority": "localhost", ":path": "/upload"};
+        headers = {":method": "POST", ":scheme": "https", ":authority": "127.0.0.1", ":path": "/upload"};
         client.submitHttp2Request(headers, binary(strmul("u", 12 * 1024 * 1024)));
         conn.sendFrame(FramePing, 0, 0, <0000000000000001>);
         *hash<SocketPollInfo> info = mux.continuePoll();

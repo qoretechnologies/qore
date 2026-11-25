@@ -45,6 +45,13 @@ ResolvedCallReferenceNode* FunctionEntry::makeCallReference(const QoreProgramLoc
 ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns, bool builtin)
         : FunctionEntry(old.getName(), new QoreFunction(*(old.getFunction()),
             builtin ? PO_NO_INHERIT_USER_FUNC_VARIANTS : PO_NO_SYSTEM_FUNC_VARIANTS), ns) {
+    decl_seq = old.getDeclSeq();
+}
+
+std::vector<FunctionEntry*> FunctionList::getEntriesInDeclarationOrder() const {
+    return qore_decl_ordered<fl_map_t, FunctionEntry*>(*this, [](const FunctionEntry* fe) {
+        return fe->getDeclSeq();
+    });
 }
 
 FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const QoreParseOptions& po) {
@@ -59,6 +66,7 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
             }
             f->ref();
             FunctionEntry* fe = new FunctionEntry(i->first, f, ns);
+            fe->setDeclSeq(i->second->getDeclSeq());
             insert(std::make_pair(fe->getName(), fe));
             continue;
         }
@@ -83,6 +91,7 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
             // pass po.getLo() until QoreFunction is migrated to QoreParseOptions
             fe = new FunctionEntry(i->first, new QoreFunction(*f, po.getLo()), ns);
         }
+        fe->setDeclSeq(i->second->getDeclSeq());
         insert(std::make_pair(fe->getName(), fe));
     }
 }
@@ -214,6 +223,22 @@ void FunctionList::assimilate(FunctionList& fl, qore_ns_private* ns,
             i->second->deref();
         }
 
+        fl.erase(i++);
+    }
+}
+
+void FunctionList::runtimeAssimilate(FunctionList& fl, qore_ns_private* ns) {
+    for (fl_map_t::iterator i = fl.begin(), e = fl.end(); i != e;) {
+        // a function that the namespace has is kept as it is, and the new one stays in the list of the namespace that
+        // was added, which is kept with the namespace (qore_ns_private::runtimeAssimilate()): not the parse-time merge
+        // (QoreFunction::parseAssimilate()), which raises a parse error for a variant that conflicts with the function
+        // and reads the parse location of a user variant, which a builtin variant does not have (qore#7530)
+        if (fl_map_t::find(i->first) != end()) {
+            ++i;
+            continue;
+        }
+        insert(fl_map_t::value_type(i->first, i->second));
+        i->second->updateNs(ns);
         fl.erase(i++);
     }
 }

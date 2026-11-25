@@ -107,6 +107,7 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
 
         # Unit tests (always run, no credentials needed)
         addTestCase("sanity tests", \sanityTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("child provider tests", \childProviderTests());
@@ -1074,6 +1075,28 @@ public class Cin7CoreDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("\n--- Polling Trigger tests completed ---\n");
         }
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-customer",
+            "get-supplier",
+            "get-product",
+            "get-sale",
+            "get-sale-pack",
+            "get-stock-adjustment",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("Cin7Core", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # updates a sale: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("Cin7Core", "update-sale")));
     }
 }
 

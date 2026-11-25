@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires RestSchemaActions
+
+%include SharedTypeObjectsModules.qc
+
+%exec-class SharedTypeObjectsModulesPart2
+
+#! checks part 2 of 4 of the library modules (qore#6843; see SharedTypeObjectsModules.qc)
+class SharedTypeObjectsModulesPart2 inherits SharedTypeObjectsModulesBase {
+    constructor() : SharedTypeObjectsModulesBase("SharedTypeObjectsModulesPart2", 2) {
+    }
+}

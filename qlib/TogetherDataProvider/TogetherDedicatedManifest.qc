@@ -1497,6 +1497,7 @@ public class TogetherDedicatedManifest {
             <RestSchemaActionInfo>{
                 "action": "dedicated-preview-rollout-defaults",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/projects/{projectId}/endpoints/{endpointId}/rollouts/preview-defaults",
                 "display_name": "Dedicated: Preview Rollout Defaults",
                 "short_desc": "Preview rollout defaults",

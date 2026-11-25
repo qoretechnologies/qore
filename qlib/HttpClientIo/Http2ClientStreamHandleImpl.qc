@@ -77,6 +77,9 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
 
+        #! True once a send ended the request write side (see isRequestSideOpenLocked()); protected by @ref lock
+        bool request_end_sent = False;
+
         #! The reset of the stream by the server, as a send reported it; reported again by every later send
         *hash<ExceptionInfo> send_reset;
     }
@@ -508,6 +511,13 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return h2conn.getSocket().waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
     }
 
+    #! True while the request write side of a streamed request is open: it was not ended by a send (qore#7443)
+    /** @note the caller must hold @ref lock
+    */
+    private bool isRequestSideOpenLocked() {
+        return request_body_streaming && !request_end_sent;
+    }
+
     #! Sends data on a streaming connection
     /** The request can be sent whatever has been read of the response: a server can send its complete response
         before the request is complete and keep reading the request (RFC 9113 section 8.1), and a send reports a close
@@ -572,6 +582,11 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                     "cannot send data: request write side is closed";
             }
             sid = stream_id;
+        }
+        # a send that ends the request write side ends it (see isRequestSideOpenLocked())
+        on_success if (end_stream) {
+            AutoLock al(lock);
+            request_end_sent = True;
         }
 
         # Check connection state (lock-free atomic read) AFTER the stream-level

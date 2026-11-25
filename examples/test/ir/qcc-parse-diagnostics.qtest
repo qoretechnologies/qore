@@ -77,7 +77,7 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         addTestCase("an error of a module compile", \moduleTest());
         addTestCase("a warning", \warningTest());
         addTestCase("a warning of a compile that fails", \warningAndErrorTest());
-        addTestCase("a warning and an error of a module with warnings as errors", \moduleWarningsAsErrorsTest());
+        addTestCase("a warning of a module is an error, as in the module loader", \moduleWarningsAsErrorsTest());
         addTestCase("a warning of a compile that fails after the parse", \warningThenFailureTest());
         addTestCase("--diag-format=json", \jsonTest());
         addTestCase("QORE_DIAG_FORMAT=json", \jsonEnvTest());
@@ -174,13 +174,16 @@ class QccParseDiagnosticsTest inherits QUnit::Test {
         }
     }
 
-    #! with warnings treated as errors, the error of the module is reported too, in the same form
+    #! a module is parsed as the module loader parses it, which raises its warnings as errors (qore#7314): the
+    #! warning is reported as an error, with or without warnings as errors, and ends the parse, as in the loader
     moduleWarningsAsErrorsTest() {
-        hash<auto> r = qcc(sprintf("-r --module -o %s/WarnModule.qmod %s", tmp.path, warn_module));
-        assertNeq(0, r.status, r.err);
-        checkNoBanner(r);
-        assertRegex("(^|\n)" + quote(warn_module) + ":2:[0-9]+: warning: UNKNOWN-WARNING: ", r.err);
-        assertRegex("(^|\n)" + quote(warn_module) + ":9:[0-9]+: error: PARSE-EXCEPTION: ", r.err);
+        foreach string opt in (("-r ", "")) {
+            hash<auto> r = qcc(sprintf("%s--module -o %s/WarnModule.qmod %s", opt, tmp.path, warn_module));
+            assertNeq(0, r.status, r.err);
+            checkNoBanner(r);
+            assertRegex("(^|\n)" + quote(warn_module) + ":2:[0-9]+: error: UNKNOWN-WARNING: ", r.err, opt);
+            assertFalse(is_file(tmp.path + "/WarnModule.qmod"), opt);
+        }
     }
 
     #! the warning of a parse that succeeded is reported when the compile fails afterwards

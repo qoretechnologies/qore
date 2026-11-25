@@ -40,6 +40,7 @@
 #include "qore/intern/qore_container_free.h"
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreAllocFailure.h"
 
 typedef ReferenceHolder<QoreListNode> safe_qorelist_t;
 
@@ -52,6 +53,15 @@ struct qore_list_private {
     unsigned obj_count = 0;
     const QoreTypeInfo* complexTypeInfo = nullptr;
     QoreContainerWeakRefs weakRefs;
+#ifndef NDEBUG
+    //! the number of lvalue helpers changing the container through a weak reference that it is designated by, which
+    //! its other owners share (qore#7297): the assertions of uniqueness of its changes accept it then
+    std::atomic<int> weak_change{0};
+
+    DLLLOCAL bool weakChangeAllowed() const {
+        return weak_change.load(std::memory_order_relaxed) > 0;
+    }
+#endif
     std::unique_ptr<std::vector<size_t>> eval_pos_map;
     size_t eval_result_size = 0;
     //! the sandbox memory charge of entry (see design/sandbox-resource-limits.md); synced with allocated
@@ -589,7 +599,7 @@ struct qore_list_private {
     //! Replacement entry for source-bound AST operations; compiled callers use the canonical overload.
     DLLLOCAL static QoreListNode* replace(QoreListNode& list, ptrdiff_t offset, ptrdiff_t length, QoreValue value,
             bool extract, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
-        assert(list.reference_count() == 1);
+        assert(list.reference_count() == 1 || list.priv->weakChangeAllowed());
         size_t n_offset, n_length;
         list.priv->checkOffset(offset, length, n_offset, n_length);
         return list.priv->spliceIntern<true>(n_offset, n_length, value, extract, xsink, policy);
@@ -597,7 +607,7 @@ struct qore_list_private {
 
     DLLLOCAL static QoreListNode* replace(QoreListNode& list, ptrdiff_t offset, ptrdiff_t length, QoreValue value,
             bool extract, ExceptionSink* xsink) {
-        assert(list.reference_count() == 1);
+        assert(list.reference_count() == 1 || list.priv->weakChangeAllowed());
         size_t n_offset, n_length;
         list.priv->checkOffset(offset, length, n_offset, n_length);
         return list.priv->spliceIntern(n_offset, n_length, value, extract, xsink);
@@ -768,11 +778,26 @@ struct qore_list_private {
             return;
         // make larger
         if (num >= allocated) {
-            size_t d = num >> 2;
-            allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-            entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
-            sb.sync(sizeof(QoreValue) * allocated);
+            grow(num);
         }
+    }
+
+    //! grows the list's storage to hold \a num entries; memory that cannot be allocated fails the operation with
+    //! std::bad_alloc and leaves the list's entries unchanged (the storage was replaced with a null pointer, and the
+    //! next write ended the process; qore#7466)
+    DLLLOCAL void grow(size_t num) {
+        size_t d = num >> 2;
+        allocated = num + (d < LIST_PAD ? LIST_PAD : d);
+        QoreValue* p = static_cast<QoreValue*>(qore_realloc_or_null(static_cast<void*>(entry),
+            sizeof(QoreValue) * allocated));
+        if (__builtin_expect(!p, 0)) {
+            // the list keeps its storage, which holds at least its entries; the capacity is set only on success, so
+            // that the code that does not fail stays as it was
+            allocated = length;
+            qore_throw_bad_alloc();
+        }
+        entry = p;
+        sb.sync(sizeof(QoreValue) * allocated);
     }
 
     DLLLOCAL void resize(size_t num) {
@@ -784,10 +809,7 @@ struct qore_list_private {
         // make larger
         if (num >= length) {
             if (num >= allocated) {
-                size_t d = num >> 2;
-                allocated = num + (d < LIST_PAD ? LIST_PAD : d);
-                entry = static_cast<QoreValue*>(realloc(static_cast<void*>(entry), sizeof(QoreValue) * allocated));
-                sb.sync(sizeof(QoreValue) * allocated);
+                grow(num);
             }
             zeroEntries(length, num);
         }

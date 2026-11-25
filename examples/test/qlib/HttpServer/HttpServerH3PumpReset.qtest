@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC stream resets of an HTTP/3 response body that the I/O thread sends from an InputStream
+# HttpServerH3PumpReset.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A client that resets an HTTP/3 stream whose response body the server's I/O thread sends from an InputStream ends
+# that response only: the listener keeps serving other clients (qoretechnologies/qore#7434).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerH3PumpResetTest
+
+#! compressed data that decompresses to more than the decompressor's limit
+const ShortBody = gzip(strmul("y", 8 * 1024 * 1024));
+
+#! answers /big with a body from a C++ InputStream, which the I/O thread sends, and /small with a short body
+class BodyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/small") {
+            return makeResponse(200, "small");
+        }
+        if (cx.raw_path == "/short") {
+            # a body whose InputStream fails after its first part: the decompressed data exceeds the
+            # decompressor's output limit
+            return makeResponse(200, new TransformInputStream(new BinaryInputStream(ShortBody),
+                get_decompressor("gzip", 1024 * 1024)), {"Content-Type": "application/octet-stream"});
+        }
+        # far more than the client reads before it resets the stream, and more than the stream's send buffer
+        return makeResponse(200, new BinaryInputStream(binary(strmul("x", 16 * 1024 * 1024))),
+            {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class HttpServerH3PumpResetTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerH3PumpReset", "1.0") {
+        addTestCase("a client's reset of a streamed response leaves the listener serving", \testResetDuringPump());
+        addTestCase("the listener serves many downloads that are reset in turn", \testRepeatedResets());
+        addTestCase("a body that fails ends the stream with an error, not as a complete response", \testShortBody());
+        set_return_value(main());
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getManager() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": 20s,
+            "connect_timeout": 15s,
+        });
+    }
+
+    private hash<auto> startServer() {
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("body", new BodyHandler());
+        hs.waitForAsyncIo();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        }).port;
+        hs.waitForAsyncIo();
+        return {"server": hs, "url": "https://127.0.0.1:" + port};
+    }
+
+    #! reads part of the large body, then resets the stream
+    private resetDownload(string url) {
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle s = mgr.acquireStream(url);
+        s.startStreaming("GET", "/big", NOTHING);
+        int got = 0;
+        # an overall bound, so that a server that stops sending fails the case instead of hanging it; generous, as
+        # the first data can take long under valgrind
+        date deadline = now_us() + 120s;
+        while (got < 256 * 1024 && now_us() < deadline) {
+            auto d = s.readData(5s);
+            if (!exists d) {
+                continue;
+            }
+            if (d instanceof binary) {
+                got += d.size();
+            } else if (d.typeCode() == NT_HASH && (d.end_stream || d.error)) {
+                break;
+            }
+        }
+        assertGe(256 * 1024, got, "the body was being sent when the stream was reset");
+        s.getConnection().cancelRequest(s.getStreamId());
+    }
+
+    #! returns the status of a short request from a new client
+    private int getSmall(string url) {
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        return mgr.request(url, "GET", "/small", NOTHING, NOTHING).status_code;
+    }
+
+    testResetDuringPump() {
+        hash<auto> setup = startServer();
+        on_exit setup.server.stop();
+        resetDownload(setup.url);
+        assertEq(200, getSmall(setup.url), "a new client is served after the reset");
+    }
+
+    testShortBody() {
+        hash<auto> setup = startServer();
+        on_exit setup.server.stop();
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle s = mgr.acquireStream(setup.url);
+        s.startStreaming("GET", "/short", NOTHING);
+        int got = 0;
+        *string outcome;
+        # the error must come long before the deadline; without the reset, no data and no end come at all
+        date deadline = now_us() + 120s;
+        outcome = "no end and no error within 120 s";
+        while (now_us() < deadline) {
+            auto d;
+            try {
+                d = s.readData(5s);
+            } catch (hash<ExceptionInfo> ex) {
+                outcome = sprintf("error: %s: %s", ex.err, ex.desc);
+                break;
+            }
+            if (!exists d) {
+                continue;
+            }
+            if (d instanceof binary) {
+                got += d.size();
+            } else if (d.typeCode() == NT_HASH && d.error) {
+                outcome = sprintf("error: %y", d.error);
+                break;
+            } else if (d.typeCode() == NT_HASH && d.end_stream) {
+                outcome = "end of stream";
+                break;
+            }
+        }
+        assertLt(8 * 1024 * 1024, got, "the body is short");
+        # the stream is reset with H3_INTERNAL_ERROR (0x102)
+        assertRegex("^error: .*RESET", outcome ?? "none", "the client is told that the response failed");
+        assertEq(200, getSmall(setup.url), "the listener still serves");
+    }
+
+    testRepeatedResets() {
+        hash<auto> setup = startServer();
+        on_exit setup.server.stop();
+        for (int i = 0; i < 5; ++i) {
+            resetDownload(setup.url);
+            assertEq(200, getSmall(setup.url), sprintf("a new client is served after reset %d", i + 1));
+        }
+    }
+}

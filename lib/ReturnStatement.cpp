@@ -184,9 +184,8 @@ int ReturnStatement::parseInitImpl(QoreParseContext& parse_context) {
                 "INVALID-OPERATION", desc);
         } else {
             QoreStringNode* desc = new QoreStringNode("return value for this block expects ");
-            QoreTypeInfo::getThisType(returnTypeInfo, *desc);
-            desc->concat(", but value given to the return statement is ");
-            QoreTypeInfo::getThisType(argTypeInfo, *desc);
+            QoreTypeInfo::describeTypeComparison(*desc, returnTypeInfo,
+                ", but value given to the return statement is ", argTypeInfo);
             qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", desc);
             if (!err) {
                 err = -1;

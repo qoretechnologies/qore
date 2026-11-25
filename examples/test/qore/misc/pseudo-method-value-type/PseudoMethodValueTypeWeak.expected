@@ -1,0 +1,249 @@
+0 local list size: 3
+0 local list first: 1
+0 local list join: "1,2,3"
+0 local list typeCode: 8
+0 local list type: "list"
+0 local hash typeCode: 9
+0 local hash type: "hash"
+0 local hash keys: ["a", "b"]
+0 local hash firstKey: "a"
+0 hash member keys: ["a", "b"]
+0 hash member firstKey: "a"
+0 hash member size: 2
+0 hash member typeCode: 9
+0 hash member type: "hash"
+0 hash member empty: False
+0 hash member val: True
+0 hash list member size: 3
+0 hash list member first: 1
+0 hash list member last: 3
+0 hash list member empty: False
+0 hash list member join: "1,2,3"
+0 hash list member lsize: 3
+0 hash list member typeCode: 8
+0 hash list member type: "list"
+0 hash list member val: True
+0 hash list member toString: ""
+0 hash list member toInt: 0
+0 hash list member toBool: True
+0 hash list member toFloat: 0.0
+0 hash list member toNumber: 0
+0 hash list member contains: True
+0 hash list member callp: False
+0 hash list member sizep: True
+0 hash list member complexType: False
+0 hash member values: [1, 2]
+0 hash member lastKey: "b"
+0 hash member hasKey: True
+0 hash member toString: ""
+0 hash member toInt: 0
+0 hash member toNumber: 0
+0 hash member sizep: True
+0 hash list member join named: "1-2-3"
+0 hash list member join reference: "1,2,3"
+0 param first: 1
+0 param size: 3
+0 param empty: False
+0 param last: 3
+0 weak local first: 1
+0 weak local size: 3
+0 freed list size: 0
+0 freed list first: null
+0 freed list typeCode: 8
+0 freed list type: "list"
+0 freed list empty: True
+0 freed hash size: 0
+0 freed hash keys: []
+0 freed hash typeCode: 9
+0 freed hash val: False
+0 list element size: 3
+0 list element join: "1,2,3"
+0 member list size: 3
+0 member list first: 1
+0 member list last: 3
+0 member list empty: False
+0 member list val: True
+0 member list join: "1,2,3"
+0 member list typeCode: 8
+0 member list type: "list"
+0 member hash keys: ["a", "b"]
+0 member hash firstKey: "a"
+0 member hash size: 2
+0 member hash member keys: ["a", "b"]
+0 member hash member size: 2
+0 member hash member typeCode: 9
+0 member hash member type: "hash"
+0 member object className: "WeakObjectTarget"
+0 member object typeCode: 10
+0 member object type: "object"
+0 member object val: True
+0 member list toString: ""
+0 member list toNumber: 0
+0 member hash values: [1, 2]
+0 member hash typeCode: 9
+1 local list size: 3
+1 local list first: 1
+1 local list join: "1,2,3"
+1 local list typeCode: 8
+1 local list type: "list"
+1 local hash typeCode: 9
+1 local hash type: "hash"
+1 local hash keys: ["a", "b"]
+1 local hash firstKey: "a"
+1 hash member keys: ["a", "b"]
+1 hash member firstKey: "a"
+1 hash member size: 2
+1 hash member typeCode: 9
+1 hash member type: "hash"
+1 hash member empty: False
+1 hash member val: True
+1 hash list member size: 3
+1 hash list member first: 1
+1 hash list member last: 3
+1 hash list member empty: False
+1 hash list member join: "1,2,3"
+1 hash list member lsize: 3
+1 hash list member typeCode: 8
+1 hash list member type: "list"
+1 hash list member val: True
+1 hash list member toString: ""
+1 hash list member toInt: 0
+1 hash list member toBool: True
+1 hash list member toFloat: 0.0
+1 hash list member toNumber: 0
+1 hash list member contains: True
+1 hash list member callp: False
+1 hash list member sizep: True
+1 hash list member complexType: False
+1 hash member values: [1, 2]
+1 hash member lastKey: "b"
+1 hash member hasKey: True
+1 hash member toString: ""
+1 hash member toInt: 0
+1 hash member toNumber: 0
+1 hash member sizep: True
+1 hash list member join named: "1-2-3"
+1 hash list member join reference: "1,2,3"
+1 param first: 1
+1 param size: 3
+1 param empty: False
+1 param last: 3
+1 weak local first: 1
+1 weak local size: 3
+1 freed list size: 0
+1 freed list first: null
+1 freed list typeCode: 8
+1 freed list type: "list"
+1 freed list empty: True
+1 freed hash size: 0
+1 freed hash keys: []
+1 freed hash typeCode: 9
+1 freed hash val: False
+1 list element size: 3
+1 list element join: "1,2,3"
+1 member list size: 3
+1 member list first: 1
+1 member list last: 3
+1 member list empty: False
+1 member list val: True
+1 member list join: "1,2,3"
+1 member list typeCode: 8
+1 member list type: "list"
+1 member hash keys: ["a", "b"]
+1 member hash firstKey: "a"
+1 member hash size: 2
+1 member hash member keys: ["a", "b"]
+1 member hash member size: 2
+1 member hash member typeCode: 9
+1 member hash member type: "hash"
+1 member object className: "WeakObjectTarget"
+1 member object typeCode: 10
+1 member object type: "object"
+1 member object val: True
+1 member list toString: ""
+1 member list toNumber: 0
+1 member hash values: [1, 2]
+1 member hash typeCode: 9
+2 local list size: 3
+2 local list first: 1
+2 local list join: "1,2,3"
+2 local list typeCode: 8
+2 local list type: "list"
+2 local hash typeCode: 9
+2 local hash type: "hash"
+2 local hash keys: ["a", "b"]
+2 local hash firstKey: "a"
+2 hash member keys: ["a", "b"]
+2 hash member firstKey: "a"
+2 hash member size: 2
+2 hash member typeCode: 9
+2 hash member type: "hash"
+2 hash member empty: False
+2 hash member val: True
+2 hash list member size: 3
+2 hash list member first: 1
+2 hash list member last: 3
+2 hash list member empty: False
+2 hash list member join: "1,2,3"
+2 hash list member lsize: 3
+2 hash list member typeCode: 8
+2 hash list member type: "list"
+2 hash list member val: True
+2 hash list member toString: ""
+2 hash list member toInt: 0
+2 hash list member toBool: True
+2 hash list member toFloat: 0.0
+2 hash list member toNumber: 0
+2 hash list member contains: True
+2 hash list member callp: False
+2 hash list member sizep: True
+2 hash list member complexType: False
+2 hash member values: [1, 2]
+2 hash member lastKey: "b"
+2 hash member hasKey: True
+2 hash member toString: ""
+2 hash member toInt: 0
+2 hash member toNumber: 0
+2 hash member sizep: True
+2 hash list member join named: "1-2-3"
+2 hash list member join reference: "1,2,3"
+2 param first: 1
+2 param size: 3
+2 param empty: False
+2 param last: 3
+2 weak local first: 1
+2 weak local size: 3
+2 freed list size: 0
+2 freed list first: null
+2 freed list typeCode: 8
+2 freed list type: "list"
+2 freed list empty: True
+2 freed hash size: 0
+2 freed hash keys: []
+2 freed hash typeCode: 9
+2 freed hash val: False
+2 list element size: 3
+2 list element join: "1,2,3"
+2 member list size: 3
+2 member list first: 1
+2 member list last: 3
+2 member list empty: False
+2 member list val: True
+2 member list join: "1,2,3"
+2 member list typeCode: 8
+2 member list type: "list"
+2 member hash keys: ["a", "b"]
+2 member hash firstKey: "a"
+2 member hash size: 2
+2 member hash member keys: ["a", "b"]
+2 member hash member size: 2
+2 member hash member typeCode: 9
+2 member hash member type: "hash"
+2 member object className: "WeakObjectTarget"
+2 member object typeCode: 10
+2 member object type: "object"
+2 member object val: True
+2 member list toString: ""
+2 member list toNumber: 0
+2 member hash values: [1, 2]
+2 member hash typeCode: 9

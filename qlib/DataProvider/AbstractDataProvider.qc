@@ -1341,6 +1341,16 @@ public hashdecl DataProviderBaseInfo {
     */
     bool supports_observable = False;
 
+    #! Whether the source redelivers an event refused by an observer
+    /** An exception from @ref DataProvider::Observer::update() "Observer::update()" refuses the event.
+        When this flag is @ref True, the provider leaves the event unacknowledged and the source delivers it
+        again, possibly after a back-off. With the default @ref False, a refused event may be lost.
+
+        @see dataprovider_watch_delivery
+        @since %DataProvider 3.13
+    */
+    bool supports_refusal_redelivery = False;
+
     #! Output message support
     /** @see dataprovider_message_support
 
@@ -2576,6 +2586,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         if (!exists rv.has_record) {
             rv.has_record = rv.supports_read;
+        }
+        if (self instanceof AbstractWatchDataProviderBase) {
+            rv.supports_refusal_redelivery = True;
         }
         if (!rv.events && rv.supports_observable) {
             rv.events = getEventTypes();
@@ -4069,18 +4082,25 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     #! Logs an error caught by an API that returns no value instead of raising it
     /** The error is logged with the data provider's logger, or with the global data provider logger if the data
         provider has none, so that it is not lost; messages must not contain option or data values, which can hold
-        credentials
+        credentials.  With the global logger, which the host sets for the whole process, the line breaks and other
+        control characters of the message are written as escapes, and the message of an object of a class that
+        sandboxed code declares is marked with the Program of the object's class
+        (<tt>[sandboxed Program &lt;id&gt;]</tt>),
+        so that a subclass cannot pass its messages off as the module's; the messages of the objects of the classes of
+        modules and of the host keep their form otherwise
 
         @param message the message format string for @ref Qore::vsprintf() "vsprintf()"
 
         @since %DataProvider 3.9
     */
     private logCaughtError(string message, ...) {
-        # the global logger is read directly, as the message is produced by the module also for sandboxed callers
-        *LoggerInterface logger = getLogger() ?? DataProviderGlobalLogger::logger;
-        if (logger) {
+        if (*LoggerInterface logger = getLogger()) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
+            return;
         }
+        # the global logger is used directly, as the message is produced by the module also for sandboxed callers; the
+        # message of an object of a class that sandboxed code declares is marked as such (qore#7110)
+        DataProviderGlobalLogger::logObjectArgs(self, Qore::Logger::LoggerLevel::LevelError, message, argv);
     }
 
     #! Returns the description of a response message, if this object represents a response message
@@ -5722,7 +5742,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.6
     */
-    private static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
+    static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
         return (ex.arg.typeCode() == NT_HASH ? ex.arg : {}) + {"ex": ex};
     }
 
@@ -7513,7 +7533,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @note The error code passed as \c err is thrown if any errors are detected
     */
-    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+    *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
             *hash<auto> uoptions, *string required_options) {
         # to ensure that the return value has type "hash<auto>"
         hash<auto> options += uoptions;
@@ -7662,7 +7682,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @return the processed expression
     */
-    private *hash<DataProviderExpression> processSearchParameters(*hash<DataProviderExpression> exp,
+    *hash<DataProviderExpression> processSearchParameters(*hash<DataProviderExpression> exp,
             *hash<auto> search_options) {
         if (!exp) {
             return exp;

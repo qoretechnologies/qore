@@ -974,7 +974,7 @@ public class AbstractDataProviderRecordIterator<RecT> [legacy_raw] inherits Abst
 
         @throw FIELD-ERROR invalid or unknown field name
     */
-    private auto doMemberGate(string key) {
+    auto doMemberGate(string key) {
         auto record = getValue();
         auto rv = record{key};
         if (!exists rv && !record.hasKey(key)) {
@@ -990,7 +990,7 @@ public class AbstractDataProviderRecordIterator<RecT> [legacy_raw] inherits Abst
         the input, otherwise a recursive partial match with only the keys given in the value to be checked is
         performed
     */
-    private static bool matchGeneric(hash<auto> record, hash<DataProviderExpression> where_cond,
+    static bool matchGeneric(hash<auto> record, hash<DataProviderExpression> where_cond,
             *hash<auto> template_context) {
         return AbstractDataProvider::evalGenericExpression(record, where_cond, template_context);
     }
@@ -1001,7 +1001,7 @@ public class AbstractDataProviderRecordIterator<RecT> [legacy_raw] inherits Abst
         the input, otherwise a recursive partial match with only the keys given in the value to be checked is
         performed
     */
-    private static bool matchGeneric(hash<auto> record, *hash<auto> where_cond,
+    static bool matchGeneric(hash<auto> record, *hash<auto> where_cond,
             *hash<auto> template_context) {
         foreach hash<auto> elem in (where_cond.pairIterator()) {
             # Template references and other typed hashdecls are matched directly as values

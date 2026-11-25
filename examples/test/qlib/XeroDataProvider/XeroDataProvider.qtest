@@ -770,6 +770,19 @@ public class XeroDataProviderTest inherits QUnit::Test {
     }
 
     private employeeRegionTest() {
+        # getEmployees only GETs the employee list and declares that it is read-only; updateOrCreateEmployees
+        # POSTs employees and declares that it changes state (qore#7454)
+        hash<DataProviderActionInfo> get_action = DataProviderActionCatalog::getAppAction(
+            XeroDataProvider::XeroDataProvider::AppName, "getEmployees");
+        assertEq(NT_BOOLEAN, get_action.mutates_state.typeCode());
+        assertFalse(get_action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(get_action));
+        hash<DataProviderActionInfo> create_action = DataProviderActionCatalog::getAppAction(
+            XeroDataProvider::XeroDataProvider::AppName, "updateOrCreateEmployees");
+        assertEq(NT_BOOLEAN, create_action.mutates_state.typeCode());
+        assertTrue(create_action.mutates_state);
+        assertTrue(DataProviderActionCatalog::actionMutatesState(create_action));
+
         # Australia is a different API version from the other two, so the region selects a document rather
         # than a parameter
         assertEq("/payroll.xro/1.0", XeroRestClientBase::getPayrollPrefix("au"));

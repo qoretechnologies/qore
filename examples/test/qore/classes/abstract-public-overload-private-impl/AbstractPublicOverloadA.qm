@@ -1,0 +1,34 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module of abstract-public-overload-private-impl.qtest, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractPublicOverloadA {
+    version = "1.0";
+    desc = "abstract classes and classes that implement their overloads for abstract-public-overload-private-impl.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace APO {
+public class C5 { string m(int i) { return "C5::m(int)"; } }
+public class P3 { string m(bool b) { return "P3::m(bool)"; } }
+public class P3p { private string m(bool b) { return "P3p::m(bool)"; } }
+# public abstract variants; G3 implements one of them
+public class G0 {
+    abstract string m(bool b);
+    abstract string m(int i);
+    string cm(auto a) { return m(a); }
+}
+public class G3 inherits G0 { string m(bool b) { return "G3::m(bool)"; } }
+# private abstract variants; F3 implements one of them
+public class F0 {
+    abstract private string m(bool b);
+    abstract private string m(int i);
+    string cm(auto a) { return m(a); }
+}
+public class F3 inherits F0 { string m(bool b) { return "F3::m(bool)"; } }
+# a class that the subclasses of K reach only through K's private:internal inheritance
+public class K inherits private:internal C5 { string k() { return "K"; } }
+}
