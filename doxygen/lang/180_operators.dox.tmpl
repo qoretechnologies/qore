@@ -2597,7 +2597,12 @@ if (x || y)
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
     variable's own value and shows the changes later made through the variable; this is the same in every
-    @ref exec_mode_overview "execution mode".  The same holds for an lvalue path from a variable, the object or a class
+    @ref exec_mode_overview "execution mode".  A parameter passed by value is a variable of the call: when its hash or
+    list is also the caller's value, the parameter gets a copy of its own, which the call releases when it returns, so
+    a weak reference to the parameter (ex: <tt>gx := h</tt> in <tt>sub f(hash<string, int> h)</tt>) designates that
+    copy and is empty once the call has returned; to designate the caller's container, the caller passes a reference
+    (<tt>f(\\th)</tt> to <tt>sub f(reference<hash<string, int>> h)</tt>), and the weak assignment designates the
+    variable that the reference refers to.  The same holds for an lvalue path from a variable, the object or a class
     static variable: an object member (<tt>w := c.l</tt>), a member of the object (<tt>w := l</tt> in a method), a hash
     key (<tt>w := h.k</tt>) or a list element (<tt>w := l[0]</tt>), also when its steps have no type when the code is
     parsed (ex: <tt>w := a.k</tt> with <tt>auto a</tt>), whose values are then checked when the assignment runs: the
