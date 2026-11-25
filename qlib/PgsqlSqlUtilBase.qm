@@ -7501,6 +7501,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return False;
     }
 
+    #! Returns whether the server supports changing a table's logging mode
+    bool supportsTableLogging() {
+        return pgsql_get_server_version_num(ds) >= 90500;
+    }
+
+    private string getSetLoggingSqlImpl(bool enabled) {
+        if (!supportsTableLogging()) {
+            return AbstractTable::getSetLoggingSqlImpl(enabled);
+        }
+        return sprintf("alter table %s %s", getSqlName(), enabled ? "set logged" : "set unlogged");
+    }
+
     #! returns @ref True "True" if the database support tablespaces
     private bool supportsTablespacesImpl() {
         return True;

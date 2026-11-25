@@ -1305,6 +1305,47 @@ string sql = table.getTruncateSql();
         return AbstractDatabase::doCallback(opt, getTruncateSqlImpl(), AbstractDatabase::AC_Truncate, "table", name);
     }
 
+    #! Returns whether this database supports changing the logging mode of an existing table
+    bool supportsTableLogging() {
+        return False;
+    }
+
+    #! Returns the SQL to change this table's logging mode
+    /** Oracle uses <tt>ALTER TABLE ... LOGGING</tt> or <tt>NOLOGGING</tt>. Disabling logging reduces redo for
+        eligible direct-path operations. Conventional inserts still generate redo, and database or tablespace
+        FORCE LOGGING takes precedence.
+
+        PostgreSQL 9.5 and later use <tt>SET LOGGED</tt> or <tt>SET UNLOGGED</tt>. An unlogged table is
+        truncated after a crash and its contents are not replicated to standbys. Changing persistence can
+        rewrite the table and requires a table lock.
+
+        Other drivers raise \c TABLE-LOGGING-NOT-SUPPORTED. Session logging settings and database-wide recovery
+        modes have different scopes and cannot implement this table operation.
+
+        @param enabled True for the database's logged mode, False for the reduced-logging mode described above
+        @param opt optional @ref SqlUtil::AbstractDatabase::CallbackOptions "SQL and information callbacks"
+        @return the ALTER TABLE statement for this table
+    */
+    string getSetLoggingSql(bool enabled, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", AbstractDatabase::CallbackOptions, \opt);
+        return AbstractDatabase::doCallback(opt, getSetLoggingSqlImpl(enabled), AbstractDatabase::AC_Modify,
+            "table logging", getSqlName());
+    }
+
+    #! Changes the table's logging mode with the caller managing the transaction
+    /** See getSetLoggingSql() for each database's durability and recovery behavior. Oracle DDL commits implicitly. */
+    setLogging(bool enabled) {
+        ds.execRaw(getSetLoggingSql(enabled));
+    }
+
+    #! Changes the table's logging mode and releases the transaction
+    /** Commits on success and rolls back on error. See getSetLoggingSql() for the effects on stored data. */
+    setLoggingCommit(bool enabled) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        setLogging(enabled);
+    }
+
     #! sets table statistics preferences and commits or rolls back the transaction
     /** @par Example:
         @code{.py}
@@ -15261,6 +15302,11 @@ on_exit printf("SQL> %s\n", sql);
                 getDesc(), ds.getDriverName());
         }
         return sprintf("drop table %s", getSqlName());
+    }
+
+    private string getSetLoggingSqlImpl(bool enabled) {
+        throw "TABLE-LOGGING-NOT-SUPPORTED", sprintf("%s: table logging mode cannot be changed with driver %y",
+            getDesc(), ds.getDriverName());
     }
 
     private string getTruncateSqlImpl() {
