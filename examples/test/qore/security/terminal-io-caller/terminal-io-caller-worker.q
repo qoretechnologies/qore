@@ -43,11 +43,13 @@ bool sub via_module() { return TermCheck::allowed(); }
 # the connection providers name a module that cannot be loaded; checks only that nothing is written for the caller
 # live-provider-optin: the providers' module cannot be loaded, so no credential is read
 *hash<auto> sub connections() { return ConnectionProvider::get_connections(True); }
+# the window size that the module sends for this code, through its public API (a class of this code cannot use the
+# private declarations of the module's class): the host reads it from the connection
 class Term inherits TelnetClient {
-    constructor() : TelnetClient(\"localhost:1\") {}
-    hash<auto> size() { return getWindowSize(); }
+    constructor(string target) : TelnetClient(target) {}
+    send() { TelnetClient::connect(); windowSizeUpdated(); disconnect(); }
 }
-hash<auto> sub window_size() { return (new Term()).size(); }
+sub window_size(string target) { (new Term(target)).send(); }
 string sub use(string how) { return TermCheck::use(how); }
 # a module object that this code creates runs the code given: the host's (written) and this code's own (refused)
 string sub run_host(code host_code) { return (new TermCheck::Runner(host_code)).run(); }
@@ -77,6 +79,27 @@ bool sub host_logger(Logger logger) { logger.info(\"host logger line for restric
     return p;
 }
 
+#! returns the window size that the TelnetClient module sends for the code of the Program (RFC 1073 NAWS)
+hash<auto> sub window_size(Program p) {
+    Socket listener();
+    listener.bind("127.0.0.1:0");
+    listener.listen();
+    int port = listener.getSocketInfo().port;
+    # the connection waits in the listener's backlog while the code sends the window size
+    p.callFunction("window_size", sprintf("127.0.0.1:%d", port));
+    *Socket conn = listener.accept(10s);
+    if (!conn) {
+        throw "TEST-ERROR", "the Telnet client did not connect";
+    }
+    on_exit conn.close();
+    # IAC SB NAWS <width: 2 bytes> <height: 2 bytes> IAC SE; neither value has a byte equal to IAC here
+    binary b = conn.recvBinary(9, 10s);
+    if (b[0] != TelnetClient::IAC || b[1] != TelnetClient::SB || b[2] != TelnetClient::TOPT_NAWS) {
+        throw "TEST-ERROR", sprintf("not a window size: %y", b);
+    }
+    return {"rows": (b[5] << 8) | b[6], "columns": (b[3] << 8) | b[4]};
+}
+
 # the test runs the worker with QORE_DATASOURCE_PROVIDERS and QORE_CONNECTION_PROVIDERS naming a module that cannot be
 # loaded, whose errors the provider modules write to stdout in verbose mode (a module reads its environment when it is
 # loaded, so they are set before the worker starts)
@@ -94,7 +117,7 @@ check("host-module", True, TermCheck::allowed());
     check("restricted-ds", "DATASOURCE-ERROR", p.callFunction("ds"));
     check("restricted-connections", {}, p.callFunction("connections"));
     # the window size is not read from the terminal
-    check("restricted-window-size", {"rows": 24, "columns": 80}, p.callFunction("window_size"));
+    check("restricted-window-size", {"rows": 24, "columns": 80}, window_size(p));
     # the builtins that use the terminal refuse the caller also in library code
     foreach string how in (("printf", "print", "stdout", "stderr", "stream", "streamwriter", "window")) {
         check("restricted-builtin-" + how, "ILLEGAL-EXPRESSION", p.callFunction("use", how));
