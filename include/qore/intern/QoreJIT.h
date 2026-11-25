@@ -1583,4 +1583,10 @@ private:
     void finishBgCompileWork(BgCompileWork& work);
 };
 
+#ifdef DEBUG
+//! builds and runs an optimization pipeline with an optimization level that was never written (a debug hook, see
+//! dbg_llvm_uninitialized_level()); returns 0, or -1 if no target machine can be created
+DLLLOCAL int qore_jit_dbg_pipeline_uninitialized_level();
+#endif
+
 #endif

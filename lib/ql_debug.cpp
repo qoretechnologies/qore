@@ -1661,6 +1661,152 @@ static void ut_qorefile_open_sandbox_policy(UnitTestCounters& c) {
     rmdir(outside_dir);
 }
 
+#ifndef _Q_WINDOWS
+// the sandbox filesystem policy is checked for the file actually opened, which can differ from the one that the name
+// it was opened with appears to name; the exception names the file as given, never the file reached
+static void ut_opened_file_policy(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    char inside_template[] = "/tmp/qore-ut-opened-in-XXXXXX";
+    char outside_template[] = "/tmp/qore-ut-opened-out-XXXXXX";
+    char* inside_dir = mkdtemp(inside_template);
+    char* outside_dir = mkdtemp(outside_template);
+    UT_ASSERT(c, inside_dir && outside_dir, "opened file policy: test directories created");
+    if (!inside_dir || !outside_dir) {
+        return;
+    }
+    std::string inside = std::string(inside_dir) + "/inside.txt";
+    std::string outside = std::string(outside_dir) + "/outside.txt";
+    std::string removed = std::string(inside_dir) + "/removed.txt";
+    for (const std::string* path : {&inside, &outside, &removed}) {
+        FILE* f = fopen(path->c_str(), "w");
+        if (f) {
+            fputs("x", f);
+            fclose(f);
+        }
+    }
+    std::unique_ptr<char, decltype(&free)> inside_real(realpath(inside.c_str(), nullptr), &free);
+    std::unique_ptr<char, decltype(&free)> outside_real(realpath(outside.c_str(), nullptr), &free);
+    UT_ASSERT(c, inside_real && outside_real, "opened file policy: test files created");
+
+    int in_fd = open(inside.c_str(), O_RDONLY | O_CLOEXEC);
+    int out_fd = open(outside.c_str(), O_RDONLY | O_CLOEXEC);
+    int removed_fd = open(removed.c_str(), O_RDONLY | O_CLOEXEC);
+    int pfd[2] = {-1, -1};
+    UT_ASSERT_EQ(c, 0, pipe(pfd), "opened file policy: pipe created");
+    UT_ASSERT(c, in_fd >= 0 && out_fd >= 0 && removed_fd >= 0, "opened file policy: test files opened");
+    unlink(removed.c_str());
+
+    if (inside_real && outside_real && in_fd >= 0 && out_fd >= 0 && removed_fd >= 0 && pfd[0] >= 0) {
+        // the path of an open file is taken from the descriptor
+        struct stat sbuf;
+        std::string canon;
+        UT_ASSERT_EQ(c, 0, fstat(out_fd, &sbuf), "opened file policy: fstat()");
+        UT_ASSERT_EQ(c, 0, q_get_open_file_path(out_fd, sbuf, inside.c_str(), canon),
+            "opened file policy: the path of an open file is found");
+        UT_ASSERT(c, canon == outside_real.get(),
+            "opened file policy: the path is that of the file opened, not the name given");
+        // an object without a path, and a removed file, have none
+        UT_ASSERT_EQ(c, 0, fstat(pfd[0], &sbuf), "opened file policy: fstat() of a pipe");
+        UT_ASSERT_EQ(c, -1, q_get_open_file_path(pfd[0], sbuf, nullptr, canon),
+            "opened file policy: a pipe has no path");
+        UT_ASSERT_EQ(c, 0, fstat(removed_fd, &sbuf), "opened file policy: fstat() of a removed file");
+        UT_ASSERT_EQ(c, -1, q_get_open_file_path(removed_fd, sbuf, removed.c_str(), canon),
+            "opened file policy: a removed file has no path");
+        // the status must be that of the file at the path
+        UT_ASSERT_EQ(c, 0, fstat(in_fd, &sbuf), "opened file policy: fstat() of the inside file");
+        UT_ASSERT_EQ(c, -1, q_get_open_file_path(out_fd, sbuf, nullptr, canon),
+            "opened file policy: a path that does not name the file with the status given is refused");
+
+        QoreSandboxManager* sm = new QoreSandboxManager;
+        sm->filesystem().setDefaultPolicy(false);
+        UT_ASSERT_EQ(c, 0, sm->filesystem().addAllowedPath(inside_dir, QSEC_READ | QSEC_WRITE, &xsink),
+            "opened file policy: allowed path set");
+        xsink.clear();
+
+        // a file opened by an allowed name is allowed
+        UT_ASSERT_EQ(c, 0, q_check_opened_file_policy(*sm, in_fd, inside.c_str(), QSEC_READ, &xsink),
+            "opened file policy: the file named is allowed");
+        UT_ASSERT(c, !xsink, "opened file policy: no exception for the file named");
+        UT_ASSERT_EQ(c, 0, q_check_opened_file_policy(*sm, in_fd, inside_real.get(), QSEC_READ, &xsink),
+            "opened file policy: the file named by its canonical path is allowed");
+        xsink.clear();
+
+        // another file reached by an allowed name is denied, and the error names the file as given
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, out_fd, inside.c_str(), QSEC_READ, &xsink),
+            "opened file policy: a file outside the allowed path is denied");
+        UT_ASSERT(c, xsink.isException(), "opened file policy: the denial raises an exception");
+        if (xsink.isException()) {
+            QoreStringDataHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, err && !strcmp(err.c_str(), "FILESYSTEM-ACCESS-DENIED"),
+                "opened file policy: the denial is FILESYSTEM-ACCESS-DENIED");
+            QoreStringDataHelper desc(xsink.getExceptionDesc());
+            const char* d = desc ? desc.c_str() : "";
+            UT_ASSERT(c, strstr(d, inside.c_str()) != nullptr, "opened file policy: the error names the file as given");
+            UT_ASSERT(c, !strstr(d, outside_dir), "opened file policy: the error does not name the file reached");
+        }
+        xsink.clear();
+
+        // an object without a path, and a removed file, are denied
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, pfd[0], inside.c_str(), QSEC_READ, &xsink),
+            "opened file policy: a pipe is denied");
+        UT_ASSERT(c, xsink.isException(), "opened file policy: the pipe denial raises an exception");
+        xsink.clear();
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, removed_fd, removed.c_str(), QSEC_READ, &xsink),
+            "opened file policy: a removed file is denied");
+        xsink.clear();
+
+        // an access mode that the rule does not grant is denied for the file reached
+        UT_ASSERT_EQ(c, -1, q_check_opened_file_policy(*sm, in_fd, "/dev/null", QSEC_CREATE, &xsink),
+            "opened file policy: a mode not granted is denied");
+        xsink.clear();
+
+        // QoreFile opens are checked: the open itself succeeds for an allowed name and the file reached
+        {
+            QoreSandboxContext ctx;
+            ut_set_sandbox_context(ctx, sm);
+            QoreSandboxContextHelper sch(ctx);
+            QoreFile f;
+            UT_ASSERT_EQ(c, 0, f.open2(&xsink, inside.c_str()), "opened file policy: QoreFile::open2() of an "
+                "allowed file");
+            xsink.clear();
+        }
+        sm->deref(&xsink);
+        xsink.clear();
+
+        // O_RDONLY | O_TRUNC needs write access
+        QoreSandboxManager* ro = new QoreSandboxManager;
+        ro->filesystem().setDefaultPolicy(false);
+        ro->filesystem().addAllowedPath(inside_dir, QSEC_READ, &xsink);
+        xsink.clear();
+        {
+            QoreSandboxContext ro_ctx;
+            ut_set_sandbox_context(ro_ctx, ro);
+            QoreSandboxContextHelper ro_sch(ro_ctx);
+            QoreFile t;
+            UT_ASSERT_EQ(c, -1, t.open2(&xsink, inside.c_str(), O_RDONLY | O_TRUNC),
+                "opened file policy: O_RDONLY | O_TRUNC without write access is denied");
+            UT_ASSERT(c, xsink.isException(), "opened file policy: the O_TRUNC denial raises an exception");
+            xsink.clear();
+        }
+        ro->deref(&xsink);
+        xsink.clear();
+        struct stat tbuf;
+        UT_ASSERT(c, !stat(inside.c_str(), &tbuf) && tbuf.st_size == 1,
+            "opened file policy: the file was not truncated");
+    }
+
+    for (int fd : {in_fd, out_fd, removed_fd, pfd[0], pfd[1]}) {
+        if (fd >= 0) {
+            close(fd);
+        }
+    }
+    unlink(inside.c_str());
+    unlink(outside.c_str());
+    rmdir(inside_dir);
+    rmdir(outside_dir);
+}
+#endif
+
 static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c) {
     TestRSectionLock lock;
     RNotifier notifier;
@@ -8220,6 +8366,12 @@ public:
         have run, and must not get the attempt's number; then the operation must fail as closed, with neither a cancel
         nor its time limit, which cannot end it before.  The loop's removal of the registration must not fail, the
         socket must not take over the new descriptor, and nothing may close it.
+
+        The I/O thread is held before its command queue while the socket is closed (dbgHoldIoCommands()), so that it
+        runs no step of the operation before the close has woken the registration: Socket::close() shuts the
+        descriptor down before it closes it (qore_socket_private::prepareForClose()), and the shutdown is an event of
+        the attempt's descriptor, whose step could otherwise end the connection as closed and remove its registration
+        before the close, which then has no registration to wake (that order is the one of runConnectCloseInPreClose())
     */
     static void runConnectCloseRegistered(UnitTestCounters& c, bool direct) {
         const std::string when = direct ? " (registered, closed directly)" : " (registered)";
@@ -8338,6 +8490,20 @@ public:
         }
         UT_ASSERT_EQ(c, 0, (int)queue->size(),
             ("the connection is in progress when the socket is closed" + when).c_str());
+        // the I/O thread runs no step of the operation until the socket is closed: the shutdown that starts
+        // Socket::close() makes an event of the descriptor, whose step would otherwise race with the close
+        struct IoHold {
+            AsyncIoControllerPriv* ctrl;
+            ~IoHold() {
+                ctrl->dbgHoldIoCommands(false);
+            }
+        } io_hold{*ctrl};
+        ctrl->dbgHoldIoCommands(true);
+        bool held = ctrl->dbgWaitIoCommandsHeld(10000);
+        UT_ASSERT(c, held, ("the I/O thread is held while the socket is closed" + when).c_str());
+        if (!held) {
+            return;
+        }
         // another thread closes the socket while the I/O thread has the descriptor registered; another descriptor is
         // opened in the close, before the registration is woken
         reg_close_attempt_fd = attempt_fd;
@@ -8352,6 +8518,8 @@ public:
             sock->close();
         }
         qore_dbg_before_close_wakes.store(nullptr, std::memory_order_release);
+        // the operation runs for the close's wake
+        ctrl->dbgHoldIoCommands(false);
         int reuse_fd = reg_close_reuse_fd;
         if (reuse_fd >= 0) {
             fds.push_back(reuse_fd);
@@ -8395,6 +8563,78 @@ public:
         }
     }
 
+    //! The socket whose close runConnectCheckAfterShutdown() starts after the step's check of the socket
+    static inline std::atomic<QoreSocket*> after_check_sock{nullptr};
+    static inline std::atomic<bool> after_check_done{false};
+
+    //! The hook after the step's check of the socket: the close's shutdown, once (prepareForClose())
+    static void shutDownAfterSocketCheck() {
+        QoreSocket* s = after_check_sock.exchange(nullptr, std::memory_order_acq_rel);
+        if (s) {
+            qore_socket_private::get(*s)->prepareForClose();
+            after_check_done.store(true, std::memory_order_release);
+        }
+    }
+
+    //! A happy-eyeballs step that sees the effect of a close after it checked the socket fails as closed (qore#7003)
+    /** A close that lands after a connection step checked that the socket was not closed, and before it checks its
+        attempts, makes the attempt that is the socket's descriptor fail (its shutdown's error, ECONNRESET): the step
+        gave the attempt up through the socket, which refused it (the close changed the descriptor generation), and
+        reported the attempt's error as a connection error (SOCKET-CONNECT-ERROR).  The test runs the close's shutdown
+        (qore_socket_private::prepareForClose(), which changes the generation with it) at that place
+        (qore_dbg_connect_after_socket_check) in the first step of a connection to a target that gets no answer, and
+        checks that the connection fails as closed.
+    */
+    static void runConnectCheckAfterShutdown(UnitTestCounters& c) {
+        const std::string when = " (a close after the step's check of the socket)";
+        ExceptionSink xsink;
+        std::vector<int> fds;
+        struct FdCloser {
+            std::vector<int>& fds;
+            ~FdCloser() {
+                for (int fd : fds) {
+                    ::close(fd);
+                }
+            }
+        } fd_closer{fds};
+        struct sockaddr_in sa = {};
+        if (!makeSilentTarget(c, fds, sa, when)) {
+            return;
+        }
+        std::string target = "127.0.0.1:" + std::to_string(ntohs(sa.sin_port));
+        // the hook is cleared before the socket is destroyed
+        std::unique_ptr<QoreSocket> s(new QoreSocket);
+        struct HookCleanup {
+            ~HookCleanup() {
+                qore_dbg_connect_after_socket_check.store(nullptr, std::memory_order_release);
+                after_check_sock.store(nullptr, std::memory_order_release);
+            }
+        } hook_cleanup;
+        after_check_done.store(false, std::memory_order_relaxed);
+        after_check_sock.store(s.get(), std::memory_order_release);
+        qore_dbg_connect_after_socket_check.store(shutDownAfterSocketCheck, std::memory_order_release);
+        int rc = -1;
+        {
+            // the state is destroyed before the socket
+            std::unique_ptr<AbstractPollState> st(s->startConnect(&xsink, target.c_str()));
+            UT_ASSERT(c, !xsink && st, ("the connection is started" + when).c_str());
+            if (!xsink && st) {
+                rc = driveConnect(*s, *st, xsink);
+            }
+        }
+        UT_ASSERT(c, after_check_done.load(std::memory_order_acquire),
+            ("the close's shutdown ran after the step's check of the socket" + when).c_str());
+        UT_ASSERT(c, rc < 0 && xsink, ("the connection fails" + when).c_str());
+        if (xsink) {
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"),
+                (std::string("the connection fails as closed: ") + err->c_str() + when).c_str());
+        }
+        xsink.clear();
+        s->close();
+        UT_ASSERT(c, s->getDescriptorForLibrary() < 0, ("the socket is closed" + when).c_str());
+    }
+
     //! The state of the hook of runConnectCloseInPreClose(), which holds the close after its shutdown
     struct PreCloseHold {
         std::mutex l;
@@ -8409,18 +8649,25 @@ public:
         bool held = false;
         bool removed_while_held = false;
     };
-    static inline PreCloseHold* pre_close_hold = nullptr;
+    //! read by the closing thread, which can be any thread: atomic
+    static inline std::atomic<PreCloseHold*> pre_close_hold{nullptr};
 
     //! Holds the close of the test's socket after its shutdown until the I/O thread ended the connection
-    static void preCloseHook(qore_socket_private* sp) {
-        PreCloseHold* h = pre_close_hold;
+    /** Called in a close, which can be made by a destructor: it throws nothing; a failed wait does not hold the close,
+        which the test then sees (removed_while_held is not set)
+    */
+    static void preCloseHook(qore_socket_private* sp) noexcept {
+        PreCloseHold* h = pre_close_hold.load(std::memory_order_acquire);
         if (!h || sp != h->sock) {
             return;
         }
-        std::unique_lock<std::mutex> g(h->l);
-        h->held = true;
-        // the order comes from the operation's end; the limit only guards against a hang
-        h->removed_while_held = h->cond.wait_for(g, std::chrono::seconds(10), [h]() { return h->removed; });
+        try {
+            std::unique_lock<std::mutex> g(h->l);
+            h->held = true;
+            // the order comes from the operation's end; the limit only guards against a hang
+            h->removed_while_held = h->cond.wait_for(g, std::chrono::seconds(10), [h]() { return h->removed; });
+        } catch (...) {
+        }
     }
 
     //! A connection step that runs between the shutdown of a close and the close fails as closed (qore#7003)
@@ -8472,7 +8719,7 @@ public:
                 xsink.clear();
                 ctrl->stopClear(&xsink);
                 xsink.clear();
-                pre_close_hold = nullptr;
+                pre_close_hold.store(nullptr, std::memory_order_release);
             }
         } cleanup{*ctrl, xsink};
         ctrl->setMaxIoThreads(1, &xsink);
@@ -8551,12 +8798,12 @@ public:
             hold.sock = qore_socket_private::get(*sock->priv->socket);
             hold.attempt_fd = attempt_fd;
         }
-        pre_close_hold = &hold;
+        pre_close_hold.store(&hold, std::memory_order_release);
         qore_dbg_after_pre_close_shutdown.store(preCloseHook, std::memory_order_release);
         // the close through the controller: its shutdown, then (once the hook let it continue) its close
         sock->close();
         qore_dbg_after_pre_close_shutdown.store(nullptr, std::memory_order_release);
-        pre_close_hold = nullptr;
+        pre_close_hold.store(nullptr, std::memory_order_release);
         {
             std::lock_guard<std::mutex> g(hold.l);
             UT_ASSERT(c, hold.held, ("the close was held after its shutdown" + when).c_str());
@@ -9158,6 +9405,13 @@ public:
         }
     }
 
+    //! Runs the shutdown of a close (prepareForClose()) after the UNIX connection's check read its descriptor, as
+    //! another thread's close can; the close itself follows the connection's step (see runUnixConnectClose())
+    static void shutDownInUnixCheck(int) {
+        qore_dbg_unix_connect_before_check.store(nullptr, std::memory_order_release);
+        qore_socket_private::get(*unix_close_sock)->prepareForClose();
+    }
+
     //! Where runUnixConnectClose() closes the socket
     enum UnixCloseMode {
         //! right before the connection gives the socket its descriptor (qore_dbg_unix_connect_before_adopt)
@@ -9170,6 +9424,10 @@ public:
         UCM_BEFORE_CONNECTED_REOPENED,
         //! after the connection's state was set (qore_dbg_unix_connect_after_connected)
         UCM_AFTER_CONNECTED,
+        //! the shutdown of a close after the connection's check read the descriptor (qore_dbg_unix_connect_before_check):
+        //! the check fails with the shutdown's error, and the connection must fail as closed; the close itself follows
+        //! the connection's step
+        UCM_SHUTDOWN_IN_CHECK,
     };
 
     //! The descriptor that the socket is given after the close (UCM_BEFORE_CONNECTED_REOPENED), and its peer
@@ -9210,10 +9468,15 @@ public:
         stay reserved while the check uses it (another socket opened then must not get it), and the check must not
         continue the connection; before the connection's state is set, the state is set with the socket's close lock
         held only if the socket was not closed meanwhile.  With UCM_BEFORE_CONNECTED_REOPENED, the socket is given
-        another descriptor after the close: the failed connection must not close it.
+        another descriptor after the close: the failed connection must not close it.  With UCM_SHUTDOWN_IN_CHECK, only
+        the shutdown of the close runs in the check (qore_socket_private::prepareForClose(), which changes the
+        descriptor generation with it), as when another thread's close has shut the descriptor down and not released it
+        yet: the check fails with the shutdown's error (EPIPE), and the connection must fail as closed, not with that
+        error; the test closes the socket after the connection's step.
     */
     static void runUnixConnectClose(UnitTestCounters& c, UnixCloseMode mode) {
-        const std::string when = mode == UCM_IN_CHECK ? " (UNIX connection closed in its check)"
+        const std::string when = mode == UCM_SHUTDOWN_IN_CHECK ? " (UNIX connection shut down by a close in its check)"
+            : mode == UCM_IN_CHECK ? " (UNIX connection closed in its check)"
             : (mode == UCM_BEFORE_ADOPT ? " (UNIX connection closed before its descriptor is taken)"
                 : (mode == UCM_BEFORE_CONNECTED ? " (UNIX connection closed before it is connected)"
                     : (mode == UCM_AFTER_CONNECTED ? " (UNIX connection closed after it is connected)"
@@ -9279,6 +9542,8 @@ public:
         unix_reopen_peer = mode == UCM_BEFORE_CONNECTED_REOPENED ? 0 : -1;
         if (mode == UCM_IN_CHECK) {
             qore_dbg_unix_connect_before_check.store(closeInUnixCheck, std::memory_order_release);
+        } else if (mode == UCM_SHUTDOWN_IN_CHECK) {
+            qore_dbg_unix_connect_before_check.store(shutDownInUnixCheck, std::memory_order_release);
         } else if (mode == UCM_BEFORE_ADOPT) {
             qore_dbg_unix_connect_before_adopt.store(closeBeforeUnixAdopt, std::memory_order_release);
         } else if (mode == UCM_AFTER_CONNECTED) {
@@ -9311,6 +9576,11 @@ public:
             }
             UT_ASSERT(c, !foreign_send,
                 ("the check does not use a number that the close released and another socket took" + when).c_str());
+        } else if (mode == UCM_SHUTDOWN_IN_CHECK) {
+            UT_ASSERT(c, !qore_dbg_unix_connect_before_check.load(std::memory_order_acquire),
+                ("the socket was shut down in the check" + when).c_str());
+            // the close whose shutdown ran in the check
+            s->close();
         } else if (mode == UCM_BEFORE_ADOPT) {
             UT_ASSERT(c, !qore_dbg_unix_connect_before_adopt.load(std::memory_order_acquire),
                 ("the socket was closed before its descriptor was taken" + when).c_str());
@@ -9372,17 +9642,32 @@ public:
 
 #ifdef __linux__
     //! Returns the number of open descriptors of the process
-    static int ccrOpenDescriptors() {
-        int n = 0;
+    //! Returns the sockets that the process has open, by their inodes (the targets of /proc/self/fd)
+    /** Only sockets: the descriptors that other threads open and close by themselves meanwhile (as valgrind does with
+        its own files, which it opens at the lowest free number before it moves them away) are not the test's; a
+        descriptor that is closed while the directory is read is skipped, as it is not left open
+    */
+    static std::set<std::string> ccrOpenSockets() {
+        std::set<std::string> rv;
         if (DIR* d = opendir("/proc/self/fd")) {
             while (struct dirent* e = readdir(d)) {
-                if (e->d_name[0] != '.') {
-                    ++n;
+                if (e->d_name[0] == '.') {
+                    continue;
+                }
+                char path[64], target[256];
+                snprintf(path, sizeof(path), "/proc/self/fd/%s", e->d_name);
+                ssize_t len = readlink(path, target, sizeof(target) - 1);
+                if (len <= 0) {
+                    continue;
+                }
+                target[len] = '\0';
+                if (!strncmp(target, "socket:", 7)) {
+                    rv.insert(target);
                 }
             }
             closedir(d);
         }
-        return n;
+        return rv;
     }
 #endif
 
@@ -9418,7 +9703,7 @@ public:
             UT_ASSERT(c, !ut_fd_stat(fds[i], &fds_st[i]), ("the target's descriptor is open" + when).c_str());
         }
 #ifdef __linux__
-        int open_before = ccrOpenDescriptors();
+        const std::set<std::string> sockets_before = ccrOpenSockets();
 #endif
         {
             QoreSocketObject* sock = new QoreSocketObject;
@@ -9481,7 +9766,16 @@ public:
                 ("the connections close no descriptor of another object" + when).c_str());
         }
 #ifdef __linux__
-        UT_ASSERT_EQ(c, open_before, ccrOpenDescriptors(), ("no descriptor is left open" + when).c_str());
+        {
+            // the sockets of the connections: those that are open now and were not before
+            std::string left;
+            for (const std::string& sk : ccrOpenSockets()) {
+                if (!sockets_before.count(sk)) {
+                    left += " " + sk;
+                }
+            }
+            UT_ASSERT(c, left.empty(), ("no socket of the connections is left open:" + left + when).c_str());
+        }
 #endif
     }
 
@@ -9673,6 +9967,23 @@ public:
         hold.reset();
         struct stat st;
         UT_ASSERT(c, ut_fd_stat(sv[0], &st), ("the descriptor is closed when the hold is released" + when).c_str());
+    }
+
+    //! Both native close paths consume generation wakes on a socket with no descriptor.
+    static void runDescriptorlessCloseWakes(UnitTestCounters& c) {
+        for (bool public_close : {true, false}) {
+            QoreSocket socket;
+            auto* priv = qore_socket_private::get(socket);
+            std::atomic<int> calls{0};
+            auto hold = priv->holdGenerationWake([&calls]() { ++calls; });
+            UT_ASSERT(c, hold != nullptr, "the descriptorless socket takes a generation wake");
+            int rc = public_close ? socket.close() : priv->close_internal();
+            UT_ASSERT_EQ(c, 0, rc, "the native close succeeds");
+            UT_ASSERT_EQ(c, 1, calls.load(), public_close ? "QoreSocket::close runs the generation wake"
+                : "close_internal runs the generation wake");
+            priv->close_internal();
+            UT_ASSERT_EQ(c, 1, calls.load(), "a second close does not repeat the generation wake");
+        }
     }
 
     //! A close of a socket between the hold of its descriptor and the setting of the hold's close wake runs the wake
@@ -14172,6 +14483,862 @@ public:
         xsink.clear();
     }
 };
+
+#ifndef _Q_WINDOWS
+//! Returns a new P-256 key, or nullptr (defined below)
+static EVP_PKEY* ut_tls_make_key();
+//! Returns a new self-signed certificate for the key, or nullptr (defined below)
+static X509* ut_tls_make_cert(EVP_PKEY* key);
+
+//! An operation whose descriptor is ready when its deadline has passed times out, unless it opted in to a last
+//! attempt (qore#7480)
+/** When the I/O thread gets to an operation's readiness only after the operation's deadline has passed (a stalled
+    I/O thread), the timeout wins: the operation ends with SOCKET-TIMEOUT without a step.  Only an operation that
+    opted in to a last attempt (QoreLastAttemptPollOperation: a plain TCP accept), whose step
+    completes it or asks to wait again without starting anything, gets one more step at its deadline, also when the
+    iteration did not report its descriptor ready: a step that completes it delivers its result, and a step that
+    asks to wait again ends it with SOCKET-TIMEOUT.  Without it, Socket::accept(timeout) returned NOTHING while a
+    connection waited in the listener's backlog (SocketUnfinishedChunkedBody.qtest under load).  Every other
+    operation keeps the timeout: a receive does not consume data that it would then drop, a TLS accept does not
+    accept a connection whose handshake the timeout would then discard, and a woken operation, or one whose
+    descriptor is reported with a hang-up, reports the timeout.
+
+    The test hook dbg_phase1_time_offset moves the time of the first iteration that has a ready operation past the
+    operation's deadline, as a stall of the I/O thread would, without any real time passing: the iteration finds the
+    operation ready and its deadline passed at once.
+*/
+class AsyncIoDeadlineReadyTest {
+    typedef AsyncIoControllerPriv Ctrl;
+
+    //! the time that the hook adds to the iteration: far past the deadline of every operation of the test
+    static constexpr int64 TIME_OFFSET_US = 3600LL * 1000000LL;
+    //! the time limit of the operations of the test, in milliseconds; it never passes in real time
+    static constexpr int OP_TIMEOUT_MS = 600000;
+    //! the hang guard of the test's waits for a descriptor, in milliseconds
+    static constexpr int HANG_GUARD_MS = 30000;
+
+    //! Waits for the readability of a pollable object that it never reads (a notifier that it never acknowledges, a
+    //! socket whose peer has closed), which is ready again at each poll, and asks to wait again each time it is
+    //! continued; opts in to a last attempt at its deadline if so made
+    class LevelReadyOp : public SocketPollOperationBase, public QoreLastAttemptPollOperation {
+    public:
+        DLLLOCAL LevelReadyOp(QoreObject* poll_obj, bool opt_in) : poll_obj(poll_obj), opt_in(opt_in) {
+        }
+
+        DLLLOCAL virtual bool goalReached() const override {
+            return false;
+        }
+
+        DLLLOCAL virtual void abort(ExceptionSink*) override {
+        }
+
+        DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+            info->setKeyValue("events", SOCK_POLLIN, xsink);
+            info->setKeyValue("socket", poll_obj->objectRefSelf(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            {
+                std::lock_guard<std::mutex> g(l);
+                ++calls;
+            }
+            cond.notify_all();
+            return info.release();
+        }
+
+        DLLLOCAL virtual bool completesInLastAttempt() const override {
+            return opt_in;
+        }
+
+        DLLLOCAL virtual QoreValue getOutput() const override {
+            return calls.load();
+        }
+
+        DLLLOCAL virtual const char* getStateImpl() const override {
+            return "waiting";
+        }
+
+        //! Waits until the operation has been continued \a n times; returns false if it is not within the hang guard
+        DLLLOCAL bool waitForCalls(int n) {
+            std::unique_lock<std::mutex> g(l);
+            return cond.wait_for(g, std::chrono::milliseconds(HANG_GUARD_MS), [&]() { return calls.load() >= n; });
+        }
+
+        //! the number of continuePoll() calls
+        std::atomic<int> calls{0};
+
+    private:
+        QoreObject* poll_obj;
+        bool opt_in;
+        std::mutex l;
+        std::condition_variable cond;
+    };
+
+    //! The state of the test hook; guarded by the controller's lock
+    struct HookState {
+        //! the operation whose steps are counted, or nullptr
+        LevelReadyOp* op = nullptr;
+        //! the hook fires only once the operation has been continued this many times
+        int min_calls = 0;
+        //! if true, the hook also wakes the operations of the thread as a close of their sockets does, so that the
+        //! iteration finds them ready and woken
+        bool close_wake = false;
+        //! true once the hook has moved the time of an iteration
+        bool fired = false;
+        //! true once the hook has made a close wake
+        bool close_wake_made = false;
+        //! the number of steps of the operation when the hook fired
+        int calls_at_fire = -1;
+        //! if not 0, the hook connects to this port, after the poll that started its iteration, and waits until the
+        //! connection is in the backlog of the listener with the descriptor listen_fd
+        int connect_port = 0;
+        //! the descriptor of the listener that the hook connects to
+        int listen_fd = -1;
+        //! the descriptor of the connection that the hook made, or -1; closed with the state
+        int client_fd = -1;
+        //! true once the connection that the hook made is in the listener's backlog
+        bool backlog_ready = false;
+
+        DLLLOCAL ~HookState() {
+            if (client_fd >= 0) {
+                ::close(client_fd);
+            }
+        }
+    };
+
+    //! Removes the hook on every exit path, before its state goes out of scope
+    struct HookGuard {
+        Ctrl* ctrl;
+
+        ~HookGuard() {
+            AutoLocker al(ctrl->m);
+            ctrl->io_threads[0]->dbg_phase1_time_offset = nullptr;
+        }
+    };
+
+    //! Stops the controller on every exit path
+    struct Cleanup {
+        Ctrl* ctrl;
+        ExceptionSink& xsink;
+
+        ~Cleanup() {
+            xsink.clear();
+            ctrl->stopClear(&xsink);
+            xsink.clear();
+        }
+    };
+
+    //! Closes descriptors on every exit path
+    struct FdCloser {
+        std::vector<int> fds;
+
+        ~FdCloser() {
+            for (int fd : fds) {
+                ::close(fd);
+            }
+        }
+    };
+
+    //! Starts a controller with one I/O thread; returns false if it cannot be started
+    static bool startCtrl(UnitTestCounters& c, Ctrl* ctrl, const std::string& when, ExceptionSink& xsink) {
+        ctrl->setMaxIoThreads(1, &xsink);
+        ctrl->start(&xsink);
+        bool ready = !xsink && ctrl->waitReady(5000, &xsink);
+        UT_ASSERT(c, ready && !xsink, ("the controller starts" + when).c_str());
+        return ready && !xsink;
+    }
+
+    //! Arms the hook: the first iteration that has a ready operation (once \a op, if any, has been continued
+    //! \a min_calls times) gets its time moved past the deadlines of the test's operations
+    static void armHook(Ctrl* ctrl, HookState& hs) {
+        AutoLocker al(ctrl->m);
+        ctrl->io_threads[0]->dbg_phase1_time_offset = [&hs](Ctrl::IoThreadContext& t, bool has_ready) -> int64 {
+            if (hs.fired || !has_ready || (hs.op && hs.op->calls.load() < hs.min_calls)) {
+                return 0;
+            }
+            hs.fired = true;
+            hs.calls_at_fire = hs.op ? hs.op->calls.load() : -1;
+            if (hs.connect_port) {
+                // the connection arrives after the poll that started this iteration, whose batch of events
+                // therefore cannot have the listener; the wait makes sure that the listener has it in its backlog
+                hs.client_fd = connectTo(hs.connect_port);
+                hs.backlog_ready = hs.client_fd >= 0 && waitReadable(hs.listen_fd);
+            }
+            if (hs.close_wake) {
+                // the wake that a close of the socket makes (see Ctrl::makeCloseWake()), which this iteration
+                // drains after the hook
+                try {
+                    for (auto& [key, pinfo] : t.cache) {
+                        if (!pinfo.cached_sock_hash.empty()) {
+                            Ctrl::makeCloseWake(t, pinfo.cached_sock_hash)();
+                            hs.close_wake_made = true;
+                        }
+                    }
+                } catch (...) {
+                    // no memory: close_wake_made stays false, which the test reports
+                }
+            }
+            return TIME_OFFSET_US;
+        };
+    }
+
+    //! Returns true if the hook fired
+    static bool hookFired(Ctrl* ctrl, HookState& hs) {
+        AutoLocker al(ctrl->m);
+        return hs.fired;
+    }
+
+    //! Submits the operation of \a op_obj on \a sock_obj with the test's time limit; returns its result Queue
+    static QoreObject* submit(Ctrl* ctrl, QoreObject* sock_obj, QoreObject* op_obj, const char* goal,
+            const char* owner, ExceptionSink& xsink) {
+        qore_poll_op_set_member(op_obj, "sock", sock_obj->objectRefSelf(), &xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), &xsink);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink), &xsink);
+        info->setKeyValue("sock", sock_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("spop", op_obj->objectRefSelf(), &xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner), &xsink);
+        info->setKeyValue("to", OP_TIMEOUT_MS, &xsink);
+        if (xsink) {
+            return nullptr;
+        }
+        return ctrl->submit(nullptr, info.release(), false, &xsink);
+    }
+
+    //! Waits until the I/O thread has registered the descriptor of the operation submitted last
+    /** The I/O thread registers it in the iteration whose snapshot has the operation; a getInfo() round trip is
+        processed after that iteration.
+    */
+    static bool waitRegistered(Ctrl* ctrl, ExceptionSink& xsink) {
+        if (!ctrl->waitForProcessing(HANG_GUARD_MS, &xsink) || xsink) {
+            return false;
+        }
+        ReferenceHolder<QoreHashNode> io_info(ctrl->getInfo(&xsink), &xsink);
+        return !xsink;
+    }
+
+    //! Waits for the operation's result; returns the error of the result (an empty string if it has none) or
+    //! "no result" if there is none within the hang guard
+    static std::string waitResult(Queue* queue, ExceptionSink& xsink) {
+        bool timed_out = false;
+        ValueHolder result(queue->shift(&xsink, HANG_GUARD_MS, &timed_out), &xsink);
+        if (timed_out || xsink || result->getType() != NT_HASH) {
+            xsink.clear();
+            return "no result";
+        }
+        QoreValue ex = result->get<QoreHashNode>()->getKeyValue("ex");
+        const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
+        if (!exh) {
+            return "";
+        }
+        QoreValue err = exh->getKeyValue("err");
+        return err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "unknown error";
+    }
+
+    //! Returns the result Queue of the Queue object
+    static Queue* getQueue(QoreObject* queue_obj, ExceptionSink& xsink) {
+        return static_cast<Queue*>(queue_obj->getReferencedPrivateData(CID_QUEUE, &xsink));
+    }
+
+    //! Makes a listening TCP socket on the loopback address; returns its descriptor or -1, and its port in \a port
+    static int makeListener(int& port) {
+        int lfd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (lfd < 0) {
+            return -1;
+        }
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t salen = sizeof(sa);
+        if (::bind(lfd, reinterpret_cast<struct sockaddr*>(&sa), salen)
+                || ::getsockname(lfd, reinterpret_cast<struct sockaddr*>(&sa), &salen) || ::listen(lfd, 5)) {
+            ::close(lfd);
+            return -1;
+        }
+        port = ntohs(sa.sin_port);
+        return lfd;
+    }
+
+    //! Connects a TCP socket to the port on the loopback address; returns its descriptor or -1
+    /** The return of connect() does not strictly guarantee that the listener's side has queued the connection: a
+        test that needs it in the listener's backlog waits until the listener is readable (see waitReadable()); an
+        accept that waits for it is woken by the listener's readiness.
+    */
+    static int connectTo(int port) {
+        int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+            return -1;
+        }
+        struct sockaddr_in sa = {};
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        sa.sin_port = htons(port);
+        if (::connect(fd, reinterpret_cast<struct sockaddr*>(&sa), sizeof(sa))) {
+            ::close(fd);
+            return -1;
+        }
+        return fd;
+    }
+
+    //! Waits until the descriptor is readable; returns false if it is not within the hang guard
+    static bool waitReadable(int fd) {
+        if (fd < 0) {
+            return false;
+        }
+        struct pollfd pfd = {fd, POLLIN, 0};
+        int rc;
+        while ((rc = ::poll(&pfd, 1, HANG_GUARD_MS)) < 0 && errno == EINTR) {
+        }
+        return rc == 1 && (pfd.revents & POLLIN);
+    }
+
+    //! The variants of the accept test
+    enum class AcceptMode {
+        //! a plain TCP accept: it opts in to a last attempt
+        Plain,
+        //! an accept that negotiates TLS: no last attempt
+        Tls,
+        //! a plain TCP accept that a close wake wakes in the iteration that also finds its listener ready: no last
+        //! attempt
+        CloseWake,
+    };
+
+    //! Returns the name of the variant for the test's messages
+    static const char* acceptModeName(AcceptMode mode) {
+        switch (mode) {
+            case AcceptMode::Plain:
+                return " (accept)";
+            case AcceptMode::Tls:
+                return " (TLS accept)";
+            case AcceptMode::CloseWake:
+                return " (accept woken by a close)";
+        }
+        return "";
+    }
+
+public:
+    //! An accept whose listener is ready when its deadline has passed
+    /** A plain TCP accept takes the connection in the backlog.  An accept that negotiates TLS, and a plain accept that
+        a close wake also woke in the iteration, time out without a step, as an accept did before qore#7480:
+        Socket::accept(timeout) and Socket::acceptSSL(timeout) return NOTHING for a timeout before the accept
+        (SocketAcceptPollOperation::timeoutBeforeAccept()), and the connection stays in the listener's backlog for
+        the next accept.
+    */
+    static void runAccept(UnitTestCounters& c, AcceptMode mode) {
+        const std::string when = acceptModeName(mode);
+        const bool tls = mode == AcceptMode::Tls;
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+        FdCloser fd_closer;
+
+        QoreSocketObject* listener = new QoreSocketObject;
+        ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+        if (tls) {
+            EVP_PKEY* key = ut_tls_make_key();
+            X509* cert = key ? ut_tls_make_cert(key) : nullptr;
+            UT_ASSERT(c, key && cert, ("a certificate is made" + when).c_str());
+            if (!key || !cert) {
+                if (key) {
+                    EVP_PKEY_free(key);
+                }
+                return;
+            }
+            listener->setCertificateAndPrivateKey(new QoreSSLCertificate(cert), new QoreSSLPrivateKey(key));
+        }
+        int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener->listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, ("the listener listens" + when).c_str());
+        if (rc || xsink) {
+            return;
+        }
+        int port = listener->getPort();
+
+        listener->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, listener, tls, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        UT_ASSERT(c, !xsink, ("the accept is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        accept->setSelf(*op_obj);
+        UT_ASSERT(c, qore_poll_op_completes_in_last_attempt(accept) == !tls,
+            ("only an accept without TLS opts in to a last attempt" + when).c_str());
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *listener_obj, *op_obj, tls ? "accept-ssl" : "accept",
+            "deadline-ready-accept-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the accept is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        // the accept waits for the listener with its descriptor registered
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the listener" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the accept waits for a connection" + when).c_str());
+
+        HookState hs;
+        hs.close_wake = mode == AcceptMode::CloseWake;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // a connection is in the backlog: the I/O thread sees the listener ready in the iteration whose time is past
+        // the accept's deadline
+        int cfd = connectTo(port);
+        UT_ASSERT(c, cfd >= 0, ("the client connects" + when).c_str());
+        if (cfd < 0) {
+            return;
+        }
+        fd_closer.fds.push_back(cfd);
+
+        std::string err = waitResult(*queue, xsink);
+        UT_ASSERT(c, hookFired(*ctrl, hs),
+            ("the iteration with the ready listener is past the deadline" + when).c_str());
+        if (mode == AcceptMode::Plain) {
+            UT_ASSERT(c, err.empty(), ("the accept takes the connection in the backlog at its deadline: " + err
+                + when).c_str());
+            ValueHolder output(accept->getOutput(), &xsink);
+            UT_ASSERT(c, output->getType() == NT_OBJECT
+                && output->get<QoreObject>()->getClass()->getClass(CID_SOCKET),
+                ("the accept returns the accepted socket" + when).c_str());
+            xsink.clear();
+            return;
+        }
+        if (mode == AcceptMode::CloseWake) {
+            bool made;
+            {
+                AutoLocker al(ctrl->m);
+                made = hs.close_wake_made;
+            }
+            UT_ASSERT(c, made, ("the iteration has a close wake of the listener" + when).c_str());
+        }
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("the accept times out at its deadline: " + err + when).c_str());
+        UT_ASSERT(c, accept->timeoutBeforeAccept(),
+            ("the timeout is before the accept, for which the Socket methods return NOTHING" + when).c_str());
+        {
+            ValueHolder output(accept->getOutput(), &xsink);
+            UT_ASSERT(c, output->isNothing(), ("the accept accepted no connection" + when).c_str());
+            xsink.clear();
+        }
+        // the connection is still in the listener's backlog: the next accept gets it
+        int lfd = listener->getPollableDescriptor();
+        bool readable = waitReadable(lfd);
+        UT_ASSERT(c, readable, ("the listener still has the connection in its backlog" + when).c_str());
+        if (!readable) {
+            return;
+        }
+        int afd = ::accept(lfd, nullptr, nullptr);
+        UT_ASSERT(c, afd >= 0, ("the next accept gets the connection" + when).c_str());
+        if (afd >= 0) {
+            fd_closer.fds.push_back(afd);
+        }
+    }
+
+    //! A receive whose socket is ready when its deadline has passed times out without reading the data (\a partial:
+    //! the data are not enough for it), which stay for the next receive
+    static void runRecv(UnitTestCounters& c, bool partial) {
+        const std::string when = partial ? " (partial receive)" : " (receive)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+        FdCloser fd_closer;
+
+        int port = 0;
+        int lfd = makeListener(port);
+        UT_ASSERT(c, lfd >= 0, ("the peer's listener listens" + when).c_str());
+        if (lfd < 0) {
+            return;
+        }
+        fd_closer.fds.push_back(lfd);
+        QoreSocketObject* client = new QoreSocketObject;
+        ReferenceHolder<QoreObject> client_obj(new QoreObject(QC_SOCKET, getProgram(), client), &xsink);
+        int rc = client->connectINET("127.0.0.1", port, 5000, &xsink);
+        UT_ASSERT(c, !rc && !xsink, ("the client connects" + when).c_str());
+        if (rc || xsink) {
+            return;
+        }
+        // the connection is in the backlog
+        int pfd = ::accept(lfd, nullptr, nullptr);
+        UT_ASSERT(c, pfd >= 0, ("the peer accepts the connection" + when).c_str());
+        if (pfd < 0) {
+            return;
+        }
+        fd_closer.fds.push_back(pfd);
+
+        // the receive wants 5 bytes, or 10 when the peer sends only 5
+        client->ref();
+        SocketRecvPollOperation* recv = new SocketRecvPollOperation(&xsink, partial ? 10 : 5, client, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), recv), &xsink);
+        UT_ASSERT(c, !xsink, ("the receive is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        recv->setSelf(*op_obj);
+        UT_ASSERT(c, !qore_poll_op_completes_in_last_attempt(recv), ("a receive does not opt in to a last attempt" + when).c_str());
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *client_obj, *op_obj, "recv",
+            "deadline-ready-recv-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the receive is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the client socket" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the receive waits for data" + when).c_str());
+
+        HookState hs;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the data arrive: the I/O thread sees the socket ready in the iteration whose time is past the receive's
+        // deadline
+        UT_ASSERT_EQ(c, (ssize_t)5, ::send(pfd, "hello", 5, 0), ("the peer sends the data" + when).c_str());
+
+        std::string err = waitResult(*queue, xsink);
+        UT_ASSERT(c, hookFired(*ctrl, hs),
+            ("the iteration with the ready socket is past the deadline" + when).c_str());
+        // the timeout wins: the receive reads nothing (a receive that read data and then timed out would drop them)
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("the receive times out at its deadline: " + err + when).c_str());
+
+        // the data stay in the socket: the next receive gets all of them
+        int cfd = client->getPollableDescriptor();
+        UT_ASSERT(c, cfd >= 0, ("the timeout leaves the socket open" + when).c_str());
+        bool readable = waitReadable(cfd);
+        UT_ASSERT(c, readable, ("the socket still has the data" + when).c_str());
+        if (!readable) {
+            return;
+        }
+        char buf[16];
+        ssize_t n = ::recv(cfd, buf, sizeof(buf), MSG_DONTWAIT);
+        UT_ASSERT(c, n == 5 && !memcmp(buf, "hello", 5), ("the next receive gets all of the data" + when).c_str());
+    }
+
+    //! An operation that is ready at each poll and asks to wait again each time it is continued times out at its
+    //! deadline: without a step if it did not opt in to a last attempt, and after exactly one last attempt if it did
+    static void runLevelReady(UnitTestCounters& c, bool opt_in) {
+        const std::string when = opt_in ? " (level-triggered readiness, last attempt)"
+            : " (level-triggered readiness)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), ("the notifier is created" + when).c_str());
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+
+        LevelReadyOp* op = new LevelReadyOp(*notifier_obj, opt_in);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *notifier_obj, *op_obj, "level-ready",
+            "deadline-level-ready-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the operation is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        UT_ASSERT(c, op->waitForCalls(1), ("the operation makes its first step" + when).c_str());
+
+        // the hook fires once the readiness has continued the operation at least once
+        HookState hs;
+        hs.op = op;
+        hs.min_calls = 2;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the notifier is ready at each poll from now on
+        notifier->notify();
+
+        std::string err = waitResult(*queue, xsink);
+        bool fired;
+        int calls_at_fire;
+        {
+            AutoLocker al(ctrl->m);
+            fired = hs.fired;
+            calls_at_fire = hs.calls_at_fire;
+        }
+        UT_ASSERT(c, fired, ("the iteration with the ready operation is past the deadline" + when).c_str());
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("readiness does not keep the operation alive past its deadline: "
+            + err + when).c_str());
+        if (opt_in) {
+            UT_ASSERT_EQ(c, calls_at_fire + 1, op->calls.load(),
+                ("the operation has exactly one last attempt after its deadline" + when).c_str());
+        } else {
+            UT_ASSERT_EQ(c, calls_at_fire, op->calls.load(),
+                ("the operation has no step after its deadline" + when).c_str());
+        }
+        xsink.clear();
+    }
+
+    //! An accept whose deadline passes in an iteration that did not report its listener ready, although a
+    //! connection is in the listener's backlog, takes the connection
+    /** The I/O thread can go round without polling (when a command arrives before the poll), and a capped batch of
+        events can leave the listener out: the accept still gets its last attempt at its deadline (qore#7480).  The
+        iteration is one that the readiness of another operation starts; the hook connects to the listener after the
+        poll that started the iteration, so that the poll's batch of events cannot have the listener, and waits until
+        the connection is in the listener's backlog.
+    */
+    static void runAcceptNotReported(UnitTestCounters& c) {
+        const std::string when = " (accept, listener not reported ready)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+
+        QoreSocketObject* listener = new QoreSocketObject;
+        ReferenceHolder<QoreObject> listener_obj(new QoreObject(QC_SOCKET, getProgram(), listener), &xsink);
+        int rc = listener->bindINET("127.0.0.1", "0", true, AF_INET, SOCK_STREAM, 0, &xsink);
+        if (!rc && !xsink) {
+            rc = listener->listen(5);
+        }
+        UT_ASSERT(c, !rc && !xsink, ("the listener listens" + when).c_str());
+        if (rc || xsink) {
+            return;
+        }
+        int port = listener->getPort();
+
+        listener->ref();
+        SocketAcceptPollOperation* accept = new SocketAcceptPollOperation(&xsink, listener, false, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), accept), &xsink);
+        UT_ASSERT(c, !xsink, ("the accept is created" + when).c_str());
+        if (xsink) {
+            return;
+        }
+        accept->setSelf(*op_obj);
+        UT_ASSERT(c, qore_poll_op_completes_in_last_attempt(accept), ("a plain TCP accept opts in to a last attempt" + when).c_str());
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *listener_obj, *op_obj, "accept",
+            "deadline-not-reported-accept-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the accept is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the listener" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the accept waits for a connection" + when).c_str());
+
+        // the operation whose readiness starts the iteration; it does not opt in to a last attempt
+        ReferenceHolder<QoreEventNotifier> notifier(new QoreEventNotifier(&xsink), &xsink);
+        UT_ASSERT(c, !xsink && notifier->isValid(), ("the notifier is created" + when).c_str());
+        if (xsink || !notifier->isValid()) {
+            return;
+        }
+        notifier->ref();
+        ReferenceHolder<QoreObject> notifier_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), *notifier), &xsink);
+        LevelReadyOp* other = new LevelReadyOp(*notifier_obj, false);
+        ReferenceHolder<QoreObject> other_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), other), &xsink);
+        other->setSelf(*other_obj);
+        ReferenceHolder<QoreObject> other_queue_obj(submit(*ctrl, *notifier_obj, *other_obj, "level-ready",
+            "deadline-not-reported-other-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && other_queue_obj, ("the other operation is submitted" + when).c_str());
+        if (xsink || !other_queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> other_queue(getQueue(*other_queue_obj, xsink), &xsink);
+        if (!other_queue || xsink) {
+            return;
+        }
+        bool other_waits = other->waitForCalls(1);
+        UT_ASSERT(c, other_waits, ("the other operation makes its first step" + when).c_str());
+        if (!other_waits) {
+            return;
+        }
+
+        HookState hs;
+        hs.op = other;
+        hs.min_calls = 1;
+        hs.connect_port = port;
+        hs.listen_fd = listener->getPollableDescriptor();
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the notifier is ready: the iteration that the poll starts with it is past the deadlines
+        notifier->notify();
+
+        std::string err = waitResult(*queue, xsink);
+        std::string other_err = waitResult(*other_queue, xsink);
+        bool fired;
+        bool backlog_ready;
+        int calls_at_fire;
+        {
+            AutoLocker al(ctrl->m);
+            fired = hs.fired;
+            backlog_ready = hs.backlog_ready;
+            calls_at_fire = hs.calls_at_fire;
+        }
+        UT_ASSERT(c, fired, ("the iteration that the other operation's readiness starts is past the deadline"
+            + when).c_str());
+        UT_ASSERT(c, backlog_ready, ("the connection is in the listener's backlog in that iteration" + when).c_str());
+        UT_ASSERT(c, err.empty(), ("the accept takes the connection in the backlog at its deadline: " + err
+            + when).c_str());
+        {
+            ValueHolder output(accept->getOutput(), &xsink);
+            UT_ASSERT(c, output->getType() == NT_OBJECT
+                && output->get<QoreObject>()->getClass()->getClass(CID_SOCKET),
+                ("the accept returns the accepted socket" + when).c_str());
+            xsink.clear();
+        }
+        UT_ASSERT(c, other_err == "SOCKET-TIMEOUT", ("the other operation times out at its deadline: " + other_err
+            + when).c_str());
+        UT_ASSERT_EQ(c, calls_at_fire, other->calls.load(),
+            ("the other operation has no step after its deadline" + when).c_str());
+    }
+
+    //! An operation that opted in to a last attempt and whose descriptor is reported with a hang-up when its
+    //! deadline has passed times out without a step
+    /** The peer of one end of a socket pair closes: the event loop reports the end readable with a hang-up (epoll:
+        EPOLLIN | EPOLLHUP, kqueue: EV_EOF), and a descriptor that hangs up is not usable for a clean step
+        (qore#7480).
+    */
+    static void runHangUp(UnitTestCounters& c) {
+        const std::string when = " (hang-up, last attempt)";
+        ExceptionSink xsink;
+        ReferenceHolder<Ctrl> ctrl(new Ctrl(false, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, ("the controller is created" + when).c_str());
+        if (xsink) {
+            xsink.clear();
+            return;
+        }
+        Cleanup cleanup{*ctrl, xsink};
+        if (!startCtrl(c, *ctrl, when, xsink)) {
+            return;
+        }
+        FdCloser fd_closer;
+
+        int sv[2];
+        bool paired = !::socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
+        UT_ASSERT(c, paired, ("a socket pair is made" + when).c_str());
+        if (!paired) {
+            return;
+        }
+        // the peer is closed by the test; sv[0] belongs to the socket made from it once it is made
+        fd_closer.fds.push_back(sv[1]);
+        fd_closer.fds.push_back(sv[0]);
+        ReferenceHolder<QoreSocketObject> tmpl(new QoreSocketObject, &xsink);
+        QoreSocketObject* sock = new QoreSocketObject(**tmpl, sv[0]);
+        fd_closer.fds.pop_back();
+        ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+
+        LevelReadyOp* op = new LevelReadyOp(*sock_obj, true);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), op), &xsink);
+        op->setSelf(*op_obj);
+        ReferenceHolder<QoreObject> queue_obj(submit(*ctrl, *sock_obj, *op_obj, "hang-up",
+            "deadline-hang-up-unit-test", xsink), &xsink);
+        UT_ASSERT(c, !xsink && queue_obj, ("the operation is submitted" + when).c_str());
+        if (xsink || !queue_obj) {
+            return;
+        }
+        ReferenceHolder<Queue> queue(getQueue(*queue_obj, xsink), &xsink);
+        if (!queue || xsink) {
+            return;
+        }
+        bool first_step = op->waitForCalls(1);
+        UT_ASSERT(c, first_step, ("the operation makes its first step" + when).c_str());
+        if (!first_step) {
+            return;
+        }
+        bool registered = waitRegistered(*ctrl, xsink);
+        UT_ASSERT(c, registered, ("the I/O thread registers the socket" + when).c_str());
+        if (!registered) {
+            return;
+        }
+        UT_ASSERT_EQ(c, 0, (int)queue->size(), ("the operation waits for its socket" + when).c_str());
+
+        HookState hs;
+        hs.op = op;
+        hs.min_calls = 1;
+        HookGuard hook_guard{*ctrl};
+        armHook(*ctrl, hs);
+
+        // the peer closes: the iteration that the hang-up starts is past the deadline
+        assert(fd_closer.fds.size() == 1 && fd_closer.fds[0] == sv[1]);
+        fd_closer.fds.pop_back();
+        ::close(sv[1]);
+
+        std::string err = waitResult(*queue, xsink);
+        bool fired;
+        int calls_at_fire;
+        {
+            AutoLocker al(ctrl->m);
+            fired = hs.fired;
+            calls_at_fire = hs.calls_at_fire;
+        }
+        UT_ASSERT(c, fired, ("the iteration with the hang-up is past the deadline" + when).c_str());
+        UT_ASSERT(c, err == "SOCKET-TIMEOUT", ("the operation times out at its deadline: " + err + when).c_str());
+        UT_ASSERT_EQ(c, calls_at_fire, op->calls.load(),
+            ("the operation has no last attempt with a hang-up" + when).c_str());
+        xsink.clear();
+    }
+
+    static void run(UnitTestCounters& c) {
+        runAccept(c, AcceptMode::Plain);
+        runAccept(c, AcceptMode::Tls);
+        runAccept(c, AcceptMode::CloseWake);
+        runAcceptNotReported(c);
+        runRecv(c, false);
+        runRecv(c, true);
+        runLevelReady(c, false);
+        runLevelReady(c, true);
+        runHangUp(c);
+    }
+};
+#endif
 
 // set when the unit tests are built with ThreadSanitizer, which reports the misuse of a mutex itself
 #if defined(__SANITIZE_THREAD__)
@@ -22367,6 +23534,40 @@ static void ut_qoresocket_fd_transfer_uses_async_controller(UnitTestCounters& c)
 }
 
 #ifdef DEBUG
+//! Closes the socket directly, as a native caller can do without canceling its controller operations
+static QoreValue f_dbg_close_socket_directly(const QoreListNode* params, RuntimeConfig&, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET,
+        xsink)), xsink);
+    if (sock) {
+        qore_socket_object_private sp(sock);
+        AutoLocker al(sp.priv->m);
+        qore_socket_private::get(*sp.priv->socket)->close_and_reset();
+    }
+    return QoreValue();
+}
+
+//! Fails one generation-wake allocation on the given socket and returns its current number of subscribed wakes.
+static QoreValue f_dbg_socket_generation_wake(const QoreListNode* params, RuntimeConfig&, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET,
+        xsink)), xsink);
+    if (!sock) {
+        return QoreValue();
+    }
+    qore_socket_object_private sp(sock);
+    auto* priv = qore_socket_private::get(*sp.priv->socket);
+    auto stage = get_param_value(params, 1).getAsBigInt();
+    using WakeAllocation = qore_socket_private::WakeAllocation;
+    if (stage < 0 || stage > static_cast<int>(WakeAllocation::Recheck)) {
+        xsink->raiseException("DEBUG-ERROR", "invalid generation wake allocation stage");
+        return QoreValue();
+    }
+    priv->dbg_wake_failure.store(static_cast<WakeAllocation>(stage), std::memory_order_relaxed);
+    qore_socket_private::CloseLockHelper lock(*priv);
+    return static_cast<int64>(priv->generation_wakes.size());
+}
+
 //! Debug-only: closes a socket from another thread at the start of its next SSL I/O call
 /** The close is made where the I/O call is about to use the TLS connection, which is where a close made by another
     thread, such as the abort of a poll operation, can release the connection under the call.  DEBUG builds only.
@@ -22727,6 +23928,71 @@ static QoreValue f_dbg_http1_header_read_op_failure_site(const QoreListNode* par
     DbgHeaderReadOpFailure& f = dbg_header_read_op_failure;
     AutoLocker al(f.m);
     return f.failed_at.empty() ? QoreValue() : new QoreStringNode(f.failed_at);
+}
+
+namespace {
+//! the state of the dbg_fail_http_header_text_alloc() hook
+struct DbgHeaderTextAllocFailure {
+    QoreThreadLock m;
+    //! the site where the allocation fails; empty: the hook is not armed
+    std::string target;
+    //! true once the allocation has failed
+    bool failed = false;
+};
+
+DbgHeaderTextAllocFailure dbg_header_text_alloc_failure;
+}
+
+bool qore_dbg_http_header_text_alloc_must_fail(const char* site) {
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    if (f.target.empty() || f.target != site) {
+        return false;
+    }
+    f.target.clear();
+    f.failed = true;
+    return true;
+}
+
+//! Debug-only: the next allocation of the text of an HTTP header received at the given site fails (one-shot)
+/** @param site \c "read-header" (the blocking header reader of the C++ API), \c "send-and-read-header" or
+    \c "send-stream-and-read-header" (the operations that send a response and read the next request header)
+*/
+static QoreValue f_dbg_fail_http_header_text_alloc(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // note: the argument can be an inline short string, which the helper reads
+    DbgStringNodeHelper site(get_param_value(params, 0));
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    f.target = (*site)->c_str();
+    f.failed = false;
+    return QoreValue();
+}
+
+//! Debug-only: returns True if the allocation armed by dbg_fail_http_header_text_alloc() has failed, and disarms it
+static QoreValue f_dbg_http_header_text_alloc_failed(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    DbgHeaderTextAllocFailure& f = dbg_header_text_alloc_failure;
+    AutoLocker al(f.m);
+    bool rv = f.failed;
+    f.target.clear();
+    f.failed = false;
+    return rv;
+}
+
+//! the size over which the buffer of a binary value cannot grow; 0: no limit (dbg_fail_binary_reserve_over())
+static std::atomic<int64> dbg_binary_reserve_limit{0};
+
+bool qore_dbg_binary_reserve_must_fail(size_t size) {
+    int64 limit = dbg_binary_reserve_limit.load(std::memory_order_relaxed);
+    return limit > 0 && size > static_cast<size_t>(limit);
+}
+
+//! Debug-only: the buffer of a binary value cannot grow over the given size in the process, as if the memory could not
+//! be allocated; 0 removes the limit
+static QoreValue f_dbg_fail_binary_reserve_over(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    dbg_binary_reserve_limit.store(get_param_value(params, 0).getAsBigInt(), std::memory_order_relaxed);
+    return QoreValue();
 }
 
 //! Debug-only: returns the number of records that a session of a socket keeps for its streams, by kind
@@ -23553,6 +24819,22 @@ static QoreValue f_dbg_lock_wait_wait(const QoreListNode* params, RuntimeConfig&
     }
     dbg_lock_wait_lock.store(nullptr, std::memory_order_release);
     dbg_lock_wait_seen = false;
+    return QoreValue();
+}
+
+//! Debug-only: closes a socket directly, as a C++ owner of the socket does, without the async I/O controller
+/** QoreSocketObject::closeIo() records the close (qore_socket_private::prepareForClose()) and closes the descriptor
+    if the socket has one; a test uses it to close a socket that has no descriptor yet while an operation of the
+    controller that is to give it one runs (qore#7427).
+*/
+static QoreValue f_dbg_socket_close_io(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    ReferenceHolder<QoreSocketObject> sock(
+        static_cast<QoreSocketObject*>(obj->getReferencedPrivateData(CID_SOCKET, xsink)), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    sock->closeIo(xsink);
     return QoreValue();
 }
 
@@ -25959,6 +27241,25 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
     return make_unit_test_result(c, xsink);
 }
 
+// defined in JITRuntime.cpp
+DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stats();
+DLLLOCAL QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stress(QoreObject* target, int64 threads, int64 iterations,
+        ExceptionSink* xsink);
+
+//! Debug-only: returns the counters of the reclamation of replaced AOT method dispatch cache entries (qore#7459)
+static QoreValue f_dbg_aot_dispatch_reclaim_stats(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_rt_dbg_aot_dispatch_reclaim_stats();
+}
+
+//! Debug-only: looks up AOT method dispatch cache entries in reader threads while a writer replaces them (qore#7459)
+static QoreValue f_dbg_aot_dispatch_reclaim_stress(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* target = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    return qore_rt_dbg_aot_dispatch_reclaim_stress(target, get_param_value(params, 1).getAsBigInt(),
+        get_param_value(params, 2).getAsBigInt(), xsink);
+}
+
 //! Checks the reference type cached in a value type (qore#7269)
 /** qore_get_complex_reference_type() returns the reference type cached in the value type without a lock; the cached
     type must always be the entry of the cache of reference types for the value type, so that the type of a reference
@@ -27541,6 +28842,9 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
+#ifndef _Q_WINDOWS
+    ut_opened_file_policy(c);
+#endif
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_dgc_scan_wait_cycle(c);
@@ -28461,6 +29765,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_stateful_string_api(c);
     ut_qorefile_timed_read_contract(c);
     ut_qorefile_open_sandbox_policy(c);
+#ifndef _Q_WINDOWS
+    ut_opened_file_policy(c);
+#endif
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_dgc_scan_wait_cycle(c);
@@ -28524,6 +29831,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInPreClose(c);
+    AsyncIoDescriptorHoldTest::runConnectCheckAfterShutdown(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_ASSIGN, true);
     AsyncIoDescriptorHoldTest::runConnectCloseAt(c, AsyncIoDescriptorHoldTest::CLOSE_BEFORE_CONNECTED, false);
@@ -28538,6 +29846,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_CONNECTED);
     AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_BEFORE_CONNECTED_REOPENED);
     AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_AFTER_CONNECTED);
+    AsyncIoDescriptorHoldTest::runUnixConnectClose(c, AsyncIoDescriptorHoldTest::UCM_SHUTDOWN_IN_CHECK);
 #endif
     AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, true);
     AsyncIoDescriptorHoldTest::runCloseWithoutDescriptor(c, false);
@@ -28545,6 +29854,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runCloseUnderControllerLock(c);
     AsyncIoDescriptorHoldTest::runCloseWakeAfterStop(c);
     AsyncIoDescriptorHoldTest::runCloseWakeAfterGiveUp(c);
+    AsyncIoDescriptorHoldTest::runDescriptorlessCloseWakes(c);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_NORMAL);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_POLL_DIFFERS);
     AsyncIoDescriptorHoldTest::runPollableExtraFdClose(c, AsyncIoDescriptorHoldTest::XFD_ALL_FALLBACK);
@@ -28578,6 +29888,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoClosedPollableTest::run(c);
     AsyncIoZeroPollHintTest::run(c);
     AsyncIoStaleReadinessTest::run(c);
+#ifndef _Q_WINDOWS
+    AsyncIoDeadlineReadyTest::run(c);
+#endif
     AsyncIoAbandonedCommandLockTest::run(c);
     AsyncIoErrorCheckLockTest::run(c);
     AsyncIoStoppingThreadTest::run(c);
@@ -29526,6 +30839,51 @@ static QoreValue f_dbg_wait_bg_compile_teardown_waiting(const QoreListNode* para
     return QoreJIT::instance().dbgWaitBgCompileTeardownWaiting(get_param_value(params, 0).getAsBigInt());
 }
 
+//! reads a value that was never written and branches on it, so that valgrind reports an error of Qore's own code
+/** For examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of examples/test/valgrind.supp must not
+    hide a report of Qore's code; the value is read from a heap allocation that is not initialized, through a volatile
+    pointer, so that the compiler can neither assume nor remove the read
+
+    @return 1 or 2, depending on the value read
+*/
+// the two outcomes of the branch of dbg_read_uninitialized(), not inlined, so that the compiler keeps a branch (and
+// does not select the value without one, which would move the report to the code that uses the value)
+static QORE_INTERN_NOINLINE int64 dbg_uninitialized_positive() {
+    return 1;
+}
+
+static QORE_INTERN_NOINLINE int64 dbg_uninitialized_not_positive() {
+    return 2;
+}
+
+static QoreValue f_dbg_read_uninitialized(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    std::unique_ptr<int[]> v(new int[1]);
+    volatile int* p = v.get();
+    if (*p > 0) {
+        return dbg_uninitialized_positive();
+    }
+    return dbg_uninitialized_not_positive();
+}
+
+//! reads memory after it was freed, so that valgrind reports an error of Qore's own code
+/** For examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of examples/test/valgrind.supp must not
+    hide it; the pointer is read through a volatile, so that the compiler can neither assume nor remove the read
+*/
+static QoreValue f_dbg_use_after_free(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int* volatile p = new int(1);
+    int* q = p;
+    delete q;
+    return (int64)*p;
+}
+
+//! passes an optimization level that was never written to LLVM's pipeline (qore_jit_dbg_pipeline_uninitialized_level())
+/** For examples/test/qore/misc/valgrind-suppressions.qtest: an uninitialised value that Qore's code passes to LLVM is
+    reported in the LLVM function that uses it, which the suppressions of examples/test/valgrind.supp do not match
+*/
+static QoreValue f_dbg_llvm_uninitialized_level(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return (int64)qore_jit_dbg_pipeline_uninitialized_level();
+}
+
 //! waits until the background JIT compiler has no queued or in-progress work, detached work included
 static QoreValue f_dbg_wait_bg_compile_idle(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     QoreJIT::instance().waitForBgCompileQueue();
@@ -30470,6 +31828,20 @@ static QoreValue f_dbg_scan_wait_notify(const QoreListNode* params, RuntimeConfi
     }
     q_set_scan_wait_notify(*c);
     return QoreValue();
+}
+
+//! Tests the weak-source fast path with or without a reader already holding the member lock (#7301).
+static QoreValue f_dbg_try_unique_weak_member(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    auto* obj = qore_object_private::get(*get_param_value(params, 0).get<QoreObject>());
+    DbgStringNodeHelper member(get_param_value(params, 1));
+    QoreValue result;
+    bool acquired;
+    {
+        QoreSafeVarRWReadLocker reader(obj->rml, get_param_value(params, 2).getAsBool());
+        acquired = obj->tryReadUniqueWeakMember((*member)->c_str(), result);
+    }
+    result.discard(xsink);
+    return acquired;
 }
 
 //! holds an object's write lock until a Counter reaches zero
@@ -31656,42 +33028,62 @@ void dbg_http1_send_failure_dec(Counter* c) {
     }
 }
 
-//! blocks until the connection on \a fd is shut down or reset; no timer is involved
-void dbg_http1_wait_hangup(int fd) {
+//! blocks until the connection on \a fd is shut down or reset, or for at most \a timeout_ms milliseconds if it is not
+//! negative; no other timer is involved
+/** @return true if the connection ended, false if the wait timed out or failed
+*/
+bool dbg_http1_wait_hangup(int fd, int timeout_ms = -1) {
+    int64 deadline_us = timeout_ms < 0 ? 0 : q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    // the time left in milliseconds, -1 for no limit
+    auto left_ms = [deadline_us, timeout_ms] () -> int64 {
+        if (timeout_ms < 0) {
+            return -1;
+        }
+        int64 left = (deadline_us - q_get_monotonic_us()) / 1000;
+        return left > 0 ? left : 0;
+    };
 #ifdef DARWIN
     // poll() on macOS reports nothing for a descriptor polled with no events, so the end of the connection is
     // waited for with an edge-triggered read filter, which fires once for each change - data arriving, which does
     // not end the wait, and the end of the connection, which sets EV_EOF
     int kq = kqueue();
     if (kq < 0) {
-        return;
+        return false;
     }
     ON_BLOCK_EXIT([kq] () { ::close(kq); });
     struct kevent kev;
     EV_SET(&kev, fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0) {
-        return;
+        return false;
     }
     while (true) {
         struct kevent out;
-        int rc = kevent(kq, nullptr, 0, &out, 1, nullptr);
+        int64 left = left_ms();
+        struct timespec ts = {static_cast<time_t>(left / 1000), static_cast<long>((left % 1000) * 1000000)};
+        int rc = kevent(kq, nullptr, 0, &out, 1, left < 0 ? nullptr : &ts);
         if (rc < 0 && errno == EINTR) {
             continue;
         }
-        if (rc <= 0 || (out.flags & (EV_EOF | EV_ERROR))) {
-            return;
+        if (rc <= 0) {
+            return false;
+        }
+        if (out.flags & (EV_EOF | EV_ERROR)) {
+            return true;
         }
     }
 #else
     // poll() reports POLLHUP and POLLERR whatever the events requested, so nothing else wakes it
     while (true) {
         pollfd pfd = {fd, 0, 0};
-        int rc = ::poll(&pfd, 1, -1);
+        int rc = ::poll(&pfd, 1, static_cast<int>(left_ms()));
         if (rc < 0 && errno == EINTR) {
             continue;
         }
-        if (rc < 0 || (pfd.revents & (POLLHUP | POLLERR | POLLNVAL))) {
-            return;
+        if (rc <= 0) {
+            return false;
+        }
+        if (pfd.revents & (POLLHUP | POLLERR | POLLNVAL)) {
+            return true;
         }
     }
 #endif
@@ -32307,10 +33699,12 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
 }
 
-//! Debug-only: waits until no QUIC session of the process has data in flight (qore#7452)
-/** When a client and a server in the process have nothing in flight, each has had all its packets that need an
-    acknowledgment acknowledged by the other: neither has a packet left to send or to receive until it sends something
-    new (a request, or the response to one)
+//! Debug-only: waits until no QUIC session of the process has data in flight or anything left to write (qore#7452)
+/** When a client and a server in the process have nothing in flight and nothing to write, each has had all its
+    packets that need an acknowledgment acknowledged by the other, and has no frame waiting to be sent (ex: a client's
+    credit update after it read a response): neither has a packet left to send or to receive until it sends something
+    new (a request, or the response to one), or a timer sends one (keep-alive, path MTU discovery: see
+    QORE_QUIC_TEST_DISABLE_PMTUD)
 
     @param timeout_ms the maximum time to wait in milliseconds
 
@@ -32339,12 +33733,49 @@ static QoreValue f_dbg_quic_wait_all_idle(const QoreListNode* params, RuntimeCon
         }
         // checked without the registry's lock: getBytesInFlight() takes the session's lock
         for (auto& session : sessions) {
-            if (!session->isClosed() && session->getBytesInFlight()) {
+            if (!session->isClosed() && (session->getBytesInFlight() || session->hasPendingWrite())) {
                 return false;
             }
         }
         return true;
     }, static_cast<int>(timeout_ms));
+}
+
+//! Debug-only: sets the peer response timeout of the QUIC client sessions of the process that are open (qore#7452)
+/** A test gives its client a connect timeout that the machine's load cannot exceed, and shortens the peer response
+    timeout (see QuicSession::setPeerResponseTimeout()) of its connection only when the peer cannot answer any more, so
+    that the wait that is to expire is short, and no other wait depends on the load
+
+    @param timeout_ms the peer response timeout in milliseconds
+
+    @return the number of client sessions whose timeout was set
+*/
+static QoreValue f_dbg_quic_set_client_peer_response_timeout(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t timeout_ms = get_param_value(params, 0).getAsBigInt();
+    if (timeout_ms <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_set_client_peer_response_timeout(): invalid timeout "
+            "%lld", (long long)timeout_ms);
+        return QoreValue();
+    }
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        for (auto& i : dbg_quic_sessions) {
+            std::shared_ptr<QuicSession> session = i.second.lock();
+            if (session && !session->isServer()) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    int64_t count = 0;
+    for (auto& session : sessions) {
+        if (!session->isClosed()) {
+            session->setPeerResponseTimeout(static_cast<uint64_t>(timeout_ms) * 1000000ULL);
+            ++count;
+        }
+    }
+    return count;
 }
 
 namespace {
@@ -32386,21 +33817,93 @@ static QoreValue f_dbg_quic_wait_dropped_client_datagrams(const QoreListNode* pa
     }, static_cast<int>(timeout_ms));
 }
 
-std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
-std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
-std::atomic<int64_t> qore_dbg_quic_retries_received{0};
-std::atomic<int64_t> qore_dbg_quic_server_initial_drops{0};
+std::atomic<bool> qore_dbg_h2_fail_next_submit{false};
 
-//! returns the number of connections that the QUIC servers of the process dropped since it started because a client
-//! Initial did not start the ClientHello (ngtcp2's NGTCP2_ERR_RETRY or NGTCP2_ERR_DROP_CONN)
-static QoreValue f_dbg_quic_server_initial_drops(const QoreListNode* params, RuntimeConfig& rc,
-        ExceptionSink* xsink) {
-    return qore_dbg_quic_server_initial_drops.load(std::memory_order_relaxed);
+//! the link that dbg_fs_swap_on_open() replaces, and its new target; protected by dbg_fs_swap_lock
+static std::mutex dbg_fs_swap_lock;
+static std::string dbg_fs_swap_link;
+static std::string dbg_fs_swap_target;
+static std::atomic<bool> dbg_fs_swap_armed{false};
+//! the number of matching opens that dbg_fs_swap_on_open() lets pass before the one it acts on
+static int64_t dbg_fs_swap_skip = 0;
+
+void qore_dbg_fs_swap_on_open(const char* fn) {
+    if (!dbg_fs_swap_armed.load(std::memory_order_acquire) || !fn) {
+        return;
+    }
+    std::string link, target;
+    {
+        std::lock_guard<std::mutex> lock(dbg_fs_swap_lock);
+        if (!dbg_fs_swap_armed.load(std::memory_order_relaxed)) {
+            return;
+        }
+        // a link ending in "/*" matches every name in the directory before it, which is the one replaced (a
+        // component of the name); one ending in '*' otherwise matches every name that starts with what comes before
+        // it, which is replaced
+        const std::string& pat = dbg_fs_swap_link;
+        bool component = pat.size() > 2 && pat.compare(pat.size() - 2, 2, "/*") == 0;
+        bool match = (!pat.empty() && pat.back() == '*')
+            ? !strncmp(fn, pat.c_str(), pat.size() - 1)
+            : pat == fn;
+        if (!match) {
+            return;
+        }
+        if (dbg_fs_swap_skip > 0) {
+            --dbg_fs_swap_skip;
+            return;
+        }
+        dbg_fs_swap_armed.store(false, std::memory_order_relaxed);
+        link = component ? pat.substr(0, pat.size() - 2) : std::string(fn);
+        target = std::move(dbg_fs_swap_target);
+    }
+#ifndef _Q_WINDOWS
+    unlink(link.c_str());
+    if (symlink(target.c_str(), link.c_str())) {
+        fprintf(stderr, "dbg_fs_swap_on_open(): symlink(%s, %s) failed: %s\n", target.c_str(), link.c_str(),
+            strerror(errno));
+    }
+#endif
 }
 
-//! returns the number of Retry packets that the QUIC clients of the process took since it started
-static QoreValue f_dbg_quic_retries_received(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    return qore_dbg_quic_retries_received.load(std::memory_order_relaxed);
+//! Debug-only: replaces a file or symbolic link with a link to another target in the next open of it whose name the
+//! sandbox filesystem policy checked, after the check and before the open, as a concurrent change of the file system
+//! would (qore#7498); a link ending in '*' matches every name that starts with what comes before it, and the first
+//! \a skip matching opens are not changed
+static QoreValue f_dbg_fs_swap_on_open(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringDataHelper link(get_param_value(params, 0));
+    QoreStringDataHelper target(get_param_value(params, 1));
+    std::lock_guard<std::mutex> lock(dbg_fs_swap_lock);
+    dbg_fs_swap_link = link ? link.c_str() : "";
+    dbg_fs_swap_target = target ? target.c_str() : "";
+    dbg_fs_swap_skip = get_param_value(params, 2).getAsBigInt();
+    dbg_fs_swap_armed.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
+//! Debug-only: the next request submitted on an HTTP/2 client session fails as when the session has no stream ID left
+//! (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE, raised as HTTP2-ERROR; qore#7443)
+static QoreValue f_dbg_http2_fail_next_submit(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_h2_fail_next_submit.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
+std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent{0};
+std::atomic<int64_t> qore_dbg_quic_stateless_resets_received{0};
+std::atomic<int64_t> qore_dbg_quic_server_retries_sent{0};
+std::atomic<int64_t> qore_dbg_quic_server_validated_drops{0};
+
+//! returns the Retry packets that the QUIC servers of the process sent, and the connections that they dropped
+/** As a hash with the keys \c retries_sent and \c validated_drops (the connections dropped because a client
+    Initial did not start the ClientHello although the client had returned a valid Retry token), counted since the
+    process started.  Both are counted by the server, so that they do not depend on when the client's timers expire.
+*/
+static QoreValue f_dbg_quic_server_retry_counts(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("retries_sent", qore_dbg_quic_server_retries_sent.load(std::memory_order_relaxed), xsink);
+    h->setKeyValue("validated_drops", qore_dbg_quic_server_validated_drops.load(std::memory_order_relaxed),
+        xsink);
+    return h.release();
 }
 
 //! returns the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received
@@ -32615,6 +34118,28 @@ static QoreValue f_dbg_http3_client_error_hidden(const QoreListNode* params, Run
 static QoreValue f_dbg_async_io_registered_qore_ops(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return static_cast<int64_t>(qore_dbg_registered_qore_ops());
+}
+
+namespace {
+//! set by dbg_io_uring_defer_completions()
+std::atomic<bool> dbg_iouring_defer_completions{false};
+}
+
+bool qore_dbg_io_uring_completions_deferred() {
+    return dbg_iouring_defer_completions.load(std::memory_order_acquire);
+}
+
+//! makes the I/O threads leave the io_uring completions that a poll reports to the drain at the end of the iteration
+/** As when a file read completes after the poll returned and before the iteration ends: the drain takes it then
+    (qore#7435).  For a test that the sockets of the HTTP/2 sessions whose reads such a drain delivers run again.
+
+    @param on True to defer the completions, False to deliver them for the poll's event again
+
+    @return the previous setting
+*/
+static QoreValue f_dbg_io_uring_defer_completions(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_iouring_defer_completions.exchange(HARD_QORE_VALUE_BOOL(params, 0));
 }
 
 bool qore_dbg_h2_stream_data_held(int32_t stream_id) {
@@ -32901,7 +34426,10 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     operation submitted a request and is about to register it, after waking its I/O thread, so that the request is
     sent and its response can arrive before the registration; \c "h3-response-buffered": an HTTP/3 client poll
     operation received the response of a request that is not registered yet and kept it for the registration (with a
-    release Counter of 0, it only reports it)
+    release Counter of 0, it only reports it); \c "h3-race-winner": the address family race of an HTTP/3 client
+    connection found the connection attempt that wins, before the operation's socket takes it over (the I/O thread);
+    \c "send-drain-wait": an HTTP/2 or HTTP/3 client connection's streamed send found the stream's send buffer full
+    and is about to wait for it to drain (qore#7465)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -32949,6 +34477,10 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3Register);
     } else if (!strcmp(name->c_str(), "h3-response-buffered")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::Http3ResponseBuffered);
+    } else if (!strcmp(name->c_str(), "h3-race-winner")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Http3RaceWinner);
+    } else if (!strcmp(name->c_str(), "send-drain-wait")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::SendDrainWait);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -33502,12 +35034,19 @@ static QoreValue f_dbg_hold_http1_socket_send(const QoreListNode* params, Runtim
 static struct {
     std::mutex m;
     int port = 0;
+    //! the longest time the read is held, in milliseconds
+    int timeout_ms = 0;
     Counter* reached = nullptr;
 } dbg_tls_read_want;
 
-//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315)
+//! holds a TLS read of the socket connected to the armed port until its connection is reset or closed (#6315), or
+//! until the hold's time limit has passed
+/** The hold blocks the I/O thread of the socket, which can be the I/O thread of the test's peer too: the peer answers
+    and resets the connection with dbg_tls_answer_and_reset(), which needs no I/O thread (#7523).
+*/
 static void dbg_tls_read_want_hook(int fd) {
     Counter* c;
+    int timeout_ms;
     {
         std::lock_guard<std::mutex> l(dbg_tls_read_want.m);
         if (!dbg_tls_read_want.reached || fd < 0 || dbg_http1_peer_port(fd) != dbg_tls_read_want.port) {
@@ -33515,25 +35054,34 @@ static void dbg_tls_read_want_hook(int fd) {
         }
         c = dbg_tls_read_want.reached;
         dbg_tls_read_want.reached = nullptr;
+        timeout_ms = dbg_tls_read_want.timeout_ms;
         qore_dbg_tls_read_want_hook.store(nullptr);
     }
     dbg_http1_send_failure_dec(c);
-    dbg_http1_wait_hangup(fd);
+    if (!dbg_http1_wait_hangup(fd, timeout_ms)) {
+        printd(0, "dbg_hold_tls_read_until_hangup(): the connection did not end within %d ms; the read continues\n",
+            timeout_ms);
+    }
 }
 
 //! holds the next TLS read of a header (Socket::recvUntilBytes()) of a socket connected to the given port, once
 //! SSL_read() has found no record, until the connection is reset or closed
-/** The test's peer then sends its data and resets or closes the connection; the read continues once the end of the
-    connection has arrived, so the data and the end are both in the receive buffer when it polls (#6315).
+/** The test's peer then sends its data and resets the connection with dbg_tls_answer_and_reset(); the read continues
+    once the end of the connection has arrived, so the data and the end are both in the receive buffer when it polls
+    (#6315).  The hold blocks the I/O thread of the socket, so the peer must not need it (#7523): the peer's socket
+    can be served by the same I/O thread.
 
     @param port the port of the peer of the socket whose read is held
     @param reached decremented when the read is held
+    @param timeout_ms the longest time the read is held; it then continues, so a test whose peer did not end the
+    connection fails instead of hanging; 0 or less: no limit
 
     @throw DBG-ARGUMENT-ERROR the hook is already armed
 */
 static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int port = (int)get_param_value(params, 0).getAsBigInt();
+    int timeout_ms = (int)get_param_value(params, 2).getAsBigInt();
     Counter* c = get_counter_arg(params, 1, xsink);
     if (*xsink) {
         return QoreValue();
@@ -33545,8 +35093,80 @@ static QoreValue f_dbg_hold_tls_read_until_hangup(const QoreListNode* params, Ru
         return QoreValue();
     }
     dbg_tls_read_want.port = port;
+    // no limit for a timeout of 0 or less, so the read is always held
+    dbg_tls_read_want.timeout_ms = timeout_ms <= 0 ? -1 : timeout_ms;
     dbg_tls_read_want.reached = c;
     qore_dbg_tls_read_want_hook.store(dbg_tls_read_want_hook);
+    return QoreValue();
+}
+
+//! Debug-only: a TLS peer answers and resets its connection in the calling thread, without the I/O threads
+/** Writes \a answer on the TLS connection of \a peer, waits until the other side has acknowledged it (so it is in
+    that side's receive buffer, see dbg_wait_send_buffer_empty()), and resets the connection with system calls only:
+    the descriptor is closed with \c SO_LINGER and a zero timeout once its number has been taken over by a new,
+    unconnected socket (dup2()), so the Socket object keeps a valid descriptor, which it closes later without touching
+    the connection or another socket; the later close skips the TLS close_notify alert (dbgResetOnClose()).
+
+    Neither the write nor the reset uses the I/O thread of \a peer, so the peer can answer while a debug hook holds
+    that thread, as dbg_hold_tls_read_until_hangup() does when both sides of the connection are served by the same I/O
+    thread (#7523).  \a peer must have no I/O operation in progress and must not be used afterwards, except to be
+    closed; no other thread may close it while the function runs, as its descriptor is used without the socket's
+    lock once the answer is written.  DEBUG builds only.
+
+    @param peer the socket of the test's peer; it must use TLS
+    @param answer the data to write
+    @param timeout_ms the longest time the write may take
+
+    @throw DBG-ARGUMENT-ERROR the socket has no TLS connection
+    @throw DBG-TLS-WRITE-ERROR the write failed or did not complete in time; the connection is not reset
+    @throw DBG-RESET-SOCKET-ERROR the answer was not acknowledged, or the reset failed
+*/
+static QoreValue f_dbg_tls_answer_and_reset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreSocketObject> sock(obj
+        ? reinterpret_cast<QoreSocketObject*>(const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET,
+            xsink))
+        : nullptr, xsink);
+    if (*xsink || !sock) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tls_answer_and_reset() requires a Socket argument");
+        }
+        return QoreValue();
+    }
+    std::string answer = dbg_http1_bytes_arg(params, 1);
+    int timeout_ms = (int)get_param_value(params, 2).getAsBigInt();
+    if (answer.empty()) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_tls_answer_and_reset() requires an answer");
+        return QoreValue();
+    }
+    int fd = -1;
+    if (qore_socket_object_private(sock).dbgTlsWriteNow(answer.data(), answer.size(), timeout_ms < 0 ? 0 : timeout_ms,
+            fd, xsink)) {
+        return QoreValue();
+    }
+    int64 wnd = -1;
+    if (int64 left = dbg_wait_send_buffer_empty(fd, wnd)) {
+        xsink->raiseException("DBG-RESET-SOCKET-ERROR", "dbg_tls_answer_and_reset(): " QLLD " bytes written on the "
+            "socket are not acknowledged, and the peer's receive window is 0; the connection is not reset", left);
+        return QoreValue();
+    }
+    qore_socket_object_private(sock).dbgResetOnClose();
+    struct linger l;
+    l.l_onoff = 1;
+    l.l_linger = 0;
+    setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof l);
+    // the placeholder is never connected, only closed later, so its family need not match the connection's
+    int replacement = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (replacement < 0) {
+        xsink->raiseErrnoException("DBG-RESET-SOCKET-ERROR", errno, "dbg_tls_answer_and_reset(): socket() failed");
+        return QoreValue();
+    }
+    int drc = ::dup2(replacement, fd);
+    int derr = errno;
+    ::close(replacement);
+    if (drc < 0) {
+        xsink->raiseErrnoException("DBG-RESET-SOCKET-ERROR", derr, "dbg_tls_answer_and_reset(): dup2() failed");
+    }
     return QoreValue();
 }
 
@@ -35049,6 +36669,11 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stats", f_dbg_aot_dispatch_reclaim_stats, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_aot_dispatch_reclaim_stress", f_dbg_aot_dispatch_reclaim_stress, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "target", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "threads", bigIntTypeInfo, QORE_PARAM_NO_ARG, "iterations");
     qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_reference_type_cache_tests", f_dbg_run_reference_type_cache_tests, QCF_NO_FLAGS,
@@ -35305,12 +36930,18 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTSMARTLOCK->getTypeInfo(), QORE_PARAM_NO_ARG, "lock", bigIntTypeInfo, QORE_PARAM_NO_ARG, "tid");
     qns.addBuiltinVariant("dbg_lock_wait_wait", f_dbg_lock_wait_wait, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_socket_close_io", f_dbg_socket_close_io, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK | QDOM_NETWORK, nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_socket_is_nonblocking", f_dbg_socket_is_nonblocking,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, boolOrNothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_async_io_quit_io_thread", f_dbg_async_io_quit_io_thread,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "index");
+    qns.addBuiltinVariant("dbg_socket_generation_wake", f_dbg_socket_generation_wake, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 2, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock", bigIntTypeInfo, QoreValue(0), "stage");
+    qns.addBuiltinVariant("dbg_close_socket_directly", f_dbg_close_socket_directly, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_close_socket_at_next_ssl_io", f_dbg_close_socket_at_next_ssl_io,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
@@ -35328,6 +36959,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringOrNothingTypeInfo, QORE_PARAM_NO_ARG, "site");
     qns.addBuiltinVariant("dbg_http1_header_read_op_failure_site", f_dbg_http1_header_read_op_failure_site,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringOrNothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_http_header_text_alloc", f_dbg_fail_http_header_text_alloc, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "site");
+    qns.addBuiltinVariant("dbg_http_header_text_alloc_failed", f_dbg_http_header_text_alloc_failed, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_binary_reserve_over", f_dbg_fail_binary_reserve_over, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "size");
     qns.addBuiltinVariant("dbg_clear_http1_header_read_op_failure", f_dbg_clear_http1_header_read_op_failure,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_socket_stream_records", f_dbg_socket_stream_records,
@@ -35431,6 +37068,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_wait_bg_compile_idle", f_dbg_wait_bg_compile_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_read_uninitialized", f_dbg_read_uninitialized, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_use_after_free", f_dbg_use_after_free, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_llvm_uninitialized_level", f_dbg_llvm_uninitialized_level, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_bg_compile_discarded_count", f_dbg_get_bg_compile_discarded_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ir_returns_pass_through_without_thread_data",
@@ -35572,6 +37214,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, anyTypeInfo, QORE_PARAM_NO_ARG, "v");
     qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
+    qns.addBuiltinVariant("dbg_try_unique_weak_member", f_dbg_try_unique_weak_member, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold_read_lock");
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
@@ -35675,10 +37320,13 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_quic_stateless_reset_counts", f_dbg_quic_stateless_reset_counts, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
-    qns.addBuiltinVariant("dbg_quic_retries_received", f_dbg_quic_retries_received, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        bigIntTypeInfo);
-    qns.addBuiltinVariant("dbg_quic_server_initial_drops", f_dbg_quic_server_initial_drops, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_fail_next_submit", f_dbg_http2_fail_next_submit, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fs_swap_on_open", f_dbg_fs_swap_on_open, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "link", stringTypeInfo, QORE_PARAM_NO_ARG, "target",
+        bigIntTypeInfo, QoreValue(0), "skip");
+    qns.addBuiltinVariant("dbg_quic_server_retry_counts", f_dbg_quic_server_retry_counts, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_fail_sends", f_dbg_quic_fail_sends, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", boolTypeInfo, QORE_PARAM_NO_ARG, "by_peer",
         listTypeInfo, QORE_PARAM_NO_ARG, "datagrams", bigIntTypeInfo, QORE_PARAM_NO_ARG, "err", boolTypeInfo,
@@ -35691,6 +37339,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_wait_all_idle", f_dbg_quic_wait_all_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_set_client_peer_response_timeout", f_dbg_quic_set_client_peer_response_timeout,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_dropped_client_datagrams", f_dbg_quic_dropped_client_datagrams, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_dropped_client_datagrams", f_dbg_quic_wait_dropped_client_datagrams,
@@ -35704,6 +37354,8 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "reset");
     qns.addBuiltinVariant("dbg_async_io_registered_qore_ops", f_dbg_async_io_registered_qore_ops, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_io_uring_defer_completions", f_dbg_io_uring_defer_completions, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
@@ -35761,8 +37413,11 @@ void init_debug_functions(QoreNamespace& qns) {
         "reached", QC_SOCKET->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataOrNothingTypeInfo,
         QORE_PARAM_NO_ARG, "response");
     qns.addBuiltinVariant("dbg_hold_tls_read_until_hangup", f_dbg_hold_tls_read_until_hangup, QCF_NO_FLAGS,
-        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
-        QORE_PARAM_NO_ARG, "reached");
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 3, bigIntTypeInfo, QORE_PARAM_NO_ARG, "port", QC_COUNTER->getTypeInfo(),
+        QORE_PARAM_NO_ARG, "reached", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_tls_answer_and_reset", f_dbg_tls_answer_and_reset, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "peer", dataTypeInfo, QORE_PARAM_NO_ARG,
+        "answer", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_http1_send_failure_result", f_dbg_http1_send_failure_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo, 0);
     qns.addBuiltinVariant("dbg_release_http1_connection_on_close", f_dbg_release_http1_connection_on_close,

@@ -135,6 +135,19 @@ struct LVPathStep;
 class QoreMemberInfo;
 enum class LVPathStepKind : uint8_t;
 
+//! Takes a reference to a uniquely owned container; the caller protects its slot until this returns.
+DLLLOCAL inline bool qore_try_ref_unique_container(QoreValue value, QoreValue& result) {
+    if (!value.isPlainPointer() || (value.getType() != NT_LIST && value.getType() != NT_HASH)
+            || !value.getInternalNode()->is_unique()) {
+        return false;
+    }
+    result = value.refSelf();
+    return true;
+}
+
+//! Reads a uniquely owned list or hash from a simple thread-local lvalue path (qore#7301).
+DLLLOCAL bool qore_try_read_unique_weak_path(const struct LVPathStep* steps, size_t size, QoreValue& result);
+
 //! Returns the class static variable named by a \c "ClassPath::varName" lvalue path in the given program
 /** @param pgm the program whose namespace is searched
     @param full_name the lvalue path root name, in the runtime class-path form used by LVPathStep::name
@@ -1238,6 +1251,24 @@ public:
         bool for_assignment = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
+    //! The AST integer pre-increment inlines the lookup and increment together (qore#7256).
+    struct InlineExpression {};
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE LValueHelper(InlineExpression, const QoreValue& exp, ExceptionSink* xsink,
+            bool for_remove = false, bool for_assignment = false) : vl(xsink), assignment_only(for_assignment) {
+        if (for_remove) {
+            startRemovalPath();
+        }
+        // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
+        if (!exp.isNothing() && exp.hasNode()) {
+            try {
+                doLValue(exp, for_remove);
+            } catch (...) {
+                // the lvalue can be reached through references, whose Programs the destructor leaves; it does not run
+                ref_pgms.release(nullptr);
+                throw;
+            }
+        }
+    }
     //! resolves the lvalue \a exp and calls \a hook with \a hook_arg once, before its root is resolved and locked
     /** The keys and indices of the path to the root are evaluated before the hook is called, in the order in which
         the other constructors evaluate them; code that the hook runs, such as the selectors of a remove or delete
@@ -1939,6 +1970,26 @@ public:
     DLLLOCAL int64 shiftLeftEqualsBigInt(int64 v, const char* desc = "<lvalue>");
     DLLLOCAL int64 shiftRightEqualsBigInt(int64 v, const char* desc = "<lvalue>");
     DLLLOCAL int64 preIncrementBigInt(const char* desc = "<lvalue>");
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int64 preIncrementBigIntInline(const char* desc) {
+        if (intResultNeedsConversion()) {
+            return storeIntResult(getAsBigInt() + 1, desc);
+        }
+        if (val) {
+            if (makeIntVal(desc)) {
+                return 0;
+            }
+            return val->preIncrementBigInt();
+        }
+        if (makeIntQv(desc)) {
+            return 0;
+        }
+        // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
+        // value that is both stored and returned
+        int64 oldVal = qv->getAsBigInt();
+        saveTemp(*qv);
+        qv->set(oldVal + 1);
+        return oldVal + 1;
+    }
     DLLLOCAL int64 preDecrementBigInt(const char* desc = "<lvalue>");
     DLLLOCAL int64 postIncrementBigInt(const char* desc = "<lvalue>");
     DLLLOCAL int64 postDecrementBigInt(const char* desc = "<lvalue>");

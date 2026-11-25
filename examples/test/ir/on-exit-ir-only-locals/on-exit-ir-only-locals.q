@@ -211,6 +211,42 @@ string sub method_calls() {
     return sprintf("n=%d caught=%d", c.get(), caught);
 }
 
+#! the object given to HandlerLocalParam::f(), which records when it is destroyed
+class Arg {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! a method whose block exit handlers run out of line on a normal exit, with a local that only a handler references
+class HandlerLocalParam {
+    f(Arg a) {
+        {
+            on_exit noop();
+            int i = 1;
+            on_error if (i > 10) {
+                noop();
+            }
+        }
+    }
+
+    private noop() {
+    }
+}
+
+#! the parameter of the method is released when the method returns: the AOT code left the variable that it put on
+#! the runtime stack for the handlers there, and the parameter's value was never released
+string sub handler_local_param() {
+    int before = Arg::destroyed;
+    HandlerLocalParam d();
+    d.f(new Arg());
+    return sprintf("destroyed=%d", Arg::destroyed - before);
+}
+
 for (int i = 0; i < 3; ++i) {
     printf("normal exit: %s\n", normal_exit());
     printf("exception in the same function: %s\n", exception_same_function());
@@ -222,4 +258,5 @@ for (int i = 0; i < 3; ++i) {
     printf("closure and reference: %s\n", closure_and_reference());
     printf("thread_exit: %s\n", thread_exit_handlers());
     printf("method calls: %s\n", method_calls());
+    printf("parameter of a method with a handler local: %s\n", handler_local_param());
 }

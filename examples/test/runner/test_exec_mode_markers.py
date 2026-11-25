@@ -370,13 +370,16 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   binary started without an execution mode
         # - AOTGuardedMethodEntryReturnKind (#6860): its checks run qcc in child processes started without an execution
         #   mode
-        # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
-        #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
         #   interpreter in the default mode, under a limit of its address space
+        # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
+        #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
+        # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
+        #   modules loaded from source and compiled with qcc
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
+                                 "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",

@@ -83,6 +83,7 @@ module RedisDataProvider {
             "short_desc": "Get the string value of a key",
             "desc": "Get the string value of a key from Redis",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -106,6 +107,7 @@ module RedisDataProvider {
             "short_desc": "Get hash field values",
             "desc": "Get the values of hash fields from Redis",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 

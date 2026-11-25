@@ -1351,8 +1351,11 @@ static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, Qor
     QoreStringNodeValueHelper raw(*result);
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw.getReferencedValue();
@@ -5822,7 +5825,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
     - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
     - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this key; a quoted-string value is unquoted
-    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated
+    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated; an HTTP/1.0 request with a \c Transfer-Encoding closes the connection (RFC 9112 section 6.1)
     - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
@@ -5833,7 +5836,9 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @return a hash of the header; a header value, as the \c status_message, that is not valid UTF-8 is given in
     ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text; the hash has the following keys:
     - \c headers: a hash of every header field, with lower-case names; a field given more than once is a list of its
-      values
+      values; a \c Transfer-Encoding field of the chunked coding alone is given as \c "chunked", as which it is
+      recognized without regard to case, to the whitespace around it and to the empty elements of its list, also when
+      it is given in more than one line (the value received is given in the \c headers-raw key of \a info)
     - the header fields with their lower-case names at the top level as well (deprecated; see
       @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers, \c trailers, \c status_code,
       \c status_message, \c http_version, \c method or \c path, which is given only under \c headers (so that a field
@@ -5856,9 +5861,26 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     the name and the colon), a line without a colon or with an empty field name, a whitespace line before the first
     field line, or, in a request, an obsolete line folding (a line that starts with whitespace); in a response, an
     obsolete line folding is replaced with spaces
+    @throw SOCKET-HTTP-ERROR a header with a field line with a control character other than tab (RFC 9110 section
+    5.5; since %Qore 3.0): the \c arg key of the exception hash has the start of the line, with its non-printable
+    bytes escaped as \c "\xhh"; or a request header with a line that ends with a bare LF; a header is read up to its
+    first empty line, where a line ends with LF, which a CR can precede, and a line of a response header can end with
+    LF alone (RFC 9112 section 2.2; a header that ends with \c "\n\n" is read since %Qore 3.0)
+    @throw SOCKET-HTTP-ERROR a request with more than one \c Host field or a list in it (RFC 9112 section 3.2), with
+    both \c Transfer-Encoding and \c Content-Length, or whose \c Transfer-Encoding does not give a framing that every
+    recipient finds: the chunked transfer coding is not the final coding, is given more than once or with a
+    parameter, or no coding is given (RFC 9112 section 6.3)
+    @throw HTTP-UNSUPPORTED-TRANSFER-CODING a request with a transfer coding other than chunked (RFC 9112 section 6.1);
+    a server answers such a request with 501 (Not Implemented); a response is never refused for its
+    \c Transfer-Encoding: its body is chunked if its final transfer coding is chunked, and is delimited by the end of
+    the connection if not (RFC 9112 section 6.3); a response with the status 1xx, 204 or 304 has no body
     @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
     unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
     closed
+    @throw SOCKET-HTTP-ERROR a header that starts with \c "HTTP/" (a response) with an invalid status line: the line
+    must be <tt>HTTP/</tt><em>digit</em><tt>.</tt><em>digit</em>, a space, a status code of three digits in the range
+    \c 100 - \c 599, and either the end of the line or a space and a reason phrase, which can be empty, without
+    control characters other than tab (RFC 9112 section 4; since %Qore 3.0)
 
     @note
     - if the header claims a certain character encoding via a \c charset declaration in the \c "Content-Type" header, the Socket's @ref character_encoding "character encoding" is automatically set accordingly
@@ -5877,8 +5899,12 @@ hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>
     return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
 
-//! Retuns a string representing the data in the HTTP header read (reads until \c "\r\n\r\n")
+//! Retuns a string representing the data in the HTTP header read (reads until the first empty line)
 /** If any errors occur reading from the socket, an exception is raised. Accepts an optional timeout value in milliseconds.
+
+    The header is read up to its first empty line, where a line ends with LF, which a CR can precede (\c "\r\n\r\n",
+    and since %Qore 3.0 also \c "\n\n", \c "\r\n\n" and \c "\n\r\n"); the string is returned without the empty
+    line and with \c "\n" as the line end of its last line.
 
     @par Example:
     @code{.py}
@@ -5935,7 +5961,8 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -5969,7 +5996,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -6008,7 +6036,8 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
@@ -6040,7 +6069,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is written to the stream
@@ -6080,7 +6110,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback
@@ -6124,7 +6155,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
     end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
     @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback

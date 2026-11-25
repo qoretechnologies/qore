@@ -145,6 +145,7 @@ module BitlyDataProvider {
             "desc": "Retrieve aggregate click statistics for a bitlink over a specified "
                 "time period",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": BitlyBitlinkClicksDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return new BitlyBitlinkClicksDataType();

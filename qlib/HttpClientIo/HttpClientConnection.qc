@@ -50,6 +50,12 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         */
         Mutex lock();
 
+        #! Why the connection was closed: the first reason recorded (see setCloseReason()); qore#7443
+        *string close_reason;
+
+        #! Protects @ref close_reason, which is recorded also by code that holds @ref lock
+        Mutex close_reason_lock();
+
         #! Maximum concurrent streams
         int max_concurrent_streams = DefaultMaxStreamsPerConnection;
 
@@ -391,10 +397,57 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         controller_ref = controller;
     }
 
+    #! Handles the failure of a request's submit
+    /** A connection-fatal error (see HttpClientConnectionManager::isConnectionErrorStatic()) ends the connection's
+        use: it takes no new request.  The streams in progress on a multiplexed connection are not failed with it:
+        their requests were sent and are being answered, so the connection drains (as after a GOAWAY) and is closed
+        once they have completed; a request sent on it would otherwise be failed or sent again on another connection
+        for the failure of a request that never got a stream (ex: the session had no stream ID left; qore#7443).
+        Another error leaves the connection as it is.
+
+        @param ex the error of the submit
+    */
+    private submitFailed(hash<ExceptionInfo> ex) {
+        if (!HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+            return;
+        }
+        # the request that failed has no stream: the active streams are those of other requests
+        if (getActiveStreamCount() && !isClosed()) {
+            setCloseReason(sprintf("a request could not be submitted (%s: %s), and the streams in progress were "
+                "completed first", ex.err, ex.desc));
+            self.setDraining();
+            return;
+        }
+        setCloseReason(sprintf("a request could not be submitted: %s: %s", ex.err, ex.desc));
+        self.setClosed();
+    }
+
+    #! Records why the connection is closed; the first reason recorded is kept (qore#7443)
+    /** Called where the connection is closed or marked closed, before it is: the reason is reported in
+        @ref getConnectionInfo() and in the recent closes of its manager's @ref HttpClientConnectionManager::getStats().
+        It is only formatted when the connection closes, never on the path of a request.
+
+        @param reason why the connection is closed
+    */
+    setCloseReason(string reason) {
+        AutoLock al(close_reason_lock);
+        if (!close_reason) {
+            close_reason = reason;
+        }
+    }
+
+    #! Returns why the connection was closed, or nothing while it is not closed (see setCloseReason())
+    *string getCloseReason() {
+        AutoLock al(close_reason_lock);
+        return close_reason;
+    }
+
     #! Returns connection info
     hash<HttpClientConnectionInfo> getConnectionInfo() {
+        *string reason = getCloseReason();
         AutoLock al(lock);
         return <HttpClientConnectionInfo>{
+            "close_reason": reason,
             "host": url_info.host,
             "port": url_info.port,
             "state": cast<HttpClientConnectionState>(self.getConnectionState()),
@@ -446,9 +499,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         } catch (hash<ExceptionInfo> ex) {
             # Mark connection Closed only for connection-fatal errors so the
             # pool evicts it immediately; transient errors leave it Ready
-            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
-                self.setClosed();
-            }
+            submitFailed(ex);
             rethrow;
         }
         @assert(stream_id >= 0);
@@ -459,7 +510,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (!suppress_wake && ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getPollOperation().getSocket());
         }
 
         # Return the Promise alongside the Future so the caller keeps it alive
@@ -507,9 +558,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         try {
             stream_id = submitRequestWithNotifierImpl(method, path, headers, body, p, notifier);
         } catch (hash<ExceptionInfo> ex) {
-            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
-                self.setClosed();
-            }
+            submitFailed(ex);
             rethrow;
         }
         @assert(stream_id >= 0);
@@ -517,7 +566,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getPollOperation().getSocket());
         }
 
         return {
@@ -546,7 +595,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getPollOperation().getSocket());
         }
     }
 
@@ -561,6 +610,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         }
 
         if (getPollOperation().isClosed()) {
+            *hash<auto> err = getPollOperation().getError();
+            setCloseReason(err
+                ? sprintf("its I/O operation closed: %s: %s", err.err, err.desc)
+                : "its I/O operation closed");
             self.setClosed();
         }
 

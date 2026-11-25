@@ -40,7 +40,7 @@ class ProtobufJsonEncodingTest inherits QUnit::Test {
     constructor() : QUnit::Test("ProtobufJsonEncodingTest", "1.0", \ARGV) {
         addTestCase("fromJson() converts its argument to UTF-8", \testFromJson());
         addTestCase("toJson() returns UTF-8", \testToJson());
-        if (!ENV{ChildVar}) { # live-provider-optin: ChildVar, set by the test for its child
+        if (!ENV{ChildVar}) {
             addTestCase("a default encoding that is not UTF-8", \testChild());
         }
         set_return_value(main());

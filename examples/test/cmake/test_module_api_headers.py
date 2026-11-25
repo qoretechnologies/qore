@@ -176,6 +176,40 @@ class ModuleApiHeadersTest(unittest.TestCase):
             (root / "include/qore/qlist").unlink()
             self.assert_fails(root, "the public headers changed without a change of the module API 2.1")
 
+    @unittest.skipUnless(shutil.which("git"), "requires git")
+    def test_unmerged_header_requires_staging_the_resolution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.make_tree(root)
+
+            def git(*args, check=True):
+                return subprocess.run(["git", "-C", str(root), "-c", "user.name=Test",
+                                       "-c", "user.email=test@example.org", *args], check=check, capture_output=True)
+
+            git("init", "-q")
+            git("add", "-A")
+            git("commit", "-qm", "base")
+            git("switch", "-qc", "left")
+            header = root / "include/qore/Value.h"
+            header.write_text("class Left {};\n")
+            git("commit", "-qam", "left")
+            git("switch", "-qc", "right", "HEAD^")
+            header.write_text("class Right {};\n")
+            git("commit", "-qam", "right")
+            self.assertEqual(git("merge", "left", check=False).returncode, 1)
+            header.write_text("class Resolved {};\n")
+            record = (root / guard.RECORD).read_bytes()
+            for options in ((), ("--update",)):
+                result = self.run_tool(root, *options)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("unmerged header 'include/qore/Value.h'", result.stderr)
+                self.assertEqual((root / guard.RECORD).read_bytes(), record)
+            git("add", "include/qore/Value.h")
+            self.assertEqual(self.run_tool(root, "--update").returncode, 0)
+            git("add", str(guard.RECORD))
+            git("commit", "-qm", "resolve")
+            self.assert_ok(root)
+
     def test_tarball_hashes_all_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

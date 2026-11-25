@@ -1,0 +1,292 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - request bodies written to TCP sockets after 101 responses, partial writes and socket hand-over
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A server can answer a streamed HttpClientIo request that asked for a protocol upgrade with 101 before it has read
+# the whole request body, which the client must still complete (RFC 9110 section 7.8).  sendData() completes it: the
+# data given before the 101 response is sent before the end of the response stream is delivered, and the data given
+# after it, also after the end of the stream, is written to the socket; before, the data was queued and never sent,
+# or sendData() raised HTTPCLIENT-STATE-ERROR after the end of the stream (qore#7503).  Data given after the end of
+# the body is refused with HTTPCLIENT-STATE-ERROR.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class HttpClientIoSendDataAfter101Test
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the request header fields that ask for a protocol upgrade
+const UpgradeHeaders = {"Upgrade": "foo", "Connection": "Upgrade", "Transfer-Encoding": "chunked"};
+
+#! An HTTP/1.1 server that answers a request with an Upgrade header with 101 before it reads the request body, then
+#! reads the body and speaks a protocol of its own (it answers "PING" with "PONG") until the client closes the
+#! connection
+class UpgradeServer {
+    public {
+        #! the request body read after the 101 response: the decoded body, or the raw bytes of the chunked body
+        Queue bodies();
+        #! the end of each connection after a 101 response: "<connection number>:closed"
+        Queue ends();
+        #! the trailers of each request body read decoded
+        Queue trailers();
+        #! with raw_body_size: a value is pushed when the server has sent the 101 response
+        Queue sent_101();
+        #! with raw_body_size: the server reads the rest of the body once a value is read from this queue
+        Queue go();
+        #! if set, the server reads this many bytes of the request body before it sends the 101 response and then
+        #! reads the raw chunked body until it has this many bytes in all
+        int raw_body_size;
+        #! with raw_body_size: the server closes the connection without reading the rest of the body, which resets
+        #! it
+        bool reset_after_101;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    #! stops the server; the connections of the clients must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        on_exit ends.push(sprintf("%d:closed", n));
+        try {
+            hash<auto> h = s.readHTTPHeader(Timeout);
+            if (!h.method) {
+                return;
+            }
+            if (raw_body_size) {
+                # a part of the body is read: the client is writing the body when the 101 response arrives
+                binary raw = s.recvBinary(1000, Timeout);
+                s.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n");
+                sent_101.push(True);
+                go.get(Timeout);
+                if (reset_after_101) {
+                    # the unread data makes the close reset the connection
+                    return;
+                }
+                while (raw.size() < raw_body_size) {
+                    raw += s.recvBinary(-1, Timeout);
+                }
+                bodies.push(raw);
+            } else {
+                s.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n");
+                hash<auto> body = s.readHTTPChunkedBody(Timeout);
+                bodies.push(body.body);
+                trailers.push(body - "body");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            bodies.push(sprintf("%s: %s", ex.err, ex.desc));
+            return;
+        }
+        otherProtocol(s);
+    }
+
+    #! the protocol after the request body: "PING" is answered with "PONG" until the client closes the connection
+    private otherProtocol(Socket s) {
+        while (True) {
+            *binary b;
+            try {
+                b = s.recvBinary(-1, Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!b) {
+                return;
+            }
+            if (b.toString() =~ /PING/) {
+                s.send("PONG");
+            }
+        }
+    }
+}
+
+class HttpClientIoSendDataAfter101Test inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientIoSendDataAfter101", "1.0") {
+        addTestCase("sendData() after the 101 header and before the end of the stream completes the request body",
+            \testSendAfter101(), (False,));
+        addTestCase("sendData() after the end of the stream completes the request body", \testSendAfter101(),
+            (True,));
+        addTestCase("the body data given before the 101 response is sent before the end of the stream",
+            \testDataInHand());
+        addTestCase("a write of the body data in hand that fails after the 101 response is reported",
+            \testDataInHandReset());
+        addTestCase("sendData() after the end of the request body raises an error", \testSendAfterEnd());
+        set_return_value(main());
+    }
+
+    #! a manager for HTTP/1.1 with one connection to a host at most
+    static HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_request_retries": 0,
+            "max_connections_per_host": 1,
+            "request_timeout": Timeout,
+        });
+    }
+
+    #! the request body is completed with sendData() after the 101 response, before or after the end of the stream
+    testSendAfter101(bool after_end) {
+        UpgradeServer server();
+        on_exit server.stop();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle sh = mgr.acquireAndStartStreaming(server.getUrl(), "POST", "/up", UpgradeHeaders,
+            True);
+        assertEq(101, sh.readData(Timeout).status_code);
+        if (after_end) {
+            assertEq({"end_stream": True}, sh.readData(Timeout));
+        }
+        sh.sendData("abc");
+        sh.setTrailers({"X-Trailer": "end"});
+        sh.sendData("def", True);
+        if (!after_end) {
+            assertEq({"end_stream": True}, sh.readData(Timeout));
+        }
+        # the server has the whole body
+        assertEq("abcdef", server.bodies.get(Timeout));
+        assertEq("end", server.trailers.get(Timeout)."x-trailer");
+
+        # the caller speaks the new protocol on the socket after the body
+        HttpClientConnection conn = sh.getConnection();
+        Socket s = conn.getSocket();
+        s.send("PING");
+        assertEq("PONG", s.recvBinary(4, Timeout).toString());
+        conn.close();
+        assertEq("1:closed", server.ends.get(Timeout));
+    }
+
+    #! the body data that the client is sending when the 101 response arrives is sent before the end of the stream
+    testDataInHand() {
+        binary big = getBigChunk();
+        string head = sprintf("%x\r\n", big.size());
+        binary expected = binary(head) + big + binary("\r\n0\r\n\r\n");
+
+        UpgradeServer server();
+        on_exit server.stop();
+        server.raw_body_size = expected.size();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle sh = mgr.acquireAndStartStreaming(server.getUrl(), "POST", "/up", UpgradeHeaders,
+            True);
+        sh.sendData(big);
+        assertEq(True, server.sent_101.get(Timeout));
+        assertEq(101, sh.readData(Timeout).status_code);
+        # the stream does not end before the chunk was written, which the server has not read yet
+        assertEq(NOTHING, sh.readData(0));
+        server.go.push(True);
+        sh.sendData(binary(), True);
+        assertEq({"end_stream": True}, sh.readData(Timeout));
+        # the server has the whole body
+        binary raw = server.bodies.get(Timeout);
+        assertEq(expected.size(), raw.size());
+        assertTrue(raw == expected);
+
+        HttpClientConnection conn = sh.getConnection();
+        Socket s = conn.getSocket();
+        s.send("PING");
+        assertEq("PONG", s.recvBinary(4, Timeout).toString());
+        conn.close();
+        assertEq("1:closed", server.ends.get(Timeout));
+    }
+
+    #! more than the socket buffers hold, so that the chunk is being written when the 101 response arrives
+    static binary getBigChunk() {
+        return binary(strmul("0123456789abcdef", 2 * 1024 * 1024));
+    }
+
+    #! the write of the body data in hand fails after the 101 response: the reader of the stream gets the error
+    testDataInHandReset() {
+        UpgradeServer server();
+        on_exit server.stop();
+        server.raw_body_size = 1;
+        server.reset_after_101 = True;
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle sh = mgr.acquireAndStartStreaming(server.getUrl(), "POST", "/up", UpgradeHeaders,
+            True);
+        sh.sendData(getBigChunk(), True);
+        assertEq(True, server.sent_101.get(Timeout));
+        assertEq(101, sh.readData(Timeout).status_code);
+        # the server closes the connection without reading the body
+        server.go.push(True);
+        assertEq("1:closed", server.ends.get(Timeout));
+        # the stream ends with the error of the failed write, never with a normal end
+        auto d = sh.readData(Timeout);
+        assertEq(Type::Hash, d.type());
+        assertTrue(exists d.error, sprintf("%y", d));
+        assertFalse(exists d.end_stream);
+    }
+
+    #! data given after the end of the request body is refused
+    testSendAfterEnd() {
+        UpgradeServer server();
+        on_exit server.stop();
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle sh = mgr.acquireAndStartStreaming(server.getUrl(), "POST", "/up", UpgradeHeaders,
+            True);
+        assertEq(101, sh.readData(Timeout).status_code);
+        assertEq({"end_stream": True}, sh.readData(Timeout));
+        sh.sendData("abc", True);
+        assertEq("abc", server.bodies.get(Timeout));
+        assertThrows("HTTPCLIENT-STATE-ERROR", \sh.sendData(), ("more",));
+        # another end of the body is ignored
+        sh.sendData(binary(), True);
+
+        HttpClientConnection conn = sh.getConnection();
+        conn.close();
+        assertEq("1:closed", server.ends.get(Timeout));
+    }
+}

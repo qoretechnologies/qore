@@ -164,12 +164,17 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", through which
+      the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request is set up without the
+      connection's socket (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
     - added @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "AbstractHttpRequestHandler::setHandlerSocketView()"
       and @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView() "needsHandlerSocketView()": the handler
       of an HTTP/1.x request that is declared by sandboxed code, or that asks for it, gets a socket of its request
       (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>),
       as does one that runs the code of objects of classes of a sandboxed Program
       (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()")
+    - added @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize", the default maximum size of a
+      request body that the server reads into memory (256 MiB)
     - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
       @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
       @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
@@ -452,6 +457,26 @@ public const date<relative> ReadTimeout = DefaultTimeout;
     @since HttpServerUtil 1.6
 */
 public const int DefaultMaxDecodedBodySize = 128 * 1024 * 1024;
+
+#! default maximum size in bytes of a request body that the server reads into memory (256 MiB)
+/** Applies when \c max_request_body_size is set neither for the server
+    (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size",
+    @ref HttpServer::HttpServer::setMaxRequestBodySize() "HttpServer::setMaxRequestBodySize()") nor for the listener
+    (@ref HttpServer::HttpListenerOptionInfo::max_request_body_size "HttpListenerOptionInfo::max_request_body_size"),
+    to a body that the server reads into memory for the handler: a body that it reads before dispatching the request
+    or for a handler that does not read it as a stream (HTTP/1.x with a \c Content-Length or chunked, HTTP/2 and
+    HTTP/3), one that a handler reads with
+    @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()", and
+    the rest of a chunked body that the handler left unread.  A larger body is answered with HTTP 413 (Content Too
+    Large), and an HTTP/1.x connection is closed.  A body that a handler reads as a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"
+    and @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is not limited by this default.
+
+    Set \c max_request_body_size to \c 0 explicitly for no limit.
+
+    @since HttpServerUtil 1.6
+*/
+public const int DefaultMaxRequestBodySize = 256 * 1024 * 1024;
 
 #! the largest HTTP/1.x request body with a \c Content-Length that the server reads before the request is dispatched (1 MiB)
 /** A body of this size or smaller is read by the server's I/O thread before the handler is called, so that a small
@@ -1049,10 +1074,15 @@ public hashdecl HttpListenerOptionInfo {
     */
     bool sync = True;
 
-    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    #! Maximum HTTP request body size in bytes (0 = the server's limit)
     /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends.
+
+        \c 0 (the default) uses the limit of the server
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size"),
+        which is @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" for the bodies that the
+        server reads into memory if none is set.
 
         A handler that reads the request body as a stream (see
         @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces the limit on
@@ -1098,13 +1128,14 @@ public hashdecl HttpListenerOptionInfo {
     */
     int sse_max_buffer_size = 1048576;
 
-    #! The minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+    #! The minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
     /** A stream that the client takes less of while the server waits for it is ended, so that the client cannot hold
         a handler thread by taking very little data; 0 disables the check.  The rate applies to each stream, so a
         client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
         that serves such clients may need a lower value.  The default is
         @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
-        body that a handler thread sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
+        body that the HTTP/1 controller sends. On HTTP/2 and HTTP/3 it applies to a body that a handler thread
+        sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
         pumps directly holds no thread and is not checked.
 
         @since HttpServerUtil 1.6
@@ -3038,6 +3069,18 @@ public class AbstractStreamRequest {
                 : s.getHttp2StreamTrailers(sid)});
         } else {
             if (http_get_field(hdr, "transfer-encoding") == "chunked") {
+                # a body read as a stream has the limit set for the listener or the server, not the default limit of
+                # a body that the server reads into memory (DefaultMaxRequestBodySize), which applies again after
+                # the read, as to the rest of a body that the handler leaves unread
+                *int stream_max_body = cx."header-info".max_request_body_size;
+                int buffered_max_body = s.getMaxChunkedBodySize();
+                bool set_stream_max_body = exists stream_max_body && stream_max_body != buffered_max_body;
+                if (set_stream_max_body) {
+                    s.setMaxChunkedBodySize(stream_max_body);
+                }
+                on_exit if (set_stream_max_body) {
+                    s.setMaxChunkedBodySize(buffered_max_body);
+                }
                 # HTTP/1.1 chunked reading: the native socket library controls
                 # the chunk loop via readHTTPChunkedBody*WithCallback(), so
                 # unlike HTTP/2/3 (which have explicit loops with
@@ -3618,7 +3661,7 @@ public class CallbackInputStream inherits InputStream {
 #! The time without progress from the peer after which the send of a streamed HTTP/2 or HTTP/3 response fails
 public const StreamStallTimeout = 30m;
 
-#! The default minimum rate in bytes per second at which a client must take a streamed HTTP/2 or HTTP/3 response
+#! The default minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
 /** @since HttpServerUtil 1.6
 */
 public const DefaultStreamSendMinRate = 1024;
@@ -4234,9 +4277,11 @@ public class AbstractHttpRequestHandler {
         - \c http2 (\c bool): \c True for HTTP/2 requests
         - \c max_request_body_size (\c int): the effective maximum request body size of the listener in bytes
           (the listener's \c max_request_body_size, or the server's if the listener sets none); \c 0 means no
-          limit.  The server does not limit the total size of a body read as a stream; the handler must stop
-          reading and reject the request (for example with HTTP 413 Content Too Large) when the total exceeds this
-          value.  The key is also set for requests with a buffered body
+          limit, also when none is set (the default limit,
+          @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize", applies only to the bodies that
+          the server reads into memory).  The server does not limit the total size of a body read as a stream; the
+          handler must stop reading and reject the request (for example with HTTP 413 Content Too Large) when the
+          total exceeds this value.  The key is also set for requests with a buffered body
 
         @par Complete Streaming Handler Example
         @code{.py}
@@ -5387,6 +5432,144 @@ public class AbstractUrlHandler inherits HttpServer::AbstractHttpRequestHandler 
       the handler returns
     - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 */
+#! A handle of the poll operation of an HTTP/1.1 WebSocket connection, which gives no socket (qore#7476)
+/** The HTTP server gives this handle, not the poll operation, to the setup of the WebSocket connection of a handler
+    that gets the socket of its request (see
+    @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()"):
+    the poll operation holds the connection's socket, which such a handler must not get, and the server cannot tell
+    the method of the trusted handler from a method with the same name of another class.  The handle keeps the
+    poll operation in an internal member and gives only what the setup and the connection need: its settings, the
+    frames that it sends, its state, and the wake-up of the async I/O controller for the connection, never the poll
+    operation or its socket.
+
+    @since HttpServerUtil 1.6
+*/
+public final class HttpWebSocketPollOperationHandle {
+    private:internal {
+        #! the poll operation, which holds the connection's socket
+        HttpWebSocketPollOperationBase op;
+    }
+
+    #! Creates the handle of a poll operation
+    constructor(HttpWebSocketPollOperationBase op) {
+        self.op = op;
+    }
+
+    #! A copy of a handle is not supported
+    /** @throw HANDLE-COPY-ERROR always
+    */
+    copy() {
+        throw "HANDLE-COPY-ERROR", "a poll operation handle cannot be copied";
+    }
+
+    #! Sets the interval of the heartbeat pings in milliseconds
+    nothing setHeartbeat(int ms) {
+        op.setHeartbeat(ms);
+    }
+
+    #! Sets the idle timeout in milliseconds
+    nothing setIdleTimeout(int ms) {
+        op.setIdleTimeout(ms);
+    }
+
+    #! Sets the send timeout in milliseconds
+    nothing setSendTimeout(int ms) {
+        op.setSendTimeout(ms);
+    }
+
+    #! Sets whether the send timeout is scaled
+    nothing setSendTimeoutScaled(bool scaled) {
+        op.setSendTimeoutScaled(scaled);
+    }
+
+    #! Sets the minimum send rate
+    nothing setSendMinRate(int min_rate, timeout window) {
+        op.setSendMinRate(min_rate, window);
+    }
+
+    #! Sets the close timeout
+    nothing setCloseTimeout(timeout close_timeout) {
+        op.setCloseTimeout(close_timeout);
+    }
+
+    #! Sets the maximum frame size
+    nothing setMaxFrameSize(int size) {
+        op.setMaxFrameSize(size);
+    }
+
+    #! Sets the RSV bits of the negotiated extensions
+    nothing setExtensionRsvMask(int mask) {
+        op.setExtensionRsvMask(mask);
+    }
+
+    #! Enables or disables echo mode
+    nothing setEchoMode(bool enabled) {
+        op.setEchoMode(enabled);
+    }
+
+    #! Sets the connection and its handler that the frames are dispatched to
+    nothing setConnection(auto wsc, auto handler) {
+        call_object_method(op, "setConnection", wsc, handler);
+    }
+
+    #! Sets the counter that is decremented when the connection ends
+    nothing setDone(Counter done) {
+        call_object_method(op, "setDone", done);
+    }
+
+    #! Sets the code that is called when the connection has ended
+    nothing setDoneCallback(code<nothing()> cb) {
+        call_object_method(op, "setDoneCallback", cb);
+    }
+
+    #! Queues an encoded frame
+    nothing sendRawFrame(binary frame) {
+        op.sendRawFrame(frame);
+    }
+
+    #! Queues a close frame
+    nothing sendClose(int code = 1000, string reason = "") {
+        op.sendClose(code, reason);
+    }
+
+    #! Ends the connection at once, if the poll operation supports it
+    nothing forceClose() {
+        if (op.hasCallableMethod("forceClose")) {
+            call_object_method(op, "forceClose");
+        }
+    }
+
+    #! Wakes the async I/O controller for the connection
+    nothing wake() {
+        Qore::AsyncIoController::wakeSocket(io_object: op.getSocket());
+    }
+
+    #! Returns the size of the send queue
+    int getSendQueueSize() {
+        return op.getSendQueueSize();
+    }
+
+    #! Returns True if the connection failed
+    bool hasError() {
+        return op.hasError();
+    }
+
+    #! Returns the error of the connection, if any
+    *hash<auto> getError() {
+        return op.getError();
+    }
+
+    #! Returns the close code
+    int getCloseCode() {
+        return op.getCloseCode();
+    }
+
+    #! Returns the close reason
+    string getCloseReason() {
+        return op.getCloseReason();
+    }
+}
+
 public class AbstractHttpSocketHandlerInterface {
     private {
         #! stop listener flag
@@ -5575,6 +5758,10 @@ public class AbstractHttpSocketHandlerInterface {
     /** The default implementation does nothing. SSE handlers that maintain a
         connection registry should override this method and remove \a cid from
         their registry.
+
+        The server also calls it for an HTTP/1.x event stream whose setup failed, which may have failed before the
+        handler registered the connection: an implementation does nothing for a \a cid that it has not registered
+        (qore#7376).
 
         @param cid the SSE connection ID
     */

@@ -7123,6 +7123,8 @@ protected:
     std::string pseudo_var;
     //! true if the receiver of the pseudo-method is a pointer, which is null if it is not of the class's type
     bool pseudo_ptr = false;
+    //! the condition that a receiver that is not a pointer is valid (the "argcheck" attribute of the class)
+    std::string pseudo_argcheck;
     bool const_method;
 
     void serializeCppConstructor(FILE* fp, const char* cname) const {
@@ -7276,6 +7278,11 @@ protected:
     }
 
 public:
+    //! sets the condition that the receiver of a pseudo-method that is not a pointer is valid (see pseudo_argcheck)
+    void setPseudoArgCheck(const std::string& check) {
+        pseudo_argcheck = check;
+    }
+
     Method(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params, const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags, const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly, const char* n_pseudo_arg, bool n_stub_only = false) :
                CodeBase(fn, n_name, n_attr, n_params, n_docs, n_return_type, n_flags, n_dom, n_code, n_line, n_doconly, n_stub_only),
                const_method(false) {
@@ -7546,6 +7553,8 @@ public:
                 // receiver (qore#7363)
                 if (pseudo_ptr) {
                     fprintf(fp, "    if (!%s) {\n        return QoreValue();\n    }\n", pseudo_var.c_str());
+                } else if (!pseudo_argcheck.empty()) {
+                    fprintf(fp, "    if (!(%s)) {\n        return QoreValue();\n    }\n", pseudo_argcheck.c_str());
                 }
             }
         }
@@ -7726,6 +7735,7 @@ protected:
         name,                      // class name
         doc,                       // doc string
         arg,                       // argument for non-static methods
+        argcheck,                  // the condition that the receiver of a pseudo-class's method is valid
         defbase,                   // default builtin base class
         scons,                     // system constructor
         serializer,                // class serializer function
@@ -7856,6 +7866,12 @@ public:
             if (i->first == "arg") {
                 arg = i->second;
                 log(LL_DEBUG, "+ arg: %s\n", arg.c_str());
+                continue;
+            }
+
+            if (i->first == "argcheck") {
+                argcheck = i->second;
+                log(LL_DEBUG, "+ argcheck: %s\n", argcheck.c_str());
                 continue;
             }
 
@@ -8108,6 +8124,9 @@ public:
 
         Method* m = new Method(fileName, mname, attr, params, doc, return_type, cf, dom, code, line, doconly,
                 is_pseudo ? arg.c_str() : 0, stub_only, const_method);
+        if (is_pseudo && !argcheck.empty()) {
+            m->setPseudoArgCheck(argcheck);
+        }
         mmap.insert(mmap_t::value_type(mname, m));
         return !*m;
     }

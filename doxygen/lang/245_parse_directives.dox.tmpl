@@ -1323,6 +1323,11 @@ i+ =4;
     Without this directive, both \c @@assert and \c @@debug statements are completely skipped at parse time,
     providing zero runtime overhead when debugging is disabled.
 
+    For an AOT-compiled module, @ref qcc_tool "qcc" makes this choice when it parses the module source.
+    Pass <tt>--parse-option=enable-debug</tt> to <tt>qcc -m</tt> to include debug statements. The CMake
+    user-module rules pass this option for the Debug configuration. A qmod retains its compile-time choice
+    for every invocation, including when the loading process uses <tt>--enable-debug</tt>.
+
     @par Syntax:
     @code{.py}
     @assert(condition);
@@ -1919,8 +1924,18 @@ ArrayList l();
     - getpwnam2()
     - getpwuid()
     - getpwuid2()
+    - get_qore_library_info()
     - getuid()
     - unsetenv()
+    - the \c "filename" and \c "path" keys of the module descriptions that get_module_hash() and get_module_list()
+      return, which are left out
+    - the directory of the module being loaded, which get_module_context_path() and get_module_context_path_ex() leave
+      out: they return the file name of the module
+    - the directories of the module path, which the error for a module that is not found does not list
+
+    @par Known Limitation:
+    The exceptions and warnings of module loads and of the code of modules can still name the files of modules with
+    their directories, in their messages and in their locations (\c file, \c callstack).
 
     <hr>
     @section no-external-process %no-external-process

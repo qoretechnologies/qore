@@ -5825,12 +5825,15 @@ void QoreIRToLLVM::retireHandlerIRLocals(llvm::Module& module) {
                 builder->CreateCall(replace_fn, {llvm::ConstantInt::get(i64_type, VAL_NOTHING), val, xsink_arg});
             }
         }
-        // the runtime stack releases its reference, which is not the last one
+        // the runtime stack releases its reference, which is not the last one, and the variable that
+        // materializeHandlerIRLocals() instantiated is popped, as qore_rt_uninstantiate_local() pops it in JIT code:
+        // qore_rt_uninstantiate_local_aot() only clears a variable (the AOT body locals stay on the stack until the
+        // function's exit), and the variable left on the stack kept the function's parameters from being released
         if (aot_mode) {
-            auto uninst_fn = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
+            auto pop_fn = module.getOrInsertFunction("qore_rt_pop_local_aot",
                     llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
-            builder->CreateCall(uninst_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            builder->CreateCall(pop_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
         } else {
             auto uninst_fn = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                     llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));

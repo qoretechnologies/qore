@@ -3974,8 +3974,11 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
     const QoreStringNode* raw = *raw_holder;
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw->stringRefSelf();
@@ -5635,6 +5638,12 @@ int qore_socket_object_private::checkIdleDataForAsyncPoll(ExceptionSink* xsink, 
     return checkIdleDataForAsyncPollLocked(xsink, buffered_is_data);
 }
 
+size_t qore_socket_object_private::getBufferedReadBytes() const {
+    AutoLocker al(priv->m);
+    qore_socket_private* p = qore_socket_private::get(*priv->socket);
+    return p->buflen > 0 ? (size_t)p->buflen : 0;
+}
+
 int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data) {
     assert(priv->m.trylock());
 
@@ -5643,8 +5652,10 @@ int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* x
         return -1;
     }
     // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
-    // that sent its next request before the response to the previous one (pipelining) has it here; for a server only
-    // (an HTTP client may have bytes there that it does not use, such as a body that a server sent to a HEAD request)
+    // that sent its next request before the response to the previous one (pipelining) has it here, and an HTTP client
+    // has bytes here that follow the response it read, which keep the connection from being reused (qore#7471): the
+    // client checks for them when a response ends, which closes such a connection, and again before it sends its
+    // next request on the connection
     if (buffered_is_data && p->buflen > 0) {
         return 1;
     }
@@ -6354,6 +6365,11 @@ bool qore_socket_object_private::isHttp2StreamEndStreamReceivedForAsyncPoll(int3
     return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
+bool qore_socket_object_private::isHttp2StreamLocalOpen(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 && h2->isStreamLocalOpen(stream_id);
+}
+
 bool qore_socket_object_private::isHttp2StreamResetForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     return h2 && h2->isStreamReset(stream_id);
@@ -6393,6 +6409,11 @@ void qore_socket_object_private::releaseQuicStream(int64_t session_id, int64_t s
     if (session) {
         session->releaseStream(stream_id);
     }
+}
+
+bool qore_socket_object_private::isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
+    return session && session->isBidiStreamOpen(stream_id);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
@@ -6510,6 +6531,54 @@ QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t sessi
         return nullptr;
     }
     return h2->dbgGetStreamRecordCounts();
+}
+
+int qore_socket_object_private::dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    qore_socket_private::IoUseHelper io_use(*sp);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    fd = io_use.getDescriptor();
+    if (!ssl || fd == QORE_INVALID_SOCKET) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no TLS connection");
+        return -1;
+    }
+    OptionalNonBlockingHelper nbh(*sp, true, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    size_t sent = 0;
+    size_t awaiting_drain = 0;
+    while (sent < size) {
+        size_t real_io = 0;
+        int rc = ssl->sendNonBlocking(xsink, "dbg_tls_answer_and_reset", const_cast<char*>(data + sent),
+            size - sent, real_io, awaiting_drain);
+        if (*xsink) {
+            return -1;
+        }
+        sent += real_io;
+        if (sent == size) {
+            break;
+        }
+        int64 left_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (left_ms <= 0) {
+            xsink->raiseException("DBG-TLS-WRITE-ERROR", "timeout writing on the TLS connection: " QLLD " of " QLLD
+                " bytes written", static_cast<int64>(sent), static_cast<int64>(size));
+            return -1;
+        }
+        if (!rc) {
+            continue;
+        }
+        assert(rc == SOCK_POLLIN || rc == SOCK_POLLOUT);
+        pollfd p = {fd, static_cast<short>(rc == SOCK_POLLIN ? POLLIN : POLLOUT), 0};
+        if (::poll(&p, 1, static_cast<int>(left_ms)) < 0 && errno != EINTR) {
+            xsink->raiseErrnoException("DBG-TLS-WRITE-ERROR", errno, "poll() failed");
+            return -1;
+        }
+    }
+    return 0;
 }
 #endif
 

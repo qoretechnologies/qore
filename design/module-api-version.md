@@ -71,7 +71,7 @@ and the excluded files are not hashed, and the headers without an extension, suc
 git checkout it hashes the files of `include/qore` that git tracks (`git ls-files`), so that untracked files in a
 development tree (`.DS_Store`, `*.orig`, `*.rej`, editor swap files) do not fail it; in a source tarball, every file of
 the directory.  The
-hash is recorded with the module API it was recorded for in `cmake/module-api-headers.txt`.  The check fails when:
+hash is recorded with the module API it was recorded for in `cmake/module-api-headers.txt`.  Resolve and stage all index conflicts under `include/qore` before checking or updating the record.  The check fails when:
 
 - the hash differs and the API does not: the author either increments `QORE_MODULE_API_MINOR` (a change that a
   compiled module would get wrong), or, for a change that cannot affect a compiled module (a new function or type

@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - TCP, UNIX-domain and IPv6 sockets, TLS, timeouts, pipes as sockets, async socket I/O
+# test-loopback: localhost - it tests connecting to the name localhost, including the Happy Eyeballs fallback from a ::1 blackhole to 127.0.0.1 at the same port; the servers of its localhost clients are bound to the name "localhost", which listens on its first address and holds the port on the other loopback address, and its 127.0.0.1 servers have 127.0.0.1 clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -2173,16 +2174,21 @@ class SocketTest inherits QUnit::Test {
     }
 
     #! Forwards data from @p src to @p dst for sslUpgradeHeldFlightsTest()
-    /** @param holds chunk i is held for holds[i] before it is forwarded
+    /** @param dir the direction, for the events
+        @param holds chunk i is held for holds[i] before it is forwarded
         @param split chunk i is forwarded in two halves split[i] apart
         @param frag if not 0, every chunk is forwarded in pieces of this size, @p gap apart
+        @param events receives what the relay does, with its time after @p t0, so that a failure tells data that the
+        relay did not forward (an error, an early end) from data that it forwarded and the peer did not read
+        (qore#7521)
     */
-    private static forwardTlsFlights(Socket src, Socket dst, list<auto> holds, list<auto> split, int frag, date gap,
-            Counter done) {
+    private static forwardTlsFlights(string dir, Socket src, Socket dst, list<auto> holds, list<auto> split, int frag,
+            date gap, Counter done, Queue events, date t0) {
         on_exit {
             try {
                 dst.shutdown();
             } catch (hash<ExceptionInfo> ex) {
+                SocketTest::heldFlightEvent(events, t0, "%s: shutdown: %s: %s", dir, ex.err, ex.desc);
             }
             done.dec();
         }
@@ -2190,8 +2196,10 @@ class SocketTest inherits QUnit::Test {
             for (int i = 0; True; ++i) {
                 binary b = src.recvBinary(0, 30s);
                 if (!b.size()) {
+                    SocketTest::heldFlightEvent(events, t0, "%s: end of data after %d chunk(s)", dir, i);
                     break;
                 }
+                SocketTest::heldFlightEvent(events, t0, "%s: chunk %d: %d byte(s)", dir, i, b.size());
                 if (*date h = holds[i]) {
                     usleep(h);
                 }
@@ -2210,10 +2218,21 @@ class SocketTest inherits QUnit::Test {
                 } else {
                     dst.send(b);
                 }
+                SocketTest::heldFlightEvent(events, t0, "%s: chunk %d forwarded", dir, i);
             }
         } catch (hash<ExceptionInfo> ex) {
-            # the connection was closed
+            # the connection was closed; recorded for a failure that follows
+            SocketTest::heldFlightEvent(events, t0, "%s: %s: %s", dir, ex.err, ex.desc);
         }
+    }
+
+    #! Records an event of sslUpgradeHeldFlightsTest() with its time after @p t0
+    /** @param events the events of the case
+        @param t0 the start of the case
+        @param fmt the format of the event, for vsprintf() with the remaining arguments
+    */
+    private static heldFlightEvent(Queue events, date t0, string fmt, ...) {
+        events.push(sprintf("%d ms: %s", get_duration_milliseconds(now_us() - t0), vsprintf(fmt, argv)));
     }
 
     #! A TLS upgrade completes as soon as the data of a delayed peer arrives (qore#7118)
@@ -2250,22 +2269,28 @@ class SocketTest inherits QUnit::Test {
             relay.listen();
             int relay_port = relay.getSocketInfo().port;
 
-            # the relay's accept thread and its forwarding threads
+            # the relay's accept thread and its forwarding threads; every thread of the case records what it does in
+            # events, which a failure reports (qore#7521)
+            Queue events();
+            date t0 = now_us();
             Counter relay_done(1);
             background sub () {
                 on_exit relay_done.dec();
                 try {
                     Socket a = relay.accept(15s);
+                    SocketTest::heldFlightEvent(events, t0, "relay: accepted the client's connection");
                     Socket b();
                     b.connect("127.0.0.1:" + server_port, 15s);
+                    SocketTest::heldFlightEvent(events, t0, "relay: connected to the server");
                     relay_done.inc();
                     relay_done.inc();
-                    background SocketTest::forwardTlsFlights(a, b, c.c2s ?? (), c.c2s_split ?? (), c.frag ?? 0,
-                        c.gap ?? 0s, relay_done);
-                    background SocketTest::forwardTlsFlights(b, a, c.s2c ?? (), c.s2c_split ?? (), c.frag ?? 0,
-                        c.gap ?? 0s, relay_done);
+                    background SocketTest::forwardTlsFlights("c2s", a, b, c.c2s ?? (), c.c2s_split ?? (),
+                        c.frag ?? 0, c.gap ?? 0s, relay_done, events, t0);
+                    background SocketTest::forwardTlsFlights("s2c", b, a, c.s2c ?? (), c.s2c_split ?? (),
+                        c.frag ?? 0, c.gap ?? 0s, relay_done, events, t0);
                 } catch (hash<ExceptionInfo> ex) {
                     # the client's or the server's connection failed, which the checks below report
+                    SocketTest::heldFlightEvent(events, t0, "relay: %s: %s", ex.err, ex.desc);
                 }
             }();
 
@@ -2273,13 +2298,17 @@ class SocketTest inherits QUnit::Test {
             background sub () {
                 try {
                     Socket peer = server.accept(15s);
+                    SocketTest::heldFlightEvent(events, t0, "server: accepted the relay's connection");
                     if (c.server_delay) {
                         usleep(c.server_delay);
                     }
                     peer.upgradeServerToSSL(15s);
+                    SocketTest::heldFlightEvent(events, t0, "server: upgraded");
                     peer.send("ok");
+                    SocketTest::heldFlightEvent(events, t0, "server: sent its data");
                     q.push(peer);
                 } catch (hash<ExceptionInfo> ex) {
+                    SocketTest::heldFlightEvent(events, t0, "server: %s: %s", ex.err, ex.desc);
                     q.push(ex);
                 }
             }();
@@ -2291,29 +2320,47 @@ class SocketTest inherits QUnit::Test {
             string ok;
             try {
                 client.upgradeClientToSSL(15s);
+                SocketTest::heldFlightEvent(events, t0, "client: upgraded");
                 ok = client.recv(2, 15s);
+                SocketTest::heldFlightEvent(events, t0, "client: received the server's data");
             } catch (hash<ExceptionInfo> ex) {
+                SocketTest::heldFlightEvent(events, t0, "client: %s: %s", ex.err, ex.desc);
                 err = ex;
             }
             date elapsed = now_us() - start;
             client.close();
-            auto server_result = q.get(30s);
+            auto server_result;
+            try {
+                server_result = q.get(30s);
+            } catch (hash<ExceptionInfo> ex) {
+                server_result = {"err": ex.err, "desc": "no outcome within 30 s"};
+            }
             if (server_result.typeCode() == NT_OBJECT) {
                 server_result.close();
             }
             # the relay's threads end with the connections
-            relay_done.waitForZero(30s);
+            bool relay_ended = !relay_done.waitForZero(30s);
             relay.close();
             server.close();
 
-            if (err) {
-                fail(sprintf("%s: client: %s: %s after %d ms", label, err.err, err.desc,
-                    get_duration_milliseconds(elapsed)));
+            # a failure reports what the client, the server and each direction of the relay did and when
+            if (err || ok != "ok" || server_result.typeCode() == NT_HASH || !relay_ended) {
+                list<string> log = ();
+                while (events.size()) {
+                    log += events.get();
+                }
+                if (!relay_ended) {
+                    log += "the relay's threads did not end within 30 s";
+                }
+                fail(sprintf("%s: client: %s after %d ms; server: %s; events:\n  %s", label,
+                    err ? sprintf("%s: %s", err.err, err.desc) : sprintf("received %y", ok),
+                    get_duration_milliseconds(elapsed),
+                    server_result.typeCode() == NT_HASH
+                        ? sprintf("%s: %s", server_result.err, server_result.desc)
+                        : "upgraded and sent its data",
+                    (foldl $1 + "\n  " + $2, log)));
             }
             assertEq("ok", ok, label);
-            if (server_result.typeCode() == NT_HASH) {
-                fail(sprintf("%s: server: %s: %s", label, server_result.err, server_result.desc));
-            }
             # the hold took effect
             assertGe(c.min ?? hold, elapsed, label);
         }

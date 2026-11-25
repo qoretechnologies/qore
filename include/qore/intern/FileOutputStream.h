@@ -76,6 +76,11 @@ public:
       return !f.isOpen();
    }
 
+   //! returns the descriptor of the file, or -1 if it is not open
+   DLLLOCAL int getFD() const {
+      return f.getFD();
+   }
+
    DLLLOCAL void close(ExceptionSink* xsink) override {
       assert(!isClosed());
       int rc = f.close();

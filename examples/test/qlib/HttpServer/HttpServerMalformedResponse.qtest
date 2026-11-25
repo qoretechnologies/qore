@@ -164,6 +164,13 @@ class BadHandler inherits AbstractHttpRequestHandler {
                            : s.sendHttp2StreamData(sid, binary("refused: " + ex.err + ": " + ex.desc), True);
                     }
                     break;
+                case "body-read-error": {
+                    # The native decompressor runs on the I/O thread and cannot read this response body.
+                    InputStream response_body = new TransformInputStream(new BinaryInputStream(binary("invalid gzip")),
+                        get_decompressor(COMPRESSION_ALG_GZIP));
+                    s.submitHttp2StreamingResponseWithStream(sid, 200, {}, response_body);
+                    break;
+                }
                 case "withstream": {
                     # a streamed response that the handler submits itself, then reply_sent without "streaming"; with
                     # 1, the stream cannot be read on the I/O thread, and the response is submitted as a whole
@@ -293,6 +300,7 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
         addTestCase("content-length fields that do not match the body are refused", \contentLengthTest());
         addTestCase("a response without content sends no body", \noBodyTest());
         addTestCase("a streamed body of another length than declared resets its stream", \streamLengthTest());
+        addTestCase("HTTP/2 response body read errors reset only its stream", \bodyReadErrorTest());
         addTestCase("a compressed body is sent with its own length", \compressedTest());
         addTestCase("te is not sent in a response", \teTest());
         addTestCase("a CONNECT response is never malformed", \connectTest());
@@ -370,9 +378,11 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
             err = ex;
         }
         list<string> entries = plain.getEntries(held_id);
-        string diag = sprintf("held request %y: %s; server entries: %y; client connections: %y; client stats: %y",
-            held_id, err ? sprintf("%s: %s", err.err, err.desc) : sprintf("status %y", status), entries,
-            mgr.getConnectionInfo(), mgr.getStats());
+        # the client's stats include the connections it closed most recently and why (recent_closes), and the server
+        # keeps those it closed (qore#7443), so that a connection that died names the path that closed it
+        string diag = sprintf("held request %y: %s; server entries: %y; client connections: %y; client stats: %y; "
+            "server closes: %y", held_id, err ? sprintf("%s: %s", err.err, err.desc) : sprintf("status %y", status),
+            entries, mgr.getConnectionInfo(), mgr.getStats(), server.getHttpAsyncIo().getRecentConnectionCloses());
         if (err || entries.size() != 1) {
             printf("%s: %s\n", msg, diag);
         }
@@ -448,6 +458,11 @@ class HttpServerMalformedResponseTest inherits QUnit::Test {
                 assertRegex("RESET", rv.ex.desc, sprintf("%s %s: the stream is reset", protocol, c));
             }
         }
+    }
+
+    bodyReadErrorTest() {
+        hash<auto> rv = withHeldStream("h2", "body read error", "GET", "/bad/body-read-error");
+        assertRegex("RESET", rv.ex.desc, "the client receives a stream reset");
     }
 
     teTest() {

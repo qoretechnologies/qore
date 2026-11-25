@@ -47,6 +47,10 @@
 #include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/Passes/PassBuilder.h>
+#ifdef DEBUG
+// qore_jit_dbg_pipeline_uninitialized_level()
+#include <llvm/IR/IRBuilder.h>
+#endif
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -1094,6 +1098,61 @@ static void optimizeModule(llvm::Module& module, int opt_level, const std::atomi
 
     delete tm;
 }
+
+#ifdef DEBUG
+// builds and runs the optimization pipeline of a module of one function with the calls of optimizeModule(), with an
+// optimization level whose bytes were never written, so that valgrind reports an uninitialised value that Qore's code
+// passes to LLVM (see examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of
+// examples/test/valgrind.supp must not hide it)
+int qore_jit_dbg_pipeline_uninitialized_level() {
+    // the native target, once for the process, as the JIT sets it up (the process may not have compiled code yet)
+    qore_llvm_initialize_targets();
+    llvm::LLVMContext ctx;
+    llvm::Module module("dbg", ctx);
+    llvm::Function* f = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getInt64Ty(ctx),
+        {llvm::Type::getInt64Ty(ctx)}, false), llvm::Function::ExternalLinkage, "f", module);
+    llvm::IRBuilder<> b(llvm::BasicBlock::Create(ctx, "entry", f));
+    b.CreateRet(b.CreateAdd(f->getArg(0), b.getInt64(1)));
+    std::string triple_str = llvm::sys::getDefaultTargetTriple();
+    llvm::Triple triple(triple_str);
+    std::string target_error;
+#if LLVM_VERSION_MAJOR >= 21
+    auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+#else
+    auto* target = llvm::TargetRegistry::lookupTarget(triple_str, target_error);
+#endif
+    if (!target) {
+        return -1;
+    }
+#if LLVM_VERSION_MAJOR >= 21
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#else
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple_str, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#endif
+    if (!tm) {
+        return -1;
+    }
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+    llvm::PassBuilder PB(tm.get(), llvm::PipelineTuningOptions(), std::nullopt, nullptr);
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    // the level is copied from memory that was never written, as a bug of Qore's code could pass one
+    std::unique_ptr<unsigned char[]> raw(new unsigned char[sizeof(llvm::OptimizationLevel)]);
+    llvm::OptimizationLevel level = llvm::OptimizationLevel::O2;
+    memcpy(static_cast<void*>(&level), raw.get(), sizeof(level));
+    auto MPM = PB.buildPerModuleDefaultPipeline(level);
+    MPM.run(module, MAM);
+    return 0;
+}
+#endif
 
 //! stops the background compile thread at process exit
 /** ~QoreJIT() used to do this; the singleton is immortal now, so the stop is registered from the

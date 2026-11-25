@@ -1301,9 +1301,7 @@ void qore_object_private::getContextStorageMembers(const qore_class_private* sto
     }
 }
 
-QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
-    // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink, const qore_class_private* class_ctx) const {
     // a class context with no private access to the object's class still has the storage of some members (issue #7180)
     const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
@@ -3013,6 +3011,30 @@ QoreValue QoreObject::evalMember(const char* mem, ExceptionSink* xsink) {
 
 QoreValue qore_object_private::evalMember(QoreObject* obj, const std::string& mem, ExceptionSink* xsink) {
     return obj->priv->evalMember(mem.c_str(), mem.size(), xsink);
+}
+
+bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreValue& result) {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    // A gate, accessor or notification can run user code as part of ordinary lvalue navigation.
+    if (cls->member_write_gate || cls->memberGate || cls->has_member_accessors || cls->memberNotification) {
+        return false;
+    }
+    const qore_class_private* ctx = runtime_get_class();
+    if (ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, ctx)) {
+        ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, name.c_str(), ctx);
+    }
+    const qore_class_private* storage_ctx = nullptr;
+    if (checkMemberAccess(name.c_str(), ctx, storage_ctx)) {
+        return false;
+    }
+    // Checking the reference count and taking the result reference must be exclusive: two readers could both
+    // see a single owner before either takes its reference. Let normal lvalue navigation wait and recheck on contention.
+    QoreOptionalVarRWWriteLocker al(rml);
+    if (!al || status != OS_OK) {
+        return false;
+    }
+    const QoreHashNode* storage = storage_ctx ? getInternalData(storage_ctx) : data;
+    return storage && qore_try_ref_unique_container(storage->getKeyValue(name.c_str()), result);
 }
 
 QoreValue qore_object_private::evalMember(const char* mem, size_t len, ExceptionSink* xsink) {

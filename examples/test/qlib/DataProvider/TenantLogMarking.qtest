@@ -1,0 +1,266 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class TenantLogMarkingTest
+
+#! The messages that a sandboxed subclass of a data provider writes to the host's process-wide logger are marked
+#! (qore#7110)
+/** A data provider without a logger of its own logs the errors that it catches with the global DataProvider logger,
+    which the host sets for the whole process (AbstractDataProvider::logCaughtError()).  A subclass that sandboxed code
+    declares could write messages of its choosing there, directly or through the module's methods that format its own
+    values, which looked like the module's own: they are marked with the Program of the object's class, whichever code
+    calls the object (the tenant, the host or another tenant).  The messages of a data provider of a module that
+    sandboxed code uses, and those of the host's own subclass, keep their form, and a line break in a value that a
+    caller chose is written as an escape, in every message.  The worker runs in each execution mode.
+*/
+class TenantLogMarkingTest inherits QUnit::Test {
+    public {
+        #! the worker: prints the tenant's Program ID and each message of the host's logger, with its case
+        const Worker = "%modern
+%no-child-restrictions
+%prepend-module-path \"QLIB_DIR\"
+%requires DataProvider
+
+class HostLogger inherits LoggerWrapper {
+    public {
+        list<string> messages = ();
+    }
+
+    constructor() : LoggerWrapper(new Logger(\"host\")) {
+    }
+
+    logArgs(Qore::Logger::LoggerLevel level, string message, *softlist<auto> args) {
+        messages += vsprintf(message, args);
+    }
+}
+
+# the host's own subclass
+class HostProvider inherits AbstractDataProvider {
+    string getName() {
+        return \"host-provider\";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{\"type\": \"HostProvider\"};
+    }
+
+    write(string msg) {
+        logCaughtError(\"%s\", msg);
+    }
+}
+
+const TenantCode = \"%requires DataProvider
+class TenantProvider inherits AbstractDataProvider {
+    string getName() {
+        return \\\"tenant-provider\\\";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{\\\"type\\\": \\\"TenantProvider\\\"};
+    }
+
+    write(string msg) {
+        logCaughtError(\\\"%s\\\", msg);
+    }
+}
+
+# a message of the tenant's own choosing, through the module's method
+auto sub direct() {
+    TenantProvider p();
+    p.write(\\\"injected message\\\");
+}
+
+# the module's method that formats the values of the tenant's subclass
+auto sub inherited() {
+    TenantProvider p();
+    return p.tryGetActionOptionsFromRequestTypeWithData(1);
+}
+
+# a data provider of a module that the tenant uses
+auto sub module() {
+    QoreProcessorsDataProvider p();
+    return p.tryGetActionOptionsFromRequestTypeWithData(1);
+}
+
+# a line break in a value that the tenant gives a module's data provider
+auto sub module_newline() {
+    QoreProcessorsDataProvider p();
+    return p.tryGetActionOptionsForRequestWithOptions(<DataProviderActionInfo>{
+        \\\"app\\\": \\\"x\\nFORGED LINE\\\", \\\"action\\\": \\\"y\\\", \\\"data_dependent_options\\\": True,
+    }, {\\\"a\\\": 1});
+}
+
+# a line break in a message of the tenant's own choosing
+auto sub direct_newline() {
+    TenantProvider p();
+    p.write(\\\"benign\\nFORGED LINE\\\");
+}
+
+# an object of the tenant's class, which other code calls
+object sub make() {
+    return new TenantProvider();
+}
+
+# calls an object of another tenant's class
+auto sub call_other(object o) {
+    return o.tryGetActionOptionsFromRequestTypeWithData(1);
+}
+
+# bytes that are not valid UTF-8 in a value that the tenant gives a module's data provider
+auto sub module_badenc() {
+    QoreProcessorsDataProvider p();
+    return p.tryGetActionOptionsForRequestWithOptions(<DataProviderActionInfo>{
+        \\\"app\\\": binary_to_string(<61ff0a46>), \\\"action\\\": \\\"y\\\", \\\"data_dependent_options\\\": True,
+    }, {\\\"a\\\": 1});
+}
+
+# a Unicode line separator, ESC and a C1 control character (NEL) in a message of the tenant's own choosing
+auto sub direct_controls() {
+    TenantProvider p();
+    p.write(binary_to_string(<61e280a8621b63c285e2808e>));
+}
+
+# a long message with multibyte characters
+auto sub direct_large() {
+    TenantProvider p();
+    p.write(strmul(\\\"é\\\", 100000) + \\\"\\nEND\\\");
+}
+
+# a value that cannot be converted to the encoding of the format string
+auto sub module_badutf16() {
+    QoreProcessorsDataProvider p();
+    return p.tryGetActionOptionsForRequestWithOptions(<DataProviderActionInfo>{
+        \\\"app\\\": binary_to_string(<610062000a>, \\\"UTF-16LE\\\"), \\\"action\\\": \\\"y\\\",
+        \\\"data_dependent_options\\\": True,
+    }, {\\\"a\\\": 1});
+}
+
+# an object of a module's class that the tenant creates
+object sub make_module() {
+    return new QoreProcessorsDataProvider();
+}
+
+# returns the Program ID that SandboxManager::getSandboxedProgramId() gives for an object
+*int sub id_of(object o) {
+    return SandboxManager::getSandboxedProgramId(o);
+}
+\";
+
+HostLogger host_logger();
+DataProvider::setGlobalLogger(host_logger);
+Program tenant(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+tenant.parse(TenantCode, \"tenant\");
+tenant.setSandboxManager(new SandboxManager());
+printf(\"tenant=%d\\n\", tenant.getProgramId());
+foreach string c in (\"direct\", \"inherited\", \"module\", \"module_newline\", \"direct_newline\",
+        \"module_badenc\", \"direct_controls\", \"direct_large\", \"module_badutf16\") {
+    host_logger.messages = ();
+    tenant.callFunction(c);
+    printf(\"%s: %s\\n\", c, host_logger.messages.join(\" | \"));
+}
+# the host calls an object of the tenant's class
+object tenant_obj = tenant.callFunction(\"make\");
+host_logger.messages = ();
+tenant_obj.tryGetActionOptionsFromRequestTypeWithData(1);
+printf(\"hostcall: %s\\n\", host_logger.messages.join(\" | \"));
+# another tenant calls it
+Program other(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+other.parse(TenantCode, \"other\");
+other.setSandboxManager(new SandboxManager());
+printf(\"other=%d\\n\", other.getProgramId());
+host_logger.messages = ();
+other.callFunction(\"call_other\", tenant_obj);
+printf(\"othercall: %s\\n\", host_logger.messages.join(\" | \"));
+# the Program of an object's class: of the tenant's class, also for another tenant; none for the host's or a module's
+printf(\"api: %y %y %y %y\\n\", SandboxManager::getSandboxedProgramId(tenant_obj) == tenant.getProgramId(),
+    other.callFunction(\"id_of\", tenant_obj) == tenant.getProgramId(),
+    SandboxManager::getSandboxedProgramId(host_logger),
+    SandboxManager::getSandboxedProgramId(tenant.callFunction(\"make_module\")));
+host_logger.messages = ();
+(new HostProvider()).write(\"host message\");
+printf(\"host: %s\\n\", host_logger.messages.join(\" | \"));
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-tenant-log-marking-");
+    }
+
+    constructor() : QUnit::Test("TenantLogMarkingTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        addTestCase("the messages of a sandboxed data provider subclass are marked in each execution mode",
+            \testExecModes());
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        string worker = tmp.path + DirSep + "worker.q";
+        File f();
+        f.open2(worker, O_CREAT | O_WRONLY | O_TRUNC);
+        # the worker loads the modules of this tree, as the test does
+        f.write(replace(Worker, "QLIB_DIR", normalize_dir(get_script_dir() + "/../../../../qlib")));
+        f.close();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the worker runs its code once, so its native code is not checked
+            string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+                libqore_dir, libqore_dir, qore_bin, mode, worker), ExecModeHarness::NativeCheck::None);
+            hash<auto> lines;
+            foreach string line in (out.split("\n")) {
+                *list<*string> m = (line =~ x/^([a-z0-9_]+)[:=] ?(.*)$/);
+                if (m) {
+                    lines{m[0]} = m[1] ?? "";
+                }
+            }
+            assertRegex("^[0-9]+$", lines.tenant ?? "", mode + ": the tenant's Program ID: " + out);
+            assertRegex("^[0-9]+$", lines.other ?? "", mode + ": the other tenant's Program ID: " + out);
+            string mark = sprintf("[sandboxed Program %s] ", lines.tenant);
+            # the tenant's own message, and the module's message that formats the values of the tenant's subclass,
+            # are marked with the tenant's Program
+            assertEq(mark + "injected message", lines.direct, mode + ": a message of the tenant's choosing");
+            string inherited = lines.inherited ?? "";
+            assertEq(0, inherited.find(mark), mode + ": the module's method on the tenant's subclass: " + inherited);
+            assertRegex("tenant-provider", inherited, mode);
+            # the message of a module's data provider that the tenant uses, and the host's own, keep their form
+            assertRegex("failed to get the request type", lines.module, mode + ": a module's data provider");
+            assertFalse(lines.module =~ /sandboxed/, mode + ": a module's data provider is not marked");
+            assertEq("host message", lines.host, mode + ": the host's own subclass");
+            # a line break in a value that a caller chose is written as an escape, so that it cannot start a line that
+            # looks like a message of its own: in the message of a module's data provider (not marked) and in a message
+            # of the tenant's choosing (marked)
+            assertRegex("x\\\\nFORGED LINE", lines.module_newline ?? "", mode + ": a module's message");
+            assertFalse((lines.module_newline ?? "") =~ /sandboxed/, mode + ": a module's message is not marked");
+            assertEq(mark + "benign\\nFORGED LINE", lines.direct_newline, mode + ": a tenant's message");
+            assertFalse(out =~ /^FORGED LINE/m, mode + ": no line of the tenant's choosing: " + out);
+            # the message of an object of the tenant's class names the tenant, whichever code calls it: the host, or
+            # another tenant
+            string hostcall = lines.hostcall ?? "";
+            assertEq(0, hostcall.find(mark), mode + ": the host calls the tenant's object: " + hostcall);
+            string othercall = lines.othercall ?? "";
+            assertEq(0, othercall.find(mark), mode + ": another tenant calls it: " + othercall);
+            # bytes that are not valid UTF-8 are logged as ISO-8859-1 characters, and logging does not fail
+            assertRegex("action aÿ\\\\nF/y", lines.module_badenc ?? "", mode + ": invalid UTF-8: " + out);
+            # a Unicode line separator, ESC and NEL are escaped
+            assertEq(mark + "a\\u2028b\\x1bc\\u0085\\u200e", lines.direct_controls, mode + ": control characters");
+            assertEq(mark + strmul("é", 100000) + "\\nEND", lines.direct_large, mode + ": a long message");
+            # a value that cannot be converted to the encoding of the format string does not make logging fail
+            assertRegex("the arguments of the message cannot be formatted: ENCODING-CONVERSION-ERROR",
+                lines.module_badutf16 ?? "", mode + ": an unconvertible value");
+            assertEq("True True null null", lines.api, mode + ": SandboxManager::getSandboxedProgramId()");
+        }
+    }
+}

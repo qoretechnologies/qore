@@ -3360,8 +3360,14 @@ set(_qcc_format_sources
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
+#   QoreAOTMethodDispatchReclaim
+#                      when the run-time method dispatch cache that AOT code's
+#                      by-name calls use frees the entries it replaced
+#                      (qore#7459): libqore's own run-time state; qcc emits
+#                      calls to the same runtime functions either way.
 set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTMethodDispatchReclaim.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPointerSlot.h

@@ -103,27 +103,6 @@ public enum HttpVersionMode : string {
     H3 = "h3",
 }
 
-#! Releases a handle of work of the module cleanup that was handed over to code that is destroyed without being run
-/** See HttpAsyncSocketIoController::wrapCleanupHandover() (qore#7239); releasing a handle again has no effect, so the
-    release when the code has run (AsyncIoController::runModuleCleanupWork()) and the release here do not conflict
-*/
-class ModuleCleanupHandoverGuard {
-    public {
-        #! the handle
-        int handle;
-    }
-
-    #! Creates the object with the handle that it releases when it is destroyed
-    constructor(int handle) {
-        self.handle = handle;
-    }
-
-    #! Releases the handle if it is still held
-    destructor() {
-        AsyncIoController::releaseModuleCleanupWork(handle);
-    }
-}
-
 #! HTTP-aware async I/O controller for managing HTTP connections
 /** This controller manages HTTP connections through their lifecycle:
 
@@ -172,6 +151,14 @@ public class HttpAsyncSocketIoController {
         #! Thread pool configuration for recreation after stop(); internal, as it selects functionality such as the
         #! reverse lookup of peers (qore#7056)
         hash<auto> pool_opts;
+    }
+
+    private {
+        #! The HTTP/2 and HTTP/3 connections closed most recently, with why (qore#7443); see getRecentConnectionCloses()
+        list<hash<auto>> recent_closes = ();
+
+        #! Protects @ref recent_closes
+        Mutex recent_closes_lock();
     }
 
     private {
@@ -289,7 +276,7 @@ public class HttpAsyncSocketIoController {
           @ref False "False")
         - \c io_operation_timeout: the time allowed for an I/O operation of a connection: reading the first request
           of a connection, reading a request header after the idle time (\c ttl) of a keep-alive connection, and
-          sending a response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
+          waiting for progress sending an HTTP/1 response (default @ref AsyncSocketIoController::DefaultIoOperationTimeout); must be greater than
           zero
 
         @throw HTTP-SERVER-INIT-ERROR \c io_operation_timeout is not greater than zero
@@ -960,16 +947,13 @@ public class HttpAsyncSocketIoController {
             # (qore#6508)
             *LoggerInterface stop_logger = logger;
             try {
-                background sub () {
-                    try {
-                        pool.stopWait();
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (stop_logger) {
-                            stop_logger.error("Async HTTP shutdown stopping handler pool failed: %s: %s", ex.err,
-                                ex.desc);
-                        }
-                    }
-                }();
+                # work of the module cleanup that stops the pool hands itself over to the thread that stops it
+                # (qore#7339); wrapped here, in this thread, as background evaluates its expression in the new
+                # thread; the call is created by a static method, as this stop can run in the destructor, where a
+                # closure created here would refer to the object being destroyed, which background refuses
+                code<nothing()> stop_pool = AsyncIoController::wrapModuleCleanupWork(
+                    HttpAsyncSocketIoController::getPoolStop(pool, stop_logger));
+                background stop_pool();
             } catch (hash<ExceptionInfo> ex) {
                 # no thread can be started (a thread limit): the pool is stopped when it is destroyed
                 logShutdownException("stopping handler pool", ex);
@@ -1140,10 +1124,14 @@ public class HttpAsyncSocketIoController {
         @param sent the transmission result
     */
     private:internal dispatchResponseSendResult(HttpAsyncTarget target, code<nothing(bool)> callback, bool sent) {
+        # work of the module cleanup that reports the result (the cancel of a connection whose response was being
+        # sent) hands itself over to the thread that calls the callback (qore#7339); the call is created by a static
+        # method, as this can run in the destructor (its cancel callbacks), where a closure created here would refer
+        # to the object being destroyed, which background refuses
+        code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(
+            HttpAsyncSocketIoController::getSendResultCall(callback, sent));
         try {
-            submitToHandlerPool(target, sub () {
-                callback(sent);
-            });
+            submitToHandlerPool(target, c);
         } catch (hash<ExceptionInfo> ex) {
             # the handler pool no longer accepts tasks (the controller is stopping); the callback must still be
             # called exactly once
@@ -1151,10 +1139,28 @@ public class HttpAsyncSocketIoController {
                 ex.err, ex.desc);
             # the callback runs in a closure of this module, as on the handler pool: a callable that restricted
             # code created is not scheduled onto another thread itself (qore#7056)
-            background sub () {
-                callback(sent);
-            }();
+            background c();
         }
+    }
+
+    #! Returns a call that reports a transmission result to a callback; static, so that it does not refer to an object
+    private:internal static code<nothing()> getSendResultCall(code<nothing(bool)> callback, bool sent) {
+        return sub () {
+            callback(sent);
+        };
+    }
+
+    #! Returns a call that stops a handler pool; static, so that it does not refer to an object
+    private:internal static code<nothing()> getPoolStop(Priv::HttpHandlerPool pool, *LoggerInterface stop_logger) {
+        return sub () {
+            try {
+                pool.stopWait();
+            } catch (hash<ExceptionInfo> ex) {
+                if (stop_logger) {
+                    stop_logger.error("Async HTTP shutdown stopping handler pool failed: %s: %s", ex.err, ex.desc);
+                }
+            }
+        };
     }
 
     #! Submits a user-code body to the handler thread pool, wrapped in the target's
@@ -1173,10 +1179,12 @@ public class HttpAsyncSocketIoController {
         no-ops; subclasses such as the HttpServer integration override them to
         capture and restore framework-specific thread-local data.
 
-        The ThreadPool task takes no arguments. The pool hands off the
-        target/body pair through its queue.  This
-        avoids submitting a wrapper closure that captures request-local values
-        and can lose delayed dispatch state under heavy async scheduling.
+        The task that runs \a body is submitted to the pool by this call, so
+        \a body runs with the context (sandbox restrictions and provenance) of
+        the code that calls it: the task takes the target/body pair from a
+        handoff of this submission only, never the pair of another submission
+        (qore#7494), and releases them before it ends; the closure that the
+        pool keeps captures only the handoff.
 
         Exceptions raised by \a body are not caught here; callers may add their
         own try/catch inside \a body for dispatch-specific error handling.
@@ -1193,9 +1201,33 @@ public class HttpAsyncSocketIoController {
         # (qore#7056)
         check_thread_callable(body, "HttpAsyncSocketIoController::submitToHandlerPool()");
         check_thread_callable(target, "HttpAsyncSocketIoController::submitToHandlerPool()");
+        # work of the module cleanup that dispatches the body (a request of a server that such work started, the end of
+        # a stream of a connection that the cleanup canceled) hands itself over to the handler pool's thread, so that
+        # the cleanup waits until the body has run (qore#7339); code wrapped already is taken as it is
+        body = AsyncIoController::wrapModuleCleanupWork(body);
         Priv::HttpHandlerPool pool = handler_pool;
-        pool.submit(handlerTaskRunner(pool));
-        pool.tasks.push({"target": target, "body": body});
+        # the runner takes the work item of this submission only: a task of the pool runs with the context (sandbox
+        # restrictions and provenance) of the code that submitted it, so the work item of another submission taken
+        # from a shared queue could run with the wrong context (qore#7494)
+        Priv::HttpHandlerHandoff handoff(target, body);
+        submitHandlerTask(pool, handlerTaskRunner(pool, handoff));
+    }
+
+    #! Submits a task that runs a work item of submitToHandlerPool() to the handler pool
+    /** The task runs with the context (sandbox restrictions and provenance) of the code that submits it: the code
+        that called submitToHandlerPool(), and an override of this method on the call stack.  An override must submit
+        the task by calling this method of HttpAsyncSocketIoController in the calling thread.
+
+        This is a test hook, not an extension point: a test holds a submission here, after its task was submitted, to
+        make submissions overlap at a point of its choice (qore#7494).
+
+        @param pool the handler pool
+        @param task the task to submit
+
+        @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
+    */
+    private submitHandlerTask(Qore::Thread::ThreadPool pool, code task) {
+        pool.submit(task);
     }
 
     #! Takes the handler-pool thread that runs the calling task out of the handler pool
@@ -1215,13 +1247,14 @@ public class HttpAsyncSocketIoController {
         return pool ? pool.detachCurrentThread() : False;
     }
 
-    #! Binds the worker to this generation of the pool, including its handoff queue. The request and body are
-    #! handed off separately so the submitted closure captures neither.
-    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool) {
-        return sub () { runHandlerPoolTask(pool); };
+    #! Binds the worker to this generation of the pool and to the handoff of its own submission (qore#7494). The
+    #! submitted closure captures the handoff, not the request and body: the worker takes them out of it, so that they
+    #! are released when the worker's task ends, not with the closure.
+    private code<nothing()> handlerTaskRunner(Priv::HttpHandlerPool pool, Priv::HttpHandlerHandoff handoff) {
+        return sub () { runHandlerPoolTask(pool, handoff); };
     }
 
-    private runHandlerPoolTask(Priv::HttpHandlerPool pool) {
+    private runHandlerPoolTask(Priv::HttpHandlerPool pool, Priv::HttpHandlerHandoff handoff) {
         # ThreadPool clears thread-local variables after releasing the submitted callable. Leaving the pool
         # identity installed also recognizes a stop in a destructor run by that release.
         Priv::running_handler_pool = pool;
@@ -1234,19 +1267,13 @@ public class HttpAsyncSocketIoController {
                 count.dec();
             }
         }
-        runHandlerBody(pool);
+        runHandlerBody(handoff);
     }
 
-    #! The handoff, body, target and dispatch context are released before this worker drops its active count.
-    private runHandlerBody(Priv::HttpHandlerPool pool) {
-        hash<auto> task;
-        try {
-            task = pool.tasks.get(10s);
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "handler-pool task handoff failed: %s: %s",
-                ex.err, ex.desc);
-            return;
-        }
+    #! The body, target and dispatch context are released before this worker drops its active count.
+    private runHandlerBody(Priv::HttpHandlerHandoff handoff) {
+        # the work item of this worker's own submission (qore#7494)
+        *hash<auto> task = handoff.take();
 
         *HttpAsyncTarget target = task.target;
         *code<nothing()> body = task.body;
@@ -3615,10 +3642,17 @@ public class HttpAsyncSocketIoController {
                 # reference is opaque, like that one: nothing that the controller holds references this wrapper or
                 # its closure (the global I/O controller does, until the completion has run), so it is in no cycle
                 HttpAsyncSocketIoController ctrl @= self;
-                submit_op = new DelegatingPollOperation(op,
-                    sub (hash<SocketPollResultInfo> result) {
-                        ctrl.handleConnectionResult(result, uh, state);
-                    });
+                code complete = sub (hash<SocketPollResultInfo> result) {
+                    ctrl.handleConnectionResult(result, uh, state);
+                };
+                if (state == HttpConnectionState::SendStreamResponse || state == HttpConnectionState::SendAndReadHeader
+                        || state == HttpConnectionState::SendStreamAndReadHeader) {
+                    hash<auto> settings = getStreamSendSettings(cinfo.listener);
+                    submit_op = new DelegatingPollOperation(op, complete, NOTHING, io_operation_timeout,
+                        settings.stream_send_min_rate, settings.stream_send_min_rate_window);
+                } else {
+                    submit_op = new DelegatingPollOperation(op, complete);
+                }
             }
             hash<SocketPollOperationInfo> submit_info = <SocketPollOperationInfo>{
                 "sock": cinfo.sock,
@@ -3754,8 +3788,15 @@ public class HttpAsyncSocketIoController {
                 submitConnectionOp(uh, cinfo);
                 return;
             }
-            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
-                uh, orig_state, result.ex.err, result.ex.desc);
+            # where and why an HTTP/2 operation closed the connection (qore#7443)
+            *string close_reason = result.spop instanceof Http2PollOperation
+                ? cast<Http2PollOperation>(result.spop).getCloseReason()
+                : NOTHING;
+            log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s%s",
+                uh, orig_state, result.ex.err, result.ex.desc, close_reason ? ": " + close_reason : "");
+            if (result.spop instanceof Http2PollOperation) {
+                recordConnectionClose(uh, "h2", close_reason ?? "the operation failed", result.ex);
+            }
             if (orig_state == HttpConnectionState::SendStreamResponse && cinfo.after_send) {
                 dispatchResponseSendResult(cinfo.target, cinfo.after_send, False);
             }
@@ -3883,7 +3924,11 @@ public class HttpAsyncSocketIoController {
                         submitConnectionOp(uh, new_cinfo);
                     }
                 } else if (h3op.isClosed() || h3op.hasError()) {
-                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y", uh);
+                    # why the listener's operation ended (qore#7443)
+                    *hash<auto> h3err = h3op.getError();
+                    log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y%s", uh,
+                        h3err ? sprintf(" (%s: %s)", h3err.err, h3err.desc) : "");
+                    recordConnectionClose(uh, "h3", "the HTTP/3 listener's operation ended", h3err);
                     # Notify stream listeners (e.g., WebSocketStreamProcessor) so
                     # handler threads blocked in stream_done.waitForZero() wake up
                     h3op.notifyStreamListenersClosed();
@@ -4169,6 +4214,20 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        # an HTTP/1.x request whose body has a transfer coding other than chunked is answered with 501 (Not
+        # Implemented), and the connection is closed, as its body cannot be framed (RFC 9112 section 6.1)
+        if ((state == HttpConnectionState::Idle || state == HttpConnectionState::KeepAlive
+                || state == HttpConnectionState::ReadHeader
+                || state == HttpConnectionState::SendAndReadHeader)
+            && ex.err == "HTTP-UNSUPPORTED-TRANSFER-CODING"
+            && cinfo.sock.isOpen()) {
+            log(LoggerLevel::WARN, "HTTP request received on %s with an unsupported transfer coding: %s: %s; "
+                "answering with 501 (Not Implemented)", uh, ex.err, ex.desc);
+            if (sendBadRequest(uh, cinfo, ex.desc, 501, "Not Implemented")) {
+                return;
+            }
+        }
+
         # an HTTP/1.x request header that cannot be read, such as one with a NUL character, is answered with 400
         # (Bad Request), as RFC 9112 requires, and the connection is closed, as the rest of the request cannot be
         # framed; before, the connection was closed without a response
@@ -4206,7 +4265,7 @@ public class HttpAsyncSocketIoController {
         endConnectionSseStream(uh, cinfo);
     }
 
-    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request) or 431 (Request Header Fields Too Large), then closes the connection
+    #! Answers an HTTP/1.x request whose header could not be read with 400 (Bad Request), 431 (Request Header Fields Too Large) or 501 (Not Implemented), then closes the connection
     /** @param uh the connection's unique hash
         @param cinfo the connection
         @param desc why the header could not be read; sent as the body of the response
@@ -5244,10 +5303,10 @@ public class HttpAsyncSocketIoController {
     /** For code that must run exactly once, such as the end of a stream.
     */
     private:internal runOnHandlerPool(*HttpAsyncTarget target, code<nothing()> c) {
-        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
-        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
-        # this module
-        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239,
+        # qore#7339); code that cannot run on another thread (qore#7056) is then refused here, in the caller, which
+        # passes only code of this module
+        c = AsyncIoController::wrapModuleCleanupWork(c);
         if (target) {
             try {
                 submitToHandlerPool(target, c);
@@ -5264,45 +5323,12 @@ public class HttpAsyncSocketIoController {
         }
     }
 
-    #! Returns code that runs \a c, holding a handle of the work of the module cleanup that the current thread runs
-    /** At the end of the process, the module cleanup waits for the work that it counts before it deletes the modules;
-        code that such work leaves to another thread (a thread of its own, a thread of the handler pool) is waited for
-        too, until it has run (see
-        @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
-        qore#7239); outside of such work \a c is returned as it is.  If the returned code is discarded without being
-        run (a pool that drops its queued tasks, a caller that refuses it), the handle is released when the code is
-        destroyed, so that the cleanup does not wait for it
-
-        @param c the code to run on another thread
-        @param what the name of the caller for the error raised if \a c cannot be run on another thread
-
-        @return the code to run on the other thread
-
-        @throw PERMISSION-DENIED \a c cannot be run on another thread (see @ref Qore::check_thread_callable())
-
-        @since HttpServerAsyncIo 1.0
-    */
-    static code<nothing()> wrapCleanupHandover(code<nothing()> c, string what) {
-        int handle = AsyncIoController::holdModuleCleanupWork();
-        if (!handle) {
-            return c;
-        }
-        # releases the handle if the code returned is destroyed without being run
-        ModuleCleanupHandoverGuard guard(handle);
-        # the code runs on another thread: code that cannot start threads cannot have its code run there (qore#7056);
-        # checked here, as the code below runs it in a closure of this module
-        check_thread_callable(c, what);
-        return sub () {
-            AsyncIoController::runModuleCleanupWork(guard.handle, c);
-        };
-    }
-
     #! Runs code on a thread of its own, or in the calling thread if no thread can be started
     private:internal runOnThreadOfItsOwn(code<nothing()> c) {
-        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239); code
-        # that cannot run on another thread (qore#7056) is then refused here, in the caller, which passes only code of
-        # this module
-        c = wrapCleanupHandover(c, "HttpAsyncSocketIoController");
+        # work of the module cleanup that runs this code on another thread hands itself over to it (qore#7239,
+        # qore#7339); code that cannot run on another thread (qore#7056) is then refused here, in the caller, which
+        # passes only code of this module
+        c = AsyncIoController::wrapModuleCleanupWork(c);
         try {
             background c();
         } catch () {
@@ -6282,17 +6308,51 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! The number of closed connections kept for getRecentConnectionCloses()
+    const RecentCloseMax = 16;
+
+    #! Returns the HTTP/2 and HTTP/3 connections closed most recently, oldest first, with why (qore#7443)
+    /** For diagnostics: the reason is where and why the server's operation closed the connection.
+
+        @return a list of hashes with the keys \c connection (the connection's key), \c protocol (\c "h2" or
+        \c "h3"), \c reason, \c err and \c desc (the error, if any) and \c closed (when); at most the last 16
+    */
+    list<hash<auto>> getRecentConnectionCloses() {
+        AutoLock al(recent_closes_lock);
+        return recent_closes;
+    }
+
+    #! Records why a connection was closed (see getRecentConnectionCloses()); only called when it is closed
+    private recordConnectionClose(string uh, string protocol, string reason, *hash<auto> error) {
+        hash<auto> entry = {
+            "connection": uh,
+            "protocol": protocol,
+            "reason": reason,
+            "err": error.err,
+            "desc": error.desc,
+            "closed": now_us(),
+        };
+        AutoLock al(recent_closes_lock);
+        push recent_closes, entry;
+        if (recent_closes.size() > RecentCloseMax) {
+            splice recent_closes, 0, 1;
+        }
+    }
+
     #! Handles HTTP/2 connection closed
     private handleHttp2ConnectionClosed(string uh, hash<HttpActiveConnectionInfo> cinfo,
             Http2PollOperation h2op) {
         *hash<auto> error = h2op.getError();
+        # where and why the operation closed the connection (qore#7443)
+        string reason = h2op.getCloseReason() ?? "no reason recorded";
+        recordConnectionClose(uh, "h2", reason, error);
         if (error) {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s)",
-                uh, error.err, error.desc);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed with error: %y (%s: %s): %s",
+                uh, error.err, error.desc, reason);
             dispatchOnError(cinfo.target, cinfo.sock, cast<hash<ExceptionInfo>>(error),
                 cinfo.listener, cinfo.cx, uh, "HTTP/2 connection close");
         } else {
-            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y", uh);
+            log(LoggerLevel::DEBUG, "HTTP/2 connection closed: %y: %s", uh, reason);
         }
 
         signalPersistentQueuesForConnection(uh);
@@ -6412,15 +6472,34 @@ public class HttpAsyncSocketIoController {
 
 #! @cond nodoc
 namespace Priv {
-#! The pool and its queue stay together until the last worker of that generation returns.
+#! The pool stays until the last worker of that generation returns.
 class HttpHandlerPool inherits ThreadPool {
     public {
-        Queue tasks();
         Counter active();
     }
 
     constructor(hash<auto> opts) : ThreadPool(opts.max_handler_threads ?? 0,
             opts.min_idle_handler_threads ?? 0, opts.max_idle_handler_threads ?? 0) {
+    }
+}
+
+#! The work item of one submission to the handler pool, which only the worker of that submission takes (qore#7494)
+/** A task of the pool runs with the context (sandbox restrictions and provenance) of the code that submitted it: the
+    work item is handed to the worker of its own submission, never to a worker submitted by other code
+*/
+class HttpHandlerHandoff {
+    private {
+        *hash<auto> task;
+    }
+
+    constructor(object target, code body) {
+        task = {"target": target, "body": body};
+    }
+
+    #! Returns the work item and releases the handoff's reference to it; the worker calls it once
+    *hash<auto> take() {
+        *hash<auto> rv = remove task;
+        return rv;
     }
 }
 
