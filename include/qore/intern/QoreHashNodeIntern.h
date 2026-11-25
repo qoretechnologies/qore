@@ -315,20 +315,20 @@ public:
         return buckets ? static_cast<size_t>(mask) + 1 : 0;
     }
 
-    //! true if the map hashes its keys with the keyed hash (qore#7557)
+    //! true if the map hashes its keys with the keyed hash (qore#7557): a map with buckets whose insert limit is 0
     DLLLOCAL bool isHardened() const {
-        return hardened != 0;
+        return buckets && !limit;
     }
 
     //! true if the members of both maps keep hashes of the same kind, so that the hash that a member of one keeps
     //! finds its key in the other
     DLLLOCAL bool sameKind(const qore_hash_member_map& other) const {
-        return hardened == other.hardened;
+        return isHardened() == other.isHardened();
     }
 
     //! returns the hash of the key of \a len bytes at \a str in this map: the hash that its member keeps
     DLLLOCAL size_t hashOf(const char* str, size_t len) const {
-        return hardened ? qore_hash_keyed_bytes(str, len) : qore_hash_lookup_key::hashBytes(str, len);
+        return isHardened() ? qore_hash_keyed_bytes(str, len) : qore_hash_lookup_key::hashBytes(str, len);
     }
 
     //! returns the member with the key \a k, or nullptr
@@ -346,7 +346,8 @@ public:
                 return m;
             }
         }
-        if (hardened) [[unlikely]] {
+        // the map has buckets (it has members), so it is hardened if its insert limit is 0
+        if (!limit) [[unlikely]] {
             return findKeyed(k.str, k.len);
         }
         return nullptr;
@@ -359,12 +360,10 @@ public:
         of \a m is the keyed hash of its key then, as in any hardened map.
     */
     DLLLOCAL void insert(HashMember* m) {
-        if (count >= bucket_count()) {
-            grow();
-        }
-        // a hardened map, and a full chain, take the slow path; the insert into a map that is not hardened costs a
-        // test of the flag and of the first member of the chain more than before qore#7557
-        if (hardened) [[unlikely]] {
+        // an insert that grows the buckets, an insert into a hardened map (whose limit is 0) and an insert into a
+        // full chain take the slow path; the test of the limit replaces the test of the number of buckets that came
+        // before qore#7557, and the test of the first member of the chain is the only test more
+        if (count >= limit) [[unlikely]] {
             insertSlow(m);
             return;
         }
@@ -410,8 +409,8 @@ public:
         delete[] buckets;
         buckets = nullptr;
         mask = 0;
+        limit = 0;
         count = 0;
-        hardened = 0;
     }
 
     //! makes room for \a n members without a rehash; throws std::bad_alloc, with nothing changed, if the bucket array
@@ -425,7 +424,11 @@ public:
     */
     DLLLOCAL void copyKind(const qore_hash_member_map& src) {
         assert(!count);
-        hardened = src.hardened;
+        if (src.isHardened()) {
+            // the map has buckets: reserve() made them for the members of src
+            assert(buckets);
+            limit = 0;
+        }
     }
 
     //! returns the index of the bucket of \a m, which is in the map (for debug functions)
@@ -437,9 +440,9 @@ public:
     //! returns the length of the longest chain of a bucket (for debug functions)
     DLLLOCAL size_t maxChain() const;
 
-    //! the largest number of buckets: the mask is 32 bits wide, so that the flag of a hardened map fits in the
-    //! space of the map before qore#7557 and a hash is as large as before (MaxBuckets members need far more memory
-    //! than any host has)
+    //! the largest number of buckets: the mask and the insert limit are 32 bits wide, so that the map is as large as
+    //! before qore#7557, when the mask took 64 bits, and so is a hash (MaxBuckets members need far more memory than
+    //! any host has)
     static constexpr size_t MaxBuckets = sizeof(size_t) > sizeof(uint32_t)
         ? static_cast<size_t>(std::numeric_limits<uint32_t>::max()) + 1
         : (std::numeric_limits<size_t>::max() >> 1) + 1;
@@ -448,9 +451,11 @@ private:
     HashMember** buckets = nullptr;
     //! the number of buckets - 1, if the array is allocated
     uint32_t mask = 0;
-    //! 1 if the keys are hashed with the keyed hash, else 0 (qore#7557); 32 bits wide, as the mask that it follows,
-    //! so that both are initialized and cleared with one store
-    uint32_t hardened = 0;
+    //! the number of members from which an insert takes the slow path (qore#7557): the number of buckets (saturated
+    //! at 32 bits) in a map that is not hardened, where the slow path grows the buckets, and 0 in a map without
+    //! buckets and in a hardened map, whose inserts all take the slow path; the mask and the limit are initialized
+    //! and cleared with one store
+    uint32_t limit = 0;
     size_t count = 0;
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
@@ -478,15 +483,18 @@ private:
     //! doubles the buckets, or allocates the first ones; not inline, so that insert() stays small
     QORE_HASH_NOINLINE DLLLOCAL void grow();
 
-    //! moves the members to a new bucket array of \a n buckets, a power of 2 that is at least the number of members;
-    //! throws std::bad_alloc, with nothing changed, if the array cannot be allocated or \a n is more than MaxBuckets
+    //! moves the members to a new bucket array of \a n buckets, a power of 2 that is at least the number of members,
+    //! and sets the insert limit (the map stays hardened if it is); throws std::bad_alloc, with nothing changed, if
+    //! the array cannot be allocated or \a n is more than MaxBuckets
     QORE_HASH_NOINLINE DLLLOCAL void rehash(size_t n);
 
     //! returns the member with the key of \a len bytes at \a str in a hardened map, or nullptr
     QORE_HASH_NOINLINE DLLLOCAL HashMember* findKeyed(const char* str, size_t len) const;
 
-    //! inserts \a m into a hardened map, or into a map that is not hardened whose chain of the bucket of \a m is
-    //! full: the map is hardened then (tryHarden()), or, if it cannot be, \a m is inserted as it is
+    //! inserts \a m when the fast path of insert() cannot: the buckets grow if the map has as many members as buckets;
+    //! a hardened map hashes the key of \a m with its keyed hash; a map that is not hardened whose chain of the bucket
+    //! of \a m is full is hardened (tryHarden()), or, if it cannot be, takes \a m as it is; throws std::bad_alloc,
+    //! with nothing changed, if the buckets cannot grow
     QORE_HASH_NOINLINE DLLLOCAL void insertSlow(HashMember* m);
 
     //! hardens the map (harden()); returns false, with nothing changed, if it cannot, so that a later insert tries
