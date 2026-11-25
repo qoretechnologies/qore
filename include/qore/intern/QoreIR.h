@@ -5397,7 +5397,7 @@ public:
 
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
-    void computeIROnlyLocals();
+    void computeIROnlyLocals(bool aot_method = false);
 
     //! Collects the locals that the on_exit, on_error and on_success handlers of the function reference
     /** as computeIROnlyLocals() does to keep them on the runtime stack: the handlers' statements and their IR

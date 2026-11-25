@@ -14020,7 +14020,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
     llvm::AllocaInst* method_context = nullptr;
-    if (take_over && callee_info.guarded_method_entry) {
+    if ((take_over && callee_info.guarded_method_entry) || (object_base && callee_info.receiver_context_fast_entry)) {
         auto try_enter = module.getOrInsertFunction("qore_rt_try_enter_native_method_v1",
             llvm::FunctionType::get(i32_type, {ptr_type, ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
         auto leave = module.getOrInsertFunction("qore_rt_leave_native_method_v1",
@@ -30167,7 +30167,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || generic_specialization_matches)
                         && it->second.implicit_self_method
                         && ((it->second.approach_b_eligible && it->second.context_independent_fast_entry)
-                            || (object_take_over && it->second.guarded_method_entry))
+                            || it->second.receiver_context_fast_entry || guarded_method)
                         && (!call_gives_args || object_take_over || !it->second.local_method_takes_args)
                         && (object_target_non_overridable
                             || !QORE_ENV_IS_SET(
@@ -30182,7 +30182,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (aot_object_batch_fn) {
                         aot_object_batch_callee = &it->second;
                         aot_object_batch_requires_exact_class =
-                            !object_target_non_overridable;
+                            !object_target_non_overridable || it->second.receiver_context_fast_entry;
                     }
                 }
             }
@@ -31108,7 +31108,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || generic_specialization_matches)
                         && it->second.implicit_self_method
                         && ((it->second.approach_b_eligible && it->second.context_independent_fast_entry)
-                            || (object_take_over && it->second.guarded_method_entry))
+                            || it->second.receiver_context_fast_entry || guarded_method)
                         && (!call_gives_args || object_take_over || !it->second.local_method_takes_args)
                         && (object_target_non_overridable
                             || !QORE_ENV_IS_SET(
@@ -31123,7 +31123,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (aot_object_batch_fn) {
                         aot_object_batch_callee = &it->second;
                         aot_object_batch_requires_exact_class =
-                            !object_target_non_overridable;
+                            !object_target_non_overridable || it->second.receiver_context_fast_entry;
                     }
                 }
             }
