@@ -1,0 +1,37 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class SpeechAndSearchBillingTest
+
+class SpeechAndSearchBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("SpeechAndSearch provider billing") {
+        addVendor("ElevenLabs", "ElevenLabs", "elevenlabs.io", "metered",
+            "https://elevenlabs.io/pricing/api", {
+                "text-to-speech": "character", "audio-isolation": "minute",
+                "create-dubbing": "minute", "get-history-audio": "included",
+            });
+        addVendor("Groq", "Groq", "groq.com", "metered",
+            "https://console.groq.com/docs/models", {
+                "chat-completion": "token", "list-models": "included", "get-model": "included",
+                "list-files": "included",
+            });
+        addVendor("AssemblyAi", "AssemblyAI", "assemblyai.com", "metered",
+            "https://www.assemblyai.com/pricing", {
+                "get-transcript": "included", "create-chat-completion": "token",
+                "transcribe": "metered",
+            });
+        addVendor("Firecrawl", "Firecrawl", "firecrawl.dev", "metered",
+            "https://www.firecrawl.dev/pricing", {
+                "scrape": "credit", "search": "credit", "agent": "credit",
+                "get-agent-status": "included", "get-batch-scrape-status": "included",
+            });
+        set_return_value(main());
+    }
+}

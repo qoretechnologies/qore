@@ -1,0 +1,18 @@
+fields: parse: PARSE-EXCEPTION: illegal access to private member 'fields' of class 'HashDataType' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+shared_object: parse: PARSE-EXCEPTION: illegal access to private member 'shared_object' of class 'AbstractDataProviderType' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+self-fields: parse: PARSE-EXCEPTION: illegal access to private member 'fields' of class 'HashDataType' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+addFieldIntern: parse: PARSE-EXCEPTION: illegal access to private method 'addFieldIntern' of class 'HashDataType' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+self-addFieldIntern: parse: PARSE-EXCEPTION: illegal access to private method 'addFieldIntern' of class 'HashDataType' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+setOptionIntern: parse: PARSE-EXCEPTION: illegal access to private method 'setOptionIntern' of class 'AbstractDataProviderType' in class 'T': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+field-name: parse: PARSE-EXCEPTION: illegal access to private member 'name' of class 'QoreDataField' in class 'F': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+setElementTypeIntern: parse: PARSE-EXCEPTION: illegal access to private method 'setElementTypeIntern' of class 'ListDataType' in class 'L': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+fields: PRIVATE-MEMBER: 'fields' is a private member of class 'HashDataType'
+sharedFlag: PRIVATE-MEMBER: 'shared_object' is a private member of class 'HashDataType'
+computed: PRIVATE-MEMBER: 'fields' is a private member of class 'HashDataType'
+addFieldIntern: METHOD-IS-PRIVATE: HashDataType::addFieldIntern() is private and cannot be accessed externally
+setOptionIntern: METHOD-DOES-NOT-EXIST: no method HashDataType::setOptionIntern() has been defined and no pseudo-method <object>::setOptionIntern() is available (class lang: Qore)
+fieldName: PRIVATE-MEMBER: 'name' is a private member of class 'QoreDataField'
+listElement: METHOD-IS-PRIVATE: ListDataType::setElementTypeIntern() is private and cannot be accessed externally
+selfFields: PRIVATE-MEMBER: 'fields' is a private member of class 'T'
+ownFields: OK ["own"]
+shared after: ["a"] "f" "string"

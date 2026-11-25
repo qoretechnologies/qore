@@ -112,6 +112,14 @@ public class AgUiHttpAgent {
         @param opts options for the underlying
             @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
         @param headers additional headers to send with every run
+        @note The client creates its @ref HttpClientIo::HttpClientConnectionManager "connection manager" when it is
+        constructed, so the code that constructs it must be allowed to create one: code restricted from the \c NETWORK
+        functional domain is refused.  The client is caller-scoped: it has no @ref
+        HttpClientIo::HttpClientCreatorProof "creator proof" (qore#7262, qore#7295), so trusted code that lends it to
+        restricted code lends the connections of its manager to any target, as it created them.  To lend a client of a
+        fixed target to restricted code, lend a connection object of the ConnectionProvider module, or a RestClientIo (that
+        is not given a shared connection manager), WebSocketClient, JsonRpcClientIo, YamlRpcClientIo, McpClient or A2aClient client, whose managers stay bound to
+        the target of the client for the borrower
     */
     constructor(string url, *hash<auto> opts, *hash<auto> headers) {
         self.url = url;

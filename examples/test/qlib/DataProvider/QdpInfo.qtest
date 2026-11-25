@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qdp child processes of its own binary started without an execution mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class QdpInfoTest
+
+#! qdp describes a data provider whose static info does not declare its type (qore#7386)
+/** qdp's "info" passed the provider's type, which a provider's static info need not declare, to a TerminalColor
+    method that takes a string: with no type it ended with an unhandled RUNTIME-OVERLOAD-ERROR exception after the
+    provider's name.  It now labels the type as not declared and prints the rest of the information.  The other
+    commands that describe a provider run here on the same provider.
+*/
+public class QdpInfoTest inherits QUnit::Test {
+    public {
+        #! the module with the fixture provider
+        const FixtureModule = "QdpInfoFixture.qm";
+
+        #! the fixture provider
+        const Provider = "qoretestqdpinfo{}";
+
+        #! what qdp prints for a type that the provider does not declare
+        const NotDeclaredRegex = "(?m)^  Type: (\\e\\[[0-9;]*m)*\\(not declared\\)";
+    }
+
+    private {
+        #! the absolute path of the directory of this script
+        string script_dir = realpath(get_script_dir());
+        TmpDir dir;
+    }
+
+    constructor() : Test("QdpInfoTest", "1.0") {
+        dir = new TmpDir("qdp-info-");
+        addTestCase("info without a type", \infoTest());
+        addTestCase("info of a child without a type", \childInfoTest());
+        addTestCase("other descriptions without a type", \otherCommandsTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    #! runs qdp on the fixture provider with its output in files
+    private hash<auto> runQdp(string path, string args, bool color = False) {
+        string out_path = dir.path + "/out.txt";
+        string err_path = dir.path + "/err.txt";
+        string cmd = sprintf("env -u QORE_DATA_PROVIDERS %s --enable-debug %s %s-m %s %s %s > %s 2> %s < /dev/null",
+            quote(TestInterpreter::qore_interpreter()), quote(script_dir + "/../../../../bin/qdp"),
+            color ? "" : "-C ", quote(script_dir + "/" + FixtureModule), quote(Provider + path), args,
+            quote(out_path), quote(err_path));
+        int rc = system(cmd);
+        return {
+            "rc": rc,
+            "out": ReadOnlyFile::readTextFile(out_path),
+            "err": ReadOnlyFile::readTextFile(err_path),
+        };
+    }
+
+    private checkOk(hash<auto> r, string label) {
+        assertEq(0, r.rc, label + ": qdp ends normally: " + r.err);
+        assertFalse(regex(r.err + r.out, "RUNTIME-OVERLOAD-ERROR|unhandled|call stack"),
+            label + ": no exception: " + r.err);
+    }
+
+    infoTest() {
+        foreach bool color in ((False, True)) {
+            string label = sprintf("info (color: %y)", color);
+            hash<auto> r = runQdp("", "info", color);
+            checkOk(r, label);
+            assertRegex("(?m)^  (\\e\\[[0-9;]*m)*Name(\\e\\[[0-9;]*m)*: qdp-info-fixture$", r.out,
+                label + ": the name is printed");
+            if (!color) {
+                assertRegex(NotDeclaredRegex, r.out, label + ": the type is labeled as not declared");
+            } else {
+                assertRegex("\\(not declared\\)", r.out, label + ": the type is labeled as not declared");
+            }
+            # the information after the type is printed
+            assertRegex("(?m)^(\\e\\[[0-9;]*m)*Capabilities", r.out, label + ": the capabilities are printed");
+            assertRegex("request/response, events, messages", r.out, label + ": the capabilities are listed");
+            assertRegex("(?m)^(\\e\\[[0-9;]*m)*Request/Response API", r.out, label + ": the API is printed");
+            assertRegex("(?m)^(\\e\\[[0-9;]*m)*Messages", r.out, label + ": the messages are printed");
+            assertRegex("(?m)^(\\e\\[[0-9;]*m)*Events", r.out, label + ": the events are printed");
+            assertRegex("(?m)^(\\e\\[[0-9;]*m)*Children", r.out, label + ": the children are printed");
+        }
+    }
+
+    childInfoTest() {
+        hash<auto> r = runQdp("/child", "info");
+        checkOk(r, "child info");
+        assertRegex("(?m)^  Name: child$", r.out, "child info: the name is printed");
+        assertRegex(NotDeclaredRegex, r.out, "child info: the type is labeled as not declared");
+        assertRegex("(?m)^Request/Response API", r.out, "child info: the API is printed");
+    }
+
+    #! the other commands that describe the provider, its children, events and messages
+    otherCommandsTest() {
+        foreach list<string> cmd in (
+                ("", "list-details", "(?m)^- child: \\(API\\)"),
+                ("", "show-providers", "child"),
+                ("", "list-events", "event"),
+                ("", "lmessages", "message"),
+                ("", "event event", "."),
+                ("", "message message", "."),
+                ("", "info --json", "\"name\": \"qdp-info-fixture\""),
+                ("/child", "list-details", "has no children"),
+            ) {
+            foreach bool color in ((False, True)) {
+                string label = sprintf("%s%s (color: %y)", cmd[0] ? cmd[0] + " " : "", cmd[1], color);
+                hash<auto> r = runQdp(cmd[0], cmd[1], color);
+                checkOk(r, label);
+                assertRegex(cmd[2], r.out, label + ": output");
+            }
+        }
+    }
+}

@@ -28,6 +28,10 @@
     Symbols (@ref constants "constants", @ref qore_classes "classes", @ref qore_functions "functions", @ref our "global variables", @ref hashdecl "hashdecls", @ref enums "enums", and namespaces themselves) can be resolved either by giving an explicit @ref namespace_paths "namespace path" to the symbol desired, or by leaving out the namespace path and allowing the system to search for the symbol.  The two cases use different algorithms, described in the following sections.\n\n
     Both algorithms are ordered by <b>namespace depth</b>.  The depth of a namespace is the number of namespaces between it and the root namespace, so a namespace declared directly in the root namespace has a depth of 1, a namespace declared inside that namespace has a depth of 2, and so on.  When more than one namespace can provide a match, <b>the match in the shallowest namespace wins</b>.
 
+    When two classes share a short name, type mismatch and member access diagnostics use the namespace paths to
+    distinguish them. For example, an assignment can expect <tt>object&lt;::Gate&gt;</tt> and receive
+    <tt>object&lt;Qore::Thread::Gate&gt;</tt>.
+
     @anchor unqualified_symbol_resolution
     @par Unqualified Symbol Resolution
     When a symbol is used with no namespace path, the following steps are made in order; the first step that produces a match determines the result:
@@ -37,7 +41,7 @@
     |3|All namespaces|Every namespace in the tree is searched, and the match in the shallowest namespace wins.
     |4|Class handlers|Namespaces with a class handler installed by a binary module are queried in order of increasing depth.  This step applies to classes only.
 
-    Step 1 means that a user-defined symbol can never shadow a symbol in the @ref Qore "Qore" namespace when the symbol is used without a namespace path; use an explicit @ref namespace_paths "namespace path" to reach a user-defined symbol whose name collides with a built-in symbol.  The strict @ref warning-language-traps "language-traps" warning reports a user-defined function, class, constant, hashdecl or global variable declared with the name of a symbol of the same kind in the @ref Qore "Qore" namespace, once at its declaration, unless @ref broken-namespace-resolution "%broken-namespace-resolution" is set or the symbol is declared in a @ref user_modules "user module".\n\n
+    Step 1 means that a user-defined symbol can never shadow a symbol in the @ref Qore "Qore" namespace when the symbol is used without a namespace path; use an explicit @ref namespace_paths "namespace path" to reach a user-defined symbol whose name collides with a built-in symbol.  The strict @ref warning-language-traps "language-traps" warning reports a user-defined function, class, constant, hashdecl, typedef or global variable declared with the name of a symbol of the same kind in the @ref Qore "Qore" namespace, once at its declaration, unless @ref broken-namespace-resolution "%broken-namespace-resolution" is set or the symbol is declared in a @ref user_modules "user module".\n\n
     Two additional lookups are made before the steps above when the context allows it:
     - when resolving a @ref constants "constant" or a bareword inside a class, the class's own constants (including those inherited from base classes) are searched first
     - when resolving a @ref qore_functions "function" call inside a class, the class's methods are searched first

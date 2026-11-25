@@ -12,7 +12,9 @@
 # request of the client failed with HTTP3-STATE-ERROR (or HTTP3-PEER-UNRESPONSIVE again).  The closes are forced at
 # the submit with the DEBUG-build hooks QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT and
 # QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT, each of which closes the session of the next request submitted after
-# the variable gets a new value; the cases skip in other builds.
+# the variable gets a new value; the cases skip in other builds.  A request refused so was never sent, so the
+# connection manager repeats it once on a new connection whatever its method (RFC 9110 section 9.2.2); before, only an
+# idempotent request was repeated, and a POST raised the error of the close.
 
 %modern
 
@@ -28,16 +30,18 @@
 #! a hang guard only
 const Timeout = 20s;
 
-#! Answers every request, and counts the POST requests
-class CountingHandler inherits AbstractHttpRequestHandler {
+#! Answers every request, and records the method and the connection of each
+/** The connection of an HTTP/3 request is its QUIC session (\c cx."header-info".session_id): \c cx.id identifies each
+    request of an HTTP/3 connection, not the connection
+*/
+class RecordingHandler inherits AbstractHttpRequestHandler {
     public {
-        Counter posts();
+        #! a hash with the keys "method" and "conn" (the QUIC session) for each request received
+        Queue received();
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        if (hdr.method == "POST") {
-            posts.inc();
-        }
+        received.push({"method": hdr.method, "conn": cx."header-info".session_id});
         return <HttpResponseInfo>{"code": 200, "body": "ok"};
     }
 }
@@ -45,17 +49,17 @@ class CountingHandler inherits AbstractHttpRequestHandler {
 class HttpClientH3ClosedAtSubmitTest inherits QUnit::Test {
     private {
         HttpServer server;
-        CountingHandler handler();
+        RecordingHandler handler();
         *string url;
         #! the values given to the hooks, each of which arms one once
         int hook_values = 0;
     }
 
     constructor() : Test("HttpClientH3ClosedAtSubmitTest", "1.0") {
-        addTestCase("an HTTP/3 connection idle-closed at a submit is not used again", \closedAtSubmitTest(),
-            ("QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT", "HTTP3-IDLE-CLOSE"));
-        addTestCase("an HTTP/3 connection closed at a submit for lack of a response is not used again",
-            \closedAtSubmitTest(), ("QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT", "HTTP3-PEER-UNRESPONSIVE"));
+        addTestCase("a request on an HTTP/3 connection idle-closed at its submit is repeated on a new connection",
+            \closedAtSubmitTest(), ("QORE_QUIC_TEST_IDLE_CLOSE_AT_SUBMIT",));
+        addTestCase("a request on an HTTP/3 connection closed at its submit for lack of a response is repeated on a "
+            "new connection", \closedAtSubmitTest(), ("QORE_QUIC_TEST_UNRESPONSIVE_CLOSE_AT_SUBMIT",));
         set_return_value(main());
     }
 
@@ -66,7 +70,7 @@ class HttpClientH3ClosedAtSubmitTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": new Logger("h3-closed-at-submit", LoggerLevel::getLevelWarn()),
         });
-        server.setDefaultHandler("count", handler);
+        server.setDefaultHandler("record", handler);
         try {
             url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
                 "node": "127.0.0.1",
@@ -90,36 +94,49 @@ class HttpClientH3ClosedAtSubmitTest inherits QUnit::Test {
         setenv(var, sprintf("%d", ++hook_values));
     }
 
-    closedAtSubmitTest(string var, string err) {
+    #! returns the request that the server received for a request of the client; checks that it was the only one
+    private hash<auto> receivedOnce(string method) {
+        hash<auto> r = handler.received.get(Timeout);
+        assertEq(method, r.method, "the server received the request");
+        assertEq(0, handler.received.size(), "the server received the request once");
+        return r;
+    }
+
+    #! sends a request whose connection is found closed at its submit; returns the connection that served it
+    private auto closedAtSubmit(HTTPClient hc, string var, string method, auto last_conn) {
+        armHook(var);
+        on_exit unsetenv(var);
+        hash<auto> rv = hc.send(method == "POST" ? method.lwr() : NOTHING, method, "/");
+        assertEq(200, rv.status_code, method + ": the request is repeated on a new connection and answered");
+        auto conn = receivedOnce(method).conn;
+        assertNeq(last_conn, conn, method + ": the request was repeated on another connection");
+        return conn;
+    }
+
+    closedAtSubmitTest(string var) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip(var + " is only available in a library-debug build");
         }
         if (!url) {
             testSkip("QUIC is not available");
         }
-        on_exit unsetenv(var);
+        handler.received.clear();
         HTTPClient hc({"url": url, "http_version": "3.0", "ssl_verify_cert": False, "timeout": Timeout});
         on_exit hc.disconnect();
         assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the connection is up");
-        int posts = handler.posts.getCount();
+        auto conn = receivedOnce("GET").conn;
+        assertEq(Type::Int, conn.type(), "the server reports the connection of a request");
+        # the identity of the connection: a second request is sent on the same connection
+        assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the connection is used again");
+        assertEq(conn, receivedOnce("GET").conn, "the connection is used again");
 
-        # the request is refused with the error of the close, and is not sent
-        armHook(var);
-        *hash<ExceptionInfo> ex;
-        try {
-            hc.send("refused", "POST", "/");
-            fail("a request on a connection closed at its submit must be refused");
-        } catch (hash<ExceptionInfo> ex1) {
-            ex = ex1;
-        }
-        unsetenv(var);
-        assertEq(err, ex.err, sprintf("the submit is refused with the error of the close (%s)", ex.desc));
-        assertRegex("the request was not sent", ex.desc ?? "", "the description says that the request was not sent");
-        assertEq(posts, handler.posts.getCount(), "the refused request did not reach the server");
+        # a request that is not idempotent and an idempotent one, each refused at its submit with the error of the
+        # close, are each repeated once on a new connection
+        conn = closedAtSubmit(hc, var, "POST", conn);
+        conn = closedAtSubmit(hc, var, "GET", conn);
 
-        # the next requests take a new connection
-        assertEq(200, hc.send("next", "POST", "/").status_code, "the next request is answered");
-        assertEq(posts + 1, handler.posts.getCount(), "the server got the next request once");
-        assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the request after it is answered too");
+        # the connection that served the repeated requests is used again
+        assertEq(200, hc.send(NOTHING, "GET", "/").status_code, "the next request is answered");
+        assertEq(conn, receivedOnce("GET").conn, "the next request is sent on the same connection");
     }
 }

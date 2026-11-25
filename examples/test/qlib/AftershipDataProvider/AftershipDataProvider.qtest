@@ -284,6 +284,7 @@ class AftershipDataProviderTest inherits QUnit::Test {
     constructor() : QUnit::Test("AftershipDataProvider", "1.0") {
         conn_name = LiveProvider::get("aftership", "AFTERSHIP_CONNECTION", m_options."connection");
         addTestCase("unit: create tracking", \testCreateTracking());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("unit: get tracking", \testGetTracking());
         addTestCase("unit: search trackings", \testSearchTrackings());
         addTestCase("unit: update tracking", \testUpdateTracking());
@@ -655,5 +656,25 @@ class AftershipDataProviderTest inherits QUnit::Test {
         AbstractDataProvider watch_prov = events_prov.getChildProvider("tracking-status-changed");
         auto example = watch_prov.getExampleEventData("tracking-status-changed");
         assertTrue(example.typeCode() == NT_HASH, "live example event data is a hash");
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-tracking",
+            "get-last-checkpoint",
+            "detect-courier",
+            "get-return",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("Aftership", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # creates a tracking: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("Aftership", "create-tracking")));
     }
 }

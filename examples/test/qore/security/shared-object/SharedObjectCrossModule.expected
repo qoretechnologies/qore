@@ -1,0 +1,6 @@
+the base class updates the object in a scope: changed, v: "filled"
+a closure of the base class through a helper of its module: changed, v: "handed out"
+the same closure a second time: SHARED-OBJECT-ERROR, v: "handed out"
+a closure of the base class through a helper of the derived class's module: SHARED-OBJECT-ERROR, v: "orig"
+the tenant's closure through a helper of the base class's module: SHARED-OBJECT-ERROR, v: "orig"
+a closure of the base class, run by the tenant: SHARED-OBJECT-ERROR, v: "orig"

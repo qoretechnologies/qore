@@ -175,3 +175,5 @@ child ChildDerived run: "ChildDerived::m(1) ChildDerived::p(1)"
 child ChildDerived fib: 144
 child ChildBase run: "ChildBase::m(1) ChildBase::p(1)"
 child ChildBase fib: 144
+plain block return: RUNTIME-TYPE-ERROR ["PlainFrame::missing"]
+generic block return: RUNTIME-TYPE-ERROR ["MethodFrame::checked"]

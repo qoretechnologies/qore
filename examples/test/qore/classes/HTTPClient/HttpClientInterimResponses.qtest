@@ -1,0 +1,453 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.x interim and 101 responses read from TCP and TLS sockets and the close of the connection
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Every HTTP/1.x 1xx response other than 101 is an interim response (RFC 9110 section 15.2): the client skips it,
+# whatever its code (100, 102, 103 or one not defined yet), and returns the final response that follows it on the
+# same connection, which alone decides whether the connection is reused; the header of a 103 response is reported to
+# an event queue.  More interim responses than the client accepts fail the request, and a 101 response to a request
+# that did not ask for a protocol upgrade fails it at once, whether the response is streamed or not, and closes the
+# connection (qore#7483).  Both the HTTPClient class and the HttpClientIo connection manager are tested.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class HttpClientInterimResponsesTest
+
+#! a self-signed certificate for localhost, for the TLS server
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+#! the private key of the certificate
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the timeout of a request; a request that waits for a response that never comes ends with it
+const RequestTimeout = 10s;
+
+#! the final response to the first request
+const Final = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nfinal";
+
+#! the response to each request but the first one
+const Answer = "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: keep-alive\r\n\r\nanswer";
+
+#! data that follows the first response when the server sends more than the response
+const Extra = "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nextra";
+
+#! interim responses
+const P100 = "HTTP/1.1 100 Continue\r\n\r\n";
+const P102 = "HTTP/1.1 102 Processing\r\n\r\n";
+const P103 = "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload; as=style\r\n"
+    "Link: </script.js>; rel=preload; as=script\r\n\r\n";
+#! a 1xx code that is not defined: an interim response too, with header fields that do not apply to the final one
+const P150 = "HTTP/1.1 150 Unknown\r\nX-Interim: 1\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n";
+
+#! a 101 response
+const Switching = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: other\r\nConnection: Upgrade\r\n\r\n";
+
+#! the number of interim responses that the client accepts before the final one
+const MaxInterim = 16;
+
+#! An HTTP/1.1 server that answers the first request of its first connection with the given data, and every other
+#! request with @ref Answer
+class InterimServer {
+    public {
+        #! the number of the connection and the method and path of each request received
+        Queue requests();
+        #! decremented when the server's first connection has ended
+        Counter first_closed(1);
+        #! why the server's first connection ended: \c "closed" when the client closed it, the error otherwise
+        string first_end;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        bool tls;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+        #! the data sent for the first request
+        string first_response;
+    }
+
+    constructor(string first_response, bool tls = False) {
+        self.first_response = first_response;
+        self.tls = tls;
+        if (tls) {
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        }
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("%s://127.0.0.1:%d", tls ? "https" : "http", port);
+    }
+
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    #! stops the server; the connections of the client must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = tls ? listener.acceptSSL(Timeout) : listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        on_exit if (n == 1) {
+            first_closed.dec();
+        }
+        bool first = n == 1;
+        while (True) {
+            hash<auto> h;
+            try {
+                # longer than the wait of a test for the end of the connection, so that only the client's close of the
+                # connection ends it in time
+                h = s.readHTTPHeader(Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                if (n == 1) {
+                    first_end = ex.err == "SOCKET-CLOSED" ? "closed" : sprintf("%s: %s", ex.err, ex.desc);
+                }
+                return;
+            }
+            if (!h.method) {
+                # the client closed the connection
+                if (n == 1) {
+                    first_end = "closed";
+                }
+                return;
+            }
+            requests.push(sprintf("%d %s %s", n, h.method, h.path));
+            # a chunked request body is read whole, so that only the end of the connection ends the next read
+            if (h."transfer-encoding" =~ /chunked/i) {
+                s.readHTTPChunkedBody(Timeout);
+            }
+            if (first) {
+                first = False;
+                s.send(first_response);
+            } else {
+                s.send(Answer);
+            }
+        }
+    }
+}
+
+class HttpClientInterimResponsesTest inherits QUnit::Test {
+    private {
+        const Clients = ("HTTPClient", "HttpClientIo");
+    }
+
+    constructor() : QUnit::Test("HttpClientInterimResponses", "1.0") {
+        string flood = strmul(P103, MaxInterim);
+        foreach string client in (Clients) {
+            addTestCase(client + ": 102 then 200: the final response, the connection is reused", \testFinal(),
+                (client, P102 + Final, "final", True));
+            addTestCase(client + ": 103 then 200: the final response, the connection is reused", \testFinal(),
+                (client, P103 + Final, "final", True));
+            addTestCase(client + ": 150 then 200: the final response, the connection is reused", \testFinal(),
+                (client, P150 + Final, "final", True));
+            addTestCase(client + ": 100, 102, 103 and 150 then 200: the final response", \testFinal(),
+                (client, P100 + P102 + P103 + P150 + Final, "final", True));
+            addTestCase(client + ": as many interim responses as accepted then 200: the final response",
+                \testFinal(), (client, flood + Final, "final", True));
+            addTestCase(client + ": 103 then 200 followed by more data: a new connection", \testFinal(),
+                (client, P103 + Final + Extra, "final", False));
+            addTestCase(client + ": 102 then 204 followed by more data: a new connection", \testFinal(),
+                (client, P102 + "HTTP/1.1 204 No Content\r\n\r\n" + Extra, NOTHING, False, 204));
+            addTestCase(client + ": 103 then 304 followed by more data: a new connection", \testFinal(),
+                (client, P103 + "HTTP/1.1 304 Not Modified\r\n\r\n" + Extra, NOTHING, False, 304));
+            addTestCase(client + ": TLS: 103 then 200: the final response, the connection is reused", \testFinal(),
+                (client, P103 + Final, "final", True, 200, True));
+            addTestCase(client + ": more interim responses than accepted: an error, the connection is closed",
+                \testError(), (client, flood + P103 + Final, False, "interim"));
+            addTestCase(client + ": 101 to a request without Upgrade: an error, the connection is closed",
+                \testError(), (client, Switching, False, "101"));
+            addTestCase(client + ": streamed: 101 to a request without Upgrade: an error at once, the connection is "
+                "closed", \testError(), (client, Switching, True, "101"));
+            addTestCase(client + ": streamed: 103 then 200: the final response", \testStreamed(), (client,));
+        }
+        addTestCase("HTTPClient: streamed with send callback: 101 to a request without Upgrade: an error at once",
+            \testError(), ("HTTPClient-callbacks", Switching, True, "101"));
+        addTestCase("HTTPClient: the header of a 103 response is reported to the event queue", \testEvents());
+        set_return_value(main());
+    }
+
+    #! sends a request answered with interim responses and a final one, then a second request
+    testFinal(string client, string response, *string body, bool reused, int code = 200, bool tls = False) {
+        InterimServer server(response, tls);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        hash<auto> first;
+        hash<auto> second;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout, "ssl_verify_cert": False});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            first = hc.send(NOTHING, "GET", "/first", NOTHING, True);
+            second = hc.send(NOTHING, "GET", "/second", NOTHING, True);
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            first = mgr.request(url, "GET", "/first", NOTHING, NOTHING, RequestTimeout);
+            second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
+        }
+
+        assertEq(code, first.status_code, "the final response is returned");
+        if (body) {
+            assertEq(body, first.body, "the body of the final response");
+        } else {
+            assertEq(NOTHING, first.body, "the final response has no body");
+        }
+        assertEq(NOTHING, first."x-interim", "the header fields of an interim response are not returned");
+        assertEq("1 GET /first", server.requests.get(Timeout), "the first request");
+        assertEq(200, second.status_code, "the second response");
+        assertEq("answer", second.body, "the second response is the server's answer to the second request");
+        if (reused) {
+            assertEq("1 GET /second", server.requests.get(Timeout), "the connection is reused");
+            assertEq(1, server.getConnectionCount(), "no new connection was made");
+        } else {
+            assertEq("2 GET /second", server.requests.get(Timeout), "the second request is sent on a new connection");
+            assertEq(2, server.getConnectionCount(), "a new connection was made for the second request");
+        }
+        assertEq(0, server.requests.size(), "each request reached the server once");
+    }
+
+    #! sends a request whose response is an error and checks that the connection is closed
+    testError(string client, string response, bool streamed, string desc) {
+        InterimServer server(response);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        *hash<ExceptionInfo> ex;
+        int start = clock_get_monotonic_us();
+        if (client =~ /^HTTPClient/) {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            try {
+                if (!streamed) {
+                    hc.send(NOTHING, "GET", "/first");
+                } else if (client == "HTTPClient") {
+                    hc.sendWithRecvCallback(sub (hash<auto> h) {}, NOTHING, "GET", "/first");
+                } else {
+                    bool sent;
+                    hc.sendWithCallbacks(*binary sub () {
+                        if (sent) {
+                            return;
+                        }
+                        sent = True;
+                        return binary("request");
+                    }, sub (hash<auto> h) {}, "POST", "/first");
+                }
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+        } else {
+            # an idempotent request that fails with the error is sent again on a new connection, as for any invalid
+            # response, which the server here answers otherwise: it is not, so that the error is seen
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": RequestTimeout,
+                "max_request_retries": 0,
+            });
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            try {
+                if (!streamed) {
+                    mgr.request(url, "GET", "/first", NOTHING, NOTHING, RequestTimeout);
+                } else {
+                    HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/first");
+                    # reads until the stream fails or ends; a stream that waits for data that never comes ends with
+                    # the timeout
+                    while (True) {
+                        auto v = stream.readData(RequestTimeout);
+                        if (!exists v) {
+                            throw "TIMEOUT", "no data received from the stream";
+                        }
+                        if (v.typeCode() == NT_HASH && v.error) {
+                            throw v.error.err ?? "STREAM-ERROR", v.error.desc ?? sprintf("%y", v.error);
+                        }
+                        if (v.typeCode() == NT_HASH && v.end_stream) {
+                            break;
+                        }
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+        }
+        int elapsed = clock_get_monotonic_us() - start;
+        if (m_options.verbose > 2) {
+            printf("%s: %d ms: %s: %s\n", client, elapsed / 1000, ex.err, ex.desc);
+        }
+        assertTrue(exists ex, "the request fails");
+        assertRegex(desc, ex.desc, sprintf("the error is reported: %s: %s", ex.err, ex.desc));
+        # the request is not failed by its timeout
+        assertTrue(ex.desc !~ /time/i, sprintf("the request does not wait for its timeout: %s: %s", ex.err, ex.desc));
+        assertLt(RequestTimeout.durationMicroseconds(), elapsed, "the request fails before its timeout");
+        assertEq("1 " + (client == "HTTPClient-callbacks" ? "POST" : "GET") + " /first",
+            server.requests.get(Timeout), "the request");
+        # the client closed the connection
+        assertEq(0, server.first_closed.waitForZero(Timeout), "the connection is closed");
+        assertEq("closed", server.first_end, "the client closed the connection");
+        assertEq(0, server.requests.size(), "the request reached the server once");
+        assertEq(1, server.getConnectionCount(), "one connection was made");
+    }
+
+    #! a streamed response after an interim response
+    testStreamed(string client) {
+        InterimServer server(P103 + Final);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        list<int> codes = ();
+        binary body;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "timeout": RequestTimeout});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            hc.sendWithRecvCallback(sub (hash<auto> h) {
+                if (h.hdr) {
+                    push codes, h.hdr.status_code;
+                }
+                if (exists h.data) {
+                    body += h.data;
+                }
+            }, NOTHING, "GET", "/first");
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": RequestTimeout,
+            });
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", "/first");
+            while (True) {
+                auto v = stream.readData(RequestTimeout);
+                if (!exists v) {
+                    throw "TIMEOUT", "no data received from the stream";
+                }
+                if (v.typeCode() == NT_HASH) {
+                    if (v.error) {
+                        throw v.error.err ?? "STREAM-ERROR", v.error.desc ?? sprintf("%y", v.error);
+                    }
+                    if (v.end_stream) {
+                        break;
+                    }
+                    if (exists v.status_code) {
+                        push codes, v.status_code;
+                    }
+                    continue;
+                }
+                body += binary(v);
+            }
+        }
+        assertEq((200,), codes, "only the header of the final response is delivered");
+        assertEq(binary("final"), body, "the body of the final response");
+        assertEq("1 GET /first", server.requests.get(Timeout), "the request");
+    }
+
+    #! the header of an interim response is reported to the event queue
+    testEvents() {
+        InterimServer server(P103 + Final);
+        on_exit server.stop();
+        Queue events();
+        HTTPClient hc({"url": server.getUrl(), "timeout": RequestTimeout});
+        # the client's connections are closed before the server is stopped
+        on_exit delete hc;
+        hc.setEventQueue(events);
+        hash<auto> resp = hc.send(NOTHING, "GET", "/first", NOTHING, True);
+        assertEq(200, resp.status_code);
+        assertEq("final", resp.body);
+        list<hash<auto>> received = ();
+        while (events.size()) {
+            hash<auto> ev = events.get(0);
+            if (ev.event == EVENT_HTTP_MESSAGE_RECEIVED) {
+                push received, ev.headers;
+            }
+        }
+        assertEq((103, 200), (map $1.status_code, received), "the headers of both responses are reported");
+        assertEq(("</style.css>; rel=preload; as=style", "</script.js>; rel=preload; as=script"),
+            received[0].link, "the Link fields of the 103 response");
+    }
+}

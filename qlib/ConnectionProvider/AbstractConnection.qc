@@ -365,6 +365,14 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             It is never handed to the connection's class
         */
         transient *HttpClientIo::HttpClientCreatorProof creator_proof;
+
+        #! The members that the connection's clients are created from, as the code that created it set them (qore#7327)
+        /** Taken when the connection is created, also when it is deserialized; see checkLentTarget()
+        */
+        transient *hash<auto> creator_target;
+
+        #! The test hook called after a lent connection was checked (see dbgSetLentTargetHook(); qore#7327)
+        static *code<nothing(AbstractConnection)> dbg_lent_target_hook;
     }
 
     #! creates the AbstractConnection object
@@ -535,7 +543,8 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
-        return getFileLocationRedirectImpl(path, write);
+        # the redirect's location is derived from the connection's members (qore#7327)
+        return getLentTargetSource().getFileLocationRedirectImpl(path, write);
     }
 
     #! Returns @ref True if this connection provides a native file location handler
@@ -576,7 +585,8 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
-        return getFileLocationHandlerImpl();
+        # the handler's client is created from the connection's members (qore#7327)
+        return getLentTargetSource().getFileLocationHandlerImpl();
     }
 
     #! Sets or clears the default post-processing code of the objects that every connection creates
@@ -684,6 +694,10 @@ conn.checkSandboxAccess(True);
         if (SandboxManager::isRestricted()) {
             checkSandboxAccess(True);
         }
+        # a ping creates a client from the connection's members, which restricted code that was lent the connection
+        # can change (qore#7327); refused before the status of the connection changes; the ping, which changes the
+        # status of this object, creates its client with getLentTargetSource()
+        checkLentTarget();
         hash<PingInfo> rv(self{"name", "desc", "opts"} + {
             "ping_flags": ping_flags,
         });
@@ -999,7 +1013,7 @@ conn.checkSandboxAccess(True);
         # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
         # restricted code that runs while it calls (a callback, for example) can take the connection's
         *HttpClientIo::HttpClientCreatorProofGrant grant;
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             # a client that the connection's code creates from its members, which the restricted code can change,
             # connects only to the target that the connection's creator gave (qore#7262)
             checkLentClientTarget();
@@ -1007,8 +1021,11 @@ conn.checkSandboxAccess(True);
                 grant = creator_proof.grantNext();
             }
         }
+        # the object that the client is created from: the connection itself, or for restricted code that was lent it,
+        # a private copy with its creator's target (see getLentTargetSource(); qore#7327)
+        AbstractConnection src = getLentTargetSource(rtopts);
         if (!connect) {
-            object o = getImpl(False, rtopts);
+            object o = src.getImpl(False, rtopts);
             postProcess(o);
             return o;
         }
@@ -1019,7 +1036,7 @@ conn.checkSandboxAccess(True);
         # issue #4852: a connection that cannot be made does not mark the connection down; only a failed ping does
 
         try {
-            object o = getImpl(True, rtopts);
+            object o = src.getImpl(True, rtopts);
             postProcess(o);
             # issue #7236: a connection made with the connection proves that it is up
             handleConnected();
@@ -1059,17 +1076,22 @@ conn.checkSandboxAccess(True);
         # the HTTP client that the connection creates for restricted code that was lent the connection is the
         # creator's, bound to its target (qore#7262); a caller that is not restricted takes a proof of its own, so no
         # restricted code that runs while it calls (a callback, for example) can take the connection's
-        *HttpClientIo::HttpClientCreatorProofGrant grant =
-            creator_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? creator_proof.grantNext() : NOTHING;
+        *HttpClientIo::HttpClientCreatorProofGrant grant;
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK) && creator_proof) {
+            grant = creator_proof.grantNext();
+        }
+        # the client is created from the connection's members, which restricted code that was lent the connection can
+        # change: for such code, from a private copy with its creator's target (see getLentTargetSource(); qore#7327)
+        AbstractConnection src = getLentTargetSource(rtopts);
         if (!connect) {
-            object o = getAsyncImpl(False, rtopts);
+            object o = src.getAsyncImpl(False, rtopts);
             postProcess(o);
             watchFirstConnection(o);
             return o;
         }
 
         try {
-            object o = getAsyncImpl(True, rtopts);
+            object o = src.getAsyncImpl(True, rtopts);
             postProcess(o);
             # issue #7236: an async object does not prove that the connection is up, as async objects connect on
             # demand (getAsyncImpl() of the HTTP, REST and FTP connections ignores "connect"), so it is no check of
@@ -1195,7 +1217,8 @@ conn.checkSandboxAccess(True);
         if (subtype == getType()) {
             return getDataProvider(constructor_options);
         }
-        return getDataProviderImpl(subtype, constructor_options);
+        # the data provider's client is created from the connection's members (qore#7327)
+        return getLentDataProviderSource(constructor_options).getDataProviderImpl(subtype, constructor_options);
     }
 
     #! Returns a hash of data provider constructor option info, if applicable
@@ -1256,10 +1279,11 @@ conn.checkSandboxAccess(True);
     */
     object getPollImpl() {
         # the client is handed to the caller as get()'s is: it is checked for code restricted from NETWORK (qore#7262)
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             checkLentClientTarget();
         }
-        return getImpl(False);
+        # the client is created from a private copy with the creator's target for restricted code (qore#7327)
+        return getLentTargetSource().getImpl(False);
     }
 
     #! Returns @ref True if the connection supports the async request API
@@ -1391,6 +1415,334 @@ conn.checkSandboxAccess(True);
     private checkLentClientTarget() {
     }
 
+    #! Returns @ref True if the clients of the connection are bound to its creator's target by a rule of their own
+    /** The clients of an HTTP-based connection are bound to the target of the connection's creator by its creator
+        proof (see checkLentClientTarget()): restricted code that is lent the connection may change the members of
+        the connection within that target.  Other connections are confined by checkLentTarget(); this implementation
+        returns @ref False (qore#7327)
+
+        @since %ConnectionProvider 3.1
+    */
+    private bool hasCreatorBoundClients() {
+        return False;
+    }
+
+    #! Returns @ref True if the connection's clients are confined to its creator's target for the calling code
+    /** That is if the calling code was lent the connection and is restricted from a functional domain that the
+        connection's clients use (see getConnectionDomainsImpl()), and the clients are not bound to the creator's
+        target by a rule of their own (see hasCreatorBoundClients(); qore#7327)
+    */
+    final private:internal bool isLentTargetConfined() {
+        return !hasCreatorBoundClients() && SandboxManager::isLentToRestricted(getLentDomains());
+    }
+
+    #! Returns @ref True if the connection's file and location options are confined to its creator's for the caller
+    /** That is if the clients of the connection are bound to its creator's target by a rule of their own (see
+        hasCreatorBoundClients()), and the calling code was lent the connection and is restricted from the
+        \c FILESYSTEM or \c NETWORK domain: all of FilePathOptions are confined, whether the connection's scheme
+        declares them or not, as its clients take any of them from its options
+    */
+    final private:internal bool isLentFilePathConfined() {
+        # a location option can also name a remote location, which the connection's module code reads apart from its
+        # bound clients, so they are confined for code restricted from the NETWORK domain as well
+        return hasCreatorBoundClients() && SandboxManager::isLentToRestricted(DOM_FILESYSTEM | DOM_NETWORK);
+    }
+
+    #! Returns the functional domains that the code that is lent the connection is confined for
+    /** The domains that its clients use (see getConnectionDomainsImpl()), and \c FILESYSTEM if its members can name
+        files that its module code reads (see getFilePathOptions() and canUseFilePathsImpl())
+    */
+    final private:internal int getLentDomains() {
+        return getConnectionDomainsImpl() | ((canUseFilePathsImpl() || getFilePathOptions()) ? DOM_FILESYSTEM : 0);
+    }
+
+    #! Returns the connection's options that name files that its module code reads
+    /** The options of FilePathOptions that the connection's scheme declares
+    */
+    final private:internal *list<string> getFilePathOptions() {
+        *hash<auto> o = getConnectionSchemeInfoImpl().options;
+        return o ? keys o{FilePathOptions} : NOTHING;
+    }
+
+    #! Returns @ref True if the connection's members can name files that its module code reads otherwise
+    /** For example in options of its URL; the options that name files (see FilePathOptions) need not be given.  This
+        implementation returns @ref False; a connection class whose URL can name such files overrides it to return
+        @ref True, so that code restricted from the \c FILESYSTEM domain that is lent a connection of the class uses it
+        only with the members that its creator set
+
+        @since %ConnectionProvider 3.1
+    */
+    private bool canUseFilePathsImpl() {
+        return False;
+    }
+
+    #! Refuses code that was lent the connection and is restricted from its domains a client for another target
+    /** The clients of a connection are created from its members (its URLs, the parsed URL and its options), which
+        restricted code that was lent the connection can change: a connection whose clients are not bound to its
+        creator's target by a rule of their own (see hasCreatorBoundClients()) is used by code restricted from a
+        functional domain that its clients use (see getConnectionDomainsImpl()) only with the members that the code
+        that created the connection set; a connection whose members were changed since is refused before any client
+        is created, whatever members were changed (qore#7327).  Other code is not checked.
+
+        A connection class creates its clients with the object that getLentTargetSource() returns, which calls this
+        method; a method that does not create a client itself but changes the state of the connection (ping(), for
+        example) calls it first to refuse such code before the state changes.
+
+        @throw PERMISSION-DENIED the calling code is restricted from a domain of the connection's clients, and the
+        members that the clients are created from are not the ones that the connection's creator set
+
+        @since %ConnectionProvider 3.1
+    */
+    final private checkLentTarget() {
+        if (!SandboxManager::isLentToRestricted(getConnectionDomainsImpl() | DOM_FILESYSTEM)) {
+            return;
+        }
+        if (isLentTargetConfined()) {
+            checkLentTargetIntern();
+        } else if (isLentFilePathConfined()) {
+            checkLentFilePaths(FilePathOptions);
+        }
+    }
+
+    #! Refuses a lent connection whose file path options were changed, or options for its clients that name files
+    private:internal checkLentFilePaths(list<string> fpo, *hash<auto> options, *string what) {
+        *hash<auto> creator = creator_target.opts{fpo};
+        foreach string m in (getLentOptionMembers()) {
+            if (!creator_target || (self{m}{fpo} ?? {}) !== (creator ?? {})) {
+                throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the %s "
+                    "functional domain and may use a connection that unrestricted code created and lent to it only "
+                    "with the files and locations that its creator gave it", name, getLentFileDomainNames());
+            }
+        }
+        if (options && (*hash<auto> named = options{fpo})) {
+            throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the %s functional "
+                "domain and may not give a connection that unrestricted code created and lent to it the %s %y, which "
+                "name files or locations", name, getLentFileDomainNames(), what, keys named);
+        }
+    }
+
+    #! Returns the names of the members that hold the options of the connection's clients
+    private:internal list<string> getLentOptionMembers() {
+        list<string> rv = ("opts",);
+        foreach string m in (getLentOptionMembersImpl()) {
+            if (self{m}.typeCode() == NT_HASH) {
+                push rv, m;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the names of the domains that file and location options are confined for that the caller lacks
+    private:internal string getLentFileDomainNames() {
+        int dom = 0;
+        foreach int d in ((DOM_FILESYSTEM, DOM_NETWORK)) {
+            if (SandboxManager::isLentToRestricted(d)) {
+                dom |= d;
+            }
+        }
+        return getDomainNames(dom);
+    }
+
+    #! Refuses a lent connection whose members were changed (qore#7327)
+    private:internal checkLentTargetIntern() {
+        if (creator_target !== getLentTarget()) {
+            throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the %s functional "
+                "domain and may use a connection that unrestricted code created and lent to it only with the target "
+                "that its creator gave it", name, getLentRestrictedDomainNames());
+        }
+    }
+
+    #! Refuses options that the calling code gives a client or a data provider of a lent connection (qore#7327)
+    private:internal checkLentOptions(*hash<auto> options, string what) {
+        if (options && (*hash<auto> other = options - LentRuntimeOptions)) {
+            throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the %s functional "
+                "domain and may not give a connection that unrestricted code created and lent to it the %s %y, which "
+                "can change its target", name, getLentRestrictedDomainNames(), what, keys other);
+        }
+    }
+
+    #! Returns the names of the domains of the connection's clients that the calling code is restricted from
+    private:internal string getLentRestrictedDomainNames() {
+        int dom = 0;
+        int lent = getLentDomains();
+        foreach int d in ((DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE)) {
+            if ((lent & d) && SandboxManager::isLentToRestricted(d)) {
+                dom |= d;
+            }
+        }
+        return getDomainNames(dom);
+    }
+
+    #! Takes the snapshot of the members that the connection's clients are created from (qore#7327)
+    /** The base class takes it when the connection is created and when it is deserialized; a connection class whose
+        constructor changes these members after the base class's constructor (\c url, \c safe_url, \c real_url,
+        \c urlh, \c orig_opts or \c opts; for example to normalize its options) calls this method once it has set
+        them, as restricted code that is lent the connection may use it only with the members of its snapshot (see
+        getLentTargetSource())
+
+        @since %ConnectionProvider 3.1
+    */
+    final private takeLentTargetSnapshot() {
+        creator_target = getLentTarget();
+    }
+
+    #! Returns the members that the connection's clients are created from (qore#7327)
+    private:internal hash<auto> getLentTarget() {
+        return self{"url", "safe_url", "real_url", "urlh", "orig_opts", "opts"};
+    }
+
+    #! Returns the names of the other public members that hold the options that the connection's clients use
+    /** Members of a connection class that hold a copy of its options that its clients are created from (as the
+        \c real_opts of an HTTP-based connection): for code restricted from the \c FILESYSTEM or \c NETWORK domain
+        that is lent the connection, their file and location options (see FilePathOptions) are checked against and
+        reset to the options that the connection's creator gave, as \c opts are.  This implementation returns
+        @ref nothing
+
+        @since %ConnectionProvider 3.1
+    */
+    private *list<string> getLentOptionMembersImpl() {
+    }
+
+    #! Sets the members that the connection's clients are created from; only on a private copy (qore#7327)
+    private:internal setLentTarget(hash<auto> target) {
+        self += target;
+    }
+
+    #! Returns the object that a client of the connection is created from for the calling code (qore#7327)
+    /** The connection itself, unless the calling code was lent the connection and is restricted from a functional
+        domain that the connection's clients use, and the clients are not bound to the creator's target by a rule of
+        their own (see hasCreatorBoundClients()): then the connection's members are checked (see checkLentTarget()),
+        and the object returned is a private copy of the connection whose members are those that its creator set, so
+        that a change of the connection's members that the restricted code makes while the client is created (from
+        another thread) cannot reach the client.
+
+        Every method of a connection class that creates a client or does I/O for the calling code creates it with
+        the object that this method returns, or for a data provider, with getLentDataProviderSource() (the base
+        class's entry points do so themselves); see @ref sandbox_lent_connections.
+
+        For code restricted from the \c FILESYSTEM or \c NETWORK domain that is lent an HTTP-based connection, the
+        object returned is a private copy whose file and location options (see FilePathOptions) are those that the
+        connection's creator gave (qore#7499).  The methods that create the client (getImpl() and getAsyncImpl())
+        then run on the copy: a connection class keeps any state that they record in an object that the copy shares,
+        not in a member of its own.
+
+        @param rtopts the runtime options of the client, which may hold only options that do not change its target for
+        such restricted code (see LentRuntimeOptions)
+
+        @return the object to create the client from
+
+        @throw PERMISSION-DENIED the calling code is restricted from a domain of the connection's clients, and the
+        connection's members are not the ones that its creator set, or the runtime options can change the client's
+        target
+
+        @since %ConnectionProvider 3.1
+    */
+    final private AbstractConnection getLentTargetSource(*hash<auto> rtopts) {
+        # the common path is one call: only code restricted from a domain that the connection can use is checked
+        if (!SandboxManager::isLentToRestricted(getConnectionDomainsImpl() | DOM_FILESYSTEM)) {
+            return self;
+        }
+        return getLentSource(rtopts, "runtime option(s)");
+    }
+
+    #! Returns the object that a data provider of the connection is created from for the calling code (qore#7327)
+    /** As getLentTargetSource(), for the data provider: for code that was lent the connection and is restricted from a
+        domain of its clients, the data provider's constructor options may hold only options that do not change its
+        target (see LentRuntimeOptions), as the data provider creates its client from them
+
+        @param constructor_options the constructor options of the data provider
+
+        @return the object to take the members that the data provider is created from
+
+        @throw PERMISSION-DENIED the calling code is restricted from a domain of the connection's clients, and the
+        connection's members are not the ones that its creator set, or the constructor options can change the target
+
+        @since %ConnectionProvider 3.1
+    */
+    final private AbstractConnection getLentDataProviderSource(*hash<auto> constructor_options) {
+        if (!SandboxManager::isLentToRestricted(getConnectionDomainsImpl() | DOM_FILESYSTEM)) {
+            return self;
+        }
+        return getLentSource(constructor_options, "data provider option(s)");
+    }
+
+    #! Returns the object that a client or data provider is created from for code restricted from a domain
+    private:internal AbstractConnection getLentSource(*hash<auto> options, string what) {
+        if (isLentTargetConfined()) {
+            checkLentTargetIntern();
+            checkLentOptions(options, what);
+            return getLentCopy();
+        }
+        if (isLentFilePathConfined()) {
+            checkLentFilePaths(FilePathOptions, options, what);
+            return getLentFilePathCopy(FilePathOptions);
+        }
+        return self;
+    }
+
+    #! Returns a private copy of the connection with the file path options that its creator set
+    private:internal AbstractConnection getLentFilePathCopy(list<string> fpo) {
+        # test hook (a debug build of the library only; see dbgSetLentTargetHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_lent_target_hook) {
+            dbg_lent_target_hook(self);
+        }
+        AbstractConnection c = copy();
+        c.setLentFilePathOptions(fpo, creator_target);
+        return c;
+    }
+
+    #! Sets the file path options of the connection; only on a private copy
+    private:internal setLentFilePathOptions(list<string> fpo, hash<auto> target) {
+        foreach string m in (getLentOptionMembers()) {
+            self{m} = (self{m} - fpo) + target.opts{fpo};
+        }
+    }
+
+    #! Returns a private copy of the connection with the members that its creator set (qore#7327)
+    private:internal AbstractConnection getLentCopy() {
+        # test hook (a debug build of the library only): runs where restricted code in another thread could change the
+        # connection's members after they were checked (see dbgSetLentTargetHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_lent_target_hook) {
+            dbg_lent_target_hook(self);
+        }
+        AbstractConnection c = copy();
+        c.setLentTarget(creator_target);
+        return c;
+    }
+
+    #! The runtime options that restricted code that was lent a connection may give its clients (qore#7327)
+    /** Options for the client's logging, threads and timeouts, which do not change the client's target
+    */
+    const LentRuntimeOptions = ("log", "dbglog", "logger", "yield", "start_thread", "reconnect", "connect_timeout",
+        "timeout", "async_io");
+
+    #! The connection options that name files that the module code of a connection reads
+    /** Code restricted from the \c FILESYSTEM domain that is lent a connection whose scheme declares any of them uses
+        it only with the files that its creator gave (see getLentTargetSource())
+    */
+    const FilePathOptions = ("ssl_cert_path", "ssl_key_path", "ssl_ca_file", "ssl_ca_path", "negotiate_keytab",
+        "negotiate_credential_cache", "gcp_sa_json_path",
+        # the locations of schemas, which can be files
+        "swagger", "openapi3", "asyncapi");
+
+%ifdef QoreDebug
+    #! @cond nodoc
+    #! Sets the test hook that getLentTargetSource() calls after it checked a lent connection; a debug build only
+    /** For tests: the hook is process-wide, so only trusted code with process control can set it, and the method
+        exists only in a debug build of the library
+
+        @param hook the hook, called with the connection before its private copy is made, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+    */
+    static dbgSetLentTargetHook(*code<nothing(AbstractConnection)> hook) [dom=PROCESS_CONTROL] {
+        # the method's functional domain refuses a caller restricted from process control
+        SandboxManager::checkProcessWideRegistration("set the lent-target hook of connections");
+        dbg_lent_target_hook = hook;
+    }
+    #! @endcond
+%endif
+
     #! Refuses code restricted from the NETWORK domain a network connection that the connection's creator proof does not allow
     /** A connection class calls this method before it connects a client that it created outside @ref get() and
         @ref getAsync() for the calling code (a synchronous client of a ping, for example), giving the target that the
@@ -1411,7 +1763,7 @@ conn.checkSandboxAccess(True);
         @since %ConnectionProvider 3.1
     */
     final private checkLentNetworkTarget(string url, *string proxy_url) {
-        if (!SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (!SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             return;
         }
         # the origin (TLS or not, canonical host, port; the schemes that are mapped to HTTP, such as ws and rest, as
@@ -1705,6 +2057,8 @@ scheme://user:pass@hostname:port/path
         # the proof of the code that creates the connection, bound to the URL that its clients use (its real URL: the
         # HTTP URL of an HTTP-based connection, whatever its scheme) and its proxy (qore#7262)
         creator_proof = HttpClientIo::HttpClientCreatorProof::tryGet(real_url ?? url, {"proxy": opts.proxy});
+        # the target that restricted code that is lent the connection is confined to (qore#7327)
+        creator_target = getLentTarget();
     }
 
     #! Called by the constructor to set the real URL
@@ -1826,6 +2180,8 @@ scheme://user:pass@hostname:port/path
         checkCreation(members.name);
         # the transient and internal members are the deserializing process's own, never the serialized data's
         self += members - TransientMembers;
+        # the target of the deserialized connection, which the deserializing code creates (qore#7327)
+        creator_target = getLentTarget();
         # issue #7236: a connection that was never checked is not up; a connection serialized before
         # ConnectionProvider 3.1 has up True with the status "not checked"
         if (status == "not checked") {
@@ -1835,7 +2191,7 @@ scheme://user:pass@hostname:port/path
 
     #! The members that deserializeMembers() assigns itself
     const TransientMembers = ("transient_info", "sandbox_check", "state_lock", "creator_restrictions",
-        "creator_proof");
+        "creator_proof", "creator_target");
 
     #! The functional domains that a connection's clients can use (see getConnectionDomainsImpl())
     const ConnectionDomains = (DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE);

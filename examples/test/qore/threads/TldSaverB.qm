@@ -1,0 +1,68 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a user module of pool-thread-data-release.qtest: its Program is a thread-local data family of its own, and it saves an
+# object in the thread-local data whose destructor saves data in the family of the other module (qore#7398)
+
+%modern
+
+module TldSaverB {
+    version = "1.0";
+    desc = "test module: saves thread-local data from a destructor in the data of another module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace TldSaverB {
+    #! an object that is saved in the thread-local data of the module's Program
+    public class Saver {
+        private {
+            string key;
+            bool chain;
+            hash<string, code> peer;
+            hash<string, code> self_ops;
+        }
+
+        constructor(string key, bool chain, hash<string, code> peer, hash<string, code> self_ops) {
+            self.key = key;
+            self.chain = chain;
+            self.peer = peer;
+            self.self_ops = self_ops;
+        }
+
+        #! saves a value in the thread-local data of the other module, or, if chain is true, a new Saver, which
+        #! saves one in the data of this module under a new key, and so on at every pass of the release: up to a
+        #! length of the key that is far beyond the passes of the release, so that a Saver that is not kept (a save that
+        #! is refused) does not recurse for ever
+        destructor() {
+            if (chain) {
+                if (key.size() < 40) {
+                    peer.setup(key + "+", True, self_ops, peer);
+                }
+            } else {
+                peer.save(key);
+            }
+        }
+    }
+
+    #! saves a Saver in the thread-local data of this module's Program
+    public sub setup(string key, bool chain, hash<string, code> peer, hash<string, code> self_ops) {
+        save_thread_data(key, new Saver(key, chain, peer, self_ops));
+    }
+
+    #! saves a value in the thread-local data of this module's Program
+    public sub save_it(string key) {
+        save_thread_data(key, True);
+    }
+
+    #! returns the thread-local data of this module's Program
+    public hash<auto> sub dump() {
+        return get_all_thread_data();
+    }
+
+    #! the functions of the module as call references
+    public hash<string, code> sub ops() {
+        return {"setup": \TldSaverB::setup(), "save": \TldSaverB::save_it(), "dump": \TldSaverB::dump()};
+    }
+}

@@ -86,6 +86,14 @@ def action_id(name: str) -> str:
     return words(name).replace(" ", "-").lower()
 
 
+#: the Bedrock operations that query or infer without changing service state; their manifest entries declare
+#: mutates_state False explicitly, as the HTTP method alone would make the POST ones changing actions (qore#7454)
+READ_ONLY_OPERATIONS = {
+    "ApplyGuardrail", "Converse", "CountTokens", "GetAsyncInvoke", "InvokeGuardrailChecks", "InvokeModel",
+    "ListAsyncInvokes", "ListTagsForResource",
+}
+
+
 def qore(value: Any) -> str:
     """Render JSON-compatible metadata as deterministic Qore source."""
     if value is True:
@@ -446,9 +454,14 @@ class Converter:
                 if overlay:
                     fields[wire] = overlay
             desc = markdown(op.get("documentation")) or f"Runs the AWS Bedrock `{name}` operation."
-            entries.append({
+            entry: dict[str, Any] = {
                 "action": action_id(name),
                 "method": op["http"]["method"],
+            }
+            # an operation that only queries or infers declares that it is read-only (qore#7454)
+            if name in READ_ONLY_OPERATIONS:
+                entry["mutates_state"] = False
+            entries.append(entry | {
                 "path": path,
                 "operation_id": name,
                 "display_name": display,

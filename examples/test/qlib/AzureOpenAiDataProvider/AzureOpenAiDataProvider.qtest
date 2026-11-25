@@ -262,6 +262,23 @@ public class AzureOpenAiDataProviderTest inherits QUnit::Test {
             assertEq(action_name == "chat-completion", DataProviderActionCatalog::actionMutatesState(action),
                 "chat can store completions; embedding only returns vectors");
         }
+        # the POST operations that only compute and return a result declare that they change nothing in the
+        # manifest; chat completions (store) and responses (store) keep the default (qore#7454)
+        foreach string action_name in (("create-speech", "create-completion", "embedding", "run-grader",
+                "validate-grader", "create-image-edit", "create-image", "search-vector-store",
+                "create-transcription", "create-translation")) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+                AzureOpenAiDataProvider::AppName, action_name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        foreach string action_name in (("chat-completion", "create-response", "create-batch", "create-file",
+                "create-vector-store")) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+                AzureOpenAiDataProvider::AppName, action_name);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
     }
 
     private chatCompletionTest() {

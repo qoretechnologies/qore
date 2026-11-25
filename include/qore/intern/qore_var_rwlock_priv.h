@@ -40,6 +40,20 @@
 // forward reference
 //class QoreVarRWLock;
 
+#ifdef DEBUG
+//! the number of lvalue write locks that the current thread holds (qore#7391)
+/** Counts the write locks of the locks of lvalues (QoreVarRWLock: the locks of objects, global and static variables
+    and closure-bound variables), not those of the public QoreRWLock, which uses the same implementation for other
+    data (see qore_var_rwlock_priv::lvalue_lock).  A reference element is bound with no lvalue lock held
+    (qore_reference_bind_unlocked(), QoreBindRetry::again()), which asserts that it is zero.
+
+    The count is not reset in a child process made with fork(): the forking thread is the one left in the child, and it
+    still holds the lvalue locks that it held in the parent, which are not initialized again; the QoreRWLock locks that
+    the fork handlers hold and initialize again in the child are not counted.
+*/
+DLLLOCAL extern thread_local int qore_lvalue_write_locks_held;
+#endif
+
 //! Read-write lock with a read path that takes no lock at all
 /** This lock guards every object's members, every global and closure-bound variable and the public QoreRWLock and
     QoreVarRWLock, so every member or variable read takes and releases its read lock.  Readers only increment and
@@ -75,6 +89,12 @@ public:
     QoreCondition write_cond,
         read_cond;
     bool has_notify = false;
+#ifdef DEBUG
+    //! true for the lock of an lvalue, whose write locks are counted in qore_lvalue_write_locks_held (qore#7391)
+    /** Cleared for the public QoreRWLock, which guards other data (the time zones, namespaces, tree maps)
+    */
+    bool lvalue_lock = true;
+#endif
 
     //! creates and initializes the lock
     DLLLOCAL qore_var_rwlock_priv() {
@@ -133,6 +153,12 @@ public:
         assert(write_tid == -1 || !q_gettid() || write_tid == q_gettid());
         assert(write_tid != -1);
         write_tid.store(-1, std::memory_order_relaxed);
+#ifdef DEBUG
+        if (lvalue_lock) {
+            assert(qore_lvalue_write_locks_held > 0);
+            --qore_lvalue_write_locks_held;
+        }
+#endif
         // releases the lock to readers taking it with no lock: the store is sequentially consistent, so the data
         // written under the write lock is visible to a reader that sees the claim cleared
         write_claim.store(false, std::memory_order_seq_cst);
@@ -254,6 +280,11 @@ protected:
         write_claim.store(true, std::memory_order_seq_cst);
         if (!readers.load(std::memory_order_seq_cst)) {
             write_tid.store(tid, std::memory_order_relaxed);
+#ifdef DEBUG
+            if (lvalue_lock) {
+                ++qore_lvalue_write_locks_held;
+            }
+#endif
             return true;
         }
         write_claim.store(false, std::memory_order_seq_cst);

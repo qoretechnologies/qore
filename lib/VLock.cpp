@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -201,6 +201,12 @@ void qore_auto_vlock_ops::addMemberNotificationImpl(AutoVLock* b, QoreObject* ob
     }
 
     b->priv->add(obj, member);
+}
+
+void qore_auto_vlock_ops::dropMemberNotificationsImpl(AutoVLock* b) {
+    if (b->priv && b->priv->notify_list && !b->priv->pinned) {
+        b->priv->notify_list->clear();
+    }
 }
 
 VLock::VLock(int tid) : waiting_on(nullptr), tid(tid) {

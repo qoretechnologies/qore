@@ -69,8 +69,8 @@ class IgnoredQppParametersTest(unittest.TestCase):
                 cls.invoke(variant + "-" + stem, command)
                 cpp = (directory / (stem + ".cpp")).read_text()
                 cls.generated[variant, stem] = cpp
-                if stem == "Pseudo_QC_String":
-                    wrappers.append(function(cpp, "get_pseudo_string_arg"))
+                # the wrappers take their receivers with the accessors of qore/intern/QorePseudoMethods.h, which the
+                # fixture includes
                 wrappers.extend(function(cpp, prefix + name) for name in names)
             (directory / "ignored-bindings.inc").write_text("\n\n".join(wrappers) + "\n")
 

@@ -2733,30 +2733,58 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                               BEGIN(INITIAL);
                                            } else {
                                               const char* fn = fname->c_str();
+                                              // under a sandbox policy, the file included is the file that the
+                                              // policy checked, which is checked before anything about it is told
+                                              // (qore#7518)
+                                              FILE* policy_fp = nullptr;
+                                              bool policy_read = q_source_read_policy_applies();
+                                              QoreString policy_err;
+                                              if (policy_read) {
+                                                 ExceptionSink pxsink;
+                                                 policy_fp = q_open_policy_checked_source(fn, &pxsink);
+                                                 if (!policy_fp) {
+                                                    if (pxsink) {
+                                                       QoreStringValueHelper desc(pxsink.getExceptionDesc());
+                                                       policy_err.concat(desc->c_str());
+                                                       pxsink.clear();
+                                                    } else {
+                                                       q_strerror(policy_err, errno);
+                                                    }
+                                                 }
+                                              }
                                               // check if regular file
                                               struct stat sbuf;
-                                              int rc = stat(fn, &sbuf);
-                                              if (rc) {
+                                              int rc = policy_read ? 0 : stat(fn, &sbuf);
+                                              if (policy_read && !policy_fp) {
+                                                 parse_error(*get_loc(yylloc), "cannot include \"%s\": %s", fn,
+                                                    policy_err.c_str());
+                                                 BEGIN(INITIAL);
+                                              } else if (rc) {
                                                  // a parse error at the directive, as the other errors of the
                                                  // directive, so that it is also a diagnostic of the parse (issue
                                                  // #6509)
                                                  int err = errno;
                                                  QoreString errstr;
                                                  q_strerror(errstr, err);
-                                                 parse_error(*get_loc(yylloc), "cannot include \"%s\"; stat() failed: %s", fn,
-                                                    errstr.c_str());
+                                                 // the path is named as the code being parsed may see it (qore#7507)
+                                                 parse_error(*get_loc(yylloc),
+                                                    "cannot include \"%s\"; stat() failed: %s",
+                                                    qore_caller_msg_path(fn).c_str(), errstr.c_str());
                                                  BEGIN(INITIAL);
                                               } else {
                                                  //printd(5, "%s: mode=%o, s_ifmt=%o, &=%o, reg=%o comp=%s\n", fname->c_str(), sbuf.st_mode, S_IFMT, sbuf.st_mode & S_IFMT, S_IFREG, (sbuf.st_mode & S_IFMT) != S_IFREG ? "true" : "false");
-                                                 if ((sbuf.st_mode & S_IFMT) != S_IFREG) {
-                                                    parse_error(*get_loc(yylloc), "cannot include \"%s\"; is not a regular file", fn);
+                                                 if (!policy_read && (sbuf.st_mode & S_IFMT) != S_IFREG) {
+                                                    parse_error(*get_loc(yylloc),
+                                                       "cannot include \"%s\"; is not a regular file",
+                                                       qore_caller_msg_path(fn).c_str());
                                                     BEGIN(INITIAL);
                                                  } else {
                                                     FILE *save_yyin = yyin;
-                                                    yyin = fopen(fn, "r");
+                                                    yyin = policy_read ? policy_fp : fopen(fn, "r");
 
                                                     if (!yyin) {
-                                                       parse_error(*get_loc(yylloc), "cannot open include file \"%s\"", fn);
+                                                       parse_error(*get_loc(yylloc), "cannot open include file \"%s\"",
+                                                          qore_caller_msg_path(fn).c_str());
                                                        yyin = save_yyin;
                                                        BEGIN(INITIAL);
                                                     } else {

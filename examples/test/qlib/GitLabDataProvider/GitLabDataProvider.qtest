@@ -635,6 +635,13 @@ public class GitLabDataProviderTest inherits QUnit::Test {
         assertEq("my-group/my-project", res.path_with_namespace);
         assertEq("my-group%2Fmy-project", res.encoded_path_with_namespace);
 
+        # the action only reads the project, and declares that it does not change state (qore#7454)
+        hash<DataProviderActionInfo> action = (select DataProviderActionCatalog::getActions(
+            GitLabDataProvider::GitLabDataProvider::AppName), $1.action == ProjectUrlAction)[0];
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(action));
+
         # a URL from *within* the project resolves to the same project: GitLab reserves "-" as a path
         # segment, so "/-/" can only be the boundary between the project and the page being viewed.  The
         # superseded application took the whole URL path, so every one of these resolved to nothing

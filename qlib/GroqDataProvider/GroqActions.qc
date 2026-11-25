@@ -278,6 +278,7 @@ public class GroqActions {
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": AppName,
                 "action": action,
+                "billing": op.method == "GET" ? <DataProviderBillingInfo>{"model": "included"} : NOTHING,
                 "path": "/" + action,
                 "display_name": op.display_name,
                 "short_desc": op.short_desc,
