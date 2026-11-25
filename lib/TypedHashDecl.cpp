@@ -161,9 +161,7 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
         if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode("initialization expression for ");
             desc->sprintf("hashdecl member '%s' returns ", name);
-            QoreTypeInfo::getThisType(argTypeInfo, *desc);
-            desc->concat(", but the member was declared as ");
-            QoreTypeInfo::getThisType(typeInfo, *desc);
+            QoreTypeInfo::describeTypeComparison(*desc, argTypeInfo, ", but the member was declared as ", typeInfo);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
         }
         if (!err) {
@@ -360,6 +358,30 @@ static std::string make_parameterized_hashdecl_name(const std::string& base,
     return rv;
 }
 
+bool typed_hash_decl_private::setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
+    if (!sys || copied || program_local.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    // the instances of a generic hashdecl have no other owner: they are freed with it, so they are mortal as it is,
+    // also those made before it was marked (a module can name an instance in a signature before the namespace is
+    // added); getParameterizedHashDecl() reads the flag of the base for a new instance under the same lock
+    std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+    marked_types.reserve(marked_types.size() + 2 * (parameterized_hashdecl_cache.size() + 1));
+    marked_owners.reserve(marked_owners.size() + parameterized_hashdecl_cache.size() + 1);
+    program_local.store(true, std::memory_order_release);
+    marked_types.push_back(getTypeInfo(false));
+    marked_types.push_back(getTypeInfo(true));
+    marked_owners.push_back(&type_owner);
+    for (auto& i : parameterized_hashdecl_cache) {
+        typed_hash_decl_private* ipriv = get(*i.second);
+        ipriv->program_local.store(true, std::memory_order_release);
+        marked_types.push_back(ipriv->getTypeInfo(false));
+        marked_types.push_back(ipriv->getTypeInfo(true));
+        marked_owners.push_back(&ipriv->type_owner);
+    }
+    return true;
+}
+
 const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         const std::vector<const QoreTypeInfo*>& args) const {
     const typed_hash_decl_private* base = parameterized_base ? get(*parameterized_base) : this;
@@ -431,23 +453,35 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     }
     // issue #5765: the declaration is added with the registry locked, so it is removed from the cache when one of its
     // type arguments is destroyed
-    qore_generic_cache_insert(registration, args, [&] () {
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
-        auto i = parameterized_hashdecl_cache.lower_bound(args);
-        if (i != parameterized_hashdecl_cache.end()
-                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
-            existing = i->second;
-        } else {
-            // only a new declaration makes the key that the cache owns
-            parameterized_hashdecl_key_t key;
-            key.reserve(args.size());
-            for (const QoreTypeInfo* arg : args) {
-                key.emplace_back(arg, qore_get_type_identity_serial(arg));
+    try {
+        qore_generic_cache_insert(registration, args, [&] () {
+            std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+            auto i = parameterized_hashdecl_cache.lower_bound(args);
+            if (i != parameterized_hashdecl_cache.end()
+                    && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
+                existing = i->second;
+            } else {
+                // the instance of a generic hashdecl added to a Program at run time is mortal as its base is; read
+                // under the lock with which setProgramLocal() marks the base and the instances already made
+                // (qore#7540)
+                if (program_local.load(std::memory_order_relaxed)) {
+                    priv->program_local.store(true, std::memory_order_release);
+                }
+                // only a new declaration makes the key that the cache owns
+                parameterized_hashdecl_key_t key;
+                key.reserve(args.size());
+                for (const QoreTypeInfo* arg : args) {
+                    key.emplace_back(arg, qore_get_type_identity_serial(arg));
+                }
+                parameterized_hashdecl_cache.insert(i,
+                    decltype(parameterized_hashdecl_cache)::value_type(std::move(key), priv->thd));
             }
-            parameterized_hashdecl_cache.insert(i, decltype(parameterized_hashdecl_cache)::value_type(std::move(key),
-                priv->thd));
-        }
-    });
+        });
+    } catch (...) {
+        // the unpublished declaration is released
+        typed_hash_decl_private::get(*priv->thd)->deref();
+        throw;
+    }
     if (existing) {
         // another thread made the declaration first; the unpublished one is released outside the lock, as its
         // destruction purges the derived types of its own type

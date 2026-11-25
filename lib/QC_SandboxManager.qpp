@@ -556,6 +556,22 @@ hashdecl NetworkSecurityConfigInfo {
     list<hash<PortRangeInfo>> allowed_ports;
 }
 
+//! The time zone path budget of a sandbox and its use (qore#7566)
+/** @see SandboxManager::getTimeZonePathLimits()
+
+    @since %Qore 3.0
+*/
+hashdecl SandboxTimeZonePathInfo {
+    //! the most time zones that code governed by the sandbox may load from paths; 0 = path zones are refused
+    int max_zones = 0;
+    //! the most memory in bytes that those zones may use; 0 = path zones are refused
+    int max_bytes = 0;
+    //! the time zone name entries charged to the sandbox
+    int zones = 0;
+    //! the time zone memory in bytes charged to the sandbox
+    int bytes = 0;
+}
+
 //! Full sandbox configuration
 /** @since %Qore 3.0
 */
@@ -925,6 +941,50 @@ nothing SandboxManager::setMemoryLimit(int max_memory_bytes) [flags=NAMED_ARGS] 
         return QoreValue();
     }
     sm->setMemoryLimit(max_memory_bytes);
+}
+
+//! Sets the budget of the sandbox for time zones loaded from paths
+/** Code governed by the sandbox can load a time zone from a path (with @ref Qore::TimeZone::constructor(string)
+    "TimeZone::constructor()", @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" or the
+    @ref set-time-zone "%set-time-zone" parse directive) only if every sandbox that governs it has a budget, and only a
+    path that its file system policy allows.  Time zones are never freed, so the memory of every time zone and name
+    that such code loads is charged to each of its sandboxes for the life of the sandbox; a zone or name that is
+    loaded already costs nothing.  See @ref sandbox_time_zone_paths.
+
+    @param max_zones the most time zones (names) that the code can load from paths; 0 = none (the default)
+    @param max_bytes the most memory in bytes that they can use; 0 = none (the default)
+
+    @par Example:
+    @code{.py}
+sm.setTimeZonePathLimits(16, 4 * 1024 * 1024);
+    @endcode
+
+    @throw SANDBOX-CONFIG-ERROR a limit is negative, or the sandbox is a composite of sandboxes
+    @throw SANDBOX-ACCESS-ERROR restricted code tried to raise a limit: only code that is not restricted can raise
+    them, also of a sandbox that restricted code created; restricted code can lower them
+
+    @note a copy of a sandbox (see copy()) has no budget until one is set
+
+    @since %Qore 3.0
+*/
+nothing SandboxManager::setTimeZonePathLimits(int max_zones, int max_bytes) [flags=NAMED_ARGS] {
+    qore_sandbox_set_tz_path_limits(sm, max_zones, max_bytes, xsink);
+}
+
+//! Returns the budget of the sandbox for time zones loaded from paths and its use
+/** @return the limits (0 if path zones are refused) and the zones and memory charged to the sandbox; see
+    setTimeZonePathLimits()
+
+    @since %Qore 3.0
+*/
+hash<SandboxTimeZonePathInfo> SandboxManager::getTimeZonePathLimits() [flags=CONSTANT] {
+    QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+    QoreHashNode* rv = new QoreHashNode(hashdeclSandboxTimeZonePathInfo, xsink);
+    rv->setKeyValue("max_zones", account->tz_max_zones.load(), xsink);
+    rv->setKeyValue("max_bytes", account->tz_max_bytes.load(), xsink);
+    rv->setKeyValue("zones", account->tz_zones.load(), xsink);
+    rv->setKeyValue("bytes", account->tz_bytes.load(), xsink);
+    return rv;
 }
 
 //! Gets the memory limit of the sandbox
@@ -2825,6 +2885,12 @@ static *int SandboxManager::getCallerProgramId() [flags=RET_VALUE_ONLY] {
       for the restricted caller: a closure or call reference that library code creates while it serves the caller
       keeps the caller's restrictions, so the code is created in the module's initialization, or it is a capability
       created there
+    - an object of a library module's class that the host's code creates, while no restriction other than that of
+      uncontrolled APIs applies to it, is lent as a grant is (see @ref sandbox_lent_objects): while one of its methods
+      that the restricted code itself called runs, the file system, the network and external information are lent,
+      as by a policy barrier; the other domains, and the loading of native code, are not; library code that calls the
+      object (one that holds it, or that the restricted code gave it) lends nothing; the arguments that restricted
+      code gives the method keep their restrictions, and a callback of restricted code runs as restricted code
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 
@@ -2848,6 +2914,43 @@ if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
 */
 static bool SandboxManager::isCallerRestricted(softint domain) [flags=RET_VALUE_ONLY] {
     return qore_caller_restricts_domain(domain);
+}
+
+//! Returns @ref True if the code that a lent object was lent to is restricted from any of the given functional domains
+/** As isCallerRestricted(), except that a method of an object that the host lent (see @ref sandbox_lent_objects)
+    lends nothing here: inside such a method the code that the object was lent to (the borrower) counts, while the
+    host's policy barriers (callWithSystemPolicy()) and system-policy capabilities (createSystemPolicyCall()) still lend
+    what they lend.  Without a lent object's method on the stack it answers as isCallerRestricted(), and it never
+    answers less restricted than isCallerRestricted().
+
+    Library code that a lent object's methods run, and that binds what it does to what the object's creator chose, uses
+    it to recognize a restricted borrower: the object can still do what its methods do for the borrower (the lent
+    domains), but only with the target that the creator gave (for example the creator proof of
+    @ref HttpClientIo::HttpClientCreatorProof "HttpClientCreatorProof", which binds a lent HTTP client to its creator's
+    target, proxy and CA locations).
+
+    It reveals only whether the code is restricted, so it is not restricted itself.
+
+    @param domain the @ref functional_domain_constants "functional domains" to check, as a bitmask of \c DOM_*
+    constants; only the domains that a parse option restricts are answered
+
+    @return @ref True if the code that a lent object's method was lent to, or the calling code, is restricted from any
+    of the domains in \a domain; @ref False if not
+
+    @par Example:
+    @code{.py}
+# a client that a lent connection creates is bound to the creator's target for a restricted borrower
+if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
+    checkTargetOfCreator(url);
+}
+    @endcode
+
+    @see isCallerRestricted()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isLentToRestricted(softint domain) [flags=RET_VALUE_ONLY] {
+    return qore_caller_lent_to_restricts_domain(domain);
 }
 
 //! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions

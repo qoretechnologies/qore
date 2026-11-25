@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# a module block that the module loader accepts and that the scan of earlier qcc versions refused (qore#7315)
+
+%modern
+
+module BlockBraces {
+    # a comment with a } and a "quote" and a desc = "not the description";
+    init = sub () {
+        if (True) {
+            BlockBraces::Init::done = True;
+        }
+    };
+    version = "1.0";
+    desc = "a {} in the \"description\" with } and { and \\ and 'quotes'; author = \"no\"";
+    author = 'single {quoted} "author"';
+    url = "https://qore.org/{x}";
+    license = "MIT";
+}
+
+public namespace BlockBraces {
+    public class Init {
+        public {
+            static bool done = False;
+        }
+    }
+
+    public bool sub init_done() {
+        return Init::done;
+    }
+}

@@ -45,6 +45,13 @@ ResolvedCallReferenceNode* FunctionEntry::makeCallReference(const QoreProgramLoc
 ModuleImportedFunctionEntry::ModuleImportedFunctionEntry(const FunctionEntry& old, qore_ns_private* ns, bool builtin)
         : FunctionEntry(old.getName(), new QoreFunction(*(old.getFunction()),
             builtin ? PO_NO_INHERIT_USER_FUNC_VARIANTS : PO_NO_SYSTEM_FUNC_VARIANTS), ns) {
+    decl_seq = old.getDeclSeq();
+}
+
+std::vector<FunctionEntry*> FunctionList::getEntriesInDeclarationOrder() const {
+    return qore_decl_ordered<fl_map_t, FunctionEntry*>(*this, [](const FunctionEntry* fe) {
+        return fe->getDeclSeq();
+    });
 }
 
 FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const QoreParseOptions& po) {
@@ -59,6 +66,8 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
             }
             f->ref();
             FunctionEntry* fe = new FunctionEntry(i->first, f, ns);
+            fe->setSharedUnowned(i->second->isSharedUnowned() || !i->second->getNamespace()->ownedByProgram());
+            fe->setDeclSeq(i->second->getDeclSeq());
             insert(std::make_pair(fe->getName(), fe));
             continue;
         }
@@ -77,12 +86,16 @@ FunctionList::FunctionList(const FunctionList& old, qore_ns_private* ns, const Q
             && (f->getModuleName() || !get_module_context_name())) {
             QoreFunction* func = i->second->getFunction();
             func->ref();
-            fe = new FunctionEntry(i->first, func, ns);;
+            fe = new FunctionEntry(i->first, func, ns);
+            // a variant that a binary module adds to the function at run time is added to the namespaces that share
+            // it (qore#7540)
+            fe->setSharedUnowned(i->second->isSharedUnowned() || !i->second->getNamespace()->ownedByProgram());
         } else {
             // otherwise we have to make a new function object with only the desired visible variants
             // pass po.getLo() until QoreFunction is migrated to QoreParseOptions
             fe = new FunctionEntry(i->first, new QoreFunction(*f, po.getLo()), ns);
         }
+        fe->setDeclSeq(i->second->getDeclSeq());
         insert(std::make_pair(fe->getName(), fe));
     }
 }

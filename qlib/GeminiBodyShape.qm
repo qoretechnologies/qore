@@ -76,6 +76,7 @@ module GeminiBodyShape {
     - @ref openAiToolChoiceToGeminiConfig() — adapt OpenAI \c tool_choice
       to Gemini \c toolConfig
     - @ref normalizeGenerationConfig() — model-specific generation controls, applied after body overrides
+    - @ref highestThinkingLevel() — the level selected for maximum reasoning effort
     - @ref lowestThinkingLevel() — the thinking level that a budget of zero selects on Gemini 3.x (\c LOW)
     - @ref minimumThinkingBudget() — the budget that a budget of zero selects on Gemini 2.5 Pro (\c 128)
     - @ref reasoningAlwaysOn() — whether a model spends reasoning tokens even with a budget of zero
@@ -1675,8 +1676,19 @@ public bool sub usesThinkingLevel(string model) {
     return model =~ /^gemini-[34]([.-]|$)/;
 }
 
-# Hydrogen and Neon accept XHIGH. The other level-based models accept at most HIGH.
-string sub highestThinkingLevel(string model) {
+#! Returns the thinking level selected for maximum reasoning effort on a level-based model
+/** Use @ref usesThinkingLevel() to identify models that accept thinking levels.
+
+    @param model a bare model ID or a Gemini/Vertex model resource name
+
+    @return \c "XHIGH" for Gemini 4 Hydrogen and Neon, or \c "HIGH" for other level-based models
+
+    @par Example
+    @code{.py}
+string level = GeminiBodyShape::highestThinkingLevel("gemini-4-hydrogen"); # "XHIGH"
+    @endcode
+*/
+public string sub highestThinkingLevel(string model) {
     model =~ s/^.*\///;
     return model =~ /^gemini-4-(hydrogen|neon)([.-]|$)/ ? "XHIGH" : "HIGH";
 }

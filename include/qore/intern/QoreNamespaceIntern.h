@@ -33,6 +33,7 @@
 #define _QORE_QORENAMESPACEINTERN_H
 
 #include "qore/intern/QoreClassList.h"
+#include "qore/intern/DeclSeq.h"
 #include "qore/intern/HashDeclList.h"
 #include "qore/intern/EnumList.h"
 #include "qore/intern/QoreNamespaceList.h"
@@ -49,8 +50,10 @@
 #include <atomic>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <list>
+#include <memory>
 
 //! the guidance given when a module declares a public thread_local variable or an AOT module image holds one
 /** A module's public variable is one variable shared by every Program that imports the module (qore#5662).
@@ -78,6 +81,8 @@ struct TypedefEntry {
     //! the namespace that declares the typedef while the Program that declares it is parsed, in which its type is
     //! resolved; not copied: a copy imported into another Program has the resolved type
     qore_ns_private* parse_ns = nullptr;
+    //! Check for shadowing once the complete namespace tree is available (declaration-time opt-in).
+    bool check_shadow = false;
     //! true while the type is being resolved, so that a typedef that refers to itself is an error
     bool resolving = false;
 
@@ -157,14 +162,31 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
         QoreValue value, QoreValue compiled_define);
 
+//! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
+DLLLOCAL std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m);
+
 class qore_ns_private {
 public:
     const QoreProgramLocation* loc;
     std::string name;
     // the fully-justified reference including the namespace name
     std::string path;
+    //! the order in which the namespace was declared; a copy has the number of the namespace that it is a copy of
+    //! (issue #7171)
+    uint64_t decl_seq = qore_next_decl_seq();
 
     QoreNamespace* ns = nullptr;
+
+    //! The mortal declarations of the parent Program that the copy of its namespaces for a child Program did not copy,
+    //! referenced (qore#7607); set only in the root namespace of a child Program
+    /** The code, constants, typedefs and global variables that the child inherits can name declarations that it does
+        not inherit (PO_NO_INHERIT_USER_CLASSES, PO_NO_INHERIT_SYSTEM_CLASSES for the declarations that a binary module
+        added to the parent at run time, ...; a public function naming a class that is not public), which are freed
+        with the parent, which the child can outlive; also those that the parent kept so, which a child of the child
+        inherits as well; released when the namespace is destroyed, after its content (declared before it; see
+        qore_root_ns_private::refLeftOutDecls())
+    */
+    std::unique_ptr<QoreTypeDeclRefs> left_out_decl_refs;
 
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
@@ -249,6 +271,7 @@ public:
     DLLLOCAL qore_ns_private(const char* n, const qore_ns_private& old)
         : name(n),
             path(old.path),
+            decl_seq(old.decl_seq),
             ns(new QoreNamespace(this)),
             constant(this), pub(old.pub),
             builtin(old.builtin),
@@ -264,6 +287,7 @@ public:
     DLLLOCAL qore_ns_private(const qore_ns_private& old, const QoreParseOptions& po, QoreNamespace* ns)
         : name(old.name),
             path(old.path),
+            decl_seq(old.decl_seq),
             ns(ns),
             classList(old.classList, po, this),
             hashDeclList(old.hashDeclList, po, this),
@@ -686,6 +710,18 @@ public:
 
     DLLLOCAL void addModuleNamespace(qore_ns_private* nns, QoreModuleContext& qmc);
     DLLLOCAL void addCommitNamespaceIntern(qore_ns_private* nns);
+
+    //! Returns true if a declaration added to this namespace is owned by a Program: it is attached to a Program's
+    //! root namespace, and it is not the namespace of a module (qore#7540)
+    DLLLOCAL bool ownedByProgram() const;
+
+    //! Marks the original builtin declarations of the namespace tree \a tree as Program-local, if this namespace, to
+    //! which it is added, is owned by a Program (ownedByProgram(); qore#7540)
+    /** Called before the tree is published, under the runtime namespace write lock: a class whose own namespace is in
+        the tree, a hashdecl that is not a copy and an enum that is the original are marked; copies of declarations of a
+        module or of the static system namespace, which share their private data, are not.
+    */
+    DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();
@@ -1485,11 +1521,46 @@ struct deferred_new_check_t {
     }
 };
 
+#ifdef DEBUG
+//! Makes the next completion of a marking event of a namespace that a Program owns fail after its upgrade, as an
+//! allocation failure would (qore#7540)
+DLLLOCAL void qore_dbg_fail_next_runtime_refresh();
+
+//! Returns the number of variants whose references the marking events refreshed (qore#7608)
+DLLLOCAL int64 qore_dbg_runtime_variant_refreshes();
+#endif
+
 class qore_root_ns_private : public qore_ns_private {
     friend class qore_ns_private;
     friend class QoreNamespace;
 
 protected:
+    //! The builtin variants of the namespace functions that the Program owns (not added to a namespace that no Program
+    //! owns), referenced (qore#7540)
+    /** Their references to the mortal declarations that they name are refreshed whenever a declaration of the Program
+        becomes mortal (refRuntimeVariantDecls()), so that a variant added before a declaration that it names is marked
+        references it too.  Written under the runtime namespace write lock; not copied into a child Program, which
+        does not own them
+    */
+    std::vector<AbstractQoreFunctionVariant*> runtime_variants;
+    //! the variants of runtime_variants, for the test of membership
+    std::unordered_set<const AbstractQoreFunctionVariant*> runtime_variant_set;
+    //! The variants of runtime_variants that name a declaration that is not mortal yet, by the own type of the
+    //! declaration (QoreTypeDeclRefs::getUnmarkedDeclTypes(); qore#7608)
+    /** A marking event refreshes only these variants of the declarations that it marks, whose types it reports, and
+        the variants that it adds, instead of every variant of the Program; the entries of the declarations marked are
+        removed.  An entry can remain for a declaration that is never marked or that is freed: a variant that is
+        refreshed for nothing references nothing more
+    */
+    std::unordered_map<const QoreTypeInfo*, std::vector<AbstractQoreFunctionVariant*>> unmarked_decl_variants;
+    //! true if a variant of runtime_variants could not be indexed in unmarked_decl_variants (an allocation failed):
+    //! every marking event then refreshes every variant
+    bool unmarked_index_incomplete = false;
+    //! true from the start of a marking event until its upgrade of the derived types and its refresh of
+    //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
+    //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
+    bool runtime_refresh_pending = false;
+
     //! Protects committed namespace containers during cold runtime module merges
     mutable QoreRWLock runtime_namespace_lock;
     mutable std::atomic<int> runtime_namespace_writer_tid{-1};
@@ -1933,6 +2004,10 @@ protected:
     //! Checks, and raises the warning, for a hashdecl declared in \a declaring_ns
     DLLLOCAL void parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
             const qore_ns_private* declaring_ns);
+
+    //! Checks a typedef declaration for a Qore-namespace alias that unqualified lookup selects first.
+    DLLLOCAL void parseCheckTypedefShadowedByQore(const QoreProgramLocation* loc, const char* name,
+        const qore_ns_private* declaring_ns);
 
     //! Checks, and raises the warning, for a global variable declared in \a declaring_ns
     DLLLOCAL void parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
@@ -2654,6 +2729,9 @@ public:
         // Program, as when it imports the modules (qore#5664)
         markCopiedModuleVarImportsFrom(old);
 
+        // the declarations of the parent that the copy left out are kept with it (qore#7607)
+        refLeftOutDecls(old);
+
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
@@ -2661,7 +2739,55 @@ public:
     //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src
     DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
+    //! References the mortal declarations of \a src, the root namespace of the parent Program from which this one was
+    //! copied, that the copy did not copy (left_out_decl_refs; qore#7607)
+    DLLLOCAL void refLeftOutDecls(const qore_root_ns_private& src);
+
     DLLLOCAL ~qore_root_ns_private() {
+        releaseRuntimeVariants();
+    }
+
+    //! Adds a builtin variant of a namespace function that the Program owns to runtime_variants, with a reference
+    //! (qore#7540)
+    DLLLOCAL void addRuntimeVariant(AbstractQoreFunctionVariant* v);
+
+    //! Makes each variant of runtime_variants reference the mortal declarations that it names
+    //! (BuiltinFunctionVariantBase::refMortalDecls()), from the variant with the index \a start; called whenever a
+    //! declaration of the Program becomes mortal
+    DLLLOCAL void refRuntimeVariantDecls(size_t start = 0);
+
+    //! Releases the references of runtime_variants
+    DLLLOCAL void releaseRuntimeVariants();
+
+    //! Starts a marking event (qore#7540); returns true if an earlier one did not complete, in which case the event
+    //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
+    //! write lock
+    DLLLOCAL bool beginRuntimeMarking() {
+        bool incomplete = runtime_refresh_pending;
+        runtime_refresh_pending = true;
+        return incomplete;
+    }
+
+    //! Completes a marking event: upgrades the derived types of the declarations marked (all of them if \a full) and
+    //! refreshes the references of the variants of runtime_variants from \a start, and of the variants before it that
+    //! name a declaration marked (unmarked_decl_variants; all of them if \a full; qore#7608)
+    DLLLOCAL void completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full);
+
+    //! Completes a marking event that did not complete, if any (as the next event would)
+    DLLLOCAL void completePendingRuntimeMarking() {
+        if (runtime_refresh_pending) {
+            completeRuntimeMarking(type_vec_t(), 0, true);
+        }
+    }
+
+    //! Returns true if a marking event did not complete (runtime_refresh_pending)
+    DLLLOCAL bool runtimeRefreshPending() const {
+        return runtime_refresh_pending;
+    }
+
+    //! Returns the number of the variants of runtime_variants
+    DLLLOCAL size_t runtimeVariantCount() const {
+        return runtime_variants.size();
     }
 
     DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {
@@ -3534,7 +3660,8 @@ private:
         return best;
     }
 
-    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname) {
+    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname,
+            const qore_ns_private** found_ns = nullptr) {
         const qore_ns_private* qore_ns = getQore();
         if (!qore_ns) {
             return nullptr;
@@ -3556,6 +3683,9 @@ private:
             if (!best || ns_priv->depth < best_depth) {
                 best = const_cast<TypedefEntry*>(td);
                 best_depth = ns_priv->depth;
+                if (found_ns) {
+                    *found_ns = ns_priv;
+                }
             }
         }
         return best;
