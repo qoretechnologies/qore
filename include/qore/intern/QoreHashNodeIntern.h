@@ -495,8 +495,16 @@ private:
     }
 
     //! true if the chain that starts with \a m has MaxChain members, so that another one would make it too long
+    /** the loop is not unrolled: insert() is inlined into many callers, and an unrolled walk at each of them would
+        take code size that the compiler's inlining budget then denies to other code (qore#7557)
+    */
     DLLLOCAL static bool chainFull(const HashMember* m) {
         size_t n = 1;
+#if defined(__clang__)
+#pragma clang loop unroll(disable)
+#elif defined(__GNUC__)
+#pragma GCC unroll 1
+#endif
         for (m = m->bucket_next; m; m = m->bucket_next) {
             if (++n == MaxChain) {
                 return true;
