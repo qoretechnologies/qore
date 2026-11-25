@@ -38,7 +38,7 @@ class IRBoundedPairScalarReplacementTest inherits QUnit::Test {
         #! the functions whose pair is replaced: with members in and out of the inline range, in one or two blocks,
         #! in a loop and with a constant read as well
         const Replaced = ("boundedPair", "commutedPair", "multipleReads", "crossBlockPair", "inlinePair",
-            "inlineCommutedPair", "inlineMultipleReads", "inlineCrossBlockPair", "loopPair", "inlineExtremes",
+            "inlineCommutedPair", "inlineMultipleReads", "inlineCrossBlockPair", "loopPair", "inlineExtremes", "rangePair",
             "wideConstantPair");
 
         #! the functions whose list must stay: an index that can be another value, string members, a list that is
