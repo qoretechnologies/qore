@@ -83,13 +83,16 @@ class ForkTypeRetirementLocksTest inherits QUnit::Test {
     }
 
     epochHoldsTest() {
-        # the scan of the threads for the freeing of retired declarations reads the epoch holds
+        # the scan of the threads for the freeing of retired declarations reads the epoch holds; the child keeps the
+        # holds of the parent's queued background compiles, which it finishes itself, and only those: the parent takes
+        # their number just before fork() (see forkWhileHeld())
+        int baseline;
         forkWhileHeld("type_epoch_holds", int sub () {
-            if (call_function("dbg_type_epoch_holds") != 0) {
+            if (call_function("dbg_type_epoch_holds") != baseline) {
                 return 2;
             }
             return retireAndFree();
-        });
+        }, \baseline);
     }
 
     tombstonesTest() {
@@ -238,10 +241,22 @@ class ForkTypeRetirementLocksTest inherits QUnit::Test {
         }
     }
 
-    private forkWhileHeld(string name, code child) {
+    #! forks while another thread holds the lock named; the child runs \a child
+    /** @param baseline if given, receives the number of epoch holds in the parent just before fork()
+
+        The background JIT compiles queued by the code run before (with JIT or tiered execution) are finished first:
+        a queued compile of a specialization holds an epoch hold, which keeps what the child retires afterwards from
+        being freed until the child's compile thread has compiled it.  After that, this thread runs no code that can
+        queue a compile until fork(), so the holds counted in \a baseline are the ones the child has.
+    */
+    private forkWhileHeld(string name, code child, *reference<int> baseline) {
         checkFork();
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("the test needs a debug build of the library");
+        }
+        call_function("dbg_wait_bg_compile_idle");
+        if (exists baseline) {
+            baseline = call_function("dbg_type_epoch_holds");
         }
         hash<auto> r = call_function("dbg_fork_while_type_lock_held", name, child);
         assertNeq(98, r.status, sprintf("the child did not inherit the %y lock held", name));
