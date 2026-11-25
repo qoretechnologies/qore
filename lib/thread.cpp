@@ -8214,29 +8214,25 @@ int qore_caller_sandbox_state() {
     return qore_caller_sandbox_state_intern(nullptr);
 }
 
-bool qore_caller_has_unmanaged_sandbox() {
+bool qore_caller_has_restricted_code() {
     ThreadData* td = thread_data.get();
     if (!td) {
         return false;
     }
-    // a Program marked sandboxed that has no manager of its own
-    auto unmanaged = [] (const QoreProgram* pgm) -> bool {
-        if (!pgm) {
-            return false;
-        }
-        const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
-        return (pp->untrusted_mark.load(std::memory_order_acquire) || pp->ever_managed.load(std::memory_order_acquire))
-            && !pp->hasSandboxManager();
+    // restricted code: a sandbox that does not trust its code governs its Program, or it is sandboxed without a manager
+    // (fails closed, as qore_program_is_restricted())
+    auto restricted = [] (const QoreProgram* pgm) -> bool {
+        return pgm && qore_program_is_restricted(pgm);
     };
     // the same scope as qore_caller_sandbox_state_intern()
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
         || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
     if (td->sandboxed_caller && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())
-        && td->sandboxed_caller->isUnmanaged()) {
+        && td->sandboxed_caller->isRestricted()) {
         return true;
     }
     if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
-        if (unmanaged(td->current_pgm)) {
+        if (restricted(td->current_pgm)) {
             return true;
         }
     }
@@ -8244,29 +8240,11 @@ bool qore_caller_has_unmanaged_sandbox() {
         if (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx)) {
             break;
         }
-        if (unmanaged(ch->getOldProgram())) {
+        if (restricted(ch->getOldProgram())) {
             return true;
         }
     }
-    return !mib && td->current_pgm != td->call_program_context && unmanaged(td->call_program_context);
-}
-
-bool qore_caller_marks_untrusted() {
-    if (!qore_caller_is_sandboxed()) {
-        return false;
-    }
-    if (qore_caller_has_unmanaged_sandbox()) {
-        return true;
-    }
-    try {
-        // a caller that is sandboxed without a manager and without an untrusted mark: trusted code marked its Program
-        // sandboxed (a parse of it that failed, for example)
-        ReferenceHolder<QoreSandboxManager> sm(qore_caller_sandbox_ref(), nullptr);
-        return sm && !sm->trustsUncontrolledApis();
-    } catch (std::bad_alloc&) {
-        // fails closed
-        return true;
-    }
+    return !mib && td->current_pgm != td->call_program_context && restricted(td->call_program_context);
 }
 
 bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
@@ -9667,7 +9645,7 @@ QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, Exce
         return;
     }
     // decided before this record is pushed: an outer record of the caller is still the thread's
-    unmanaged = qore_caller_has_unmanaged_sandbox();
+    restricted = qore_caller_has_restricted_code();
     previous = td->sandboxed_caller;
     td->sandboxed_caller = this;
     pushed = true;

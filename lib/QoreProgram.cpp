@@ -1100,9 +1100,6 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
-        if (qore_caller_marks_untrusted()) {
-            untrusted_mark.store(true, std::memory_order_release);
-        }
         sandboxed.store(true, std::memory_order_release);
         // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
         // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
@@ -1163,10 +1160,7 @@ void qore_program_private::deleteFailedChild(QoreProgram* pgm, ExceptionSink* xs
 void qore_program_private::markSandboxedParse() {
     // the flag is never cleared, so a Program that is sandboxed already needs no lookup; the sandbox of the code that
     // is parsed is attached when the code is committed (see getParseCreatorSandbox())
-    if (!untrusted_mark.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
-        if (qore_caller_marks_untrusted()) {
-            untrusted_mark.store(true, std::memory_order_release);
-        }
+    if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
     }
 }
@@ -3278,7 +3272,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
                 ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
-                    pp.clearCommitUnmanagedSandbox();
+                    pp.clearCommitRestrictedCaller();
                     pp.clearParseTidsIntern();
                 }
             private:

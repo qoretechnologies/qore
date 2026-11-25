@@ -9485,7 +9485,7 @@ bool qore_class_private::isRestrictedCode() const {
     }
     // the current Program cannot be deleted while the thread runs in it
     if (p == getProgram()) {
-        return qore_program_code_is_restricted(p);
+        return qore_program_is_restricted(p);
     }
     // the sandboxes of another Program are read with a reference to it, outside dataLock(), whose sections take no
     // other lock
@@ -9503,7 +9503,7 @@ bool qore_class_private::isRestrictedCode() const {
     if (!ref.p) {
         return released_sandboxed.load();
     }
-    return qore_program_code_is_restricted(ref.p);
+    return qore_program_is_restricted(ref.p);
 }
 
 bool qore_class_private::isSandboxDeclared(bool unknown) const {
@@ -9567,10 +9567,10 @@ int qore_class_private::parseCheckSandboxMethodAccess(const QoreProgramLocation*
 
 void qore_class_private::initSandboxAccess() {
     // the sandbox of the code that the commit commits is attached to the Program (isRestrictedCode()), but code
-    // parsed by sandboxed code without a manager has none (qore#7635)
+    // parsed for restricted code by code that a trusting sandbox governs is restricted too (qore#7635)
     QoreProgram* p = spgm.load();
     sandbox_ctx = !sys && (isRestrictedCode() || (p && p == getProgram()
-        && qore_program_private::get(*p)->commitParsedByUnmanagedSandbox()));
+        && qore_program_private::get(*p)->commitParsedByRestrictedCaller()));
     if (!sandbox_ctx) {
         return;
     }
