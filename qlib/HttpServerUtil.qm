@@ -173,8 +173,16 @@ module HttpServerUtil {
     sandbox governs only to interrupt or limit it, gets the request as the server made it, unless its handler asks
     for the filter (@ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()"), as a
     trusted handler that hands its requests to other code does.  The filter applies to the code that the base class
-    dispatches a stream request to and to the REST classes; a handler class of restricted code that overrides
-    @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.
+    dispatches a stream request to and to the REST classes.  The methods of a handler of restricted code
+    (@ref HttpServer::AbstractHttpRequestHandler::handlerCodeIsRestricted() "handlerCodeIsRestricted()") that the
+    HTTP server calls for a request (handleExpectHeader(), wantsBodyStreaming(), preprocessRequest(),
+    authenticateRequest(), canHandleInline(), handleInlineRequest() and
+    @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()") get the request without its
+    credentials (@ref HttpServer::AbstractHttpRequestHandler::withholdCredentialsForDispatch() "withholdCredentialsForDispatch()");
+    the rest of the context is the handler's.  The trusted authenticator of such a handler authenticates the raw
+    request first (@ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "authenticateRestrictedRequest()"),
+    and the handler's code gets the platform context keys that it sets, but not the other keys that it adds, such as
+    a session token; an authenticator of restricted code gets the request without its credentials.
     A stream request of a class of a restricted %Program that a trusted handler creates without filtering the request
     for it is refused (\c HTTP-SERVER-ERROR): a trusted handler that creates the stream requests of restricted code
     filters its requests (setFilterRequests() or setHostsCode()).  The refusal recognizes the request context that
@@ -229,6 +237,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - the methods of a handler of restricted code that the HTTP server calls for a request get the request without its
+      credentials, and the handler's trusted authenticator authenticates the raw request first
+      (@ref httpserverutil_request_credentials; issue #7303)
     - added @ref HttpServer::AbstractStreamRequest::getContext() "AbstractStreamRequest::getContext()",
       @ref HttpServer::AbstractStreamRequest::getHeaders() "getHeaders()" and
       @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
