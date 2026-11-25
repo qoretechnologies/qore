@@ -672,7 +672,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
                     checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
                         ? client.getProxyURL() : NOTHING);
                 }
-            } else if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+            } else if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
                 throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
                     "functional domain, and the target of the connection's client cannot be checked", name);
             }
@@ -720,6 +720,23 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
     */
     private bool hasBoundClient() {
         return False;
+    }
+
+    #! Returns \c real_opts: the copy of the options that the clients of HTTP-based connections are created from
+    /** For code restricted from the \c FILESYSTEM or \c NETWORK domain that is lent the connection, its file and
+        location options are those that the connection's creator gave (qore#7327)
+    */
+    private *list<string> getLentOptionMembersImpl() {
+        return ("real_opts",);
+    }
+
+    #! Returns @ref True: the clients of the connection are bound to its creator's target by its creator proof
+    /** Restricted code that was lent the connection may change its members within that target (see
+        checkLentClientTarget()), so AbstractConnection::checkLentTarget() does not confine it to the members that
+        the connection's creator set (qore#7327)
+    */
+    private bool hasCreatorBoundClients() {
+        return True;
     }
 
     #! Checks the client that get() or getPollImpl() creates for code restricted from NETWORK (qore#7262)

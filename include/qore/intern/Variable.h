@@ -47,9 +47,11 @@ enum qore_var_t {
 #include "qore/intern/VRMutex.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
+#include "qore/intern/QoreReferenceBind.h"
 #include "qore/vector_set"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -67,6 +69,7 @@ class QoreHashObjectDereferenceOperatorNode;
 class RuntimeConfig;
 struct QoreLValuePathKeys;
 class QoreLValuePathKeyCache;
+class QoreStorePathKeys;
 
 union qore_gvar_ref_u {
     bool b;
@@ -146,7 +149,12 @@ DLLLOCAL inline bool qore_try_ref_unique_container(QoreValue value, QoreValue& r
 }
 
 //! Reads a uniquely owned list or hash from a simple thread-local lvalue path (qore#7301).
-DLLLOCAL bool qore_try_read_unique_weak_path(const struct LVPathStep* steps, size_t size, QoreValue& result);
+/** Only a container that is already pinned (qore#7318) is read; \a result is then a weak hold of it, as the lvalue
+    helper gives the source of a weak assignment (qore#7405); true is also returned without a value when the release
+    of the container read raises an exception in \a xsink
+*/
+DLLLOCAL bool qore_try_read_unique_weak_path(const struct LVPathStep* steps, size_t size,
+        QoreValue& result, ExceptionSink* xsink);
 
 //! Returns the class static variable named by a \c "ClassPath::varName" lvalue path in the given program
 /** @param pgm the program whose namespace is searched
@@ -190,12 +198,14 @@ DLLLOCAL void qore_raise_module_state_read_only(ExceptionSink* xsink, const char
     @param index the index of the element of a list (negative indexes count from the end with
     \c PO_NEGATIVE_OFFSETS), if \a key is nullptr
     @param val the value assigned, borrowed: the assignment takes a reference of its own
+    @param res if not nullptr, takes a reference to the value stored after a successful assignment: the value of the
+    assignment, as the AST interpreter gives it (LValueHelper::getReferencedValue(); qore#7589)
 
     @return true if the local holds a weak reference to \a container, in which case the assignment was made or raised
     an exception in \a xsink; false if it does not, in which case nothing was done
 */
 DLLLOCAL bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode* container, const char* key,
-        int64 index, const QoreValue& val, ExceptionSink* xsink);
+        int64 index, const QoreValue& val, ExceptionSink* xsink, QoreValue* res = nullptr);
 
 // structure for global variables
 class Var : protected QoreReferenceCounter {
@@ -790,8 +800,53 @@ private:
     DLLLOCAL void releaseIntern(ExceptionSink* xsink);
 };
 
-//! raises the exception for binding a reference to a member that runs Qore code under the assignment's lock (qore#7380)
-DLLLOCAL void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink);
+//! the source of a weak assignment read as an rvalue reads it, from the first step of its path that an lvalue cannot
+//! take (qore#7351)
+/** A slice, a member that the object gives through memberGate() or an accessor or that is not declared public, an index
+    of a value that is not a list or a hash: the lvalue stops there, and the value it reached and the steps left, with
+    their evaluated keys and indexes, are read as the operators read them after the lvalue is released, as
+    memberGate() and the accessors run Qore code.  The keys are not evaluated again.
+*/
+class WeakSourceRead {
+public:
+    DLLLOCAL WeakSourceRead() = default;
+
+    //! takes the reference of \a v, the value of the path where the lvalue stopped
+    DLLLOCAL void setValue(QoreValue v) {
+        assert(!value.hasNode());
+        value = v;
+    }
+
+    //! releases the values that read() did not take
+    DLLLOCAL ~WeakSourceRead();
+
+    //! adds a step, with a reference of its own to \a key; a member or key step (\a member) or an index step with the
+    //! string_index_char and negative_offsets of its operator
+    DLLLOCAL void addStep(const QoreValue& key, bool member, bool string_index_char, bool negative_offsets);
+
+    //! returns the value of the path read from the value where the lvalue stopped; the caller owns the reference
+    /** in the Program \a pgm, from which the plugins of an index step are dispatched; the values are released
+    */
+    DLLLOCAL QoreValue read(QoreProgram* pgm, ExceptionSink* xsink);
+
+    //! releases the values
+    DLLLOCAL void clear(ExceptionSink* xsink);
+
+private:
+    struct Step {
+        //! the evaluated key or index, with a reference
+        QoreValue key;
+        //! true for a member or key step, false for an index step
+        bool member;
+        bool string_index_char;
+        bool negative_offsets;
+    };
+
+    //! the value of the path read so far, with a reference
+    QoreValue value;
+    //! the steps left, from the step where the lvalue stopped to the last one
+    std::vector<Step> steps;
+};
 
 class LValueHelper final {
     friend struct qore_type_safe_ref_helper_priv_t;
@@ -830,8 +885,9 @@ protected:
     template <bool Checked>
     DLLLOCAL int ensureUniqueImpl(const char* desc) {
         // a write-protected variable's container is only read (see setReadOnlyResolution()), as is one on the path of
-        // a reference whose value is read
-        if (read_only_resolution || read_value_only) {
+        // a reference whose value is read, and the container of the lvalue's weak reference is changed as it is,
+        // shared (see viewWeakContainer()); the flags are bits of one byte, tested at once
+        if (read_only_resolution | read_value_only | weak_target_view) {
             return 0;
         }
         member_lvalue_modified = true;
@@ -864,7 +920,7 @@ protected:
         // earlier on its path do not make the container shared: a copy would leave the weak references on the
         // original, which the helper then releases (qore#7352).  The lvalue holds the container now, so the helper
         // releases them, and the container is unique
-        if (holds_weak_locks && releaseOwnWeakLocks(current_value)) [[unlikely]] {
+        if ((cold_flags & ColdHoldsWeakLocks) && releaseOwnWeakLocks(current_value)) [[unlikely]] {
             assert(current_value->is_unique());
             return;
         }
@@ -872,12 +928,15 @@ protected:
             // a value stored in a container can be held through an opaque reference: the copy keeps its
             // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
             saveTemp(qore_value_copy_on_write(*qv));
+            // the copy of a pinned container is pinned, as the container that holds it counts it so (qore#7318)
+            qore_weak_target_pin_copy(current_value, qv->getInternalNode());
             return;
         }
         // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
         assert(!val->getValue().isOpaque());
         AbstractQoreNode* old = current_value;
         assignNodeIntern(current_value->realCopy());
+        qore_weak_target_pin_copy(old, val->getValue().getInternalNode());
         saveTemp(old);
     }
 
@@ -889,12 +948,17 @@ protected:
     DLLLOCAL QORE_INTERN_NOINLINE bool releaseOwnWeakLocks(AbstractQoreNode* n);
 
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    //! doListLValue() for the source of a weak assignment (\a WeakSource) or any other path (qore#7351)
+    template <bool WeakSource>
+    DLLLOCAL int doListLValueImpl(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     //! raises the exception of a negative index of a list or a buffer and returns -1; returns -1 without an exception
     //! for the source of a weak assignment (see weak_source_resolution)
     DLLLOCAL int raiseNegativeIndex(const QoreSquareBracketsOperatorNode* op, int64 ind);
     //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
     DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    template <bool WeakSource>
+    DLLLOCAL int doListLValueImpl(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
 public:
     //! binds the lvalue to a temporary holding a static variable's value read from external storage
@@ -924,7 +988,13 @@ protected:
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
+    //! doHashObjLValue() for the source of a weak assignment (\a WeakSource) or any other path (qore#7351)
+    template <bool WeakSource>
+    DLLLOCAL int doHashObjLValueImpl(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    template <bool WeakSource>
+    DLLLOCAL int doHashObjLValueImpl(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc,
+            bool for_remove);
     //! the root of the lvalue of a background expression, or an error for another value that is not an lvalue
     //! (issue #5723); out of line, so that doLValue() stays as small as before for the lvalues of other expressions
     DLLLOCAL __attribute__((noinline, cold)) int doBackgroundRootLValue(const QoreValue& n);
@@ -999,13 +1069,44 @@ private:
     ocvec_t ocvec;
     //! true if a container of ocvec was reached through a weak reference (qore#7321)
     bool path_has_weak_step = false;
-    //! true if the helper locked a list or a hash at a weak step of its path (see releaseOwnWeakLocks(), qore#7352)
-    bool holds_weak_locks = false;
+    //! the bits of cold_flags (qore#7391)
+    enum : uint8_t {
+        //! the helper locked a list or a hash at a weak step of its path (see releaseOwnWeakLocks(), qore#7352)
+        ColdHoldsWeakLocks = 1,
+        //! bind_retry was allocated by this helper for a store site that has a retry, when its store recorded
+        //! references; it is released after the locks if the store site does not take it (qore#7391)
+        ColdBindRetryAllocated = 2,
+        //! the work of the destructor: the bits above, tested with one instruction
+        ColdDestructorWork = ColdHoldsWeakLocks | ColdBindRetryAllocated,
+        //! the store site has a retry (enableBindRetry()); no work of the destructor (qore#7391)
+        BindRetryEnabled = 4,
+        //! bind_retry was given by the store site (setBindRetry()); no work of the destructor (qore#7391)
+        BindRetryGiven = 8,
+        //! bind_retry is valid
+        BindRetrySet = ColdBindRetryAllocated | BindRetryGiven,
+    };
+    //! the bits above; 0 on the normal path, where the destructor tests the bits of its work with one instruction, as
+    //! it tests the flag of develop's weak locks
+    uint8_t cold_flags = 0;
 
     // flag if the changed value was a container before the assignment
     bool before = false;
-    //! the lvalue's storage is not changed and is not read again (see leaveUnchangedLValue())
-    bool unchanged_lvalue = false;
+#ifndef NDEBUG
+    //! the container changed through the weak reference that the lvalue holds, whose changes are allowed while it is
+    //! shared until the helper is destroyed (see viewWeakContainer())
+    QoreListNode* weak_change_list = nullptr;
+    QoreHashNode* weak_change_hash = nullptr;
+#endif
+    //! the container that the weak reference held by the lvalue designates, which the helper designates instead of
+    //! the lvalue (see viewWeakContainer()); not referenced: the helper holds it with the reference of lockWeakList()
+    /** Constructed by viewWeakContainer() only, and valid only while \a weak_target_view is set: a helper that does
+        not change a weak reference's container does not initialize it (QoreValue is trivially destructible)
+    */
+    union {
+        QoreValue weak_view;
+    };
+    static_assert(std::is_trivially_destructible_v<QoreValue>, "weak_view is never destroyed: QoreValue must be "
+        "trivially destructible");
 
     // flag to suppress the recursive-reference scan of the target RObject in the destructor; set only when the
     // caller can guarantee that the set of objects reachable from the lvalue is unchanged (see
@@ -1072,6 +1173,12 @@ private:
         }
     };
     std::unique_ptr<MemberLValue> member_lvalue;
+    //! true for the helper of an assignment (the for_assignment argument), whose store site has a retry (qore#7391)
+    /** Every store site that makes a helper for an assignment tests isBindPending() after a failed store and makes the
+        store again (see deferBinds()): the AST assignments (QoreAssignmentOperatorNode, QoreListAssignmentOperatorNode)
+        and the IR, JIT and AOT stores, which also enable their retry with enableBindRetry().  The retry of an AST
+        assignment thus costs its helper nothing.
+    */
     bool assignment_only = false;
     //! called once, before the root of the lvalue (a variable, a member of self, a static class variable or a
     //! reference) is resolved and locked, when the keys and indices of the path to it have been evaluated (see the
@@ -1177,16 +1284,30 @@ private:
     bool track_write_protection = false;
     //! set with read_access when the variable read could not have been written; see isWriteProtected()
     bool write_protected = false;
+    // the following flags are bits of one byte: they are initialized together, and ensureUniqueImpl() tests three of
+    // them at once (see the #7297 follow-up)
     //! set while the containers of a write-protected variable are resolved to read an element; see
     //! setReadOnlyResolution()
-    bool read_only_resolution = false;
+    bool read_only_resolution : 1 = false;
     //! set when the value of a reference is only read (ReadAccess): the containers on the whole path, also past an
     //! object, are resolved without being changed (qore#6435)
-    bool read_value_only = false;
+    bool read_value_only : 1 = false;
+    //! the helper designates the container of the lvalue's weak reference (see viewWeakContainer())
+    bool weak_target_view : 1 = false;
+    //! the lvalue's storage is not changed and is not read again (see leaveUnchangedLValue())
+    bool unchanged_lvalue : 1 = false;
+    //! the operation on the unchanged lvalue added or removed a value that needs a scan (see changedScannedValue())
+    bool unchanged_lvalue_scan : 1 = false;
     //! set when the source of a weak assignment is resolved to make its container unique (WeakSourceAccess,
     //! setWeakSourceResolution()): an element that does not exist (also an index beyond the start of a list) is no
     //! lvalue, without an exception, as an rvalue read of it gives no value (qore#7242)
     bool weak_source_resolution = false;
+    //! set when the source of a weak assignment reaches a step that an lvalue cannot take: the value reached and the
+    //! steps left, which the caller reads after the lvalue is released (see WeakSourceRead, qore#7351)
+    std::unique_ptr<WeakSourceRead> weak_source_read;
+    //! the value of the local variable that the helper resolved, if any (setLocalVariableLValue()): an assignment to it
+    //! moves a weakly designated container that nothing else holds, as any other share point copies it (qore#7342)
+    const QoreLValueGeneric* local_var_lvalue = nullptr;
     //! the declared types of the references resolved on a path resolved for delete or remove that name the current
     //! value: the one deciding whether the value can be a list<*T> (ref_list_type) and the one deciding whether it
     //! can be a container with a widened element or value type (ref_decl_type); set up by startRemovalPath(), set by
@@ -1224,6 +1345,14 @@ public:
     */
     q_lvalue_vts_e value_type_source = QLVTS_None;
 
+private:
+    //! the retry of the store that this helper makes: given by the store site (BindRetryGiven) or allocated for a
+    //! store site that has a retry (ColdBindRetryAllocated); valid only with one of these bits of cold_flags, and not
+    //! initialized by the constructors, so that the helper of a store that records no reference costs nothing for it
+    //! (qore#7391)
+    QoreBindRetry* bind_retry;
+
+public:
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false,
@@ -1261,6 +1390,72 @@ public:
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
 
+    //! enables the retry of the store that this helper makes, for a store site that tests isBindPending() (qore#7391)
+    /** A store whose check records references then stores nothing, and assign() returns -1 with no exception and
+        isBindPending() true; without it, the store fails closed (see deferBinds()).  The helper of an assignment
+        (assignment_only) has a retry without it.
+    */
+    DLLLOCAL void enableBindRetry() {
+        cold_flags |= BindRetryEnabled;
+    }
+
+    //! returns true if the store failed because its check recorded references to bind (see enableBindRetry())
+    /** Tested only after assign() (or the operation that assigns) failed; the retry is allocated only then
+    */
+    DLLLOCAL bool isBindPending() const {
+        return (cold_flags & ColdBindRetryAllocated) && bind_retry->isPending();
+    }
+
+    //! hands the pending retry to \a retry and releases the helper with its locks, as its destructor does (qore#7391)
+    /** The helper is left empty, as made by LValueHelper(ExceptionSink*, bool): the store site makes the store again
+        in it or with helpers of its own.  Out of line and cold.
+    */
+    DLLLOCAL void releaseForBindRetry(QoreBindRetry& retry);
+
+    //! gives the helper the state of \a retry for a round of a store made again in it (qore#7391)
+    /** The helper releases it after its locks unless the round is pending again (see qore_store_bind_retry_continue());
+        out of line and cold
+    */
+    DLLLOCAL void adoptBindRetry(QoreBindRetry& retry);
+
+    //! returns the value of the last round of the retry that the helper holds, which the caller owns (qore#7391)
+    DLLLOCAL QoreValue takeBindRetryValue() {
+        assert(cold_flags & BindRetrySet);
+        return bind_retry->hasValue() ? bind_retry->takeValue() : QoreValue();
+    }
+
+    //! gives the helper the retry of its store, which the store site makes again itself (qore#7391)
+    DLLLOCAL void setBindRetry(QoreBindRetry& retry) {
+        assert(!(cold_flags & BindRetrySet));
+        bind_retry = &retry;
+        cold_flags |= BindRetryGiven;
+    }
+
+    //! removes the retry given with setBindRetry(), for a helper that outlives it (qore#7391)
+    DLLLOCAL void clearBindRetry() {
+        assert(!(cold_flags & ColdBindRetryAllocated));
+        cold_flags &= ~BindRetryGiven;
+    }
+
+    //! returns the retry of the store that this helper makes, or nullptr (qore#7391)
+    DLLLOCAL QoreBindRetry* getBindRetry() const {
+        return (cold_flags & BindRetrySet) ? bind_retry : nullptr;
+    }
+
+    //! resolves the AST lvalue \a exp in this helper with the keys of its path that the store site evaluated first
+    /** For a helper that holds no lvalue (made with LValueHelper(ExceptionSink*, bool), or with a constructor given no
+        expression): the steps of the path take the keys of \a keys instead of evaluating their key expressions, until
+        the root of the path is reached; the path of a reference that the root holds is resolved as for any other use of
+        the reference.  The first round of a store and each of its retries resolve the path with the same keys, so that
+        the key expressions are evaluated once (see QoreStorePathKeys, qore#7391).
+
+        @return -1 if the lvalue could not be resolved (an exception was raised), 0 if it was
+    */
+    DLLLOCAL int resolveWithKeys(const QoreValue& exp, const QoreStorePathKeys& keys);
+
+    //! as above, with a runtime configuration
+    DLLLOCAL int resolveWithKeys(const QoreValue& exp, RuntimeConfig& rc, const QoreStorePathKeys& keys);
+
     //! tag for the constructor that only reads the value of a reference
     struct ReadAccess {};
 
@@ -1273,15 +1468,6 @@ public:
     //! Resolves a reference only to read its value, without creating a missing value when \a for_remove is true
     /** isWriteProtected() then tells whether the variable that the reference names could have been written
     */
-    //! tag of the constructors that resolve a reference for binding it during a type check (qore#7380)
-    struct ReferenceBind {};
-
-    //! resolves the reference for reading to bind it; can reuse a lock that the assignment of this thread holds
-    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind);
-
-    //! resolves the reference for writing to bind it; can reuse a lock that the assignment of this thread holds
-    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind);
-
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove);
 
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
@@ -1296,10 +1482,54 @@ public:
     */
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, WeakSourceAccess);
 
+    //! Resolves the lvalue that a reference designates as the source of a weak assignment (see WeakSourceAccess)
+    /** For a local with IR storage that holds a reference (qore#7405): a missing element or key is no lvalue, and
+        nothing is created, as for the source given as an expression
+    */
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, WeakSourceAccess);
+
     //! Resolves the path that navigatePath() is given as the source of a weak assignment (see WeakSourceAccess)
     DLLLOCAL void setWeakSourceResolution() {
         weak_source_resolution = true;
     }
+
+    //! Records that the value that the helper is set to is the value of a local variable (see local_var_lvalue)
+    DLLLOCAL void setLocalVariableLValue() {
+        local_var_lvalue = val;
+    }
+
+    //! Returns the read of the source of a weak assignment that reached a step that an lvalue cannot take, if any
+    /** The caller reads it (WeakSourceRead::read()) after the helper is released; see WeakSourceRead (qore#7351)
+    */
+    DLLLOCAL std::unique_ptr<WeakSourceRead> takeWeakSourceRead() {
+        return std::move(weak_source_read);
+    }
+
+    //! Reads the source of a weak assignment that navigatePath() stopped at a step that an lvalue cannot take
+    /** Returns false if it did not stop there.  Otherwise finishes the helper (see finishForCallback()), which is
+        empty afterwards, and reads the rest of the path as the operators read it, in the current Program; \a res is
+        the value read, with a weak reference read as its target, as an rvalue weak assignment reads it, or NOTHING
+        after an exception (qore#7351).
+    */
+    DLLLOCAL __attribute__((cold)) bool finishWeakSourceRead(QoreValue& res);
+
+    //! Stops resolving the source of a weak assignment at the current value, which the step given is read from, or
+    //! adds the step to the read of a source that stopped before; returns -1 (qore#7351)
+    DLLLOCAL __attribute__((cold)) int weakSourceReadStep(const QoreValue& key, bool member,
+            bool string_index_char = false, bool negative_offsets = false);
+
+    //! adds the step of a path that navigatePath() is given to the read of the source of a weak assignment, which
+    //! stops at the current value if it did not before (see weakSourceReadStep(), qore#7351)
+    DLLLOCAL __attribute__((cold)) void weakSourceReadPathStep(const LVPathStep& step);
+
+    //! returns true if the step with the evaluated \a index from the current value is read as the operator reads it:
+    //! a slice (a list of indexes), or an index of a value that is not a list or a hash (qore#7351)
+    DLLLOCAL bool weakSourceIndexNeedsRead(const QoreValue& index) const;
+
+    //! returns true if the member \a mem of \a o is read through an lvalue as an rvalue reads it: a member without
+    //! accessors that a read takes without memberGate(); the access to the member is checked as for a read
+    //! (qore#7351)
+    DLLLOCAL static bool weakSourceMemberIsLValue(QoreObject* o, const char* mem);
 
     //! Finishes the parent lvalue before a callback that can replace or remove it
     /** The caller must first retain the target object. Completes counts, locks, reference Program entries,
@@ -1337,25 +1567,14 @@ public:
         write_protected = true;
     }
 
-    //! Records that this helper resolves a reference under a lock of the assignment being type-checked (qore#7380)
-    /** The lvalue is then only read: the assignment holds pointers into the data that the lock guards.
-    */
-    DLLLOCAL void noteReusedBindLock() {
-        read_only_resolution = true;
-        read_value_only = true;
-        write_protected = true;
-    }
-
-    //! Returns true if this helper resolved its lvalue under a lock of the assignment being type-checked
-    /** For a helper made with a ReferenceBind constructor, where only noteReusedBindLock() sets read_value_only
-    */
-    DLLLOCAL bool hasReusedBindLock() const {
-        return read_value_only;
-    }
-
     //! Returns true if the variable read through a reference could not have been written through it
     DLLLOCAL bool isWriteProtected() const {
         return write_protected;
+    }
+
+    //! Returns true if the value of a reference is only read: the path is resolved without changing anything
+    DLLLOCAL bool isReadValueOnly() const {
+        return read_value_only;
     }
 
     DLLLOCAL LValueHelper(LValueHelper&& o);
@@ -1551,7 +1770,7 @@ public:
     //! helper reached the list through a weak reference: the helper holds a reference to it, and its objects are
     //! scanned when the helper is destroyed (scanWeakContainerRemovals(), qore#7373)
     DLLLOCAL void removedValueThroughWeak(const QoreValue& v) {
-        if (holds_weak_locks) [[unlikely]] {
+        if (cold_flags & ColdHoldsWeakLocks) [[unlikely]] {
             keepRemovedThroughWeak(v);
         }
     }
@@ -1623,15 +1842,59 @@ public:
     //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
     DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();
 
-    //! Marks the lvalue's storage as unchanged by the operation (qore#7402)
+    //! Marks the lvalue's storage as unchanged by the operation (qore#7297, qore#7402)
     /** For an operation that changes the container that the weak reference held by the lvalue designates, after
         lockWeakList() or lockWeakHash(): the lvalue keeps the weak reference, so the helper does not read the
         storage again when it is destroyed (it can be an entry of the container that the operation changes, which a
-        removal frees or moves), and its scan state is unchanged; the changes of the object counts of the containers
-        on the lvalue's path (which can hold the container changed) are still written up the path
+        change can move, such as a list that it grows, and a removal can free or move), and its scan state is
+        unchanged; the changes of the object counts of the containers on the lvalue's path (which can hold the
+        container changed) are still written up the path
     */
     DLLLOCAL void leaveUnchangedLValue() {
         unchanged_lvalue = true;
+    }
+
+    //! Makes the helper designate the container that the weak reference held by the lvalue designates (qore#7297)
+    /** For an operation that changes the list or the hash that the lvalue holds: if the lvalue holds a weak reference
+        to a list or a hash, the helper then designates the container itself, held by the helper while it is changed,
+        with its own type, and ensureUnique() leaves it shared; the lvalue keeps the weak reference (see
+        leaveUnchangedLValue()).  Has no effect on an lvalue that holds any other value.
+
+        @return 0, or -1 if the container of the weak reference was freed (LIST-ERROR or HASH-ERROR is raised)
+    */
+    DLLLOCAL int viewWeakContainer();
+
+    //! Returns true if the lvalue holds a list or a weak reference to a list
+    DLLLOCAL bool holdsList() const {
+        qore_type_t t = getType();
+        return t == NT_LIST || t == NT_WEAKREF_LIST;
+    }
+
+    //! Returns the list that an operation that changes the lvalue's list changes (qore#7297)
+    /** The lvalue's own list, made unique, or the list that the weak reference that the lvalue holds designates,
+        which the helper holds while it is changed: the lvalue's storage is then not changed and not read again (see
+        leaveUnchangedLValue()), so the caller must not read the lvalue's value after this call
+
+        @return the list, or nullptr if the list of the weak reference was freed (LIST-ERROR is raised)
+
+        @pre holdsList()
+    */
+    DLLLOCAL QoreListNode* getListForChange();
+
+    //! Returns the hash that an operation that changes the lvalue's hash changes, as getListForChange() a list
+    /** @return the hash, or nullptr if the hash of the weak reference was freed (HASH-ERROR is raised)
+
+        @pre the lvalue holds a hash or a weak reference to a hash
+    */
+    DLLLOCAL QoreHashNode* getHashForChange();
+
+    //! Notes a value that an operation on an unchanged lvalue (see leaveUnchangedLValue()) added to or removed from
+    //! the container that it changes: a value that needs a scan for recursive references starts the scan of the
+    //! lvalue's object when the helper is destroyed, as a change of the lvalue's value does (qore#7297)
+    DLLLOCAL void changedScannedValue(const QoreValue& v) {
+        if (unchanged_lvalue && needs_scan(v)) {
+            unchanged_lvalue_scan = true;
+        }
     }
 
     //! Saves the value that the lvalue holds, which the caller then overwrites, for release after the locks
@@ -1652,6 +1915,16 @@ public:
     DLLLOCAL void saveTempRef(QoreValue& n);
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
+
+    //! resolves an lvalue with \a resolve, the steps of its path taking the keys of \a keys (see resolveWithKeys())
+    template <typename F>
+    DLLLOCAL int resolveWithKeysIntern(const QoreStorePathKeys& keys, F resolve);
+
+    //! the root hook of resolveWithKeys(): the steps of the path have taken their keys (qore#7391)
+    DLLLOCAL static int storePathKeysRootHook(void* arg);
+
+    //! releases the retry that the helper allocated (ColdBindRetryAllocated), after the locks; out of line and cold
+    DLLLOCAL void releaseAllocatedBindRetry();
 
     //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
     //! @param steps array of LVPathStep describing the navigation
@@ -1976,11 +2249,47 @@ public:
 
     DLLLOCAL int assignNative(QoreValue val, const char* desc);
 
-    template <bool Lexical, bool Native = false>
+    //! assigns a value; \a WeakOrOpaque for the weak and opaque modes, whose handling is then compiled in: a weak
+    //! assignment designates the container assigned (qore#7237), and both refuse a value that the lvalue's type
+    //! converts to a copy (qore#7572); a parameter of the template, so that a normal assignment has no code for it
+    template <bool Lexical, bool Native = false, bool WeakOrOpaque = false>
     DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
             LexicalSemanticPolicy policy);
 
+    //! checks the value of an assignment whose target's type can bind a reference, or whose cached byte is not known
+    //! yet (QoreTypeInfo::mayBindReferenceCached()), out of line (qore#7391)
+    /** A type that binds no reference is checked as assignImpl() checks it.  With an lvalue lock held, the check runs
+        with a QoreReferenceBindProbe; if it records a reference, nothing is stored: the value and the references go to
+        the retry of the store, and -1 is returned with no exception, or with REFERENCE-BIND-ERROR if the helper has no
+        retry.  With no lvalue lock held, the references are bound inline.
+
+        @param weak_source the container that a weak or opaque assignment assigns (see assignImpl()), or no value:
+        a conversion of it to a copy is refused before the store is deferred (\a weak: a weak assignment), as the
+        retry assigns the converted value (qore#7572)
+
+        @return -1 if the value was not stored (an exception was raised, or the store is made again), 0 if the
+        assignment continues
+    */
+    template <bool Lexical, bool Native>
+    DLLLOCAL int checkTypesMayBind(QoreValue& n, const char* desc, LexicalSemanticPolicy policy,
+            const QoreValue& weak_source, bool weak);
+
+    //! drops the member notifications of a store that is made again; the next round adds them again (qore#7391)
+    DLLLOCAL void dropMemberNotifications();
+
+    //! leaves the store of \a n unmade until the references \a pairs, which its check recorded, are bound (qore#7391)
+    /** With a retry, nothing is stored: the entries created to reach the target are removed, its member notifications
+        are dropped, and the retry takes \a n, \a pairs and the exception that the check raised after it recorded
+        them, if any; without a retry, the store fails closed with REFERENCE-BIND-ERROR.
+
+        @return -1
+    */
+    DLLLOCAL int deferBinds(QoreValue& n, QoreReferenceBindPairList& pairs);
+
     DLLLOCAL QoreValue removeValue(bool for_del);
+
+    //! replaces a weak reference to a list or a hash given to a weak assignment with its container (qore#7405)
+    DLLLOCAL __attribute__((cold)) void lockWeakAssignmentSource(QoreValue& n);
     DLLLOCAL QoreValue remove(bool& static_assignment);
 
     DLLLOCAL void setDelta(int dt) {
@@ -2060,6 +2369,373 @@ private:
     //! getRemovalHash() for a weak reference to a hash
     DLLLOCAL __attribute__((cold)) QoreHashNode* getWeakRemovalHash();
 };
+
+//! The keys and indices of the lvalue path of an AST store, evaluated by its store site before its helper (qore#7391)
+/** A store whose check records reference elements to bind under its lvalue lock is made again after they have been
+    bound with no lock held, and its path is resolved again for it.  The key expressions of the path are evaluated once
+    per store: a store site whose path has a key expression that can give another value or have a side effect when it
+    is evaluated again (see qore_lvalue_store_keys_first()) evaluates the keys first into this object, which it owns,
+    and resolves the path of the first round and of each retry with them (LValueHelper::resolveWithKeys()).  The keys
+    are evaluated as LValueHelper::evalPathKeys() evaluates the keys of a path (qore#5753): from the root out, each a
+    statement of its own, a value borrowed from a variable with a reference of its own; the other stores resolve their
+    path as any helper does.
+
+    The keys are released when the object is destroyed, after the helpers of the store site.
+*/
+class QoreStorePathKeys {
+public:
+    DLLLOCAL explicit QoreStorePathKeys(ExceptionSink* xsink) : xsink(xsink) {
+    }
+
+    DLLLOCAL ~QoreStorePathKeys();
+
+    QoreStorePathKeys(const QoreStorePathKeys&) = delete;
+    QoreStorePathKeys& operator=(const QoreStorePathKeys&) = delete;
+
+    //! evaluates the keys and indices of the lvalue path \a exp, from the root out
+    /** @return -1 if a key raised an exception, 0 if not
+    */
+    DLLLOCAL int eval(const QoreValue& exp);
+
+    //! returns the number of keys, which LValueHelper::resolveWithKeys() gives the steps of the path
+    DLLLOCAL size_t size() const {
+        return store.count;
+    }
+
+    //! returns the key at position \a i, the one nearest the root first, borrowed from this object
+    DLLLOCAL const QoreValue& get(size_t i) const {
+        assert(i < store.count);
+        return const_cast<LValueHelper::PathKeyStore&>(store).data()[i].value;
+    }
+
+private:
+    //! the keys, each with a reference of this object if needs_deref is set
+    LValueHelper::PathKeyStore store;
+    ExceptionSink* xsink;
+
+    //! evaluates the keys of the path \a n, those nearer the root first
+    DLLLOCAL int evalIntern(const QoreValue& n);
+};
+
+//! returns true if a store site evaluates the keys of the AST lvalue path \a exp first (QoreStorePathKeys, qore#7391)
+/** A store made again resolves its path again: a path whose keys and indices are all constants, or reads of local
+    variables that nothing but the code of their own frame can change (see the definition), is resolved again with them
+    evaluated again, which gives the same keys with no side effect; any other key expression is evaluated first.
+    Decided when the code runs, as a local variable becomes closure-bound when a reference to it is taken or a closure
+    captures it, which can be parsed after the store.
+*/
+DLLLOCAL bool qore_lvalue_store_keys_first(const QoreValue& exp);
+
+//! How an AST store site resolves its lvalue path, decided when it first runs (qore#7391)
+/** One byte of the node of the store site, tested once on its normal path: Known alone for a path resolved as any
+    helper resolves it (also by a retry, see qore_lvalue_store_keys_first()), with KeysFirst for a path whose keys the
+    store site evaluates first; a store site can add flags of its own, decided with the mode, so that its normal path
+    tests them with the same instruction
+*/
+class QoreStorePathMode {
+public:
+    //! the mode has been decided
+    static constexpr uint8_t Known = 1;
+    //! the store site evaluates the keys of its path first (QoreStorePathKeys)
+    static constexpr uint8_t KeysFirst = 2;
+    //! the first flag of a store site
+    static constexpr uint8_t SiteFlag = 4;
+
+    DLLLOCAL QoreStorePathMode() = default;
+
+    //! a copy of a node decides its mode again
+    DLLLOCAL QoreStorePathMode(const QoreStorePathMode&) {
+    }
+
+    DLLLOCAL QoreStorePathMode& operator=(const QoreStorePathMode&) {
+        mode.store(0, std::memory_order_relaxed);
+        return *this;
+    }
+
+    //! returns the mode, or 0 if it has not been decided yet
+    DLLLOCAL uint8_t get() const {
+        return mode.load(std::memory_order_relaxed);
+    }
+
+    //! decides the mode of the store of the lvalue path \a exp, with the flags \a site_flags of the store site
+    /** Out of line: called by the first run of the store site; another thread that runs it first decides the same mode
+
+        @return the mode
+    */
+    DLLLOCAL uint8_t set(const QoreValue& exp, uint8_t site_flags = 0) const;
+
+    //! records the mode of a store site that decides whether it evaluates the keys of its paths first itself
+    DLLLOCAL uint8_t setKeysFirst(bool keys_first, uint8_t site_flags = 0) const {
+        uint8_t m = Known | (keys_first ? KeysFirst : 0) | site_flags;
+        mode.store(m, std::memory_order_relaxed);
+        return m;
+    }
+
+private:
+    mutable std::atomic<uint8_t> mode{0};
+};
+
+//! no lvalue: the expression given to a helper constructor by a store site that resolves its path with the keys that it
+//! evaluated first (LValueHelper::resolveWithKeys(), qore#7391), so that it shares the code of its normal path
+DLLLOCAL extern const QoreValue qore_store_no_lvalue;
+
+//! resolves the AST lvalue \a exp in \a lvh, an empty helper, for the first round of a store site that decides its mode
+//! or for a round of a store made again (qore#7391)
+/** With the keys that the store site evaluated first if \a keys is not nullptr, otherwise as any helper resolves it;
+    NOTHING, which has no lvalue, is not resolved, as by the helper constructors (issue #6480)
+
+    @return -1 if the lvalue could not be resolved (an exception was raised, or there is no lvalue), 0 if it was
+*/
+DLLLOCAL int qore_store_resolve_lvalue(LValueHelper& lvh, const QoreValue& exp, const QoreStorePathKeys* keys);
+
+//! as above, with a runtime configuration
+DLLLOCAL int qore_store_resolve_lvalue(LValueHelper& lvh, const QoreValue& exp, RuntimeConfig& rc,
+        const QoreStorePathKeys* keys);
+
+//! Makes the retries of a store whose first round recorded reference elements to bind (qore#7391)
+/** Out of line and cold: called only when the first round of the store left \a retry pending.  Each round binds the
+    references recorded with no lvalue lock held (QoreBindRetry::again()), resolves the target again with \a resolve,
+    and assigns the value that the last round converted with \a assign; see qore_store_with_bind_retry()
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename Resolve, typename Assign>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_store_bind_retry_rounds(QoreBindRetry& retry, ExceptionSink* xsink,
+        bool for_assignment, Resolve&& resolve, Assign&& assign) {
+    while (retry.again()) {
+        LValueHelper lvh(xsink, for_assignment);
+        lvh.setBindRetry(retry);
+        // the value that the retry holds is released with it if the target cannot be resolved
+        if (resolve(lvh)) {
+            return -1;
+        }
+        assert(retry.hasValue());
+        if (!assign(lvh, retry.takeValue())) {
+            return 0;
+        }
+    }
+    return -1;
+}
+
+//! Makes the retries of a store whose first round left its helper \a lvh pending, in \a lvh itself (qore#7391)
+/** Out of line and cold: called only when the first round of the store left \a lvh pending
+    (LValueHelper::isBindPending()).  The helper is released with its locks (LValueHelper::releaseForBindRetry()), and
+    each round binds the references recorded with no lvalue lock held (QoreBindRetry::again()), resolves the target
+    again in \a lvh with \a resolve, and assigns the value that the last round converted with \a assign.  When the store
+    is made, \a lvh holds its target as after a store made in one round, so that the store site goes on with it as it
+    does on its normal path.
+
+    @param lvh the helper of the store site
+    @param resolve <tt>int (LValueHelper&)</tt>: resolves the target of the store; returns non-zero, with an exception,
+    if it cannot be
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: assigns the value given, which it owns, and returns the
+    result of LValueHelper::assign()
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename Resolve, typename Assign>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_store_bind_retry_continue(LValueHelper& lvh, Resolve& resolve,
+        Assign& assign) {
+    QoreBindRetry retry;
+    lvh.releaseForBindRetry(retry);
+    while (retry.again()) {
+        // the helper holds the retry, with the references bound already and the value of the last round, which it
+        // releases after its locks if the round does not take them
+        lvh.adoptBindRetry(retry);
+        if (resolve(lvh)) {
+            return -1;
+        }
+        if (!assign(lvh, lvh.takeBindRetryValue())) {
+            return 0;
+        }
+        if (!lvh.isBindPending()) {
+            return -1;
+        }
+        lvh.releaseForBindRetry(retry);
+    }
+    return -1;
+}
+
+//! Makes the retries of an AST store whose first round left its helper \a lvh pending (qore#7391)
+/** Out of line and cold: the lvalue \a exp is resolved again in \a lvh for each round (qore_store_resolve_lvalue()),
+    with \a keys if the store site evaluated the keys of its path first, and \a op makes the operation of the store
+    again; see qore_ast_store()
+
+    @return 0 if the store was made, -1 if not
+*/
+template <typename Op>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_ast_store_bind_retry(LValueHelper& lvh, const QoreValue& exp,
+        const QoreStorePathKeys* keys, Op& op) {
+    auto resolve = [&exp, keys](LValueHelper& h) -> int {
+        return qore_store_resolve_lvalue(h, exp, keys);
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, op);
+}
+
+//! as above, with a runtime configuration
+template <typename Op>
+QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_ast_store_bind_retry(LValueHelper& lvh, const QoreValue& exp,
+        RuntimeConfig& rc, const QoreStorePathKeys* keys, Op& op) {
+    auto resolve = [&exp, &rc, keys](LValueHelper& h) -> int {
+        return qore_store_resolve_lvalue(h, exp, rc, keys);
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, op);
+}
+
+//! Makes an AST store whose operation \a op runs on the lvalue \a exp, binding its reference elements outside its locks
+/** The first round runs the code of a store with no retry: the helper is made as by a store site with no retry (with
+    the keys \a keys of the path if \a KeysFirst), and \a op makes the operation; if it fails because its check recorded
+    reference elements to bind (LValueHelper::isBindPending(), tested only after a failure), the store is made again out
+    of line (qore_ast_store_bind_retry()).  A store site that is not an assignment enables the retry of the helper in
+    \a op, before the check that can record references (qore#7391).
+
+    @param for_assignment the \a for_assignment argument of the helper
+    @param keys the keys of the path, evaluated first, if \a KeysFirst, otherwise nullptr
+    @param op <tt>int (LValueHelper&, QoreValue)</tt>: makes the operation of the store on the target that the helper
+    holds; given the value that the last round converted, which it owns, for a retry (no value for the first round and
+    for a container operation, which takes its operand again); returns 0 if the store was made, -1 if not
+
+    @return 0 if the store was made, -1 if not
+*/
+template <bool KeysFirst, typename Op>
+QORE_INTERN_ALWAYS_INLINE int qore_ast_store(const QoreValue& exp, ExceptionSink* xsink, bool for_assignment,
+        const QoreStorePathKeys* keys, Op& op) {
+    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
+    LValueHelper lvh(KeysFirst ? qore_store_no_lvalue : exp, xsink, false, for_assignment);
+    if constexpr (KeysFirst) {
+        if (lvh.resolveWithKeys(exp, *keys)) {
+            return -1;
+        }
+    }
+    if (!lvh) {
+        return -1;
+    }
+    if (!op(lvh, QoreValue())) {
+        return 0;
+    }
+    if (!lvh.isBindPending()) [[likely]] {
+        return -1;
+    }
+    return qore_ast_store_bind_retry(lvh, exp, keys, op);
+}
+
+//! Makes an AST store whose store site's mode is not QoreStorePathMode::Known alone, out of line (qore#7391)
+/** For the first run of the store site, which decides \a mode, and for a store site whose path has key expressions that
+    are evaluated first, here, where the helper evaluates them; see qore_ast_store()
+*/
+template <typename Op>
+QORE_INTERN_NOINLINE int qore_ast_store_slow(const QoreStorePathMode& mode, const QoreValue& exp,
+        ExceptionSink* xsink, bool for_assignment, Op& op) {
+    uint8_t m = mode.get();
+    if (!m) {
+        m = mode.set(exp);
+    }
+    if (!(m & QoreStorePathMode::KeysFirst)) {
+        return qore_ast_store<false>(exp, xsink, for_assignment, nullptr, op);
+    }
+    // released after the helper
+    QoreStorePathKeys keys(xsink);
+    if (keys.eval(exp)) {
+        return -1;
+    }
+    return qore_ast_store<true>(exp, xsink, for_assignment, &keys, op);
+}
+
+//! Makes a store whose target has no key expressions to evaluate, binding its reference elements outside its locks
+/** If the check of the value records reference elements to bind under the lvalue lock of the target, nothing is
+    stored, the helper is released with its locks, the references are bound, and the target is resolved and the store
+    made again with the value that the first round converted (see QoreReferenceBind.h; qore#7391).  For a store whose
+    target is resolved from values that the caller evaluated already (a variable, a member, the path of an IR or a
+    JIT/AOT instruction with its evaluated keys), which are resolved again for each round with no expression evaluated
+    again.  The first round is made inline, as a store with no retry is, with the cost of a byte stored to enable the
+    retry and of a test after a failed assignment; the retries are made out of line (qore_store_bind_retry_continue()).
+
+    @param xsink the exception sink of the store
+    @param for_assignment the \a for_assignment argument of the helper
+    @param make_value <tt>QoreValue ()</tt>: returns the value of the first round, which the store owns; called once
+    the target has been resolved, and not called if it cannot be
+    @param resolve <tt>int (LValueHelper&)</tt>: resolves the target of the store; returns non-zero, with an exception,
+    if it cannot be
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: assigns the value given, which it owns, with
+    LValueHelper::assign() or assignNative() and returns its result; when the store is made, it also takes what the
+    caller needs from the helper, such as the value of the assignment
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename MakeValue, typename Resolve, typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_store_with_bind_retry_lazy(ExceptionSink* xsink, bool for_assignment,
+        MakeValue&& make_value, Resolve&& resolve, Assign&& assign) {
+    LValueHelper lvh(xsink, for_assignment);
+    lvh.enableBindRetry();
+    if (resolve(lvh)) {
+        return -1;
+    }
+    if (!assign(lvh, make_value())) {
+        return 0;
+    }
+    if (!lvh.isBindPending()) [[likely]] {
+        return -1;
+    }
+    return qore_store_bind_retry_continue(lvh, resolve, assign);
+}
+
+//! As qore_store_with_bind_retry_lazy(), for a value that the store owns in every case (qore#7391)
+/** @param value the value, which this function owns in every case: it is released after the locks of the helper if
+    the store is not made
+*/
+template <typename Resolve, typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_store_with_bind_retry(ExceptionSink* xsink, bool for_assignment, QoreValue value,
+        Resolve&& resolve, Assign&& assign) {
+    // released after the locks of the helper if the store is not made
+    ValueHolder holder(value, xsink);
+    return qore_store_with_bind_retry_lazy(xsink, for_assignment, [&holder]() -> QoreValue {
+            return holder.release();
+        }, resolve, assign);
+}
+
+//! Makes a store through the reference \a ref, binding its reference elements outside its locks (qore#7391)
+/** As qore_store_with_bind_retry_lazy(), for a target named by a reference, which is resolved again for each retry,
+    as for any use of the reference
+
+    @param ref the reference
+    @param xsink the exception sink of the store
+    @param make_value <tt>QoreValue ()</tt>: see qore_store_with_bind_retry_lazy()
+    @param assign <tt>int (LValueHelper&, QoreValue)</tt>: see qore_store_with_bind_retry_lazy()
+    @param for_assignment the \a for_assignment argument of the helper
+
+    @return 0 if the store was made, -1 if not (an exception was raised)
+*/
+template <typename MakeValue, typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_reference_store_with_bind_retry_lazy(const ReferenceNode& ref,
+        ExceptionSink* xsink, MakeValue&& make_value, Assign&& assign, bool for_assignment = false) {
+    LValueHelper lvh(ref, xsink, false, for_assignment);
+    if (!lvh) {
+        return -1;
+    }
+    lvh.enableBindRetry();
+    if (!assign(lvh, make_value())) {
+        return 0;
+    }
+    if (!lvh.isBindPending()) [[likely]] {
+        return -1;
+    }
+    // the reference is resolved again for each retry, as for any use of it
+    auto resolve = [&ref](LValueHelper& h) -> int {
+        return h.set(ref) || !h ? -1 : 0;
+    };
+    return qore_store_bind_retry_continue(lvh, resolve, assign);
+}
+
+//! As qore_reference_store_with_bind_retry_lazy(), for a value that the store owns in every case (qore#7391)
+template <typename Assign>
+QORE_INTERN_ALWAYS_INLINE int qore_reference_store_with_bind_retry(const ReferenceNode& ref, ExceptionSink* xsink,
+        QoreValue value, Assign&& assign, bool for_assignment = false) {
+    // released after the locks of the helper if the store is not made
+    ValueHolder holder(value, xsink);
+    return qore_reference_store_with_bind_retry_lazy(ref, xsink, [&holder]() -> QoreValue {
+            return holder.release();
+        }, assign, for_assignment);
+}
 
 class LValueRemoveHelper {
 private:
@@ -2143,11 +2819,49 @@ struct lvinfo {
 */
 DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
 
+//! Checks that the lvalue's type kept the list or hash \a source of a weak or opaque assignment as it is
+/** Every conversion to a copy, also one that only strips the container's type, is an error, as the weak or opaque
+    reference would designate the copy, a temporary, instead of the value assigned (qore#7572, which replaces the
+    container kept in place of a stripped copy of qore#7237)
+
+    @param source the container assigned, or a weak reference to it
+    @param converted the value that the lvalue's type converted it to
+    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    @param target_ti the type of the lvalue
+    @param xsink the exception sink, which must not be null
+
+    @return 0 if the type kept the value, 1 if it copied a container without a type of its own only to tag it as a
+    container of auto (a hash<auto!> or list<auto!> lvalue given a shared one: the container assigned is kept in place
+    of the copy), or -1 if it converted it to a copy (an exception is raised)
+*/
+DLLLOCAL int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, bool weak,
+        const QoreTypeInfo* target_ti, ExceptionSink* xsink);
+
 //! returns true if the value is a weak or opaque reference to an object, hash or list
 /** These are the representations that hold their target indirectly, so that a store which built
     one must release the reference taken when it was built.
 */
 DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
+
+//! Returns the description of the error of a weak (:=) or opaque (@=) assignment of a container that the lvalue's type
+//! would convert to a copy (qore#7572)
+/** The type of the lvalue (an untyped list element or hash key, any, hash, *hash, list, softlist, hash<auto!>, ...)
+    strips the complex type of the value, which makes a copy of it; the weak or opaque reference would designate that
+    copy, a temporary, instead of the value assigned, so the assignment is refused at parse time where the types are
+    known, and at run time otherwise
+
+    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    @param value_type the type of the value assigned
+    @param target_type the type of the lvalue
+*/
+DLLLOCAL QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_type, const char* target_type);
+//! Returns true if an lvalue of the given declared type that has no value is vivified as an untyped list
+/** As the AST interpreter vivifies it (LValueHelper::doListLValue(), LValueHelper::navigatePath()): an untyped
+    declaration (none, any, list, *list, softlist, *softlist) takes an untyped list (issue #3429, qore#7573), which the
+    IR interpreter and native code vivify as well, so that the value of the assignment is the element as stored
+    (qore#7589)
+*/
+DLLLOCAL bool qore_lvalue_vivifies_untyped_list(const QoreTypeInfo* ti);
 
 //! Assigns a value through the reference that an element of a container holds, as the AST interpreter assigns an
 //! element that holds a reference (LValueHelper::doLValue() follows it; qore#6661)
@@ -2160,6 +2874,12 @@ DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 */
 DLLLOCAL bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val,
         ExceptionSink* xsink);
+
+//! As qore_assign_through_element_reference(), and \a res takes a reference to the value stored after a successful
+//! assignment: the value of the assignment, as the AST interpreter gives it (LValueHelper::getReferencedValue();
+//! qore#7589)
+DLLLOCAL bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val,
+        ExceptionSink* xsink, QoreValue& res);
 
 //! Removes the element with the given index from the value of an lvalue, as the remove operator does
 /** As LValueRemoveHelper::doRemove() does for an index operator with a single index: a list loses the element and

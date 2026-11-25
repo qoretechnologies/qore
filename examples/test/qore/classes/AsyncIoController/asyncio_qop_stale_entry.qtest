@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - EventNotifier poll readiness on the async I/O threads, which run the operations of the test
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoQopStaleEntryTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! An operation implemented in Qore that completes at its first step
+class CompletingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+#! An operation implemented in Qore that waits for an event of its notifier, which never comes
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+#! The deleted mark of an operation object never applies to a later object at its address (qore#7168)
+/** The async I/O controller registers a submitted operation implemented in Qore by its object, and records whether the
+    object was deleted, which cancels the operation.  A registration that is not ended (as in qore#7167) left the entry
+    of a deleted object behind, keyed by its address only: an object later made at that address inherited the deleted
+    mark, and its operation was canceled when it was submitted.  A debug hook adds that entry for the address of an
+    object of the test (the address that the object reuses), deterministically; the object's operation must then run
+    as any other, and its own deletion must still cancel it.
+*/
+class AsyncIoQopStaleEntryTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoQopStaleEntryTest", "1.0") {
+        addTestCase("an operation whose address has the entry of a deleted object completes", \completesTest());
+        addTestCase("the deletion of such an operation's object still cancels it", \deletionCancelsTest());
+        addTestCase("an operation of a deleted object submitted again is canceled", \resubmitDeletedTest());
+        set_return_value(main());
+    }
+
+    #! skips the test case in a build without the debug hooks
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the entry of a deleted object is added with a test hook of a debug build");
+        }
+    }
+
+    completesTest() {
+        checkDebug();
+        string key = sprintf("qop-stale-complete-%d", gettid());
+        EventNotifier n();
+        CompletingOperation op(n);
+        int before = call_function("dbg_async_io_qop_registered_count");
+        int gen = call_function("dbg_async_io_qop_inject_stale", op);
+        on_exit call_function("dbg_async_io_qop_release_stale", gen);
+        # the operation's step waits for its notifier, which is ready
+        n.notify();
+        auto rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": key,
+            "key": key,
+            "to": HangGuard,
+        });
+        hash<auto> r = rq.get(HangGuard);
+        assertEq(False, r.canceled ?? False, "the operation is not canceled");
+        assertEq(True, op.goalReached(), "the operation ran");
+        # the I/O thread has processed the completion (getInfo() is answered after the commands sent before it)
+        AsyncIoController::getInfo();
+        # only the added entry is left
+        assertEq(before + 1, call_function("dbg_async_io_qop_registered_count"), "the operation's entry is ended");
+    }
+
+    deletionCancelsTest() {
+        checkDebug();
+        string key = sprintf("qop-stale-delete-%d", gettid());
+        EventNotifier n();
+        WaitingOperation op(n);
+        int gen = call_function("dbg_async_io_qop_inject_stale", op);
+        # a reference that keeps the object, deleted below, from being freed while the test checks its operation
+        object addr_holder = op;
+        on_exit {
+            call_function("dbg_async_io_qop_release_stale", gen);
+            remove addr_holder;
+        }
+        auto rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": key,
+            "key": key,
+            "to": -1s,
+        });
+        on_exit AsyncIoController::cancelByOwner(key);
+        # the operation is in the cache of an I/O thread
+        AsyncIoController::getInfo();
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys), "the operation is submitted");
+        delete op;
+        hash<auto> r = rq.get(HangGuard);
+        assertTrue(r.canceled, "the deletion of the object cancels its operation");
+    }
+
+    resubmitDeletedTest() {
+        string key = sprintf("qop-resubmit-deleted-%d", gettid());
+        EventNotifier n();
+        WaitingOperation op(n);
+        # a second reference, with which the deleted object is submitted again
+        object again = op;
+        auto rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": key,
+            "key": key,
+            "to": -1s,
+        });
+        on_exit AsyncIoController::cancelByOwner(key);
+        AsyncIoController::getInfo();
+        delete op;
+        # submitted again while its first operation may still be registered: it is canceled, as its object is deleted
+        auto rq2 = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": again,
+            "owner": key,
+            "key": key + "-again",
+            "to": -1s,
+        });
+        assertTrue(rq.get(HangGuard).canceled, "the deletion of the object cancels its first operation");
+        assertTrue(rq2.get(HangGuard).canceled, "the operation of the deleted object submitted again is canceled");
+    }
+}

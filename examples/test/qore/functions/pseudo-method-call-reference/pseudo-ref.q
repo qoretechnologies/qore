@@ -236,3 +236,28 @@ tryit("named arguments, reference", auto sub () { return (\hw.substr())(start: 6
     remove lo;
     tryit("list held by the reference", auto sub () { return lc(); });
 }
+
+# The result of a call resolved by name can have a different type from the built-in pseudo-method's (#7362).
+sub size_operators(hash h) {
+    printf("size operators: %y, %y, %y\n", h.size() + 1, (h.size() + 1) + 2, h.size() * 2);
+}
+size_operators({"size": auto sub () { return "abc"; }});
+size_operators({"size": auto sub () { return 1.5; }});
+size_operators({"size": 5, "other": 6});
+
+class PseudoBase {}
+class PseudoChild inherits PseudoBase {
+    string typeCode() { return "child"; }
+}
+sub object_operator(PseudoBase base) {
+    printf("subclass typeCode: %y\n", base.typeCode() + 1);
+}
+object_operator(new PseudoChild());
+
+hashdecl SizeBase { int a; }
+hashdecl SizeChild inherits SizeBase { code size; }
+sub hashdecl_operator(hash<SizeBase> h) { printf("subtype size: %y\n", h.size() + 1); }
+hashdecl_operator(<SizeChild>{"a": 1, "size": auto sub () { return "derived"; }});
+
+sub optional_operator(*hash<string, code> h) { printf("optional size: %y\n", h.size() + 1); }
+optional_operator({"size": auto sub () { return "optional"; }});

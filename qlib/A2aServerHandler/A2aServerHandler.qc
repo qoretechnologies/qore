@@ -141,6 +141,13 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         #! Task ID counter
         int task_id_counter = 0;
 
+        #! If the task IDs may contain the PID: not if code restricted from external information created the handler,
+        #! nor for such code that calls it, as the PID is information about the host (qore#7586)
+        bool task_id_pid = SandboxManager::callerMayReadExternalInfo();
+
+        #! The part of the task IDs that makes them unique to the process when they do not contain the PID
+        string task_id_random = get_random_string(16);
+
         #! Request ID counter
         int rpc_rid = 0;
 
@@ -1516,7 +1523,9 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
     #! Generates a unique task ID
     private string generateTaskId() {
         AutoWriteLock al(rwl);
-        return sprintf("task-%d-%d", getpid(), ++task_id_counter);
+        return sprintf("task-%s-%d", task_id_pid && SandboxManager::callerMayReadExternalInfo()
+            ? getpid().toString()
+            : task_id_random, ++task_id_counter);
     }
 
     #! Returns the next request ID

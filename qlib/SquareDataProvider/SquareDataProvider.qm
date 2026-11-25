@@ -59,6 +59,15 @@ module SquareDataProvider {
                 "invoicing, and business management.\n\n"
                 "This integration supports customers, orders, payments, invoices, bookings, "
                 "catalog items, inventory, refunds, and events.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "squareup.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.squareup.com/us/en/online-payment-apis",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "squareres",
             "logo": SquareLogo,
             "logo_file_name": "square-logo.svg",
@@ -397,6 +406,7 @@ module SquareDataProvider {
             "app": SquareDataProvider::AppName,
             "path": "/orders/create-paid",
             "action": "create-paid-order",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Orders",
             "display_name": "Create Paid Order",
             "short_desc": "Create and pay an order",
@@ -594,6 +604,7 @@ module SquareDataProvider {
             "app": SquareDataProvider::AppName,
             "path": "/payments/create",
             "action": "create-payment",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Payments",
             "display_name": "Create a Payment",
             "short_desc": "Create a new payment",
@@ -667,6 +678,7 @@ module SquareDataProvider {
             "app": SquareDataProvider::AppName,
             "path": "/payments/complete",
             "action": "complete-payment",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Payments",
             "display_name": "Complete Payment",
             "short_desc": "Complete a payment",

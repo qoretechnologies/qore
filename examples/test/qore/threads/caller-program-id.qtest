@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    get_caller_program_id() returns the Program ID of the frame at the given offset of the call stack, as
+    get_thread_call_stack() lists them, and nothing past the end of the stack or for a negative offset (qore#7581)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CallerProgramIdTest
+
+#! the Program IDs that get_caller_program_id() gives at every offset, and get_thread_call_stack()
+hash<auto> sub ids() {
+    list<hash<CallStackInfo>> cs = get_thread_call_stack();
+    list<auto> pid = ();
+    for (int i = 0; i <= cs.size() + 1; ++i) {
+        pid += get_caller_program_id(i);
+    }
+    return {"cs": cs, "pid": pid, "negative": get_caller_program_id(-1), "default": get_caller_program_id()};
+}
+
+#! the ID of this Program
+int sub my_program_id() {
+    return get_thread_call_stack()[0].programid;
+}
+
+hash<auto> sub f() {
+    return ids();
+}
+
+class C {
+    hash<auto> m() {
+        return ids();
+    }
+}
+
+#! the code of another Program
+const OtherSource = "%new-style
+hash<auto> sub ids() {
+    list<hash<CallStackInfo>> cs = get_thread_call_stack();
+    list<auto> pid = ();
+    for (int i = 0; i <= cs.size() + 1; ++i) {
+        pid += get_caller_program_id(i);
+    }
+    return {'cs': cs, 'pid': pid, 'negative': get_caller_program_id(-1), 'default': get_caller_program_id()};
+}
+
+hash<auto> sub outer() {
+    return ids();
+}
+";
+
+class CallerProgramIdTest inherits QUnit::Test {
+    constructor() : QUnit::Test("CallerProgramIdTest", "1.0") {
+        addTestCase("functions and methods", \functionTest());
+        addTestCase("frames of another Program", \programTest());
+        addTestCase("a background thread", \threadTest());
+        set_return_value(main());
+    }
+
+    #! checks the IDs against the call stack: every frame but the innermost (the calls of the two functions)
+    private check(hash<auto> h, string label) {
+        list<hash<CallStackInfo>> cs = h.cs;
+        for (int i = 1; i < cs.size(); ++i) {
+            assertEq(cs[i].programid, h.pid[i], sprintf("%s: offset %d", label, i));
+        }
+        # past the end of the stack
+        assertNothing(h.pid[cs.size()], label + ": past the end");
+        assertNothing(h.pid[cs.size() + 1], label + ": past the end + 1");
+        assertNothing(h.negative, label + ": a negative offset");
+        # the default offset is the frame of the code that called the function that calls it
+        assertEq(cs[1].programid, h."default", label + ": the default offset");
+    }
+
+    functionTest() {
+        hash<auto> h = f();
+        assertEq(my_program_id(), h.pid[1]);
+        check(h, "functions");
+        check(new C().m(), "method");
+    }
+
+    programTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(OtherSource, "other");
+        hash<auto> h = p.callFunction("outer");
+        check(h, "another Program");
+        # the frames of the other Program and those of this one below them
+        assertEq(p.getProgramId(), h.pid[1]);
+        assertEq(p.getProgramId(), h.pid[2]);
+        assertEq(my_program_id(), h.pid[h.cs.size() - 1]);
+    }
+
+    threadTest() {
+        hash<auto> h;
+        Counter c(1);
+        background sub () {
+            on_exit c.dec();
+            h = f();
+        }();
+        c.waitForZero();
+        check(h, "a background thread");
+    }
+}

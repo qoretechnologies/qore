@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc links and runs a native executable with serialized debugger metadata
 # Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
 
 # Regression test: a debugger attached to an AOT program gets the step event of every statement of an AOT
@@ -28,6 +29,7 @@ class AOTDebugIRStatementStepTest inherits QUnit::Test {
 
         # probe() is called through call_function() so that the call is dispatched through the tiered entry of
         # the variant, as calls between separately compiled AOT objects are; lines 30-36 are its statements
+        # Line 31 starts at column zero and has two distinct statement spans (#7490).
         const ProbeSource = "%modern
 %allow-debugger
 
@@ -39,7 +41,7 @@ class StepRecorder inherits DebugProgram {
             reference rs, reference rts) {
         if (statementId) {
             hash<auto> i = pgm.getStatementIdInfo(statementId);
-            seen += sprintf(\"step %s:%d\", basename(i.file), i.start_line + i.offset);
+            seen += sprintf(\"step %s:%d:%d-%d\", basename(i.file), i.start_line + i.offset, i.start_column, i.end_column);
         }
         rs = DebugStep;
     }
@@ -58,7 +60,7 @@ class StepRecorder inherits DebugProgram {
 
 int sub probe(int a) {
     list<int> l = (a, 2);
-    int sum = 0;
+int sum = 0; sum += 0;
     foreach int v in (l) {
         sum += v;
     }
@@ -68,6 +70,10 @@ int sub probe(int a) {
 
 StepRecorder r();
 ProgramControl pc = ProgramControl::getProgram();
+foreach int id in (pc.findStatementIds(\"probe.q\", 31)) {
+    hash<auto> i = pc.getStatementIdInfo(id);
+    printf(\"lookup %d:%d-%d\\n\", i.start_line, i.start_column, i.end_column);
+}
 int rv;
 Counter cnt(1);
 background sub () {
@@ -80,7 +86,7 @@ cnt.waitForZero();
 printf(\"rv=%d\\n\", rv);
 # only the statements of probe(): AOT top-level code is native code without step events
 foreach string e in (r.seen) {
-    int line = (e =~ x/:([0-9]+)$/)[0].toInt();
+    int line = (e =~ x/:([0-9]+):/)[0].toInt();
     if (line >= 29 && line <= 37) {
         printf(\"%s\\n\", e);
     }
@@ -111,16 +117,21 @@ foreach string e in (r.seen) {
 
         # the AST interpreter is the benchmark
         string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s 2>&1", qore_bin, src));
-        assertEq("rv=3\nstep probe.q:30\nstep probe.q:31\nstep probe.q:32\nstep probe.q:33\nstep probe.q:33\n"
-            "step probe.q:35\nstep probe.q:36\n", ast_out, "AST step events of probe()");
+        assertEq("lookup 31:0-11\nlookup 31:13-21\nrv=3\nstep probe.q:30:4-24\nstep probe.q:31:0-11\n"
+            "step probe.q:31:13-21\nstep probe.q:32:4-5\nstep probe.q:33:8-16\nstep probe.q:33:8-16\n"
+            "step probe.q:35:4-33\nstep probe.q:36:4-20\n", ast_out, "AST source spans of probe()");
 
-        foreach bool strip in ((False, True)) {
-            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile%s --output %s %s 2>&1",
-                libqore_dir, qore_bin, strip ? " --strip-source" : "", exe, src));
+        list<string> commands = (qore_bin + " -b --compile", qore_bin + " -b --compile --strip-source");
+        if (*string qcc = TestInterpreter::qcc_compiler()) {
+            push commands, qcc + " -O0";
+            push commands, qcc + " -O3 --strip-source";
+        }
+        foreach string compile in (commands) {
+            string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s --output %s %s 2>&1",
+                libqore_dir, compile, exe, src));
             assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
             string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
-            assertEq(ast_out, aot_out, sprintf("AOT step events of probe() match the AST interpreter "
-                "(strip-source: %y)", strip));
+            assertEq(ast_out, aot_out, "AOT step events and statement lookup match source for " + compile);
             unlink(exe);
         }
     }

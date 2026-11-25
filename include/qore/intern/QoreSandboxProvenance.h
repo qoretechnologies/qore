@@ -87,7 +87,7 @@ class QoreObject;
     @param spans true if a base class of the object's class has the code of another Program
 */
 DLLLOCAL QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm = nullptr,
-    bool spans = false);
+    bool spans = false, bool* capability = nullptr);
 //! Returns the functional-domain restrictions that an object or call reference created now records (qore#6844)
 /** Its code runs for the code that creates it: the restrictions of that code are recorded if the code that it runs
     is the code of a module (a library module or one loaded by its path, also when module code creates it), whose
@@ -105,12 +105,32 @@ DLLLOCAL QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, 
     qore#6844); does nothing if they are empty
 */
 DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
+//! Records that the own Program of a closure is not the one that compiled its code, if it is not (qore#7202)
+/** The variant of the closure is then called through the call path, which holds the Program that compiled it before
+    anything of the variant is read and runs the closure in it (UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN,
+    UserClosureFunction::evalForeignClosure())
+
+    @param closure the closure, which is created
+    @param exec_pgm the closure's own Program: the Program of its object, or the Program current where it is created
+
+    @return true if the closure's own Program is not the one that compiled its code
+*/
+DLLLOCAL bool qore_closure_note_execution_program(const ResolvedCallReferenceNode* closure,
+    const QoreProgram* exec_pgm);
 //! Returns true if a sandbox governs the Program of the class of the object, now (qore#7305)
 /** The object holds a dependency reference to the Program of its class (the Program in whose context it was created,
     see qore_class_private::execConstructor()), not that of the code that created it; the Program's own sandbox and
     that of the code that created the Program count (qore_program_private::getSandboxManagerRef())
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the Program of the class of the object, now
+//! (qore#6843)
+/** The sandboxes are those of qore_object_program_is_sandboxed(); a sandbox does not trust its code if it refuses
+    uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); for a composition, if any member refuses them), as
+    for SandboxManager::isRestricted().  Fails closed: true if the sandboxes cannot be resolved, and for a Program
+    marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
+*/
+DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
     object (SandboxManager::getSandboxedProgramId(); qore#7110)

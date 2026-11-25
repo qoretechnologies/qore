@@ -104,6 +104,9 @@ enum QoreForkLockRank : int {
     QFLR_THREAD_COUNTERS = 400,
     //! module locks whose holders check for cancellation (QFR_MODULE_CANCELLABLE): take the thread list
     QFLR_MODULE_CANCELLABLE = 450,
+    //! the lock of the entries of threads into the quiescent waits of type retirement (debug builds only; see
+    //! QoreTypeQuiescentWaitHelper): its holders count an entry, or read the counts of threads in the thread list
+    QFLR_TYPE_WAIT_ENTRY = 470,
     //! the thread list (thread_list.lck): taken when threads start and exit; takes the condition waker lock and the
     //! stack lock
     QFLR_THREAD_LIST = 500,
@@ -111,9 +114,29 @@ enum QoreForkLockRank : int {
     QFLR_COND_WAKER = 510,
     //! the thread stack lock (stack_lck): held only while a thread is created and its stack size set
     QFLR_STACK = 520,
+    //! the registry of the tombstones of retired declarations: making a tombstone creates declarations and types,
+    //! which takes leaf locks (the complex types, the class IDs, the debug registries of types and declarations)
+    QFLR_TYPE_TOMBSTONES = 900,
+    //! the lock that serializes the member additions of classes with their publication (qore_class_private::
+    //! addMemberApi()): its holders add the member, which creates types and takes leaf locks
+    QFLR_CLASS_MEMBER_ADD = 950,
     //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below),
     //! also the leaf locks of modules (QFR_MODULE_LEAF)
     QFLR_LEAF = 1000,
+    //! the registry of the generic caches by the types their keys name: taken with the complex types lock held, its
+    //! holders take only the locks of the caches themselves (not registered)
+    QFLR_GENERIC_CACHE_REGISTRY = 1020,
+    //! the stripes of the locks of the caches of generics that belong to one object each (the cache of the concrete
+    //! declarations of a generic hashdecl, the specialized IR of a user variant, the extended type counts of an IR type
+    //! profile; see qore_cache_stripe_lock()): taken with the generic cache registry's lock held; their holders take
+    //! no other registered lock
+    QFLR_CACHE_STRIPES = 1025,
+    //! the registry of the armed epoch holds of type retirement (QoreTypeEpochHold): taken with the JIT's background
+    //! queue lock held; its holders take no other lock
+    QFLR_TYPE_EPOCH_HOLDS = 1030,
+    //! the debug registries of the live types and declarations (debug builds only): taken whenever a type or a
+    //! declaration is created or destroyed, also with the locks above held; their holders take no other lock
+    QFLR_TYPE_DEBUG_REGISTRIES = 1040,
     //! the LLVM target initialization lock (see qore_llvm_initialize_targets()): held while LLVM registers its
     //! targets, which takes no registered lock; it ranks after the leaf locks so that their holders may compile
     QFLR_LLVM_TARGET_INIT = 1100,
@@ -141,6 +164,22 @@ enum QoreForkLockRank : int {
 #define QFLM_STRIPED QFLM_RESET
 #else
 #define QFLM_STRIPED QFLM_ACQUIRE
+#endif
+
+//! returns the lock that protects the cache of generics of the object given, one of a striped array that the fork
+//! handlers acquire before fork() (qore#7554)
+/** The caches of generics belong to one object each (a generic hashdecl, a user variant, an IR type profile), too
+    many to be acquired one by one before fork(), and their locks are held only around a read or a change of the cache
+    itself.  An object therefore uses the stripe its address selects, so that a child of fork() never inherits one of
+    them held by a thread that does not exist in it, and sees every cache consistent.  Two objects can share a stripe,
+    so the holder of a stripe must not take the stripe of another object (or the same stripe again): the critical
+    sections touch only the cache itself.
+*/
+DLLLOCAL std::mutex& qore_cache_stripe_lock(const void* obj);
+
+#ifdef DEBUG
+//! returns the lock of the stripe \a i of qore_cache_stripe_lock(), or nullptr if there is no such stripe
+DLLLOCAL std::mutex* qore_cache_stripe_dbg_lock(size_t i);
 #endif
 
 //! returns the TID of the calling thread, or -1 for a thread unknown to Qore; for the fork handlers
@@ -296,6 +335,13 @@ public:
     DLLLOCAL bool wasAcquired() const {
         return acquired;
     }
+
+#ifdef DEBUG
+    //! returns the mutex, for the debug hook that holds it in another thread across fork()
+    DLLLOCAL std::mutex& dbgMutex() {
+        return m;
+    }
+#endif
 
 private:
     std::mutex& m;

@@ -53,6 +53,7 @@
 #include <cstring>
 #include <type_traits>
 #include <vector>
+#include <unordered_set>
 #include <memory>
 
 #define TRACK_REFS 0
@@ -1192,8 +1193,8 @@ bool needs_scan(const AbstractQoreNode* n) {
         return false;
 
     switch (n->getType()) {
-        case NT_LIST: return qore_list_private::getScanCount(*static_cast<const QoreListNode*>(n)) ? true : false;
-        case NT_HASH: return qore_hash_private::getScanCount(*static_cast<const QoreHashNode*>(n)) ? true : false;
+        case NT_LIST: return qore_list_private::needsScan(*static_cast<const QoreListNode*>(n));
+        case NT_HASH: return qore_hash_private::needsScan(*static_cast<const QoreHashNode*>(n));
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
         case NT_FUNCREF: {
@@ -1207,6 +1208,123 @@ bool needs_scan(const AbstractQoreNode* n) {
     return false;
 }
 
+void qore_weak_target_pin(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_LIST:
+            qore_list_private::pin(*v.get<const QoreListNode>());
+            break;
+        case NT_HASH:
+            qore_hash_private::pin(*v.get<const QoreHashNode>());
+            break;
+        default:
+            break;
+    }
+}
+
+bool qore_weak_shared_container(const AbstractQoreNode* n) {
+    return n->getType() == NT_LIST ? qore_list_private::weakShared(*static_cast<const QoreListNode*>(n))
+        : qore_hash_private::weakShared(*static_cast<const QoreHashNode*>(n));
+}
+
+bool qore_weak_shared_local_container(const AbstractQoreNode* n) {
+    // the count of the weak references first, which is zero for nearly every container; a container with no other
+    // strong holder is moved into the local variable, not shared: it keeps its identity, and the weak references follow
+    // it (David, qore#7342)
+    return qore_weak_shared_container(n) && !n->is_unique();
+}
+
+bool qore_weak_designated_container(const AbstractQoreNode* n) {
+    switch (n->getType()) {
+        case NT_LIST:
+            return qore_list_private::weakShared(*static_cast<const QoreListNode*>(n));
+        case NT_HASH:
+            return qore_hash_private::weakShared(*static_cast<const QoreHashNode*>(n));
+        default:
+            return false;
+    }
+}
+
+std::atomic<unsigned> qore_weak_container_holders{0};
+
+void qore_weak_holder(const AbstractQoreNode* n, int dt) {
+    // the global count is raised before the container's and released after it, so that it is never zero while a
+    // container counts a weak reference (see qore_weak_container_holders)
+    if (dt > 0) {
+        qore_weak_container_holders.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (n->getType() == NT_LIST) {
+        qore_list_private::weakHolder(*static_cast<const QoreListNode*>(n), dt);
+    } else {
+        assert(n->getType() == NT_HASH);
+        qore_hash_private::weakHolder(*static_cast<const QoreHashNode*>(n), dt);
+    }
+    if (dt < 0) {
+        assert(qore_weak_container_holders.load(std::memory_order_relaxed));
+        qore_weak_container_holders.fetch_sub(1, std::memory_order_relaxed);
+    }
+}
+
+QoreValue qore_weak_share_copy(QoreValue v, ExceptionSink* xsink) {
+    ExceptionSink local_xsink;
+    if (!xsink) {
+        xsink = &local_xsink;
+    }
+    // the original keeps its other holder (the one that the weak reference designates it in), so releasing this
+    // reference does not free it
+    ValueHolder orig(v, xsink);
+    if (v.getType() == NT_LIST) {
+        return v.get<const QoreListNode>()->copy();
+    }
+    assert(v.getType() == NT_HASH);
+    return v.get<const QoreHashNode>()->copy();
+}
+
+QoreValue qore_weak_source_container(const QoreValue& v) {
+    AbstractQoreNode* copy;
+    switch (v.getType()) {
+        case NT_LIST: {
+            const QoreListNode* l = v.get<const QoreListNode>();
+            if (qore_list_private::isPinned(*l)) {
+                return v.refSelf();
+            }
+            copy = l->realCopy();
+            break;
+        }
+        case NT_HASH: {
+            const QoreHashNode* h = v.get<const QoreHashNode>();
+            if (qore_hash_private::isPinned(*h)) {
+                return v.refSelf();
+            }
+            copy = h->realCopy();
+            break;
+        }
+        default:
+            return v.refSelf();
+    }
+    QoreValue rv(copy);
+    qore_weak_target_pin(rv);
+    return rv;
+}
+
+void qore_weak_target_pin_copy(const AbstractQoreNode* orig, const AbstractQoreNode* copy) {
+    switch (get_node_type(orig)) {
+        case NT_LIST:
+            if (qore_list_private::isPinned(*static_cast<const QoreListNode*>(orig))
+                    && get_node_type(copy) == NT_LIST) {
+                qore_list_private::pin(*static_cast<const QoreListNode*>(copy));
+            }
+            break;
+        case NT_HASH:
+            if (qore_hash_private::isPinned(*static_cast<const QoreHashNode*>(orig))
+                    && get_node_type(copy) == NT_HASH) {
+                qore_hash_private::pin(*static_cast<const QoreHashNode*>(copy));
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 bool needs_scan(const QoreValue& v) {
     // an opaque reference is a strong reference the collector does not follow; it is transparent
     // to every other consumer, so the tag is the only thing that distinguishes it here
@@ -1214,6 +1332,54 @@ bool needs_scan(const QoreValue& v) {
         return false;
     }
     return needs_scan(v.getInternalNode());
+}
+
+bool qore_return_release_observable(const QoreValue& value) {
+    if (value.isOpaque() || needs_scan(value)) {
+        return true;
+    }
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (!node || (node->getType() != NT_LIST && node->getType() != NT_HASH)) {
+        return false;
+    }
+
+    // Opaque references own their targets but do not contribute to a container's GC scan count. Check
+    // the stored entries without resolving or following those references. A shared subcontainer is visited once.
+    std::vector<const AbstractQoreNode*> pending{node};
+    std::unordered_set<const AbstractQoreNode*> seen;
+    auto visit = [&](const QoreValue& entry) {
+        if (entry.isOpaque() || needs_scan(entry)) {
+            return true;
+        }
+        const AbstractQoreNode* child = entry.getInternalNode();
+        if (child && (child->getType() == NT_LIST || child->getType() == NT_HASH)) {
+            pending.push_back(child);
+        }
+        return false;
+    };
+    while (!pending.empty()) {
+        node = pending.back();
+        pending.pop_back();
+        if (!seen.insert(node).second) {
+            continue;
+        }
+        if (node->getType() == NT_LIST) {
+            ConstListIterator it(static_cast<const QoreListNode*>(node));
+            while (it.next()) {
+                if (visit(it.getValue())) {
+                    return true;
+                }
+            }
+        } else {
+            ConstHashIterator it(static_cast<const QoreHashNode*>(node));
+            while (it.next()) {
+                if (visit(it.get())) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 void inc_container_obj(const AbstractQoreNode* n, int dt) {
@@ -1227,14 +1393,14 @@ void inc_container_obj(const AbstractQoreNode* n, int dt) {
 }
 
 bool has_complex_type(const AbstractQoreNode* n) {
+    // the private accessors are inline, the public ones are calls into the library (qore#7573)
     switch (get_node_type(n)) {
         case NT_LIST: {
-            const QoreListNode* l = static_cast<const QoreListNode*>(n);
-            const QoreTypeInfo* ti = l->getValueTypeInfo();
+            const QoreTypeInfo* ti = qore_list_private::get(static_cast<const QoreListNode*>(n))->getValueTypeInfo();
             return ti && ti != anyTypeInfo;
         }
         case NT_HASH: {
-            const QoreHashNode* h = static_cast<const QoreHashNode*>(n);
+            const qore_hash_private* h = qore_hash_private::get(static_cast<const QoreHashNode*>(n));
             if (h->getHashDecl()) {
                 return true;
             }
@@ -1436,4 +1602,14 @@ DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n) {
         return n.refSelf();
     }
     return QoreValue(copy_strip_complex_types(n.getInternalNode()));
+}
+
+__attribute__((noinline, cold)) void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry,
+        ExceptionSink* xsink) {
+    assert(entry.isPointer());
+    assert(!QoreTypeInfo::hasType(vti));
+    const AbstractQoreNode* n = entry.getPtr();
+    if (n && vti != autoTypeInfo && has_complex_type(n)) {
+        QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+    }
 }

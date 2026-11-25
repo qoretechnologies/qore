@@ -53,6 +53,15 @@
 #else
 #include "qore/intern/qore_glob.h"
 #endif
+#include "qore/intern/QoreSandboxProvenance.h"
+
+#ifndef _Q_WINDOWS
+// gets the status of a path that the sandbox policy allowed, pinned against a concurrent change (qore#7518)
+static int sandbox_pinned_stat(QoreSandboxManagerHelper& smh, const char* path, bool follow, struct stat& sbuf,
+      ExceptionSink* xsink) {
+   return q_sandbox_pinned_stat(*smh.get(), path, follow, sbuf, xsink);
+}
+#endif
 
 static bool check_stat(unsigned code, const QoreString& path, ExceptionSink* xsink) {
    // a path with a NUL character names no file; it fails with EINVAL before the sandbox check
@@ -63,6 +72,12 @@ static bool check_stat(unsigned code, const QoreString& path, ExceptionSink* xsi
    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
       return false;
    }
+#ifndef _Q_WINDOWS
+   if (smh) {
+      struct stat sbuf;
+      return !sandbox_pinned_stat(smh, path.c_str(), true, sbuf, xsink) && (sbuf.st_mode & S_IFMT) == code;
+   }
+#endif
 
    return (q_get_mode(path) & S_IFMT) == code;
 }
@@ -81,7 +96,13 @@ static bool check_lstat(unsigned code, const QoreString& path, ExceptionSink* xs
    struct stat sbuf;
    int rc;
 
-   if ((rc = lstat(path.getBuffer(), &sbuf)))
+#ifndef _Q_WINDOWS
+   if (smh) {
+      rc = sandbox_pinned_stat(smh, path.c_str(), false, sbuf, xsink);
+   } else
+#endif
+   rc = lstat(path.getBuffer(), &sbuf);
+   if (rc)
       return false;
 
    return (sbuf.st_mode & S_IFMT) == code;
@@ -102,7 +123,13 @@ static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink)
       return false;
    }
 
-   if ((rc = stat(path->getBuffer(), &sbuf)))
+#ifndef _Q_WINDOWS
+   if (smh) {
+      rc = sandbox_pinned_stat(smh, path->c_str(), true, sbuf, xsink);
+   } else
+#endif
+   rc = stat(path->getBuffer(), &sbuf);
+   if (rc)
       return false;
 
    if (S_ISDIR(sbuf.st_mode)) { // If path is a directory.
@@ -138,11 +165,14 @@ static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink)
       return false;
    }
 
-   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
-      return false;
+   if (smh) {
+      if (!smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+         return false;
+      }
+      // the access of the file checked, pinned against a concurrent change, without opening it (qore#7518)
+      return !q_sandbox_pinned_access(*smh.get(), path->c_str(), QSEC_WRITE, W_OK, xsink);
    }
-   // with a policy, the file actually opened is checked too (qore#7498)
-   rc = q_open_policy_checked(path->getBuffer(), O_WRONLY, 0, xsink);
+   rc = open(path->getBuffer(), O_WRONLY);
    if (rc != -1) {
       close(rc);
       return true;
@@ -437,11 +467,17 @@ bool is_dev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    struct stat sbuf;
    int rc;
 
-#ifdef HAVE_LSTAT
-   if ((rc = lstat(path->getBuffer(), &sbuf)))
-#else
-   if ((rc = stat(path->getBuffer(), &sbuf)))
+#ifndef _Q_WINDOWS
+   if (smh) {
+      rc = sandbox_pinned_stat(smh, path->c_str(), false, sbuf, xsink);
+   } else
 #endif
+#ifdef HAVE_LSTAT
+   rc = lstat(path->getBuffer(), &sbuf);
+#else
+   rc = stat(path->getBuffer(), &sbuf);
+#endif
+   if (rc)
       return false;
 
    return ((sbuf.st_mode & S_IFMT) == S_IFCHR) || ((sbuf.st_mode & S_IFMT) == S_IFBLK);
@@ -494,6 +530,12 @@ bool is_readable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
       return false;
    }
+#ifndef _Q_WINDOWS
+   // the access of the object checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      return !q_sandbox_pinned_access(*smh.get(), path->c_str(), QSEC_READ, R_OK, xsink);
+   }
+#endif
    return q_path_is_readable(path->getBuffer());
 }
 
@@ -565,8 +607,13 @@ bool is_executable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 
    struct stat sbuf;
    int rc;
-
-   if ((rc = stat(path->getBuffer(), &sbuf))) {
+#ifndef _Q_WINDOWS
+   if (smh) {
+      rc = sandbox_pinned_stat(smh, path->c_str(), true, sbuf, xsink);
+   } else
+#endif
+   rc = stat(path->getBuffer(), &sbuf);
+   if (rc) {
       return false;
    }
 
@@ -681,6 +728,14 @@ nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FIL
     }
 
     struct statvfs vfs;
+#ifndef _Q_WINDOWS
+    // the file system of the object checked, pinned against a concurrent change (qore#7518)
+    if (smh) {
+        if (q_sandbox_pinned_statvfs(*smh.get(), path->c_str(), vfs, xsink))
+            return QoreValue();
+        return statvfs_to_hash(vfs);
+    }
+#endif
     if (statvfs(path->getBuffer(), &vfs))
         return QoreValue();
 
@@ -719,6 +774,12 @@ if (!exists l)
     }
 
     struct stat sbuf;
+#ifndef _Q_WINDOWS
+    if (smh) {
+       if (sandbox_pinned_stat(smh, path->c_str(), true, sbuf, xsink))
+          return QoreValue();
+    } else
+#endif
     if (stat(path->getBuffer(), &sbuf))
         return QoreValue();
 
@@ -761,6 +822,12 @@ if (!exists l)
    }
 
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   if (smh) {
+      if (sandbox_pinned_stat(smh, path->c_str(), false, sbuf, xsink))
+         return QoreValue();
+   } else
+#endif
 #ifdef HAVE_LSTAT
    if (lstat(path->getBuffer(), &sbuf))
 #else
@@ -806,6 +873,12 @@ if (!h)
    }
 
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   if (smh) {
+      if (sandbox_pinned_stat(smh, path->c_str(), true, sbuf, xsink))
+         return QoreValue();
+   } else
+#endif
    if (stat(path->getBuffer(), &sbuf))
       return QoreValue();
 
@@ -847,6 +920,12 @@ if (!exists h)
    }
 
    struct stat sbuf;
+#ifndef _Q_WINDOWS
+   if (smh) {
+      if (sandbox_pinned_stat(smh, path->c_str(), false, sbuf, xsink))
+         return QoreValue();
+   } else
+#endif
 #ifdef HAVE_LSTAT
    if (lstat(path->getBuffer(), &sbuf))
 #else
@@ -1419,7 +1498,7 @@ int lchown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARG
    // the operation acts on the path that the policy checked, pinned against a concurrent change (qore#7518)
    if (smh) {
       QoreSandboxPinnedPath pin;
-      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_WRITE, true, pin, xsink)) {
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_WRITE, true, pin, xsink, true)) {
          return -1;
       }
       return fchownat(pin.dirfd, pin.leaf.c_str(), (uid_t)owner, (uid_t)group, AT_SYMLINK_NOFOLLOW);
@@ -1458,7 +1537,26 @@ string readlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    }
 
    char buf[QORE_PATH_MAX + 1];
-   qore_offset_t len = readlink(path->getBuffer(), buf, QORE_PATH_MAX);
+   qore_offset_t len;
+#ifndef _Q_WINDOWS
+   // the link is read from the directory checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      if (q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_READ, true, pin, xsink, true)) {
+         if (*xsink) {
+            return QoreValue();
+         }
+         len = -1;
+      } else if (pin.alias) {
+         // a descriptor alias is not a link
+         errno = EINVAL;
+         len = -1;
+      } else {
+         len = readlinkat(pin.dirfd, pin.leaf.c_str(), buf, QORE_PATH_MAX);
+      }
+   } else
+#endif
+   len = readlink(path->getBuffer(), buf, QORE_PATH_MAX);
    if (len < 0)
       return xsink->raiseErrnoException("READLINK-ERROR", errno, "readlink('%s') failed", path->getBuffer());
    assert(len <= QORE_PATH_MAX);
@@ -1649,6 +1747,26 @@ string realpath(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
       return QoreValue();
    }
 
+#ifndef _Q_WINDOWS
+   // under a policy, the path is resolved once, by pinning it: the result is the canonical path that the policy
+   // checked, and every error comes from the directory checked, so that none tells whether a file outside of the
+   // policy exists (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      int rc = q_sandbox_pin_path(*smh.get(), path->c_str(), QSEC_READ, false, pin, xsink);
+      if (!rc && !pin.alias) {
+         struct stat sbuf;
+         rc = fstatat(pin.dirfd, pin.leaf.c_str(), &sbuf, AT_SYMLINK_NOFOLLOW) ? -2 : 0;
+      }
+      if (rc) {
+         if (!*xsink) {
+            xsink->raiseErrnoException("REALPATH-ERROR", errno, "error calling realpath()");
+         }
+         return QoreValue();
+      }
+      return new QoreStringNode(pin.canon.c_str(), path->getEncoding());
+   }
+#endif
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(path->getEncoding()));
    return q_realpath(*path, **rv, xsink) ? 0 : rv.release();
 }

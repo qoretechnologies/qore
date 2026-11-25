@@ -1686,6 +1686,11 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
    }
 
    ExceptionSink wsink, xsink;
+   // the mode requested with --exec-mode applies to every Program of the process, also to one that has no parent and to
+   // a module loaded without a requesting Program
+   if (user_requested_exec_mode) {
+      qore_set_default_exec_mode(exec_mode);
+   }
    {
       QoreProgramHelper qpgm(parse_options, xsink);
       bool mod_errs = false;

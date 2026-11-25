@@ -652,6 +652,26 @@ static void nestedElements(QoreIRFunction& fn, QoreIRBuilder& b) {
     b.createReturnNothing();
 }
 
+//! the element of a foreach statement that saves the enclosing element once and sets the index of each next element
+//! (a PopImplicitElement with the saved element as its second operand, which leaves the push open; qore#7379):
+//! \a kind 0: the loop ends and restores the element; 1: the set names the outer element while an inner one is open;
+//! 2: the set comes after the element was restored
+static void loopElementSet(QoreIRFunction& fn, QoreIRBuilder& b, int kind) {
+    QoreIRValue index = b.createConstInt(0)->result;
+    QoreIRValue next = b.createConstInt(1)->result;
+    QoreIRValue saved = b.createPushImplicitElement(index)->result;
+    if (kind == 1) {
+        b.createPushImplicitElement(index);
+    } else if (kind == 2) {
+        b.createPopImplicitElement(saved);
+    }
+    b.createSetImplicitElement(next, saved);
+    if (kind != 2) {
+        b.createPopImplicitElement(saved);
+    }
+    b.createReturnNothing();
+}
+
 //! two nested catch blocks; \a exit_depth: one CatchCleanup closes both (a catch-exit depth of 0), otherwise each is
 //! closed by a CatchCleanup of its own; \a extra: one CatchCleanup more
 static void nestedCatches(QoreIRFunction& fn, QoreIRBuilder& b, bool exit_depth, bool extra) {
@@ -1263,6 +1283,14 @@ int main(int argc, char** argv) {
         elementReturn(fn, b, true);
     }, nullptr, "on the path of the exception");
     run("outer implicit element restored", [](QoreIRFunction& fn, QoreIRBuilder& b) { nestedElements(fn, b); });
+    // the set of a loop's next element leaves its push open, which must be the innermost element (qore#7379)
+    run("loop element set", [](QoreIRFunction& fn, QoreIRBuilder& b) { loopElementSet(fn, b, 0); });
+    run("loop element set under an inner element", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        loopElementSet(fn, b, 1);
+    }, nullptr, NotInnermost);
+    run("loop element set after its restoration", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        loopElementSet(fn, b, 2);
+    }, nullptr, NotInnermost);
     // the catch blocks: each CatchCleanup closes the innermost one, or the catch blocks down to its catch-exit depth
     // (qore#6733, qore#6658)
     run("nested catch blocks", [](QoreIRFunction& fn, QoreIRBuilder& b) { nestedCatches(fn, b, false, false); });

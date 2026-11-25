@@ -57,6 +57,15 @@ module ZohoInventoryDataProvider {
                 "This integration supports contacts, items, item groups, item adjustments, "
                 "packages, purchase orders, sales orders, and shipment orders.",
             "scheme": "zohoinventory",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "zohoapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://www.zoho.com/inventory/api/v1/introduction/",
+                "effective_date": 2026-11-25,
+            },
             "logo": ZohoInventoryLogo,
             "logo_file_name": "zohoinventory-logo.svg",
             "logo_mime_type": MimeTypeSvg,

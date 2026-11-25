@@ -844,6 +844,13 @@ public hashdecl DataProviderActionBaseInfo {
     #! Free-form metadata for the action
     *hash<auto> metadata;
 
+    #! Message formats this action can submit, keyed by destination/authorization variant and then format
+    /** See @ref DataProviderMessageFormat for the declaration and upgrade-checking contract. An absent
+        declaration or variant means unknown. Option labels are localized through the ordinary action
+        option projection. Variant names, format names, option paths and selector values are stable data.
+    */
+    *hash<auto> message_formats;
+
     #! Processor capability bitfield (DPC_* constants) for pipeline processor actions
     /** @since %DataProvider 3.3
     */
@@ -2319,7 +2326,8 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static auto runWithCatalogLock(code c) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot hold the catalog lock from a context with restricted process control";
         }
         # test hooks are for trusted test code only
@@ -2493,7 +2501,8 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static setDeliveryTestHook(*code hook) [dom=PROCESS_CONTROL] {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set a catalog test hook from a context with restricted process control";
         }
         # test hooks are for trusted test code only
@@ -3842,7 +3851,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     static *hash<DataProviderAppInfo> deregisterDynamicApp(string name) [dom=PROCESS_CONTROL] {
         # sandboxed code would remove an app that it does not own from every caller
         DataProviderSandboxState::checkRegistration("application", name, True);
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove app %y from a context with restricted process control",
                 name);
         }
@@ -4022,6 +4032,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         DataProviderActionCatalog::checkProcessingAndBilling("ACTION-ERROR", sprintf("action %s/%s", action.app,
             action.action), action.processing, action.billing);
+        if (exists action.message_formats) {
+            DataProviderMessageFormat::validate(action);
+        }
         action.path = DataProviderActionCatalog::normalizePath(action.path);
 
         # check that all path variables are defined
@@ -4912,7 +4925,9 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @ref DataProvider::registerKnownFactories()), otherwise only apps registered by already-loaded modules are
         cached
 
-        @return the number of applications added to the cache
+        @return the number of applications added to the cache; 0 for code that may not change the cache of the data
+        provider index (sandboxed code and code restricted from external information, see
+        @ref providerindexutil_published_index), for which the refusal of each app is logged
     */
     static int cacheAllRegisteredApps() [dom=PROCESS_CONTROL] {
         int count = 0;
@@ -6454,7 +6469,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static bool waitForLazyInitsQueued(int count, timeout timeout_ms) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot wait for the catalog worker from a context with restricted process "
                 "control";
         }

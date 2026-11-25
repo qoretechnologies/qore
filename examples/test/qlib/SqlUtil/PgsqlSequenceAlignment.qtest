@@ -33,6 +33,7 @@ public class PgsqlSequenceAlignmentTest inherits QUnit::Test {
     constructor() : QUnit::Test("PgsqlSequenceAlignment", "1.0", \ARGV) {
         addTestCase("a sequence parameter change is an ALTER that keeps the value", \sequenceAlter());
         addTestCase("sequence bounds are checked in both directions", \sequenceBounds());
+        addTestCase("sequence type and column ownership come from the catalog", \sequenceOwnership());
         set_return_value(main());
     }
 
@@ -111,10 +112,44 @@ public class PgsqlSequenceAlignmentTest inherits QUnit::Test {
         assertEq((), db.getAlignSql({"sequences": {"b4ra_seq_desc": {"increment": -1, "max": 0}}}));
     }
 
+    sequenceOwnership() {
+        Datasource ds = connectOrSkip();
+        on_exit ds.rollback();
+        Database db(ds);
+        string schema = ds.selectRow("select current_schema() as s").s;
+        ds.execRaw("create sequence seq_free");
+        ds.execRaw("create table \"SequenceOwner\" (\"SerialId\" serial, ref bigint default nextval('seq_free'))");
+        AbstractSequence standalone = db.getSequence(schema + ".seq_free");
+        assertEq("standalone", standalone.ownership.kind);
+        assertNothing(standalone.ownership.table);
+        assertEq("bigint", standalone.data_type);
+        string owned = ds.selectRow("select pg_get_serial_sequence('\"SequenceOwner\"', 'SerialId') as s").s;
+        AbstractSequence serial = db.getSequence(owned);
+        assertEq("owned", serial.ownership.kind);
+        assertEq(schema, serial.ownership.schema);
+        assertEq("SequenceOwner", serial.ownership.table);
+        assertEq("SerialId", serial.ownership.column);
+        bool typed = ds.selectRow("select current_setting('server_version_num')::integer as n").n >= 100000;
+        assertEq(typed ? "integer" : "bigint", serial.data_type);
+        if (typed) {
+            ds.execRaw("alter table \"SequenceOwner\" add \"IdentityId\" smallint generated always as identity");
+            string name = ds.selectRow("select pg_get_serial_sequence('\"SequenceOwner\"', 'IdentityId') as s").s;
+            AbstractSequence identity = db.getSequence(name);
+            assertEq("identity", identity.ownership.kind);
+            assertEq(schema, identity.ownership.schema);
+            assertEq("SequenceOwner", identity.ownership.table);
+            assertEq("IdentityId", identity.ownership.column);
+            assertEq("smallint", identity.data_type);
+        }
+        assertNothing(db.getSequence("seq_absent"));
+    }
+
     sequenceBounds() {
         # a descending sequence that starts below its maximum is valid (it was refused before SqlUtil 3.11.0)
         PgsqlSequence d1("d1", 10, -2, 100);
         assertEq(100n, d1.max);
+        assertNothing(d1.ownership);
+        assertNothing(d1.data_type);
         # a descending sequence starting at its maximum of 0 is valid
         PgsqlSequence d2("d2", -1, -1, 0);
         assertEq(0n, d2.max);

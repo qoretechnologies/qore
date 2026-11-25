@@ -37,6 +37,7 @@
 #include "qore/intern/QC_FilePollOperation.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/ModuleInfo.h"
 
 #include <cerrno>
 #include <chrono>
@@ -889,8 +890,10 @@ int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name,
     struct stat sbuf;
     std::string canon;
     if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, name, canon)) {
+        // the messages name the file in the form for the code that they are built for (see canonicalize() in
+        // QoreSandboxManager.cpp, qore#7507)
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file opened cannot be "
-            "identified by a path, so the security policy cannot be applied to it", name);
+            "identified by a path, so the security policy cannot be applied to it", qore_msg_path(name).c_str());
         return -1;
     }
     // the name was checked before it was opened
@@ -905,7 +908,7 @@ int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name,
         QoreString code(err_str ? err_str.c_str() : "FILESYSTEM-ACCESS-DENIED");
         xsink2.clear();
         xsink->raiseException(code.c_str(), "Access to '%s' denied: the file opened is not permitted by the security "
-            "policy", name);
+            "policy", qore_msg_path(name).c_str());
         return -1;
     }
     return 0;
@@ -929,6 +932,12 @@ static int qore_open_access_mode(int flags) {
     if (flags & O_CREAT) {
         access_mode |= QSEC_CREATE;
     }
+#ifdef O_TMPFILE
+    // an unnamed file is created in the directory (qore#7518)
+    if ((flags & O_TMPFILE) == O_TMPFILE) {
+        access_mode |= QSEC_CREATE;
+    }
+#endif
     return access_mode;
 }
 
@@ -988,6 +997,87 @@ static int truncate_open_file(int fd, int flags) {
 #endif
 }
 
+#ifndef _Q_WINDOWS
+int qore_qf_private::openPinned(QoreSandboxManager& sm, const char* fn, int oflags, int mode, int access_mode,
+        ExceptionSink* xsink) {
+    // a creation pins the directory of the entry, as does an open with O_NOFOLLOW, which does not follow a link as the
+    // last component (a name that requires a directory then pins the directory); any other open pins the object that
+    // the name reaches
+    bool create = oflags & O_CREAT;
+    bool nofollow = oflags & O_NOFOLLOW;
+    QoreSandboxPinnedPath pin;
+    ExceptionSink local_xsink;
+    ExceptionSink* ex = xsink ? xsink : &local_xsink;
+    // a descriptor alias (macOS) is opened by its name and checked by the file of the descriptor opened, as in
+    // qore#7498: the open of an alias duplicates the descriptor, whose file the pin checked
+    int rc = q_sandbox_pin_path(sm, fn, access_mode | QSEC_PIN_QUERY, create || nofollow, pin, ex,
+        nofollow && !create);
+    if (rc == -2 && create && errno == EINVAL) {
+        // the creation of '.' or '..', which name directories
+        errno = EISDIR;
+    }
+    if (!rc && create && !nofollow && !(oflags & O_EXCL) && !pin.alias && !pin.dir_required) {
+        // an existing link as the last component of a creation without O_EXCL is followed, as without a policy:
+        // the object that it reaches is pinned
+        struct stat sbuf;
+        if (!fstatat(pin.dirfd, pin.leaf.c_str(), &sbuf, AT_SYMLINK_NOFOLLOW) && S_ISLNK(sbuf.st_mode)) {
+            QoreSandboxPinnedPath opin;
+            rc = q_sandbox_pin_path(sm, fn, access_mode | QSEC_PIN_QUERY, false, opin, ex);
+            if (!rc) {
+                std::swap(pin.dirfd, opin.dirfd);
+                pin.leaf.swap(opin.leaf);
+                pin.canon.swap(opin.canon);
+                pin.alias = opin.alias;
+            }
+        }
+    }
+    if (rc == -1) {
+        if (!xsink) {
+            local_xsink.clear();
+            errno = EACCES;
+        }
+        return -2;
+    }
+    if (rc) {
+        // the error of the open, as without a policy
+        return -1;
+    }
+    int nfd;
+    if (pin.alias) {
+        do {
+            nfd = ::open(fn, oflags | O_CLOEXEC, mode);
+        } while (nfd < 0 && errno == EINTR);
+        return nfd;
+    }
+    // a name that requires a directory, pinned as the object, is opened as a directory: an object replaced by another
+    // file after it was checked is not opened
+    int dflags = 0;
+#ifdef O_DIRECTORY
+    if (pin.dir_required && !create && pin.leaf.back() != '/') {
+        dflags = O_DIRECTORY;
+    }
+#endif
+    do {
+        nfd = openat(pin.dirfd, pin.leaf.c_str(), oflags | dflags | O_NOFOLLOW | O_CLOEXEC, mode);
+    } while (nfd < 0 && errno == EINTR);
+    if (nfd < 0 && errno == ELOOP && nofollow) {
+        // the error of an open with O_NOFOLLOW of a link, as without a policy
+        return -1;
+    }
+    if (nfd < 0 && errno == ELOOP) {
+        // the file became a link after it was checked
+        if (xsink) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
+                "checked", qore_msg_path(fn).c_str());
+        } else {
+            errno = EACCES;
+        }
+        return -2;
+    }
+    return nfd;
+}
+#endif
+
 int qore_qf_private::openFd(const char* fn, int flags, int mode, ExceptionSink* xsink) {
     // the policy checked the name before the open; the file actually opened is checked after it
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
@@ -1007,12 +1097,25 @@ int qore_qf_private::openFd(const char* fn, int flags, int mode, ExceptionSink* 
         qore_dbg_fs_swap_on_open(fn);
     }
 #endif
+    int nfd;
+#ifndef _Q_WINDOWS
+    if (smh) {
+        // under a policy, the file opened or created is the one checked (qore#7518): the path is pinned (for a
+        // creation, the directory that the file is created in; otherwise the file), and the file is opened relative
+        // to it without following a link, so that nothing is opened or created elsewhere before the check of the file
+        // opened below
+        nfd = openPinned(*smh.get(), fn, oflags, mode, qore_open_access_mode(flags), xsink);
+        if (nfd == -2) {
+            return -1;
+        }
+    } else
+#endif
     // a file opened by the library is never inherited by a program the process starts (with system(),
     // backquote(), fork() and exec(), or a module)
 #ifdef O_CLOEXEC
-    int nfd = ::open(fn, oflags | O_CLOEXEC, mode);
+    nfd = ::open(fn, oflags | O_CLOEXEC, mode);
 #else
-    int nfd = ::open(fn, oflags, mode);
+    nfd = ::open(fn, oflags, mode);
 #endif
     if (nfd < 0 || !smh) {
         return nfd;
@@ -1034,6 +1137,84 @@ int qore_qf_private::openFd(const char* fn, int flags, int mode, ExceptionSink* 
         return -1;
     }
     return nfd;
+}
+
+bool q_source_read_policy_applies() {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    // only a load of library code reads as library code: the files of a library module loaded into a container are
+    // read by their loaders as library code, and any other source read during the load with the policy
+    return smh && !qore_module_load_is_trusted();
+}
+
+FILE* q_open_policy_checked_source(const char* fn, ExceptionSink* xsink) {
+    // the name is checked first: nothing about a file that the policy denies is told
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(fn, QSEC_READ, xsink)) {
+            return nullptr;
+        }
+    }
+#ifdef _Q_WINDOWS
+    int fd = q_open_policy_checked(fn, O_RDONLY, 0, xsink);
+    if (fd < 0) {
+        return nullptr;
+    }
+    FILE* fp = _fdopen(fd, "r");
+    if (!fp) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+    }
+    return fp;
+#else
+    // O_NONBLOCK: a FIFO with the name of a source does not block the parse
+    int fd = q_open_policy_checked(fn, O_RDONLY | O_NONBLOCK, 0, xsink);
+    if (fd < 0) {
+        return nullptr;
+    }
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+        return nullptr;
+    }
+    if (!S_ISREG(sbuf.st_mode)) {
+        ::close(fd);
+        errno = S_ISDIR(sbuf.st_mode) ? EISDIR : EINVAL;
+        return nullptr;
+    }
+    int fl = fcntl(fd, F_GETFL);
+    if (fl >= 0) {
+        fcntl(fd, F_SETFL, fl & ~O_NONBLOCK);
+    }
+    FILE* fp = fdopen(fd, "r");
+    if (!fp) {
+        int err = errno;
+        ::close(fd);
+        errno = err;
+    }
+    return fp;
+#endif
+}
+
+int q_read_policy_checked_source(const char* fn, std::string& out, ExceptionSink* xsink) {
+    FILE* fp = q_open_policy_checked_source(fn, xsink);
+    if (!fp) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(fclose, fp);
+    out.clear();
+    char buf[16384];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof buf, fp)) > 0) {
+        out.append(buf, n);
+    }
+    if (ferror(fp)) {
+        errno = EIO;
+        return -1;
+    }
+    return 0;
 }
 
 void q_dbg_fs_swap_point(const char* name) {

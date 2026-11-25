@@ -1,0 +1,49 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the module of abstract-redeclared-parent-order.qtest, loaded from the source and as a qcc -m .qmod
+
+%modern
+%disable-warning non-existent-method-call
+
+module AbstractRedeclaredOrder {
+    version = "1.0";
+    desc = "classes that redeclare an abstract method over an implementation for abstract-redeclared-parent-order.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ARO {
+public class C0 { abstract private string m(); }
+public class C3 inherits C0 { string m() { return "C3::m"; } }
+# the abstract method redeclared over the parent class's implementation, with each access
+public class C4 inherits C3 { abstract string m(); }
+public class C4p inherits C3 { abstract private string m(); }
+public class C4h inherits C3 { abstract private:hierarchy string m(); }
+public class C4i inherits C3 { abstract private:internal string m(); }
+# redeclared again further down
+public class C5 inherits C4 {}
+public class C6 inherits C5 { abstract string m(); }
+# the implementation inherited with private:internal access
+public class X0 { abstract string m(); }
+public class X3 { string m() { return "X3::m"; } }
+public class X4 inherits private:internal X3, X0 { abstract string m(); }
+# overloads: one of them redeclared
+public class B0 {
+    abstract string m(int i);
+    abstract string m(string s);
+}
+public class B3 inherits B0 {
+    string m(int i) { return "B3::m(int)"; }
+    string m(string s) { return "B3::m(string)"; }
+}
+public class B4 inherits B3 { abstract string m(int i); }
+# const variants and private:internal edges
+public class P0 { abstract string m(bool b) const; }
+public class P1 inherits private:internal P0 { abstract string m(bool b) const; }
+public class P2 inherits private:internal P0, P1 { string m(bool b) const { return "P2::m(bool) const"; } }
+public class P5 inherits P1, P2 { abstract string m(bool b) const; }
+# classes like the ones of users.ql, parsed with their parent classes
+public class N7 inherits C4, C0 { string via() { return m(); } }
+public class N8 inherits C0, C4 { string via() { return m(); } }
+public class N9 inherits P5, P1 {}
+}

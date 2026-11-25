@@ -88,6 +88,14 @@ DLLLOCAL int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int6
 #include "qore/intern/QC_SSLPrivateKey.h"
 #include "qore/intern/QoreIoClassesOps.h"
 
+//! Raises SOCKET-SERVER-OWNED-ERROR if the calling code may not use the connection socket of a server (qore#7338)
+/** @param kind 0 for a method that reads, writes, changes or polls the connection (refused to sandboxed code), 1 for
+    close() and shutdown*() (refused to code that a sandbox's policy governs)
+
+    @return 0 if the call is allowed, -1 if not (the exception is raised)
+*/
+DLLLOCAL int qore_socket_server_guard_check(int kind, ExceptionSink* xsink);
+
 class my_socket_priv {
 public:
     QoreSocket* socket;
@@ -112,6 +120,21 @@ public:
     // A connection can supply TLS objects for use without exporting them in an HTTP client's configuration.
     bool opaque_cert = false;
     bool opaque_key = false;
+    //! the Socket object of a server's connection whose methods sandboxed code may not call (qore#7338)
+    /** Set once by Socket::setServerOwned(); cleared when that object is destroyed.  A guarded method compares its
+        object with it; the alias of the connection (see server_alias), another object, is not guarded.
+    */
+    std::atomic<QoreObject*> server_owned{nullptr};
+    //! the alias of a server's connection socket: a Socket object with the same private data, never guarded
+    /** Not referenced: the server holds it; cleared when it is destroyed (qore#7338)
+    */
+    QoreObject* server_alias = nullptr;
+    //! the reference to the connection socket that the private data holds while its alias exists (qore#7338)
+    QoreObject* server_owner_ref = nullptr;
+    //! true once the alias of the connection socket was made: it is made once (qore#7338)
+    bool server_alias_made = false;
+    //! the number of Socket objects that share the private data (the connection socket and its alias)
+    int obj_count = 1;
     int async_io_count = 0;
     int async_sequence_owner_tid[3] = {-1, -1, -1};
     int async_sequence_count[3] = {0, 0, 0};
@@ -732,5 +755,48 @@ private:
         }
     }
 };
+
+//! The guard that every non-static method of Socket calls first (the class's "guard" property; qore#7338)
+/** One pointer test for every method of every object; the sandbox is resolved only on the connection socket of a
+    server (see Socket::setServerOwned()), at each call, never cached
+
+    @param self the object whose method is called
+    @param s the object's private data
+    @param kind 0 for a method that reads, writes, changes or polls the connection, 1 for close() and shutdown*()
+    @param xsink for the exception
+
+    @return 0 if the call is allowed, -1 if not (the exception is raised)
+*/
+static inline int qore_socket_server_guard(QoreObject* self, QoreSocketObject* s, int kind, ExceptionSink* xsink) {
+    if (my_socket_priv::getPriv(*s)->server_owned.load(std::memory_order_acquire) != self) {
+        return 0;
+    }
+    return qore_socket_server_guard_check(kind, xsink);
+}
+
+//! The guard of a pollable I/O object that code other than its own methods uses (qore#7338)
+/** For the parameters of other classes' methods and functions that take a Socket (or any pollable I/O object) and act
+    on it (poll operations, PollPipeline, EventLoop, AsyncIoController, Socket::poll()): the connection socket of a
+    server is refused to sandboxed code there as in its own methods
+
+    @param obj the object given
+    @param p its private data as a pollable I/O object
+    @param xsink for the exception
+
+    @return 0 if the use is allowed, -1 if not (the exception is raised)
+*/
+static inline int qore_pollable_server_guard(const QoreObject* obj, AbstractPollableIoObjectBase* p,
+        ExceptionSink* xsink) {
+    if (!obj || !p || !obj->getClass(CID_SOCKET)) {
+        return 0;
+    }
+    // the object's own Socket private data: a class can inherit another pollable class before Socket, so the pollable
+    // private data is not necessarily the Socket's
+    TryPrivateDataRefHolder<QoreSocketObject> sock(obj, CID_SOCKET, xsink);
+    if (!sock) {
+        return *xsink ? -1 : 0;
+    }
+    return qore_socket_server_guard(const_cast<QoreObject*>(obj), *sock, 0, xsink);
+}
 
 #endif // _QORE_CLASS_QORESOCKET_H

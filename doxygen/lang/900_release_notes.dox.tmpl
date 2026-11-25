@@ -101,6 +101,36 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Closures Run in the Program That Compiled Them
+    A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
+    that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
+    @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
+
+    @par Library Code Gives Restricted Code No Values of the Host's Environment
+    For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
+    URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
+    Logger file names expand no environment variables, and
+    @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
+    sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+    @par Operators Change the Container of a Weak Reference Held by Their Lvalue
+    The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
+    chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
+    raised an error or replaced the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue
+    7297</a>, <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>).
+
+    @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
+    REST classes and stream requests whose sandbox does not trust their code get the request context without the
+    server's objects and the credentials of the request (with the platform's authorization context), and trusted code
+    when its handler opts in; an unfiltered stream request of such code is refused (see
+    @ref httpserverutil_request_credentials and @ref rest_request_credentials).
+
+    @par A Weak Assignment That Would Reference a Converted Copy Is an Error
+    A @ref weak_assignment_operator "weak assignment (:=)" of a hash or a list to an lvalue whose type converts it to a
+    copy (ex: a <tt>hash&lt;string, int&gt;</tt> to a \c hash lvalue) is refused (see @ref weak_assignment_conversion;
+    <a href="https://github.com/qoretechnologies/qore/issues/7237">issue 7237</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7572">issue 7572</a>).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or
@@ -112,6 +142,24 @@
     @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) is answered with HTTP 413 when no
     limit is set (a body that a handler reads as a stream is not limited); set the
     @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
+
+    @par Library Code Gives Restricted Code No Other Host Information
+    @parblock
+    For code restricted from external information, the functions listed in @ref sandbox_ambient_host_data (ex:
+    @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()") use no environment,
+    working directory, hostname, PID or network interface for it, with the known limitations listed there
+    (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
+
+    \c ProviderIndexUtil gives such code no index directory, index file path or process IDs: its methods that return
+    them raise \c INVALID-FUNCTION-ACCESS, and neither it nor \c DataProvider gives or lets it set its logger (see
+    @ref providerindexutil_external_info; <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>).
+    @endparblock
+
+    @par Only the Host's Code Changes the Published Data Provider Index
+    Sandboxed code and code restricted from external information, also with file system access and process control,
+    cannot write, replace or hide the data provider index that the host published, its directory, its build mode or
+    its cached apps, or claim the modules of its apps (see @ref providerindexutil_published_index;
+    <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>).
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
@@ -126,6 +174,18 @@
     event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
     that created the connection (see @ref sandbox_lent_connections;
     <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
+
+    @par A Value Given a Weakly Referenced Hash or List Holds a Copy of Its Own
+    A parameter, a list element, a hash key, an object member or a variable given a hash or a list that a
+    @ref weak_assignment_operator "weak reference" designates holds a copy of its own (a local variable only while
+    another holder holds it), so that a change through the weak reference no longer reaches it
+    (<a href="https://github.com/qoretechnologies/qore/issues/7342">issue 7342</a>).
+
+    @par A Weak Reference Made From an Expression Designates a Copy of Its Own
+    A @ref weak_assignment_operator "weak assignment" from a call or another expression that gives a hash or a list
+    designates a copy of it, which lives until the end of the statement, so that a change through the weak reference no
+    longer changes another holder of the value; one from a path whose steps have no type designates the path's own
+    container (<a href="https://github.com/qoretechnologies/qore/issues/7318">issue 7318</a>).
 
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
@@ -206,10 +266,19 @@
     (<a href="https://github.com/qoretechnologies/qore/issues/7133">issue 7133</a>).
 
     @par Code Restricted From External Information Gets No Installation or Module Paths of the Host
-    @ref Qore::get_qore_library_info() "get_qore_library_info()" is external information, and module descriptions,
-    the module context path and the error for a module that is not found give no paths of the host to code restricted
-    with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info "%no-external-info";
-    <a href="https://github.com/qoretechnologies/qore/issues/7502">issue 7502</a>).
+    @ref Qore::get_qore_library_info() "get_qore_library_info()" is external information (also for a module's
+    \c init closure), and module descriptions, the module context path and the not-found error give no host paths to
+    code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info
+    "%no-external-info"; <a href="https://github.com/qoretechnologies/qore/issues/7502">issue 7502</a>).
+
+    @par Reading Build Information Constants Requires External Information Access
+    @ref no-external-info "%no-external-info" now restricts reads of the @ref system_and_build_constants
+    "build constants" BuildHost, Compiler, CFLAGS and LDFLAGS, including reads through reflection.
+    @par Code Restricted From External Information Gets Locations and Module Load Errors Without Directories
+    Exceptions caught, call stacks, reflection source locations and module load errors and warnings name files without
+    their directories for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"; the host gets the
+    same exceptions with full paths (see @ref no-external-info "%no-external-info";
+    <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
@@ -255,9 +324,9 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
 
     @par The Handler of an HTTP/1.x Request Gets a Socket of Its Request
-    An HTTP/1.x handler declared by sandboxed code, or that asks for it (as one that gives its socket to code that is not
-    trusted must), gets a socket for its own request only, and aborts the connection with
-    @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket; issues
+    An HTTP/1.x handler declared by sandboxed code, or that asks for it, gets a socket for its own request only, and
+    aborts the connection with @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's
+    socket that other handlers get is refused to sandboxed code (see @ref httpserver_handler_socket; issues
     <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
 
     @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
@@ -300,6 +369,12 @@
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
+
+    @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
+    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code but
+    can override them and call an overridden method's base version; library classes give their subclasses final public
+    methods, so a subclass method with one of their names and signatures is a parse error and must be renamed
+    (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
     The static members in which public classes of the standard modules keep state shared by all of their callers, and
@@ -709,8 +784,9 @@
     under the key passes \c True.
 
     @par Final Methods Hold for the Whole Class Hierarchy
-    An inherited @ref final_methods "final method" now reserves its name against instance and static declarations in
-    subclasses, and a multiple-inheritance order that redirects calls away from the final variant is a parse error.
+    A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
+    arguments or with a parent class listed before the final method's class that declares or inherits its name;
+    both are now parse errors.
 
     @par Module Code Runs in the Module's Program
     User code called from another %Program, such as a module function, a method of a module class or a function
@@ -783,6 +859,10 @@
     After @ref QoreTypeSafeReferenceHelper::removeHashObjKey() invokes a native member gate or accessor, the helper
     is invalid and unlocked and must be reset before further value access, or closed, so a callback can safely
     replace its parent; see @ref native_member_callback_lvalue "native member callbacks".
+
+    @par Compiled Method Calls Can Transfer Temporary Arguments
+    A program or module built with @ref qcc_tool "qcc" can hand a temporary argument directly to a method that
+    reassigns its parameter and requires a runtime supporting the new AOT format (issue #6860).
 
     @par Binary Modules Implement Module API 2.3
     Every external binary module must be rebuilt for module API 2.3, which registers its metadata with a
@@ -876,11 +956,19 @@
 
     @par A Path Cannot Contain a NUL Character
     Every API that passes a string to the operating system as a path, a socket target, a module name or a time zone
-    region refuses a string with a NUL character, with its error code and \c EINVAL.  See @ref path_nul_characters.
+    region refuses a string with a NUL character, with its error code and \c EINVAL (a region: \c TZINFO-ERROR
+    <tt>unknown time zone region</tt>).  See @ref path_nul_characters.
 
     @par Time Zones Do Not Open Files That a Program May Not Access
-    A zoneinfo path is not opened under @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", and a region with a \c ".."
-    or empty path component or a backslash raises \c TZINFO-ERROR.  See @ref sandbox_fs_tz_regions.
+    Restricted code can load time zone regions only, not zoneinfo paths (per-tenant limits:
+    <a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>), and an invalid or missing region
+    raises \c TZINFO-ERROR <tt>unknown time zone region</tt> instead of \c FILE-OPEN2-ERROR.  See
+    @ref sandbox_fs_tz_regions.
+
+    @par Deserialized Time Zones Never Open Files
+    The time zone of a deserialized date or @ref Qore::TimeZone "TimeZone" is a region, the local zone or a UTC
+    offset, so one loaded from a zoneinfo file given as a path does not round-trip unless the receiver loads it by
+    path itself.  See @ref serializable_time_zones.
 
     @par Local Times Follow All of the Data in Zoneinfo Files
     Time zones use all of the data in zoneinfo files, so local times before 1901 and after 2037 and with "slim" files
@@ -1395,6 +1483,17 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Restricted Programs
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
+    sandbox that does not trust its code governs the %Program of the class of an object, as
+    @ref Qore::SandboxManager::isRestricted() "isRestricted()" does for the calling code (see
+    @ref sandbox_restricts).
+
+    @par The Program ID of a Caller Frame
+    @ref Qore::get_caller_program_id() "get_caller_program_id()" and its C++ API \c qore_get_caller_program_id() give
+    the ID of the Program of a frame of the call stack without building a @ref Qore::CallStackInfo "CallStackInfo"
+    hash (<a href="https://github.com/qoretechnologies/qore/issues/7581">issue 7581</a>).
+
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
     waits for it, over a sliding window (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>).
@@ -1431,7 +1530,9 @@
     \c "sensitive" key of @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"), and the masked forms
     that identify a connection and @ref Qore::SQL::mask_datasource_options() "mask_datasource_options()" show only
     the plain values of the options that a loaded driver so declares not sensitive and whose names name no credential
-    (see @ref datasource_mask_options; issue #7070).
+    (see @ref datasource_mask_options; issue #7070).  The size of a datasource pool, given by the \c "min" and
+    \c "max" options that %Qore takes itself and never gives to a driver, is shown whatever the driver when it is a
+    non-negative integer (issue #7545).
 
     @par Sensitive DBI Database Names
     A DBI driver whose database name can hold credentials declares @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME, and the
@@ -1484,9 +1585,14 @@
 
     @par Warning for a User Symbol that Unqualified Resolution Cannot Reach
     The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function,
-    class, constant, hashdecl or global variable named like a @ref Qore "Qore" namespace symbol, which
+    class, constant, hashdecl, typedef or global variable named like a @ref Qore "Qore" namespace symbol, which
     @ref unqualified_symbol_resolution "unqualified resolution" reaches instead
     (<a href="https://github.com/qoretechnologies/qore/issues/6034">issue 6034</a>).
+
+    @par Warning for a New Variant Under the Name of a Final Method
+    The strict @ref warning-language-traps "language-traps" warning is raised for a variant that a subclass adds with
+    another signature under the name of a @ref final_methods "final" method of a parent class, which a call that the
+    final method cannot take selects (<a href="https://github.com/qoretechnologies/qore/issues/7111">issue 7111</a>).
 
     @par Debugger Exception IDs
     The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
@@ -1868,6 +1974,14 @@
     @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()" tells it whether it may use
     the terminal for its caller (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
 
+    @par Asking Whether the Calling Code May Read the Host's Environment or Receive Its Secrets
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()",
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()" and the C++
+    functions \c qore_caller_may_read_external_info() and \c qore_caller_may_receive_host_secrets()
+    (\c QORE_HAVE_CALLER_AMBIENT_PREDICATES) tell library code whether it may resolve ambient data or credentials of
+    the host for its caller (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
+
     @par Process-Wide Registries Refuse Sandboxed Code
     Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
     code (\c SANDBOX-REGISTRATION-ERROR); modules use @ref Qore::SandboxManager::checkProcessWideRegistration(), and
@@ -2091,6 +2205,8 @@
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
+      - delivery actions can publish @ref DataProvider::DataProviderMessageFormat "message formats" and validate
+        a saved form against the installed action and destination variant
       - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
         (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
       - code parsed with \c PO_NO_PROCESS_CONTROL can no longer call \c registerChild(), \c addCatalogChangeListener(),
@@ -2098,6 +2214,8 @@
       - added DPQL, the Data Provider Query Language (see @ref dataprovider_dpql)
       - provider presentation metadata can be localized with source-owned catalogs and the
         \c qore-data-provider-i18n tool
+      - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
+        reports whether the source redelivers a refused event for file pollers, FTP pollers, and watch providers
       - watch data providers persist delivery checkpoints (see @ref dataprovider_watch)
       - a module can register actions to be built on first use, and the provider modules generating actions
         from REST API descriptions do, so loading them no longer builds their actions (see
@@ -2111,6 +2229,10 @@
         (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo",
         @ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo"; an action's value of a field overrides
         its app's) (<a href="https://github.com/qoretechnologies/qore/issues/6736">issue 6736</a>)
+      - hosted provider apps publish their recipient and vendor billing terms through
+        @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "getActionProcessing()" and
+        @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()"
+        (<a href="https://github.com/qoretechnologies/qore/issues/7568">issue 7568</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module
@@ -2457,7 +2579,12 @@
         default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
+      - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports sequence ownership and native type
+        where the database provides them (<a href="https://github.com/qoretechnologies/qore/issues/7587">issue 7587</a>)
       - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
+      - messages name a table without the default schema of the connection, which Oracle and MySQL name after its
+        user or database (see @ref SqlUtil::AbstractTable::getMessageName() "AbstractTable::getMessageName()")
+        (<a href="https://github.com/qoretechnologies/qore/issues/7018">issue 7018</a>)
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server
       - deferrable foreign constraints for PostgreSQL and Oracle
         (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
@@ -2829,7 +2956,8 @@
     - @ref unbouncerestclientintro "UnbounceRestClient": REST client for the Unbounce API
     - @ref unleasheddataproviderintro "UnleashedDataProvider": data provider for Unleashed inventory management
     - @ref unleashedrestclientintro "UnleashedRestClient": REST client for the Unleashed API
-    - @ref unstructureddataproviderintro "UnstructuredDataProvider": data provider for Unstructured.io
+    - @ref unstructureddataproviderintro "UnstructuredDataProvider": Unstructured.io document and workflow actions with processing
+      locality and billing metadata
     - @ref unstructuredrestclientintro "UnstructuredRestClient": REST client for the Unstructured.io APIs
     - @ref urldownloaderintro "UrlDownloader": URL downloads with progress, time limits and cancellation; the
       engine of \c qget
@@ -2861,6 +2989,29 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - storing a value whose @ref reference_complex_type "reference" elements need a type check of the variables they
+      refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
+      two threads store into targets referring to each other, or hangs when the reference refers to the target's own
+      object or variable: the references are bound with no lock held (issue #7391)
+    - the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
+      (\c %%E instead of \c %%E{NAME}) formats as an empty string instead of crashing the process.
+    - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
+      paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
+    - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
+      \c qore_get_parent_caller_location(), whose default offset is \c 1, return the frame at the given offset of the
+      call stack; they returned @ref nothing for any offset other than \c 0
+      (<a href="https://github.com/qoretechnologies/qore/issues/7564">issue 7564</a>)
+    - the C++ API \c qore_get_parent_caller_location() returns \c nullptr in a thread that is not registered with
+      %Qore, where it crashed (see @ref Qore::get_parent_caller_location() "get_parent_caller_location()";
+      <a href="https://github.com/qoretechnologies/qore/issues/7594">issue 7594</a>)
+    - the body of a plain function and of a closure created outside a class runs with its own
+      @ref Qore::Program "Program" as the Program of the calls that it makes, as a method runs with its class's, in
+      every execution mode: the frames of its calls name it (@ref Qore::CallStackInfo "CallStackInfo" \c programid),
+      and so do the checks of the calling code that read them; they named the code that called it in some execution
+      modes (<a href="https://github.com/qoretechnologies/qore/issues/7394">issue 7394</a>)
+    - a call of a closure created in a method no longer raises \c OBJECT-ALREADY-DELETED when another thread deletes
+      the method's object as the call starts; only the closure's uses of the object do (see
+      @ref closure_deleted_object; <a href="https://github.com/qoretechnologies/qore/issues/7555">issue 7555</a>)
     - a functional-domain restriction set on a Program after parsing with @ref Qore::Program::setParseOptions()
       "Program::setParseOptions()" applies to the construction of objects of every class of the Program, whether or
       not the class has a constructor of its own (<a href="https://github.com/qoretechnologies/qore/issues/7513">issue
@@ -2871,6 +3022,33 @@
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
     - @ref Qore::SQL::Datasource::getPort() "Datasource::getPort()" returns the port configured for the next
       connection, including after a port change on an open datasource.
+    - memory that cannot be allocated fails a call of builtin code (in the AST mode also a statement) with a catchable
+      \c MEMORY-ALLOCATION-ERROR exception and leaves the string or list that could not grow unchanged, where the
+      process ended with a segmentation fault or \c std::terminate() (@ref exception_memory "allocation failures";
+      <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
+    - an object or a closure of a recursive graph read through a weak reference while another thread decides to collect
+      the graph keeps the whole graph, instead of the graph being collected while the value is held (see
+      @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7556">issue 7556</a>)
+    - a closure called through a weak reference while another thread decides to collect the recursive graph of a
+      variable that the closure captured keeps the variable's value instead of reading @ref nothing (see
+      @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7546">issue 7546</a>)
+    - a method called through a weak reference while another thread releases the last strong reference to its object
+      keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
+      (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
+    - an HTTP/2 stream that the application resets with @ref Qore::Socket::resetHttp2Stream()
+      "Socket::resetHttp2Stream()" (as @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" does for a connection
+      that it stops) releases its buffered data when the call returns, where the stream kept it until the I/O thread
+      next sent the session's frames (<a href="https://github.com/qoretechnologies/qore/issues/7532">issue 7532</a>)
+    - the Doxygen search indexes of the documentation of a user module leave out the imported modules that its pages
+      do not link to, which made up 29% of their size
+      (<a href="https://github.com/qoretechnologies/qore/issues/6376">issue 6376</a>)
+    - @ref qoreocrutilsintro "QoreOcrUtils" document OCR keeps the readable text of a PDF document and reports blank,
+      partially readable and unreadable pages one by one, also when the optional PDF reader is not available
+      (<a href="https://github.com/qoretechnologies/qore/issues/6764">issue 6764</a>)
+    - the tests that create UNIX socket files use short private directories, so they pass with a \c TMPDIR whose
+      path is too long for a UNIX socket name (<a href="https://github.com/qoretechnologies/qore/issues/7462">issue
+      7462</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
@@ -2881,6 +3059,11 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/7459">issue 7459</a>)
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
+    - code that may not receive the host's secrets (sandboxed code, or code restricted from external information) no
+      longer gets the host's connections and datasources from the provider modules of the
+      @ref connectionprovider_caller_scoped "ConnectionProvider" and
+      @ref datasourceprovider_caller_scoped "DatasourceProvider" modules, only from provider modules that resolve names
+      for the calling code (<a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>)
     - the frames of the calls that the initialization of a module makes name the module's
       @ref Qore::Program "Program" (@ref Qore::CallStackInfo "CallStackInfo" \c programid) also when the module is
       loaded at run time (@ref Qore::Program::loadModule() "Program::loadModule()",
@@ -2916,6 +3099,9 @@
     - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
       object that a member was removed from, which it missed, and a write to a member by its bare name no longer
       counts the object as holding a value to scan when it holds none (issue #7348)
+    - @ref Qore::delete_all_thread_data() could use a freed member, or never end, when a destructor that it ran read
+      or saved thread-local data; a destructor now reads the values not freed yet, and the values saved during the
+      release are freed while nothing can be saved (issue #7265)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same
@@ -2932,6 +3118,50 @@
       class hierarchy calls a later parent class's public method of the name in every execution mode, as qcc
       executables did, also through a call reference (see @ref abstract_parent_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7206">issue 7206</a>)
+    - a class can implement its abstract methods with the methods of a class that it inherits with \c private or
+      \c private:internal access; calls of such a method raised \c RUNTIME-OVERLOAD-ERROR, and they now have the
+      access of the abstract declaration, or of the implementing method if it is more restrictive (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7277">issue 7277</a>)
+    - a public method of a privately inherited class that implements an abstract method that the class reaches only
+      through private inheritance could be called from outside the class hierarchy (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7288">issue 7288</a>)
+    - a method of a class that a parent class inherits with <tt><b>private:internal</b></tt> access implemented an
+      abstract method of the class, so that code outside the class hierarchy could call it (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7316">issue 7316</a>)
+    - a class's own method did not implement a parent class's abstract variant when another parent class declared
+      another overload of the method, so that the class could not be instantiated (see
+      @ref abstract_own_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7330">issue 7330</a>)
+    - abstract declarations of the same signature in a class of a \c qcc \c -m module and a parsed class, or naming a
+      type differently, were two abstract variants of a class that inherits both, and declarations of different
+      classes of the same name were one (see @ref abstract_same_signature;
+      <a href="https://github.com/qoretechnologies/qore/issues/7331">issue 7331</a>)
+    - a class whose parent class from a module implemented an abstract method called the parent class's method
+      instead of its own of the same signature when other parent classes declared and implemented the method's other
+      overloads (see @ref abstract_own_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7337">issue 7337</a>)
+    - a variant of a method that a public path reaches could not be called when an ancestor of the method that the
+      caller cannot access, such as one inherited privately, came before it, for example a method that a class
+      creates to implement an abstract variant with a privately inherited class's variant (see
+      @ref multiple_path_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/7381">issue 7381</a>)
+    - the methods of a class inherited with \c private:internal access are called only by the code of the inheriting
+      class, also on the objects of its subclasses, and no longer by the code of other classes in the hierarchy; the
+      methods of a class that a public path also reaches are public (see @ref private_inheritance;
+      <a href="https://github.com/qoretechnologies/qore/issues/7410">issue 7410</a>)
+    - a class that inherits an abstract method from a class that declares it again over its parent class's
+      implementation and from another parent class could not be instantiated when the redeclaring class came first in
+      the same program (see @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7382">issue 7382</a>)
+    - classes with the same name and declarations in different namespaces are different types (an object of one was
+      accepted for the other's type), and code compiled with \c qcc before must be recompiled (see
+      @ref class_type_identity; <a href="https://github.com/qoretechnologies/qore/issues/7397">issue 7397</a>)
+    - classes of different %Program objects that differ only in the declared type of a member or static variable or in
+      the return type of a method are different types (an object of one was accepted for the other's type), and a
+      subclass created by a static initializer of its parent class has the same signature in every %Program (see
+      @ref class_type_identity; <a href="https://github.com/qoretechnologies/qore/issues/7457">issue 7457</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
@@ -2956,6 +3186,10 @@
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
+    - the operators that change an lvalue's list or hash (+=, push, pop, splice, trim, ...) change the container that
+      a @ref weak_assignment_operator "weak reference" held by the lvalue designates; they raised an error or replaced
+      the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue 7297</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>)
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)
@@ -2973,6 +3207,10 @@
       a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
       the weak reference itself or nothing
       (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
+    - fixed a @ref weak_assignment_operator "weak assignment" whose lvalue's path passes through its source
+      (<tt>h.w := h</tt>): the path copied the source, so that the weak reference and those to the containers below it
+      designated the freed originals; the source is no longer kept by the assignment
+      (<a href="https://github.com/qoretechnologies/qore/issues/7405">issue 7405</a>)
     - a variable that holds a @ref weak_assignment_operator "weak reference" can be given to a reference parameter of
       the plain type of its target (which raised \c RUNTIME-TYPE-ERROR) and keeps it; a target that the parameter's
       type would convert is refused instead of being replaced by a copy
@@ -2988,6 +3226,9 @@
     - <tt>-=</tt> on a variable that holds a @ref weak_assignment_operator "weak reference" to an object removes the
       members from the object and keeps the weak reference, instead of replacing it with an integer
       (<a href="https://github.com/qoretechnologies/qore/issues/7368">issue 7368</a>)
+    - <tt>+=</tt> on a variable that holds a @ref weak_assignment_operator "weak reference" to an object merges a hash
+      or an object's members into the object and keeps the weak reference, instead of replacing it with an integer
+      (<a href="https://github.com/qoretechnologies/qore/issues/7403">issue 7403</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
@@ -2995,6 +3236,8 @@
       of @ref httpserverintro "HttpServer" refuse an informational status (1xx) as a final response, which made the
       client fail the connection with its other streams or wait for the response forever
       (<a href="https://github.com/qoretechnologies/qore/issues/7212">issue 7212</a>)
+    - AOT format v52 preserves symbolic wildcard bounds in @ref union_type "union types" and requires
+      rebuilding all v51 and older executables and modules with the updated qcc (issue #7184).
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
@@ -3004,6 +3247,9 @@
       <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)
     - fixed a crash when a debugger paused or terminated a debugged Program while it was being torn down and one of its
       threads had just ended (<a href="https://github.com/qoretechnologies/qore/issues/7103">issue 7103</a>)
+    - \c qcc reads the block of a module as the module loader does, so that it compiles a module whose block has a
+      brace or an escaped quote in a string, a single-quoted string or a closure, and refuses the blocks that the
+      loader refuses with the loader's diagnostics (see @ref qcc_modules; issue #7315)
     - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
       module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
       (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
@@ -3015,6 +3261,9 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
+      diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
+      issue #7314)
     - fixed a crash when the members of a deleted object are merged into another object with the
       @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception, as does a
       merge into a deleted object also when there is nothing to merge
@@ -3115,9 +3364,18 @@
     - the default @ref Qore::Logger::LoggerInterface::detail() "LoggerInterface::detail()" passes its format arguments
       to \c logArgs() as one list, so it no longer raises \c RUNTIME-OVERLOAD-ERROR with more than one
       (<a href="https://github.com/qoretechnologies/qore/issues/7197">issue 7197</a>)
+    - @ref Qore::Program::importClass() "Program::importClass()" checks class ownership when restricted code uses
+      class injection (<a href="https://github.com/qoretechnologies/qore/issues/7049">issue 7049</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
+    - the namespaces, functions and enums of a namespace are enumerated by the \c reflection module
+      (@ref Qore::Reflection::Namespace::getNamespaces() "Namespace::getNamespaces()",
+      @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()",
+      @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()") in the order in which they were declared;
+      before, the order depended on how often the namespace had been copied, so a program compiled with \c qcc
+      returned another one than the interpreter
+      (<a href="https://github.com/qoretechnologies/qore/issues/7171">issue 7171</a>)
     - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
       on the object, where code of a subclass could get a reference to a parent class's private method through an
       object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
@@ -3245,6 +3503,8 @@
       @ref on_exit "on_exit", @ref on_success "on_success" or @ref on_error "on_error" handler when a handler of the
       same block that runs after it completes normally, as compiled code does, instead of going on with the function
       (see @ref on_exit_return; issue #6677)
+    - a debugger break or continue in an exit handler releases an abandoned return value and restores any
+      enclosing pending data return (see @ref on_exit_return; issue #7022)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
@@ -3258,6 +3518,8 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" preserves the user name and optional
+      password when formatting a bind address (issue #7595)
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: a stream handler that
       wants an HTTP/1.x request body with a \c Content-Length as a stream gets it in bounded binary parts, each byte
       once, instead of the whole body twice, held in memory (see @ref http1_7 and @ref httputil1_6; issue #7308)
@@ -4581,6 +4843,15 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - sandboxed code cannot change the data types, data fields and REST schemas that library modules share with every
+      %Program of the process, nor change the members of a REST or AsyncAPI schema or of another
+      @ref sandbox_shared_objects "shared object" or delete it, whose classes update the state that they build from
+      themselves with @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()" (see
+      @ref dataprovider_v3_12 "DataProvider v3.12"; issues #6843, #6863)
+    - only trusted code @ref Qore::SandboxManager::shareObject() "shares objects", and what a shared REST schema
+      derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
+      @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
+      @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
       their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
       an exception leaves the call after a return statement
@@ -4592,6 +4863,13 @@
     - the \c keys operator, the merge of an object into a hash and the iteration over its members list, for the code of a
       class that a subclass inherits with \c private:internal, the members that it uses on an object of a further
       subclass; they returned nothing (<a href="https://github.com/qoretechnologies/qore/issues/7180">issue 7180</a>)
+    - a typed call or a call reference in the code of a class with \c private:internal variants of a method calls the
+      class's own method, as the untyped call does, on an object of a subclass that overrides the method, and no call
+      calls it on an object of a parent class (<a href="https://github.com/qoretechnologies/qore/issues/7440">issue
+      7440</a>)
+    - Calls and method references through a parent-typed object select a @ref private_access_class_identity
+      "private:internal method" of the calling class only for a receiver of that class or a subclass
+      (<a href="https://github.com/qoretechnologies/qore/issues/7463">issue 7463</a>)
     - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message
@@ -4636,6 +4914,10 @@
       @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS" replaces hash-valued static class variables instead of
       merging them, and a hash-valued static class variable no longer holds freed memory after deserialization, which
       could crash the process (<a href="https://github.com/qoretechnologies/qore/issues/7516">issue 7516</a>)
+    - a call that takes over a @ref Qore::Program "Program" object, such as @ref Qore::load_user_module_with_program(),
+      raises \c OBJECT-ALREADY-DELETED when another call takes the object over or deletes it before or at the same
+      time, instead of using or releasing the Program again
+      (<a href="https://github.com/qoretechnologies/qore/issues/7528">issue 7528</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

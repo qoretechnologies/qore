@@ -172,6 +172,137 @@ Internal composite managers are enforcement views: filesystem/network checks, in
 accounting fan out to the constituent managers. Configure, inspect and revoke the original managers, not these
 temporary views. Cleanup retains provenance, including when releasing a bound closure runs destructors.
 
+## Code compiled in another Program than the one it runs in (qore#7202)
+
+Rule: code runs in the Program that compiled it. Methods of imported classes and imported functions enter their
+Program (`qore_get_method_pgm_context()`, `qore_get_function_pgm_context()`), and so do closures: a closure whose
+Program (the Program of its object, `QoreObjectClosureNode::getProgram()`, or the current Program where it was
+created) is not the one that compiled its code, as for a closure created in a method of an imported class, is marked
+when it is created (`qore_closure_note_execution_program()`, `QoreClosureBase::runs_foreign`), and its call path
+(`UserClosureFunction::evalForeignClosure()`, out of line, and `evalClosureNamed()`) holds the compiling Program and
+passes it to the call helper, which enters it as a method call does. The names that the code looks up at run time
+(`call_function()`, `create_object()`, `get_call_reference()`, the global variables, namespace paths) therefore
+resolve in that Program, and its options and sandbox are that Program's. Ordinary closures only test the flag.
+
+As defence in depth, code compiled in one Program that nevertheless runs in another Program runs with the
+restrictions of both and is never the code of the Program that it runs in; the sandbox of the Program that compiled it
+governs it.
+
+Every path that calls a user variant sets its runtime parse options override
+(`qore_set_user_call_runtime_po_override()`); for code that is not a module's, the case `exec_pgm != uvb->pgm` takes
+the slow path, which:
+
+- runs the code with the restricting options of both Programs and only the explicitly-allowed options (`PO_ALLOW_*`)
+  that both have (`qore_compose_module_call_parse_options()`), so run-time checks of the runtime parse options
+  (functions and methods found by name, builtins) refuse what the code could not parse;
+- records the compiling Program in the thread's override state (`QoreRuntimePoState::code_pgm`); its restrictions are
+  computed from it where they are checked.
+
+The call holds the compiling Program: it counts the thread in that Program as a call into it does, without entering
+it, as the code refers to what is deleted with it (functions, classes, constants, types). The hold is taken by
+`UserVariantExecHelper` (`ProgramThreadCountContextHelper::holdForeignCodeProgram()`, released with the context's
+other exit work, `exit_work`, which costs a context that has none nothing more) and, with `QoreForeignCodeProgramHold`,
+on the other paths that run such code: the call path of closures (`UserClosureFunction::evalClosure()` and
+`evalClosureNamed()`, before the call helper reads the variant's parameter types; the call then enters the Program as
+well) and the installation of the options captured for a thread or callback
+(`QoreThreadRuntimeParseOptionsHelper`), so the expression of a thread that such code starts holds the Program for the
+thread's life, and does not run if the Program cannot be held. A closure that runs in another Program than the one
+that compiled it marks its variant when it is created (`qore_closure_note_execution_program()`,
+`UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN`), so the fast paths of native code, which test the variant's
+`fast_call_blocks` with the one load that they made for a deletion of its Program before, take the call path for every
+closure of that variant and read nothing of it first. The inline IR calls and the other JIT fast calls run code in the
+Program that compiled it, which debug builds assert (`qore_rt_assert_own_program_code()`; and in the direct closure
+call). The hold receives the exceptions of the destructors that the completion of a deferred deletion runs in the
+call's sink; the installation of the options of a thread or callback has no caller that receives them, and reports
+them. So the deletion of
+the Program waits for the call (`waitForAllThreadsToTerminateIntern()`), a deletion by the code itself is deferred until
+the call has left (`deferDerefIfRunning()`, completed by `decThreadCount()`), and the call is refused with
+`PROGRAM-ERROR` once the deletion has started or while code is parsed in the Program, as an entry into it is. The
+variant keeps the Program allocated (`UserVariantBase::setProgram()`, a dependency reference) for the state that names
+it; a capture of the state for a thread or callback takes a dependency reference of its own
+(`QoreThreadRuntimeParseOptions::refPrograms()`).
+
+The state is positional like the rest of the override: a call of other non-module user code clears it (`setCleared()`),
+so host code that the foreign code calls answers for itself; a call of module code keeps it
+(`qore_set_module_call_runtime_po_override()`), as the nearest non-module caller of that module code is the foreign
+code; a thread that it starts captures it; a module load clears it (`LoadTimeParseOptionsHelper`). It counts
+(`qore_foreign_code_counts()`) in:
+
+- the caller walk (`qore_get_caller_domain_restrictions()`, the one rule of `isCallerRestricted()`,
+  `isLentToRestricted()`, `callerMayReadExternalInfo()`, `callerMayReceiveHostSecrets()`, the declared domains of
+  module code and the restrictions that objects, call references and threads record), also through the module code
+  that the foreign code calls;
+- `qore_caller_is_sandboxed()` (which reports the compiling Program's ID) and `qore_granted_caller_is_sandboxed()`;
+- the terminal check, which never treats such code as trusted host code;
+- the walk of the sandboxes that govern the thread (`visit_thread_sandbox_stack()`), which visits the compiling
+  Program's own and kept managers first, in addition to those found below (policy, interrupts, limits), so a manager
+  that the compiling Program gets after the code was given out governs it as well.
+
+The trust tests that look at the code that is current (`qore_calling_code_is_untrusted()`,
+`qore_calling_code_is_sandboxed()`: changes of a sandbox and its isolation domain, `Program::setSandboxManager()`, the
+host's registry values and module options, the sandbox introspection APIs, `defer_thread_cancel()`, module commands to
+another Program) and the application of an asynchronous I/O callback count the compiling Program through
+`qore_foreign_calling_code_program()` only while the foreign code itself is current: module code that it calls answers
+for itself in them, as it does for the code of the compiling Program (qore#6749).
+
+As for the restrictions of a sandboxed caller, the state counts under a host grant only if it was set inside the grant
+(its generation, `caller_restrictions_gen`, which a module call that passes the state on unchanged keeps), except when
+the foreign code itself is current. Code that runs in the Program that compiled it never takes the slow path. The state
+does not grow: `override_replace` is a flag, as the options that an override replaces are always those of
+`QORE_MODULE_OWN_ACCESS_OPTIONS`; `apply_runtime_po_override()`, which the per-statement path of the AST interpreter
+inlines, selects them from a table (`qore_override_replace_options`), so that its operations on the options stay
+vectorized (a branch or a mask computed from the flag made GCC use scalar code there, with more registers saved in
+`swap_runtime_statement_location()`).
+
+Names that code looks up at run time are resolved in the Program that it runs in, which is the Program that compiled
+it (see the rule above); a closure that its Program runs in its own Program (the usual case) is not marked and does
+not take the out-of-line path.
+
+## Objects that the host lends are grants (qore#7052)
+
+An object of a class of a library module (or a class with a module base class, `qore_class_private::spansPrograms()`)
+that code of a non-module Program creates, while no restriction other than `PO_NO_UNCONTROLLED_APIS` applies to that
+code, has `qore_object_private::capability_origin` set; so does an object that a method of such an object creates
+(nested lending). The flag is computed with the creation origin in `qore_capture_sandbox_provenance()`;
+`qore_creation_by_lending_code()` requires a non-module Program on the stack, or a capability frame that is newer
+(by grant `seq`) than the innermost module initialization barrier, so the state that a library creates in its
+initialization, also in a first load inside a lent method, or for nobody is not lent.
+
+The grant is not set per call: `ProgramThreadCountContextHelper::set()` with the receiver (the method-call entry points:
+`CodeEvaluationHelper`, the JIT fast method paths and the IR interpreter's inline method calls) pushes a
+`ThreadData::CapabilityFrame` only when the call switches to the Program of the method's code, the object has the flag,
+and the Program that calls it is not a module's and can be restricted (`qore_lent_method_call_needs_frame()`): only the
+code that the object was handed to uses it as a grant, while library code acting on an object that it holds or was given
+lends nothing. `qore_program_restrictions_seen` (no Program ever restricted a domain) and the monotonic per-Program
+kinds of `SyncParseOptions::optionsSeen()` (a domain restriction, a module's Program) make the decision without reading
+the 128-bit options. Such a call sets the call's runtime parse options override (the restrictions of a sandboxed caller)
+before the frame (`CodeEvaluationHelper`), so the frame's snapshot holds it in every mode: the JIT and IR fast method
+paths, which would set it after the Program was entered, are not taken by calls that enter another Program, and would
+only fail closed. Outside a lent method, an object created while a policy barrier is active (also that of a
+system-policy capability, whose code runs for the host that created it) is not lent, so a grant does not outlive itself.
+Calls within a Program never read the flag, and the object's provenance pointer (which the JIT/AOT direct-call guards
+test) is unchanged, so calls of lent and other objects cost what they did; `restoreContext()`, which runs only for a
+switched context, pops the frame. No frame is pushed when the innermost provenance frame (apart from the object's own)
+is a call reference that restricted code created (`QoreSandboxContext::reference`), so such a reference cannot launder
+its restrictions through a lent object; `std::bad_alloc` leaves the frame out (fail closed). No frame is pushed for a
+call made while the object's destructor runs (the object's status is no longer `OS_OK` once its deletion or the release
+of its last reference started): the code that deletes the object or releases its last reference does not call it as a
+capability. The frame records the Program of the lent method's code (`CapabilityFrame::code_pgm`, the Program of the
+class that declares the method, so for an inherited method the base class's module): in a lent method, only an object
+of a class of that module Program is lent, not one of another module's class or of a class that the caller supplies,
+so a factory that creates an object of a class that its caller names cannot mint a capability of another module's
+class; every class of its own module stays reachable through it (and through a deserializer, with caller-chosen member
+state). A call from module code pushes no frame, so a base-class method that calls an override in the subclass's
+module keeps the base module's frame, and the objects the override creates are not lent (fails closed). A thread that
+a lent method starts keeps the grant for its life; the objects it creates are not lent (no frame on that thread).
+
+The innermost capability frame is a grant like a policy barrier, ordered with them by `GrantSnapshot::seq`
+(`qore_get_innermost_capability_frame()`): the walk stops at the context entered for the method, so the caller's
+Program is not counted, the provenance frames from the one innermost at entry down are not counted, and only
+`QORE_GRANT_LENT_DOMAINS` (file system, network, external information) are lent; the other domains and the loading
+of native code are decided as without it. The user-facing text is `sandbox_lent_objects` in
+doxygen/lang/222_sandboxing.dox.tmpl. Tests: examples/test/qore/security/caller-restriction-capability.qtest.
+
 ## Isolation domains (qore#6536)
 
 A tenant is an isolation domain that trusted host code sets on a sandbox (`QoreSandboxManager::setIsolationDomain()`):

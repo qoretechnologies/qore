@@ -1,0 +1,373 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - opening and re-checking zoneinfo files through symbolic links and FIFOs under the file-system policy
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/sandbox-timezone-paths"
+%requires QUnit
+%requires FsUtil
+%requires TzPathHelper
+%exec-class SandboxTimeZonePathsTest
+
+#! Time zones loaded from paths by code that a sandbox governs, within the budget that the host grants (qore#7566)
+class SandboxTimeZonePathsTest inherits QUnit::Test {
+    public {
+        #! the code that the sandboxed Programs run
+        const Code = "string sub load(string path) {
+    try {
+        TimeZone tz(path);
+        return \"ok \" + tz.region();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub load_via_module(string path) {
+    try {
+        return \"ok \" + TzPathHelper::load(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub load_cap(string path) {
+    try {
+        return \"ok \" + TzPathHelper::load_cap(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub raise_presets() {
+    list<string> rv = ();
+    foreach SandboxManager sm in ((new SandboxManager()).copy(), SandboxManager::createLockdown(),
+            SandboxManager::createWebSafe()) {
+        rv += set_limits(sm, 10, 1000000);
+    }
+    return rv.join(\",\");
+}
+string sub load_in_thread(string path) {
+    Queue q();
+    background q.push(load(path));
+    return q.get();
+}
+string sub set_limits(SandboxManager sm, int zones, int bytes) {
+    try {
+        sm.setTimeZonePathLimits(zones, bytes);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub raise_own_new_manager() {
+    SandboxManager sm();
+    return set_limits(sm, 10, 1000000);
+}
+string sub load_in_child(string path, SandboxManager child_sm) {
+    Program p(PO_NEW_STYLE);
+    p.setSandboxManager(child_sm);
+    p.parse(\"string sub load(string path) { try { TimeZone tz(path); return \\\"ok\\\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\", \"child\");
+    return p.callFunction(\"load\", path);
+}";
+
+        #! a budget large enough for the files of the tests
+        const Bytes = 50 * 1024 * 1024;
+    }
+
+    private {
+        TmpDir dir;
+        string zone_a;
+        string zone_b;
+        string zone_c;
+    }
+
+    constructor() : QUnit::Test("SandboxTimeZonePathsTest", "1.0") {
+        dir = new TmpDir("tzpaths");
+        zone_a = copyZone("a.tz");
+        zone_b = copyZone("b.tz");
+        zone_c = copyZone("c.tz");
+        addTestCase("path zones are refused without a budget", \noBudgetTest());
+        addTestCase("a budget allows path zones that the policy allows", \budgetTest());
+        addTestCase("the memory limit of a budget", \byteLimitTest());
+        addTestCase("names, the policy and the opened file", \namesAndPolicyTest());
+        addTestCase("code restricted only by parse options loads no paths", \parseOptionsTest());
+        addTestCase("module code and threads charge the code they act for", \actsForTest());
+        addTestCase("only unrestricted code raises a budget", \raiseTest());
+        addTestCase("a system-policy capability that sandboxed code calls", \capabilityTest());
+        addTestCase("every sandbox that governs the code needs and pays a budget", \compositeTest());
+        addTestCase("an isolation domain bounds the sandboxes of a tenant", \domainTest());
+        addTestCase("replacing the zone of a name is charged", \replaceTest());
+        addTestCase("the %set-time-zone directive in a sandboxed Program", \directiveTest());
+        set_return_value(main());
+    }
+
+    #! copies a zoneinfo file of the system to the test directory and returns its path, or an empty string
+    string copyZone(string name, string region = "Europe/Prague") {
+        string src = "/usr/share/zoneinfo/" + region;
+        if (!is_file(src)) {
+            return "";
+        }
+        string target = dir.path + "/" + name;
+        # the zones differ by name; the copies of one file share their data
+        File f();
+        f.open2(target, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readBinaryFile(src));
+        return target;
+    }
+
+    setUp() {
+        if (!zone_a) {
+            testSkip("no zoneinfo files on this system");
+        }
+        if (PlatformOS == "Windows") {
+            testSkip("restricted code cannot load time zones from paths on Windows");
+        }
+    }
+
+    #! returns a manager that allows reading the test directory
+    SandboxManager manager(int zones = 0, int bytes = 0) {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(dir.path, QSEC_READ);
+        if (zones || bytes) {
+            sm.setTimeZonePathLimits(zones, bytes);
+        }
+        return sm;
+    }
+
+    #! returns a Program that the manager governs
+    static Program sandboxed(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.loadModule("TzPathHelper");
+        p.parse(Code, "tenant");
+        return p;
+    }
+
+    noBudgetTest() {
+        SandboxManager sm = manager();
+        assertEq({"max_zones": 0, "max_bytes": 0, "zones": 0, "bytes": 0}, sm.getTimeZonePathLimits());
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", sandboxed(sm).callFunction("load", zone_a));
+        # one limit is not a budget
+        sm.setTimeZonePathLimits(5, 0);
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", sandboxed(sm).callFunction("load", zone_a));
+        assertEq(0, sm.getTimeZonePathLimits().zones);
+        # regions need no budget
+        assertEq("ok Europe/Prague", sandboxed(manager()).callFunction("load", "Europe/Prague"));
+    }
+
+    budgetTest() {
+        SandboxManager sm = manager(2, Bytes);
+        Program p = sandboxed(sm);
+        assertEq("ok " + zone_a, p.callFunction("load", zone_a));
+        hash<SandboxTimeZonePathInfo> use = sm.getTimeZonePathLimits();
+        assertEq(1, use.zones);
+        assertTrue(use.bytes > 0);
+        # a zone that is loaded already costs nothing
+        assertEq("ok " + zone_a, p.callFunction("load", zone_a));
+        assertEq(use, sm.getTimeZonePathLimits());
+        assertEq("ok " + zone_b, p.callFunction("load", zone_b));
+        assertEq(2, sm.getTimeZonePathLimits().zones);
+        # the budget is spent
+        assertEq("SANDBOX-TIMEZONE-LIMIT", p.callFunction("load", zone_c));
+        assertEq(2, sm.getTimeZonePathLimits().zones);
+        # a name loaded already is still available
+        assertEq("ok " + zone_b, p.callFunction("load", zone_b));
+        # unrestricted code can raise the budget
+        sm.setTimeZonePathLimits(3, Bytes);
+        assertEq("ok " + zone_c, p.callFunction("load", zone_c));
+        # a copy has no budget
+        assertEq({"max_zones": 0, "max_bytes": 0, "zones": 0, "bytes": 0}, sm.copy().getTimeZonePathLimits());
+    }
+
+    byteLimitTest() {
+        string zone = copyZone("bytes.tz");
+        SandboxManager sm = manager(10, 100);
+        assertEq("SANDBOX-TIMEZONE-LIMIT", sandboxed(sm).callFunction("load", zone));
+        assertEq(0, sm.getTimeZonePathLimits().zones);
+        assertEq(0, sm.getTimeZonePathLimits().bytes);
+    }
+
+    namesAndPolicyTest() {
+        Program p = sandboxed(manager(100, Bytes));
+        # names that are not absolute paths without ".", ".." or empty components
+        foreach string name in ("./a.tz", "../a.tz", dir.path + "/./a.tz", dir.path + "/../" + basename(dir.path)
+                + "/a.tz", dir.path + "//a.tz", dir.path + "/", strmul("/x", 5000)) {
+            assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load", name), name.substr(0, 60));
+        }
+        # a file outside of the policy, and one that does not exist there: the same error
+        string outside = "/usr/share/zoneinfo/Europe/Paris";
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", outside));
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", "/usr/share/zoneinfo/No/Such_Zone"));
+        # a link in the allowed directory to a file outside of it: the opened file is checked
+        string link = dir.path + "/link.tz";
+        symlink(outside, link);
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", link));
+        # a link to a file outside of the policy that does not exist gives the same error: nothing is learned of it
+        string dangling = dir.path + "/dangling.tz";
+        symlink("/usr/share/zoneinfo/No/Such_Zone", dangling);
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", dangling));
+        # a FIFO does not block and is no zone
+        string fifo = dir.path + "/fifo.tz";
+        if (!system("mkfifo " + fifo + " 2>/dev/null")) {
+            assertEq("TZINFO-ERROR", p.callFunction("load", fifo));
+        }
+        # a file that is not a zoneinfo file
+        File f();
+        f.open2(dir.path + "/text.tz", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("not a zone");
+        f.close();
+        assertEq("TZINFO-ERROR", p.callFunction("load", dir.path + "/text.tz"));
+    }
+
+    parseOptionsTest() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.loadModule("TzPathHelper");
+        p.parse(Code, "po");
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load", zone_a));
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load_via_module", zone_a));
+    }
+
+    actsForTest() {
+        SandboxManager sm = manager(10, Bytes);
+        Program p = sandboxed(sm);
+        string zone = copyZone("module.tz");
+        assertEq("ok " + zone, p.callFunction("load_via_module", zone));
+        assertEq(1, sm.getTimeZonePathLimits().zones, "module code charges the sandbox of its caller");
+        zone = copyZone("thread.tz");
+        assertEq("ok " + zone, p.callFunction("load_in_thread", zone));
+        assertEq(2, sm.getTimeZonePathLimits().zones, "a thread of sandboxed code charges its sandbox");
+        # without a budget, neither can load a path
+        Program p0 = sandboxed(manager());
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p0.callFunction("load_via_module", zone));
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p0.callFunction("load_in_thread", zone));
+    }
+
+    raiseTest() {
+        SandboxManager sm = manager(2, Bytes);
+        Program p = sandboxed(sm);
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("set_limits", sm, 3, Bytes));
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("set_limits", sm, 2, Bytes + 1));
+        # also of a manager that the sandboxed code created
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("raise_own_new_manager"));
+        # nor of the copies and presets that it makes
+        assertEq("SANDBOX-ACCESS-ERROR,SANDBOX-ACCESS-ERROR,SANDBOX-ACCESS-ERROR", p.callFunction("raise_presets"));
+        # lowering is allowed
+        assertEq("ok", p.callFunction("set_limits", sm, 1, Bytes));
+        assertEq(1, sm.getTimeZonePathLimits().max_zones);
+        assertThrows("SANDBOX-CONFIG-ERROR", \sm.setTimeZonePathLimits(), (-1, 1));
+    }
+
+    compositeTest() {
+        SandboxManager tenant = manager(10, Bytes);
+        Program p = sandboxed(tenant);
+        string zone = copyZone("child.tz");
+        # a Program that the sandboxed code creates with a sandbox of its own, which has no budget: refused
+        SandboxManager child = manager();
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load_in_child", zone, child));
+        # with a budget that the host grants it, both sandboxes are charged
+        child.setTimeZonePathLimits(10, Bytes);
+        assertEq("ok", p.callFunction("load_in_child", zone, child));
+        assertEq(1, tenant.getTimeZonePathLimits().zones);
+        assertEq(1, child.getTimeZonePathLimits().zones);
+        # the tenant's budget bounds what its children load
+        tenant.setTimeZonePathLimits(1, Bytes);
+        assertEq("SANDBOX-TIMEZONE-LIMIT", p.callFunction("load_in_child", copyZone("child2.tz"), child));
+    }
+
+    capabilityTest() {
+        TzPathHelper::init_cap();
+        SandboxManager sm = manager();
+        Program p = sandboxed(sm);
+        string zone = copyZone("cap.tz");
+        # without a budget, a capability that runs with the system policy cannot load a path for the sandboxed code
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load_cap", zone));
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load_cap", "/usr/share/zoneinfo/Europe/Paris"));
+        # with one, the load is charged to the sandbox of the code that calls it
+        sm.setTimeZonePathLimits(10, Bytes);
+        assertEq("ok " + zone, p.callFunction("load_cap", zone));
+        assertEq(1, sm.getTimeZonePathLimits().zones);
+    }
+
+    domainTest() {
+        string domain = sprintf("tzdomain-%d", getpid());
+        int loaded = 0;
+        string err;
+        # a manager per job, each with a budget: the domain stops the tenant
+        for (int i = 0; i < QoreTimeZoneManagerMaxDomainZones + 5; ++i) {
+            SandboxManager sm = manager(10, Bytes);
+            sm.setIsolationDomain(domain);
+            string zone = copyZone(sprintf("dom-%d.tz", i));
+            string res = sandboxed(sm).callFunction("load", zone);
+            if (res !~ /^ok /) {
+                err = res;
+                break;
+            }
+            ++loaded;
+        }
+        assertEq("SANDBOX-TIMEZONE-LIMIT", err);
+        assertEq(QoreTimeZoneManagerMaxDomainZones, loaded);
+        # another domain is not affected
+        SandboxManager other = manager(10, Bytes);
+        other.setIsolationDomain(domain + "-other");
+        assertEq("ok " + zone_a, sandboxed(other).callFunction("load", zone_a));
+    }
+
+    replaceTest() {
+        SandboxManager sm = manager(4, Bytes);
+        Program p = sandboxed(sm);
+        string zone = copyZone("switch.tz");
+        # a zone with other data
+        string other = copyZone("switch-other.tz", "Asia/Tokyo");
+        if (!other) {
+            testSkip("no Asia/Tokyo zoneinfo file on this system");
+        }
+        int n = 0;
+        string res;
+        # the name reaches another file each time: every new entry is charged, so the loop stops at the budget
+        for (int i = 0; i < 20; ++i) {
+            unlink(zone);
+            File f();
+            f.open2(zone, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(ReadOnlyFile::readBinaryFile(i % 2 ? other : zone_a));
+            f.close();
+            res = p.callFunction("load", zone);
+            if (res !~ /^ok /) {
+                break;
+            }
+            ++n;
+        }
+        assertEq("SANDBOX-TIMEZONE-LIMIT", res);
+        assertEq(4, n);
+        assertEq(4, sm.getTimeZonePathLimits().zones);
+    }
+
+    directiveTest() {
+        string zone = copyZone("directive.tz");
+        string code = sprintf("%%set-time-zone %s\nstring sub tz() { return TimeZone::get().region(); }\n"
+            "string sub lit() { return 2026-01-15T10:00:00.info().zone.region(); }", zone);
+        # a sandboxed Program with a budget: the directive loads the path and charges the sandbox
+        SandboxManager sm = manager(10, Bytes);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(code, "directive");
+        assertEq(zone, p.callFunction("tz"));
+        # a date literal of the Program is in the Program's own zone, in every execution mode
+        assertEq(zone, p.callFunction("lit"));
+        assertEq(1, sm.getTimeZonePathLimits().zones);
+        # without a budget
+        Program p0(PO_NEW_STYLE);
+        p0.setSandboxManager(manager());
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p0.parse(), (code, "directive"));
+        # outside of the policy
+        Program p1(PO_NEW_STYLE);
+        p1.setSandboxManager(manager(10, Bytes));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p1.parse(),
+            ("%set-time-zone /usr/share/zoneinfo/Europe/Paris\nsub f() {}", "directive"));
+        # a Program restricted only by its parse options
+        Program po(PO_NEW_STYLE | PO_NO_NETWORK);
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \po.parse(), (code, "directive"));
+    }
+}
+
+#! the most zone names of one isolation domain (QoreTimeZoneManager::MaxDomainPathZones)
+const QoreTimeZoneManagerMaxDomainZones = 256;

@@ -64,6 +64,15 @@ module InstantlyDataProvider {
                 "- Workspace and team collaboration\n"
                 "- Block list management\n"
                 "- Custom tags for organizing resources",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "instantly.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://instantly.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "instantly",
             "logo": InstantlyLogo,
             "logo_file_name": "instantly-logo.svg",
@@ -1623,6 +1632,7 @@ module InstantlyDataProvider {
             "app": InstantlyDataProvider::AppName,
             "path": "/create-email-verification",
             "action": "create-email-verification",
+            "billing": <DataProviderBillingInfo>{"model": "metered", "unit": "credit"},
             "groups": "Email Verification",
             "display_name": "Create Email Verification",
             "short_desc": "Create an email verification request",

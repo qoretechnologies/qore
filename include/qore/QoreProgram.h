@@ -931,6 +931,11 @@ public:
 
         @note the data of a thread is freed when the family's root is destroyed even if the thread is still alive, so
         the data of a thread that has left every Program of the family does not outlive the family
+
+        @note when the thread-local data is released (Qore::delete_all_thread_data(), the end of a task of a thread
+        pool), the values that the destructors run by the release save with Qore::save_thread_data() are freed while
+        nothing can be saved, so that the release ends; changes made through this hash are not refused, so a module
+        must not save thread-local data here from code that runs when thread-local data is released
     */
     DLLEXPORT QoreHashNode* getThreadData();
 

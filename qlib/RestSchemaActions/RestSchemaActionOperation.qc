@@ -827,7 +827,15 @@ public class RestSchemaActionOperation {
     }
 
     #! Builds the flattened request type with the overlay applied
+    /** The schema's fields are built in a type build of the schema, so that a schema that is shared by every Program
+        keeps them for every caller (qore#6843)
+    */
     private buildRequestType() {
+        schema.runTypeBuild(sub () { buildRequestTypeIntern(); });
+    }
+
+    #! Builds the flattened request type with the overlay applied; see buildRequestType()
+    private buildRequestTypeIntern() {
         *hash<string, OpenApi3::ParameterBase> params = pio.parameters + op.parameters;
 
         # collect the derived fields per location, in transport order
@@ -1419,6 +1427,13 @@ public class RestSchemaActionOperation {
         response
     */
     private hash<auto> buildResponseValues() {
+        # the schema's fields are built in a type build of the schema, so that a schema that is shared by every
+        # Program keeps them for every caller (qore#6843)
+        return schema.runTypeBuild(hash<auto> sub () { return buildResponseValuesIntern(); });
+    }
+
+    #! Builds the output type and the response conversions; see buildResponseValues()
+    private hash<auto> buildResponseValuesIntern() {
         # the type of a response value has the read-only properties that request types have no field for, and has
         # no write-only property; a schema without such properties gives its shared cached type, as for Stripe's
         # large graph of expandable objects

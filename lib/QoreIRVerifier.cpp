@@ -462,7 +462,14 @@ QoreIRVerifyStackEffect qore_ir_verify_stack_effect(const QoreIRInstruction& ins
             break;
         case QoreIROpcode::PopImplicitElement:
             e.stack = QORE_IR_VERIFY_ELEMENTS;
-            e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            // with a second operand, the set of the next element of a foreach statement (qore#7379): the push that
+            // saved the enclosing element (the operand) stays open, and must be the innermost element
+            if (inst.operands.size() > 1) {
+                e.id = inst.operands[1].id;
+                e.keep = true;
+            } else {
+                e.id = inst.operands.empty() ? 0 : inst.operands[0].id;
+            }
             break;
         case QoreIROpcode::Context:
             e.stack = QORE_IR_VERIFY_CONTEXTS;
@@ -3086,9 +3093,17 @@ static void collectLocalsFromStatementBlock(const StatementBlock* block,
 static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
     switch (inst->opcode) {
         // QoreIRExprInstruction (Call, CallIndirect, CallMethod, CallStatic, CallClosureDirect, and other expr-based ops)
+        case QoreIROpcode::CallMethod: {
+            // a call of a method of self, unqualified (m()) or qualified (Base::m()), is made with the arguments in
+            // its operands (its call node is copied with them: qore_rt_call_with_args(), the AOT self call targets and
+            // the IR interpreter; a call without arguments has no operands and evaluates its node, which has none),
+            // never with the argument expressions of its node, so they make no local AST-visible, as for an Invoke of
+            // the call (issue #7267)
+            const QoreValue& expr = static_cast<const QoreIRExprInstruction*>(inst)->expr;
+            return qore_get_self_function_call_node(expr.getInternalNode()) ? nullptr : &expr;
+        }
         case QoreIROpcode::Call:
         case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
@@ -3294,6 +3309,8 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
 //! their local references still need slots in serialized nested IR functions.
 static const QoreValue* getSerializationOnlyInstructionExpr(const QoreIRInstruction* inst) {
     switch (inst->opcode) {
+        case QoreIROpcode::CallMethod:
+            return getInstructionExpr(inst) ? nullptr : &static_cast<const QoreIRExprInstruction*>(inst)->expr;
         case QoreIROpcode::CallDirect:
             return &static_cast<const QoreIRCallDirectInstruction*>(inst)->expr;
         case QoreIROpcode::CallMethodDirect: {
@@ -4001,7 +4018,7 @@ bool QoreIRFunction::collectHandlerBodyLocals(const StatementBlock* code,
     return !unknown_node_found;
 }
 
-void QoreIRFunction::computeIROnlyLocals() {
+void QoreIRFunction::computeIROnlyLocals(bool aot_method) {
     // the write inventories are recomputed: the take-over analysis cached from them for the AOT IR is computed again
     // when it is needed (see take_over_params_state)
     take_over_params_state.store(0, std::memory_order_release);
@@ -4198,6 +4215,27 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
                 collectLocalsFromExpr(*expr, ast_referenced_locals,
                         unknown_node_found, &reference_created, &expr_seen);
+            }
+
+            // the parameters given to a call of a method of self (m(p), Base::m(p)), whose argument expressions are
+            // not evaluated (see getInstructionExpr()), keep their storage on the runtime local stack: every call path
+            // that enters a method instantiates its parameters there (UserVariantBase::setupCall(),
+            // instantiateFastCallParams()), and an IR-only parameter would be read from it as a native value only to
+            // be boxed again for the argument array of the call; only the body locals that the call takes become
+            // IR-only (issue #7267). An AOT method can instead receive native parameters at a checked fast
+            // entry: the ordinary AST visibility checks above still protect captured or otherwise visible locals.
+            if (!aot_method && inst->opcode == QoreIROpcode::CallMethod) {
+                const QoreValue& call_expr = static_cast<const QoreIRExprInstruction*>(inst.get())->expr;
+                if (qore_get_self_function_call_node(call_expr.getInternalNode())) {
+                    std::unordered_set<const void*> arg_locals;
+                    bool arg_unknown_node = false;
+                    collectLocalsFromExpr(call_expr, arg_locals, arg_unknown_node);
+                    for (const void* key : arg_locals) {
+                        if (!handler_body_local_keys.count(key)) {
+                            ast_referenced_locals.insert(key);
+                        }
+                    }
+                }
             }
 
             // Reference-creating instructions, plus instructions whose AST bodies are walked by
@@ -5181,7 +5219,11 @@ bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const Local
     std::optional<QoreIRUnrecordedWrites> unrecorded;
     for (unsigned i = 0; i < num_params; ++i) {
         const LocalVar* param = params[i];
-        if (!param || !qore_ir_take_over_type_may_hold_object(param->getTypeInfo())) {
+        // a parameter of a reference type holds the reference that the call gives it until it is released when the
+        // call returns: a write to it writes the referenced lvalue and never releases the reference, whose release
+        // runs no destructor either (issue #7271)
+        if (!param || QoreTypeInfo::isReference(param->getTypeInfo())
+                || !qore_ir_take_over_type_may_hold_object(param->getTypeInfo())) {
             continue;
         }
         const void* key = reinterpret_cast<const void*>(param);

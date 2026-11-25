@@ -204,6 +204,18 @@ static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRE
 
 // Final-artifact emission settings belong to the compiling thread. Parsing and JIT execution
 // keep their original locations; LLVM backend workers consume already-mapped debug metadata.
+// a constant hash key of compiled code that is ASCII text has the same bytes in every process encoding; another key is
+// converted to the encoding of the process when it is used (qore_rt_aot_key()), so the summaries of the specialized
+// paths, which embed the key's bytes and prehashes as constants, take only ASCII keys (qore#6840)
+static bool qore_aot_key_is_ascii(const std::string& key) {
+    for (unsigned char c : key) {
+        if (c & 0x80) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static thread_local std::vector<std::pair<std::string, std::string>> aot_file_prefix_maps;
 
 void QoreAOT::setFilePrefixMaps(const std::vector<std::pair<std::string, std::string>>& maps) {
@@ -1181,8 +1193,12 @@ static llvm::Type* qore_aot_fast_entry_return_type(BatchCalleeReturnKind kind,
 
 //! Check if an AOT function can have an Approach B fast entry.
 //! Criteria: all params/body locals IR-only, no closures/references/varargs.
+/** @param ref_fast_entry if not null, parameters of a reference type that are not private to the body are accepted,
+    and it is set to true if there is one: the function can then have a reference parameter fast entry, whose callers
+    bind them on the runtime stack (BatchCalleeInfo::ref_fast_entry, issue #7271), but no other fast entry
+*/
 static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
-        const UserVariantBase* uvb, bool allow_type_parameters = false) {
+        const UserVariantBase* uvb, bool allow_type_parameters = false, bool* ref_fast_entry = nullptr) {
     if (!uvb
             || !uvb->isStaticallyFastCallEligible(allow_type_parameters)) {
         return false;
@@ -1214,10 +1230,24 @@ static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
         }
         const LocalVar* lv = sig->lv[i];
         if (!qore_ir_fast_entry_param_is_private(*ir_func, lv)) {
+            if (ref_fast_entry && !allow_type_parameters && !sig->hasTypeParameters()
+                    && qore_ir_fast_entry_param_is_runtime_reference(lv)) {
+                *ref_fast_entry = true;
+                continue;
+            }
             return false;
         }
     }
     return true;
+}
+
+//! Returns true if a function can have a reference parameter fast entry (issue #7271)
+/** It has no other fast entry (isAOTFastEntryEligible()) only because parameters of a reference type are not private
+    to its body; see BatchCalleeInfo::ref_fast_entry
+*/
+static bool isAOTRefFastEntryEligible(const QoreIRFunction* ir_func, const UserVariantBase* uvb) {
+    bool ref_fast_entry = false;
+    return isAOTFastEntryEligible(ir_func, uvb, false, &ref_fast_entry) && ref_fast_entry;
 }
 
 static bool isAOTFastMethodCallEligible(
@@ -1831,23 +1861,17 @@ static void getAOTStatementLocations(QoreProgram* pgm,
     qore_program_private::get(*pgm)->getRegisteredStatementLocations(locs);
     // Statement registration can follow pointer-ordered parser structures. This
     // metadata-only inventory has no native slot references; use source order.
-    std::sort(locs.begin(), locs.end(), [](const auto* lhs, const auto* rhs) {
-        int cmp = strcmp(lhs->getFileValue(), rhs->getFileValue());
-        if (cmp) {
-            return cmp < 0;
-        }
-        cmp = strcmp(lhs->getSourceValue(), rhs->getSourceValue());
-        if (cmp) {
-            return cmp < 0;
-        }
-        if (lhs->offset != rhs->offset) {
-            return lhs->offset < rhs->offset;
-        }
-        if (lhs->start_line != rhs->start_line) {
-            return lhs->start_line < rhs->start_line;
-        }
-        return lhs->end_line < rhs->end_line;
+    auto sourceSpan = [](const QoreProgramLocation* loc) {
+        // Keep the first statement with a known column as the line lookup's default.
+        return std::make_tuple(std::string_view(loc->getFileValue()), std::string_view(loc->getSourceValue()),
+            loc->offset, loc->start_line, loc->start_column < 0, loc->start_column, loc->end_line, loc->end_column);
+    };
+    std::sort(locs.begin(), locs.end(), [&](const auto* lhs, const auto* rhs) {
+        return sourceSpan(lhs) < sourceSpan(rhs);
     });
+    locs.erase(std::unique(locs.begin(), locs.end(), [&](const auto* lhs, const auto* rhs) {
+        return sourceSpan(lhs) == sourceSpan(rhs);
+    }), locs.end());
 }
 
 static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
@@ -1861,7 +1885,6 @@ static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
     std::vector<const QoreProgramLocation*> stmt_locs;
     getAOTStatementLocations(pgm, stmt_locs);
 
-    std::unordered_set<std::string> seen;
     for (size_t i = 0; i < stmt_locs.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT statement-location index construction")) {
             error = "AOT statement-location index construction cancelled";
@@ -1876,22 +1899,11 @@ static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
             continue;
         }
         const char* source = loc->getSourceValue();
-        std::string key(file);
-        key.push_back('\n');
-        key.append(source);
-        key.push_back('\n');
-        key.append(std::to_string(loc->offset));
-        key.push_back('\n');
-        key.append(std::to_string(loc->start_line));
-        key.push_back(':');
-        key.append(std::to_string(loc->end_line));
-        if (!seen.insert(std::move(key)).second) {
-            continue;
-        }
-
         AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
         entry.start_line = loc->start_line;
         entry.end_line = loc->end_line;
+        entry.start_column = loc->start_column;
+        entry.end_column = loc->end_column;
         entry.offset = loc->offset;
         entry.file = file;
         entry.source = source;
@@ -1922,7 +1934,6 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
     getAOTStatementLocations(pgm, stmt_locs);
 
     std::vector<AOTCompiledFuncWithSlots::AOTStmtLocEntry> locs;
-    std::unordered_set<std::string> seen;
     for (size_t i = 0; i < stmt_locs.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT statement-location metadata collection")) {
             error = "AOT statement-location metadata collection cancelled";
@@ -1941,22 +1952,11 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
             continue;
         }
         const char* source = loc->getSourceValue();
-        std::string key(file);
-        key.push_back('\n');
-        key.append(source);
-        key.push_back('\n');
-        key.append(std::to_string(loc->offset));
-        key.push_back('\n');
-        key.append(std::to_string(loc->start_line));
-        key.push_back(':');
-        key.append(std::to_string(loc->end_line));
-        if (!seen.insert(std::move(key)).second) {
-            continue;
-        }
-
         AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
         entry.start_line = loc->start_line;
         entry.end_line = loc->end_line;
+        entry.start_column = loc->start_column;
+        entry.end_column = loc->end_column;
         entry.offset = loc->offset;
         entry.file = file;
         entry.source = source;
@@ -2289,14 +2289,22 @@ std::string qore_aot_get_compile_runtime_identity() {
     return test_identity && !test_identity.str().empty() ? test_identity.str() : qore_aot_runtime_identity;
 }
 
+std::string qore_aot_get_compile_builtin_api_identity() {
+    // a copy: the value read from the environment is only valid while it is held
+    QoreEnvironmentValue test_identity("QORE_AOT_TEST_BUILTIN_API_IDENTITY");
+    return test_identity && !test_identity.str().empty() ? test_identity.str() : qore_builtin_api_identity;
+}
+
 //! Append producer/build diagnostics to the AOT metadata blob.
 /** BUILD_INFO is informational.  Nothing about the source file's state on disk, such as its modification time, is
     recorded: an artifact depends only on the content it was compiled from, so compiling the same content again
     produces the same bytes, whatever the source file's modification time (a checkout or a rebase rewrites files
     with unchanged content).  Nor is the git revision of the compiling Qore: a commit that changes nothing qcc
     compiles with would otherwise change every artifact, so that a build cache (design/qmod-build-cache.md) could
-    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  No runtime reads such data from an artifact; the loader checks the sources of a module
-    linked into a source tree with the fingerprints file beside the module (see --depfile). */
+    never reuse one; the AOT runtime identity and the Qore version identify the compiler.  Apart from the AOT
+    runtime identity, which the host API qore_aot_script_register() reads to check a script object (issue #6898), no
+    runtime reads such data from an artifact; the loader checks the sources of a module linked into a source tree
+    with the fingerprints file beside the module (see --depfile). */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
         const char* target_triple, int opt_level, bool include_source) {
     std::vector<std::pair<std::string, std::string>> info;
@@ -2309,6 +2317,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("qore-version", std::to_string(QORE_VERSION_MAJOR) + "."
         + std::to_string(QORE_VERSION_MINOR) + "." + std::to_string(QORE_VERSION_PATCH));
     add("aot-runtime-identity", qore_aot_get_compile_runtime_identity());
+    add("builtin-api-identity", qore_aot_get_compile_builtin_api_identity());
     add("aot-format-version", std::to_string(QORE_AOT_BINARY_VERSION));
     add("supported-features", std::to_string(QORE_AOT_SUPPORTED_FEATURES));
     add("max-opcode", std::to_string(QORE_IR_MAX_OPCODE));
@@ -2956,7 +2965,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
     ir_func->source_variant = uvb->getAbstractFunctionVariant();
-    if (!(uvb->getParseOptions(pgm->getParseOptions()) & PO_ALLOW_DEBUGGER)) {
+    const bool private_locals = !(uvb->getParseOptions(pgm->getParseOptions()) & PO_ALLOW_DEBUGGER);
+    if (private_locals) {
         ir_func->aot_private_root_scope = statements->getLVList();
     }
     // the parse-time type checks of the lowering are made in the class context of the code, as in
@@ -3090,7 +3100,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
     }
     // Classify locals as IR-only vs AST-visible for optimization
-    ir_func->computeIROnlyLocals();
+    ir_func->computeIROnlyLocals(sig && sig->selfid && private_locals);
     // a read of a plain local that the statement writes later is released after its last use (qore#5712)
     ir_func->releasePlainLocalReadsBeforeWrites();
     if (sig) {
@@ -7405,7 +7415,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         const QoreIRFunction& ir_func,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
         const std::unordered_set<const LocalVar*>* explicit_captures = nullptr,
-        QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry) {
+        QoreContextIndependenceFlag flag = &BatchCalleeInfo::context_independent_fast_entry,
+        bool allow_self_calls = false) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(ir_func);
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -7621,6 +7632,13 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                                 reinterpret_cast<const void*>(linst->local))) {
                         return false;
                     }
+                    // A boxed parameter store can coerce through a slot in the callee's AOT context.
+                    // The native JIT resolves the same type directly.
+                    if (inst->opcode == QoreIROpcode::StoreLocal
+                            && flag == &BatchCalleeInfo::context_independent_fast_entry
+                            && qore_ir_get_scalar_local_kind(linst->local) == BatchCalleeParamKind::Boxed) {
+                        return false;
+                    }
                     break;
                 }
                 case QoreIROpcode::IncrementLocalInt: {
@@ -7645,6 +7663,31 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                         && (call->intrinsic == QoreIRIntrinsic::Size
                             || call->intrinsic == QoreIRIntrinsic::StringStrlen);
                     if (!context_free_string_size) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallMethod: {
+                    if (!allow_self_calls) {
+                        return false;
+                    }
+                    const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
+                    const auto* self = call->expr.hasNode()
+                        ? qore_get_self_function_call_node(call->expr.getInternalNode()) : nullptr;
+                    // Virtual calls conservatively mark their arguments as possible references. Only an exact
+                    // receiver reaches this entry, and scalar operands cannot carry a reference into the call.
+                    bool may_pass_reference = call->has_ref_args && std::any_of(call->operands.begin(),
+                        call->operands.end(), [&](QoreIRValue value) {
+                            const auto* facts = ir_func.getValueFacts(value);
+                            return !facts || !QoreTypeInfo::returnsOnlyScalars(facts->type_info);
+                        });
+                    if (!self || !self->hasSingleName() || self->isCopyCall() || self->isAbstractCall()
+                            || self->getRuntimeArgNames() || self->getExplicitTypeParamInstantiation()
+                            || self->getClass() != variant->getClass() || !self->getMethod()
+                            || !qore_method_private::get(*self->getMethod())->getFunction()->hasSingleCallVariant()
+                            || self->getMethod()->isStatic() || self->getMethod()->getClass() != variant->getClass()
+                            || !qore_aot_fast_entry_call_is_context_independent(self->getVariant(), call->expr,
+                                call->operands, may_pass_reference, batch_callees)) {
                         return false;
                     }
                     break;
@@ -7685,7 +7728,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
 bool qore_ir_body_is_context_free(const AbstractQoreFunctionVariant* variant, const QoreIRFunction& ir_func) {
     // no batch callees: a body that makes a call is not proven free of the context
     static const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> no_callees;
-    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees);
+    return qore_aot_fast_entry_is_context_independent(variant, ir_func, no_callees, nullptr,
+        &BatchCalleeInfo::context_free_body);
 }
 
 bool qore_ir_function_runs_without_context(const QoreIRFunction& ir_func) {
@@ -7843,6 +7887,16 @@ static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
         result.input_keys.push_back(value->second);
     }
     result.output_keys = make_hash->keys;
+    for (const std::string& key : result.input_keys) {
+        if (!qore_aot_key_is_ascii(key)) {
+            return false;
+        }
+    }
+    for (const std::string& key : result.output_keys) {
+        if (!qore_aot_key_is_ascii(key)) {
+            return false;
+        }
+    }
     result.result_type_info = make_hash->typeInfo;
     return true;
 }
@@ -8503,7 +8557,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 auto base = hash_values.find(inst->operands[0].id);
                 const auto* access =
                     static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
-                if (base == hash_values.end() || access->key_name.empty()) {
+                if (base == hash_values.end() || access->key_name.empty()
+                        || !qore_aot_key_is_ascii(access->key_name)) {
                     return false;
                 }
                 int index = -1;
@@ -8902,7 +8957,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
                 return false;
             }
             const auto* access = static_cast<const QoreIRHashKeyAccessInstruction*>(operation);
-            if (access->key_name.empty()) {
+            if (access->key_name.empty() || !qore_aot_key_is_ascii(access->key_name)) {
                 return false;
             }
             result.key = access->key_name;
@@ -8919,7 +8974,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
             const auto* access =
                 static_cast<const QoreIRHashKeyAccessInstruction*>(
                     operation);
-            if (access->key_name.empty()) {
+            if (access->key_name.empty() || !qore_aot_key_is_ascii(access->key_name)) {
                 return false;
             }
             result.key = access->key_name;
@@ -11953,7 +12008,7 @@ static bool qore_aot_collect_int_expression_summaries(
     auto append_hash_projection = [&](AOTIntExpressionInfo& expression,
             AOTIntExpressionNodeKind kind, int8_t param,
             const std::string& key) {
-        if (param < 0 || key.empty()) {
+        if (param < 0 || key.empty() || !qore_aot_key_is_ascii(key)) {
             return -1;
         }
         AOTIntExpressionNodeInfo node;
@@ -12743,12 +12798,35 @@ static bool qore_aot_collect_int_expression_summaries(
                     }
                     auto nested = batch_callees.find(call.variant);
                     assert(nested != batch_callees.end());
-                    if (!allow_fallible_operations && nested->second.int_expression
-                            && std::any_of(nested->second.int_expression.nodes.begin(),
-                                nested->second.int_expression.nodes.end(),
+                    // the nodes of a composed summary run in the inline frame of the call of this function, with no
+                    // frame of the nested callee and at the location of the statement of the call here: a nested
+                    // callee whose summary can raise an exception is called, so that the exception has the callee's
+                    // frame and the location of its operation (qore#7632)
+                    // a division or a modulo by a constant other than 0 and -1 cannot raise one (-1 can, with the
+                    // smallest integer as the dividend)
+                    auto can_raise_division = [](bool constant_divisor, int64_t divisor) {
+                        return !constant_divisor || !divisor || divisor == -1;
+                    };
+                    const AOTIntExpressionInfo& nested_expression = nested->second.int_expression;
+                    const AOTScalarLeafInfo& nested_leaf = nested->second.scalar_leaf;
+                    if ((nested_expression
+                            && std::any_of(nested_expression.nodes.begin(), nested_expression.nodes.end(),
                                 [&](const AOTIntExpressionNodeInfo& node) {
-                                    return is_fallible_node(node.kind);
-                                })) {
+                                    if (node.kind != AOTIntExpressionNodeKind::Div
+                                            && node.kind != AOTIntExpressionNodeKind::Mod) {
+                                        return is_fallible_node(node.kind);
+                                    }
+                                    const AOTIntExpressionNodeInfo* divisor = node.rhs < nested_expression.nodes.size()
+                                        ? &nested_expression.nodes[node.rhs] : nullptr;
+                                    return can_raise_division(divisor
+                                            && divisor->kind == AOTIntExpressionNodeKind::Constant,
+                                        divisor ? divisor->constant : 0);
+                                }))
+                            || (!nested_expression
+                                && nested_leaf.kind == AOTScalarLeafKind::IntBinary
+                                && (nested_leaf.opcode == static_cast<uint16_t>(QoreIROpcode::DivInt)
+                                    || nested_leaf.opcode == static_cast<uint16_t>(QoreIROpcode::ModInt))
+                                && can_raise_division(nested_leaf.rhs_param < 0, nested_leaf.rhs_int))) {
                         return false;
                     }
                     std::vector<int> args;
@@ -13261,7 +13339,7 @@ static bool qore_aot_collect_float_expression_summaries(
     };
     auto append_hash_key = [&](AOTFloatExpressionInfo& expression,
             int8_t param, const std::string& key) {
-        if (param < 0 || key.empty()) {
+        if (param < 0 || key.empty() || !qore_aot_key_is_ascii(key)) {
             return -1;
         }
         for (size_t i = 0; i < expression.nodes.size(); ++i) {
@@ -13589,21 +13667,30 @@ static bool qore_aot_collect_float_expression_summaries(
                     }
                     auto nested = batch_callees.find(call.variant);
                     assert(nested != batch_callees.end());
-                    if (!allow_division
-                            && ((nested->second.float_expression
-                                    && std::any_of(
-                                        nested->second.float_expression.nodes.begin(),
-                                        nested->second.float_expression.nodes.end(),
-                                        [](const AOTFloatExpressionNodeInfo& node) {
-                                            return node.kind
-                                                == AOTFloatExpressionNodeKind::Div;
-                                        }))
-                                || (!nested->second.float_expression
-                                    && nested->second.scalar_leaf.kind
-                                        == AOTScalarLeafKind::FloatBinary
-                                    && nested->second.scalar_leaf.opcode
-                                        == static_cast<uint16_t>(
-                                            QoreIROpcode::DivFloat)))) {
+                    // as for an integer summary: a nested callee whose summary can raise an exception (a division
+                    // other than by a nonzero constant, or a hash projection) is called, so that the exception has the
+                    // callee's frame and the location of its operation (qore#7632)
+                    const AOTFloatExpressionInfo& nested_expression = nested->second.float_expression;
+                    const AOTScalarLeafInfo& nested_leaf = nested->second.scalar_leaf;
+                    if ((nested_expression
+                            && std::any_of(nested_expression.nodes.begin(), nested_expression.nodes.end(),
+                                [&](const AOTFloatExpressionNodeInfo& node) {
+                                    if (node.kind == AOTFloatExpressionNodeKind::HashKeyFloat) {
+                                        return true;
+                                    }
+                                    if (node.kind != AOTFloatExpressionNodeKind::Div) {
+                                        return false;
+                                    }
+                                    const AOTFloatExpressionNodeInfo* divisor
+                                        = node.rhs < nested_expression.nodes.size()
+                                        ? &nested_expression.nodes[node.rhs] : nullptr;
+                                    return !divisor || divisor->kind != AOTFloatExpressionNodeKind::Constant
+                                        || divisor->constant == 0.0;
+                                }))
+                            || (!nested_expression
+                                && nested_leaf.kind == AOTScalarLeafKind::FloatBinary
+                                && nested_leaf.opcode == static_cast<uint16_t>(QoreIROpcode::DivFloat)
+                                && (nested_leaf.rhs_param >= 0 || nested_leaf.rhs_float == 0.0))) {
                         return false;
                     }
                     std::vector<int> args;
@@ -16939,7 +17026,7 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
             assert(old_fn->use_empty());
             old_fn->eraseFromParent();
         }
-        if (!info.approach_b_eligible) {
+        if (!info.approach_b_eligible && !info.guarded_method_entry && !info.ref_fast_entry) {
             continue;
         }
         std::vector<llvm::Type*> params;
@@ -17162,7 +17249,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>
         effect_only_candidates;
-    std::unordered_set<const AbstractQoreFunctionVariant*> exact_class_only_methods;
+    // Local fast entries can require their method context even when the method is final.
+    std::unordered_map<const AbstractQoreFunctionVariant*, bool> method_requires_exact_class;
 
     // Walk functions
     size_t func_i = 0;
@@ -17276,6 +17364,26 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
                 aot_batch_callee_map[variant] = std::move(info);
                 context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
                 ir_func = nullptr;
+            } else if (!will_outline && isAOTRefFastEntryEligible(ir_func, uvb)) {
+                // a fast entry whose callers bind the reference parameters on the runtime stack (issue #7271): it
+                // takes an argument for every parameter, which it ignores for a reference parameter; only the calls
+                // that bind those parameters call it, and nothing else uses it (approach_b_eligible stays false)
+                // (refreshAOTBatchFastEntryDeclarations() declares the fast entry with its final return ABI)
+                unsigned num_params = sig->numParams();
+                std::vector<BatchCalleeParamKind> param_kinds =
+                    qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                std::string fast_entry_name = ir_func->name + "_fast";
+                BatchCalleeInfo info;
+                info.name = ir_func->name;
+                info.call_ref_path = function_name;
+                info.single_variant_function = func->numVariants() == 1;
+                info.ref_fast_entry = true;
+                info.fast_name = fast_entry_name;
+                info.num_params = num_params;
+                info.param_kinds = std::move(param_kinds);
+                info.param_rejects_nothing = qore_ir_get_fast_entry_param_rejects_nothing(sig);
+                qore_ir_clear_runtime_reference_param_nothing_checks(variant, info);
+                aot_batch_callee_map[variant] = std::move(info);
             }
             if (ir_func && sig && sig->needsTypeParameterSubstitution()) {
                 BatchCalleeInfo info;
@@ -17455,14 +17563,18 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
                     info.body_contract_qore_path = aotRelocMethodDisplayKey(qc, meth->getName(), variant);
                     info.approach_b_eligible = true;
                     info.implicit_self_method = implicit_self;
+                    // A separately compiled module need not publish its method IR to the runtime variant.
+                    // Use the body that supplied this local entry's ABI to decide whether it takes arguments.
+                    if (!uvb->getCachedIR()) {
+                        info.local_method_takes_args = qore_ir_collect_take_over_params(*ir_func,
+                            sig->lv.data(), num_params, nullptr);
+                    }
                     info.fast_name = fast_entry_name;
                     info.num_params = num_params;
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
-                    if (!isAOTNonOverridableMethodTarget(qc, variant)) {
-                        exact_class_only_methods.insert(variant);
-                    }
+                    method_requires_exact_class.emplace(variant, !isAOTNonOverridableMethodTarget(qc, variant));
                     context_candidates.emplace_back(variant,
                         std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
@@ -17614,8 +17726,21 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         return false;
     }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
+    // An implicit-self method whose only other context dependency is an unqualified call can run on an
+    // exact receiver if the caller supplies the object, lexical class and the method's own expression table.
+    size_t receiver_candidate_i = 0;
+    for (const auto& [variant, ir] : context_candidates) {
+        if (++receiver_candidate_i % 100 == 0 && qore_check_cancel(nullptr, "AOT receiver fast-entry analysis")) {
+            return false;
+        }
+        auto& info = aot_batch_callee_map.at(variant);
+        if (info.implicit_self_method && !info.context_independent_fast_entry) {
+            info.receiver_context_fast_entry = qore_aot_fast_entry_is_context_independent(variant, *ir,
+                aot_batch_callee_map, nullptr, &BatchCalleeInfo::context_independent_fast_entry, true);
+        }
+    }
     size_t exact_method_i = 0;
-    for (const auto* variant : exact_class_only_methods) {
+    for (const auto& [variant, needs_exact_class] : method_requires_exact_class) {
         if (exact_method_i++ && !(exact_method_i % 100)
                 && qore_check_cancel(nullptr,
                     "AOT speculative method fast-entry pruning")) {
@@ -17624,7 +17749,21 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm, bo
         auto info = aot_batch_callee_map.find(variant);
         if (info != aot_batch_callee_map.end()
                 && !info->second.context_independent_fast_entry) {
-            info->second.approach_b_eligible = false;
+            // An explicit receiver can differ from the caller's self even when the method is final.
+            info->second.guarded_method_entry = true;
+            if (needs_exact_class) {
+                // Ordinary implicit-self and summary calls cannot speculate on an overridable target.
+                info->second.approach_b_eligible = false;
+            }
+        }
+    }
+    // a function with a reference parameter fast entry has no other fast entry: a summary of its body marks it as
+    // having one (qore_ir_resolve_batch_function_summaries()), which a call would call without binding its reference
+    // parameters (issue #7271)
+    for (auto& [variant, info] : aot_batch_callee_map) {
+        (void)variant;
+        if (info.ref_fast_entry) {
+            info.approach_b_eligible = false;
         }
     }
     if (!finalizeAOTBatchFastEntrySymbols(module, aot_batch_callee_map)
@@ -17688,7 +17827,8 @@ static bool auditAOTBatchFastEntryDefinitions(llvm::Module& module,
             return false;
         }
         ++callee_i;
-        if (!info.approach_b_eligible || info.fast_name.empty()
+        // a reference parameter fast entry is audited as well: its callers call it as directly (issue #7271)
+        if ((!info.approach_b_eligible && !info.ref_fast_entry) || info.fast_name.empty()
                 || info.preloaded_fast_entry) {
             continue;
         }
@@ -17725,6 +17865,11 @@ static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Mod
         }
         ++callee_i;
         const BatchCalleeInfo& info = entry.second;
+        // a reference parameter fast entry (BatchCalleeInfo::ref_fast_entry) is never declared here: it has no fast-
+        // entry contract (finalizeAOTBatchFastEntrySymbols() hashes the fast entries of approach_b_eligible callees
+        // only), so a stale object could call one of another object with another ABI; it is defined with internal
+        // linkage in the module of its callers only (refreshAOTBatchFastEntryDeclarations()), whose calls of it
+        // require that linkage (issue #7271).  A change that calls one from another object must add its contract
         if (!info.approach_b_eligible || info.fast_name.empty()) {
             continue;
         }
@@ -18030,6 +18175,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.collection_op.index_param = rec.collection_op_index_param;
     info.collection_op.string_index_char = rec.collection_op_string_index_char;
     info.collection_op.key = rec.collection_op_key;
+    if (!qore_aot_key_is_ascii(info.collection_op.key)) {
+        return false;
+    }
     if (!info.collection_op) {
         if (info.collection_op.base_param != -1
                 || info.collection_op.index_param != -1
@@ -18423,6 +18571,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.param = input.param;
             node.constant = input.constant;
             node.key = input.key;
+            if (!qore_aot_key_is_ascii(node.key)) {
+                return false;
+            }
             bool is_source = node.kind == AOTIntExpressionNodeKind::ListSize
                 || node.kind == AOTIntExpressionNodeKind::StringSize
                 || node.kind == AOTIntExpressionNodeKind::StringLength;
@@ -18560,6 +18711,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.param = input.param;
             node.constant = input.constant;
             node.key = input.key;
+            if (!qore_aot_key_is_ascii(node.key)) {
+                return false;
+            }
             bool is_bool = false;
             if (node.kind == AOTFloatExpressionNodeKind::Param) {
                 if (node.param < 0 || node.param >= static_cast<int>(info.num_params)
@@ -18654,6 +18808,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.param = input.param;
             node.int_constant = input.int_constant;
             node.string_constant = input.string_constant;
+            if (node.kind == AOTStringExpressionNodeKind::HashKeyString
+                    && !qore_aot_key_is_ascii(node.string_constant)) {
+                return false;
+            }
             bool is_string = node.kind != AOTStringExpressionNodeKind::IntParam
                 && node.kind != AOTStringExpressionNodeKind::IntConstant;
             if (node.kind == AOTStringExpressionNodeKind::StringParam
@@ -22095,11 +22253,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                 std::vector<uint8_t> fast_entry_param_rejects_nothing;
                 bool analyzed_fast_entry_eligible = true;
+                // the analysis found the function eligible for a reference parameter fast entry (issue #7271)
+                bool analyzed_ref_fast_entry = false;
                 const BatchCalleeInfo* analyzed_fast_entry = nullptr;
                 if (aot_batch_callee_map) {
                     auto analyzed = aot_batch_callee_map->find(variant);
                     analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
                         && analyzed->second.approach_b_eligible;
+                    analyzed_ref_fast_entry = analyzed != aot_batch_callee_map->end()
+                        && analyzed->second.ref_fast_entry;
                     if (analyzed != aot_batch_callee_map->end()) {
                         analyzed_fast_entry = &analyzed->second;
                     }
@@ -22141,7 +22303,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 bool self_rec_eligible = fast_entry_eligible
                     && !generic_specialized_fast_entry
                     && hasAOTSelfRecursiveCall(ir_func);
-                if (fast_entry_eligible) {
+                // a reference parameter fast entry, which only the calls that bind its reference parameters call:
+                // the function's self-recursive calls do not call it directly (issue #7271)
+                bool ref_fast_entry_eligible = !fast_entry_eligible && !metadata_only
+                    && !fn_outliner.active() && analyzed_ref_fast_entry && analyzed_fast_entry
+                    && !generic_specialized_fast_entry
+                    && isAOTRefFastEntryEligible(fast_ir_func, uvb);
+                if (fast_entry_eligible || ref_fast_entry_eligible) {
                     fast_entry_name = analyzed_fast_entry
                         ? analyzed_fast_entry->fast_name
                         : ir_func->name + "_fast";
@@ -22252,7 +22420,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
                         lowerer.setBatchCallees(aot_batch_callee_map);
                     }
-                    if (!fast_entry_name.empty()) {
+                    if (fast_entry_eligible) {
                         // Pass FE so the self-recursion check in the
                         // lowerer compares pointer identity — base-name
                         // comparison mis-identifies cross-namespace
@@ -22328,8 +22496,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         std_entry_ok = aotMergeOutlinedNativeLocalFlags(*ir_func, fn_outliner.helpers, llvm_error);
                     }
 
-                    // Compile fast entry for AOT Approach B.
-                    if (std_entry_ok && fast_entry_eligible) {
+                    // Compile fast entry for AOT Approach B (or a reference parameter fast entry).
+                    if (std_entry_ok && (fast_entry_eligible || ref_fast_entry_eligible)) {
                         const UserSignature* sig = uvb->getUserSignature();
                         unsigned num_params = sig->numParams();
                         llvm::Function* fast_fn = module.getFunction(fast_entry_name);
@@ -22348,6 +22516,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                     "fast-entry parameter mapping", "cancelled");
                                 delete ir_func;
                                 return;
+                            }
+                            // the argument of a parameter that the caller of a reference parameter fast entry binds
+                            // on the runtime stack is ignored: the body reads and writes the parameter there
+                            if (ref_fast_entry_eligible
+                                    && qore_ir_fast_entry_param_is_runtime_reference(sig->lv[i])) {
+                                fast_fn->getArg(i)->setName(std::string("ref_arg") + std::to_string(i));
+                                continue;
                             }
                             const void* key = reinterpret_cast<const void*>(sig->lv[i]);
                             param_map[key] = fast_fn->getArg(i);
@@ -22598,7 +22773,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (aot_batch_callee_map) {
                         auto analyzed = aot_batch_callee_map->find(variant);
                         analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
-                            && analyzed->second.approach_b_eligible;
+                            && (analyzed->second.approach_b_eligible || analyzed->second.guarded_method_entry);
                         if (analyzed != aot_batch_callee_map->end()) {
                             analyzed_fast_entry = &analyzed->second;
                         }
@@ -22685,8 +22860,32 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         }
                         fast_params.push_back(ptr_ty);
                         fast_params.push_back(ptr_ty);
-                        auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                        // the entry returns the value of the kind that its body is lowered with (setFastEntryMode()
+                        // below); a guarded method entry (#6860) can reach here without the declaration of its native
+                        // return type, which a declaration of another type that nothing calls is replaced with
+                        BatchCalleeReturnKind declared_return_kind = BatchCalleeReturnKind::Boxed;
+                        if (aot_batch_callee_map) {
+                            auto kind_it = aot_batch_callee_map->find(variant);
+                            if (kind_it != aot_batch_callee_map->end()) {
+                                declared_return_kind = kind_it->second.return_kind;
+                            }
+                        }
+                        auto* fast_fn_type = llvm::FunctionType::get(
+                            qore_aot_fast_entry_return_type(declared_return_kind, i64_ty, double_ty), fast_params,
+                            false);
                         llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                        if (fast_fn && fast_fn->getFunctionType() != fast_fn_type) {
+                            if (!fast_fn->empty() || !fast_fn->use_empty()) {
+                                ++failed_count;
+                                setAOTCompileFatal(fatal_error, "method", variant_key, "fast-entry declaration",
+                                    "the fast entry '" + fast_entry_name + "' is declared with another type than "
+                                    "its return kind gives");
+                                delete ir_func;
+                                return;
+                            }
+                            fast_fn->eraseFromParent();
+                            fast_fn = nullptr;
+                        }
                         if (!fast_fn) {
                             fast_fn = llvm::Function::Create(fast_fn_type,
                                     llvm::Function::InternalLinkage, fast_entry_name, module);
@@ -24614,6 +24813,13 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         return false;
     }
 
+    // the fast entries that take their arguments over, which the calls declared (issue #6105): defined before the
+    // functions are sorted and optimized
+    if (!QoreIRToLLVM::materializeOwnedFastEntries(module, error)) {
+        delete tm;
+        return false;
+    }
+
     // LLVM emits functions in module-list order. That list can inherit
     // unordered namespace traversal order even though symbol names and
     // contents are stable, producing byte-different objects and unnecessary
@@ -25076,7 +25282,14 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         }
     } else {
         // Dynamic link: use CXX compiler from config, link -lqore + system libs
+#ifdef __APPLE__
+        // libqore is linked weakly, so that dyld does not end an executable run with a libqore that lacks a symbol
+        // it imports before main() runs: qore_aot_run_v4() then refuses the executable for its AOT runtime identity,
+        // or main() reports that the library predates the check (issue #6898)
+        cmd = compiler + " -o " + output + " " + object + " -L" + libdir + " -Wl,-weak-lqore";
+#else
         cmd = compiler + " -o " + output + " " + object + " -L" + libdir + " -lqore";
+#endif
         appendAOTExecutableLinkOptions(cmd);
         if (config.emit_rpath) {
             cmd += " -Xlinker -rpath -Xlinker " + libdir;
@@ -25104,12 +25317,17 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
 
 //! Generate the LLVM IR for main() and the function registration table
 //! Generate main() and function table for AOT binary.
-/** Embeds serialized metadata blob and calls qore_aot_run_v2() from main().
+/** Embeds serialized metadata blob and calls qore_aot_run_v4() from main() with the AOT runtime identity of this
+    libqore, which the runtime checks before anything else (issue #6898).
+
+    @param weak_runtime_entry true to reference qore_aot_run_v4() weakly and report a libqore without it from main()
+    (dynamic links); false for an executable that links libqore statically, where a weak reference would not pull the
+    runtime entry out of the archive
 */
 static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
         const QoreParseOptions& parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs,
-        const std::vector<AOTCompiledInitFunc>& compiled_init_funcs = {}) {
+        const std::vector<AOTCompiledInitFunc>& compiled_init_funcs = {}, bool weak_runtime_entry = true) {
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
     auto* ptr_type = llvm::PointerType::get(ctx, 0);
@@ -25198,10 +25416,17 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         func_table_gv = nullptr;
     }
 
-    // Declare qore_aot_run_v3 (accepts full 128-bit parse options as two i64)
+    // the AOT runtime identity of this libqore: the runtime refuses the executable if it has another one (issue #6898)
+    std::string identity = qore_aot_get_compile_runtime_identity();
+    llvm::Constant* identity_data = llvm::ConstantDataArray::getString(ctx, identity, true);
+    auto* identity_gv = new llvm::GlobalVariable(module, identity_data->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, identity_data, "qore_aot_runtime_identity_str");
+
+    // Declare qore_aot_run_v4 (accepts full 128-bit parse options as two i64)
     auto* aot_run_type = llvm::FunctionType::get(i32_type, {
         i32_type,       // argc
         ptr_type,       // argv
+        ptr_type,       // identity (const char*)
         ptr_type,       // metadata (const uint8_t*)
         i32_type,       // metadata_len
         ptr_type,       // label
@@ -25210,7 +25435,13 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         ptr_type,       // functions
         i32_type        // num_functions
     }, false);
-    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v3", aot_run_type);
+    auto aot_run_fn = module.getOrInsertFunction("qore_aot_run_v4", aot_run_type);
+    auto* aot_run_decl = llvm::cast<llvm::Function>(aot_run_fn.getCallee());
+    if (weak_runtime_entry) {
+        // referenced weakly: run with a libqore that predates it, main() reports the mismatch itself instead of the
+        // dynamic loader failing (libqore is linked weakly on macOS, see linkExecutable())
+        aot_run_decl->setLinkage(llvm::GlobalValue::ExternalWeakLinkage);
+    }
 
     // Generate main()
     auto* main_type = llvm::FunctionType::get(i32_type, {i32_type, ptr_type}, false);
@@ -25222,6 +25453,32 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     auto arg_it = main_fn->arg_begin();
     llvm::Value* argc_val = &*arg_it++;
     llvm::Value* argv_val = &*arg_it;
+
+    if (weak_runtime_entry) {
+        auto* old_bb = llvm::BasicBlock::Create(ctx, "runtime_predates_entry", main_fn);
+        auto* run_bb = llvm::BasicBlock::Create(ctx, "run", main_fn);
+        builder.CreateCondBr(builder.CreateIsNull(aot_run_decl), old_bb, run_bb);
+
+        // the error is written with write(2): nothing of the Qore library is called
+        builder.SetInsertPoint(old_bb);
+        std::string msg = "AOT-RUNTIME-MISMATCH: the AOT-compiled program (" + std::string(qore_aot_map_source_path(
+            label)) + ") was compiled for AOT runtime identity '" + identity + "', but the Qore library could not be "
+            "loaded or predates the AOT runtime identity check of executables (it has no qore_aot_run_v4()); its "
+            "native code can only be run with the Qore library of the qcc that compiled it; check that the Qore "
+            "library is installed, or rebuild it with the qcc of this Qore installation\n";
+        llvm::Constant* msg_data = llvm::ConstantDataArray::getString(ctx, msg, false);
+        auto* msg_gv = new llvm::GlobalVariable(module, msg_data->getType(), true,
+            llvm::GlobalValue::PrivateLinkage, msg_data, "qore_aot_runtime_mismatch_msg");
+        // size_t and ssize_t: Qore targets are 64-bit only
+        auto* size_type = i64_type;
+        auto write_fn = module.getOrInsertFunction("write",
+            llvm::FunctionType::get(size_type, {i32_type, ptr_type, size_type}, false));
+        builder.CreateCall(write_fn, {builder.getInt32(2), msg_gv,
+            llvm::ConstantInt::get(size_type, msg.size())});
+        builder.CreateRet(builder.getInt32(2));
+
+        builder.SetInsertPoint(run_bb);
+    }
 
     // GEP to get pointers to metadata and label
     llvm::Value* meta_ptr = builder.CreateInBoundsGEP(
@@ -25245,6 +25502,7 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
     llvm::Value* rc = builder.CreateCall(aot_run_fn, {
         argc_val,
         argv_val,
+        identity_gv,
         meta_ptr,
         builder.getInt32(static_cast<int>(metadata.size())),
         lbl_ptr,
@@ -25457,41 +25715,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             del_c.discard(nullptr);
         }
-        // the modules that each module requires, directly or through other modules
-        std::map<std::string, std::set<std::string>> requires_map;
+        // in the order of the teardown of the data of the module Programs, as the closures of AOT modules run: a cycle
+        // is broken at one of its own modules, never at a module that it requires (qore#7445)
+        QMM.orderModulesDependentsFirst(del_modules);
         for (const std::string& name : del_modules) {
-            std::set<std::string> all;
-            std::vector<std::string> todo{name};
-            while (!todo.empty()) {
-                std::string cur = std::move(todo.back());
-                todo.pop_back();
-                std::set<std::string> deps;
-                QMM.getModuleDependencies(cur.c_str(), deps);
-                for (const std::string& d : deps) {
-                    if (all.insert(d).second) {
-                        todo.push_back(d);
-                    }
-                }
-            }
-            requires_map[name] = std::move(all);
-        }
-        std::vector<std::string> ordered;
-        while (!del_modules.empty()) {
-            size_t pick = 0;
-            for (size_t i = 0; i < del_modules.size(); ++i) {
-                bool required = false;
-                for (size_t j = 0; j < del_modules.size() && !required; ++j) {
-                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
-                }
-                if (!required) {
-                    pick = i;
-                    break;
-                }
-            }
-            ordered.push_back(del_modules[pick]);
-            del_modules.erase(del_modules.begin() + pick);
-        }
-        for (const std::string& name : ordered) {
             QoreAbstractModule* mod = QMM.findModule(name.c_str());
             QoreUserModule* user_mod = dynamic_cast<QoreUserModule*>(mod);
             assert(user_mod);
@@ -25866,7 +26093,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         bool report_metadata = qccReportMetadataSizeStart("compilation metadata", metadata.size());
         finalizeAOTMetadataCompression(metadata, include_source, report_metadata, writer);
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
-            compiled_init_funcs);
+            compiled_init_funcs, !static_link);
 
         split_codegen = !func_slots.empty();
     }
@@ -26320,8 +26547,8 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 }
 
 //! Parse module metadata from .qm source text
-/** Extracts name, version, desc, author, url, and license from the module { ... } block.
-    Falls back to deriving the module name from the filename label.
+/** Extracts the module name from the module declaration and the dependencies from the %requires directives; the
+    values of the module block are taken from the parsed block (see qoreAotModuleInfoFromContext()).
 */
 static bool parseModuleMetadataImpl(const char* source, int source_len, const char* label,
         QoreAOTModuleInfo& info, std::string& error) {
@@ -26382,69 +26609,10 @@ static bool parseModuleMetadataImpl(const char* source, int source_len, const ch
     }
     info.name = src.substr(name_start, name_end - name_start);
 
-    // Find the module block: everything between { and matching }
-    size_t brace_start = src.find('{', name_end);
-    if (brace_start == std::string::npos) {
-        error = "missing '{' after module declaration";
-        return false;
-    }
-    size_t brace_end = src.find('}', brace_start);
-    if (brace_end == std::string::npos) {
-        error = "missing '}' in module declaration";
-        return false;
-    }
-    std::string block = src.substr(brace_start + 1, brace_end - brace_start - 1);
-
-    // Parse key = "value" pairs
-    auto extractValue = [&](const std::string& key) -> std::string {
-        std::string pattern = key + " ";
-        size_t kpos = block.find(pattern);
-        if (kpos == std::string::npos) {
-            pattern = key + "=";
-            kpos = block.find(pattern);
-        }
-        if (kpos == std::string::npos) {
-            return "";
-        }
-        // Find '=' after key
-        size_t eq = block.find('=', kpos + key.size());
-        if (eq == std::string::npos) {
-            return "";
-        }
-        // Find opening quote
-        size_t q1 = block.find('"', eq + 1);
-        if (q1 == std::string::npos) {
-            return "";
-        }
-        // Find closing quote
-        size_t q2 = block.find('"', q1 + 1);
-        if (q2 == std::string::npos) {
-            return "";
-        }
-        return block.substr(q1 + 1, q2 - q1 - 1);
-    };
-
-    info.version = extractValue("version");
-    info.desc = extractValue("desc");
-    info.author = extractValue("author");
-    info.url = extractValue("url");
-    info.license = extractValue("license");
-
-    if (info.version.empty()) {
-        error = "module 'version' not found in module block";
-        return false;
-    }
-    if (info.desc.empty()) {
-        error = "module 'desc' not found in module block";
-        return false;
-    }
-    if (info.author.empty()) {
-        error = "module 'author' not found in module block";
-        return false;
-    }
-    if (info.license.empty()) {
-        info.license = "MIT";
-    }
+    // the values of the module block (version, desc, author, url, license) are taken from the block as the parser
+    // reads it, when the module's main file has been parsed (see qoreAotModuleInfoFromContext()), as the module
+    // loader takes them: a scan of the text here cannot read a block as the parser does (a brace or an escaped quote
+    // in a string, a closure in the block, a comment) and refused blocks that the loader accepts (qore#7315)
 
     // Extract non-reexport dependencies from %requires directives
     // These are exported so the module manager can load them before calling init.
@@ -26625,6 +26793,46 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
         error = std::string(label) + ":" + std::to_string(line) + ": invalid UTF-8 in source";
     }
     return false;
+}
+
+//! Takes the metadata of a module from its parsed module block, as the module loader does
+/** The module block is read by the parser when the module's main file is parsed, which checks it as it does when the
+    module is loaded (QoreModuleDefContext::set()); a module without a version, description or author is refused with
+    the error of the loader (see QoreModuleManager::setupUserModule()) (qore#7315).
+
+    @param qmd the module definition context that the main file of the module was parsed with
+    @param path the path of the module, for the error message
+    @param info receives the metadata; its \c name is the name of the module
+    @param error receives the error message when the module is refused
+
+    @return true if the metadata is complete, false with @a error set if not
+*/
+static bool qoreAotModuleInfoFromContext(const QoreModuleDefContext& qmd, const std::string& path,
+        QoreAOTModuleInfo& info, std::string& error) {
+    auto missing = [&](const char* what) {
+        error = "module '" + path + "': feature '" + info.name + "': missing " + what;
+        return false;
+    };
+    const char* desc = qmd.get("desc");
+    if (!desc) {
+        return missing("description");
+    }
+    const char* version = qmd.get("version");
+    if (!version) {
+        return missing("version");
+    }
+    const char* author = qmd.get("author");
+    if (!author) {
+        return missing("author");
+    }
+    info.desc = desc;
+    info.version = version;
+    info.author = author;
+    const char* url = qmd.get("url");
+    info.url = url ? url : "";
+    const char* license = qmd.get("license");
+    info.license = license ? license : "MIT";
+    return true;
 }
 
 //! Map a license string to a qore_license_t enum value
@@ -27106,7 +27314,7 @@ static std::string scriptBatchSourceId(const std::string& target_canon) {
       giving the descriptor count.
     - `qore_<sanapp>_<sanfile>_script_register(QoreProgram*)` —
       exported fn.  Thin wrapper around
-      `qore_aot_script_register(pgm, blob, len, label, funcs, n)`
+      `qore_aot_script_register_v2(identity, pgm, blob, len, label, funcs, n)`
       using this file's own metadata blob + func table.  Called
       once per file by the host's `main()` (or slice 10d's
       glue-generated `qore_app_register_all`).
@@ -27201,13 +27409,18 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
         prefix_public + "_script_num_funcs");
     count_gv->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
 
-    // Declare qore_aot_script_register bridge.
+    // Declare the qore_aot_script_register_v2() bridges, which take the AOT runtime identity of this libqore first:
+    // the runtime refuses the object if it has another one (issue #6898)
     auto* bridge_fn_type = llvm::FunctionType::get(i32_type,
-        {ptr_type, ptr_type, i32_type, ptr_type, ptr_type, i32_type}, false);
-    auto bridge_fn = module.getOrInsertFunction("qore_aot_script_register",
+        {ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type, i32_type}, false);
+    auto bridge_fn = module.getOrInsertFunction("qore_aot_script_register_v2",
         bridge_fn_type);
-    auto native_bridge_fn = module.getOrInsertFunction("qore_aot_script_register_native",
+    auto native_bridge_fn = module.getOrInsertFunction("qore_aot_script_register_native_v2",
         bridge_fn_type);
+    llvm::Constant* identity_data = llvm::ConstantDataArray::getString(ctx, qore_aot_get_compile_runtime_identity(),
+        true);
+    auto* identity_gv = new llvm::GlobalVariable(module, identity_data->getType(), true,
+        llvm::GlobalValue::PrivateLinkage, identity_data, "qore_aot_script_runtime_identity_" + file_basename_san);
 
     // Private label string for diagnostics.
     auto* label_data = llvm::ConstantDataArray::getString(ctx,
@@ -27241,6 +27454,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
     }
 
     builder.CreateCall(bridge_fn, {
+        identity_gv,
         pgm_arg,
         blob_ptr,
         builder.getInt32(static_cast<int>(blob_size)),
@@ -27294,6 +27508,7 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
                 llvm::cast<llvm::PointerType>(ptr_type));
         }
         native_builder.CreateCall(native_bridge_fn, {
+            identity_gv,
             native_pgm_arg,
             native_blob_ptr,
             native_builder.getInt32(static_cast<int>(blob_size)),
@@ -27447,6 +27662,8 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
     QoreAOTModuleFileInfo info;
     info.module_name = mod_info.name;
     info.dependencies = mod_info.dependencies;
+    // the builtin metadata that the module's code can have built in (qore#7183)
+    info.builtin_api_identity = qore_aot_get_compile_builtin_api_identity();
     info.unavailable_optional_modules = pp->unavailable_try_modules;
     // the modules the module was compiled with, by name: the module loader checks those it loads for the module;
     // the names of the files of a depfile do not say which of them are modules (an %include file can have the name
@@ -28201,9 +28418,6 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     if (!parseModuleMetadata(source_text, source_len, label, mod_info, error)) {
         return false;
     }
-    printd(2, "AOT module: name='%s' version='%s' desc='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str());
-
     // Step 2: Parse the module source to get the namespace tree with functions
     // We need PO_IN_MODULE for the parser to handle the module block
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
@@ -28251,13 +28465,26 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // Use parsePending() + parseCommit() like interpreted module loading does.
         // This allows forward references in the init closure to be resolved during commit
         // after all module types/functions have been parsed.
-        qore_program_private::get(**qpgm)->parsePending(std::string_view(source_text, source_len), label, &xsink, &wsink, QP_WARN_DEFAULT);
+        // the module is parsed as the module loader parses a module file (QoreModuleManager::loadUserModuleFromPath()):
+        // with the warning mask of a module load and the warnings raised as errors, in the parse and in the commit, so
+        // that a module that qcc compiles also loads from source (qore#7314)
+        qore_program_private::get(**qpgm)->parsePending(std::string_view(source_text, source_len), label, &xsink,
+            &xsink, QP_WARN_MODULES);
         if (!xsink.isException()) {
-            qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+            qpgm->parseCommit(&xsink, &xsink, QP_WARN_MODULES);
         }
         // the module's parse options are checked as they are at the end of its source; the module header's
         // restrictions ended with the header, and closing the module context leaves the options as they are
         parsed_po = qpgm->getParseOptions();
+
+        // the metadata of the module block, as the parser read it (qore#7315)
+        if (!xsink.isException() && !qoreAotModuleInfoFromContext(mod_ctx, label ? label : "", mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
+            return false;
+        }
+        printd(2, "AOT module: name='%s' version='%s' desc='%s'\n",
+            mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str());
 
         // Capture init closure before mod_ctx destroys it
         if (!xsink.isException() && mod_ctx.hasInit()) {
@@ -28679,8 +28906,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         return false;
     }
 
-    printd(2, "AOT split module: name='%s' version='%s' desc='%s' dir='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(), mod_info.desc.c_str(), dir_str.c_str());
+    printd(2, "AOT split module: name='%s' dir='%s'\n", mod_info.name.c_str(), dir_str.c_str());
 
     // Step 5: Create QoreProgram and set up module context
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
@@ -28719,7 +28945,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
         // Parse main .qm file with parsePending()
-        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &xsink,
+            QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -28730,6 +28960,12 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 
@@ -28778,7 +29014,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     continue;
                 }
 
-                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink, file_warn_mask);
+                qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &xsink,
+                    file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -28807,7 +29044,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
 
         // Step 8: Commit parsing
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -32698,8 +32937,11 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(),
             *qpgm, xsink, QMRL_LOCK);
 
-        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &wsink,
-            QP_WARN_DEFAULT);
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
+        qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(), &xsink, &xsink,
+            QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -32710,6 +32952,12 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 
@@ -32768,7 +33016,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 printd(2, "AOT: warning: skipping empty file: %s\n", file_path.c_str());
                 continue;
             }
-            qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &wsink,
+            qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(), &xsink, &xsink,
                 file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
@@ -32820,7 +33068,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33249,9 +33499,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         return false;
     }
 
-    printd(2, "AOT aggregator: name='%s' version='%s' inputs=%zu dir='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(),
-        object_paths.size(), dir_str.c_str());
+    printd(2, "AOT aggregator: name='%s' inputs=%zu dir='%s'\n", mod_info.name.c_str(), object_paths.size(),
+        dir_str.c_str());
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
@@ -33284,8 +33533,11 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+            &xsink, &xsink, QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33296,6 +33548,12 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 
@@ -33336,7 +33594,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
-                    &xsink, &wsink, file_warn_mask);
+                    &xsink, &xsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -33357,7 +33615,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             }
         }
 
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33830,9 +34090,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         return false;
     }
 
-    printd(2, "AOT archive: name='%s' version='%s' inputs=%zu dir='%s'\n",
-        mod_info.name.c_str(), mod_info.version.c_str(),
-        object_paths.size(), dir_str.c_str());
+    printd(2, "AOT archive: name='%s' inputs=%zu dir='%s'\n", mod_info.name.c_str(), object_paths.size(),
+        dir_str.c_str());
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
@@ -33865,8 +34124,11 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(),
             qm_path.c_str(), *qpgm, xsink, QMRL_LOCK);
 
+        // the files of the module are parsed and committed as the module loader parses and commits a separated
+        // module (QoreModuleManager::loadSeparatedModule()): with the warning mask of a module load and the warnings
+        // raised as errors (qore#7314, qore#7324)
         qore_program_private::get(**qpgm)->parsePending(main_source, qm_path.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+            &xsink, &xsink, QP_WARN_MODULES);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -33877,6 +34139,12 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
         if (!qore_aot_check_parse_options(qpgm->getParseOptions(), qm_path, error, *qpgm)) {
             mod_ctx.close();
+            return false;
+        }
+        // the metadata of the module block, as the parser read it in the main file (qore#7315)
+        if (!qoreAotModuleInfoFromContext(mod_ctx, qm_path, mod_info, error)) {
+            mod_ctx.close();
+            qoreAotReportParseDiagnostics(wsink, true);
             return false;
         }
 
@@ -33917,7 +34185,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     continue;
                 }
                 qore_program_private::get(**qpgm)->parsePending(file_source, file_path.c_str(),
-                    &xsink, &wsink, file_warn_mask);
+                    &xsink, &xsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
                     // the warnings of the parse, then its errors (issue #6555)
@@ -33938,7 +34206,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             }
         }
 
-        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        // the warnings found when the module is committed are errors as well, under the warning mask that the .qm
+        // file left, as the loader commits it (qore#7324)
+        qpgm->parseCommit(&xsink, &xsink, file_warn_mask);
         if (xsink.isException()) {
             mod_ctx.close();
             // the warnings of the parse, then its errors (issue #6555)
@@ -36181,7 +36451,9 @@ class ExprTreeSerializer {
         // Number constant
         if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
             QoreString s;
-            num->toString(s);
+            if (!qore_aot_format_number(*num, s)) {
+                return false;
+            }
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NUMBER));
             writeStr(s.c_str(), s.size());
             writeU16(0);
@@ -37650,14 +37922,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // number rebuilt from digits alone gets a precision derived from the string LENGTH, which is unrelated
     // to its own, so the folded constant is a DIFFERENT number from the one the runtime computes (#5461).
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        id.kind = AOTExprKind::CONST_NUMBER;
         QoreString str;
-        ExceptionSink xsink;
-        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-            xsink.clear();
-            str.clear();
-            num->toString(str);
+        if (!qore_aot_format_number(*num, str)) {
+            id.ref1 = "cannot serialize number literal";
+            return id;
         }
+        id.kind = AOTExprKind::CONST_NUMBER;
         id.ref1 = str.c_str();
         id.ref2 = std::to_string(num->getPrec());
         return id;
@@ -37694,8 +37964,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             && (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node))) {
         auto cit = const_reverse_map->find(node);
         if (cit != const_reverse_map->end()) {
-            id.kind = AOTExprKind::RUNTIME_CONST_REF;
             id.ref1 = cit->second.path;
+            // A folded literal returned by an initializer can itself be the value in the reverse map. Its
+            // expression slot must own the literal, even while the named constant is still pending (#7290).
+            if (cit->second.deferred_init && !v.needsEval() && qoreAOTContainerHoldsPlainData(v)) {
+                id.kind = AOTExprKind::CONST_VALUE;
+                id.child_expr = v;
+            } else {
+                id.kind = AOTExprKind::RUNTIME_CONST_REF;
+            }
             return id;
         }
     }
@@ -38924,7 +39201,13 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const CaseNodeRegex* cnode = reinterpret_cast<const CaseNodeRegex*>(ptr);
         AOTRegexCaseSlotId& rcid = out.regex_cases[slot];
         QoreRegex* re = cnode->getRegex();
-        rcid.pattern = re->getPatternCStr();
+        // every case regex has its pattern saved, which is an empty string for an empty pattern (#7623)
+        const char* pattern = re ? re->getPatternCStr() : nullptr;
+        assert(pattern);
+        if (!pattern) {
+            continue;
+        }
+        rcid.pattern = pattern;
         rcid.options = re->getOptions();
         // Check if it's a negated regex case
         rcid.is_negated = dynamic_cast<const CaseNodeNegRegex*>(cnode) != nullptr;

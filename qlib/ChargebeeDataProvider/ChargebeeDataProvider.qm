@@ -65,6 +65,15 @@ module ChargebeeDataProvider {
                 "- Transaction retrieval\n"
                 "- Real-time webhooks for customers, subscriptions, invoices, and events",
             "scheme": "chargebee",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "chargebee.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://www.chargebee.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": ChargebeeLogo,
             "logo_file_name": "chargebee-logo.svg",
             "logo_mime_type": MimeTypeSvg,

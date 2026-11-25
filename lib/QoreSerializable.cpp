@@ -1006,6 +1006,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (qore_set_indexed_hash_type(**holder, *oh, xsink)) {
                     return QoreValue();
                 }
+                // a weak reference in the data can designate it: it is pinned before any container holds it, so that
+                // its holders count it as needing a scan from the start (qore#7318)
+                qore_weak_target_pin(QoreValue(*holder));
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, holder.release()));
             } else if (hashdeclListSerializationInfo->equal(oh->getHashDecl())) {
@@ -1013,6 +1016,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (qore_set_indexed_list_type(**holder, *oh, xsink)) {
                     return QoreValue();
                 }
+                // a weak reference in the data can designate it: it is pinned before any container holds it, so that
+                // its holders count it as needing a scan from the start (qore#7318)
+                qore_weak_target_pin(QoreValue(*holder));
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, holder.release()));
             } else {
@@ -2587,20 +2593,9 @@ DateTimeNode* QoreSerializable::deserializeAbsDateFromStream(StreamReader& reade
             return nullptr;
         }
 
-        bool is_path = (!region.empty() && region.c_str()[0] == '.') || q_absolute_path(region.c_str());
-        if (QoreTimeZoneManager::checkRegion(region, is_path, xsink)) {
-            return nullptr;
-        }
-        if (is_path && runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot create a TimeZone object from absolute path "
-                "'%s' when sandboxing restriction PO_NO_FILESYSTEM is set", region.c_str());
-            return nullptr;
-        }
-
-        zone = is_path
-            ? QTZM.findLoadRegionFromPath(region.c_str(), xsink)
-            : QTZM.findLoadRegion(region.c_str(), xsink);
-
+        // a zone named in data is a region or the local zone, never a path: a path raises the error of an unknown
+        // region
+        zone = QTZM.findDataRegion(region, xsink);
         if (*xsink) {
             return nullptr;
         }

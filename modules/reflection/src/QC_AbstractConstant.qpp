@@ -269,12 +269,18 @@ auto v = con.getValue();
     @return the value for the constant
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the constant has been destroyed
-    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write, or the calling code's or the class's Program's sandboxing restrictions do not allow the class (see @ref reflection_caller_privilege)
+    @throw REFLECTION-ACCESS-ERROR the reflection object belongs to another Program whose values the calling code may not read or write, or the applicable restrictions do not allow the constant or its class (see @ref reflection_caller_privilege)
 */
 auto AbstractConstant::getValue() [flags=RET_VALUE_ONLY] {
     // the calling code's privileges apply (see @ref reflection_caller_privilege)
     QoreReflectionCaller caller;
     if (reflection_check_program_access(caller, c->pgm, "read or write the values of", xsink)) {
+        return QoreValue();
+    }
+    int64 domain = c->ce->getDomain();
+    if (domain && !caller.allowsDomain(domain, c->pgm)) {
+        xsink->raiseException("REFLECTION-ACCESS-ERROR", "parse options do not allow access to constant '%s' "
+            "(functional domain: %s)", c->ce->getName(), q_describe_functional_domains(domain).c_str());
         return QoreValue();
     }
     // the constant of a class is read as the class would be named in source code

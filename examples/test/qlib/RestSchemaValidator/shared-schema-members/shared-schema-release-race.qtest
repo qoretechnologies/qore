@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-weak-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires OpenApi3
+%requires json
+
+%exec-class SharedSchemaReleaseRaceTest
+
+#! Regression test for qore#6843: a value of the per-Program cache released while a reader holds it
+/** A shared schema releases what it built for its callers when it is destroyed (see
+    SandboxManager::releaseProgramCacheValues()); a reader that found such a value before the release keeps it, and
+    the value is released when the reader is done with it.  The reader is held between its lookup and its use of the
+    value by a debug hook (dbg_program_cache_hold_reads()), so the test needs a debug build.
+*/
+class SharedSchemaReleaseRaceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("shared schema release race", "1.0", \ARGV) {
+        addTestCase("a release while a reader holds a value", \raceTest());
+        set_return_value(main());
+    }
+
+    raceTest() {
+        try {
+            call_function("dbg_program_cache_hold_reads", False);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("debug build required for dbg_program_cache_hold_reads()");
+        }
+        hash<auto> weak = {};
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3",
+            "info": {"title": "race", "version": "1"},
+            "paths": {},
+            "components": {"schemas": {
+                "Customer": {"type": "object", "properties": {"id": {"type": "string"},
+                    "subscription": {"anyOf": ({"type": "string"}, {"\$ref": "#/components/schemas/Subscription"})}}},
+                "Subscription": {"type": "object", "properties": {"id": {"type": "string"},
+                    "customer": {"anyOf": ({"type": "string"}, {"\$ref": "#/components/schemas/Customer"})}}},
+            }},
+        }), True);
+        assertTrue(SandboxManager::isSharedObject(doc), "trusted code creates a shared document");
+        SchemaObject subscription = doc.components.schemas.Subscription;
+        # the field is built for this Program and kept in its per-Program cache
+        AbstractDataField first = subscription.getField("body", "the body");
+        weak.field := first;
+        remove first;
+        weak.doc := doc;
+
+        call_function("dbg_program_cache_hold_reads", True);
+        on_exit call_function("dbg_program_cache_hold_reads", False);
+        Queue results();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                # the read finds the field and is held before it returns it
+                AbstractDataField f = subscription.getField("body", "the body");
+                results.push(sprintf("same field: %y, accepts: %y", f == weak.field,
+                    f.getType().acceptsValue({"id": "s1", "customer": "c1"}).customer));
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(get_exception_string(ex));
+            }
+        }();
+        assertTrue(call_function("dbg_program_cache_wait_held", 1, 60000), "the reader is held after its lookup");
+        # the document is destroyed, which releases the values of its schema objects in every Program
+        remove doc;
+        assertFalse(alive(weak, "doc"), "the document is destroyed");
+        assertTrue(alive(weak, "field"), "the reader keeps the field that it found");
+        call_function("dbg_program_cache_hold_reads", False);
+        done.waitForZero();
+        assertEq("same field: True, accepts: \"c1\"", results.get(), "the reader uses the field after the release");
+        remove subscription;
+        assertFalse(alive(weak, "field"), "the field is released once the reader is done with it");
+    }
+
+    private static bool alive(hash<auto> weak, string key) {
+        try {
+            return SharedSchemaReleaseRaceTest::isObject(weak{key});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "RUNTIME-TYPE-ERROR" || ex.err == "RUNTIME-OVERLOAD-ERROR") {
+                return False;
+            }
+            rethrow;
+        }
+    }
+
+    private static bool isObject(object o) {
+        return True;
+    }
+}

@@ -404,6 +404,67 @@ From the start of library cleanup (`qore_cleanup()`, once every thread has ended
 the declarations retired (those of the modules' Programs, which are deleted then) are kept until library cleanup frees
 them, as before: no tombstone is made and nothing is orphaned or freed, as the process ends.
 
+### Binary module declarations that Programs' declarations name (qore#7533)
+
+Builtin (system and binary module) declarations are not decided with the declarations of Programs
+(`isTypeOwnerSystem()`): they name each other directly and are freed with their namespace.  `qore_cleanup()` deletes
+the modules (`QMM.cleanup()`, user modules before the modules that they require) before it clears the Programs that are
+still referenced (`clearRemainingPrograms()`, such as a Program that holds itself in a global variable), so a binary
+module's declarations can be freed while a declaration of a Program still names them, and the Program's
+`QoreTypeOwnerBatch` read the freed types.  The declarations of the system namespace (`Qore::`) are freed with
+`staticSystemNamespace`, after every Program, so only the original declarations of binary modules
+(`isTypeOwnerModule()`) are referenced.
+
+The rule is ownership, not the module context of a declaration's creation.  A builtin declaration that belongs to no
+binary module is marked (`not_module_decl`, `setNotModuleDecl()`): the constructor of `StaticSystemNamespace` marks
+every class, hashdecl and enum of the namespace tree that it has built, with the concrete declarations that its generic
+hashdecls have made by then, such as `KeyValueInfo<auto>` (`mark_static_system_namespace_decls()`, before any other
+thread exists); the pseudo-classes (`pseudo_classes_init()`) and the tombstones (`QoreTombstoneBuilder`) are marked
+when they are made.  A copy of a hashdecl or enum, a concrete declaration made afterwards and an imported copy of a
+class keep the mark of their source, and a class shares its private data with its copies in Programs; a concrete
+declaration copies the mark rather than reading its generic's, as it does not reference its generic, which can be a
+module's that it outlives.  Every other original builtin declaration is a module's, whenever it is made: module-jni and
+module-python create builtin classes when they are first needed, after the module's initialization, with no module
+context or with the context of a user module being parsed.  Copies are never module declarations themselves, as before
+(`isTypeOwnerSystem()` is false for a hashdecl or enum copy).
+
+The references follow compound types: a member of type `list<ModEnum>` or `hash<string, hash<ModHd>>`, a union, a
+parameterized class or a code type names the module declarations of its element, member, argument, parameter and return
+types (`qore_type_owner_add_module_names()`, which walks the orphanable views of the type arguments and parameter types,
+as `QoreDerivedTypeOrphaner` does, and does not walk into the declarations that it finds nor into type parameters).  A
+module class is the exception, one level deep: a class's type is shared with its copies, so a Program names the
+module's original class, whose member, static variable, signature and type parameter types (and those of its module
+base classes) are read by the code of the Program that calls it, so the module declarations that they name are
+referenced with it (`getTypeOwnerModuleSignatureNames()`, added by `qore_type_owner_add_module_class_names()`, once
+per class in a `QoreTypeOwnerBatch`), but not what those name in turn.  A Program names a copy of a module's hashdecl,
+which references what its members name itself (below), and an enum names no declaration.  The derived-type retirement
+does not cover them: a builtin declaration is never retired, so a derived type that names one is not what keeps it.
+Three references close the window:
+
+- A hashdecl copied into a Program shares the types of its source's members, so a copy of a module's hashdecl names
+  the module's original enums, hashdecls and classes; a module's enum could then live on only through the constants of
+  the Program, which `waitForTerminationAndClear()` releases before the batch reads the member types.  A hashdecl copy
+  (and a concrete declaration of one) references the module declarations that its member types name, and those of its
+  parents for as long as they are module declarations (a parent's members are read with the copy's), with what the
+  module classes among them name in their own types, from when it is made (`copy_module_names`), and releases them
+  last in its destructor, after its source (`copy_source`).  A copy of a copy reuses its source's list, and a module's
+  hashdecl computes its list once for all its copies (`getBuiltinModuleNames()`).
+- An enum copied into a Program references its original if the original is a module's (`orig_ref`), released last in
+  its destructor: the module's C++ code makes values from its original's members (`QoreValue::makeEnum()`), and the
+  code of a Program cleared after the modules can call it.
+- Every other declaration of a Program references the module declarations that it names from the first batch that it
+  is in (`QoreTypeOwner::type_owner_module_refs`: `getTypeOwnerNames()` lists them with the user declarations that it
+  names directly, and `QoreTypeOwnerBatch::init()` takes them apart from the names, which only list the declarations
+  of Programs) until it is destroyed (`qore_type_owner_destroyed()`), whether it survives, is retired or is freed: a
+  class of a user module whose signatures name a binary module's class (a class's type is shared with its copies, so
+  it is the module's original) survives the module's Program through its copy in another Program, which reads the
+  signatures when it is deleted.  A hashdecl copy does not list them, as it references them itself.
+
+So the batch of a Program cleared after the modules reads no freed module type: a declaration that it reads is either
+a copy that references what it names, or one whose own Program's batch (which ran while the Program's copies or the
+module kept the module declarations) took the references.  Builtin classes copied into a Program are builtin
+declarations themselves and are not walked by the batch.
+
 ### Quiescent waits (1c)
 
 `QoreTypeQuiescentWaitHelper` stores 0 in the thread's slot before the wait and publishes the epoch again after it,
@@ -503,6 +564,14 @@ a user declaration directly is made in a thread that publishes an epoch (`qore_t
 declaration's own type is not checked, as it is read from an owner that keeps the declaration.  Modules outside this
 repository that check values in threads of their own (registered with `q_register_foreign_thread()`) must enter a
 Program for it.
+
+### Child processes created with fork()
+
+The locks of the scheme (the registries of tombstones, epoch holds and generic caches, the debug registries of types
+and declarations, and the lock of the debug count of entries into quiescent waits) are acquired before `fork()` by fork
+handlers, and the epoch hold of a background JIT compile that a child loses with its thread is released in the child
+(qore#7549); see "Type retirement" in `design/fork-handlers.md`.  A free or a retirement that another thread had begun
+at `fork()` is not finished in the child: the declarations that it had taken off the retire list stay allocated there.
 
 ### Bounding and reporting the delay
 

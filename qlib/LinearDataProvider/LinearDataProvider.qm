@@ -55,6 +55,15 @@ module LinearDataProvider {
                 "This integration enables creating, reading, updating, and archiving issues, projects, "
                 "cycles, labels, and comments through Linear's GraphQL API.",
             "scheme": "linear",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "linear.app",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://linear.app/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": LinearLogo,
             "logo_file_name": "linear-logo.svg",
             "logo_mime_type": MimeTypeSvg,
