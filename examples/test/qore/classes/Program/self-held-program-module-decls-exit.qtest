@@ -1,0 +1,310 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# test-platform: macos - binary and user module teardown at process exit before the remaining Programs are cleared
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class SelfHeldProgramModuleDeclsExitTest
+
+#! A Program that outlives the modules whose declarations it holds copies of exits cleanly (qore#7533)
+/** qore_cleanup() deletes the modules before it clears the Programs that are still referenced (a Program that holds
+    itself in a global variable).  A Program's copy of a module's hashdecl shares the types of the members of the
+    module's hashdecl, which name the module's enums, hashdecls and classes; the module's enum was then kept only by
+    the constants of the Program, which are released before the Program's type-owner batch reads the member types of
+    its hashdecls, and the batch read the freed enum (an assertion in a debug build, a crash in a release build).  A
+    hashdecl copy now references the binary module declarations that its member types (and those of its module
+    parents) name, directly or through compound types, an enum copy references its original if it is a module's, and
+    a declaration of a Program (such as a user module's class whose member and signature name a binary module's class,
+    which its copy in another Program shares) references them from the first type-owner batch that it is in.
+
+    Each case runs a child script with the qore binary under test, which must print \c "ok" and exit with status 0 and
+    no other output.  The cases with a self-held Program whose namespace has the yaml module's declarations exercise
+    the fix (they crashed before it); the others are guards (they passed before the fix): a Program released before
+    the modules are deleted, and a self-held Program with only a user module's declarations, which the type-owner
+    bookkeeping keeps.
+*/
+class SelfHeldProgramModuleDeclsExitTest inherits QUnit::Test {
+    public {
+        #! the yaml module's hashdecl YamlSaxEvent names the module's enums YamlSaxEventType and YamlScalarStyle
+        #! (exercises the fix)
+        const YamlSelfHeld = "%modern
+%requires yaml
+Program p();
+p.parse('our auto self_pgm;', 'self');
+p.setGlobalVarValue('self_pgm', p);
+printf(\"ok\\n\");
+";
+
+        #! the same, with values of the module's hashdecl and enum in the Program's global variables (exercises the
+        #! fix)
+        const YamlSelfHeldValues = "%modern
+%requires yaml
+Program p();
+p.parse('our auto self_pgm;
+our hash<YamlSaxEvent> ev = <YamlSaxEvent>{\"type\": YamlSaxEventType::Scalar, \"style\": YamlScalarStyle::Plain};
+our enum<YamlScalarStyle> style = YamlScalarStyle::Literal;', 'self');
+p.setGlobalVarValue('self_pgm', p);
+p.run();
+printf(\"ok\\n\");
+";
+
+        #! the same, with an object of the module's class in a global variable, which has parsed a YAML string, and the
+        #! events that the module's code made (values of the module's own hashdecl and enums) (exercises the fix)
+        const YamlSelfHeldObject = "%modern
+%requires yaml
+Program p();
+p.parse('our auto self_pgm;
+our YamlSaxParser parser();
+our list<hash<YamlSaxEvent>> events = ();
+parser.parse(\"key: value\", sub (hash<YamlSaxEvent> e) { events += e; });', 'self');
+p.setGlobalVarValue('self_pgm', p);
+p.run();
+printf(\"ok\\n\");
+";
+
+        #! the Program is held by the script's global variable and released with the script's Program, before the
+        #! modules are deleted (a guard)
+        const YamlHeld = "%modern
+%requires yaml
+our Program p();
+p.parse('our hash<YamlSaxEvent> ev = <YamlSaxEvent>{\"type\": YamlSaxEventType::Scalar};', 'held');
+p.run();
+printf(\"ok\\n\");
+";
+
+        #! the Program is deleted while the modules are loaded (a guard)
+        const YamlDeleted = "%modern
+%requires yaml
+Program p();
+p.parse('our hash<YamlSaxEvent> ev = <YamlSaxEvent>{\"type\": YamlSaxEventType::Scalar};', 'deleted');
+p.run();
+delete p;
+printf(\"ok\\n\");
+";
+
+        #! the yaml module is loaded at run time into a Program that holds itself; the script does not load it
+        #! (exercises the fix)
+        const YamlRunTimeSelfHeld = "%modern
+Program p();
+p.parse('our auto self_pgm; load_module(\"yaml\");', 'self');
+p.setGlobalVarValue('self_pgm', p);
+p.run();
+printf(\"ok\\n\");
+";
+
+        #! a user module whose public hashdecl names its own public enum (the cases that use it are guards)
+        const UserEnumModule = "%modern
+module SelfHeldEnum7533 {
+    version = \"1.0\";
+    desc = \"a hashdecl that names an enum\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public enum UmState : int { Ready = 1, Done = 2 }
+
+public hashdecl UmEvent {
+    enum<UmState> state;
+    int n = 1;
+}
+";
+
+        #! a user module whose public hashdecl names the yaml module's enum, hashdecl and class, and whose public class
+        #! names the yaml module's class in a member and a signature; the scripts that load it do not load yaml
+        #! themselves (exercises the fix)
+        const UserYamlModule = "%modern
+%requires yaml
+module SelfHeldYaml7533 {
+    version = \"1.0\";
+    desc = \"a hashdecl that names the declarations of a binary module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public hashdecl UmYamlEvent {
+    enum<YamlScalarStyle> style;
+    *hash<YamlSaxEvent> event;
+    *YamlSaxParser parser;
+}
+
+public class UmYamlHolder {
+    public {
+        *YamlSaxParser parser;
+    }
+
+    setParser(*YamlSaxParser p) {
+        parser = p;
+    }
+}
+";
+
+        #! a user module whose public hashdecl names the yaml module's enum, hashdecl and class only through compound
+        #! member types (exercises the fix: the module declarations named through element and value types are kept as
+        #! well)
+        const UserYamlCompoundModule = "%modern
+%requires yaml
+module SelfHeldYamlCompound7533 {
+    version = \"1.0\";
+    desc = \"a hashdecl whose compound member types name the declarations of a binary module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public hashdecl UmYamlCompound {
+    *list<enum<YamlScalarStyle>> styles;
+    *hash<string, hash<YamlSaxEvent>> events;
+    *list<YamlSaxParser> parsers;
+}
+";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("SelfHeldProgramModuleDeclsExitTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a self-held Program after %requires yaml exits cleanly", \yamlSelfHeld());
+        addTestCase("a self-held Program with yaml values exits cleanly", \yamlSelfHeldValues());
+        addTestCase("a self-held Program with a yaml object and its events exits cleanly", \yamlSelfHeldObject());
+        addTestCase("a Program held by the script with yaml exits cleanly", \yamlHeld());
+        addTestCase("a Program deleted before exit with yaml exits cleanly", \yamlDeleted());
+        addTestCase("a self-held Program that loads yaml at run time exits cleanly", \yamlRunTimeSelfHeld());
+        addTestCase("a self-held Program with a user module's enum in a hashdecl exits cleanly", \userEnumSelfHeld());
+        addTestCase("a Program held by the script with a user module's enum in a hashdecl exits cleanly",
+            \userEnumHeld());
+        addTestCase("a self-held Program with a user module's hashdecl and class naming yaml declarations exits "
+            "cleanly", \userYamlSelfHeld());
+        addTestCase("a self-held Program with a user module's hashdecl naming yaml declarations in compound member "
+            "types exits cleanly", \userYamlCompoundSelfHeld());
+        set_return_value(main());
+    }
+
+    yamlSelfHeld() {
+        checkChild(YamlSelfHeld);
+    }
+
+    yamlSelfHeldValues() {
+        checkChild(YamlSelfHeldValues);
+    }
+
+    yamlSelfHeldObject() {
+        checkChild(YamlSelfHeldObject);
+    }
+
+    yamlHeld() {
+        checkChild(YamlHeld);
+    }
+
+    yamlDeleted() {
+        checkChild(YamlDeleted);
+    }
+
+    yamlRunTimeSelfHeld() {
+        checkChild(YamlRunTimeSelfHeld);
+    }
+
+    userEnumSelfHeld() {
+        TmpDir tmp("qore-7533-user-enum-");
+        writeFile(tmp.path + "/SelfHeldEnum7533.qm", UserEnumModule);
+        checkChild(sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires SelfHeldEnum7533
+Program p();
+# the child Program imports the module that the script requires
+p.loadModule('SelfHeldEnum7533');
+p.parse('our auto self_pgm;
+our hash<UmEvent> ev = <UmEvent>{\"state\": UmState::Done};', 'self');
+p.setGlobalVarValue('self_pgm', p);
+p.run();
+printf(\"ok\\n\");
+", tmp.path));
+    }
+
+    userEnumHeld() {
+        TmpDir tmp("qore-7533-user-enum-held-");
+        writeFile(tmp.path + "/SelfHeldEnum7533.qm", UserEnumModule);
+        checkChild(sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires SelfHeldEnum7533
+our Program p();
+# the child Program imports the module that the script requires
+p.loadModule('SelfHeldEnum7533');
+p.parse('our hash<UmEvent> ev = <UmEvent>{\"state\": UmState::Ready};', 'held');
+p.run();
+printf(\"ok\\n\");
+", tmp.path));
+    }
+
+    userYamlSelfHeld() {
+        TmpDir tmp("qore-7533-user-yaml-");
+        writeFile(tmp.path + "/SelfHeldYaml7533.qm", UserYamlModule);
+        checkChild(sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires SelfHeldYaml7533
+Program p();
+# the child Program imports the module that the script requires
+p.loadModule('SelfHeldYaml7533');
+p.parse('our auto self_pgm;
+our *hash<UmYamlEvent> ev;
+our UmYamlHolder holder();', 'self');
+p.setGlobalVarValue('self_pgm', p);
+p.run();
+printf(\"ok\\n\");
+", tmp.path));
+    }
+
+    userYamlCompoundSelfHeld() {
+        TmpDir tmp("qore-7533-user-yaml-compound-");
+        writeFile(tmp.path + "/SelfHeldYamlCompound7533.qm", UserYamlCompoundModule);
+        checkChild(sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires SelfHeldYamlCompound7533
+Program p();
+# the child Program imports the module that the script requires, and yaml, whose declarations it names in the values
+p.loadModule('SelfHeldYamlCompound7533');
+p.loadModule('yaml');
+p.parse('our auto self_pgm;
+our hash<UmYamlCompound> c = <UmYamlCompound>{
+    \"styles\": (YamlScalarStyle::Plain, YamlScalarStyle::Literal),
+    \"events\": {\"a\": <YamlSaxEvent>{\"type\": YamlSaxEventType::Scalar, \"style\": YamlScalarStyle::Plain}},
+    \"parsers\": (new YamlSaxParser(),),
+};', 'self');
+p.setGlobalVarValue('self_pgm', p);
+p.run();
+printf(\"ok\\n\");
+", tmp.path));
+    }
+
+    #! runs a child script, which must print only "ok" and exit with status 0
+    private checkChild(string code) {
+        TmpDir tmp("qore-7533-child-");
+        string script = tmp.path + "/child.q";
+        writeFile(script, code);
+        # the exit status is printed after the output: 134 for a failed assertion, 139 for a segmentation fault
+        string output = backquote(sprintf("%s %s 2>&1; echo \"rc=$?\"", shellQuote(qore_bin), shellQuote(script)));
+        assertEq("ok\nrc=0\n", output, "the child exits cleanly");
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+        f.close();
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

@@ -1559,10 +1559,16 @@ public:
         } else if (const QoreWildcardTypeInfo* wti = dynamic_cast<const QoreWildcardTypeInfo*>(ti)) {
             orphanType(wti->getOrphanableBound());
         } else if (const QoreComplexSoftListTypeInfo* sti = dynamic_cast<const QoreComplexSoftListTypeInfo*>(ti)) {
-            orphanType(*sti->getOrphanableElementCell());
+            // a soft list type made from its accept and return specs (the soft auto list singletons) has no element
+            // cell: its specs, walked above, are all that it names (qore#7533)
+            if (const QoreOrphanablePtr<const QoreTypeInfo>* cell = sti->getOrphanableElementCell()) {
+                orphanType(*cell);
+            }
         } else if (const QoreComplexSoftListOrNothingTypeInfo* sti
                 = dynamic_cast<const QoreComplexSoftListOrNothingTypeInfo*>(ti)) {
-            orphanType(*sti->getOrphanableElementCell());
+            if (const QoreOrphanablePtr<const QoreTypeInfo>* cell = sti->getOrphanableElementCell()) {
+                orphanType(*cell);
+            }
         } else if (const QoreComplexReferenceTypeInfo* rti = dynamic_cast<const QoreComplexReferenceTypeInfo*>(ti)) {
             // the hard reference type made on demand and owned by the type names the same element type
             orphan(rti->getCreatedHardReference(), depth + 1);
@@ -1865,15 +1871,24 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
                 n->derefTypeOwner();
             }
         }
+        // the binary module declarations that it named (qore#7533)
+        std::vector<QoreTypeOwner*> mod_refs;
+        mod_refs.swap(owner->type_owner_module_refs);
+        for (QoreTypeOwner* n : mod_refs) {
+            n->derefTypeOwner();
+        }
         return;
     }
     std::vector<QoreTypeOwner*> release_list;
+    // the binary module declarations that it named (qore#7533), released after the lock is released
+    std::vector<QoreTypeOwner*> mod_refs;
     {
         AutoLocker al(ctl);
         type_owner_counted_registry().erase(owner);
         type_owner_release_keeps(owner);
         retired_derived_naming.erase(owner);
         type_owner_uncount_names(owner, release_list);
+        mod_refs.swap(owner->type_owner_module_refs);
         // a member of a group is freed only when the group has been collected, unless it is deleted with its class
         // object (qore_class_private::deref() with in_del): it leaves its group then
         QoreTypeOwnerGroup* g = owner->type_owner_group;
@@ -1891,43 +1906,203 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
         }
     }
     type_owner_release(release_list);
+    for (QoreTypeOwner* n : mod_refs) {
+        n->derefTypeOwner();
+    }
 }
 
-void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti, const QoreTypeOwner* self) {
+//! Returns the declaration (class, hashdecl or enum) whose own type or or-nothing type \a ti is, or nullptr
+static QoreTypeOwner* type_owner_of_decl_type(const QoreTypeInfo* ti) {
+    if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
+        const QoreClass* qc = QoreTypeInfo::getReturnClass(ti);
+        if (qc) {
+            qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
+            if (priv) {
+                return &priv->type_owner;
+            }
+        }
+    } else if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
+        const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti);
+        if (hd) {
+            return &typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd))->type_owner;
+        }
+    } else if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
+        const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
+        if (ed) {
+            return &qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed))->type_owner;
+        }
+    }
+    return nullptr;
+}
+
+namespace {
+//! Collects the binary module declarations that a type names, directly or through the types that it is made of
+/** A compound type (list<ModEnum>, hash<string, hash<ModHd>>, a union, a parameterized class, a code type) names the
+    declarations of its element, member, argument, parameter and return types; the walk follows the types as
+    QoreDerivedTypeOrphaner does, and not the declarations that it finds (what a declaration names is its own), nor
+    type parameters, which belong to the declaration that declares them (qore#7533)
+*/
+class QoreModuleTypeOwnerCollector {
+public:
+    DLLLOCAL QoreModuleTypeOwnerCollector(std::vector<QoreTypeOwner*>& names) : names(names) {
+    }
+
+    DLLLOCAL void add(const QoreTypeInfo* ti) {
+        // every type is walked once: a type can be reached by several paths
+        if (!ti || !visited.insert(ti).second) {
+            return;
+        }
+        if (QoreTypeOwner* o = type_owner_of_decl_type(ti)) {
+            addOwner(o);
+            return;
+        }
+        for (const QoreAcceptSpec& as : ti->getAcceptSpecs()) {
+            addSpec(as.spec);
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            addSpec(rs.spec);
+        }
+        // the orphanable views, which QoreDerivedTypeOrphaner walks, not the legacy copies kept for the deprecated
+        // reflection functions (qore#7533)
+        if (const QoreParameterizedClassTypeInfo* pti = dynamic_cast<const QoreParameterizedClassTypeInfo*>(ti)) {
+            addClass(pti->getOrphanableBaseClass().get());
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& arg : pti->getTypeArgs().getOrphanable()) {
+                add(arg.get());
+            }
+        } else if (const QoreUnionTypeInfo* uti = dynamic_cast<const QoreUnionTypeInfo*>(ti)) {
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& m : uti->getOrphanableMemberTypes()) {
+                add(m.get());
+            }
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& m : uti->getOrphanableExactMembers()) {
+                add(m.get());
+            }
+        } else if (const QoreComplexCodeTypeInfo* cti = dynamic_cast<const QoreComplexCodeTypeInfo*>(ti)) {
+            add(cti->getOrphanableReturnType().get());
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& p : cti->getParamTypes().getOrphanable()) {
+                add(p.get());
+            }
+        } else if (const QoreWildcardTypeInfo* wti = dynamic_cast<const QoreWildcardTypeInfo*>(ti)) {
+            add(wti->getOrphanableBound().get());
+        } else if (const QoreComplexSoftListTypeInfo* sti = dynamic_cast<const QoreComplexSoftListTypeInfo*>(ti)) {
+            // a soft list type made from its accept and return specs has no element cell (qore#7533)
+            if (const QoreOrphanablePtr<const QoreTypeInfo>* cell = sti->getOrphanableElementCell()) {
+                add(cell->get());
+            }
+        } else if (const QoreComplexSoftListOrNothingTypeInfo* sti
+                = dynamic_cast<const QoreComplexSoftListOrNothingTypeInfo*>(ti)) {
+            if (const QoreOrphanablePtr<const QoreTypeInfo>* cell = sti->getOrphanableElementCell()) {
+                add(cell->get());
+            }
+        }
+    }
+
+private:
+    std::vector<QoreTypeOwner*>& names;
+    std::set<const QoreTypeInfo*> visited;
+
+    DLLLOCAL void addOwner(QoreTypeOwner* o) {
+        if (o->isTypeOwnerModule() && std::find(names.begin(), names.end(), o) == names.end()) {
+            names.push_back(o);
+        }
+    }
+
+    DLLLOCAL void addClass(const QoreClass* qc) {
+        if (!qc) {
+            return;
+        }
+        qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
+        if (priv) {
+            addOwner(&priv->type_owner);
+        }
+    }
+
+    DLLLOCAL void addSpec(const QoreTypeSpec& spec) {
+        switch (spec.getTypeSpec()) {
+            case QTS_CLASS:
+                addClass(spec.getClass());
+                break;
+            case QTS_HASHDECL:
+                if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                    addOwner(&typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd))->type_owner);
+                }
+                break;
+            case QTS_ENUM:
+                if (const QoreEnumDecl* ed = spec.getEnum()) {
+                    addOwner(&qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed))->type_owner);
+                }
+                break;
+            case QTS_COMPLEXHASH:
+            case QTS_COMPLEXLIST:
+            case QTS_COMPLEXSOFTLIST:
+            case QTS_COMPLEXHARDREF:
+            case QTS_COMPLEXREF:
+            case QTS_COMPLEXBUFFER:
+            case QTS_PARAMCLASS:
+            case QTS_WILDCARD:
+                add(spec.getOrphanableTypeInfo());
+                break;
+            default:
+                break;
+        }
+    }
+};
+}
+
+void qore_type_owner_add_module_names(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti) {
+    if (!ti) {
+        return;
+    }
+    assert(qore_type_info_is_live(ti));
+    QoreModuleTypeOwnerCollector(names).add(ti);
+}
+
+void qore_type_owner_add_module_class_names(std::vector<QoreTypeOwner*>& names,
+        qore_type_owner_module_names_cache_t* cache) {
+    // only the declarations listed when called are walked: what a declaration that they name names is not
+    std::vector<QoreTypeOwner*> sig_names;
+    for (size_t i = 0, e = names.size(); i < e; ++i) {
+        const QoreTypeOwner* o = names[i];
+        assert(o->isTypeOwnerModule());
+        const std::vector<QoreTypeOwner*>* found;
+        if (cache) {
+            qore_type_owner_module_names_cache_t::iterator ci = cache->find(o);
+            if (ci == cache->end()) {
+                std::vector<QoreTypeOwner*> v;
+                o->getTypeOwnerModuleSignatureNames(v);
+                ci = cache->emplace(o, std::move(v)).first;
+            }
+            found = &ci->second;
+        } else {
+            sig_names.clear();
+            o->getTypeOwnerModuleSignatureNames(sig_names);
+            found = &sig_names;
+        }
+        for (QoreTypeOwner* n : *found) {
+            if (std::find(names.begin(), names.end(), n) == names.end()) {
+                names.push_back(n);
+            }
+        }
+    }
+}
+
+void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti, const QoreTypeOwner* self,
+        bool module_names) {
     if (!ti) {
         return;
     }
     // a declaration names the types of its members by pointer: the owner of a type that it names must outlive it, or
     // be kept by a reference or retired (QoreTypeOwnerBatch)
     assert(qore_type_info_is_live(ti));
-    QoreTypeOwner* o = nullptr;
-    if (dynamic_cast<const QoreClassTypeInfo*>(ti)) {
-        const QoreClass* qc = QoreTypeInfo::getReturnClass(ti);
-        if (qc) {
-            qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(qc));
-            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
-                o = &priv->type_owner;
-            }
+    QoreTypeOwner* o = type_owner_of_decl_type(ti);
+    if (o && !o->isTypeOwnerSystem()) {
+        if (o != self) {
+            names.push_back(o);
         }
-    } else if (dynamic_cast<const QoreHashDeclTypeInfo*>(ti)) {
-        const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti);
-        if (hd) {
-            typed_hash_decl_private* priv = typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd));
-            if (!priv->type_owner.isTypeOwnerSystem()) {
-                o = &priv->type_owner;
-            }
-        }
-    } else if (dynamic_cast<const QoreEnumTypeInfo*>(ti)) {
-        const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti);
-        if (ed) {
-            qore_enum_decl_private* priv = qore_enum_decl_private::get(*const_cast<QoreEnumDecl*>(ed));
-            if (!priv->type_owner.isTypeOwnerSystem()) {
-                o = &priv->type_owner;
-            }
-        }
+        return;
     }
-    if (o && o != self) {
-        names.push_back(o);
+    // the binary module declarations that it names, directly or through a compound type (qore#7533)
+    if (module_names) {
+        QoreModuleTypeOwnerCollector(names).add(ti);
     }
 }
 
@@ -1960,11 +2135,47 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
     // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
     // (one that survived another Program sharing it) keeps them
     AutoLocker al(ctl);
+    std::vector<QoreTypeOwner*> names;
+    // what each binary module class named by the declarations names in its own types, walked once (qore#7533)
+    qore_type_owner_module_names_cache_t module_class_names;
     for (QoreTypeOwner* o : owners) {
-        if (!o->type_owner_names_counted) {
+        bool user = !o->type_owner_names_counted;
+        bool module = !o->type_owner_module_refs_taken;
+        if (!user && !module) {
+            continue;
+        }
+        names.clear();
+        o->getTypeOwnerNames(names);
+        if (user) {
             o->type_owner_names.clear();
-            o->getTypeOwnerNames(o->type_owner_names);
+            for (QoreTypeOwner* n : names) {
+                if (!n->isTypeOwnerSystem()) {
+                    o->type_owner_names.push_back(n);
+                }
+            }
             o->type_owner_names_known = true;
+        }
+        if (module) {
+            // the binary module declarations that it names are not decided with the declarations of Programs: they
+            // are referenced until it is destroyed, as their module can be deleted before it; a hashdecl copy, which
+            // references them itself, does not list them (qore#7533)
+            assert(o->type_owner_module_refs.empty());
+            std::vector<QoreTypeOwner*> mod_names;
+            for (QoreTypeOwner* n : names) {
+                if (n->isTypeOwnerModule()
+                        && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
+                    mod_names.push_back(n);
+                }
+            }
+            // a class's type is shared with its copies, so the declaration names a module's original class, whose
+            // member and signature types the code of its Program reads (qore#7533)
+            qore_type_owner_add_module_class_names(mod_names, &module_class_names);
+            // nothing is thrown from here on
+            for (QoreTypeOwner* n : mod_names) {
+                n->refTypeOwner();
+            }
+            o->type_owner_module_refs.swap(mod_names);
+            o->type_owner_module_refs_taken = true;
         }
     }
 }

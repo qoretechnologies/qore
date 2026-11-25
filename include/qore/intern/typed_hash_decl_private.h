@@ -155,6 +155,8 @@ public:
         delete parse_parent;
         // the declarations named by this hashdecl's member types are no longer kept for it (issue #5790)
         qore_type_owner_destroyed(&type_owner);
+        // last, after the source, which names them as well (qore#7533)
+        releaseCopyModuleNames();
     }
 
     // QoreTypeOwner (issue #5790)
@@ -178,6 +180,15 @@ public:
         return sys && !copied;
     }
 
+    //! An original builtin hashdecl that is not one of the static system namespace (Qore::) or a tombstone (nor a
+    //! concrete declaration of one): a binary module's (qore#7533)
+    /** Decided by ownership, not by the module context of its creation: a binary module can create builtin
+        declarations after its initialization, with no module context or with that of a user module being parsed
+    */
+    DLLLOCAL bool isTypeOwnerModule() const {
+        return isTypeOwnerSystem() && !not_module_decl;
+    }
+
     //! A retired hashdecl keeps its members, its parent and its source, as the type checks compare them
     DLLLOCAL bool keepsTypeOwnerMembers() const {
         return true;
@@ -193,12 +204,23 @@ public:
     }
 
     //! The declarations named by the member types
+    /** A copy references the binary module declarations that they name itself (copy_module_names), so they are not
+        listed for it (qore#7533)
+    */
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
         for (auto& i : members.member_list) {
             if (i.second) {
-                qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+                qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner, !copied);
             }
         }
+        if (!copied) {
+            addBuiltinParentModuleNames(names);
+        }
+    }
+
+    //! Nothing: a Program names a copy of a module's hashdecl, which keeps what its members name itself
+    //! (copy_module_names); an original that a module class's types name is not walked in turn (qore#7533)
+    DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
     }
 
     //! The parent and the source of a copy
@@ -209,6 +231,7 @@ public:
         if (copy_source) {
             refs.push_back(&copy_source->type_owner);
         }
+        refs.insert(refs.end(), copy_module_names.begin(), copy_module_names.end());
     }
 
     DLLLOCAL void refTypeOwner() {
@@ -608,6 +631,22 @@ public:
         return hashdecl.priv;
     }
 
+    //! Marks a builtin hashdecl that belongs to no binary module and the concrete declarations that it has made
+    //! (qore#7533)
+    /** A hashdecl of the static system namespace (Qore::), marked when the namespace has been built, or a tombstone
+        hashdecl, marked when it is created, before it is shared with another thread; see isTypeOwnerModule().  A
+        concrete declaration made before (such as KeyValueInfo<auto>, made while the namespace is built) is marked
+        here; one made after copies the flag from its generic (getParameterizedHashDecl()), as a concrete declaration
+        does not reference its generic, which a binary module's can outlive
+    */
+    DLLLOCAL void setNotModuleDecl() {
+        not_module_decl = true;
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        for (auto& i : parameterized_hashdecl_cache) {
+            get(*i.second)->not_module_decl = true;
+        }
+    }
+
     DLLLOCAL void addMember(const char* name, const QoreTypeInfo* memberTypeInfo, QoreValue init_val) {
         assert(!members.find(name));
         members.addNoCheck(std::make_pair(strdup(name), new HashDeclMemberInfo(&loc_builtin, memberTypeInfo, nullptr, init_val)));
@@ -820,6 +859,55 @@ public:
         }
     }
 
+    //! References the binary module declarations that the member types of a copy name (see copy_module_names)
+    /** @param src the hashdecl that this one was copied from, whose members have the same types and whose parent is
+        the same, or nullptr (a concrete declaration of a copy, whose members are instantiated): its list is reused if
+        it is a copy or a builtin declaration
+    */
+    DLLLOCAL void keepCopyModuleNames(const typed_hash_decl_private* src);
+
+    //! Releases the references taken by keepCopyModuleNames(); can be called again
+    DLLLOCAL void releaseCopyModuleNames() {
+        std::vector<QoreTypeOwner*> names;
+        names.swap(copy_module_names);
+        // a release can free a module declaration whose namespace has been deleted
+        for (QoreTypeOwner* o : names) {
+            o->derefTypeOwner();
+        }
+    }
+
+    //! Adds the binary module declarations that the member types name, directly or through compound types (qore#7533)
+    DLLLOCAL void addMemberModuleNames(std::vector<QoreTypeOwner*>& names) const {
+        for (auto& i : members.member_list) {
+            if (i.second) {
+                qore_type_owner_add_module_names(names, i.second->getTypeInfo());
+            }
+        }
+    }
+
+    //! Adds the binary module declarations that the member types of the parents name, for as long as the parents are
+    //! binary module declarations (qore#7533)
+    /** A module's hashdecl names the module declarations of its members without references; a declaration that
+        references the module hashdecl as its parent (or whose source does) keeps them as well, as the parent's members
+        are read with its own.  A parent that is not a module's declaration is a copy that keeps them itself, a user
+        declaration whose own Program decides what it names, or a system declaration (Qore::), whose members name
+        only system declarations
+    */
+    DLLLOCAL void addBuiltinParentModuleNames(std::vector<QoreTypeOwner*>& names) const {
+        for (const TypedHashDecl* p = parentHashDecl; p;) {
+            const typed_hash_decl_private* pp = get(*p);
+            if (!pp->type_owner.isTypeOwnerModule()) {
+                break;
+            }
+            pp->addMemberModuleNames(names);
+            p = pp->parentHashDecl;
+        }
+    }
+
+    //! Returns the binary module declarations that the members of a builtin hashdecl and of its module parents name,
+    //! computed once and shared by its copies (qore#7533)
+    DLLLOCAL const std::vector<QoreTypeOwner*>& getBuiltinModuleNames() const;
+
     //! Releases the caches of the hashdecl and its registration; can be called again
     /** Called by releaseDependencies(), and when the hashdecl is retired (see QoreTypeOwner)
     */
@@ -1005,6 +1093,24 @@ protected:
         otherwise: a copy imported into or inherited by another Program can outlive the source Program
     */
     typed_hash_decl_private* copy_source = nullptr;
+    //! The binary module declarations that the member types of a copy (and of its module parents) name, directly or
+    //! through compound types, referenced by the copy (qore#7533)
+    /** A copy shares the types of its source's members.  A module's source names the declarations of its namespace
+        without references, as they are freed with the namespace (see QoreTypeOwner::isTypeOwnerModule()), and the
+        names that the type-owner bookkeeping counts (type_owner_names) are only declarations of Programs; a module's
+        namespace can be freed before the Program that holds the copy, however: at the end of the process, the modules
+        are deleted before a Program that holds itself is cleared.  So the copy keeps them until it is destroyed, and
+        its Program's QoreTypeOwnerBatch (which does not take them again for a copy: QoreTypeOwner::
+        type_owner_module_refs) and the type checks of its members never read a freed type.  The declarations of the
+        system namespace (Qore::) are freed after every Program and are not referenced.  One entry per reference held;
+        see keepCopyModuleNames()
+    */
+    std::vector<QoreTypeOwner*> copy_module_names;
+    //! The binary module declarations that the members of a builtin hashdecl and of its module parents name, without
+    //! references, computed once for its copies (getBuiltinModuleNames())
+    mutable std::vector<QoreTypeOwner*> builtin_module_names;
+    //! Guards the computation of builtin_module_names
+    mutable std::once_flag builtin_module_names_once;
 
 public:
     //! the declaration's QoreTypeOwner (issue #5790); the last member, so the layout of the others is not changed
@@ -1022,6 +1128,13 @@ protected:
 
     bool pub = false;
     bool sys = false;
+    //! a builtin hashdecl that belongs to no binary module, which is freed after every Program
+    /** Set (setNotModuleDecl()) on the hashdecls of the static system namespace (Qore::) and on their concrete
+        declarations when the namespace has been built, and on the tombstone hashdecls when they are created; kept by
+        copies and by the concrete declarations made afterwards; every other original builtin hashdecl, whenever it is
+        created, is a binary module's (isTypeOwnerModule(), qore#7533)
+    */
+    bool not_module_decl = false;
 
     // re-export marker for cross-program imports.  Set by Program::importHashDecl(...
     // reexport=True) on the host side; consulted by qore_program_private::

@@ -3424,7 +3424,13 @@ public:
         */
         hierarchy_initialized : 1 = false,
         //! abstract resolution installed variants in this class or an uncommitted ancestor
-        abstract_dispatch_changed : 1 = false
+        abstract_dispatch_changed : 1 = false,
+        //! a builtin class that belongs to no binary module, which is freed after every Program
+        /** Set (setNotModuleDecl()) on the classes of the static system namespace (Qore::) when the namespace has
+            been built, on the pseudo-classes and on the tombstone classes when they are created, and kept by copies;
+            every other builtin class, whenever it is created, is a binary module's (isTypeOwnerModule(), qore#7533)
+        */
+        not_module_decl : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -6577,6 +6583,14 @@ public:
         return qc.priv;
     }
 
+    //! Marks a builtin class that belongs to no binary module (qore#7533)
+    /** A class of the static system namespace (Qore::), marked when the namespace has been built, a pseudo-class or
+        a tombstone class, marked when it is created, before it is shared with another thread; see isTypeOwnerModule()
+    */
+    DLLLOCAL static void setNotModuleDecl(QoreClass& qc) {
+        qc.priv->not_module_decl = true;
+    }
+
     DLLLOCAL static bool isPublic(const QoreClass& qc) {
         return qc.priv->pub;
     }
@@ -6647,6 +6661,17 @@ protected:
         return sys;
     }
 
+    //! A builtin class that is not one of the static system namespace (Qore::), a pseudo-class or a tombstone: a
+    //! binary module's (qore#7533)
+    /** Decided by ownership, not by the module context of its creation: a binary module can create builtin classes
+        after its initialization (module-jni and module-python create them when they are first needed, with no module
+        context or with that of a user module being parsed); a class shares its private data with its copies in
+        Programs, and an imported copy keeps the flag of its source
+    */
+    DLLLOCAL bool isTypeOwnerModule() const {
+        return sys && !not_module_decl;
+    }
+
     DLLLOCAL bool keepsTypeOwnerMembers() const {
         return false;
     }
@@ -6661,6 +6686,14 @@ protected:
 
     //! The declarations named by the types of the members, static variables and method signatures
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const;
+
+    //! The binary module declarations named by the types of the members, static variables, method signatures and
+    //! type parameters of a binary module's class and of its module base classes (qore#7533)
+    DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const;
+
+    //! Calls \a f with each type of the members, static variables, method signatures and type parameters
+    template <typename F>
+    DLLLOCAL void forEachTypeOwnerType(F&& f) const;
 
     //! The base classes (the special method list of the class holds a reference to each) and the source of an imported
     //! class
