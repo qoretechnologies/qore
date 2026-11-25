@@ -3975,6 +3975,53 @@ public:
         }
     }
 
+    //! Appends the own types of the declarations that \a ti names that are not mortal, as addMortal() walks it; the
+    //! caller holds the type lock (qore#7608)
+    DLLLOCAL static void getUnmarked(type_vec_t& out, const QoreTypeInfo* ti, int depth) {
+        if (!ti || depth > 64) {
+            return;
+        }
+        for (const QoreReturnSpec& rs : ti->return_vec) {
+            const QoreTypeSpec& spec = rs.spec;
+            if (const TypedHashDecl* hd = spec.getHashDecl()) {
+                const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+                if (hp->type_owner.isTypeOwnerSystem()) {
+                    out.push_back(hp->getTypeInfo(false));
+                }
+                for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                    getUnmarked(out, arg, depth + 1);
+                }
+            } else if (const QoreParameterizedClassTypeInfo* pti = spec.getParameterizedClassTypeInfo()) {
+                getUnmarkedClass(out, pti->getBaseClass());
+                for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+                    getUnmarked(out, arg, depth + 1);
+                }
+            } else if (const QoreClass* qc = spec.getClass()) {
+                getUnmarkedClass(out, qc);
+            } else if (const QoreEnumDecl* ed = spec.getEnum()) {
+                const qore_enum_decl_private* ep = qore_enum_decl_private::get(*ed);
+                if (ep->type_owner.isTypeOwnerSystem()) {
+                    out.push_back(ep->getTypeInfo(false));
+                }
+            } else if (const QoreWildcardTypeInfo* wti = spec.getWildcardTypeInfo()) {
+                getUnmarked(out, wti->getBound(), depth + 1);
+            } else if (const QoreTypeInfo* elem = spec.getElementType()) {
+                getUnmarked(out, elem, depth + 1);
+            }
+        }
+        if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+            getUnmarked(out, cti->getReturnType(), depth + 1);
+            for (const QoreTypeInfo* param : cti->getParamTypes()) {
+                getUnmarked(out, param, depth + 1);
+            }
+        }
+        if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+            if (target != ti) {
+                getUnmarked(out, target, depth + 1);
+            }
+        }
+    }
+
     DLLLOCAL ~qore_type_decl_refs_private() {
         for (QoreClass* c : classes) {
             qore_class_private::derefClass(*c, false, false, false);
@@ -4083,6 +4130,13 @@ private:
         }
     }
 
+    //! Appends the type of a class for getUnmarked() if it is not mortal
+    DLLLOCAL static void getUnmarkedClass(type_vec_t& out, const QoreClass* qc) {
+        if (qc && qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
+            out.push_back(qc->getTypeInfo());
+        }
+    }
+
     //! References a class for addMortal() if it is mortal
     DLLLOCAL static void addMortalClass(std::unique_ptr<qore_type_decl_refs_private>& p, const QoreClass* qc) {
         if (qc && !qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()) {
@@ -4174,6 +4228,15 @@ void QoreTypeDeclRefs::addMortal(const QoreTypeInfo* ti) {
         throw;
     }
     priv = p.release();
+}
+
+void QoreTypeDeclRefs::getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& types) {
+    if (!ti) {
+        return;
+    }
+    // under the type lock, as addMortal() walks the type
+    AutoLocker al(ctl);
+    qore_type_decl_refs_private::getUnmarked(types, ti, 0);
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {

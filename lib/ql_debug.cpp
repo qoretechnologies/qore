@@ -424,6 +424,11 @@ static QoreValue f_dbg_runtime_refresh_pending(const QoreListNode* params, Runti
     return qore_root_ns_private::get(*root)->runtimeRefreshPending();
 }
 
+//! Returns the number of variants whose references the marking events of run-time namespaces refreshed (qore#7608)
+static QoreValue f_dbg_runtime_variant_refreshes(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_runtime_variant_refreshes();
+}
+
 //! Returns the number of scans of the parameterized class types for declarations that became mortal (qore#7540)
 static QoreValue f_dbg_program_local_derived_type_scans(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -517,6 +522,25 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         late_cns->addSystemClass(lateb);
         late_fns->addBuiltinVariant("dbg_rt_lateb", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
             lateb->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        // a hashdecl, an enum and an instance of a generic hashdecl of <name>C that functions of <name>F name: the
+        // attach of <name>C refreshes them through the declarations that it marks (qore#7608)
+        std::string cpath = std::string("::") + inner + "C::";
+        TypedHashDecl* lateh = new TypedHashDecl("DbgRtLateH", (cpath + "DbgRtLateH").c_str());
+        lateh->addMember("a", bigIntTypeInfo, QoreValue());
+        late_cns->addSystemHashDecl(lateh);
+        late_fns->addBuiltinVariant("dbg_rt_lateh", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateh->getTypeInfo(true), QORE_PARAM_NO_ARG, "h");
+        QoreEnumDecl* latee = new QoreEnumDecl("DbgRtLateE", (cpath + "DbgRtLateE").c_str(), bigIntTypeInfo);
+        latee->addMember("A", static_cast<int64>(1));
+        late_cns->addSystemEnum(latee);
+        late_fns->addBuiltinVariant("dbg_rt_latee", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            latee->getTypeInfo(true), QORE_PARAM_NO_ARG, "e");
+        TypedHashDecl* lateg = new TypedHashDecl("DbgRtLateG", (cpath + "DbgRtLateG").c_str());
+        lateg->addTypeParameter("T");
+        lateg->addMember("a", bigIntTypeInfo, QoreValue());
+        late_cns->addSystemHashDecl(lateg);
+        late_fns->addBuiltinVariant("dbg_rt_lateg", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            lateg->getTypeInfo(type_vec_t{bigIntTypeInfo}, true), QORE_PARAM_NO_ARG, "h");
     }
     if (sep != std::string::npos) {
         std::unique_ptr<QoreNamespace> outer(new QoreNamespace(full.substr(0, sep).c_str()));
@@ -37329,6 +37353,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_rt_box_unsafe", f_dbg_rt_box_unsafe, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
     qns.addBuiltinVariant("dbg_runtime_refresh_pending", f_dbg_runtime_refresh_pending, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_runtime_variant_refreshes", f_dbg_runtime_variant_refreshes, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_program_local_derived_type_scans", f_dbg_program_local_derived_type_scans,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

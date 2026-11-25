@@ -62,6 +62,8 @@ bool sub pending() { return dbg_runtime_refresh_pending(); }";
         addTestCase("a marking event that did not complete is completed by the next one", \failedRefreshTest());
         addTestCase("a declaration added to an attached namespace and a variant added after it",
             \addSystemAfterAttachTest());
+        addTestCase("an attach refreshes only its variants and those naming the declarations that it marks",
+            \targetedRefreshTest());
         set_return_value(main());
     }
 
@@ -174,6 +176,36 @@ bool sub pending() { return dbg_runtime_refresh_pending(); }";
             Program p = getSource(1, 4);
             assertFalse(p.callFunction("pending"), "the failed marking event is completed");
         }, "failed refresh");
+    }
+
+    targetedRefreshTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse(AddSource, "add");
+            # each attach of a namespace with declarations refreshes the variants that it adds, not those of the
+            # namespaces attached before it (qore#7608)
+            list<int> counts;
+            for (int i = 0; i < 4; ++i) {
+                int before = call_function("dbg_runtime_variant_refreshes");
+                p.callFunction("add", "DbgRtNs" + i, 1);
+                counts += call_function("dbg_runtime_variant_refreshes") - before;
+            }
+            assertGt(0, counts[0], "the first attach refreshes its variants");
+            assertEq((counts[0], counts[0], counts[0]), counts[1..], "the later attaches refresh as many");
+            # the functions of a namespace attached before the namespace with the hashdecl, the enum and the generic
+            # hashdecl that they name still keep them (the class: lateClassTest())
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p2 = getSource(1, 2);
+            foreach string f in ("dbg_rt_lateh", "dbg_rt_latee", "dbg_rt_lateg") {
+                p2.callFunction("imp", q, "DbgRtNsF::" + f);
+            }
+            delete p2;
+            checkImported(q, "DbgRtNsF::dbg_rt_lateh", "DbgRtLateH");
+            checkImported(q, "DbgRtNsF::dbg_rt_latee", "DbgRtLateE");
+            checkImported(q, "DbgRtNsF::dbg_rt_lateg", "DbgRtLateG");
+        }, "targeted refresh");
     }
 
     addSystemAfterAttachTest() {

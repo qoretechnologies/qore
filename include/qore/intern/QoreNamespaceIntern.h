@@ -1502,6 +1502,9 @@ struct deferred_new_check_t {
 //! Makes the next completion of a marking event of a namespace that a Program owns fail after its upgrade, as an
 //! allocation failure would (qore#7540)
 DLLLOCAL void qore_dbg_fail_next_runtime_refresh();
+
+//! Returns the number of variants whose references the marking events refreshed (qore#7608)
+DLLLOCAL int64 qore_dbg_runtime_variant_refreshes();
 #endif
 
 class qore_root_ns_private : public qore_ns_private {
@@ -1519,6 +1522,17 @@ protected:
     std::vector<AbstractQoreFunctionVariant*> runtime_variants;
     //! the variants of runtime_variants, for the test of membership
     std::unordered_set<const AbstractQoreFunctionVariant*> runtime_variant_set;
+    //! The variants of runtime_variants that name a declaration that is not mortal yet, by the own type of the
+    //! declaration (QoreTypeDeclRefs::getUnmarkedDeclTypes(); qore#7608)
+    /** A marking event refreshes only these variants of the declarations that it marks, whose types it reports, and
+        the variants that it adds, instead of every variant of the Program; the entries of the declarations marked are
+        removed.  An entry can remain for a declaration that is never marked or that is freed: a variant that is
+        refreshed for nothing references nothing more
+    */
+    std::unordered_map<const QoreTypeInfo*, std::vector<AbstractQoreFunctionVariant*>> unmarked_decl_variants;
+    //! true if a variant of runtime_variants could not be indexed in unmarked_decl_variants (an allocation failed):
+    //! every marking event then refreshes every variant
+    bool unmarked_index_incomplete = false;
     //! true from the start of a marking event until its upgrade of the derived types and its refresh of
     //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
     //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
@@ -2721,7 +2735,8 @@ public:
     }
 
     //! Completes a marking event: upgrades the derived types of the declarations marked (all of them if \a full) and
-    //! refreshes the references of runtime_variants (from \a start if nothing was marked and not \a full)
+    //! refreshes the references of the variants of runtime_variants from \a start, and of the variants before it that
+    //! name a declaration marked (unmarked_decl_variants; all of them if \a full; qore#7608)
     DLLLOCAL void completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full);
 
     //! Completes a marking event that did not complete, if any (as the next event would)
