@@ -2989,6 +2989,30 @@ static bool SandboxManager::callerMayReceiveHostSecrets() [flags=RET_VALUE_ONLY]
     return qore_caller_may_receive_host_secrets();
 }
 
+//! Returns the temporary directory of the %Program of the calling code, if the host gave it one
+/** The %Program of the calling code is found past the code of modules, which acts for its caller, as for
+    callerMayReadExternalInfo(): library code that creates temporary files for its caller
+    (@ref Util::tmp_location() "tmp_location()", @ref FsUtil::TmpDir "TmpDir") uses the directory of the caller's
+    %Program, also for the temporary files that it creates for itself while such code calls it
+
+    @return the directory set with @ref Qore::Program::setTempDir() "Program::setTempDir()" for the %Program of the
+    calling code (or taken from the %Program that created it), or @ref nothing if it has none
+
+    @par Example:
+    @code{.py}
+*string dir = SandboxManager::callerTempDir();
+    @endcode
+
+    @note Not restricted: it returns only the directory that the host chose for the calling code
+
+    @see @ref sandbox_temp_dir
+
+    @since %Qore 3.0
+*/
+static *string SandboxManager::callerTempDir() [flags=RET_VALUE_ONLY] {
+    return qore_get_caller_temp_dir();
+}
+
 //! Returns whether entering a Qore callable with the given functional domains would be denied by the caller's restrictions
 /** Uses the caller check for a function or method declared with \c [dom=...]. A library module's own initialization
     is checked independently of the Program that loaded it. On an ordinary call, the caller's restrictions apply.

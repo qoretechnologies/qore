@@ -1093,9 +1093,9 @@ authenticate();
     - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
       environment; such code gives them explicitly
     - @ref Util::tmp_location() "tmp_location()" takes no directory from the environment (\c TMPDIR and the others):
-      it is the platform's default (\c /tmp), also for the temporary files and directories that library code creates
-      without a directory (ex: @ref FsUtil::TmpDir "TmpDir"), which such code places elsewhere by giving their
-      directory; @ref Util::TerminalColor::isColorDisabled() "TerminalColor::isColorDisabled()" does not read
+      it is the platform's default (\c /tmp), or the directory that the host set for the code's %Program (see
+      @ref sandbox_temp_dir), also for the temporary files and directories that library code creates without a
+      directory (ex: @ref FsUtil::TmpDir "TmpDir"), which such code places elsewhere by giving their directory; @ref Util::TerminalColor::isColorDisabled() "TerminalColor::isColorDisabled()" does not read
       \c NO_COLOR, @ref QUnit::Test::getEnv() "QUnit::Test::getEnv()" gives no values,
       @ref EdifactUtil::EdifactDirectoryCache "EdifactDirectoryCache" takes no cache root from the environment and
       expands no \c ~ (\c EDIFACT-CACHE-ERROR), and a @ref TelnetClient::TelnetClient "TelnetClient" that such code
@@ -1163,6 +1163,44 @@ authenticate();
     - the constant @ref Qore::Logger::LoggerLayoutPattern::HostName "LoggerLayoutPattern::HostName" gives the
       hostname to any code that can use the \c logger_bin module, as constants have no check of the calling code
       (<a href="https://github.com/qoretechnologies/qore/issues/7506">issue 7506</a>)
+
+    @since %Qore 3.0
+
+    @subsection sandbox_temp_dir The Temporary Directory of a Program
+
+    A host chooses where the code of a %Program puts its temporary files with
+    @ref Qore::Program::setTempDir() "Program::setTempDir()": @ref Util::tmp_location() "tmp_location()" returns that
+    directory to every caller in the %Program (also to code restricted from external information, which does not read
+    \c TMPDIR and the other variables of the environment), and the library code that creates temporary files and
+    directories for such code without being given a directory (ex: @ref FsUtil::TmpDir "TmpDir") uses it, as it uses
+    @ref Qore::SandboxManager::callerTempDir() "SandboxManager::callerTempDir()", which finds the %Program of the
+    calling code past the code of modules.  The rules:
+    - only unrestricted code sets or clears the directory (sandboxed code and code whose functional domains are
+      restricted get \c SANDBOX-ACCESS-ERROR, also through a %Program object lent to them); it is an absolute path of
+      an existing directory and is kept as given: symbolic links are not resolved, so the code of the %Program learns
+      no other path of the host from it
+    - a %Program created by the code of the %Program takes its directory when it is created, so that code cannot go
+      back to the platform default by creating a %Program; a %Program created by module code takes none, as the module
+      may keep it for all of its callers (its code runs with the module's restrictions); the code of a %Program that the host lends to
+      restricted code answers for itself, as for the environment, so it uses the directory of its own %Program
+    - setting the directory grants no access to it: the host allows it in the file system policy of a sandboxed
+      %Program, which can make it the only location that the code can write to; if the calling code cannot write to
+      it, @ref Util::tmp_location() "tmp_location()" raises \c TMP-ERROR and uses no other directory
+    - @ref Qore::Program::getTempDir() "Program::getTempDir()" gives the directory to the holder of the %Program object
+      and is not available to code restricted from external information; the %Program's own code gets it with
+      @ref Util::tmp_location() "tmp_location()"
+
+    @par Example
+    @code{.py}
+string tmp = "/var/lib/myapp/tenant1/tmp";
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(False);
+# the only location that the tenant's code can write to
+sm.addFilesystemAllowedPath(tmp, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+Program pgm(PO_NO_EXTERNAL_INFO);
+pgm.setSandboxManager(sm);
+pgm.setTempDir(tmp);
+    @endcode
 
     @since %Qore 3.0
 

@@ -1458,6 +1458,31 @@ public:
     //! zones (QoreTimeZoneManager::callerRestricted())
     bool tz_host = false;
 
+    //! the temporary directory of the Program set with Program::setTempDir() or taken from its creator, if any
+    /** Util::tmp_location() gives it to the code of the Program (SandboxManager::callerTempDir()) instead of the
+        directory of the environment or the platform default (qore#7656); guarded by \c temp_dir_lock
+    */
+    std::string temp_dir;
+    //! true if \c temp_dir is set
+    bool has_temp_dir = false;
+    //! guards \c temp_dir and \c has_temp_dir
+    mutable std::mutex temp_dir_lock;
+
+    //! sets or clears (\a dir nullptr) the temporary directory of the Program (see Program::setTempDir())
+    DLLLOCAL void setTempDir(const char* dir) {
+        // the copy is made before the lock: it can throw std::bad_alloc, and the swap cannot
+        std::string n(dir ? dir : "");
+        std::lock_guard<std::mutex> lg(temp_dir_lock);
+        temp_dir.swap(n);
+        has_temp_dir = dir != nullptr;
+    }
+
+    //! returns the temporary directory of the Program as a new string, or nullptr if it has none
+    DLLLOCAL QoreStringNode* getTempDir() const {
+        std::lock_guard<std::mutex> lg(temp_dir_lock);
+        return has_temp_dir ? new QoreStringNode(temp_dir) : nullptr;
+    }
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,

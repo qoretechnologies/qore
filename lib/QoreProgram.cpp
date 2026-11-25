@@ -1093,12 +1093,35 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
     return rv;
 }
 
+QoreStringNode* qore_get_caller_temp_dir() {
+    QoreProgram* pgm = qore_get_calling_program();
+    // the code of a Program that is not a module's answers for itself, also when restricted code calls it (a Program
+    // lent to such code), as for the environment (see SandboxManager::callerMayReadExternalInfo())
+    return pgm ? qore_program_private::get(*pgm)->getTempDir() : nullptr;
+}
+
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
     // a Program created with no Program running is a host Program, whose code is not restricted for time zones
     // (QoreTimeZoneManager::callerRestricted())
     tz_host = !qore_thread_current_program_if_any();
+    // the Program takes the temporary directory of the Program whose own code creates it, so that code given a
+    // directory cannot leave it by creating a Program (qore#7656); a Program that module code creates takes none: the
+    // module keeps it for all of its callers, so the directory of the caller that happened to create it would be used
+    // for the others' files; neither does a module's own Program; before the sandbox below, as there is nothing to undo
+    // if the copy fails
+    if (!n_parse_options.hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        QoreProgram* creator = qore_get_calling_program();
+        if (creator && creator == qore_thread_current_program_if_any()) {
+            qore_program_private* cp = qore_program_private::get(*creator);
+            std::lock_guard<std::mutex> lg(cp->temp_dir_lock);
+            if (cp->has_temp_dir) {
+                temp_dir = cp->temp_dir;
+                has_temp_dir = true;
+            }
+        }
+    }
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
