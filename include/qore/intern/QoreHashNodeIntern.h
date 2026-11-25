@@ -746,6 +746,15 @@ public:
                 return false;
             }
         }
+        return !m || membersEqualByKey(m, other, value_equal);
+    }
+
+    //! the rest of membersEqual(): looks up the key of \a m and of each member after it in \a other
+    /** not inline, so that the comparison of the members in the same order compiles as it did before qore#7557
+    */
+    template <typename F>
+    QORE_HASH_NOINLINE DLLLOCAL bool membersEqualByKey(const HashMember* m, const qore_hash_private& other,
+            F& value_equal) const {
         // the key is searched with the hash that the member keeps (qore#7265), which finds it in a map of the same
         // kind, and in a hardened map, which hashes the key itself when the hash does not find it; only a member of a
         // hardened map is searched in a map that is not hardened with its member hash (qore#7557)
