@@ -121,6 +121,19 @@ public:
     */
     DLLLOCAL virtual bool isTypeOwnerSystem() const = 0;
 
+    //! Returns true for an original builtin declaration of a binary module (isTypeOwnerSystem() and not marked as
+    //! belonging to no binary module: not_module_decl, set on the declarations of the static system namespace, the
+    //! pseudo-classes and the tombstones, qore#7533)
+    /** A module's namespace can be freed before a declaration of a Program that names its declarations (at the end of
+        the process, the modules are deleted before a Program that holds itself is cleared), so a hashdecl copy, which
+        shares the types of its source's members, references the module declarations that they name from when it is
+        made, an enum copy references its original if it is a module's, and every other declaration of a Program
+        references the module declarations that it names from its first QoreTypeOwnerBatch (type_owner_module_refs),
+        until it is destroyed.  The declarations of the system namespace (Qore::) are freed after every Program and
+        need no reference (qore#7533)
+    */
+    DLLLOCAL virtual bool isTypeOwnerModule() const = 0;
+
     //! Returns true if the declaration keeps its members when it is retired, and so what their types name
     DLLLOCAL virtual bool keepsTypeOwnerMembers() const = 0;
 
@@ -130,7 +143,8 @@ public:
     //! Frees the declaration, which has no reference left
     DLLLOCAL virtual void freeTypeOwner() = 0;
 
-    //! Adds the declarations that the declaration's member, static variable and signature types name directly
+    //! Adds the declarations that the declaration's member, static variable and signature types name directly, and
+    //! the binary module declarations that they name directly or through compound types (qore_type_owner_add_name())
     DLLLOCAL virtual void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const = 0;
 
     //! Adds the declarations that this one holds a reference to beyond the names (type_owner_refs): the base classes
@@ -140,6 +154,18 @@ public:
         counts as held from outside the cycle, which keeps the cycle
     */
     DLLLOCAL virtual void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const = 0;
+
+    //! Adds the binary module declarations that a binary module's class names in its own types and in those of its
+    //! module base classes (qore#7533)
+    /** Called for a binary module declaration (isTypeOwnerModule()) that a declaration of a Program or a hashdecl copy
+        names: a class's type is shared with its copies, so a Program's code calls the module's original, whose
+        member, static variable and signature types are read then (by the type checks of its calls, for example),
+        and the module declarations that they name are kept with it (see
+        qore_type_owner_add_module_class_names()).  Only the declarations that its types name are added, not what
+        they name in turn.  Nothing is added for a hashdecl or an enum: a Program names a copy of a module's hashdecl,
+        which keeps what its members name itself, and an enum names no declaration
+    */
+    DLLLOCAL virtual void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const = 0;
 
     //! Adds the declarations that the declaration's caches hold (the concrete declarations of a generic hashdecl),
     //! referenced; the caller releases the references (issue #6419)
@@ -172,6 +198,18 @@ public:
     std::vector<QoreTypeOwner*> type_owner_names;
     //! the declarations that this one holds a reference to for its names
     std::vector<QoreTypeOwner*> type_owner_refs;
+    //! true once type_owner_module_refs holds the module declarations that this one names (QoreTypeOwnerBatch)
+    bool type_owner_module_refs_taken = false;
+    //! the binary module declarations that this one names, directly or through compound types, referenced until it
+    //! is destroyed (qore#7533)
+    /** Builtin declarations are not among its names (type_owner_names), as they are not decided with the
+        declarations of Programs; the module ones are referenced when the first Program that the declaration belongs to
+        is deleted, while its types are valid, as the module that they belong to can be deleted before the declaration
+        (a declaration of a user module's Program that a Program referenced at the end of the process keeps, whose
+        types are read when that Program is cleared).  Empty for a hashdecl copy, which references them itself
+        (typed_hash_decl_private::copy_module_names)
+    */
+    std::vector<QoreTypeOwner*> type_owner_module_refs;
     //! the group of survivors of a Program that the declaration is a member of, if any
     QoreTypeOwnerGroup* type_owner_group = nullptr;
     //! true while the declaration is a live member of its group: its last reference has not been released
@@ -234,6 +272,10 @@ public:
         return owner->isTypeOwnerSystem();
     }
 
+    DLLLOCAL virtual bool isTypeOwnerModule() const {
+        return owner->isTypeOwnerModule();
+    }
+
     DLLLOCAL virtual bool keepsTypeOwnerMembers() const {
         return owner->keepsTypeOwnerMembers();
     }
@@ -248,6 +290,10 @@ public:
 
     DLLLOCAL virtual void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
         owner->getTypeOwnerNames(names);
+    }
+
+    DLLLOCAL virtual void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
+        owner->getTypeOwnerModuleSignatureNames(names);
     }
 
     DLLLOCAL virtual void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
@@ -304,9 +350,32 @@ DLLLOCAL bool qore_type_owner_released(QoreTypeOwner* owner);
 DLLLOCAL void qore_type_owner_destroyed(QoreTypeOwner* owner);
 
 //! Adds the declaration of a type to \a names if the type is the type of a user class, hashdecl or enum other than
-//! \a self, or its or-nothing type
+//! \a self, or its or-nothing type; otherwise, if \a module_names is true, the binary module declarations that the type
+//! names, directly or through the types that it is made of (see qore_type_owner_add_module_names())
+/** QoreTypeOwnerBatch separates the module declarations (QoreTypeOwner::type_owner_module_refs); \a module_names is
+    false for a hashdecl copy, which references them itself (qore#7533)
+*/
 DLLLOCAL void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti,
-        const QoreTypeOwner* self);
+        const QoreTypeOwner* self, bool module_names = true);
+
+//! Adds the binary module declarations (QoreTypeOwner::isTypeOwnerModule()) that a type names, directly or through
+//! the types that it is made of (element, member, argument, parameter and return types), once each
+/** A hashdecl copy, which shares the types of its source's members, references them (qore#7533)
+*/
+DLLLOCAL void qore_type_owner_add_module_names(std::vector<QoreTypeOwner*>& names, const QoreTypeInfo* ti);
+
+//! The binary module declarations that each binary module class names in its own types, computed once per caller
+//! (QoreTypeOwner::getTypeOwnerModuleSignatureNames())
+typedef std::map<const QoreTypeOwner*, std::vector<QoreTypeOwner*>> qore_type_owner_module_names_cache_t;
+
+//! Adds the binary module declarations that the binary module classes in \a names name in their own types (qore#7533)
+/** \a names lists binary module declarations (QoreTypeOwner::isTypeOwnerModule()); for each that is in it when called,
+    the declarations of QoreTypeOwner::getTypeOwnerModuleSignatureNames() are added once each, but not walked in
+    turn.  \a cache, if given, keeps what each declaration names for the next call (a QoreTypeOwnerBatch walks each
+    module class once)
+*/
+DLLLOCAL void qore_type_owner_add_module_class_names(std::vector<QoreTypeOwner*>& names,
+        qore_type_owner_module_names_cache_t* cache = nullptr);
 
 //! Decides what happens to the declarations of a Program whose namespace is deleted (see QoreTypeOwner)
 /** Holds a reference to each declaration of the namespace while the namespace is deleted; afterwards, the declarations

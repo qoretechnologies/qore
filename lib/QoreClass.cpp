@@ -1632,6 +1632,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
     // the copy is committed: a later parse must not write its parse state (issue #6106)
     hierarchy_initialized = old.hierarchy_initialized;
+    // a copy of a class that belongs to no binary module is not a binary module's class (qore#7533)
+    not_module_decl = old.not_module_decl;
     if (!old.initialized)
         const_cast<qore_class_private&>(old).initialize();
 
@@ -1978,21 +1980,22 @@ void qore_class_private::retireTypeOwner() {
     }
 }
 
-void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+template <typename F>
+void qore_class_private::forEachTypeOwnerType(F&& f) const {
     // the bounds and defaults of the type parameters, which the tombstone of the class is made from (issue #6419)
     for (const type_vec_t* v : {&type_param_bound_types, &type_param_default_types}) {
         for (const QoreTypeInfo* ti : *v) {
-            qore_type_owner_add_name(names, ti, &type_owner);
+            f(ti);
         }
     }
     for (auto& i : members.getList()) {
         if (i.second) {
-            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+            f(i.second->getTypeInfo());
         }
     }
     for (auto& i : vars.member_list) {
         if (i.second) {
-            qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+            f(i.second->getTypeInfo());
         }
     }
     for (const hm_method_t* m : {&hm, &shm}) {
@@ -2003,10 +2006,36 @@ void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) c
                 if (!sig) {
                     continue;
                 }
-                qore_type_owner_add_name(names, sig->getReturnTypeInfo(), &type_owner);
+                f(sig->getReturnTypeInfo());
                 for (unsigned p = 0; p < sig->numParams(); ++p) {
-                    qore_type_owner_add_name(names, sig->getParamTypeInfo(p), &type_owner);
+                    f(sig->getParamTypeInfo(p));
                 }
+            }
+        }
+    }
+}
+
+void qore_class_private::getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+    forEachTypeOwnerType([this, &names] (const QoreTypeInfo* ti) {
+        qore_type_owner_add_name(names, ti, &type_owner);
+    });
+}
+
+void qore_class_private::getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
+    assert(isTypeOwnerModule());
+    // the method maps of a builtin class are read without a lock, as every method lookup of the class reads them
+    auto add = [&names] (const QoreTypeInfo* ti) {
+        qore_type_owner_add_module_names(names, ti);
+    };
+    forEachTypeOwnerType(add);
+    // the base classes are held by the class (getTypeOwnerHeldRefs()); the signatures of the module ones are read
+    // with its own (an inherited method called through it); a base class of the static system namespace names only
+    // its declarations (qore#7533)
+    if (scl) {
+        for (auto& i : scl->sml) {
+            const qore_class_private* bp = i.first->priv;
+            if (bp->isTypeOwnerModule()) {
+                bp->forEachTypeOwnerType(add);
             }
         }
     }

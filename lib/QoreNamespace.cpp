@@ -1577,6 +1577,42 @@ QoreNamespace* RootQoreNamespace::rootGetQoreNamespace() const {
 
 extern void preinitBreakpointClass();
 
+//! Marks the classes, hashdecls (with the concrete declarations that they have made) and enums of a namespace of
+//! the static system namespace and of its subnamespaces
+/** The declarations of the static system namespace (Qore::) are freed with it, after every Program, while every
+    other builtin declaration is a binary module's, whose namespace can be freed before a Program that names it
+    (QoreTypeOwner::isTypeOwnerModule()); a binary module can create builtin declarations at any time (module-jni and
+    module-python create classes when they are first needed), so they are told apart by ownership, not by the module
+    context of their creation.  Called once the namespace has been built, before any other thread exists; the
+    concrete declarations of its generic hashdecls made while it was built (such as KeyValueInfo<auto>) are marked
+    with their generic, and those made afterwards copy the flag (qore#7533)
+*/
+static void mark_static_system_namespace_decls(QoreNamespace& ns) {
+    qore_ns_private* nspriv = qore_ns_private::get(ns);
+    {
+        ClassListIterator i(nspriv->classList);
+        while (i.next()) {
+            qore_class_private::setNotModuleDecl(*i.get());
+        }
+    }
+    {
+        HashDeclListIterator i(nspriv->hashDeclList);
+        while (i.next()) {
+            // and the concrete declarations already made (qore#7533)
+            typed_hash_decl_private::get(*i.get())->setNotModuleDecl();
+        }
+    }
+    {
+        EnumListIterator i(nspriv->enumList);
+        while (i.next()) {
+            qore_enum_decl_private::get(*i.get())->setNotModuleDecl();
+        }
+    }
+    for (auto& i : nspriv->nsl.nsmap) {
+        mark_static_system_namespace_decls(*i.second);
+    }
+}
+
 // sets up the root namespace
 StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root_ns_private(this)) {
     // every write to a root namespace holds its runtime namespace write lock; no other thread exists yet, so it is
@@ -1908,6 +1944,9 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 #endif
 
     qore_ns_private::addNamespace(*this, rpriv->qoreNS);
+
+    // last: the declarations of the static system namespace are not binary module declarations (qore#7533)
+    mark_static_system_namespace_decls(*this);
 }
 
 StaticSystemNamespace::~StaticSystemNamespace() {

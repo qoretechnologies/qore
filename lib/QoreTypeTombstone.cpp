@@ -860,6 +860,8 @@ QoreClass* QoreTombstoneBuilder::tombClass(const QoreClass* qc, int depth) {
     QoreClass* t = new QoreClass(p->name.c_str(), p->path.c_str());
     qore_class_private* tp = qore_class_private::get(*t);
     tp->sys = true;
+    // a tombstone belongs to no binary module (qore#7533)
+    tp->not_module_decl = true;
     tp->committed = true;
     r.classes[fp] = t;
     r.tombs.insert(t);
@@ -969,6 +971,8 @@ TypedHashDecl* QoreTombstoneBuilder::tombHashDecl(const TypedHashDecl* hd, int d
     TypedHashDecl* t = new TypedHashDecl(p->name.c_str(), p->path.c_str());
     typed_hash_decl_private* tp = typed_hash_decl_private::get(*t);
     tp->sys = true;
+    // a tombstone belongs to no binary module, nor do its concrete declarations, which copy the flag (qore#7533)
+    tp->setNotModuleDecl();
     tp->parse_init_done = true;
     tp->type_params = p->type_params;
     r.hashdecls[fp] = t;
@@ -1018,6 +1022,8 @@ QoreEnumDecl* QoreTombstoneBuilder::tombEnum(const QoreEnumDecl* ed) {
     QoreEnumDecl* t = new QoreEnumDecl(p->getName(), p->getPath(), p->getBaseTypeInfo());
     qore_enum_decl_private* tp = qore_enum_decl_private::get(*t);
     tp->sys = true;
+    // a tombstone belongs to no binary module (qore#7533)
+    tp->setNotModuleDecl();
     tp->parse_init_done = true;
     for (const QoreEnumMember* m : p->getMembers()) {
         t->addMember(m->getName(), m->getValue().refSelf());
