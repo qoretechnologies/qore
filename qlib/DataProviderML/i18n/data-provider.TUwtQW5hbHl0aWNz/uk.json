@@ -3831,6 +3831,18 @@
           "source": "Extract overall sentiment, score, per-aspect breakdown",
           "message": "Видобувати загальну тональність, оцінку, розбивку за аспектами"
         },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.display_name": {
+          "source": "Custom Schema",
+          "message": "Власна схема"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.short_desc": {
+          "source": "Custom extraction schema as a hash",
+          "message": "Власна схема видобування у вигляді хешу"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.Y3VzdG9tX3NjaGVtYQ.desc": {
+          "source": "Omit `schema_template` and set `name`, `description`, and a nonempty list of `fields`. Each field has a unique `name`, a `description`, and a JSON type (`string`, `number`, `integer`, `boolean`, `array`, or `object`). `required` defaults to true. Array fields can specify `items`, object fields can specify `properties`, and `enum_values` lists the permitted values.",
+          "message": "Пропустіть `schema_template` і задайте `name`, `description` та непорожній список `fields`. Кожне поле має унікальне `name`, `description` і тип JSON (`string`, `number`, `integer`, `boolean`, `array` або `object`). `required` за замовчуванням має значення true. Поля типу array можуть задавати `items`, поля типу object можуть задавати `properties`, а `enum_values` перелічує дозволені значення."
+        },
         "app.TUwtQW5hbHl0aWNz.action.ZXh0cmFjdC1zdHJ1Y3R1cmVk.option.bGxtX3VybA.display_name": {
           "source": "LLM URL",
           "message": "URL-адреса LLM"
