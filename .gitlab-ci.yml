@@ -3,10 +3,13 @@ stages:
   - test
 
 default:
-  # A Kubernetes job pod can time out waiting for CPU capacity before tests start.
+  # A Kubernetes job pod can time out waiting for CPU capacity before tests start.  run_tests.sh ends a run with the
+  # exit code 75 (EX_TEMPFAIL) when its comparison of the tree with the build did not finish in time (a slow or stalled
+  # host, qore#7615): that is retried as well, as it says nothing about the tests.
   retry:
     max: 2
     when: runner_system_failure
+    exit_codes: [75]
   services:
     - name: mariadb:11.4
       alias: mysql
