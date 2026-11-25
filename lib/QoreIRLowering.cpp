@@ -4396,6 +4396,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 // Use SwitchRegexMatch instruction which directly calls CaseNodeRegex::matches()
                 // without creating temporary AST nodes that would corrupt the switch statement
                 auto* inst = builder.createSwitchRegexMatch(regex_case, switch_val, node->loc);
+                if (!inst) {
+                    error = "IR builder failed to create a switch regex case match";
+                    return false;
+                }
                 if (!exception_stack.empty()) {
                     inst->exception_target = exception_stack.back();
                 }
