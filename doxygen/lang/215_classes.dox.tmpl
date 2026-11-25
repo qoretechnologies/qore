@@ -588,7 +588,10 @@ x1.viaB();    # "P1::m": B1's code can call P1::m()
     - a method with the same signature (an override)
     - a variant of the same name with another signature that accepts arguments that the <b><tt>final</tt></b> variant
       accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
-      arguments; a variant whose parameters accept none of the same arguments is allowed
+      arguments; a variant whose parameters accept none of the same arguments is allowed (a new variant of this kind,
+      which a call that the <b><tt>final</tt></b> variant cannot take selects, is reported by the strict
+      @ref warning-language-traps "language-traps" warning, unless it overrides a variant that a parent class already
+      has under that name)
     - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
       <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
       position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a

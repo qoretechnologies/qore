@@ -1514,6 +1514,11 @@
     @ref unqualified_symbol_resolution "unqualified resolution" reaches instead
     (<a href="https://github.com/qoretechnologies/qore/issues/6034">issue 6034</a>).
 
+    @par Warning for a New Variant Under the Name of a Final Method
+    The strict @ref warning-language-traps "language-traps" warning is raised for a variant that a subclass adds with
+    another signature under the name of a @ref final_methods "final" method of a parent class, which a call that the
+    final method cannot take selects (<a href="https://github.com/qoretechnologies/qore/issues/7111">issue 7111</a>).
+
     @par Debugger Exception IDs
     The exception hash of @ref Qore::DebugProgram::onException() "DebugProgram::onException()" has the
     \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo", the same in each event of an exception, so that
