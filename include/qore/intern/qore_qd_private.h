@@ -223,6 +223,14 @@ public:
         cwd_base = old.cwd_base;
     }
 
+    //! returns the path with the argument appended, and in \a base the process's current directory that it derives
+    //! from, or an empty string, read together (qore#7662)
+    DLLLOCAL std::string getPath(const char* sub, std::string& base) const {
+        AutoLocker al(m);
+        base = cwd_base;
+        return getPathIntern(sub);
+    }
+
     //! returns the process's current directory that the path derives from, or an empty string (qore#7662)
     DLLLOCAL std::string getCwdBase() const {
         AutoLocker al(m);

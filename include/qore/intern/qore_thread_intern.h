@@ -1719,8 +1719,8 @@ DLLLOCAL std::string qore_path_relative_to_base(const char* path, const std::str
 
 //! Names the paths that derive from a host directory that the code did not give itself (the process's current
 //! directory that a Dir object starts in) relative to it in the messages built in its scope (qore#7662)
-/** While the scope is active, qore_msg_path() and qore_caller_msg_path() give absolute paths relative to the base
-    directory (qore_path_relative_to_base()), unless a scope of QoreRestrictedMessageScopeHelper gives them without
+/** While the scope is active, qore_msg_path() gives absolute paths relative to the base directory
+    (qore_path_relative_to_base()), unless a scope of QoreRestrictedMessageScopeHelper gives them without
     their directories.  It is active only if the base is not empty and the code running on the thread does not get
     host directories that it did not give itself (qore_caller_no_host_dirs()); it is set up only for operations on
     paths that derive from the base, never for an absolute path that the code gave.

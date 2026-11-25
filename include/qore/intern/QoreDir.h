@@ -225,6 +225,10 @@ public:
     */
     DLLEXPORT std::string getPath(const char* sub) const;
 
+    //! returns a complete path with the argument appended to the current directory name, and in \a base the
+    //! process's current directory that it derives from, or an empty string, read together (qore#7662)
+    DLLLOCAL std::string getPath(const char* sub, std::string& base) const;
+
     //! returns the encoding used for the filesystem
     /** @return the encoding used for the filesystem
     */

@@ -351,7 +351,8 @@ bool Dir::chdir(string path) [flags=NAMED_ARGS] {
     from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets it relative to that
     directory: \c "." for the directory itself, a path starting with \c "./" below it and one starting with \c ".."
     otherwise; an absolute path that the code gave to chdir() and the paths that derive from it are given as they
-    are; see @ref sandbox_fs_dir_cwd
+    are.  Such a relative path is resolved against the current directory of the process when it is used; see
+    @ref sandbox_fs_dir_cwd
 
     @return the path of the Dir object or @ref nothing if no path is set
 
@@ -1365,8 +1366,10 @@ File Dir::openFile(string filename, int flags = O_RDONLY, int mode = 0666, *stri
 
    // open the file with exception
    ReferenceHolder<File> f(new File(qe), xsink);
-   std::string path = d->getPath(filename->getBuffer());
-   std::string cwd_base = d->getCwdBase();
+   // the path and the directory that it derives from are read together, so that a concurrent chdir() cannot pair a
+   // path that derives from the process's current directory with no base (qore#7662)
+   std::string cwd_base;
+   std::string path = d->getPath(filename->getBuffer(), cwd_base);
 
    {
       // the messages name a path that derives from the process's current directory relative to it for code that is
@@ -1408,9 +1411,12 @@ Dir Dir::openDir(string subdir, *string encoding) [flags=NAMED_ARGS] {
       return xsink->raiseException("DIR-OPENDIR-PARAMETER-ERROR", "only direct directory names without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : d->getEncoding();
-   ReferenceHolder<Dir> dc(new Dir(xsink, qe, d->getPath(subdir->getBuffer()).c_str()), xsink);
-   // the path of the new object derives from the process's current directory if this one's does (qore#7662)
-   dc->setCwdBase(d->getCwdBase());
+   // the path of the new object derives from the process's current directory if this one's does; both are read
+   // together (qore#7662)
+   std::string cwd_base;
+   std::string path = d->getPath(subdir->getBuffer(), cwd_base);
+   ReferenceHolder<Dir> dc(new Dir(xsink, qe, path.c_str()), xsink);
+   dc->setCwdBase(cwd_base);
    // create the qoreObject and set the Dir object as private data of the class tagged with the CID_DIR class ID
    return new QoreObject(QC_DIR, getProgram(), dc.release());
 }
@@ -1446,11 +1452,12 @@ bool Dir::removeFile(string filename) [flags=NAMED_ARGS] {
    if (strchr(filename->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-REMOVEFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
-   std::string path = d->getPath(filename->getBuffer());
+   std::string cwd_base;
+   std::string path = d->getPath(filename->getBuffer(), cwd_base);
 
    // the messages name a path that derives from the process's current directory relative to it for code that is not
    // given host directories that it did not give itself (qore#7662)
-   QoreHostDirBaseMessageScopeHelper msg_scope(d->getCwdBase());
+   QoreHostDirBaseMessageScopeHelper msg_scope(std::move(cwd_base));
 
    // the sandbox policy must allow the file to be deleted
    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);

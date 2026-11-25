@@ -10530,10 +10530,8 @@ std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
     if (!path) {
         return std::string();
     }
-    if (qore_msg_restricted_scope || qore_caller_no_external_info(pgm)) {
-        return qore_path_file_name(path);
-    }
-    return qore_msg_host_dir_base ? qore_path_relative_to_base(path, *qore_msg_host_dir_base) : std::string(path);
+    return qore_msg_restricted_scope || qore_caller_no_external_info(pgm) ? qore_path_file_name(path)
+        : std::string(path);
 }
 
 bool qore_caller_no_external_info(const QoreProgram* pgm) {

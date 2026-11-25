@@ -357,6 +357,10 @@ std::string QoreDir::getPath(const char* sub) const {
     return priv->getPath(sub);
 }
 
+std::string QoreDir::getPath(const char* sub, std::string& base) const {
+    return priv->getPath(sub, base);
+}
+
 int QoreDir::checkPath() const {
     return priv->checkPath();
 }

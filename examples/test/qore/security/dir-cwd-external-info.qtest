@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandbox file-system policy checks of opened files and directories (F_GETPATH on macOS) and getcwd() paths
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # A Dir object gives code restricted from external information no path that names the process's current directory,
@@ -75,6 +76,7 @@ try_op(sub () { m.stat(); });
 try_op(sub () { m.hstat(); });
 try_op(sub () { m.chmod(0755); });
 try_op(sub () { Dir t = d.copy(); t.chdir(\"a.txt/x\"); t.create(); });
+try_op(sub () { m.statvfs(); });
 list<auto> sub get() {
     return (res, errs);
 }
@@ -101,6 +103,8 @@ try_op(sub () { d.openDir(\"denied\").mkdir(\"new\"); });
 try_op(sub () { d.removeFile(\"a.txt\"); });
 try_op(sub () { d.openDir(\"denied\").hstat(); });
 try_op(sub () { d.openDir(\"denied\").create(); });
+try_op(sub () { d.openFile(\"a.txt\").chown(-1); });
+try_op(sub () { Dir t(); t.chdir(other); t.chdir(\"x\"); });
 res += d.path();
 list<auto> sub get() {
     return (res, errs);
@@ -206,10 +210,10 @@ list<hash<ExceptionInfo>> sub get() {
             list<auto> l = runSandboxed(m.value, PO_NO_EXTERNAL_INFO, m.key);
             assertEq((".",), l[0], m.key + ": the path");
             list<hash<ExceptionInfo>> errs = l[1];
-            assertEq(7, errs.size(), m.key + ": the denials");
+            assertEq(9, errs.size(), m.key + ": the denials");
             list<string> paths = map (regex_extract($1.desc, "^Access to '([^']*)'") ?? ("?",))[0], errs;
             assertEq(("./denied", "./denied", "./denied/x.txt", "./denied/new", "./a.txt", "./denied",
-                "./denied"), paths, m.key + ": the paths named");
+                "./denied", "./a.txt", other + "/x"), paths, m.key + ": the paths named");
             map assertEq("FILESYSTEM-ACCESS-DENIED", $1.err, m.key), errs;
             checkNoCwd(l, m.key + " sandboxed");
         }
@@ -220,7 +224,9 @@ list<hash<ExceptionInfo>> sub get() {
             list<auto> l = runSandboxed(m.value, 0, m.key);
             assertEq((cwd,), l[0], m.key + ": the path");
             list<hash<ExceptionInfo>> errs = l[1];
-            assertEq(7, errs.size(), m.key + ": the denials");
+            assertEq(9, errs.size(), m.key + ": the denials");
+            assertEq(sprintf("Access to '%s/a.txt' denied: write access not permitted by security policy", cwd),
+                errs[7].desc, m.key);
             assertEq(sprintf("Access to '%s/denied' denied by security policy (path is in denied list)", cwd),
                 errs[0].desc, m.key);
         }
@@ -328,6 +334,9 @@ File sub file() { return (new Dir()).openFile(\"a.txt\"); }", "dir-cwd-receiver-
         SandboxManager sm();
         sm.addFilesystemAllowedPath(cwd, QSEC_READ);
         sm.addFilesystemDeniedPath(cwd + DirSep + "denied");
+        # an absolute path that the code gives is allowed, a relative path below it is denied
+        sm.addFilesystemAllowedPath(other, QSEC_READ);
+        sm.addFilesystemDeniedPath(other + DirSep + "x");
         Program p(PO_MODERN | po);
         p.setSandboxManager(sm);
         p.setExecMode(em);
@@ -339,10 +348,10 @@ File sub file() { return (new Dir()).openFile(\"a.txt\"); }", "dir-cwd-receiver-
     #! checks the errors of the Code: their codes and the paths that they name, relative for restricted code
     private checkErrors(list<hash<ExceptionInfo>> errs, string label, bool restricted) {
         list<string> codes = ("FILE-OPEN2-ERROR", "DIR-RMDIR-FAILURE", "DIR-MKDIR-FAILURE", "DIR-READ-FAILURE",
-            "DIR-STAT-FAILURE", "DIR-HSTAT-FAILURE", "DIR-CHMOD-FAILURE", "DIR-CREATE-FAILURE");
+            "DIR-STAT-FAILURE", "DIR-HSTAT-FAILURE", "DIR-CHMOD-FAILURE", "DIR-CREATE-FAILURE", "DIR-STATVFS-FAILURE");
         assertEq(codes, map $1.err, errs, label + ": the errors");
         list<string> paths = ("./missing-7662.txt", "./missing-7662", "./sub", "./missing-7662", "./missing-7662",
-            "./missing-7662", "./missing-7662", "./a.txt");
+            "./missing-7662", "./missing-7662", "./a.txt", "./missing-7662");
         if (!restricted) {
             paths = map cwd + $1.substr(1), paths;
         }

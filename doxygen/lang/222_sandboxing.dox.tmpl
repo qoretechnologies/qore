@@ -1272,6 +1272,16 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     external information, including sandboxed code, which may call @ref Qore::getcwd() "getcwd()", gets the paths of
     the host.
 
+    A relative path is resolved against the current directory of the process when it is used, as every relative path
+    is: if the process changes its current directory, a path that @ref Qore::Dir::path() "Dir::path()" returned to
+    such code no longer reaches the directory of the object, while the object itself keeps its directory.  On
+    Windows, the relative paths use the platform's directory separator (ex: <tt>.\\sub</tt>).
+
+    This hides the name of the directory, not the directory itself: code that may read the parent directories of the
+    current directory can find it, from the depth that the relative paths show (\c "../..") and the names in the
+    listings of the parents, as it can without a @ref Qore::Dir "Dir" object; a
+    @ref sandbox_filesystem "file-system policy" that denies those directories prevents it.
+
     @since %Qore 3.0
 
     @subsection path_nul_characters Paths With NUL Characters
