@@ -55,6 +55,28 @@ sub take_reference(reference<int> r) {
     r = 8;
 }
 
+# a weak reference element of a referenced list read in a function (not a closure) keeps its object
+string sub weak_element_in_function() {
+    *T q = new T("q");
+    list<auto> wl = ("x", 2);
+    wl[0] := q;
+    list<reference<list<auto>>> lw = (\wl,);
+    list<auto> keep = (lw[0][0],);
+    q = NOTHING;
+    return keep[0].n;
+}
+
+# as weak_element_in_function() for a hash of references and a computed index
+string sub weak_element_in_function_hash() {
+    *T q = new T("q");
+    list<auto> wl = ("x", 2);
+    wl[0] := q;
+    hash<string, reference<list<auto>>> hw = {"a": \wl};
+    hash<auto> keep = {"k": hw.a[next_index() - g_next]};
+    q = NOTHING;
+    return keep.k.n;
+}
+
 sub run() {
     hash<string, reference<*T>> ho = {"a": \g_p};
     hash<string, reference<hash<auto>>> hh = {"a": \g_h};
@@ -198,6 +220,9 @@ sub run() {
         q = NOTHING;
         return keep.k.n;
     });
+
+    show("weak reference element of a referenced list in a function", \weak_element_in_function());
+    show("weak reference element of a referenced list in a hash in a function", \weak_element_in_function_hash());
 
     # the reference as it is
     show("operator", auto sub () { return li[0] + 1; });

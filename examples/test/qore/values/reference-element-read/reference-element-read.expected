@@ -33,6 +33,8 @@ reference to a reference element: 20
 weak reference element of a referenced list: "q"
 weak reference element of a referenced list by a computed index: "q"
 weak reference element of a referenced list in a hash: "q"
+weak reference element of a referenced list in a function: "q"
+weak reference element of a referenced list in a hash in a function: "q"
 operator: 1
 auto variable: 9
 reference parameter: 8
@@ -74,6 +76,8 @@ reference to a reference element: 20
 weak reference element of a referenced list: "q"
 weak reference element of a referenced list by a computed index: "q"
 weak reference element of a referenced list in a hash: "q"
+weak reference element of a referenced list in a function: "q"
+weak reference element of a referenced list in a hash in a function: "q"
 operator: 1
 auto variable: 9
 reference parameter: 8
