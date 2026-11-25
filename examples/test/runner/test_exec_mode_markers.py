@@ -383,6 +383,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modules loaded from source and compiled with qcc
         # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
         #   as the checks are of the exit of the process that holds the Program
+        # - small-main-stack-startup (#7663): its checks run in child interpreters and a qcc executable without an
+        #   execution mode, under a small stack rlimit, as the checks are of the start of the process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
                                  "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
@@ -481,6 +483,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
+                                 "examples/test/qore/misc/small-main-stack-startup.qtest",
                                  "examples/test/qore/parser/include-failure-diagnostics.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",
