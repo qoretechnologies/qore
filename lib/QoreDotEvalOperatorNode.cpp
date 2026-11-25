@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,7 +55,9 @@ QoreValue QoreDotEvalOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
 
         case NT_WEAKREF_HASH: {
             // FIXME: inefficient
-            const AbstractQoreNode* ref = check_call_ref(op->get<WeakHashReferenceNode>()->get(), m->getName());
+            // the hash is held with a reference of its own while its member is called
+            ReferenceHolder<QoreHashNode> h(op->get<WeakHashReferenceNode>()->lock(), xsink);
+            const AbstractQoreNode* ref = check_call_ref(*h, m->getName());
             if (ref) {
                 return reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(m->getArgs(), xsink);
             }

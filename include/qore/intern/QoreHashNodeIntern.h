@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -554,6 +554,26 @@ public:
             return true;
         }
         return false;
+    }
+
+    //! Returns a new reference to a hash that a weak reference holds, or a new empty hash that cannot be changed if
+    //! its last reference was released (see WeakHashReferenceNode::lock())
+    /** Once the reference count of the hash has reached zero, its entries are being freed (possibly by a destructor
+        that is reading the hash through a weak reference) or have been freed, so the hash must never be referenced
+        again: a reference is only taken while the count is not zero (QoreReferenceCounter::optRef()).
+    */
+    DLLLOCAL static QoreHashNode* lockWeak(QoreHashNode& h) {
+        if (h.optRef()) {
+            return &h;
+        }
+        return getFreedStandIn(h);
+    }
+
+    //! Returns a new empty hash with the type of a hash whose last reference was released, which cannot be changed
+    DLLLOCAL static QoreHashNode* getFreedStandIn(const QoreHashNode& h) {
+        QoreHashNode* rv = h.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
     }
 
     DLLLOCAL void setHashDecl(const TypedHashDecl* hd);

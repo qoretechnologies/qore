@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -162,13 +162,17 @@ QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreLis
             return qore_class_private::evalPseudoMethod(po_list[NT_OBJECT],
                 QoreValue(n.get<WeakReferenceNode>()->get()), name, args, xsink);
 
-        case NT_WEAKREF_HASH:
-            return qore_class_private::evalPseudoMethod(po_list[NT_HASH],
-                QoreValue(n.get<WeakHashReferenceNode>()->get()), name, args, xsink);
+        // the target is held with a reference of its own while the pseudo-method runs, or is a new empty container
+        // if it was released: a weak reference does not keep the entries of its target
+        case NT_WEAKREF_HASH: {
+            ReferenceHolder<QoreHashNode> target(n.get<WeakHashReferenceNode>()->lock(), xsink);
+            return qore_class_private::evalPseudoMethod(po_list[NT_HASH], QoreValue(*target), name, args, xsink);
+        }
 
-        case NT_WEAKREF_LIST:
-            return qore_class_private::evalPseudoMethod(po_list[NT_LIST],
-                QoreValue(n.get<WeakListReferenceNode>()->get()), name, args, xsink);
+        case NT_WEAKREF_LIST: {
+            ReferenceHolder<QoreListNode> target(n.get<WeakListReferenceNode>()->lock(), xsink);
+            return qore_class_private::evalPseudoMethod(po_list[NT_LIST], QoreValue(*target), name, args, xsink);
+        }
 
         case NT_REFERENCE: {
             const ReferenceNode* r = n.get<const ReferenceNode>();

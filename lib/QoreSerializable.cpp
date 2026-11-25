@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -347,14 +347,16 @@ QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSeri
         }
 
         case NT_WEAKREF_HASH: {
-            ValueHolder rv(serializeHashToData(*val.get<WeakHashReferenceNode>()->get(), true, context, xsink),
-                xsink);
+            // serialized with a reference of its own, or as a new empty hash if it was released
+            ReferenceHolder<QoreHashNode> h(val.get<WeakHashReferenceNode>()->lock(), xsink);
+            ValueHolder rv(serializeHashToData(**h, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_LIST: {
-            ValueHolder rv(serializeListToData(*val.get<WeakListReferenceNode>()->get(), true, context, xsink),
-                xsink);
+            // serialized with a reference of its own, or as a new empty list if it was released
+            ReferenceHolder<QoreListNode> l(val.get<WeakListReferenceNode>()->lock(), xsink);
+            ValueHolder rv(serializeListToData(**l, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 

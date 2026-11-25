@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,10 +58,15 @@ QoreValue QoreInstanceOfOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
     switch (t) {
         case NT_WEAKREF:
             return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakReferenceNode>()) ? true : false;
-        case NT_WEAKREF_HASH:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakHashReferenceNode>()) ? true : false;
-        case NT_WEAKREF_LIST:
-            return QoreTypeInfo::runtimeAcceptsValue(ti, **v->get<const WeakListReferenceNode>()) ? true : false;
+        // the target is checked with a reference of its own, or as a new empty container if it was released
+        case NT_WEAKREF_HASH: {
+            ReferenceHolder<QoreHashNode> target(v->get<const WeakHashReferenceNode>()->lock(), xsink);
+            return QoreTypeInfo::runtimeAcceptsValue(ti, *target) ? true : false;
+        }
+        case NT_WEAKREF_LIST: {
+            ReferenceHolder<QoreListNode> target(v->get<const WeakListReferenceNode>()->lock(), xsink);
+            return QoreTypeInfo::runtimeAcceptsValue(ti, *target) ? true : false;
+        }
     }
 
     return QoreTypeInfo::runtimeAcceptsValue(ti, *v) ? true : false;

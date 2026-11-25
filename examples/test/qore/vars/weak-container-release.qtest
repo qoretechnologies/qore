@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+%allow-weak-references
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class WeakContainerReleaseTest
+
+# records what a destructor read through a weak reference
+class Recorder {
+    public {
+        list<auto> results = ();
+    }
+
+    add(auto v) {
+        push results, v;
+    }
+}
+
+# an entry of a container whose destructor reads the container through a weak reference while the container is
+# released
+class Reader {
+    public {
+        # holds the weak reference to the container
+        list<auto> wl = ();
+        string mode;
+        Recorder rec;
+    }
+
+    constructor(string mode, Recorder rec) {
+        self.mode = mode;
+        self.rec = rec;
+    }
+
+    destructor() {
+        foreach auto e in (wl) {
+            try {
+                switch (mode) {
+                    case "lookup": rec.add(e.k0); break;
+                    case "index": rec.add(e[0]); break;
+                    case "size": rec.add(e.size()); break;
+                    case "keys": rec.add(e.keys()); break;
+                    case "iter": {
+                        list<auto> l = ();
+                        foreach auto i in (e.iterator()) {
+                            push l, i;
+                        }
+                        rec.add(l);
+                        break;
+                    }
+                    case "copy": {
+                        auto c = e;
+                        rec.add(c.size());
+                        break;
+                    }
+                    case "write-hash": e.k0 = "x"; rec.add("written"); break;
+                    case "write-list": e[0] = "x"; rec.add("written"); break;
+                    case "string": rec.add(sprintf("%y", e)); break;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                rec.add(ex.err);
+            }
+        }
+    }
+}
+
+public class WeakContainerReleaseTest inherits QUnit::Test {
+    constructor() : Test("WeakContainerReleaseTest", "1.0") {
+        addTestCase("hash read through a weak reference while it is released", \hashReleaseTest());
+        addTestCase("list read through a weak reference while it is released", \listReleaseTest());
+        addTestCase("container read through a weak reference after it was released", \releasedTest());
+        addTestCase("closure variable holding a weak reference", \closureTest());
+        set_return_value(main());
+    }
+
+    # returns what the destructor of an entry read through a weak reference while the hash was released; the hash is
+    # nested "depth" levels deep in the container that is released
+    private list<auto> releaseHash(string mode, int depth) {
+        Recorder rec();
+        {
+            # untyped values, as the container also holds a Reader object
+            hash<auto> h = {};
+            h.k0 = "v0";
+            h.k1 = "v1";
+            h.k2 = "v2";
+            Reader r(mode, rec);
+            h.obj = r;
+            list<auto> holder = ();
+            holder[0] := h;
+            r.wl = holder;
+            remove holder;
+            remove r;
+            auto c = h;
+            remove h;
+            for (int i = 0; i < depth; ++i) {
+                c = {"n": c};
+            }
+            remove c;
+        }
+        return rec.results;
+    }
+
+    private list<auto> releaseList(string mode, int depth) {
+        Recorder rec();
+        {
+            list<auto> l = ();
+            push l, "v0";
+            push l, "v1";
+            push l, "v2";
+            Reader r(mode, rec);
+            push l, r;
+            list<auto> holder = ();
+            holder[0] := l;
+            r.wl = holder;
+            remove holder;
+            remove r;
+            auto c = l;
+            remove l;
+            for (int i = 0; i < depth; ++i) {
+                c = (c,);
+            }
+            remove c;
+        }
+        return rec.results;
+    }
+
+    hashReleaseTest() {
+        foreach int depth in ((0, 20)) {
+            string d = sprintf(" (depth %d)", depth);
+            # the hash reads as empty while it is released
+            assertEq((NOTHING,), releaseHash("lookup", depth), "lookup" + d);
+            assertEq((0,), releaseHash("size", depth), "size" + d);
+            assertEq((list(),), releaseHash("keys", depth), "keys" + d);
+            assertEq((list(),), releaseHash("iter", depth), "iter" + d);
+            assertEq((0,), releaseHash("copy", depth), "copy" + d);
+            assertEq(("{}",), releaseHash("string", depth), "string" + d);
+            # and cannot be changed
+            assertEq(("HASH-ERROR",), releaseHash("write-hash", depth), "write" + d);
+        }
+    }
+
+    listReleaseTest() {
+        foreach int depth in ((0, 20)) {
+            string d = sprintf(" (depth %d)", depth);
+            # the list reads as empty while it is released
+            assertEq((NOTHING,), releaseList("index", depth), "index" + d);
+            assertEq((0,), releaseList("size", depth), "size" + d);
+            assertEq((list(),), releaseList("iter", depth), "iter" + d);
+            assertEq((0,), releaseList("copy", depth), "copy" + d);
+            assertEq(("[]",), releaseList("string", depth), "string" + d);
+            # and cannot be changed
+            assertEq(("LIST-ERROR",), releaseList("write-list", depth), "write" + d);
+        }
+    }
+
+    releasedTest() {
+        # a weak reference to a container whose last reference was released reads as an empty container
+        assertEq(list(), getReleasedList());
+        assertEq({}, getReleasedHash());
+        list<auto> l = getReleasedList();
+        assertEq(0, l.size());
+        hash<auto> h = getReleasedHash();
+        assertEq(0, h.size());
+
+        list<auto> wl;
+        wl := list(1, 2);
+        assertEq(0, wl.size());
+        assertThrows("LIST-ERROR", sub () { wl[0] = 1; });
+        hash<auto> wh;
+        # a hash created at runtime (a constant hash is kept by the program)
+        int one = 1;
+        wh := {"a": one};
+        assertEq(NOTHING, wh.a);
+        assertThrows("HASH-ERROR", sub () { wh.a = 2; });
+    }
+
+    closureTest() {
+        hash<auto> h = {"a": 1};
+        list<auto> l = (1, 2);
+        hash<auto> wh;
+        wh := h;
+        list<auto> wl;
+        wl := l;
+        code ch = auto sub () { return wh; };
+        code cl = auto sub () { return wl; };
+        for (int i = 0; i < 5; ++i) {
+            auto v = ch();
+            assertEq({"a": 1}, v);
+            v = cl();
+            assertEq((1, 2), v);
+        }
+        # changes through the weak reference change the container
+        wh.b = 2;
+        wl[2] = 3;
+        assertEq({"a": 1, "b": 2}, h);
+        assertEq((1, 2, 3), l);
+        assertEq({"a": 1, "b": 2}, ch());
+        assertEq((1, 2, 3), cl());
+    }
+
+    static list<auto> getReleasedList() {
+        list<auto> m;
+        m := list(8);
+        return m;
+    }
+
+    static hash<auto> getReleasedHash(int v = 1) {
+        hash<auto> m;
+        m := {"a": v};
+        return m;
+    }
+}
