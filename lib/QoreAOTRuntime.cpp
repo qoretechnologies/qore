@@ -3616,6 +3616,20 @@ QoreAOTTypeParamOwnerHelper::~QoreAOTTypeParamOwnerHelper() {
     qore_aot_type_param_owner = old_owner;
 }
 
+//! Test hook: the pattern of a regex switch case that cannot be compiled when its function is loaded
+/** Set with \c QORE_AOT_TEST_FAIL_REGEX_CASE; a case whose pattern is the given text is compiled with an unmatched
+    \c ")" appended, as a PCRE2 library that refuses a pattern that the compiling one accepted would do.  The
+    regression test of the load of regex cases (#7642) uses it, as no pattern compiles at qcc time and fails at load
+    time with the same library.
+*/
+static const char* aotTestFailRegexCase() {
+    static constinit QoreLazyValue<QoreEnvironmentValue> pattern_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_TEST_FAIL_REGEX_CASE");
+    });
+    const char* pattern = pattern_setting.get().c_str();
+    return pattern && *pattern ? pattern : nullptr;
+}
+
 static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -6942,14 +6956,34 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Deserialize regex cases
     if (num_regex_cases > 0) {
-        ExceptionSink xsink;
         for (int i = 0; i < num_regex_cases; ++i) {
             const char* pattern = reader.readStringRef(ptr);
             int64_t options = QoreAOTBinaryReader::readI64(ptr);
             bool is_negated = QoreAOTBinaryReader::readU8(ptr) != 0;
+            std::string test_pattern;
+            if (const char* fail_pattern = aotTestFailRegexCase(); fail_pattern && pattern
+                    && !strcmp(pattern, fail_pattern)) {
+                test_pattern = std::string(pattern) + ")";
+                pattern = test_pattern.c_str();
+            }
+            // each case has a sink of its own, whose exception is the cause reported for the function: left in a
+            // shared sink, it was printed as an unhandled exception each time the context was built, and the error
+            // named no cause
+            ExceptionSink xsink;
             QoreRegex* re = new QoreRegex(pattern, options, &xsink);
             if (xsink) {
                 delete re;
+                // only the first failure is reported; before it, a recorded detail is stale
+                if (!has_unsupported) {
+                    aot_slot_resolve_error = "regex case slot " + std::to_string(i);
+                    for (const QoreValue& v : {xsink.getExceptionErr(), xsink.getExceptionDesc()}) {
+                        if (v.getType() == NT_STRING) {
+                            aot_slot_resolve_error += ": ";
+                            aot_slot_resolve_error += v.get<const QoreStringNode>()->c_str();
+                        }
+                    }
+                }
+                xsink.clear();
                 has_unsupported = true;
                 continue;
             }
