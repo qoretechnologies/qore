@@ -448,6 +448,24 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         }
     }
 
+    #! Returns the request context for the given code: without the credentials of the request for code of a
+    #! restricted %Program (qore#7303)
+    /** The code of a method or of the log message callback that a handler of trusted code calls with the request
+        context gets it filtered (see @ref HttpServer::AbstractHttpRequestHandler::filtersRequestsFor() "the request
+        filter of the handler") when it is of a %Program that a sandbox that does not trust its code governs
+        (@ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()",
+        failing closed)
+    */
+    private hash<auto> getContextForCode(code c, hash<auto> cx) {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isCodeFromRestrictedProgram(c);
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        return restricted ? filterRequestForHandler(cx, cx.hdr ?? {}).cx : cx;
+    }
+
     private hash<HttpResponseInfo> callMethod(hash<auto> cx0, auto params) {
         # to ensure that cx remains "hash<auto>"
         hash<auto> cx += cx0;
@@ -475,7 +493,9 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         cx.cmark = found.cmark;
         cx.function = found.function;
 
-        *string msg = exists getLogMessage ? call_function(getLogMessage, cx, found - "name_re", \params) : NOTHING;
+        *string msg = exists getLogMessage
+            ? call_function(getLogMessage, getContextForCode(getLogMessage, cx), found - "name_re", \params)
+            : NOTHING;
         if (exists msg)
             log(cx, msg);
 
@@ -483,8 +503,9 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
 
         *softlist<auto> args;
         if (found.include_context) {
-            # add the context hash as the first argument
-            args = (cx,) + params;
+            # add the context hash as the first argument; the code of a restricted Program gets it without the
+            # credentials of the request (qore#7303)
+            args = (found.function.typeCode() == NT_STRING ? cx : getContextForCode(found.function, cx),) + params;
         } else {
             args = params;
         }

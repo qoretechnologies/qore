@@ -430,6 +430,21 @@ public namespace YamlRpcHandler {
         }
 
         # don't reimplement this method; fix/enhance it in the module
+
+        #! Returns the request context for the log message callback: without the credentials of the request for code
+        #! of a restricted %Program (qore#7303)
+        /** See @ref Qore::SandboxManager::isCodeFromRestrictedProgram() "SandboxManager::isCodeFromRestrictedProgram()";
+            fails closed
+        */
+        private hash<auto> getContextForCode(code c, hash<auto> cx) {
+            bool restricted;
+            try {
+                restricted = SandboxManager::isCodeFromRestrictedProgram(c);
+            } catch (hash<ExceptionInfo> ex) {
+                restricted = True;
+            }
+            return restricted ? filterRequestForHandler(cx, cx.hdr ?? {}).cx : cx;
+        }
         final private hash<auto> callMethod(hash cx, auto params) {
             @assert(cx.method);
             string method = cx.method;
@@ -449,7 +464,8 @@ public namespace YamlRpcHandler {
                 cx.cmark = found.cmark;
                 cx.function = found.function;
 
-                *string msg = getLogMessage ? getLogMessage(cx, found - "name_re", \params) : NOTHING;
+                *string msg = getLogMessage
+                    ? getLogMessage(getContextForCode(getLogMessage, cx), found - "name_re", \params) : NOTHING;
                 if (msg)
                     log(cx, msg);
 
