@@ -740,7 +740,10 @@ public:
         // the members instead of testing both lists' ends, which costs a test less per member (qore#7272)
         const HashMember* om = other.member_list.front();
         for (size_t n = size(); n; --n, m = m->next, om = om->next) {
-            if (!qore_key_equal(m->key.data(), m->key.size(), om->key.data(), om->key.size())) [[unlikely]] {
+            // always inline: the compiler inlined it here before qore#7557 by its heuristics alone, which other changes
+            // can turn
+            if (!qore_key_equal_always_inline(m->key.data(), m->key.size(), om->key.data(), om->key.size()))
+                    [[unlikely]] {
                 break;
             }
             // the keys are unique, so the member with the same key is the member at the same place
