@@ -2702,7 +2702,9 @@ static QoreListNode* list_library_module_sources(const char* dir, ExceptionSink*
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
     DIR* d = opendir(dir);
     if (!d) {
-        xsink->raiseErrnoException("DIR-READ-ERROR", errno, "cannot list the sources of module directory '%s'", dir);
+        int err = errno;
+        xsink->raiseErrnoException("DIR-READ-ERROR", err, "cannot list the sources of module directory '%s'",
+            qore_msg_path(dir).c_str());
         return nullptr;
     }
     std::set<std::string> names;
@@ -5358,9 +5360,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     if (!sep_library_file && q_source_read_policy_applies()) {
         if (q_read_policy_checked_source(moduleOpenPath.c_str(), moduleCode, &xsink)) {
             if (!xsink) {
-                xsink.raiseErrnoException("LOAD-MODULE-ERROR", errno, "cannot read '%s'", moduleOpenPath.c_str());
+                int err = errno;
+                xsink.raiseErrnoException("LOAD-MODULE-ERROR", err, "cannot read '%s'",
+                    qore_msg_path(moduleOpenPath.c_str()).c_str());
             }
-            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                qore_msg_path(path).c_str());
             return nullptr;
         }
     } else {
@@ -5416,11 +5421,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             if (!sep_library_file && q_source_read_policy_applies()) {
                 if (q_read_policy_checked_source(fileOpenPath.c_str(), fileCode, &xsink)) {
                     if (!xsink) {
-                        xsink.raiseErrnoException("LOAD-MODULE-ERROR", errno, "cannot read '%s'",
-                            fileOpenPath.c_str());
+                        int err = errno;
+                        xsink.raiseErrnoException("LOAD-MODULE-ERROR", err, "cannot read '%s'",
+                            qore_msg_path(fileOpenPath.c_str()).c_str());
                     }
                     xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
-                        path);
+                        qore_msg_path(path).c_str());
                     return nullptr;
                 }
             } else {

@@ -2741,6 +2741,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                               QoreString policy_err;
                                               if (policy_read) {
                                                  ExceptionSink pxsink;
+                                                 // the denial names the file as the code being parsed may see it
+                                                 // (qore#7507)
+                                                 QoreRestrictedMessageScopeHelper msg_scope(
+                                                    qore_caller_no_external_info());
                                                  policy_fp = q_open_policy_checked_source(fn, &pxsink);
                                                  if (!policy_fp) {
                                                     if (pxsink) {
@@ -2756,8 +2760,8 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                               struct stat sbuf;
                                               int rc = policy_read ? 0 : stat(fn, &sbuf);
                                               if (policy_read && !policy_fp) {
-                                                 parse_error(*get_loc(yylloc), "cannot include \"%s\": %s", fn,
-                                                    policy_err.c_str());
+                                                 parse_error(*get_loc(yylloc), "cannot include \"%s\": %s",
+                                                    qore_caller_msg_path(fn).c_str(), policy_err.c_str());
                                                  BEGIN(INITIAL);
                                               } else if (rc) {
                                                  // a parse error at the directive, as the other errors of the

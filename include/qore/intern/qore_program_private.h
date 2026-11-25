@@ -4741,8 +4741,12 @@ public:
             }
         }
         if (!fp) {
-            if ((first_except_only && !exceptions_raised) || !first_except_only)
-                xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
+            if ((first_except_only && !exceptions_raised) || !first_except_only) {
+                int err = errno;
+                // a module file is named in the form for the code that loads the module (qore#7507)
+                xsink->raiseErrnoException("PARSE-EXCEPTION", err, "cannot open qore script '%s'",
+                    qore_msg_path(filename).c_str());
+            }
             exceptions_raised++;
             return;
         }

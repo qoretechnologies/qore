@@ -1948,9 +1948,10 @@ ArrayList l();
       warnings of a load that code with this option requests, and of the loads that it makes (dependencies, child
       modules, the initialization of AOT modules), name each file without its directory (also the files that an AOT
       module that is out of date names), and leave out the details that the dynamic loader and the readers of module
-      files give in text of their own; so do the errors of
-      \c %%include in the code that it parses; the \c desc of a child module in the \c "child-modules" of a module
-      description is replaced by a note when the error was built for code without this option
+      files give in text of their own; so do the errors of \c %%include in the code that it parses, and the denials
+      of a @ref sandbox_filesystem "sandbox file-system policy" for the sources that these loads and \c %%include
+      read; the \c desc of a child module in the \c "child-modules" of a module description is replaced by a note
+      when the error was built for code without this option
 
     @par Known Limitation:
     The following still give paths of the host to code with this option:
