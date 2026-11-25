@@ -6,6 +6,7 @@
 # it (qore#6662)
 
 %modern
+%allow-weak-references
 
 class T {
     public {
@@ -167,6 +168,35 @@ sub run() {
         hash<auto> inner = {"b": \g_l};
         list<reference<hash<auto>>> lh = (\inner,);
         return lh[0].b[1];
+    });
+
+    # a weak reference held by the referenced list reads as its object, so the value read keeps the object
+    show("weak reference element of a referenced list", auto sub () {
+        *T q = new T("q");
+        list<auto> wl = ("x", 2);
+        wl[0] := q;
+        list<reference<list<auto>>> lw = (\wl,);
+        list<auto> keep = (lw[0][0],);
+        q = NOTHING;
+        return keep[0].n;
+    });
+    show("weak reference element of a referenced list by a computed index", auto sub () {
+        *T q = new T("q");
+        list<auto> wl = ("x", 2);
+        wl[0] := q;
+        list<reference<list<auto>>> lw = (\wl,);
+        auto v = lw[0][next_index() - g_next];
+        q = NOTHING;
+        return v.n;
+    });
+    show("weak reference element of a referenced list in a hash", auto sub () {
+        *T q = new T("q");
+        list<auto> wl = ("x", 2);
+        wl[0] := q;
+        hash<string, reference<list<auto>>> hw = {"a": \wl};
+        hash<auto> keep = {"k": hw.a[next_index() - g_next]};
+        q = NOTHING;
+        return keep.k.n;
     });
 
     # the reference as it is

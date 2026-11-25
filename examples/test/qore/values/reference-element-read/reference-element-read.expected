@@ -30,6 +30,9 @@ map of a range and a selector with side effects: [10, 20, 30]
 selector that changes the referenced variable: [1, 2, 3]
 order of the selectors and of the map: [[1, 2, 3], ["f0", "g1", "f1", "f2", "g2", "g3"]]
 reference to a reference element: 20
+weak reference element of a referenced list: "q"
+weak reference element of a referenced list by a computed index: "q"
+weak reference element of a referenced list in a hash: "q"
 operator: 1
 auto variable: 9
 reference parameter: 8
@@ -68,6 +71,9 @@ map of a range and a selector with side effects: [10, 20, 30]
 selector that changes the referenced variable: [1, 2, 3]
 order of the selectors and of the map: [[1, 2, 3], ["f0", "g1", "f1", "f2", "g2", "g3"]]
 reference to a reference element: 20
+weak reference element of a referenced list: "q"
+weak reference element of a referenced list by a computed index: "q"
+weak reference element of a referenced list in a hash: "q"
 operator: 1
 auto variable: 9
 reference parameter: 8
