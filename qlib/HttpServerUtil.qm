@@ -4871,19 +4871,21 @@ public class AbstractHttpRequestHandler {
     }
 
     #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
-    /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
-        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()", or a sandbox governs the Program
-        that created the object: see
-        @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), or if
-        setHandlerSocketView() was called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+    /** True if the handler object is declared by restricted code (the call of this method on the object is
+        restricted: see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()", or a restricting
+        sandbox governs the Program that created the object: see
+        @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"), or if
+        setHandlerSocketView() was called; also True if this cannot be decided.  Code that a sandbox governs only for
+        its resource limits, interrupts or I/O policy, and that may use uncontrolled APIs, is trusted: it gets the
+        connection's socket (qore#7577).  The method is final, so that a subclass cannot change the
         decision; the server calls it when the handler is registered
 
         @since HttpServerUtil 1.6
     */
     final bool needsHandlerSocketView() {
         try {
-            return handler_socket_view || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self)
-                || hostsSandboxedCode();
+            return handler_socket_view || SandboxManager::isRestricted()
+                || SandboxManager::isFromRestrictedProgram(self) || hostsSandboxedCode();
         } catch (hash<ExceptionInfo> ex) {
             # the decision fails closed
             return True;
@@ -4901,10 +4903,11 @@ public class AbstractHttpRequestHandler {
     }
 
     #! Returns @ref True "True" if an object whose code the handler runs (see hostedObjects()) is of a class of a
-    #! sandboxed Program (qore#7305)
-    /** Also True if this cannot be decided
+    #! restricted Program (qore#7305)
+    /** A Program that a sandbox governs only for its resource limits, interrupts or I/O policy, and that may use
+        uncontrolled APIs, is trusted and does not count (qore#7577).  Also True if this cannot be decided
 
-        @see @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"
+        @see @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"
 
         @since HttpServerUtil 1.6
     */
@@ -4914,7 +4917,7 @@ public class AbstractHttpRequestHandler {
                 return False;
             }
             foreach object obj in (hostedObjects()) {
-                if (SandboxManager::isFromSandboxedProgram(obj)) {
+                if (SandboxManager::isFromRestrictedProgram(obj)) {
                     return True;
                 }
             }

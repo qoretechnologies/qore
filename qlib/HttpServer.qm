@@ -188,23 +188,25 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     connection only.
 
     The requests of an HTTP/1.x connection come one after the other on its socket, which the server keeps.  The
-    handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
-    code, which needs nothing more, or when the handler asked for it with
+    handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by restricted
+    code (code that a sandbox governs that refuses uncontrolled APIs: see
+    @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), which needs nothing more, or when the
+    handler asked for it with
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
-    registered, or when it runs the code of objects of classes of a sandboxed Program
+    registered, or when it runs the code of objects of classes of a restricted Program
     (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()", decided for each
     request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
-    gets a socket of its request when one of its REST classes is of a class of a sandboxed Program, whoever made the
-    handler and whenever the class was added, when it is declared by sandboxed code, or when it asked for it, and
+    gets a socket of its request when one of its REST classes is of a class of a restricted Program, whoever made the
+    handler and whenever the class was added, when it is declared by restricted code, or when it asked for it, and
     gives that socket to its REST classes and their stream handlers (\c cx.socketobject).  A
     @ref RestHandler::RestHandler "RestHandler" that has the connection's socket refuses a request (\c 500, and the
-    connection is closed) whose dispatch path has a REST class or a stream handler of a sandboxed Program that its
+    connection is closed) whose dispatch path has a REST class or a stream handler of a restricted Program that its
     top-level classes did not show when the request started (one below a trusted class, one that a trusted class's
     \c subClassImpl() returns, or one added since); a trusted @ref RestHandler::RestHandler "RestHandler" whose REST
     classes are trusted but run code that is not trusted (a closure of a tenant, for example) must ask for it.
 
     The connection's socket, which the server gives the other handlers, is the server's
-    (@ref Qore::Socket::setServerOwned() "Socket::setServerOwned()"): sandboxed code may not call its methods that
+    (@ref Qore::Socket::setServerOwned() "Socket::setServerOwned()"): restricted code may not call its methods that
     read, write, change or poll the connection, nor close it or shut it down (\c SOCKET-SERVER-OWNED-ERROR), also
     when a trusted handler passes it on, so such code cannot read the next request on the connection or answer
     another one; its methods that only give information, such as @ref Qore::Socket::getPeerInfo() "getPeerInfo()",
@@ -212,6 +214,10 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     calls @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" so that the
     code can use the request's own part of the connection
     (<a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>).
+
+    Code that a sandbox governs only for its resource limits, interrupts or I/O policy, and that may use uncontrolled
+    APIs, is trusted: a handler of such code gets the connection's socket and can use it, as any trusted handler
+    (<a href="https://github.com/qoretechnologies/qore/issues/7577">issue 7577</a>).
 
     A request that is served for sandboxed code, such as a request of a server that sandboxed code runs, or of a
     listener that trusted code added on behalf of sandboxed code, gets a socket of its own for any handler, as the
@@ -5477,10 +5483,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # a request that is served for sandboxed code (of a server that sandboxed code runs, or of a listener
             # that was added for it) gets a socket of its own as well: the connection's socket is refused to code
             # that runs for sandboxed code (qore#7338)
+            # restricted code only: code that a sandbox governs only for its resource limits, interrupts or I/O policy,
+            # and that may use uncontrolled APIs, is trusted and gets the connection's socket (qore#7577)
             if (!handler_socket_view && handler && !is_multiplexed) {
-                handler_socket_view = SandboxManager::isFromSandboxedProgram(handler)
+                handler_socket_view = SandboxManager::isFromRestrictedProgram(handler)
                     || (hosts_code && handler.hostsSandboxedCode())
-                    || SandboxManager::isSandboxed();
+                    || SandboxManager::isRestricted();
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
                 startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
@@ -11572,16 +11580,17 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     #! Aborts the connection: the client sees it closed, without the rest of the response, and the server drops it
-    /** For code that is not sandboxed only, as when a server ends a response midway to tell the client that it is
+    /** For code that is not restricted only, as when a server ends a response midway to tell the client that it is
         truncated; the server's response, if any, is then not sent, and the connection serves no other request.  A
-        connection that the client already closed is not an error.
+        connection that the client already closed is not an error.  Code that a sandbox governs only for its resource
+        limits, interrupts or I/O policy, and that may use uncontrolled APIs, is trusted and can call it (qore#7577).
 
-        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is sandboxed (see
-        @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), or the request ended
+        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is restricted (see
+        @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), or the request ended
     */
     nothing abortConnection() {
-        # a sandboxed caller cannot end the connection, also when it calls through code that is not sandboxed
-        if (SandboxManager::isSandboxed()) {
+        # a restricted caller cannot end the connection, also when it calls through code that is not restricted
+        if (SandboxManager::isRestricted()) {
             throw "HTTP-HANDLER-SOCKET-ERROR", "Socket::abortConnection() cannot be called by sandboxed code on the "
                 "socket of an HTTP/1.x request";
         }

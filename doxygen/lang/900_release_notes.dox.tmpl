@@ -261,10 +261,12 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
 
     @par The Handler of an HTTP/1.x Request Gets a Socket of Its Request
-    An HTTP/1.x handler declared by sandboxed code, or that asks for it, gets a socket for its own request only, and
-    aborts the connection with @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's
-    socket that other handlers get is refused to sandboxed code (see @ref httpserver_handler_socket; issues
-    <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
+    An HTTP/1.x handler declared by restricted code (code that a sandbox refusing uncontrolled APIs governs), or that
+    asks for it, gets a socket for its own request only, and aborts the connection with
+    @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's socket that other handlers
+    get is refused to restricted code (see @ref httpserver_handler_socket; issues
+    <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7577">7577</a>).
 
     @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
     The HTTP/1.1 WebSocket connection of such a handler is set up without the connection's socket, and another socket

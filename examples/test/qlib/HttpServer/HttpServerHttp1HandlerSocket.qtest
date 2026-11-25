@@ -1554,8 +1554,8 @@ nothing sub run_code(code c) {
         assertTrue(SandboxManager::isFromSandboxedProgram(h), "a sandbox governs the handler's Program");
         assertFalse(SandboxManager::isFromRestrictedProgram(h), "the Program is not restricted");
         assertFalse(h.needsHandlerSocketView(), "the handler gets the connection's socket");
+        # removed below, before the restricted handler takes the same path
         server.setHandler("trusted-permissive", "^class", NOTHING, h);
-        on_exit server.removeHandler("trusted-permissive");
         Socket c = connect();
         on_exit c.close();
         c.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
