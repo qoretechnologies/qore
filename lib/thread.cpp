@@ -13059,14 +13059,12 @@ QoreListNode* QoreThreadList::getCallStack(const QoreStackLocation* stack_locati
 }
 
 QoreHashNode* QoreThreadList::getParentCallerLocation(const QoreStackLocation* stack_location, size_t offset) const {
-    const QoreStackLocation* w = stack_location;
-    size_t i = 0;
-    if (w) {
-        if (i == offset) {
+    // the frame at the offset from the innermost one, as get_thread_call_stack() lists them (qore#7564)
+    for (const QoreStackLocation* w = stack_location; w; w = w->getNext()) {
+        if (!offset) {
             return getCallStackHash(*w);
         }
-        ++i;
-        w = w->getNext();
+        --offset;
     }
     return nullptr;
 }
