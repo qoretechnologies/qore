@@ -355,6 +355,18 @@ Run the isolated runner regression tests with:
 
     python3 -B -W error examples/test/runner/test_timeout_diagnostics.py -v
 
+Thread-local variable access (TLS descriptors)
+----------------------------------------------
+
+On x86_64 Linux with GCC or Clang, libqore accesses its thread-local variables through TLS descriptors
+(-mtls-dialect=gnu2; -DQORE_TLS_DESCRIPTORS=ON, the default).  libqore is also loaded with dlopen(), so it cannot use
+the initial-exec TLS model, and with the general-dynamic model every access of a thread-local variable calls
+__tls_get_addr(); a TLS descriptor resolves to a few instructions instead.  The jemalloc that musl builds link into
+libqore is compiled the same way.  -DQORE_TLS_DESCRIPTORS=OFF builds without them, as does a compiler without
+-mtls-dialect=gnu2; get_qore_library_info() reports the choice as TlsDescriptors, and
+examples/test/qore/misc/tls-descriptors.qtest checks the relocations of a library built with them.  The option has
+no effect on other platforms (aarch64 uses TLS descriptors by default).
+
 Faster library builds for CI images
 -----------------------------------
 

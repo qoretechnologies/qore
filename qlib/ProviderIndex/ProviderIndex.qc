@@ -1348,12 +1348,12 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
             }
         }
         if (info.expressions) {
+            # The type descriptions in one expression catalog share a key space. getInfo() supplies
+            # process-local keys, so give each distinct key a stable name in traversal order.
+            ProviderIndexUniqueKeys signature_keys();
             rv.expressions = map {
-                $1.key: $1.value + {
-                    "args": (map $1 + {
-                        "type": $1.type.getBaseTypeName(),
-                    }, $1.value.args),
-                    "return_type": $1.value.return_type.getBaseTypeName(),
+                $1.key: $1.value + getSerializableExpressionType("return_type", $1.value.return_type, signature_keys) + {
+                    "args": (map $1 + getSerializableExpressionType("type", $1.type, signature_keys), $1.value.args),
                 }
             }, info.expressions.pairIterator();
         }
@@ -1364,6 +1364,18 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     "type": $1.value.type.getBaseTypeName(),
                 }}, info{key}.pairIterator();
             }
+        }
+        return rv;
+    }
+
+    #! Keep the compact base name for older readers and describe types that the name cannot restore.
+    private:internal static hash<auto> getSerializableExpressionType(string key, AbstractDataProviderType type,
+            ProviderIndexUniqueKeys signature_keys) {
+        string base = type.getBaseTypeName();
+        hash<auto> rv;
+        rv{key} = base;
+        if (type !== AbstractDataProviderTypeMap{base}) {
+            rv{key + "_info"} = signature_keys.replace(type.getInfo());
         }
         return rv;
     }

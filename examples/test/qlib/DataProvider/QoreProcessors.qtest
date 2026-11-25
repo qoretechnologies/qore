@@ -1103,7 +1103,13 @@ class QoreProcessorsTest inherits QUnit::Test {
                     exp.key, exp.value.return_type.type()));
             assertEq(registered{exp.key}.return_type.getBaseTypeName(), exp.value.return_type.getBaseTypeName(),
                 sprintf("expression %y has the return type it was registered with", exp.key));
+            assertEq((map $1.type.getName(), registered{exp.key}.args), (map $1.type.getName(), exp.value.args),
+                sprintf("expression %y retains its argument types", exp.key));
         }
+
+        AbstractDataProviderType sum_type = restored.expressions."sum".return_type;
+        assertTrue(sum_type instanceof QoreUnionDataType, "sum retains its numeric union in the index");
+        assertEq(("int", "float", "number"), map $1.getName(), cast<QoreUnionDataType>(sum_type).getUnionTypes());
 
         # Verify specific standard expressions are present
         assertEq(True, exists filter.data_provider_info.expressions."&&",
