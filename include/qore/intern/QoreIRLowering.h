@@ -959,6 +959,21 @@ private:
     //! that one of them handed over before it, which the entry of each path releases (qore#7008)
     bool setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
             const QoreProgramLocation* loc, std::string& error);
+    //! Gives the ScopeExit \a se past the inline cap whose handlers' values replace the value of a return (its
+    //! operands, QoreIRScopeExitInstruction::hand_over_return) the paths of the request that the last handler it runs
+    //! ends with (qore#7531), in code with the paths of the requests
+    /** A request that goes on with the return (a return request, or a break or a continue that ends the function,
+        qore#6949) goes on after the ScopeExit as the code does: in the cleanups of a return statement (\a
+        handed_over_return nullptr), the return takes what the handlers handed over or its own value; elsewhere, the
+        return of the value handed over (\a handed_over_return, see lowerHandedOverReturn()) if one was, else the path
+        of a request made after the block (setScopeExitFlowTargets()).  Another request abandons the return: the entry
+        of its path releases what the handlers handed over and, in the cleanups of a return statement, the return's
+        own value (the operands), as a request abandons the return of a handler lowered inline (qore#7022), before the
+        path of a request made after the block, which goes on with the return that the replaced one resumes.  Leaves
+        the builder in the code after the ScopeExit.
+    */
+    bool setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
+            QoreIRBasicBlock* handed_over_return, const QoreProgramLocation* loc, std::string& error);
     //! Returns the shared paths of the requests after the handlers of the scope whose entry is
     //! cleanup_stack[\a scope_entry] (scope_exit_flow_paths), lowering them the first time; nullptr with \a error
     //! set on failure
