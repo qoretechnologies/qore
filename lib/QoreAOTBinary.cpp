@@ -2968,28 +2968,34 @@ const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pg
     if (*name == '+' || *name == '-') {
         return QTZM.findCreateOffsetZone(name, xsink);
     }
-    // a zone that is loaded already (when the code was parsed in this process, or by an earlier literal) is found by
-    // its exact name without access to a file (qore#7442)
-    if (const AbstractQoreZoneInfo* zone = QTZM.findLoadedZone(name)) {
-        return zone;
-    }
-    if (!pgm) {
-        // data names only: a path is refused as an unknown region
-        return QTZM.findLoadRegion(name, xsink);
-    }
-    if (QoreTimeZoneManager::isPathName(name)) {
-        // a zoneinfo file path is loaded only for an unrestricted Program, as for the %set-time-zone directive;
-        // findLoadRegionFromPath() is given the Program as the caller has checked it
+    // a zoneinfo file path (other than the name of the local zone) is used only for an unrestricted Program, as for
+    // the %set-time-zone directive; the restriction applies before anything else, also to a zone that is loaded
+    // already, so that restricted code cannot tell whether a path zone is loaded (qore#7442)
+    if (QoreTimeZoneManager::isPathName(name) && !QTZM.findLocalZone(name)) {
+        if (!pgm) {
+            // data names only: a path is refused as an unknown region
+            return QTZM.findLoadRegion(name, xsink);
+        }
         if ((pgm->getParseOptions64() & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
             xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the time zone of a date literal is the zoneinfo file "
                 "path '%s', which cannot be loaded in a restricted Program; restricted code can load time zone "
                 "regions only", name);
             return nullptr;
         }
+        // a zone that is loaded already is found by its exact name without access to the file; otherwise the file is
+        // loaded, given the Program as the caller has checked it
+        if (const AbstractQoreZoneInfo* zone = QTZM.findLoadedZone(name)) {
+            return zone;
+        }
         return QTZM.findLoadRegionFromPath(name, xsink, pgm);
     }
+    // a region that is loaded already (when the code was parsed in this process, or by an earlier literal) is found
+    // by its exact name without access to a file
+    if (const AbstractQoreZoneInfo* zone = QTZM.findLoadedZone(name)) {
+        return zone;
+    }
     // whether the code is restricted is decided by the loading Program, not by the code that loads it
-    return QTZM.findLoadRegionForProgram(name, pgm, xsink);
+    return pgm ? QTZM.findLoadRegionForProgram(name, pgm, xsink) : QTZM.findLoadRegion(name, xsink);
 }
 
 static std::string qoreAOTExceptionText(ExceptionSink& xsink) {

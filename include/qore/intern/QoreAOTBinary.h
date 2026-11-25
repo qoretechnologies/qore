@@ -249,10 +249,11 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     bool defer_if_pending, bool wrap_top_level_if_ready = false, bool* resolved = nullptr);
 
 //! Resolves the time zone of a date literal for the loading Program
-/** A zone that is loaded already is found by its exact name (QoreTimeZoneManager::findLoadedZone()) without access to
-    a file; otherwise a zoneinfo file path is loaded only if \a pgm is not restricted (else
-    \c ILLEGAL-FILESYSTEM-ACCESS is raised), and a region subject to the restrictions of \a pgm.  A null Program
-    permits only region names and UTC offsets.
+/** A zoneinfo file path (other than the name of the local zone) is refused with \c ILLEGAL-FILESYSTEM-ACCESS if
+    \a pgm is restricted, before anything else, also if the zone is loaded already; otherwise a zone that is loaded
+    already is found by its exact name (QoreTimeZoneManager::findLoadedZone()) without access to a file, a path is
+    loaded from its file, and a region subject to the restrictions of \a pgm.  A null Program permits only region
+    names and UTC offsets.
 */
 DLLLOCAL const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pgm, ExceptionSink* xsink);
 
