@@ -2713,6 +2713,13 @@ void QoreModuleManager::addModule(QoreAbstractModule* m) {
     // so calls into its code from other Programs need no reference to it (see qore_program_set_module_lifetime())
     if (QoreProgram* mpgm = m->getModuleProgram()) {
         qore_program_set_module_lifetime(*mpgm);
+        // the name that identifies the module's code to the library code that it calls (qore#7302); a Program keeps
+        // the name of the first module registered with it
+        qore_program_private* mpp = qore_program_private::get(*mpgm);
+        if (!mpp->module_name_set.load(std::memory_order_acquire)) {
+            mpp->module_name = m->getName();
+            mpp->module_name_set.store(true, std::memory_order_release);
+        }
     }
     //printd(5, "QoreModuleManager::addModule() m: %p '%s'\n", m, m->getName());
 }

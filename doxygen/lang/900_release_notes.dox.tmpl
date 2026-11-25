@@ -1878,6 +1878,12 @@
     \c qore_get_caller_program_id() and \c qore_get_caller_program() in the C++ API (\c QORE_HAVE_CALLER_PROGRAM)
     (<a href="https://github.com/qoretechnologies/qore/issues/6852">issue 6852</a>).
 
+    @par The Immediate Caller of Library Code
+    @ref Qore::SandboxManager::getImmediateCaller() and @ref Qore::SandboxManager::isImmediateCallerModule() tell
+    library code which code called it immediately (module code that serves its caller, or a callback of restricted
+    code), so that it hands a capability only to code of a given module; see @ref sandbox_immediate_caller
+    (<a href="https://github.com/qoretechnologies/qore/issues/7302">issue 7302</a>).
+
     @par C++ API: Module Threads and Callbacks Run Under the Caller's Sandbox
     A binary module can run work for sandboxed callers on its own worker or callback threads under each caller's
     @ref sandboxing "sandbox" with the new \c QoreSandboxCapture and \c QoreSandboxCaptureHelper classes, and check

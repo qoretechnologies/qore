@@ -83,7 +83,15 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
 #! a connection whose async client creation runs restricted code (as a callback can) in the window of the grant
 class CallbackConnection inherits HttpConnection {
     public {
+        #! True if the restricted code took a proof with HttpClientCreatorProof::forClient()
         *bool taken;
+        #! the result of a request of a client that the restricted code created itself
+        *string own;
+        #! True if a call reference that the restricted code created to HttpClientCreatorProof::forClient() took a
+        #! proof when the connection's code called it
+        *bool taken_ref;
+        #! the attempt that the restricted code makes in the next call: "take", "own" or "ref"
+        string attempt = "take";
     }
     private {
         Program cb;
@@ -92,8 +100,51 @@ class CallbackConnection inherits HttpConnection {
         self.cb = cb;
     }
     private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
-        taken = cb.callFunction("take", url);
+        # one attempt per call, so that an attempt that takes the grant does not hide what the others would get
+        switch (attempt) {
+            case "take": taken = cb.callFunction("take", url); break;
+            case "own": own = cb.callFunction("own_client", url); break;
+            case "ref": {
+                code ref = cb.callFunction("take_ref");
+                taken_ref = exists ref(url);
+                break;
+            }
+        }
         return HttpConnection::getAsyncImpl(connect, rtopts);
+    }
+}
+
+#! a REST connection whose async client creation runs restricted code (as a callback can) in the window of the grant
+class CallbackRestConnection inherits RestConnection {
+    public {
+        #! see CallbackConnection
+        *bool taken;
+        *string own;
+        *bool taken_ref;
+        string attempt = "take";
+    }
+    private {
+        Program cb;
+        #! the HTTP URL of the connection's target
+        string target;
+    }
+    constructor(Program cb, string url, string target) : RestConnection("cbr", "cbr", url, {"monitor": False},
+            {"data": "json"}) {
+        self.cb = cb;
+        self.target = target;
+    }
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        # one attempt per call, so that an attempt that takes the grant does not hide what the others would get
+        switch (attempt) {
+            case "take": taken = cb.callFunction("take", target); break;
+            case "own": own = cb.callFunction("own_client", target); break;
+            case "ref": {
+                code ref = cb.callFunction("take_ref");
+                taken_ref = exists ref(target);
+                break;
+            }
+        }
+        return RestConnection::getAsyncImpl(connect, rtopts);
     }
 }
 
@@ -179,6 +230,19 @@ string sub no_proxy(object conn) {
 }
 bool sub take(string url) {
     return exists HttpClientCreatorProof::forClient(url);
+}
+code sub take_ref() {
+    return \\HttpClientCreatorProof::forClient();
+}
+string sub own_client(string url) {
+    try {
+        RestClientIo c({\"url\": url});
+        on_exit c.close();
+        c.restGet(\"/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 string sub rest_get(object conn, string path) {
     try {
@@ -557,7 +621,9 @@ object sub lookalike() {
         addTestCase("a lent connection keeps its TLS mode, " + m, sub () { testTlsMode(m); });
         addTestCase("a lent connection keeps its proxy, " + m, sub () { testProxyRemoved(m); });
         addTestCase("redirects of a lent connection, " + m, sub () { testRedirects(m); });
-        addTestCase("restricted code inside a trusted call takes no grant, " + m, sub () { testCallback(m); });
+        addTestCase("restricted callback code takes no grant, " + m, sub () { testCallback(m); });
+        addTestCase("restricted callback code of a REST connection takes no grant, " + m,
+            sub () { testRestCallback(m); });
         addTestCase("a lent REST connection's async client, " + m, sub () { testLentRest(m); });
         addTestCase("a lent RestClientIo client, " + m, sub () { testLentRestClient(m); });
         addTestCase("a lent HTTP connection's synchronous client, " + m, sub () { testLentSync(m); });
@@ -783,16 +849,45 @@ object sub lookalike() {
     }
 
     #! restricted code that runs while trusted code calls getAsync() on a connection takes no grant: the connection
-    #! grants its proof only to a restricted caller; restricted code that runs while that caller calls it (the
-    #! documented limit) can take the grant, which is bound to the connection's target, as the caller's client would
+    #! grants its proof only to a restricted caller; restricted code that runs while that caller calls it (a callback)
+    #! takes no grant either, neither itself, nor with a client that it creates, nor through a call reference that
+    #! the connection's code calls; the connection's own client still takes it (qore#7302)
     testCallback(string mode) {
         Program p = getProgram(mode);
         CallbackConnection c(p, sprintf("http://127.0.0.1:%d/", closed_port));
-        c.getAsync(False);
+        foreach string a in (("take", "own", "ref")) {
+            c.attempt = a;
+            c.getAsync(False);
+        }
         assertEq(False, c.taken, "restricted code inside a trusted call, " + mode);
-        c.taken = NOTHING;
-        p.callFunction("use_http_conn", c);
-        assertEq(True, c.taken, "restricted code inside a restricted caller's call, " + mode);
+        assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a trusted call, " + mode);
+        assertEq(False, c.taken_ref, "a call reference of restricted code inside a trusted call, " + mode);
+        c.taken = c.own = c.taken_ref = NOTHING;
+        foreach string a in (("take", "own", "ref")) {
+            c.attempt = a;
+            assertEq("OK", p.callFunction("use_http_conn", c), "the connection's own client, " + a + ", " + mode);
+        }
+        assertEq(False, c.taken, "restricted code inside a restricted caller's call, " + mode);
+        assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a restricted caller's call, " + mode);
+        assertEq(False, c.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
+            + mode);
+    }
+
+    #! restricted code that runs while a restricted caller calls getAsync() on a lent REST connection takes no grant,
+    #! while the connection's own client, which RestClientIo code creates, takes it (qore#7302)
+    testRestCallback(string mode) {
+        Program p = getProgram(mode);
+        string target = sprintf("http://127.0.0.1:%d/rest", plain_port);
+        CallbackRestConnection c(p, sprintf("rest://127.0.0.1:%d/rest", plain_port), target);
+        foreach string a in (("take", "own", "ref")) {
+            c.attempt = a;
+            assertEq("200", p.callFunction("rest_get", c, "/rest/x"), "the connection's own client, " + a + ", "
+                + mode);
+        }
+        assertEq(False, c.taken, "restricted code inside a restricted caller's call, " + mode);
+        assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a restricted caller's call, " + mode);
+        assertEq(False, c.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
+            + mode);
     }
 
     #! the same host and port with TLS instead of plain HTTP is another origin

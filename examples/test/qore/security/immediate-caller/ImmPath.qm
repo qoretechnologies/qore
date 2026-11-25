@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of immediate-caller.qtest that the worker loads by its path: not library code (qore#7302)
+
+%modern
+
+%requires ImmAsk
+
+module ImmPath {
+    version = "1.0";
+    desc = "immediate caller probe: a module loaded by its path";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ImmPath {
+#! returns the immediate caller of ImmAsk::ask() when this module code calls it
+public *hash<ImmediateCallerInfo> sub ask_via() {
+    return ImmAsk::ask();
+}
+
+#! returns ImmAsk::is_module() when this module code calls it
+public bool sub is_module_via(string name) {
+    return ImmAsk::is_module(name);
+}
+}

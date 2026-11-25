@@ -1448,6 +1448,59 @@ private:
 */
 DLLLOCAL int qore_find_caller_program(QoreProgram*& pgm, qore_program_id_t& id);
 
+//! The code that made the call immediately before the running code (qore#7302); see qore_get_immediate_caller()
+struct QoreImmediateCallerInfo {
+    //! the Program of the immediate caller's code (not referenced, valid during the call)
+    const QoreProgram* pgm = nullptr;
+    //! the ID of \a pgm
+    qore_program_id_t pgm_id = QORE_NO_PROGRAM_ID;
+    //! the name of the module whose code it is, or nullptr if it is not the code of a registered module (valid while
+    //! the module's Program exists, as \a pgm)
+    const std::string* module_name = nullptr;
+    //! true if it is the code of a library module (a module loaded from a trusted path)
+    bool library_module = false;
+    //! true if it is restricted code (see qore_get_immediate_caller())
+    bool restricted = true;
+    //! the number of the immediate caller's frame: the number of switches between the code of different Programs
+    //! below it on the thread's stack
+    int64 frame = -1;
+    //! the number of the outermost frame of the unbroken run of trusted code that ends with the immediate caller, or
+    //! -1 if the immediate caller is restricted
+    int64 trusted_frame = -1;
+};
+
+//! Finds the immediate caller of the running code (qore#7302)
+/** The running code is the code of the current Program (the code that calls the library function that asks); its
+    immediate caller is the code of the nearest frame below it on the thread's stack whose Program is another one: the
+    running code's own calls within its Program (the nested functions and methods of a module) are not frames, and
+    neither are its Program's frames directly below it.  Calls within a Program
+    switch nothing, so the frames are those of the switches between the code of different Programs, which every
+    execution mode records (the program context helpers and QoreProgramContextHelper); a closure runs in the Program
+    that compiled it, and so does the code of a call reference.
+
+    The immediate caller is restricted if its Program's code is restricted (a Program that is not a module's with a
+    restriction or a sandbox, the code compiled in such a Program that runs in another one, a module that is not
+    library code whose Program has a restriction or a sandbox), or if a closure or call reference that restricted or
+    sandboxed code created (its provenance) was called while the immediate caller's code or the running code ran: the
+    running code was then called through code that restricted code chose; or if an object that code restricted from a
+    domain that a host grant lends (file system, network, external information) created had a method called then (an
+    object runs its class's code, but such an object was created outside any grant: the objects that a lent method
+    creates for its borrower are lent and have none of those restrictions).  The provenance of a reference or object
+    is applied by the code that calls it, so it makes that code's frame restricted, not the frame of its target: a
+    call reference of restricted code to library code makes its caller's frame end the run of trusted code
+    (\a trusted_frame), while the library code that it reaches is still that library's code.
+
+    It is unknown, and the function returns -1, if the walk reaches the start of the thread, a module initialization
+    barrier (the initialization of library code, a trusted build), or the start of work that the thread runs for
+    other code (QoreCallerProgramScope) before it finds the immediate caller, or if the frames cannot be recorded for
+    lack of memory.  Adds no work to calls: the walk is made only when the function is called.
+
+    @param info set to the immediate caller
+
+    @return 0 if the immediate caller was found, -1 if it is unknown
+*/
+DLLLOCAL int qore_get_immediate_caller(QoreImmediateCallerInfo& info);
+
 //! The caller Program of the code that submits work that runs later on another thread (qore#6852)
 /** Captured where a thread is started (the \c background operator, q_start_thread()) or a task is submitted (a
     ThreadPool task), and applied where the work starts with QoreCallerProgramScope, so that the caller Program of the
@@ -3974,6 +4027,14 @@ public:
         return old_ctx;
     }
 
+    //! returns the innermost sandbox provenance frame of the thread when the context switched the Program (qore#7302)
+    /** The provenance frames applied since were applied while the code of this context's Program, or of code that it
+        called, ran (see qore_get_immediate_caller())
+    */
+    DLLLOCAL const QoreSandboxProvenanceHelper* getOldProvenance() const {
+        return old_provenance;
+    }
+
     //! Hands the thread count that set() took in the Program over to the caller
     /** The caller leaves the Program with qore_program_private::decThreadCount(); the context is still restored
         when the helper is destroyed, without leaving the Program.  Used to keep the Program of a reference entered
@@ -4050,6 +4111,8 @@ protected:
     int count_tid;
     ThreadLocalProgramData* old_tlpd;
     ProgramThreadCountContextHelper* old_ctx;
+    //! the innermost sandbox provenance frame of the thread when set() switched the Program; see getOldProvenance()
+    const QoreSandboxProvenanceHelper* old_provenance;
     // frame count of tlpd when context is started
     int save_frameCount;
     int old_frameCount;

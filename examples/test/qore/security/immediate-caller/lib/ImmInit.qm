@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of immediate-caller.qtest whose initialization calls ImmAsk (qore#7302): library code that the host loads
+
+%modern
+
+%requires ImmAsk
+
+module ImmInit {
+    version = "1.0";
+    desc = "immediate caller probe: the initialization of a module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ImmInit::Result::init_caller = {"caller": ImmAsk::ask()};
+    };
+}
+
+public namespace ImmInit {
+#! the immediate caller of ImmAsk::ask() in the module's initialization
+public class Result {
+    public {
+        static *hash<auto> init_caller;
+    }
+}
+
+#! returns the immediate caller of ImmAsk::ask() in the module's initialization
+public *hash<auto> sub get() {
+    return Result::init_caller;
+}
+}

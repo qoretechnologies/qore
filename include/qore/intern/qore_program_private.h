@@ -2384,6 +2384,15 @@ public:
     */
     bool library_module = false;
 
+    //! the name of the module whose Program this is, set once when the module is registered (qore#7302)
+    /** Written once before \c module_name_set is set with release semantics and never changed afterwards, so that the
+        caller walk (qore_get_immediate_caller()) reads it without a lock once it has read the flag with acquire
+        semantics; empty while the module is loaded and initialized
+    */
+    std::string module_name;
+    //! true once \c module_name is set
+    std::atomic<bool> module_name_set{false};
+
     //! Returns the block of an AOT closure at the given location, which the debugger's events of the debug IR of the
     //! closure are given with, as the entry block of an AOT function (#5795)
     /** Made and registered once per location, and owned by the Program, as the closure functions of AOT code are made

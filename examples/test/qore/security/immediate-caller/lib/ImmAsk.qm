@@ -1,0 +1,82 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a module of immediate-caller.qtest: library code (a trusted module directory) that asks for its immediate caller
+# (SandboxManager::getImmediateCaller(), qore#7302)
+
+%modern
+
+module ImmAsk {
+    version = "1.0";
+    desc = "immediate caller probe";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ImmAsk {
+#! the listeners that the module calls back in fire()
+class Listeners {
+    public {
+        static list<code> list = ();
+    }
+}
+
+#! returns the immediate caller of this module code
+public *hash<ImmediateCallerInfo> sub ask() {
+    return SandboxManager::getImmediateCaller();
+}
+
+#! returns the immediate caller of this module code through a function of the module that it calls
+public *hash<ImmediateCallerInfo> sub ask_nested() {
+    return ImmAsk::inner();
+}
+
+#! the nested function of ask_nested()
+*hash<ImmediateCallerInfo> sub inner() {
+    return SandboxManager::getImmediateCaller();
+}
+
+#! returns True if the immediate caller of this module code is the code of the given library module
+public bool sub is_module(string name) {
+    return SandboxManager::isImmediateCallerModule(name);
+}
+
+#! module code that calls the code that it is given
+public auto sub call(code c) {
+    return c();
+}
+
+#! module code that calls the code that it is given with an argument
+public auto sub call_with(code c, auto arg) {
+    return c(arg);
+}
+
+#! returns the immediate caller of a method of a class of this module
+public class Asker {
+    public *hash<ImmediateCallerInfo> ask() {
+        return SandboxManager::getImmediateCaller();
+    }
+}
+
+#! registers a listener that fire() calls
+public sub add_listener(code c) {
+    push Listeners::list, c;
+}
+
+#! calls the listeners and returns what they return
+public list<auto> sub fire() {
+    return map $1(), Listeners::list;
+}
+
+#! removes the listeners
+public sub clear_listeners() {
+    Listeners::list = ();
+}
+
+#! returns the immediate caller of this module code in a thread that it starts
+public hash<auto> sub ask_in_background() {
+    Queue q();
+    background q.push({"caller": SandboxManager::getImmediateCaller()});
+    return q.get();
+}
+}

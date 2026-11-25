@@ -303,6 +303,59 @@ Program is not counted, the provenance frames from the one innermost at entry do
 of native code are decided as without it. The user-facing text is `sandbox_lent_objects` in
 doxygen/lang/222_sandboxing.dox.tmpl. Tests: examples/test/qore/security/caller-restriction-capability.qtest.
 
+## The immediate caller of library code (qore#7302)
+
+The caller walk (`qore_get_caller_domain_restrictions()`, `qore_find_caller_program()`) answers for the nearest
+non-module Program: it cannot tell module code that serves that Program from the Program's own code that the module
+called back. `qore_get_immediate_caller()` (`SandboxManager::getImmediateCaller()`, `isImmediateCallerModule()`)
+answers for the code of the nearest frame below the asking code whose Program is another one.
+
+Rule: frames are the switches between the code of different Programs, innermost first: the program context helpers
+of the thread (`ProgramThreadCountContextHelper`, each with its old Program) and the switches of
+`QoreProgramContextHelper` made while a helper was current (`ThreadData::ProgramContextSave`), as in
+`qore_find_caller_program()`. Calls within a Program are not frames, so the asking module's nested calls are not seen,
+and the frames of the asking Program directly below it (a re-entry of `QoreProgramContextHelper`) are skipped: the
+immediate caller is the first frame whose Program is not the asking code's (`td->current_pgm`, the code that calls
+the builtin). A frame's number is the number of switches below it, counted to the start of the thread whatever stops
+the walk, so it is stable while the frame is on the stack.
+
+Each switch records the innermost provenance frame when it switched (`ProgramThreadCountContextHelper::old_provenance`,
+written in `setOtherProgram()` only, and `ProgramContextSave::provenance`): the provenance frames newer than a frame's
+entry and older than the next frame's entry were applied while that frame's code ran. A frame is tainted if one of them
+is the context of a closure or call reference (`QoreSandboxContext::reference`) with origin restrictions or a sandbox
+manager: code reached through it was chosen by restricted code; or the context of an object whose origin
+restrictions include a domain that a host grant lends (`QORE_GRANT_LENT_DOMAINS`): an object runs its class's code, but
+one whose creator lacked a lent domain was created outside any grant (the objects that a lent method creates for its
+borrower are lent and lack none of them, and a sandbox manager alone does not taint, as the objects created for a
+sandboxed borrower have one). A recorded frame that is not on the thread's chain of provenance frames taints every
+frame from there (fail closed).
+
+The immediate caller is restricted if its Program's code is (`qore_immediate_caller_pgm_restricted()`: a library
+module's code is trusted; any other Program, also a module loaded by its path, is restricted if
+`qore_program_code_is_untrusted()`; a non-module Program while foreign code counts, `QoreRuntimePoState::code_pgm`, is
+restricted and reported as the compiling Program), or if the asking code's frames or its own frame are tainted; the
+tainted frame of its caller does not make it restricted (its code is still its own, as when restricted code calls it
+directly). `trusted_frame` is the number of the outermost frame of the unbroken run of untainted trusted frames that
+ends with an unrestricted immediate caller. The walk stops, and the caller is unknown, at the start of the thread, at
+the innermost module initialization barrier (also a lifted one: the module whose initialization runs is visible, its
+loader is not), at a `QoreCallerProgramScope` and on `std::bad_alloc`. The module name is
+`qore_program_private::module_name`, set once with `module_name_set` when the module is first registered
+(`QoreModuleManager::addModule()`: the name of the first registration, which a reinjected or private module keeps
+when it is renamed and registered again); a module that is
+not registered yet (in its initialization) has none, so `isImmediateCallerModule()` fails closed for it.
+
+Cost: one store per Program switch (`old_provenance`); nothing per call within a Program. The walk runs only when
+asked and allocates two vectors.
+
+The lent connection's grant uses it: `HttpClientCreatorProof::grantNext()` records the frame of its immediate caller
+(the connection's code; restricted or unknown callers record nothing), and `forClient()` takes a grant only if its
+immediate caller (the code that creates the client) has a `trusted_frame` at or below the grant's frame, i.e. trusted
+code that the granting code called itself creates the client. Restricted code that runs meanwhile, a client that it
+creates (through library code too: the run ends at the restricted frame) and a call reference that it created take
+nothing; the grant is not consumed by them and stays for the connection's own client. Tests:
+examples/test/qore/security/immediate-caller.qtest and `testCallback()` in
+examples/test/qore/functions/user-functional-domains/lent-client-creator-proof.qtest.
+
 ## Isolation domains (qore#6536)
 
 A tenant is an isolation domain that trusted host code sets on a sandbox (`QoreSandboxManager::setIsolationDomain()`):

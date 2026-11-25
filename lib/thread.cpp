@@ -1903,6 +1903,8 @@ public:
         const ProgramThreadCountContextHelper* ctx;
         //! the Program that it replaced (qore#6852)
         QoreProgram* pgm;
+        //! the innermost sandbox provenance frame when it switched (qore#7302)
+        const QoreSandboxProvenanceHelper* provenance;
     };
     ProgramContextSave pch_saved[PCH_SAVED_INLINE];
     //! the number of entries of pch_saved in use
@@ -1915,9 +1917,9 @@ public:
     */
     DLLLOCAL void pushProgramContextData(ThreadLocalProgramData* new_tlpd, QoreProgram* old_pgm) {
         if (pch_saved_count == PCH_SAVED_INLINE) {
-            pch_saved_more.push_back({tlpd, current_pgm_ctx, old_pgm});
+            pch_saved_more.push_back({tlpd, current_pgm_ctx, old_pgm, sandbox_provenance});
         } else {
-            pch_saved[pch_saved_count++] = {tlpd, current_pgm_ctx, old_pgm};
+            pch_saved[pch_saved_count++] = {tlpd, current_pgm_ctx, old_pgm, sandbox_provenance};
         }
         tlpd = new_tlpd;
     }
@@ -7046,6 +7048,8 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     old_tlpd = td->tlpd;
     old_frameCount = old_tlpd ? old_tlpd->lvstack.getFrameCount() : -1;
     old_ctx = td->current_pgm_ctx;
+    // the provenance frames applied from now on are applied while the code of the Program entered runs (qore#7302)
+    old_provenance = td->sandbox_provenance;
     // no sandbox lookup has been made in the context yet (see sandboxChainClear())
     sandbox_clear_gen = 0;
 
@@ -8662,6 +8666,191 @@ static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
         return td->call_program_context;
     }
     return nullptr;
+}
+
+//! returns true if a provenance frame taints the frame of the code that applied it (qore#7302)
+/** A closure or call reference that restricted or sandboxed code created: the code reached through it was chosen by
+    that code.  An object runs its class's code, whoever created it, but an object that code restricted from a domain
+    that a host grant lends (file system, network, external information) created was created outside any grant: the
+    objects that a lent method creates for its borrower do not have those restrictions (they are lent), so only an
+    object of restricted code that runs meanwhile (a callback) has them
+*/
+static bool qore_provenance_taints(const QoreSandboxProvenanceHelper* frame) {
+    const QoreSandboxContext* ctx = frame->getContext();
+    if (!ctx) {
+        return false;
+    }
+    if (!ctx->reference) {
+        return ctx->origin_restrictions.hasAny(QoreParseOptions(QORE_GRANT_LENT_DOMAINS));
+    }
+    return ctx->origin_restrictions.hasAny(qore_restricting_domain_options()) || ctx->manager || ctx->policy_manager
+        || ctx->provenance_manager || ctx->provenance_policy_manager;
+}
+
+//! returns true if a Program is a module's Program, as the module manager marks it (see qore_caller_walk_step())
+static bool qore_immediate_caller_is_module_pgm(const QoreProgram* pgm) {
+    const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    return pp->module_lifetime.load(std::memory_order_acquire) || pp->module_program.load(std::memory_order_acquire);
+}
+
+//! returns true if the code of a Program on the walk of qore_get_immediate_caller() is restricted code (qore#7302)
+/** The code of a library module is trusted, whoever calls it; the code of any other Program (one that is not a
+    module's, or of a module loaded by its path, which has the options of the Program that loaded it) is restricted if
+    the Program is sandboxed or has a restriction; code compiled in another Program than the one that it runs in
+    (\a foreign) is never trusted (qore#7202)
+
+    @param pgm the Program of the frame
+    @param foreign true if code compiled in another Program runs in the nearest Program that is not a module's
+*/
+static bool qore_immediate_caller_pgm_restricted(const QoreProgram* pgm, bool foreign) {
+    if (!pgm) {
+        return true;
+    }
+    if (qore_immediate_caller_is_module_pgm(pgm)) {
+        if (qore_program_private::get(*const_cast<QoreProgram*>(pgm))->library_module) {
+            return false;
+        }
+    } else if (foreign) {
+        return true;
+    }
+    return qore_program_code_is_untrusted(pgm);
+}
+
+int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
+    info = QoreImmediateCallerInfo();
+    ThreadData* td = thread_data.get();
+    if (!td || !td->current_pgm) {
+        return -1;
+    }
+    // the innermost module initialization barrier, also one that is lifted: the code below it is not known as the
+    // caller of the code above it (see qore_find_caller_program())
+    const ThreadData::ModuleInitBarrier* mib = td->module_init_barriers.empty()
+        ? nullptr : &td->module_init_barriers.back();
+    const QoreCallerProgramScope* scope = td->caller_scope;
+
+    // the switches between the code of different Programs, innermost first: switch i entered frame i (frame 0 is the
+    // running code) from the code of frame i + 1, which was the Program \a old_pgm; \a head is the innermost provenance
+    // frame when it switched
+    struct Switch {
+        const QoreProgram* old_pgm;
+        const QoreSandboxProvenanceHelper* head;
+    };
+    std::vector<Switch> sw;
+    // the number of switches whose old Program is known as the caller of the frame above it: the walk of the caller
+    // stops at a barrier or the scope of work, while the frames below are still counted, so that a frame's number
+    // does not depend on them
+    size_t visible = static_cast<size_t>(-1);
+    try {
+        sw.reserve(16);
+        // nothing switched since the barrier was set: the running code is the loader's, under the barrier
+        if (mib && td->current_pgm_ctx == mib->ctx && td->current_pgm == mib->pgm) {
+            visible = 0;
+        }
+        size_t save = td->programContextSaveCount();
+        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ; ch = ch->getOldContext()) {
+            // the switches of QoreProgramContextHelper made while the helper was current are more inner than its own
+            while (save && td->programContextSave(save - 1).ctx == ch) {
+                const auto& pcs = td->programContextSave(--save);
+                sw.push_back({pcs.pgm, pcs.provenance});
+            }
+            if (visible == static_cast<size_t>(-1) && ((scope && ch == scope->getContext())
+                    || (mib && (ch == mib->ctx || (ch && ch->getOldContext() == mib->ctx))))) {
+                visible = sw.size();
+            }
+            if (!ch) {
+                break;
+            }
+            sw.push_back({ch->getOldProgram(), ch->getOldProvenance()});
+        }
+    } catch (std::bad_alloc&) {
+        // fail closed: the immediate caller is unknown
+        return -1;
+    }
+    const size_t n = sw.size();
+    if (visible > n) {
+        visible = n;
+    }
+    // the Program of frame i (0 .. n)
+    auto frame_pgm = [&](size_t i) -> const QoreProgram* {
+        return i ? sw[i - 1].old_pgm : td->current_pgm;
+    };
+
+    // the frames in which a closure or call reference that restricted code created was called: the provenance frames
+    // applied after frame i was entered (sw[i].head) and before frame i - 1 was entered (sw[i - 1].head) were applied
+    // while the code of frame i ran; those of the bottom frame are all that are older (fail closed)
+    std::vector<bool> tainted;
+    try {
+        tainted.resize(n + 1, false);
+    } catch (std::bad_alloc&) {
+        return -1;
+    }
+    {
+        const QoreSandboxProvenanceHelper* p = td->sandbox_provenance;
+        for (size_t i = 0; i <= n; ++i) {
+            const QoreSandboxProvenanceHelper* stop = i < n ? sw[i].head : nullptr;
+            while (p && p != stop) {
+                if (qore_provenance_taints(p)) {
+                    tainted[i] = true;
+                }
+                p = p->getPrevious();
+            }
+            if (p != stop) {
+                // the frame at the switch is not on the thread's chain of provenance frames: fail closed
+                for (size_t j = i; j <= n; ++j) {
+                    tainted[j] = true;
+                }
+                break;
+            }
+        }
+    }
+
+    // the immediate caller: the first frame below the running code whose Program is another one
+    const QoreProgram* self_pgm = td->current_pgm;
+    size_t j = 1;
+    while (j <= visible && frame_pgm(j) == self_pgm) {
+        ++j;
+    }
+    if (j > visible || !frame_pgm(j)) {
+        return -1;
+    }
+    const QoreProgram* pgm = frame_pgm(j);
+    const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    const bool module = qore_immediate_caller_is_module_pgm(pgm);
+    // code compiled in another Program that runs in the nearest Program that is not a module's: such code is never
+    // trusted, and it is the code of the Program that compiled it (qore#7202); the state is positional (the module
+    // code that it calls passes it on, see QoreRuntimePoState::code_pgm), so it is counted for every frame of a
+    // Program that is not a module's (fail closed)
+    const QoreProgram* code_pgm = td->runtime_po_state.code_pgm;
+    const bool foreign = code_pgm && qore_foreign_code_counts(td, qore_get_caller_module_init_barrier(td), nullptr);
+    bool restricted = qore_immediate_caller_pgm_restricted(pgm, foreign);
+    // the running code and the immediate caller were not called through code that restricted code chose
+    for (size_t i = 0; i <= j && !restricted; ++i) {
+        restricted = tainted[i];
+    }
+    info.pgm = pgm;
+    info.pgm_id = pgm->getProgramId();
+    if (!module && foreign && code_pgm != pgm && qore_immediate_caller_is_module_pgm(self_pgm)) {
+        info.pgm = code_pgm;
+        info.pgm_id = code_pgm->getProgramId();
+    }
+    if (module) {
+        info.library_module = pp->library_module;
+        if (pp->module_name_set.load(std::memory_order_acquire)) {
+            info.module_name = &pp->module_name;
+        }
+    }
+    info.restricted = restricted;
+    info.frame = static_cast<int64>(n - j);
+    if (!restricted) {
+        // the unbroken run of trusted code below it, as far as the caller is known
+        size_t k = j;
+        while (k + 1 <= visible && frame_pgm(k + 1) && !tainted[k + 1]
+                && !qore_immediate_caller_pgm_restricted(frame_pgm(k + 1), foreign)) {
+            ++k;
+        }
+        info.trusted_frame = static_cast<int64>(n - k);
+    }
+    return 0;
 }
 
 bool qore_caller_restricts_terminal_io() {
