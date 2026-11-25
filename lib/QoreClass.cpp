@@ -7383,11 +7383,25 @@ static bool parse_lookup_callable(const QoreMethod* m, const qore_class_private*
 const QoreMethod* qore_class_private::parseFindAnyMethod(const char* nme, const qore_class_private* class_ctx) {
     const QoreMethod* m = nullptr;
 
-    // if we have a class context, first we have to check here for an internal method
+    // if we have a class context, first we have to check here for an internal method; the code of a class calls its
+    // own normal method first also when only some of its variants are private:internal, as at run time
+    // (runtimeFindCommittedMethodForEval(); qore#7440), for a receiver of a class that inherits it: on an object of
+    // a parent class, the parent class's method is called
     if (class_ctx) {
         m = class_ctx->parseFindAnyLocalMethod(nme);
-        if (m && qore_method_private::getAccess(*m) != Internal)
-            m = nullptr;
+        if (m && qore_method_private::getAccess(*m) != Internal) {
+            if (class_ctx == this || m->isStatic()
+                    || !qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()
+                    || qore_method_private::get(*m)->isAbstract()) {
+                m = nullptr;
+            } else {
+                // the hierarchy of the class is set up
+                initialize();
+                if (!inheritsClassContext(*class_ctx)) {
+                    m = nullptr;
+                }
+            }
+        }
     }
 
     if (!m) {
@@ -8611,7 +8625,10 @@ const QoreMethod* qore_class_private::runtimeFindCommittedStaticMethod(const cha
     }
     if (class_ctx && class_ctx != this) {
         const QoreMethod* m = class_ctx->findLocalCommittedStaticMethod(nme);
-        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()) {
+        // a method with private:internal variants beside others only for a class that inherits the class context
+        // (qore#7440)
+        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()
+                && runtimeCallsOwnMethod(*m, *class_ctx)) {
             return m;
         }
     }
@@ -8626,7 +8643,10 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethod(const char* nme
     }
     if (class_ctx && class_ctx != this) {
         const QoreMethod* m = class_ctx->findLocalCommittedMethod(nme);
-        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()) {
+        // a method with private:internal variants beside others only for a class that inherits the class context
+        // (qore#7440)
+        if (m && qore_method_private::get(*m)->getFunction()->hasPrivateInternalVariants()
+                && runtimeCallsOwnMethod(*m, *class_ctx)) {
             return m;
         }
     }
@@ -8644,7 +8664,12 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
         if (m) {
             const qore_method_private* meth = qore_method_private::get(*m);
             //printd(5, "qore_class_private::runtimeFindCommittedMethodForEval() '%s::%s': %p (pi: %d a: %d)\n", name.c_str(), nme, meth, meth->getFunction()->hasPrivateInternalVariants(), meth->isAbstract());
-            if (meth->getFunction()->hasPrivateInternalVariants() && !meth->isAbstract()) {
+            // a method with private:internal variants beside others only on an object of a class that inherits the
+            // class context: on an object of another class (a parent class of the class context), the method of the
+            // object's class is called (qore#7440); a method that is private:internal as a whole is called for any
+            // object, as the parse-time lookup binds it (parseFindAnyMethod())
+            if (meth->getFunction()->hasPrivateInternalVariants() && !meth->isAbstract()
+                    && runtimeCallsOwnMethod(*m, *class_ctx)) {
                 return m;
             }
         }
@@ -11184,6 +11209,133 @@ int qore_class_private::parseResolveHierarchy() {
     }
 
     return 0;
+}
+
+//! returns true if resolving the abstract methods of the class \a qc gives it a method of its own of the name, which it
+//! does not have yet (the test of AbstractMethodMap::parseInit(), qore#7411)
+static bool parse_abstract_creates_method(const qore_class_private& qc, const char* mname) {
+    if (qc.parse_resolve_abstract || qc.committed || qc.sys || !qc.scl || qc.parseFindLocalMethod(mname)) {
+        return false;
+    }
+    amap_t::const_iterator i = qc.ahm.find(mname);
+    if (i == qc.ahm.end()) {
+        return false;
+    }
+    // the class gets a method of its own of the name when a parent class has a concrete variant of an abstract variant
+    // of the name that the class has
+    for (const vmap_t::value_type& vi : i->second->vlist) {
+        ClassAccess va = Public;
+        if (qc.scl->matchNonAbstractVariant(i->first, vi.second, va, qc.cls->getTypeInfo())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool qore_class_private::runtimeCallsOwnMethod(const QoreMethod& m, const qore_class_private& class_ctx) const {
+    return m.getAccess() == Internal || inheritsClassContext(class_ctx);
+}
+
+bool qore_class_private::parseCalledAsOwnMethod(const QoreMethod& m, const qore_class_private* class_ctx) {
+    if (!class_ctx || !qore_class_private::get(*m.getClass())->sameClass(*class_ctx)) {
+        return false;
+    }
+    const qore_method_private* mp = qore_method_private::get(m);
+    return mp->getAccess() == Internal
+        || (!m.isStatic() && mp->getFunction()->hasPrivateInternalVariants() && !mp->isAbstract());
+}
+
+bool qore_class_private::parseAbstractMethodPending(const char* mname) const {
+    if (parse_resolve_abstract || committed || sys || !scl || parseFindLocalMethod(mname)) {
+        return false;
+    }
+    // the class gets a method of its own of the name when it gets one itself, or when a parent class gets one: the
+    // variants of a class that a parent class inherits with private:internal access are not reached from this class
+    // by the test of the class itself, and the method that the parent class creates implements the abstract variants
+    // of this class; the hierarchy is walked iteratively, each class once, so that the walk is linear in the hierarchy,
+    // not in its paths, as in BCList::matchNonAbstractVariant() (issue #6499)
+    std::vector<const qore_class_private*> stack{this};
+    qcp_set_t visited;
+    while (!stack.empty()) {
+        const qore_class_private* qc = stack.back();
+        stack.pop_back();
+        if (!visited.insert(const_cast<qore_class_private*>(qc)).second) {
+            continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (parse_abstract_creates_method(*qc, mname)) {
+            return true;
+        }
+        if (qc->scl) {
+            for (const BCNode* n : *qc->scl) {
+                if (n->sclass) {
+                    stack.push_back(qore_class_private::get(*n->sclass));
+                }
+            }
+        }
+    }
+    return false;
+}
+
+const QoreTypeInfo* qore_class_private::parseAbstractMethodPendingReturnType(const char* mname,
+        const type_vec_t& arg_types, const qore_class_private* class_ctx) const {
+    assert(scl);
+    // the method that resolving the abstract methods gives the class has the variants of the methods of the name of
+    // all the classes of its hierarchy: the variant that the call is bound to is the one that the method of one of
+    // them selects for the arguments, as it is the best of its own variants and of those of its parent classes, so the
+    // type is that of the variants that they all select, if they have the same; the hierarchy is walked iteratively,
+    // each class once (issue #6499)
+    const QoreTypeInfo* rv = nullptr;
+    bool found = false;
+    // the classes to search, each with true if a path to it from the class is not public
+    std::vector<std::pair<const qore_class_private*, bool>> stack;
+    for (const BCNode* n : *scl) {
+        if (n->sclass) {
+            stack.emplace_back(qore_class_private::get(*n->sclass), n->access > Public);
+        }
+    }
+    qcp_set_t visited;
+    while (!stack.empty()) {
+        std::pair<const qore_class_private*, bool> i = stack.back();
+        stack.pop_back();
+        const qore_class_private* qc = i.first;
+        if (!visited.insert(const_cast<qore_class_private*>(qc)).second) {
+            continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        const QoreMethod* m = qc->parseFindLocalMethod(mname);
+        if (m && !m->isStatic()) {
+            // the variants of a class reached through a path that is not public can be inaccessible in the method
+            // that the class gets, and the return type of a method of a generic class names its type parameters,
+            // which the specialization that the class inherits substitutes: the type is known once the call is bound
+            if (i.second || qc->cls->hasTypeParameters()) {
+                return nullptr;
+            }
+            bool runtime_possible;
+            const AbstractQoreFunctionVariant* v = qore_method_private::get(*m)->getFunction()
+                ->parseFindVariantNoDiagnostics(arg_types, class_ctx, nullptr, nullptr, nullptr, &runtime_possible);
+            if (v) {
+                const QoreTypeInfo* t = v->parseGetReturnTypeInfo();
+                if (!found) {
+                    rv = t;
+                    found = true;
+                } else if (!QoreTypeInfo::equal(rv, t)) {
+                    return nullptr;
+                }
+            } else if (runtime_possible) {
+                // a variant selected at run time can give the call another type
+                return nullptr;
+            }
+        }
+        if (qc->scl) {
+            for (const BCNode* n : *qc->scl) {
+                if (n->sclass) {
+                    stack.emplace_back(qore_class_private::get(*n->sclass), i.second || n->access > Public);
+                }
+            }
+        }
+    }
+    return rv;
 }
 
 bool qore_class_private::parseResolveAbstract() {
