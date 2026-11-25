@@ -27,7 +27,8 @@
 class ReturnForeachExceptionTargetTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("ref-value-return", "ref-expression-return", "fused-in-ref-return", "handler-at-return");
+        const Scripts = ("ref-value-return", "ref-expression-return", "fused-in-ref-return", "handler-at-return",
+            "ref-break-handler");
     }
 
     private {
