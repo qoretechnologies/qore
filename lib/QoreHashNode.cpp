@@ -377,10 +377,8 @@ HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
 }
 
 void qore_hash_member_map::insertSlow(HashMember* m) {
-    if (count >= bucket_count()) {
-        grow();
-    }
-    if (!isHardened()) {
+    assert(count < bucket_count());
+    if (limit) {
         HashMember* first = buckets[m->hash & mask];
         if (!first || !chainFull(first) || !tryHarden()) {
             // the map is not hardened: the member keeps its member hash
@@ -464,7 +462,8 @@ void qore_hash_member_map::rehash(size_t n) {
     }
     HashMember** nb = new HashMember*[n]();
     uint32_t nmask = static_cast<uint32_t>(n - 1);
-    bool was_hardened = isHardened();
+    // a map without buckets is not hardened; a map with buckets is hardened if its limit is 0
+    bool set_limit = !buckets || limit;
     if (buckets) {
         for (size_t b = 0, e = bucket_count(); b < e; ++b) {
             for (HashMember* m = buckets[b]; m;) {
@@ -479,9 +478,11 @@ void qore_hash_member_map::rehash(size_t n) {
     }
     buckets = nb;
     mask = nmask;
-    // a map that is not hardened takes inserts on the fast path until it has as many members as buckets
-    limit = was_hardened ? 0 : static_cast<uint32_t>(n - 1 < std::numeric_limits<uint32_t>::max()
-        ? n : std::numeric_limits<uint32_t>::max());
+    // a map that is not hardened takes inserts on the fast path until it has as many members as buckets (2^32
+    // buckets: one less); a hardened map keeps its limit of 0
+    if (set_limit) {
+        limit = static_cast<uint32_t>(n - (n > std::numeric_limits<uint32_t>::max()));
+    }
 }
 
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {

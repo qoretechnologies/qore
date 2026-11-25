@@ -360,12 +360,17 @@ public:
         of \a m is the keyed hash of its key then, as in any hardened map.
     */
     DLLLOCAL void insert(HashMember* m) {
-        // an insert that grows the buckets, an insert into a hardened map (whose limit is 0) and an insert into a
-        // full chain take the slow path; the test of the limit replaces the test of the number of buckets that came
-        // before qore#7557, and the test of the first member of the chain is the only test more
+        // the test of the limit replaces the test of the number of buckets that came before qore#7557: the buckets
+        // grow when the map has as many members as buckets, and an insert into a hardened map (whose limit is 0)
+        // takes the slow path; the test of the first member of the chain is the only test more
         if (count >= limit) [[unlikely]] {
-            insertSlow(m);
-            return;
+            if (count >= bucket_count()) {
+                grow();
+            }
+            if (!limit) {
+                insertSlow(m);
+                return;
+            }
         }
         HashMember*& b = buckets[m->hash & mask];
         HashMember* first = b;
@@ -491,10 +496,9 @@ private:
     //! returns the member with the key of \a len bytes at \a str in a hardened map, or nullptr
     QORE_HASH_NOINLINE DLLLOCAL HashMember* findKeyed(const char* str, size_t len) const;
 
-    //! inserts \a m when the fast path of insert() cannot: the buckets grow if the map has as many members as buckets;
-    //! a hardened map hashes the key of \a m with its keyed hash; a map that is not hardened whose chain of the bucket
-    //! of \a m is full is hardened (tryHarden()), or, if it cannot be, takes \a m as it is; throws std::bad_alloc,
-    //! with nothing changed, if the buckets cannot grow
+    //! inserts \a m when the fast path of insert() cannot, into a map with room for it: a hardened map hashes the key
+    //! of \a m with its keyed hash; a map that is not hardened whose chain of the bucket of \a m is full is hardened
+    //! (tryHarden()), or, if it cannot be, takes \a m as it is
     QORE_HASH_NOINLINE DLLLOCAL void insertSlow(HashMember* m);
 
     //! hardens the map (harden()); returns false, with nothing changed, if it cannot, so that a later insert tries
