@@ -769,6 +769,40 @@ list<hash<CallStackInfo>> get_thread_call_stack() [dom=THREAD_CONTROL,THREAD_INF
     return qore_get_parent_caller_location(offset);
 }
 
+//! Returns the ID of the Program of the frame at the given offset of the call stack
+/** Gives only the \c programid of the frame that @ref Qore::get_thread_call_stack() "get_thread_call_stack()" lists at
+    the offset, without building a @ref CallStackInfo hash: code that only needs the Program of a frame, and calls it
+    frequently, uses it instead of @ref Qore::get_parent_caller_location() "get_parent_caller_location()"
+
+    @param offset the offset in the call stack, from the innermost frame, as
+    @ref Qore::get_thread_call_stack() "get_thread_call_stack()" lists them: \c 0 is the frame of the call of this
+    function, \c 1 the frame of the call of the code that called it, and so on
+
+    @return the ID of the Program of the frame at the given offset (see @ref Qore::Program::getProgramId()
+    "Program::getProgramId()"); @ref NOTHING if the call stack has no frame at the offset, the offset is negative, or
+    the frame has no Program
+
+    @par Example:
+    @code{.py}
+# the Program of the code that called the current function
+*int pgm_id = get_caller_program_id();
+    @endcode
+
+    @see get_parent_caller_location()
+
+    @since %Qore 3.0
+*/
+*int get_caller_program_id(int offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
+    if (offset < 0) {
+        return QoreValue();
+    }
+    uint64_t id;
+    if (!qore_get_caller_program_id(offset, id)) {
+        return QoreValue();
+    }
+    return static_cast<int64>(id);
+}
+
 //! Immediately runs all thread resource cleanup routines for the current thread and throws all associated exceptions
 /** This function is particularly useful when used in combination with embedded code in order to catch (and log, for
     example) thread resource errors (ex: uncommitted transactions, unlocked locks, etc) - this can be used when
