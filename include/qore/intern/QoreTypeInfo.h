@@ -5063,6 +5063,15 @@ public:
     */
     DLLLOCAL void addMortal(const QoreTypeInfo* ti);
 
+    //! References the given declarations, each of which must be mortal (QoreTypeOwner::isTypeOwnerSystem() is
+    //! false) and given once, when no declaration is referenced yet (qore#7607)
+    DLLLOCAL void addMortalDecls(const std::vector<const QoreClass*>& classes,
+            const std::vector<const TypedHashDecl*>& hashdecls, const std::vector<const QoreEnumDecl*>& enums);
+
+    //! Appends the declarations referenced to the vectors given (qore#7607)
+    DLLLOCAL void getDecls(std::vector<const QoreClass*>& classes, std::vector<const TypedHashDecl*>& hashdecls,
+            std::vector<const QoreEnumDecl*>& enums) const;
+
     //! Returns true if no declaration is referenced
     DLLLOCAL bool empty() const {
         return !priv;

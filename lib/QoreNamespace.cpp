@@ -606,6 +606,83 @@ qore_ns_private::~qore_ns_private() {
     }
 }
 
+//! Collects the mortal declarations of the namespace tree \a old that its copy \a copy (nullptr if the namespace was
+//! not copied) does not have (qore#7607)
+static void collect_left_out_decls(const qore_ns_private& old, const qore_ns_private* copy,
+        std::vector<const QoreClass*>& classes, std::vector<const TypedHashDecl*>& hashdecls,
+        std::vector<const QoreEnumDecl*>& enums) {
+    {
+        ConstClassListIterator cli(old.classList);
+        while (cli.next()) {
+            const QoreClass* qc = cli.get();
+            if (!qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem()
+                && (!copy || !copy->classList.find(cli.getName()))) {
+                classes.push_back(qc);
+            }
+        }
+    }
+    {
+        ConstHashDeclListIterator hli(old.hashDeclList);
+        while (hli.next()) {
+            const TypedHashDecl* hd = hli.get();
+            if (!typed_hash_decl_private::get(*hd)->type_owner.isTypeOwnerSystem()
+                && (!copy || !copy->hashDeclList.find(hli.getName()))) {
+                hashdecls.push_back(hd);
+            }
+        }
+    }
+    {
+        ConstEnumListIterator eli(old.enumList);
+        while (eli.next()) {
+            const QoreEnumDecl* ed = eli.get();
+            // a copy of an enum keeps its original only if it is a binary module's (unlike that of a class or a
+            // hashdecl), so the parent's enum is kept also when it is copied
+            if (!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem()) {
+                enums.push_back(ed);
+            }
+        }
+    }
+    for (const auto& i : old.nsl.nsmap) {
+        const qore_ns_private* csub = nullptr;
+        if (copy) {
+            auto ci = copy->nsl.nsmap.find(i.first);
+            if (ci != copy->nsl.nsmap.end()) {
+                csub = qore_ns_private::get(*ci->second);
+            }
+        }
+        collect_left_out_decls(*qore_ns_private::get(*i.second), csub, classes, hashdecls, enums);
+    }
+    // the namespaces that a run-time merge kept are copied whole with the namespace that keeps them (qore#7530)
+    if (!copy) {
+        for (const QoreNamespace* rns : old.retained_ns) {
+            collect_left_out_decls(*qore_ns_private::get(*rns), nullptr, classes, hashdecls, enums);
+        }
+    }
+}
+
+void qore_root_ns_private::refLeftOutDecls(const qore_root_ns_private& src) {
+    assert(!left_out_decl_refs);
+    // a Program created without a parent copies the static system namespace, whose declarations are not mortal
+    if (!src.pgm) {
+        return;
+    }
+    std::vector<const QoreClass*> classes;
+    std::vector<const TypedHashDecl*> hashdecls;
+    std::vector<const QoreEnumDecl*> enums;
+    collect_left_out_decls(src, this, classes, hashdecls, enums);
+    // the declarations that the parent keeps for what it inherited, which this Program inherits too; they are not in
+    // the parent's namespaces, so they are distinct from those collected above
+    if (src.left_out_decl_refs) {
+        src.left_out_decl_refs->getDecls(classes, hashdecls, enums);
+    }
+    if (classes.empty() && hashdecls.empty() && enums.empty()) {
+        return;
+    }
+    std::unique_ptr<QoreTypeDeclRefs> refs(new QoreTypeDeclRefs);
+    refs->addMortalDecls(classes, hashdecls, enums);
+    left_out_decl_refs = std::move(refs);
+}
+
 QoreProgram* qore_ns_private::getProgram() const {
     const qore_root_ns_private* rns = getRoot();
     return rns ? rns->pgm : nullptr;
