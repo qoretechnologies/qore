@@ -1789,6 +1789,20 @@ public:
             get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls) {
     }
 
+    //! Makes the parse initialization of the static variable of a builtin class (parseInit()), when it is added
+    /** The type of the variable is resolved and its initial value is a value, not code to parse, so nothing is left
+        for a parse to initialize: the value is assigned when the class is finalized (qore_class_private::
+        finalizeBuiltin()), and parseInit(), which the first reference to the variable in parsed code calls, must not
+        reset it afterwards (qore#7541)
+    */
+    DLLLOCAL void initBuiltin() {
+        assert(!QoreMemberInfoBaseAccess::init);
+        assert(!parseTypeInfo);
+        refreshInitializationFilter();
+        val.set(typeInfo);
+        QoreMemberInfoBaseAccess::init = true;
+    }
+
     DLLLOCAL ~QoreVarInfo() {
         assert(!val.hasValue());
         delete trusted_module.load(std::memory_order_relaxed);

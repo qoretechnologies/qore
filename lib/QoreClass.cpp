@@ -1977,9 +1977,10 @@ void qore_class_private::addBuiltinStaticVar(const char* vname, QoreValue value,
         has_sig_changes = true;
     }
 
-    QoreVarInfo* vi = new QoreVarInfo(&loc_builtin, vTypeInfo, nullptr, value, access);
+    std::unique_ptr<QoreVarInfo> vi(new QoreVarInfo(&loc_builtin, vTypeInfo, nullptr, value, access));
     vi->builtin_value = true;
-    vars.addNoCheck(strdup(vname), vi);
+    vi->initBuiltin();
+    vars.addNoCheck(strdup(vname), vi.release());
 }
 
 void qore_class_private::addBuiltinStaticVarWithAccessors(const char* vname, ClassAccess access,
@@ -1997,6 +1998,7 @@ void qore_class_private::addBuiltinStaticVarWithAccessors(const char* vname, Cla
 
     std::unique_ptr<QoreVarInfo> vi(new QoreVarInfo(&loc_builtin, vTypeInfo, nullptr, QoreValue(), access));
     vi->builtin_value = true;
+    vi->initBuiltin();
     // the value is read from and written to the module's storage, so the variable holds no value of its own
     vi->eval_init = true;
     vi->get_cb = get;
