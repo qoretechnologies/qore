@@ -30230,7 +30230,8 @@ static QoreValue f_dbg_hash_lookup_with_hash_of(const QoreListNode* params, Runt
 /** The member keeps the hash value of \c hash_key in a key map that is not hardened, so a normal search of it does not
     find it until the map is hardened (dbg_hash_lookup_with_hash_of() does); a hardened map hashes the key itself.
     The hash is changed in place, without the copy that a change of a shared hash makes: pass a hash made at run time
-    that no other code shares.
+    that no other code shares.  Do not copy the hash before it is hardened: a copy keeps the hashes of the members, which debug
+    builds assert to be the hashes of their keys.
 
     @param h the hash
     @param key the key to insert, which the hash must not have
