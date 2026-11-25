@@ -22786,6 +22786,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool needs_value_coerce = element_coerce
                 || (!element_store && !mode_store_through_runtime
                     && (is_complex_typed || needs_scalar_coerce || needs_plain_any));
+            // the store of a push to a list<int> local on the runtime stack: the coercion keeps a list of the
+            // local's type as it is, and the assignment does nothing when the variable holds the list already, which
+            // the push changed in place (qore_rt_coerce_int_list_value(), qore_rt_assign_int_list_local())
+            bool int_list_push_store = inst->list_push_local_cow && needs_value_coerce && is_complex_typed
+                && !element_store && !is_ir_only && linst->mode == AssignmentMode::Normal
+                && !linst->foreach_assignment && !linst->is_ref && !linst->is_closure
+                && local_ti == qore_get_complex_list_type(bigIntTypeInfo)
+                && !QORE_ENV_IS_SET("QORE_DISABLE_IR_INT_LIST_PUSH_STORE");
             llvm::Value* consumed_cleanup = nullptr;
             // the value assigned, before the local's own type is applied to it
             llvm::Value* original_boxed = boxed;
@@ -22884,7 +22892,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                                  boxed, cleanup, read_flag, xsink_arg});
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction(qore_coerce_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment, linst->mode),
+                        auto coerce_fn = module.getOrInsertFunction(int_list_push_store
+                                ? std::string("qore_rt_coerce_int_list_value_aot")
+                                : qore_coerce_helper_name("qore_rt_coerce_value_aot", linst->foreach_assignment,
+                                    linst->mode),
                                 llvm::FunctionType::get(i64_type,
                                         {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
                         coerced = builder->CreateCall(coerce_fn,
@@ -22902,7 +22913,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         coerced = builder->CreateCall(coerce_fn,
                                 {ti_as_ptr, boxed, cleanup, read_flag, xsink_arg});
                     } else {
-                        auto coerce_fn = module.getOrInsertFunction(qore_coerce_helper_name("qore_rt_coerce_value", linst->foreach_assignment, linst->mode),
+                        auto coerce_fn = module.getOrInsertFunction(int_list_push_store
+                                ? std::string("qore_rt_coerce_int_list_value")
+                                : qore_coerce_helper_name("qore_rt_coerce_value", linst->foreach_assignment,
+                                    linst->mode),
                                 llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
                         coerced = builder->CreateCall(coerce_fn,
                                 {ti_as_ptr, boxed, cleanup, xsink_arg});
@@ -23330,6 +23344,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         ? "qore_rt_assign_local_no_coerce_throwing"
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_throwing"
                             : "qore_rt_assign_local_eval_weak_throwing");
+                if (int_list_push_store) {
+                    assert(use_no_coerce);
+                    aot_helper_name = "qore_rt_assign_int_list_local_aot";
+                    aot_helper_throwing_name = "qore_rt_assign_int_list_local_aot_throwing";
+                    jit_helper_name = "qore_rt_assign_int_list_local";
+                    jit_helper_throwing_name = "qore_rt_assign_int_list_local_throwing";
+                }
 
                 if (linst->mode == AssignmentMode::Normal && !linst->foreach_assignment) {
                     boxed = emit_take_store_value(boxed, consumed_cleanup);

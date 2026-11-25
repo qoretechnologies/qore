@@ -588,6 +588,22 @@ void qore_rt_assign_local_throwing(LocalVar* var, uint64_t value, ExceptionSink*
 void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 void qore_rt_assign_local_no_coerce_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
+//! The coercion and the assignment of the store of a push to a list<int> local on the runtime stack (qore#5578)
+/** The store that follows <tt>push local, value</tt> (QoreIRInstruction::list_push_local_cow) to a local declared
+    \c list<int>: the coercion keeps a list of that type as it is, without the generic conversion, and the assignment
+    does nothing when the variable holds the list already (the push changed it in place); any other value is coerced
+    and assigned as with qore_rt_coerce_value() and qore_rt_assign_local_no_coerce_eval_weak()
+*/
+uint64_t qore_rt_coerce_int_list_value(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup_ptr,
+    ExceptionSink* xsink);
+uint64_t qore_rt_coerce_int_list_value_aot(QoreAOTContext* ctx, int32_t local_idx, uint64_t value,
+    uint64_t* cleanup_ptr, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+void qore_rt_assign_int_list_local_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+    ExceptionSink* xsink);
+
 //! Publish a compiled local alloca value to the runtime local stack before
 //! executing deferred handlers.  This intentionally ignores any pre-existing
 //! exception in the caller's ExceptionSink because on_error handlers run while

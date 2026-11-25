@@ -503,6 +503,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_raw_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
     { "qore_rt_aot_local_var", reinterpret_cast<void*>(&qore_rt_aot_local_var) },
+    { "qore_rt_coerce_int_list_value", reinterpret_cast<void*>(&qore_rt_coerce_int_list_value) },
+    { "qore_rt_coerce_int_list_value_aot", reinterpret_cast<void*>(&qore_rt_coerce_int_list_value_aot) },
+    { "qore_rt_assign_int_list_local", reinterpret_cast<void*>(&qore_rt_assign_int_list_local) },
+    { "qore_rt_assign_int_list_local_aot", reinterpret_cast<void*>(&qore_rt_assign_int_list_local_aot) },
     { "qore_rt_coerce_value_weak", reinterpret_cast<void*>(&qore_rt_coerce_value_weak) },
     { "qore_rt_coerce_value_weak_throwing", reinterpret_cast<void*>(&qore_rt_coerce_value_weak_throwing) },
     { "qore_rt_coerce_value_weak_aot", reinterpret_cast<void*>(&qore_rt_coerce_value_weak_aot) },
@@ -3231,6 +3235,66 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak(LocalVar* var, uint64_t value,
         ExceptionSink* xsink) {
     qore_rt_assign_local_impl(var, value, xsink, false, true);
+}
+
+//! Returns true if a value is a list of type list<int> that a store to a local of that type keeps as it is
+/** A plain (not opaque) list whose type is the local's type: QoreTypeInfo::acceptAssignment() takes it unchanged, as an
+    int element is accepted without a check, and the type is not one that a no-narrow lvalue strips (qore#5578)
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_rt_is_exact_int_list(QoreValue val, const QoreTypeInfo* ti) {
+    if (!val.isPlainPointer() || val.getType() != NT_LIST) {
+        return false;
+    }
+    const qore_list_private* priv = qore_list_private::get(*val.get<const QoreListNode>());
+    return priv->complexTypeInfo == ti;
+}
+
+//! The coercion of the value that the paired store of a push to a list<int> local stores (qore#5578)
+/** As qore_rt_coerce_value(): a list of the local's type is kept as it is, with a reference for \a cleanup_ptr, without
+    the generic conversion
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_int_list_value(const QoreTypeInfo* ti, uint64_t value,
+        uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    QoreValue val = fromBits(value);
+    if (qore_rt_is_exact_int_list(val, ti)) {
+        val.refSelf();
+        if (cleanup_ptr) {
+            *cleanup_ptr = value;
+        }
+        return value;
+    }
+    return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
+}
+
+//! Returns true if the local holds the list<int> that a store to it would assign, so that the store changes nothing
+/** The paired store of a push to the list that the local holds (the push changed it in place): the variable is on the
+    current thread's local variable stack, holds the list itself with a reference of its own, the list has the
+    variable's type and no weak reference designates it (a store of a weakly designated container can copy it; see
+    qore_rt_take_store_value()), and the store is given no reference to take (qore#5578)
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_rt_local_holds_int_list(const LocalVar* var, QoreValue val) {
+    if (!var || qore_rt_store_takes_value || var->closureUse()) {
+        return false;
+    }
+    const QoreTypeInfo* ti = var->getTypeInfoForLValue();
+    if (ti != qore_get_complex_list_type(bigIntTypeInfo) || !qore_rt_is_exact_int_list(val, ti)
+            || qore_weak_designated_container(val.getPtr())) {
+        return false;
+    }
+    LocalVarValue* lvar = thread_try_find_lvar(var);
+    return lvar && lvar->val.assigned && !lvar->val.static_assignment && lvar->val.type == QV_Node
+        && lvar->val.v.n == val.getInternalNode();
+}
+
+//! The assignment of the paired store of a push to a list<int> local after qore_rt_coerce_int_list_value() (qore#5578)
+/** Nothing is done if the local holds the list already (see qore_rt_local_holds_int_list()); otherwise as
+    qore_rt_assign_local_no_coerce_eval_weak()
+*/
+extern "C" DLLEXPORT void qore_rt_assign_int_list_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    if (!*xsink && qore_rt_local_holds_int_list(var, fromBits(value))) {
+        return;
+    }
+    qore_rt_assign_local_no_coerce_eval_weak(var, value, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
@@ -17540,6 +17604,13 @@ extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak_aot(QoreAOTCo
     qore_rt_assign_local_no_coerce_eval_weak(ctx->locals[idx], val, xsink);
 }
 
+//! As qore_rt_assign_int_list_local() for the local with the given AOT slot
+extern "C" DLLEXPORT void qore_rt_assign_int_list_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_int_list_local(ctx->locals[idx], val, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_sync_local(ctx->locals[idx], val);
@@ -17550,6 +17621,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_aot(QoreAOTContext* ctx, int3
     assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
     const QoreTypeInfo* ti = ctx->locals[local_idx]->getTypeInfoForLValue();
     return qore_rt_coerce_value(ti, value, cleanup_ptr, xsink);
+}
+
+//! As qore_rt_coerce_int_list_value() for the local with the given AOT slot
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_int_list_value_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    return qore_rt_coerce_int_list_value(ctx->locals[local_idx]->getTypeInfoForLValue(), value, cleanup_ptr, xsink);
 }
 
 //! As qore_rt_coerce_value_weak() for the local with the given AOT slot
@@ -18025,6 +18103,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coer
     }
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_int_list_local_throwing(
+        LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_int_list_local(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_local_throwing(
         LocalVar* var, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_local(var, xsink);
@@ -18183,6 +18269,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coer
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_eval_weak_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     qore_rt_assign_local_no_coerce_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_int_list_local_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_int_list_local_aot(ctx, idx, val, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
