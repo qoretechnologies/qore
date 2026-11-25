@@ -66,6 +66,15 @@ module ExaDataProvider {
                 "the monitors turn the same query into an ongoing feed without a polling loop or a "
                 "de-duplication table to maintain.",
             "scheme": "exa",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "exa.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://exa.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": ExaLogo,
             "logo_file_name": "exa-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -77,8 +86,15 @@ module ExaDataProvider {
         DataProviderActionCatalog::registerLazyAppActions(ExaDataProvider::AppName, sub () {
             # every action generated from the vendored Exa Public API description; see ExaManifest for
             # what is exported and why
-            map DataProviderActionCatalog::registerAction($1),
-                ExaSchema::getActionSet().getActionInfoList(ExaDataProvider::AppName);
+            foreach hash<DataProviderActionInfo> action in (ExaSchema::getActionSet().getActionInfoList(
+                    ExaDataProvider::AppName)) {
+                if (inlist(action.action, ("search", "answer"))) {
+                    action.billing = <DataProviderBillingInfo>{"unit": "request"};
+                } else if (action.action == "contents") {
+                    action.billing = <DataProviderBillingInfo>{"unit": "page"};
+                }
+                DataProviderActionCatalog::registerAction(action);
+            }
         });
     };
 }

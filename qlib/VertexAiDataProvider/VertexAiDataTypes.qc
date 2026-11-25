@@ -67,8 +67,8 @@ public class VertexAiGenerateContentRequestDataType inherits HashDataType {
                 "desc": "Generation parameters: "
                     "`temperature`, `topP`, `topK`, `maxOutputTokens`, "
                     "`responseMimeType`, `responseSchema`, "
-                    "`thinkingConfig.thinkingLevel` (Gemini 3.x) or `thinkingConfig.thinkingBudget` (Gemini 2.5). "
-                    "Gemini 3.x omits sampling parameters and numeric thinking budgets. Use an explicit thinking "
+                    "`thinkingConfig.thinkingLevel` (Gemini 3.x and 4.x) or `thinkingConfig.thinkingBudget` (Gemini 2.5). "
+                    "Gemini 3.x and 4.x omit sampling parameters and numeric thinking budgets. Use an explicit thinking "
                     "level to control reasoning depth and cost.",
                 "example_value": {"maxOutputTokens": 1024, "thinkingConfig": {"thinkingLevel": "LOW"}},
             },

@@ -137,7 +137,7 @@ class HttpFastRoutesIsolationTest inherits QUnit::Test {
             "const char* s = \"throw and send( in a literal\";\n"
             "void f(QoreHashNode* h) { ::sleep(1); usleep(5); r.read(1); p->send(2); x::select(3); }\n"
             "void g() { try { } catch (...) { } }\n"
-            "void h() { char* e = getenv(\"X\"); fprintf(stderr, \"x\"); }\n"; # live-provider-optin: a C++ sample for a source scan
+            "void h() { char* e = getenv(\"X\"); fprintf(stderr, \"x\"); }\n";
         assertEq(("qore/Qore.h", "qore/intern/HttpFastRoutes.h", "string"), findIncludes(bad));
         assertEq(("qore/Qore.h",), disallowedIncludes(findIncludes(bad)));
         list<string> found = findForbidden(bad);

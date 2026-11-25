@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-capability.qtest: loaded for the first time in a method of a lent object, its
+#! initialization creates the library's shared state, which belongs to nobody (qore#7052)
+
+%modern
+%requires CapProbe
+
+module CapLazy {
+    version = "1.0";
+    desc = "capability provenance probe: a module loaded in a lent method (qore#7052)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        CapLazy::Shared = new CapProbe::Conn();
+    };
+}
+
+public namespace CapLazy {
+    our CapProbe::Conn Shared;
+
+    #! returns the connection that the module created in its initialization
+    public CapProbe::Conn sub shared() {
+        return Shared;
+    }
+}

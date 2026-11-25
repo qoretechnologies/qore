@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class StatementIndexManySourcesTest
+
+#! the statement index of a Program finds the statements of each of many sources, and keeps the order of its
+#! sources for the suffix match of ProgramControl::findStatementId()
+class StatementIndexManySourcesTest inherits QUnit::Test {
+    private {
+        #! the number of sources, each of them a key of the statement index
+        const NumSources = 3000;
+    }
+
+    constructor() : QUnit::Test("StatementIndexManySourcesTest", "1.0") {
+        addTestCase("many sources", \manySourcesTest());
+        addTestCase("a source parsed in several pieces", \samePieceTest());
+        addTestCase("suffix match order", \suffixOrderTest());
+        set_return_value(main());
+    }
+
+    manySourcesTest() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        for (int i = 0; i < NumSources; ++i) {
+            # the statement is on line 3 of each source
+            pgm.parsePending(sprintf("%%modern\nsub f%d() {\n    int a = %d;\n}\n", i, i), getLabel(i));
+        }
+        pgm.parseCommit();
+        ProgramControl pc = pgm.getProgram();
+        for (int i = 0; i < NumSources; ++i) {
+            string label = getLabel(i);
+            hash<StatementInfo> info = pc.getStatementIdInfo(pc.findStatementId(label, 3));
+            if (info.file != label || info.start_line != 3) {
+                # report only the first difference
+                assertEq({"file": label, "start_line": 3}, info{"file", "start_line"}, label);
+                return;
+            }
+        }
+        assertTrue(True);
+    }
+
+    samePieceTest() {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        pgm.parsePending("%modern\nsub g1() {\n    int a = 1;\n}\n", "piece");
+        pgm.parsePending("%modern\nsub g2() {\n    int a = 2;\n\n    a = 3;\n}\n", "piece");
+        pgm.parseCommit();
+        ProgramControl pc = pgm.getProgram();
+        # both pieces are in the same source; the first statement of a line is found
+        assertEq(3, pc.getStatementIdInfo(pc.findStatementId("piece", 3)).start_line);
+        assertEq(5, pc.getStatementIdInfo(pc.findStatementId("piece", 5)).start_line);
+    }
+
+    suffixOrderTest() {
+        # an exact match is found whatever its position
+        Program pgm = getSuffixProgram(("first/x.q", "second/x.q"));
+        ProgramControl pc = pgm.getProgram();
+        assertEq("second/x.q", pc.getStatementIdInfo(pc.findStatementId("second/x.q", 3)).file);
+        assertEq("first/x.q", pc.getStatementIdInfo(pc.findStatementId("first/x.q", 3)).file);
+        # a suffix match depends on the order that the sources were parsed in: the last of them is found
+        assertEq("second/x.q", pc.getStatementIdInfo(pc.findStatementId("x.q", 3)).file);
+        pgm = getSuffixProgram(("second/x.q", "first/x.q"));
+        pc = pgm.getProgram();
+        assertEq("first/x.q", pc.getStatementIdInfo(pc.findStatementId("x.q", 3)).file);
+        pgm = getSuffixProgram(("a/x.q", "b/x.q", "c/x.q"));
+        pc = pgm.getProgram();
+        assertEq("c/x.q", pc.getStatementIdInfo(pc.findStatementId("x.q", 3)).file);
+    }
+
+    #! the Program is returned, as its statements are released with it
+    static Program getSuffixProgram(list<string> labels) {
+        Program pgm(PO_NEW_STYLE | PO_ALLOW_DEBUGGER, True);
+        int n = 0;
+        foreach string label in (labels) {
+            pgm.parsePending(sprintf("%%modern\nsub h%d() {\n    int a = %d;\n}\n", ++n, n), label);
+        }
+        pgm.parseCommit();
+        return pgm;
+    }
+
+    static string getLabel(int i) {
+        return sprintf("dir%d/source%d.q", i % 97, i);
+    }
+}

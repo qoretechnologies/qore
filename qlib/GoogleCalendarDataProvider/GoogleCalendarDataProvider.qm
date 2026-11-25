@@ -53,6 +53,15 @@ module GoogleCalendarDataProvider {
             "short_desc": "Google calendar services",
             "desc": "Google calendar services",
             "scheme": "gcal",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developers.google.com/workspace/calendar/api/guides/quota",
+                "effective_date": 2026-11-25,
+            },
             "logo": GoogleCalendarLogo,
             "logo_file_name": "google-calendar-logo.svg",
             "logo_mime_type": MimeTypeSvg,

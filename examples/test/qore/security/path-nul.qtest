@@ -415,20 +415,36 @@ class PathNulTest inherits QUnit::Test {
         assertNul("PROGRAM-ERROR", nulpath, sub () { p.setScriptPath(nulpath); }, "Program::setScriptPath()");
         assertEq(real, p.getScriptPath(), "Program::setScriptPath(): the script path is not changed");
 
-        string what = "time zone region or path";
-        string plural = "time zone regions and paths";
-        assertNul("TZINFO-ERROR", "UTC\x00.txt", sub () { p.setTimeZoneRegion("UTC\x00.txt"); },
-            "Program::setTimeZoneRegion()", what, plural);
+        assertNulRegion("UTC\x00.txt", sub () { p.setTimeZoneRegion("UTC\x00.txt"); },
+            "Program::setTimeZoneRegion()");
+    }
+
+    #! asserts that the code raises the error for an unknown time zone region, which shows the NUL character
+    /** a region with a NUL character raises the same error as any other region that cannot be loaded (qore#7442)
+    */
+    assertNulRegion(string region, code c, string label, string suffix = "") {
+        try {
+            c();
+            assertTrue(False, label + ": an exception is raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("TZINFO-ERROR", ex.err, label + ": error code");
+            assertEq(sprintf("unknown time zone region \"%s\"", replace(region, "\x00", "\\x00")) + suffix,
+                ex.desc, label + ": description");
+        }
     }
 
     testTimeZone() {
         string what = "time zone region or path";
         string plural = "time zone regions and paths";
         # a region cut at the NUL character would silently be UTC
-        assertNul("TZINFO-ERROR", "UTC\x00/Europe/Prague", sub () { TimeZone tz("UTC\x00/Europe/Prague"); },
-            "TimeZone::constructor()", what, plural);
-        assertNul("TZINFO-ERROR", "UTC\x00/Europe/Prague", sub () { TimeZone::setRegion("UTC\x00/Europe/Prague"); },
-            "TimeZone::setRegion()", what, plural);
+        assertNulRegion("UTC\x00/Europe/Prague", sub () { TimeZone tz("UTC\x00/Europe/Prague"); },
+            "TimeZone::constructor()");
+        assertNulRegion("UTC\x00/Europe/Prague", sub () { TimeZone::setRegion("UTC\x00/Europe/Prague"); },
+            "TimeZone::setRegion()");
+        # a path with a NUL character raises the error for a path with a NUL character
+        string nul_path = "/usr/share/zoneinfo/UTC\x00/Europe/Prague";
+        assertNul("TZINFO-ERROR", nul_path, sub () { TimeZone tz(nul_path); }, "TimeZone::constructor() with a path",
+            what, plural);
 
         # a serialized date names its time zone region; one with a NUL character in the region is refused
         date d = (new TimeZone("Europe/Prague")).date("2026-01-15T10:00:00");
@@ -438,9 +454,8 @@ class PathNulTest inherits QUnit::Test {
         assertEq(region_hex.size(), make_hex_string(binary(nul_region)).size(), "same length");
         assertTrue(hex.find(region_hex) >= 0, "the region is in the serialized data");
         binary data = parse_hex_string(replace(hex, region_hex, make_hex_string(binary(nul_region))));
-        assertNul("TZINFO-ERROR", nul_region, auto sub () { return Serializable::deserialize(data); },
-            "Serializable::deserialize() of a date", what, plural,
-            " (while deserializing hashdecl 'SerializationInfo')");
+        assertNulRegion(nul_region, auto sub () { return Serializable::deserialize(data); },
+            "Serializable::deserialize() of a date", " (while deserializing hashdecl 'SerializationInfo')");
         assertEq(d, Serializable::deserialize(Serializable::serialize(d)), "the date without the NUL character");
     }
 

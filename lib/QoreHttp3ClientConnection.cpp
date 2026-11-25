@@ -47,54 +47,16 @@
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <cstdio>
 
 #include <sys/socket.h>
 #include <netdb.h>
 
-// Happy-eyeballs Connection Attempt Delay (RFC 8305 §8).  250ms is the
-// RFC-recommended default; the secondary address-family attempt holds
-// its first packet until this many nanoseconds after the primary's
-// submission, giving the preferred family a head start on the handshake
-// without blocking fallback when the preferred path is a black hole.
-static constexpr int64_t HE_CONNECTION_ATTEMPT_DELAY_NS = 250'000'000LL;
-
 // QPP-generated symbols — forward-declared for the single-compilation-unit
 extern QoreClass* QC_HTTP3CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
-
-//! Return candidate address families to attempt for happy-eyeballs (RFC 8305).
-/** Literal IPs only need their own family.  Hostnames return both IPv6 and IPv4
-    candidates in RFC 8305 order; the per-family SocketQuicClientPollOperation
-    instances resolve names asynchronously with c-ares and surface DNS errors.
-*/
-static std::vector<int> resolveCandidateFamilies(const char* host) {
-    std::vector<int> out;
-
-    if (host) {
-        std::string h(host);
-        if (h.size() >= 2 && h.front() == '[' && h.back() == ']') {
-            h = h.substr(1, h.size() - 2);
-        }
-
-        struct in6_addr addr6;
-        if (inet_pton(AF_INET6, h.c_str(), &addr6) == 1) {
-            out.push_back(AF_INET6);
-            return out;
-        }
-
-        struct in_addr addr4;
-        if (inet_pton(AF_INET, h.c_str(), &addr4) == 1) {
-            out.push_back(AF_INET);
-            return out;
-        }
-    }
-
-    out.push_back(AF_INET6);
-    out.push_back(AF_INET);
-    return out;
-}
 
 Http3ClientConnection::Http3ClientConnection(const char* target_host, int target_port,
         int max_concurrent_streams, ExceptionSink* xsink,
@@ -148,12 +110,12 @@ Http3ClientConnection::~Http3ClientConnection() {
     if (ssl_trust_store_) {
         ssl_trust_store_->deref();
     }
-    // the members are written under attempts_mu_, as readers that are not gated by the connection's state take the
+    // the members are written under op_mu_, as readers that are not gated by the connection's state take the
     // poll operation under it; the objects are released after the lock
     QoreObject* poll_op_obj_to_deref;
     QoreObject* sock_obj_to_deref;
     {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
+        std::lock_guard<std::mutex> lk(op_mu_);
         poll_op_obj_to_deref = poll_op_obj;
         sock_obj_to_deref = sock_obj;
         poll_op_obj = nullptr;
@@ -183,47 +145,26 @@ void Http3ClientConnection::setMaxResponseBodySizeHook(int64_t max_size) {
     if (!g.acquired()) {
         return;
     }
-    std::lock_guard<std::mutex> lk(attempts_mu_);
-    max_response_body_size_ = max_size;
-    for (auto& a : attempts_) {
-        if (a && a->sock_priv) {
-            qore_socket_object_private(a->sock_priv).setMaxResponseBodySize(max_size);
-        }
-    }
+    std::lock_guard<std::mutex> lk(op_mu_);
     if (sock_priv) {
         qore_socket_object_private(sock_priv).setMaxResponseBodySize(max_size);
     }
 }
 
-int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
-        ExceptionSink* xsink) {
+int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
 
-    // 1. Create UDP socket.
+    // 1. An unbound UDP socket: the poll operation resolves the host name in all families and races connection
+    //    attempts to its addresses (RFC 8305), each with a UDP socket of its own, bound on the I/O thread with the
+    //    network policy check of a bind; the socket takes the descriptor of the attempt that wins.  Nothing that can
+    //    block runs here.
     ReferenceHolder<QoreSocketObject> sock_priv_holder(new QoreSocketObject, xsink);
     QoreSocketObject* sock_priv_raw = *sock_priv_holder;
 
-    // 1a. Bind UDP socket to a unique ephemeral port in the requested family.
-    const char* bind_addr = (family == AF_INET6) ? "::" : "0.0.0.0";
-    // SO_REUSEADDR can let concurrent QUIC clients share a UDP 4-tuple on
-    // Linux, making server replies ambiguous between separate sockets.
-    int bind_rc = sock_priv_raw->bindINET(bind_addr, "0", false, family, SOCK_DGRAM,
-        0, xsink);
-    if (bind_rc < 0 || *xsink) {
-        if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-                "failed to bind UDP socket for QUIC connection to %s:%d",
-                target_host.c_str(), target_port);
-        }
-        return -1;
-    }
-
-    // 1b. Propagate HTTPClient's SSL config onto the fresh UDP socket —
-    //     QuicSession::createClient reads ssl_verify_mode /
-    //     accept_all_certs / cert / pk directly from this socket during
-    //     the TLS 1.3 handshake that is integrated into QUIC.  Without
-    //     this, H3 auto-upgrade always handshakes with SSL_VERIFY_NONE,
-    //     breaking mTLS (clientCertTest) and other verify-mode paths.
+    // 1a. Propagate HTTPClient's SSL config onto the socket — QuicSession::createClient reads ssl_verify_mode /
+    //     accept_all_certs / cert / pk / the trust configuration from it for the TLS 1.3 handshake that is
+    //     integrated into QUIC, for each connection attempt.  Without this, H3 auto-upgrade always handshakes with
+    //     SSL_VERIFY_NONE, breaking mTLS (clientCertTest) and other verify-mode paths.
     if (ssl_verify_mode_) {
         sock_priv_raw->setSslVerifyMode(ssl_verify_mode_);
     }
@@ -239,8 +180,8 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     }
     if (!ssl_ca_file_.empty() || !ssl_ca_path_.empty()) {
         // the socket is not submitted yet, so it is configured directly
-        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file_.empty() ? nullptr : ssl_ca_file_.c_str(),
-            ssl_ca_path_.empty() ? nullptr : ssl_ca_path_.c_str(), xsink);
+        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file_.empty()
+            ? nullptr : ssl_ca_file_.c_str(), ssl_ca_path_.empty() ? nullptr : ssl_ca_path_.c_str(), xsink);
         if (*xsink) {
             return -1;
         }
@@ -260,31 +201,22 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
         }
     }
 
-    ReferenceHolder<QoreObject> sock_obj_holder(
-        new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+    ReferenceHolder<QoreObject> sock_obj_holder(new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
 
-    // 2. Create the SocketQuicClientPollOperation (QUIC handshake inner op).
+    // 2. The SocketQuicClientPollOperation (QUIC handshake inner op), which binds the unbound socket.
     sock_priv_raw->ref();
-    ReferenceHolder<SocketQuicClientPollOperation> inner_op(
-        new SocketQuicClientPollOperation(xsink, sock_priv_raw,
-            target_host.c_str(), static_cast<uint16_t>(target_port), family,
-            handshake_timeout_ns_,
-            /* not_before_ns_abs */ not_before_ns_abs),
-        xsink);
+    ReferenceHolder<SocketQuicClientPollOperation> inner_op(new SocketQuicClientPollOperation(xsink, sock_priv_raw,
+        target_host.c_str(), static_cast<uint16_t>(target_port), AF_UNSPEC, handshake_timeout_ns_,
+        /* bind_unbound */ true), xsink);
     if (*xsink) {
         return -1;
     }
 
-    // 3. Create the Http3ClientPollOperationPriv.
+    // 3. The Http3ClientPollOperationPriv.
     sock_priv_raw->ref();
     SocketQuicClientPollOperation* inner_ptr = inner_op.release();
-    ReferenceHolder<Http3ClientPollOperationPriv> priv_holder(
-        new Http3ClientPollOperationPriv(
-            /* self */ nullptr,
-            /* sock */ sock_priv_raw,
-            /* inner */ inner_ptr,
-            /* conn_priv */ this),
-        xsink);
+    ReferenceHolder<Http3ClientPollOperationPriv> priv_holder(new Http3ClientPollOperationPriv(/* self */ nullptr,
+        /* sock */ sock_priv_raw, /* inner */ inner_ptr, /* conn_priv */ this), xsink);
     Http3ClientPollOperationPriv* priv_raw = *priv_holder;
     // the connect timeout also bounds the wait of an extended CONNECT for the server's SETTINGS
     priv_raw->setConnectTimeout(handshake_timeout_ns_ / 1000000LL);
@@ -307,502 +239,54 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
         return -1;
     }
 
-    // 7. Record the attempt so the caller can submit it (or tear it down
-    //    on error) — submission is deferred until the full list of
-    //    attempts is known so that onInnerHandshakeReady/Failed callbacks
-    //    firing from the I/O thread see a complete attempts_ vector.
-    auto a = std::make_shared<Attempt>();
-    a->sock_priv = sock_priv_raw;
-    a->sock_obj = sock_obj_holder.release();
-    a->poll_op_priv = priv_raw;
-    a->poll_op_obj = poll_obj_holder.release();
-    a->family = family;
+    // 7. Publish the connection's members before the submission, after which the I/O thread can report the outcome;
+    //    from now on the destructor releases the objects, and closeConnection() aborts an operation not submitted
+    ReferenceHolder<QoreObject> submit_sock(sock_obj_holder->objectRefSelf(), xsink);
+    ReferenceHolder<QoreObject> submit_op(poll_obj_holder->objectRefSelf(), xsink);
+    {
+        std::lock_guard<std::mutex> lk(op_mu_);
+        qore_socket_object_private(sock_priv_raw).setMaxResponseBodySize(max_response_body_size_);
+        sock_priv = sock_priv_raw;
+        sock_obj = sock_obj_holder.release();
+        poll_op_priv = priv_raw;
+        poll_op_obj = poll_obj_holder.release();
+    }
 
-    // Arm the HE observer BEFORE submission so a racing I/O thread finds
-    // the owner set on the first handshake outcome.
-    priv_raw->armHappyEyeballsOwner(this);
-
-    std::lock_guard<std::mutex> lk(attempts_mu_);
-    qore_socket_object_private(sock_priv_raw).setMaxResponseBodySize(max_response_body_size_);
-    int idx = static_cast<int>(attempts_.size());
-    attempts_.push_back(std::move(a));
-    return idx;
-}
-
-int Http3ClientConnection::submitAttempt(Attempt& a, ExceptionSink* xsink) {
-    ReferenceHolder<QoreObject> ctl_obj_holder(
-        qore_get_async_io_controller_obj(xsink), xsink);
+    // 8. Submit to the AsyncIoController.
+    ReferenceHolder<QoreObject> ctl_obj_holder(qore_get_async_io_controller_obj(xsink), xsink);
     if (*xsink || !ctl_obj_holder) {
         return -1;
     }
-    ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-        static_cast<AsyncIoControllerPriv*>(
-            ctl_obj_holder->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
-        xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj_holder->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
     if (*xsink || !ctl_priv_holder) {
         if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-                "failed to get AsyncIoController singleton");
+            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR", "failed to get AsyncIoController singleton");
         }
         return -1;
     }
-
-    // Snapshot the resource fields under attempts_mu_ so a concurrent
-    // clearAttempt (e.g., from onInnerHandshakeReady moving this
-    // attempt to losers when a sibling attempt wins) cannot null
-    // a.sock_obj / a.poll_op_obj between the read and the refSelf, and
-    // cannot deref the QoreObjects to refcount 0 between the refSelf
-    // and the use.  refSelf increments the refcount under the lock;
-    // after we release the lock, our local refs keep the objects alive
-    // even if clearAttempt subsequently nulls a's fields and derefs.
-    int family_local;
-    ReferenceHolder<QoreObject> sock_obj_ref(xsink);
-    ReferenceHolder<QoreObject> poll_op_obj_ref(xsink);
-    {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
-        if (!a.sock_obj || !a.poll_op_obj) {
-            // Already cleared by the I/O thread (winner committed and
-            // moved this attempt to losers, or all-failed teardown).
-            // Treat as a no-op success-equivalent skip — buildAndSubmit
-            // counts only successful submits and will fall through to
-            // the "no attempts submitted" error path if appropriate.
-            return -1;
-        }
-        sock_obj_ref = a.sock_obj->objectRefSelf();
-        poll_op_obj_ref = a.poll_op_obj->objectRefSelf();
-        family_local = a.family;
-    }
-
     char owner_buf[64];
-    const char* owner_to_use;
-    if (!owner_str.empty()) {
-        // When the caller provided an owner string, suffix the attempt's
-        // family so concurrent HE submissions hit distinct cache keys.
-        snprintf(owner_buf, sizeof(owner_buf), "%s-%s",
-            owner_str.c_str(),
-            (family_local == AF_INET6) ? "v6" : "v4");
-        owner_to_use = owner_buf;
-    } else {
-        snprintf(owner_buf, sizeof(owner_buf), "http3-cpp-conn-%p-%s",
-            static_cast<const void*>(&a),
-            (family_local == AF_INET6) ? "v6" : "v4");
-        owner_to_use = owner_buf;
+    if (owner_str.empty()) {
+        snprintf(owner_buf, sizeof(owner_buf), "http3-cpp-conn-%p", static_cast<const void*>(this));
     }
-
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
-    info->setKeyValue("sock", sock_obj_ref.release(), xsink);
-    info->setKeyValue("spop", poll_op_obj_ref.release(), xsink);
-    info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
+    info->setKeyValue("sock", submit_sock.release(), xsink);
+    info->setKeyValue("spop", submit_op.release(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner_str.empty() ? owner_buf : owner_str.c_str()), xsink);
     // Disable controller-level timeout; the H3 poll op manages its own idle timeout.
     info->setKeyValue("to", -1, xsink);
     if (*xsink) {
         return -1;
     }
-
-    // submit() takes ownership of `info` via the ReferenceHolder in
-    // AsyncIoControllerPriv::submit; use .release() not *info.
-    ReferenceHolder<QoreObject> submit_rv(
-        ctl_priv_holder->submit(*ctl_obj_holder, info.release(), false, xsink), xsink);
+    // submit() takes ownership of `info`
+    ReferenceHolder<QoreObject> submit_rv(ctl_priv_holder->submit(*ctl_obj_holder, info.release(), false, xsink),
+        xsink);
     if (*xsink) {
         return -1;
     }
-    {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
-        // Only mark submitted if the attempt hasn't been cleared in
-        // the meantime — clearAttempt resets submitted=false and a
-        // late write here would resurrect a stale flag.
-        if (a.sock_obj || a.poll_op_obj) {
-            a.submitted = true;
-        }
-    }
+    std::lock_guard<std::mutex> lk(op_mu_);
+    submitted_to_controller = true;
     return 0;
-}
-
-void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
-    // Snapshot+null the resource fields atomically under attempts_mu_.
-    // A concurrent submitAttempt acquires the same lock to refSelf the
-    // QoreObject wrappers; this ordering guarantees it sees either
-    // (sock_obj && poll_op_obj) both alive (and bumps their refcounts
-    // before we deref) or both nulled (and bails out).  Without this
-    // lock, submitAttempt could read a non-null sock_obj at line 330,
-    // we could deref it to refcount 0 here, and submitAttempt's
-    // refSelf would then dereference freed memory.
-    //
-    // The expensive operations (disarm, abort, deref) run AFTER the
-    // unlock so the I/O thread's clearAttempt path doesn't serialize
-    // on the brief field-null window.
-    QoreObject* poll_op_obj_to_deref;
-    QoreObject* sock_obj_to_deref;
-    Http3ClientPollOperationPriv* poll_op_priv_local;
-    QoreSocketObject* sock_priv_local;
-    bool submitted_local;
-    {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
-        poll_op_obj_to_deref = a.poll_op_obj;   a.poll_op_obj = nullptr;
-        sock_obj_to_deref = a.sock_obj;         a.sock_obj = nullptr;
-        poll_op_priv_local = a.poll_op_priv;    a.poll_op_priv = nullptr;
-        sock_priv_local = a.sock_priv;
-        submitted_local = a.submitted;
-        a.sock_priv = nullptr;
-        a.submitted = false;
-        a.finished = true;
-    }
-
-    // Disarm both back-pointers on the poll op so the subsequent abort()
-    // does NOT call setClosed on the connection (we're a losing attempt —
-    // the connection may still be racing or already committed to a
-    // different winner).
-    if (poll_op_priv_local) {
-        poll_op_priv_local->disarmConnectionPriv();
-    }
-
-    // Cancel strategy:
-    // - If we're on the I/O thread, call abort() directly.  Calling the
-    //   controller cancel path from continuePoll is unsafe because it erases
-    //   the PollInfo while the current ops_to_poll batch still holds a raw
-    //   pointer to it.
-    // - If an app thread is clearing a submitted attempt, route teardown
-    //   through controller.cancelAndClose().  The controller then invokes
-    //   abort() on the I/O thread and closes the socket on a controller
-    //   thread, so the best-effort QUIC CONNECTION_CLOSE send and fd
-    //   teardown stay with the controller-owned socket path.
-    // - Unsubmitted attempts are not in the controller cache, so direct abort
-    //   is the only cleanup path and cannot race controller polling.
-    //
-    // Safe from any thread including I/O thread:
-    //   - abort() takes loser's own sock_priv->m and stream_lock; these
-    //     are distinct from the winner's locks, so no self-deadlock when
-    //     called from within the winner's continuePoll.
-    //   - After disarmConnectionPriv, connection_priv and h3_owner_ are
-    //     nullptr, so abort's setClosed-path becomes a no-op — no state
-    //     transition on the enclosing connection.
-    bool canceled = false;
-    if (submitted_local && sock_priv_local && !qore_on_async_io_thread()) {
-        ExceptionSink cancel_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&cancel_xsink), &cancel_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &cancel_xsink)),
-                &cancel_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->cancelAndClose(sock_priv_local, &cancel_xsink);
-                canceled = !cancel_xsink;
-            }
-        }
-        cancel_xsink.clear();
-    }
-
-    if (!canceled && poll_op_priv_local) {
-        poll_op_priv_local->abort(xsink);
-    }
-
-    // Deref the QoreObject wrappers (our construction-time refs).  The
-    // controller still holds its own ref via the PollInfo until it
-    // processes the CLOSED state, so these derefs just drop OUR ref —
-    // the objects stay alive until the controller's cleanup.
-    if (poll_op_obj_to_deref) {
-        poll_op_obj_to_deref->deref(xsink);
-    }
-    if (sock_obj_to_deref) {
-        sock_obj_to_deref->deref(xsink);
-    }
-}
-
-int Http3ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
-    // Resolve all candidate address families per RFC 8305.  For a typical
-    // dual-stack hostname this returns {AF_INET6, AF_INET} — two parallel
-    // QUIC handshake attempts, the secondary staggered by
-    // HE_CONNECTION_ATTEMPT_DELAY_NS.  For literal addresses or single-
-    // family hosts, exactly one attempt is built and behavior matches the
-    // pre-HE single-attempt path.
-    std::vector<int> families = resolveCandidateFamilies(target_host.c_str());
-
-    int64_t not_before = 0;
-    std::vector<int> built_indices;
-    built_indices.reserve(families.size());
-    for (size_t i = 0; i < families.size(); ++i) {
-        int idx = buildAttempt(families[i], not_before, xsink);
-        if (idx < 0 || *xsink) {
-            // One family failed to build (e.g., kernel rejected the bind).
-            // If we already have a usable attempt, silently drop this one
-            // and proceed with the remaining candidates — HE degrades
-            // gracefully to N-1 attempts.  Otherwise surface the error.
-            if (!built_indices.empty()) {
-                xsink->clear();
-                continue;
-            }
-            return -1;
-        }
-        built_indices.push_back(idx);
-        // Subsequent attempts get staggered per RFC 8305 §8.
-        if (not_before == 0) {
-            not_before = QuicSession::timestamp() + HE_CONNECTION_ATTEMPT_DELAY_NS;
-        } else {
-            not_before += HE_CONNECTION_ATTEMPT_DELAY_NS;
-        }
-    }
-    if (built_indices.empty()) {
-        if (!*xsink) {
-            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-                "failed to build any QUIC handshake attempt for %s:%d",
-                target_host.c_str(), target_port);
-        }
-        return -1;
-    }
-
-    // Submit all built attempts to the controller.  Each attempt's
-    // SocketQuicClientPollOperation honors its own not_before_ns_ gate, so
-    // the secondary stays silent on the wire until its deadline elapses.
-    //
-    // Snapshot the Attempts as shared_ptr copies under the lock so they
-    // outlive the loop body even if a sibling attempt completes its
-    // handshake (winner commit) on the I/O thread mid-loop and moves
-    // the unsubmitted Attempt into a local losers vector that's
-    // destroyed when onInnerHandshakeReady returns.  Without the
-    // shared_ptr ownership, that destructor would free the Attempt
-    // struct under our raw pointer (use-after-free at submitAttempt's
-    // a.sock_obj read).
-    //
-    // Submit outside attempts_mu_ — submit() is a cross-thread cmd
-    // enqueue that can block briefly, so holding the lock across the
-    // loop would serialize unnecessarily and could deadlock if the I/O
-    // thread tries to call onInnerHandshakeFailed (which acquires
-    // attempts_mu_) before the submission loop finishes.
-    std::vector<std::shared_ptr<Attempt>> to_submit;
-    {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
-        for (int idx : built_indices) {
-            to_submit.push_back(attempts_[idx]);
-        }
-    }
-    int submitted_count = 0;
-    for (auto& a_ptr : to_submit) {
-        // Stop submitting once a winner is committed by the I/O thread —
-        // remaining attempts are now redundant, would race uselessly,
-        // and would just be torn down immediately by onInnerHandshakeReady's
-        // loser cleanup.  Brief lock acquisition matches submitAttempt's
-        // own internal locking discipline.
-        {
-            std::lock_guard<std::mutex> lk(attempts_mu_);
-            if (winner_idx_ >= 0) {
-                break;
-            }
-        }
-        ExceptionSink submit_xsink;
-        if (submitAttempt(*a_ptr, &submit_xsink) == 0) {
-            ++submitted_count;
-        } else {
-            submit_xsink.clear();
-            ExceptionSink clr_xsink;
-            clearAttempt(*a_ptr, &clr_xsink);
-            clr_xsink.clear();
-        }
-    }
-    if (submitted_count == 0) {
-        xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-            "no QUIC handshake attempts could be submitted for %s:%d",
-            target_host.c_str(), target_port);
-        return -1;
-    }
-
-    // Publish the primary attempt's tuple on the connection members so
-    // closeConnection (pre-winner) has something to cancel.  The winner
-    // selection in onInnerHandshakeReady may re-point these to a
-    // different attempt.
-    //
-    // The submit loop above ran without attempts_mu_ held, so the I/O
-    // thread may have already run onInnerHandshakeReady (winner committed
-    // and attempts_ cleared) or onInnerHandshakeFailed (all-failed
-    // teardown: attempts_ moved out and connection members nulled).  In
-    // either of those cases, attempts_[built_indices.front()] is null or
-    // out-of-bounds and the connection members are already in their final
-    // state — re-publishing would either segfault on a null Attempt* or
-    // overwrite the winner's tuple with stale pointers.  Guard against
-    // both by checking winner_idx_ and attempts_ first.
-    {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
-        if (winner_idx_ < 0 && !attempts_.empty()) {
-            Attempt* primary = attempts_[built_indices.front()].get();
-            if (primary) {
-                sock_priv = primary->sock_priv;
-                sock_obj = primary->sock_obj;
-                poll_op_priv = primary->poll_op_priv;
-                poll_op_obj = primary->poll_op_obj;
-                submitted_to_controller = true;
-            }
-        } else if (winner_idx_ >= 0) {
-            // Winner committed by onInnerHandshakeReady before we
-            // re-acquired the lock.  sock_priv et al. already point at
-            // the winner's tuple; just flag the controller as holding
-            // our op so a subsequent closeConnection cancels it via the
-            // controller path.
-            submitted_to_controller = true;
-        }
-        // else: onInnerHandshakeFailed cleared attempts_ and set
-        // submitted_to_controller=false on its way to setClosed().  The
-        // connection is already torn down — leave it that way.
-    }
-    return 0;
-}
-
-void Http3ClientConnection::onInnerHandshakeReady(Http3ClientPollOperationPriv* inner) {
-    std::unique_lock<std::mutex> lk(attempts_mu_);
-
-    // Already committed a winner? Losing attempt — just let clearAttempt
-    // (from the original winner path) finish us off; don't transition the
-    // base-class state again.
-    if (winner_idx_ >= 0) {
-        return;
-    }
-
-    // Locate this inner in attempts_ and commit as the winner.
-    int my_idx = -1;
-    for (size_t i = 0; i < attempts_.size(); ++i) {
-        if (attempts_[i] && attempts_[i]->poll_op_priv == inner) {
-            my_idx = static_cast<int>(i);
-            break;
-        }
-    }
-    if (my_idx < 0) {
-        // Not found — must have been torn down already.  Nothing to do;
-        // base-class state is still CONNECTING or already CLOSED.
-        return;
-    }
-    winner_idx_ = my_idx;
-    attempts_[my_idx]->finished = true;
-
-    // Publish the winner's tuple as the primary so submitRequest / close
-    // paths use it henceforth.  The members may currently point at a
-    // different attempt (the "primary" chosen at build time); reassigning
-    // here is safe because we're still in CONNECTING — no request has
-    // been dispatched.  The loser attempts' QoreObject refs are cleaned
-    // up below via clearAttempt, which disarms their back-pointers so
-    // their abort() does NOT call setClosed on us.
-    //
-    // Null the winner's Attempt members as we transfer — its unique_ptr
-    // will be destroyed below when we clear attempts_, and the Attempt
-    // destructor asserts on non-null QoreObject pointers (see
-    // QoreHttp3ClientConnection.h) to catch future double-ownership bugs.
-    Attempt* w = attempts_[my_idx].get();
-    sock_priv = w->sock_priv;        w->sock_priv = nullptr;
-    // where the connection leads: the winning attempt's socket, which a pool checks before it hands the connection
-    // to other code
-    std::shared_ptr<const QoreConnectionDestinations> winner_destinations
-        = sock_priv ? qore_socket_object_private(sock_priv).getConnectedDestinations() : nullptr;
-    sock_obj = w->sock_obj;          w->sock_obj = nullptr;
-    poll_op_priv = w->poll_op_priv;  w->poll_op_priv = nullptr;
-    poll_op_obj = w->poll_op_obj;    w->poll_op_obj = nullptr;
-
-    // Move the losers out of attempts_ into a local vector so we can
-    // release the mutex before calling clearAttempt (which invokes
-    // ctl_priv_holder->cancel — a potentially blocking cross-thread
-    // operation that must not be held under attempts_mu_).
-    std::vector<std::shared_ptr<Attempt>> losers;
-    const size_t winner_idx_sz = static_cast<size_t>(my_idx);
-    for (size_t i = 0; i < attempts_.size(); ++i) {
-        if (i != winner_idx_sz && attempts_[i]) {
-            losers.push_back(std::move(attempts_[i]));
-        }
-    }
-    // Release the winner from attempts_ so the destructor doesn't double-
-    // free its QoreObjects — the connection members hold them now.
-    attempts_.clear();
-    lk.unlock();
-
-    ExceptionSink xsink;
-    for (auto& loser : losers) {
-        if (loser) {
-            clearAttempt(*loser, &xsink);
-        }
-    }
-    xsink.clear();
-
-    setDestinations(std::move(winner_destinations));
-
-    // Finally, signal the base-class condition variable so the caller's
-    // waitForReadyOrError returns success.
-    onConnectionReady();
-}
-
-//! Returns true if a handshake error means that the attempt never reached a server
-/** A send error is one only before the QUIC handshake completed: raised while the HTTP/3 layer is set up after it,
-    the server was reached (issue #5944)
-*/
-static bool is_unreached_error(const char* err, bool handshake_complete) {
-    if (!strcmp(err, "QUIC-SEND-ERROR")) {
-        return !handshake_complete;
-    }
-    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT");
-}
-
-void Http3ClientConnection::onInnerHandshakeFailed(Http3ClientPollOperationPriv* inner,
-        const char* err, const char* desc) {
-    std::unique_lock<std::mutex> lk(attempts_mu_);
-
-    // Record the error details so that, if all attempts fail, the caller sees the failure of the attempt that got
-    // furthest rather than a generic "closed" message: an attempt that reached the server, and failed for example
-    // because its certificate was rejected, explains the failure, while an attempt to another address of the host
-    // that never reached a server (such as an IPv6 address that the server does not listen on) does not
-    const char* new_err = err ? err : "HTTP3-CONNECT-ERROR";
-    bool new_unreached = is_unreached_error(new_err, inner && inner->isHandshakeComplete());
-    if (last_err_.empty() || !new_unreached || last_err_unreached_) {
-        last_err_ = new_err;
-        last_desc_ = desc ? desc : "QUIC handshake failed";
-        last_err_unreached_ = new_unreached;
-    }
-
-    // Mark this attempt finished.  If the winner has already been chosen,
-    // this is just a stale losing-attempt failure — ignore.
-    if (winner_idx_ >= 0) {
-        return;
-    }
-    int remaining = 0;
-    for (auto& a : attempts_) {
-        if (a && a->poll_op_priv == inner) {
-            a->finished = true;
-        }
-        if (a && !a->finished) {
-            ++remaining;
-        }
-    }
-    if (remaining > 0) {
-        // Other attempts are still racing — keep the connection CONNECTING.
-        return;
-    }
-
-    // All attempts have failed.  Move them out of attempts_ under the
-    // lock, then tear down outside the lock.  This (a) releases the UDP
-    // sockets promptly instead of waiting for closeConnection or the
-    // destructor, and (b) nulls the connection's primary-attempt raw
-    // pointers before calling setClosed() — the post-close error
-    // retrieval path (getReferencedErrorInfo → poll_op_priv->getErrorInfo)
-    // still has last_err_/last_desc_ via the base-class error surface,
-    // so callers observing the CLOSED transition see a meaningful
-    // diagnostic.
-    std::vector<std::shared_ptr<Attempt>> losers = std::move(attempts_);
-    attempts_.clear();
-    // Null the primary-attempt pointers on the connection — the primary
-    // is in losers now and about to be torn down, so the raw members
-    // would otherwise dangle.
-    sock_priv = nullptr;
-    sock_obj = nullptr;
-    poll_op_priv = nullptr;
-    poll_op_obj = nullptr;
-    submitted_to_controller = false;
-    lk.unlock();
-
-    ExceptionSink xsink;
-    for (auto& a : losers) {
-        if (a) {
-            clearAttempt(*a, &xsink);
-        }
-    }
-    xsink.clear();
-
-    setClosed();
 }
 
 int Http3ClientConnection::getActiveStreamCount() const {
@@ -814,14 +298,13 @@ int Http3ClientConnection::getActiveStreamCount() const {
     if (!g.acquired()) {
         return 0;
     }
-    // while the connection attempts race, the poll operation is the primary attempt's, which their teardown can
-    // release at any time: it is taken with a reference of its own
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op(getReferencedPollOp());
     return op ? op->getActiveStreamCount() : 0;
 }
 
 Http3ClientPollOperationPriv* Http3ClientConnection::getReferencedPollOp() const {
-    std::lock_guard<std::mutex> lk(attempts_mu_);
+    std::lock_guard<std::mutex> lk(op_mu_);
     if (poll_op_priv) {
         poll_op_priv->ref();
     }
@@ -832,8 +315,7 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -894,8 +376,7 @@ int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired()) {
         action->deref(xsink);
@@ -935,8 +416,7 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
         const QoreHashNode* headers, const void* body, size_t body_len,
         QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -987,8 +467,7 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
         const char* path, const QoreHashNode* headers, bool streaming_recv,
         QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired()) {
         releaseStreamReservation(true);
@@ -1084,8 +563,7 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
 
 void Http3ClientConnection::pushSendData(const void* data, size_t len, ExceptionSink* xsink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -1117,18 +595,70 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
     bool end_stream = (!data || !len);
     if (end_stream) {
         // End-of-body: send empty DATA with end_stream flag
-        sock_priv->sendQuicClientStreamData(streaming_send_stream_id, nullptr, 0, true, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, nullptr, 0, true, xsink);
         streaming_send_stream_id = -1;
         finishStreamingSend();
     } else {
-        sock_priv->sendQuicClientStreamData(streaming_send_stream_id, data, len, false, xsink);
+        sendStreamDataWaitingForDrain(streaming_send_stream_id, data, len, false, xsink);
+    }
+}
+
+void Http3ClientConnection::sendStreamDataWaitingForDrain(int64_t stream_id, const void* data, size_t len,
+        bool end_stream, ExceptionSink* xsink) {
+    // the wait is bounded by the request timeout of stalled time, not of total time: a large body that a slow peer
+    // takes makes progress all the while (as HttpClientIo's Http3ClientConnection::sendStreamData(), issue #6968)
+    int stall_timeout_ms = -1;
+    {
+        AutoLocker al(onclose_lock);
+        if (manager_ && manager_->getOptions().request_timeout_ms > 0) {
+            stall_timeout_ms = manager_->getOptions().request_timeout_ms;
+        }
+    }
+    while (true) {
+        // 1: the stream's send buffer is full and took nothing of the data
+        int rv = sock_priv->sendQuicClientStreamData(stream_id, data, len, end_stream, xsink);
+        if (*xsink || rv != 1) {
+            return;
+        }
+        // the send waits for the buffer to drain and is made again (qore#7465); a send on the I/O thread cannot wait
+        if (qore_on_async_io_thread()) {
+            xsink->raiseException("HTTP3-FLOW-CONTROL", "stream %lld: the send buffer is full; the data was not sent",
+                (long long)stream_id);
+            return;
+        }
+        // the staged data is sent by the I/O thread
+        wakeController();
+        int64_t acked_before = qore_socket_object_quic_client_stream_acked(sock_priv, stream_id, xsink);
+        // 0: drained, 1: timed out, -1: the stream has no data staged any more (sent, or the stream or the
+        // connection ended: a reset or the close of the connection ends the wait at once); the send is made again in
+        // each case, and reports a stream or a connection that ended
+#ifdef DEBUG
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::SendDrainWait, this);
+#endif
+        int rc = *xsink ? -1 : sock_priv->waitForQuicClientStreamDrain(stream_id, stall_timeout_ms, xsink);
+        if (*xsink) {
+            // the wait failed: the thread was cancelled (THREAD-CANCELLED), its Program was interrupted, or the
+            // session is gone; the data was not sent
+            return;
+        }
+        if (rc == 1) {
+            // no drain within the timeout: a stall only if the peer acknowledged nothing of the stream's data
+            int64_t acked_after = qore_socket_object_quic_client_stream_acked(sock_priv, stream_id, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (acked_after <= acked_before) {
+                xsink->raiseException("HTTP3-FLOW-CONTROL", "stream %lld: the peer acknowledged none of the "
+                    "stream's data for %d ms; the data was not sent", (long long)stream_id, stall_timeout_ms);
+                return;
+            }
+        }
     }
 }
 
 void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -1157,8 +687,7 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 
 bool Http3ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
     MethodGuard g(this);
-    // the poll operation is taken with a reference of its own under attempts_mu_: until the connection is ready, it
-    // is the primary connection attempt's, which the attempts' teardown can release at any time
+    // the poll operation is taken with a reference of its own under op_mu_, which guards the members
     Http3PollOperationReaderRef op_ref(getReferencedPollOp());
     if (!g.acquired() || !op_ref) {
         // Already closing: the poll op settles every pending stream on the
@@ -1195,42 +724,13 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     drainInFlight();
     finishStreamingSend();
 
-    // Happy-eyeballs: if we are still racing (no winner chosen yet),
-    // tear down every in-flight attempt.  Move them out of attempts_
-    // under the lock and clear outside it.
-    //
-    // IMPORTANT — dangling-pointer guard: while racing, the connection's
-    // @c poll_op_priv / @c sock_priv / @c poll_op_obj / @c sock_obj
-    // members point into the PRIMARY attempt's tuple (published during
-    // buildAndSubmit so pre-winner closeConnection has something to
-    // cancel).  clearAttempt derefs the loser's QoreObjects, which may
-    // drop the LAST ref and destroy the underlying priv — including its
-    // @c stream_lock mutex.  If the connection's member pointers still
-    // alias that destroyed object when the post-loop code below calls
-    // @c poll_op_priv->disarmConnectionPriv(), the mutex lock asserts
-    // under debug / segfaults under release.  Null the members BEFORE
-    // dropping into the clear loop so the post-loop path skips the
-    // dangling-pointer branch.
-    std::vector<std::shared_ptr<Attempt>> to_clear;
-    // the committed winner's poll operation and socket, read under the lock (nullptr if no winner was committed);
-    // the close is no reader: it runs outside the connection's methods (it waits for them above), so the release
-    // of the operation, which can run its cleanup, is made here
+    // the poll operation and socket, read under the lock; the close is no reader: it runs outside the connection's
+    // methods (it waits for them above), so the release of the operation, which can run its cleanup, is made here
     ReferenceHolder<Http3ClientPollOperationPriv> op(xsink);
     QoreSocketObject* sock = nullptr;
     bool submitted;
     {
-        std::lock_guard<std::mutex> lk(attempts_mu_);
-        if (!attempts_.empty()) {
-            to_clear = std::move(attempts_);
-            attempts_.clear();
-            // nulled under the lock with the attempts moved out: a reader that took the primary attempt's poll
-            // operation under the lock holds a reference of its own
-            poll_op_priv = nullptr;
-            poll_op_obj = nullptr;
-            sock_priv = nullptr;
-            sock_obj = nullptr;
-            submitted_to_controller = false;
-        }
+        std::lock_guard<std::mutex> lk(op_mu_);
         if (poll_op_priv) {
             poll_op_priv->ref();
             op = poll_op_priv;
@@ -1239,16 +739,10 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
         submitted = submitted_to_controller;
         submitted_to_controller = false;
     }
-    for (auto& a : to_clear) {
-        if (a) {
-            clearAttempt(*a, xsink);
-        }
-    }
 
     if (!op) {
-        // Either we never committed a winner (all attempts already torn
-        // down above) or closeConnection was called twice — transition
-        // the base-class state to CLOSED so waiters see the error.
+        // the poll operation was never created — transition the base-class state to CLOSED so waiters see the
+        // error
         setClosed();
         return;
     }
@@ -1314,39 +808,21 @@ void Http3ClientConnection::wakeController() const {
 }
 
 QoreHashNode* Http3ClientConnection::getReferencedErrorInfo() {
-    // the poll operation is taken with a reference of its own under attempts_mu_: while the connection attempts
-    // race, it is the primary attempt's, which their teardown (a failure of all attempts, a winner that is another
-    // attempt, or a close) can release at any time, and this read is not gated by the connection's state
-    ExceptionSink xsink;
+    // the poll operation is taken with a reference of its own under op_mu_, as this read is not gated by the
+    // connection's state; the error of a connection that failed is the error of its connection attempt that got
+    // furthest (see SocketQuicClientPollOperation)
     Http3PollOperationReaderRef op;
-    std::unique_lock<std::mutex> lk(attempts_mu_);
-    if (poll_op_priv) {
+    {
+        std::lock_guard<std::mutex> lk(op_mu_);
+        if (!poll_op_priv) {
+            return nullptr;
+        }
         poll_op_priv->ref();
         op = poll_op_priv;
-        lk.unlock();
+    }
 #ifdef DEBUG
-        // a test holds the thread here, with the operation taken, while another thread tears the attempt down
-        qore_dbg_http_hold(QoreDbgHttpHoldPoint::TeardownRead, this);
+    // a test holds the thread here, with the operation taken, while another thread closes the connection
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::TeardownRead, this);
 #endif
-        return op->getErrorInfo();
-    }
-    // Happy-eyeballs all-fail path: attempts_ has been torn down and
-    // poll_op_priv nulled.  Surface the cached error from the most
-    // recent handshake failure.  Use ReferenceHolder so a bad_alloc
-    // thrown by the intermediate QoreStringNode allocations does not
-    // leak the hash.
-    if (last_err_.empty() && last_desc_.empty()) {
-        return nullptr;
-    }
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
-    h->setKeyValue("err",
-        new QoreStringNode(last_err_.empty()
-            ? "HTTP3-CONNECT-ERROR" : last_err_.c_str()),
-        &xsink);
-    h->setKeyValue("desc",
-        new QoreStringNode(last_desc_.empty()
-            ? "QUIC handshake failed" : last_desc_.c_str()),
-        &xsink);
-    xsink.clear();
-    return h.release();
+    return op->getErrorInfo();
 }

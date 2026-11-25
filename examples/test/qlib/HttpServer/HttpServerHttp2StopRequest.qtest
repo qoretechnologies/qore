@@ -633,7 +633,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         # :method POST (static index 3), :scheme http (static index 6), :path and :authority as literals with
         # indexed names (static indexes 4 and 1)
         binary block = <8386> + <04> + byte(path.size()) + binary(path)
-            + <01> + byte(9) + binary("localhost");
+            + <01> + byte(9) + binary("127.0.0.1");
         s.send(frame(HEADERS, END_HEADERS | (end_stream ? END_STREAM : 0), sid, block));
     }
 

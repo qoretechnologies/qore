@@ -78,6 +78,15 @@ module GoogleCloudStorageDataProvider {
                 "Authentication uses a GCP service account or Application Default Credentials.\n\n"
                 "Google Cloud and Google Cloud Storage are trademarks of Google LLC",
             "scheme": "gcs",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://cloud.google.com/storage/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": GoogleCloudStorageLogo,
             "logo_file_name": "google-cloud-storage-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -121,12 +130,14 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/list-buckets",
             "action": "list-buckets",
+            "billing": <DataProviderBillingInfo>{"unit": "request"},
             "display_name": "List Buckets",
             "short_desc": "List the buckets in the project",
             "desc": "Lists the buckets in the connection's GCP project.\n\n"
                 "A listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it "
                 "back in `page_token` to retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Buckets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageListBucketsRequestDataType::Fields{"prefix",}, {
@@ -143,11 +154,13 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/get-bucket",
             "action": "get-bucket",
+            "billing": <DataProviderBillingInfo>{"unit": "request"},
             "display_name": "Get Bucket",
             "short_desc": "Get a bucket's metadata",
             "desc": "Retrieves a bucket's metadata: its location, storage class, versioning and "
                 "uniform bucket-level access settings, labels, and timestamps.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Buckets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageGetBucketRequestDataType::Fields{"bucket",}, {
@@ -165,6 +178,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/list-objects",
             "action": "list-objects",
+            "billing": <DataProviderBillingInfo>{"unit": "request"},
             "display_name": "List Objects",
             "short_desc": "List the objects in a bucket",
             "desc": "Lists the objects in a bucket.\n\n"
@@ -175,6 +189,7 @@ module GoogleCloudStorageDataProvider {
                 "A listing is capped at `1000` objects; when a `next_page_token` is returned, pass it "
                 "back in `page_token` to retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageListObjectsRequestDataType::Fields{"bucket",}, {
@@ -197,11 +212,13 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/get-object-metadata",
             "action": "get-object-metadata",
+            "billing": <DataProviderBillingInfo>{"unit": "request"},
             "display_name": "Get Object Metadata",
             "short_desc": "Get an object's metadata without its content",
             "desc": "Retrieves an object's metadata — size, content type, checksums, storage class, "
                 "generation, and user-defined metadata — without transferring its content.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageGetObjectMetadataRequestDataType::Fields{"bucket", "object"}, {
@@ -219,6 +236,7 @@ module GoogleCloudStorageDataProvider {
             "app": GoogleCloudStorageDataProvider::AppName,
             "path": "/update-object-metadata",
             "action": "update-object-metadata",
+            "billing": <DataProviderBillingInfo>{"unit": "request"},
             "display_name": "Update Object Metadata",
             "short_desc": "Update an object's metadata without rewriting it",
             "desc": "Updates an object's metadata in place, without re-uploading its content: the "
@@ -292,6 +310,7 @@ module GoogleCloudStorageDataProvider {
                 "`object` is used verbatim. Set `generation` to download a specific version of an "
                 "object in a bucket with versioning enabled.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Objects",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 GoogleCloudStorageDownloadObjectRequestDataType::Fields{"bucket", "object"}, {

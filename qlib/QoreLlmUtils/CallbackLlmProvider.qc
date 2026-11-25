@@ -39,6 +39,29 @@ public namespace QoreLlmUtils {
     event — so callers always see a coherent event sequence.
 */
 public class CallbackLlmProvider inherits AbstractLlmProvider {
+    public {
+        #! The key of an exception argument that makes a callback exception reach the caller unchanged
+        /** An exception thrown by @ref LlmBackendConfig::api_callback or @ref LlmBackendConfig::api_stream_callback
+            is raised to the caller as @c LLM-ERROR, with the callback's exception as its argument.  An exception
+            whose argument is a hash with this key set to @ref True is raised to the caller exactly as the callback
+            raised it (its code, description, argument and location) instead: a callback can stop the call with a
+            control signal of its own (for example that it hands the call over to another thread), and the code that
+            called the backend receives it as such.  @c LLM-CANCELLED from the stream callback is raised unchanged as
+            before.
+
+            @par Example
+            @code{.py}
+throw "MY-HANDOVER", "the call continues elsewhere", {CallbackLlmProvider::PassThroughKey: True, "id": id};
+            @endcode
+        */
+        const PassThroughKey = "llm_callback_pass_through";
+    }
+
+    #! Returns @ref True if a callback's exception is raised to the caller unchanged (@ref PassThroughKey)
+    static bool isPassThrough(hash<ExceptionInfo> ex) {
+        return ex.arg.typeCode() == NT_HASH && ex.arg{PassThroughKey} === True;
+    }
+
     private {
         #! The caller-supplied dispatcher
         code<hash<auto>(string, string, hash<auto>)> api_callback;
@@ -103,6 +126,9 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         try {
             resp = api_callback(callback_method, callback_path, body);
         } catch (hash<ExceptionInfo> ex) {
+            if (isPassThrough(ex)) {
+                rethrow;
+            }
             throw "LLM-ERROR", sprintf("callback API call failed: %s",
                 ex.desc), ex;
         }
@@ -122,6 +148,9 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         try {
             resp = api_callback(callback_method, callback_path, body);
         } catch (hash<ExceptionInfo> ex) {
+            if (isPassThrough(ex)) {
+                rethrow;
+            }
             checkRequestCancelled(opts);
             throw "LLM-ERROR", sprintf("callback chat request failed: %s",
                 ex.desc), ex;
@@ -266,7 +295,7 @@ backend.chatStream(history,
                     }
                 });
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "LLM-CANCELLED") {
+            if (ex.err == "LLM-CANCELLED" || isPassThrough(ex)) {
                 rethrow;
             }
             throw "LLM-ERROR", sprintf("callback chat stream failed: %s",

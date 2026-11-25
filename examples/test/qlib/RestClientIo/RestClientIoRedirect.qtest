@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - cookies are scoped by host name, not by port, so server b is reached with the name localhost as another host than server a (127.0.0.1); server b listens on both loopback addresses with the same port
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -212,10 +213,10 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
         server_b.setDefaultHandler("b", peer_b);
         url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1", "service": 0}).port);
-        # server b is reached with another host name, so that cookies of server a are not sent to it
-        url_b = sprintf("http://localhost:%d", server_b.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
-            "service": 0}).port);
+        # server b is reached with another host name, so that cookies of server a are not sent to it; "localhost"
+        # resolves to ::1 first, so server b listens on both loopback addresses with the same port, and a client
+        # cannot reach a server of a test running beside this one on ::1 (qore#7469)
+        url_b = sprintf("http://localhost:%d", addLoopbackListeners(server_b));
         on_exit {
             server_a.stop();
             server_b.stop();
@@ -406,6 +407,29 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
         on_exit rest2.close();
         RestFuture f = rest2.restGetAsync("/pt");
         assertThrows("REST-RESPONSE-ERROR", "HTTP 302", \f.get());
+    }
+
+    #! adds listeners on 127.0.0.1 and, if the host has IPv6 on its loopback interface, on ::1 with the same port
+    private static int addLoopbackListeners(HttpServer server) {
+        for (int attempt = 1; ; ++attempt) {
+            hash<auto> v6;
+            try {
+                v6 = server.addListener(<HttpListenerOptionInfo>{"node": "::1", "service": 0});
+            } catch (hash<ExceptionInfo> ex) {
+                # without IPv6 on the loopback interface, no server can listen on ::1
+                return server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+            }
+            try {
+                server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": v6.port});
+                return v6.port;
+            } catch (hash<ExceptionInfo> ex) {
+                server.stopListenerID(v6.id);
+                # the port number is in use on 127.0.0.1: another one is tried
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == 20) {
+                    rethrow;
+                }
+            }
+        }
     }
 
     testCookies() {

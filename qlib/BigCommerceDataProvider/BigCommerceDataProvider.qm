@@ -55,6 +55,15 @@ module BigCommerceDataProvider {
                 "This integration supports customers, products, orders, carts, "
                 "shipments, blog posts, and customer addresses.",
             "scheme": "bigcommerceres",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "bigcommerce.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.bigcommerce.com/docs/start/best-practices/api-rate-limits",
+                "effective_date": 2026-11-25,
+            },
             "logo": BigCommerceLogo,
             "logo_file_name": "bigcommerce-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -118,6 +127,7 @@ module BigCommerceDataProvider {
             "short_desc": "Get a single customer by ID",
             "desc": "Retrieve a single customer by ID from BigCommerce",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigCommerceGetCustomerRequestDataType::Fields),
             "output_type": new BigCommerceCustomerDataType(),
@@ -363,6 +373,7 @@ module BigCommerceDataProvider {
             "short_desc": "Get a single product by ID",
             "desc": "Retrieve a single product by ID from BigCommerce",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigCommerceGetProductRequestDataType::Fields),
             "output_type": new BigCommerceProductDataType(),
@@ -512,6 +523,7 @@ module BigCommerceDataProvider {
             "short_desc": "Get a single blog post by ID",
             "desc": "Retrieve a single blog post by ID from BigCommerce",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigCommerceGetBlogPostRequestDataType::Fields),
             "output_type": new BigCommerceBlogPostDataType(),
@@ -595,6 +607,7 @@ module BigCommerceDataProvider {
             "short_desc": "Get a single order by ID",
             "desc": "Retrieve a single order by ID from BigCommerce",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigCommerceGetOrderRequestDataType::Fields),
             "output_type": new BigCommerceOrderDataType(),
@@ -754,6 +767,7 @@ module BigCommerceDataProvider {
             "short_desc": "Get a single shipment by ID",
             "desc": "Retrieve a single shipment by order ID and shipment ID from BigCommerce",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BigCommerceGetShipmentRequestDataType::Fields),
             "output_type": new BigCommerceShipmentDataType(),

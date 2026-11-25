@@ -1,0 +1,735 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - accepted sockets, a shared native socket between two Socket objects, and sandboxed code
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ServerSentEventHandler
+
+%exec-class HttpServerConnectionSocketGuardTest
+
+#! the connection socket of a server is refused to sandboxed code, also when a trusted handler passes it on (qore#7338)
+/** The server marks the socket of each connection that it accepts (Socket::setServerOwned()): sandboxed code may not
+    call its methods that read, write, change or poll the connection, and code that a sandbox's policy governs may not
+    close it or shut it down (a policy barrier lifts that); the alias of the socket, which the server gives the sockets
+    of the requests of its handlers, is not guarded.
+*/
+
+#! the code of the tenant: each function returns what it did, or the error
+const TenantCode = "%modern
+string sub why(hash<ExceptionInfo> ex) {
+    return ex.err;
+}
+string sub use(Socket s, string op) {
+    try {
+        switch (op) {
+            case \"recv\": s.recv(1, 100); return \"OK\";
+            case \"send\": s.send(\"x\"); return \"OK\";
+            case \"readHTTPHeader\": s.readHTTPHeader(100); return \"OK\";
+            case \"setNoDelay\": s.setNoDelay(True); return \"OK\";
+            case \"isDataAvailable\": s.isDataAvailable(0); return \"OK\";
+            case \"close\": s.close(); return \"OK\";
+            case \"shutdown\": s.shutdown(); return \"OK\";
+            case \"getPeerInfo\": s.getPeerInfo(); return \"OK\";
+            case \"isOpen\": s.isOpen(); return \"OK\";
+            case \"getServerAlias\": s.getServerAlias(); return \"OK\";
+            case \"getServerSocket\": s.getServerSocket(); return \"OK\";
+        }
+        return \"UNKNOWN \" + op;
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# acts on the socket through other classes and functions
+string sub use_other(Socket s, string op) {
+    try {
+        switch (op) {
+            case \"pipeline-send\": {
+                PollPipeline pp(s);
+                pp.addSend(\"PWNED\");
+                pp.addDeliverResult();
+                AsyncIoController::exec(<SocketPollOperationInfo>{\"sock\": s, \"spop\": pp, \"owner\": \"x\"});
+                return \"OK\";
+            }
+            case \"submit\": {
+                SocketPollOperation op(s, \"connect\", {\"url\": \"127.0.0.1:1\"});
+                AsyncIoController::exec(<SocketPollOperationInfo>{\"sock\": s, \"spop\": op, \"owner\": \"x\"});
+                return \"OK\";
+            }
+            case \"poll\": Socket::poll((<SocketPollInfo>{\"socket\": s, \"events\": SOCK_POLLIN},), 0); return \"OK\";
+            case \"cancel\": AsyncIoController::cancel(s); return \"OK\";
+            case \"cancelAndClose\": AsyncIoController::cancelAndClose(s); return \"OK\";
+            case \"isWriteFinished\": s.isWriteFinished(0); return \"OK\";
+            case \"setServerOwned\": return s.setServerOwned() ? \"MARKED\" : \"NOT MARKED\";
+        }
+        return \"UNKNOWN \" + op;
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# wakes the controller's operation of an object
+string sub wake(object x) {
+    try {
+        AsyncIoController::wakeSocket(x);
+        return \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# an operation of the tenant's own socket that has the controller poll another socket
+class TenantOp inherits AbstractPollOperation {
+    public {
+        Socket other;
+        int n;
+    }
+    constructor(Socket other) {
+        self.other = other;
+    }
+    string getGoal() {
+        return \"probe\";
+    }
+    string getState() {
+        return n >= 3 ? \"done\" : \"waiting\";
+    }
+    bool goalReached() {
+        return n >= 3;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        if (++n >= 3) {
+            return;
+        }
+        return <SocketPollInfo>{\"events\": SOCK_POLLIN, \"socket\": other};
+    }
+}
+string sub poll_other(Socket other, Socket own) {
+    try {
+        TenantOp op(other);
+        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{\"sock\": own, \"spop\": op, \"owner\": \"t\"});
+        hash<auto> res = q.get(15000);
+        return res.ex.err ?? \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+# calls trusted code that the host gave
+string sub call(code c) {
+    try {
+        c();
+        return \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+";
+
+#! the tenant's own server: serves a request of its own client
+const TenantServerCode = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+class H inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface l, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{\"code\": 200, \"body\": \"tenant \" + cx.url.path};
+    }
+}
+string sub run(timeout hang_guard) {
+    HttpServer server(<HttpServerOptionInfo>{});
+    on_exit server.stop();
+    server.setDefaultHandler(\"h\", new H());
+    int port = server.addListener(<HttpListenerOptionInfo>{\"node\": \"127.0.0.1\", \"service\": 0}).port;
+    server.waitForAsyncIo();
+    Socket c();
+    c.connect(\"127.0.0.1:\" + port, hang_guard);
+    on_exit c.close();
+    c.send(\"GET /x HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n\");
+    hash<auto> h = c.readHTTPHeader(hang_guard);
+    return sprintf(\"%d %s\", h.status_code, c.recv(h.\"content-length\".toInt(), hang_guard));
+}
+";
+
+#! the tenant's own server with a handler that the host gives
+const TenantServerHandlerCode = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+string sub run(AbstractHttpRequestHandler h, timeout hang_guard) {
+    HttpServer server(<HttpServerOptionInfo>{});
+    on_exit server.stop();
+    server.setDefaultHandler(\"h\", h);
+    int port = server.addListener(<HttpListenerOptionInfo>{\"node\": \"127.0.0.1\", \"service\": 0}).port;
+    server.waitForAsyncIo();
+    Socket c();
+    c.connect(\"127.0.0.1:\" + port, hang_guard);
+    on_exit c.close();
+    c.send(\"GET /x HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n\");
+    hash<auto> h = c.readHTTPHeader(hang_guard);
+    return sprintf(\"%d %s\", h.status_code, c.recv(h.\"content-length\".toInt(), hang_guard));
+}
+";
+
+#! the tenant's code that feeds an accept result of its own to the async controller of an HTTP server
+const TenantAcceptCode = "%modern
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+class FakeAcceptOp inherits AbstractPollOperation {
+    private {
+        Socket s;
+    }
+    constructor(Socket s) {
+        self.s = s;
+    }
+    string getGoal() {
+        return \"accepted\";
+    }
+    string getState() {
+        return \"accepted\";
+    }
+    bool goalReached() {
+        return True;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+    }
+    auto getOutput() {
+        return {\"sock\": s, \"http_version\": \"1.1\"};
+    }
+}
+class TenantTarget inherits HttpAsyncTarget {
+    public {
+        Queue q();
+    }
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        Socket a = info.sock;
+        string r;
+        try {
+            a.send(\"PWNED\");
+            r = \"sent\";
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        q.push(r);
+        return <HttpRequestResultInfo>{\"close\": True};
+    }
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+    onError(Socket sock, hash<ExceptionInfo> ex, *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+        q.push(\"error \" + ex.err);
+    }
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+    }
+    onWebSocketFrame(Socket sock, hash<WebSocketFrameInfo> frame, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+    onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+    }
+}
+our HttpAsyncSocketIoController ctrl;
+our TenantTarget target;
+string sub feed(Socket victim) {
+    try {
+        ctrl = new HttpAsyncSocketIoController(AsyncSocketIo::getGlobalAsyncIoController());
+        target = new TenantTarget();
+        ctrl.handleAcceptResult(<SocketPollResultInfo>{\"spop\": new FakeAcceptOp(victim)}, new Socket(), target,
+            False, NOTHING, NOTHING, \"1.1\", \"x\");
+        return \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub got(timeout hang_guard) {
+    try {
+        return target.q.get(hang_guard);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+#! a handler of the host that does I/O on the socket that it gets
+class SocketUsingHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string r;
+        try {
+            r = sprintf("%s timeout=%d", s.className(), s.setSendTimeout(5s));
+        } catch (hash<ExceptionInfo> ex) {
+            r = ex.err;
+        }
+        return <HttpResponseInfo>{"code": 200, "body": r};
+    }
+}
+
+#! the tenant's SSE handler: sends an event to each connection when it is registered
+const TenantSseCode = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+%requires ServerSentEventHandler
+class TenantSse inherits ServerSentEventHandler::ServerSentEventHandler {
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({\"heartbeat\": 0}) {
+    }
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{\"event\": \"hello\", \"data\": \"tenant\"});
+    }
+}
+AbstractHttpRequestHandler sub get_handler() {
+    return new TenantSse();
+}
+";
+
+#! a trusted WebSocket handler: reports the poll operation of its connection in the context
+class ContextWsHandler inherits WebSocketHandler {
+    public {
+        Queue to_test();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        auto op = cx."header-info".ws_poll_op;
+        string sock;
+        try {
+            sock = call_object_method(op, "getSocket").className();
+        } catch (hash<ExceptionInfo> ex) {
+            sock = ex.err;
+        }
+        to_test.push(sprintf("%s %s", op ? op.className() : "none", sock));
+        return new EchoWsConnection(self);
+    }
+}
+
+#! echoes the messages of its connection
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("echo " + msg);
+    }
+}
+
+#! a class that inherits another pollable class before Socket
+class FileSocket inherits ReadOnlyFile, Socket {
+    constructor() : ReadOnlyFile(get_script_path()) {
+    }
+}
+
+#! a trusted handler that gives the socket of its connection to the tenant's code
+class LeakingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Program tenant;
+        hash<string, string> results;
+    }
+
+    constructor(Program tenant) {
+        self.tenant = tenant;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        results.class = s.className();
+        foreach string op in ("recv", "send", "readHTTPHeader", "setNoDelay", "isDataAvailable", "close") {
+            results{op} = tenant.callFunction("use", s, op);
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "served /" + cx.url.path};
+    }
+}
+
+class HttpServerConnectionSocketGuardTest inherits QUnit::Test {
+    public {
+        const HangGuard = 15s;
+    }
+
+    constructor() : QUnit::Test("HTTP server connection socket guard", "1.0", \ARGV) {
+        addTestCase("a server's connection socket is refused to sandboxed code", \guardTest());
+        addTestCase("close and shutdown are refused to code that a sandbox's policy governs", \closeTest());
+        addTestCase("other classes and functions refuse a server's connection socket to sandboxed code",
+            \otherClassesTest());
+        addTestCase("a class that inherits another pollable class before Socket", \fileSocketTest());
+        addTestCase("an operation of sandboxed code cannot have the connection socket polled", \pollOtherTest());
+        addTestCase("the alias of a connection socket", \aliasTest());
+        addTestCase("the lifetime of a connection socket and its alias", \lifetimeTest());
+        addTestCase("a trusted handler cannot pass the connection socket to sandboxed code", \handlerTest());
+        addTestCase("a server that sandboxed code runs serves its requests", \sandboxedServerTest());
+        addTestCase("the connections of a listener added for sandboxed code are the server's", \tenantListenerTest());
+        addTestCase("sandboxed code cannot have the server make the alias of a connection socket", \acceptGadgetTest());
+        addTestCase("a handler that uses its socket in a server that sandboxed code runs", \tenantServerSocketTest());
+        addTestCase("the context of a WebSocket handler gives no socket of the connection", \wsContextTest());
+        addTestCase("the event stream of a sandboxed SSE handler", \sandboxedSseTest());
+        set_return_value(main());
+    }
+
+    #! sandboxed code may not use a server's connection socket, other than for information; trusted code may
+    guardTest() {
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        Socket s = conn.server;
+        s.setServerOwned();
+        assertTrue(s.isServerOwned(), "marked");
+        Program p = getTenantProgram();
+        foreach string op in ("recv", "send", "readHTTPHeader", "setNoDelay", "isDataAvailable", "close",
+                "shutdown") {
+            assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("use", s, op), op);
+        }
+        foreach string op in ("getPeerInfo", "isOpen") {
+            assertEq("OK", p.callFunction("use", s, op), op);
+        }
+        # trusted code uses it as before
+        s.send("hello");
+        assertEq("hello", conn.client.recv(5, HangGuard), "trusted code sends");
+        conn.client.send("x");
+        assertEq("x", s.recv(1, HangGuard), "trusted code reads");
+        assertTrue(s.isOpen(), "the connection is open");
+        # a socket that is not marked is not refused
+        hash<auto> other = getConnection();
+        on_exit other.client.close();
+        other.client.send("y");
+        assertEq("OK", p.callFunction("use", other.server, "recv"), "a socket that is not a server's");
+        assertFalse(other.server.isServerOwned(), "not marked");
+    }
+
+    #! the classes and functions that act on a socket refuse the connection socket of a server to sandboxed code: the
+    #! poll operations and pipelines, the I/O controller, Socket::poll(), and isWriteFinished()
+    otherClassesTest() {
+        Program p = getTenantProgram();
+        foreach string op in ("pipeline-send", "submit", "poll", "cancel", "cancelAndClose", "isWriteFinished") {
+            hash<auto> conn = getConnection();
+            on_exit conn.client.close();
+            Socket s = conn.server;
+            s.setServerOwned();
+            conn.client.send("D");
+            assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("use_other", s, op), op);
+            # the connection is the server's: open, and its data unread
+            assertTrue(s.isOpen(), op + ": open");
+            assertEq("D", s.recv(1, HangGuard), op + ": the data is the server's");
+            assertFalse(conn.client.isDataAvailable(0), op + ": nothing was sent");
+        }
+        # sandboxed code does not mark a socket that it was given: a server that sandboxed code runs is its own
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        assertEq("NOT MARKED", p.callFunction("use_other", conn.server, "setServerOwned"),
+            "no mark by sandboxed code");
+        assertFalse(conn.server.isServerOwned(), "not marked");
+    }
+
+    #! the guard of a class that inherits another pollable class before Socket takes the object's Socket data
+    fileSocketTest() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        FileSocket x();
+        x.connect(sprintf("127.0.0.1:%d", listener.getSocketInfo().port), HangGuard);
+        Socket peer = listener.accept(HangGuard);
+        on_exit peer.close();
+        x.setServerOwned();
+        Program p = getTenantProgram();
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("wake", x), "the I/O controller");
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("use", x, "recv"), "the socket's own method");
+    }
+
+    #! an operation that sandboxed code submits for its own socket cannot have the controller poll the connection
+    #! socket of a server
+    pollOtherTest() {
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        conn.server.setServerOwned();
+        hash<auto> own = getConnection();
+        on_exit own.client.close();
+        Program p = getTenantProgram();
+        conn.client.send("D");
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("poll_other", conn.server, own.server),
+            "the operation fails");
+        assertEq("D", conn.server.recv(1, HangGuard), "the data is the server's");
+    }
+
+    #! close() and shutdown() are refused to code that a sandbox's policy governs; a policy barrier lifts it
+    closeTest() {
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        Socket s = conn.server;
+        s.setServerOwned();
+        Program p = getTenantProgram();
+        # trusted code that the tenant calls is governed by the tenant's sandbox
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("call", sub () { s.close(); }), "close for the tenant");
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("call", sub () { s.shutdown(); }),
+            "shutdown for the tenant");
+        assertTrue(s.isOpen(), "the connection is open");
+        # trusted infrastructure closes it under a policy barrier on behalf of the tenant; the code that the barrier
+        # runs is made by trusted code before it enters the sandbox
+        code closer = sub () { s.close(); };
+        code barriered = sub () { SandboxManager::callWithSystemPolicy(closer); };
+        assertEq("OK", p.callFunction("call", barriered), "close under a policy barrier");
+        assertFalse(s.isOpen(), "the connection is closed");
+    }
+
+    #! the alias of the connection socket is made once and is not guarded; sandboxed code may not get it
+    aliasTest() {
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        Socket s = conn.server;
+        assertThrows("SOCKET-SERVER-OWNED-ERROR", \s.getServerAlias(), (), "a socket that is not marked");
+        s.setServerOwned();
+        Socket alias = s.getServerAlias();
+        assertThrows("SOCKET-SERVER-OWNED-ERROR", \s.getServerAlias(), (), "the alias is made once");
+        assertNeq(alias.uniqueHash(), s.uniqueHash(), "another object");
+        assertFalse(alias.isServerOwned(), "the alias is not guarded");
+        assertTrue(alias.isServerAlias(), "the alias");
+        assertFalse(s.isServerAlias(), "not the alias");
+        assertEq(s.uniqueHash(), alias.getServerSocket().uniqueHash(), "the connection socket from its alias");
+        assertThrows("SOCKET-SERVER-OWNED-ERROR", \s.getServerSocket(), (), "only from the alias");
+        assertThrows("SOCKET-SERVER-OWNED-ERROR", \alias.setServerOwned(), (), "an alias cannot be marked");
+        assertThrows("SOCKET-SERVER-OWNED-ERROR", \alias.getServerAlias(), (), "an alias has no alias");
+        Program p = getTenantProgram();
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("use", s, "getServerAlias"),
+            "sandboxed code cannot get the alias");
+        assertEq("SOCKET-SERVER-OWNED-ERROR", p.callFunction("use", alias, "getServerSocket"),
+            "sandboxed code cannot get the connection socket from the alias");
+        # sandboxed code may use the alias: the same connection
+        conn.client.send("x");
+        assertEq("OK", p.callFunction("use", alias, "recv"), "the alias reads");
+        assertEq("OK", p.callFunction("use", alias, "send"), "the alias sends");
+        assertEq("x", conn.client.recv(1, HangGuard), "the client gets what the alias sent");
+        # a close through one object is seen by the other
+        alias.close();
+        assertFalse(s.isOpen(), "closed through the alias");
+    }
+
+    #! destroying either object keeps the connection open for the other
+    lifetimeTest() {
+        # the connection socket first
+        {
+            hash<auto> conn = getConnection();
+            on_exit conn.client.close();
+            Socket s = conn.server;
+            s.setServerOwned();
+            Socket alias = s.getServerAlias();
+            delete s;
+            remove conn.server;
+            alias.send("a");
+            assertEq("a", conn.client.recv(1, HangGuard), "the alias after the connection socket");
+            conn.client.send("b");
+            assertEq("b", alias.recv(1, HangGuard), "the alias reads after the connection socket");
+            assertEq(NOTHING, alias.getServerSocket(), "the connection socket was deleted");
+        }
+        # the alias first
+        {
+            hash<auto> conn = getConnection();
+            on_exit conn.client.close();
+            Socket s = conn.server;
+            s.setServerOwned();
+            Socket alias = s.getServerAlias();
+            delete alias;
+            s.send("c");
+            assertEq("c", conn.client.recv(1, HangGuard), "the connection socket after the alias");
+            # the alias is made once: no other one when the first one is gone
+            assertThrows("SOCKET-SERVER-OWNED-ERROR", \s.getServerAlias(), (), "no alias after the first one");
+        }
+        # the alias keeps the connection socket: the connection is open while the alias exists
+        {
+            hash<auto> conn = getConnection();
+            on_exit conn.client.close();
+            Socket alias;
+            {
+                Socket s = remove conn.server;
+                s.setServerOwned();
+                alias = s.getServerAlias();
+            }
+            Socket s = alias.getServerSocket();
+            assertTrue(s.isServerOwned(), "the connection socket from the alias");
+            s.send("e");
+            assertEq("e", conn.client.recv(1, HangGuard), "the connection socket works");
+        }
+    }
+
+    #! a trusted handler that does not ask for the socket of its request and passes the connection's socket to
+    #! sandboxed code: the code cannot use the connection, and the server answers the request and the next one
+    handlerTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        Program p = getTenantProgram();
+        LeakingHandler handler(p);
+        server.setHandler("leak", "", NOTHING, handler);
+        server.setDefaultHandler("leak", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        Socket c();
+        c.connect("127.0.0.1:" + port, HangGuard);
+        on_exit c.close();
+        c.send("GET /first HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        assertEq("served /first", readResponse(c), "the first response");
+        foreach string op in ("recv", "send", "readHTTPHeader", "setNoDelay", "isDataAvailable", "close") {
+            assertEq("SOCKET-SERVER-OWNED-ERROR", handler.results{op}, op);
+        }
+        c.send("GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served /second", readResponse(c), "the next request is served");
+    }
+
+    #! returns a sandboxed Program with the tenant's code
+    private Program getTenantProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantCode, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! returns a connected pair of sockets on the local host: "client" and the accepted "server"
+    private hash<auto> getConnection() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", listener.getSocketInfo().port), HangGuard);
+        Socket server = listener.accept(HangGuard);
+        return {"client": client, "server": server};
+    }
+
+    #! reads a response with a Content-Length and returns its body
+    private static string readResponse(Socket c) {
+        hash<auto> h = c.readHTTPHeader(HangGuard);
+        int len = h."content-length".toInt();
+        return len ? c.recv(len, HangGuard) : "";
+    }
+
+    #! a server that sandboxed code runs is its own: its connection's socket is not marked (qore#7338)
+    sandboxedServerTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantServerCode, "tenant-server");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        assertEq("200 tenant x", p.callFunction("run", HangGuard), "the tenant's server serves the request");
+    }
+
+    #! a listener that trusted code adds while it runs for sandboxed code accepts its connections for that code; the
+    #! server marks their sockets all the same (qore#7338)
+    tenantListenerTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantCode, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+
+        LeakingHandler handler(p);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("leak", handler);
+        int port;
+        code add = sub () {
+            port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        };
+        assertEq("OK", p.callFunction("call", add), "trusted code adds a listener for the tenant");
+        server.waitForAsyncIo();
+
+        Socket c();
+        c.connect("127.0.0.1:" + port, HangGuard);
+        on_exit c.close();
+        c.send("GET /tenant-listener HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> hdr = c.readHTTPHeader(HangGuard);
+        assertEq(200, hdr.status_code, "the request is served");
+        assertEq("served /tenant-listener", c.recv(hdr."content-length".toInt(), HangGuard), "the response is intact");
+        # the request is served for the tenant: the handler gets the socket of its request, which acts on the
+        # connection for the request only, never the connection's socket
+        assertEq("Http1HandlerSocket", handler.results.class, "the handler gets the socket of its request");
+    }
+
+    #! the alias of a connection socket is made once: sandboxed code that gives a server's connection socket to the
+    #! async controller of an HTTP server as an accepted connection gets no alias of it (qore#7338)
+    acceptGadgetTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantAcceptCode, "tenant-accept");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        Socket s = conn.server;
+        s.setServerOwned();
+        # the server's alias is gone, the connection is open
+        {
+            Socket alias = s.getServerAlias();
+        }
+        p.callFunction("feed", s);
+        conn.client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        string got = p.callFunction("got", 2s);
+        assertNeq("sent", got, "the tenant cannot write to the connection: " + got);
+        assertFalse(conn.client.isDataAvailable(0), "nothing was sent");
+        assertTrue(s.isServerOwned(), "the connection socket is the server's");
+    }
+
+    #! a handler that does I/O on the socket that it gets works in a server that sandboxed code runs: the request,
+    #! which is served for sandboxed code, gets a socket of its own (qore#7338)
+    tenantServerSocketTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantServerHandlerCode, "tenant-server-handler");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        assertEq("200 Http1HandlerSocket timeout=0", p.callFunction("run", new SocketUsingHandler(), HangGuard),
+            "the handler uses the socket of its request");
+    }
+
+    #! the server's poll operation of a WebSocket connection, whose socket is the server's alias of the connection's
+    #! socket, is given to a handler only as a handle, which gives no socket (qore#7338)
+    wsContextTest() {
+        ContextWsHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setHandler("ws", "^ws", NOTHING, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, {"url": sprintf("ws://127.0.0.1:%d/ws", port), "timeout": HangGuard});
+        wsc.connect();
+        on_exit wsc.disconnect();
+        assertEq("HttpWebSocketPollOperationHandle METHOD-DOES-NOT-EXIST", handler.to_test.get(HangGuard),
+            "the context has a handle of the poll operation, which gives no socket");
+        wsc.send("hello");
+        assertEq("echo hello", msgs.get(HangGuard), "the connection works");
+    }
+
+    #! the event stream of a sandboxed SSE handler works: the server writes it through its alias (qore#7338)
+    sandboxedSseTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSseCode, "tenant-sse");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        AbstractHttpRequestHandler handler = p.callFunction("get_handler");
+
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("sse", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+
+        Socket c();
+        c.connect("127.0.0.1:" + port, HangGuard);
+        on_exit c.close();
+        c.send("GET /events HTTP/1.1\r\nHost: localhost\r\nAccept: text/event-stream\r\n\r\n");
+        hash<auto> hdr = c.readHTTPHeader(HangGuard);
+        assertEq(200, hdr.status_code, "the stream is accepted");
+        # the event's data is serialized as JSON
+        string stream = "";
+        while (stream.find("event: hello\n") < 0) {
+            stream += c.recv(-1, HangGuard);
+        }
+        assertTrue(stream.find("data: \"tenant\"\n") >= 0, "the tenant's event: " + stream);
+    }
+}

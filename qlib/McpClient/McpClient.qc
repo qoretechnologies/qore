@@ -2707,7 +2707,15 @@ public class McpClient {
                 # synchronous request API used to post the answer back would deadlock against
                 # the very request that is waiting for it, and where a slow user callback
                 # would stall event delivery for every other stream.
-                background self.handleServerRequest(msg);
+                # work of the module cleanup at the end of the process that receives the request (the last events of
+                # a canceled stream) hands itself over to that thread (qore#7339); the local reference keeps this
+                # object alive while the thread runs, as the closure does not
+                McpClient client = self;
+                # wrapped here, in this thread, as background evaluates its expression in the new thread
+                code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(sub () {
+                    client.handleServerRequest(msg);
+                });
+                background c();
                 return;
             }
             if (string(msg.id) == string(request_id)) {

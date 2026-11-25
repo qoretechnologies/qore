@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TsoZRtHolder.qm - module of static-teardown-order.qtest: loads TsoAStatic at run time, without requiring it, and
+# holds a TsoAStatic::Resource in a static variable of its own class
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TsoZRtHolder {
+    version = "1.0";
+    desc = "module for the static teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TsoZRtHolder {
+    #! holds a TsoAStatic::Resource, created after TsoAStatic was loaded into the Program of this module at run time:
+    #! the module requires TsoAStatic only through that load
+    public class RtHolder {
+        public {
+            static *object resource;
+        }
+    }
+
+    #! loads TsoAStatic at run time into the Program of this module and creates the resource
+    public sub init() {
+        load_module("TsoAStatic");
+        RtHolder::resource = create_object("TsoAStatic::Resource", "run-time resource");
+    }
+}

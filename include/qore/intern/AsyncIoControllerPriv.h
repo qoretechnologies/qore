@@ -79,6 +79,9 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 */
 class AsyncIoRoutedPollable : public AbstractPollableIoObjectBase {
 public:
+    //! The native socket whose descriptor this wrapper polls.
+    DLLLOCAL virtual struct qore_socket_private* getPollSocket() const = 0;
+
     //! Returns the route key that selects the I/O thread of every operation on this object
     DLLLOCAL virtual const std::string& getAsyncIoRouteKey() const = 0;
 
@@ -888,6 +891,19 @@ private:
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
 
+#ifdef DEBUG
+//! Debug builds: if true, the close wakes of registration holds cannot record their socket, as when there is no
+//! memory (see AsyncIoControllerPriv::makeCloseWake()); for the C++ unit tests of the fallback that wakes all of the
+//! I/O thread's operations
+DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_push_fails;
+//! Debug builds: if true, the I/O thread cannot move the sockets of its close wake queue to its wake set, as when
+//! there is no memory; for the C++ unit tests of the fallback that wakes all of the I/O thread's operations
+DLLLOCAL extern std::atomic<bool> qore_dbg_close_wake_drain_fails;
+//! Debug builds: the number of times that the I/O thread's fallback that wakes all of its operations fails, as when
+//! there is no memory, before it runs; for the C++ unit tests of its retry
+DLLLOCAL extern std::atomic<int> qore_dbg_close_wake_all_fails;
+#endif
+
 //! C++ async I/O controller - direct translation of AsyncSocketIoController.qc
 /** This class implements the core async I/O event loop used by HTTP/2 server,
     HTTP/2 client multiplexing, WebSocket, and SSE.
@@ -908,6 +924,7 @@ class AsyncIoControllerPriv : public AbstractPrivateData {
     friend class AsyncIoRegistrationCloseTest;
     friend class AsyncIoClosedPollableTest;
     friend class AsyncIoStaleReadinessTest;
+    friend class AsyncIoDeadlineReadyTest;
     friend class AsyncIoStoppingThreadTest;
     friend class AsyncIoDispatcherCancelTest;
     friend class AsyncIoReleaseCountedScopeTest;
@@ -1226,18 +1243,31 @@ public:
     //! Registers a submission of a poll operation without a C++ poll operation by its Qore object (qore#6531)
     /** The deletion of the object (qoreOpObjectDeleted()) cancels the operation with this controller; the
         registration ends with the operation's cache entry (PollInfo::cleanup()) or the submission that failed
+
+        @return the generation of the registration: an entry of the registry is keyed on the object and a generation,
+        so that the deleted mark of an object never applies to another object made later at its address, whatever
+        registration of the first object is left (qore#7168); the registration is ended and checked with it
     */
-    DLLLOCAL void registerQoreOp(const QoreObject* obj);
+    DLLLOCAL uint64_t registerQoreOp(const QoreObject* obj);
 
     //! Ends a registration made by registerQoreOp()
-    DLLLOCAL static void unregisterQoreOp(const QoreObject* obj);
+    DLLLOCAL static void unregisterQoreOp(const QoreObject* obj, uint64_t gen);
 
     //! Returns true if the Qore object of a registered poll operation was deleted
-    DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj);
+    DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj, uint64_t gen);
 
 #ifdef DEBUG
-    //! Debug-only: the number of objects in the registry of the operations without a C++ poll operation
+    //! Debug-only: the number of entries in the registry of the operations without a C++ poll operation
     DLLLOCAL static size_t dbgQoreOpRegisteredCount();
+
+    //! Debug-only: adds the entry that a registration of a deleted object at the address of \a obj leaves when it is
+    //! not ended (as qore#7167 did): a registration of \a obj is then made in a new generation (qore#7168)
+    /** @return the generation of the entry, which dbgQoreOpReleaseStale() removes
+    */
+    DLLLOCAL static uint64_t dbgQoreOpInjectStale(const QoreObject* obj);
+
+    //! Debug-only: removes the entry of the given generation added by dbgQoreOpInjectStale()
+    DLLLOCAL static void dbgQoreOpReleaseStale(uint64_t gen);
 #endif
 
     //! Called when the Qore object of a poll operation is deleted: a submitted operation without a C++ poll operation
@@ -1657,6 +1687,8 @@ private:
         //! For SubmitOp: the operation, which has no C++ poll operation, is registered by its Qore object (see
         //! registerQoreOp())
         bool submit_qop_registered = false;
+        //! For SubmitOp: the generation of the registration (qore#7168)
+        uint64_t submit_qop_gen = 0;
     };
 
     //! A cancellation that a CancelByProgram command deferred until the result of the operation's step (qore#6703)
@@ -1722,6 +1754,8 @@ private:
         //! true if the operation, which has no C++ poll operation, is registered by its Qore object (see
         //! registerQoreOp(); qore#6531): the entry unregisters it when it is cleaned up
         bool qop_registered = false;
+        //! the generation of the registration (qore#7168)
+        uint64_t qop_gen = 0;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         //! Whether the class of the operation has an onPollComplete() method: -1 = not looked up yet, 0 = no, 1 = yes
@@ -1773,6 +1807,9 @@ private:
         */
         QoreObject* cached_sock_obj = nullptr;
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
+        //! Phase 1 generation in which a wake (a WakeSocket command, a close wake, an SSL-deferred recheck) last
+        //! queued the operation, which then gets no last attempt at its deadline (qore#7480)
+        uint64_t last_woken_gen = 0;
         //! The number of the operation's last waits in a row for events of an object that has no descriptor
         /** The object was closed before its descriptor could be registered; see updateEventLoopRegistration() and
             makeDescriptorlessWaitException()
@@ -2165,6 +2202,58 @@ private:
         uint64_t last_id = 0;
     };
 
+    //! The sockets of an I/O thread that closes made by other threads woke (qore#7003)
+    /** A close of a socket that bypasses the controller (ex: an HTTP/2 abort, the destructor of an HTTP client) can
+        replace the registered descriptor with an inert one, which the event loop drops without an event; the close
+        adds the socket here and notifies the thread, which runs the socket's operations again (see
+        wake_socket_hashes), and they see the close.
+
+        The queue has a lock of its own, which is a leaf: nothing is called and no other lock is taken with it held
+        (the close adds the socket with it held and notifies the thread after releasing it; the I/O thread moves the
+        sockets to its wake set with it held), so a close can be made by a thread that holds the controller's lock or
+        another socket's lock.  The queue is shared by the wakes of the thread's registration holds and keeps a
+        reference of the thread's notifier: a close that comes after the thread stopped, or after the controller was
+        destroyed, adds the socket to a queue that nothing drains any more and notifies a notifier that does nothing
+        once it is closed; only the thread's event loop drains the queue.
+    */
+    struct CloseWakeQueue {
+        QoreThreadLock l;
+        std::vector<std::string> hashes;
+        //! set when a socket could not be added (no memory): the thread wakes all of its sockets
+        bool all = false;
+        //! the thread's notifier, referenced; none for a context without one (a context that a test makes)
+        QoreEventNotifier* notifier;
+
+        DLLLOCAL explicit CloseWakeQueue(QoreEventNotifier* notifier) : notifier(notifier) {
+            if (notifier) {
+                notifier->ref();
+            }
+        }
+
+        DLLLOCAL ~CloseWakeQueue() {
+            if (notifier) {
+                ExceptionSink xsink;
+                notifier->deref(&xsink);
+                xsink.clear();
+            }
+        }
+
+        CloseWakeQueue(const CloseWakeQueue&) = delete;
+        CloseWakeQueue& operator=(const CloseWakeQueue&) = delete;
+    };
+
+    //! Returns the wake of a registration hold of a socket's descriptor that the I/O thread has registered: it adds
+    //! the socket to the thread's close wakes and notifies the thread (see CloseWakeQueue)
+    DLLLOCAL static std::function<void()> makeCloseWake(IoThreadContext& t, const std::string& sock_hash);
+
+    //! Returns the socket hash that wakes the operation (see pollsSocket())
+    DLLLOCAL static std::string closeWakeKey(const PollInfo& pinfo) {
+        if (!pinfo.cached_sock_hash.empty()) {
+            return pinfo.cached_sock_hash;
+        }
+        return pinfo.sock ? pinfo.sock->getIoIdentityHash() : std::string();
+    }
+
     struct IoThreadContext {
         //! Release the event loop and notifier on resize, failed setup, or destruction
         DLLLOCAL ~IoThreadContext();
@@ -2247,6 +2336,11 @@ private:
         //! Test hook: called by the thread with the controller's lock held just before it checks its command queue
         //! for the last time before it polls its event loop; it may push a command to the queue
         std::function<void(IoThreadContext&)> dbg_before_poll;
+        //! Test hook: called by the thread with the controller's lock held when it starts the snapshot of an
+        //! iteration (Phase 1), with whether the iteration has operations that are ready or woken; returns the
+        //! microseconds added to the time with which the iteration compares the operations' deadlines, so that a
+        //! test can make a deadline pass without waiting for it (qore#7480)
+        std::function<int64(IoThreadContext&, bool)> dbg_phase1_time_offset;
         //! Test hook: when set, the thread waits on \c dbg_cond before it drains its command queue until it is
         //! cleared, running the actions of \c dbg_actions meanwhile (see dbgHoldIoCommands())
         bool dbg_hold_commands = false;
@@ -2284,6 +2378,9 @@ private:
 
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;
+        //! The sockets that closes made by other threads woke (see makeCloseWake()); made by the thread when it first
+        //! needs it
+        std::shared_ptr<CloseWakeQueue> close_wakes;
 
         //! IDs of the operations needing their first continuePoll (empty cached_sock_hash)
         std::vector<uint64_t> new_entry_ids;
@@ -2304,6 +2401,8 @@ private:
         // Registered socket tracking; operations are identified by their ID (see OpCache), sockets by their hash
         //! The socket each operation is registered for, by operation ID (referenced)
         std::unordered_map<uint64_t, QoreObject*> registered_sockets;
+        //! Descriptorless waits on native sockets, indexed by operation ID (qore#7371).
+        std::unordered_map<uint64_t, std::shared_ptr<void>> generation_holds;
         //! The hash each operation in @ref registered_sockets is registered under
         /** Recorded with the registration, because the object cannot be asked when the registration is removed: a
             deleted object has no private data, and without the hash the registration of its descriptor would stay
@@ -2498,6 +2597,7 @@ private:
     */
     mutable QoreThreadLock sock_route_lock;
     std::unordered_map<std::string, int> sock_to_thread;  //!< sock_hash → thread index
+
     std::unordered_map<QoreObject*, std::string> obj_to_sock_hash;  //!< QoreObject* → sock_hash for wakeSocketByObject
     std::unordered_map<std::string, unsigned> provisional_sock_routes; //!< submit-time route refcounts
 
@@ -3250,6 +3350,8 @@ private:
     */
     DLLLOCAL static bool refreshSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
 
+    enum class WaitRegistration { Registered, Descriptorless, NoMemory };
+
     //! Update EventLoop registration for an operation
     /** When the object has no descriptor although an operation waits for its events, it was closed before its
         descriptor could be registered, and no event can come for it: its operations run again and see the close, as
@@ -3257,9 +3359,9 @@ private:
 
         @param op_id the operation's ID; see OpCache
 
-        @return true if the operation waits for events of an object that has no descriptor
+        @return the registration outcome, including a failure to allocate a socket generation wake
     */
-    DLLLOCAL bool updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
+    DLLLOCAL WaitRegistration updateEventLoopRegistration(IoThreadContext& t, uint64_t op_id,
         QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
         ExceptionSink* xsink);
 
@@ -3267,18 +3369,20 @@ private:
     DLLLOCAL void updateEventLoopRegistrationIntern(IoThreadContext& t, uint64_t op_id, int ev_flags,
         QoreObject* socket, const std::string& sock_hash, bool force_fd_reregister, ExceptionSink* xsink);
 
-    //! Records whether the operation's last wait was for events of an object that has no descriptor
-    /** @param waits_without_descriptor the return value of updateEventLoopRegistration() for the wait
-    */
-    DLLLOCAL static void noteDescriptorlessWait(PollInfo& pinfo, bool waits_without_descriptor) {
-        pinfo.descriptorless_waits = waits_without_descriptor ? pinfo.descriptorless_waits + 1 : 0;
-    }
+    //! Records the outcome of registration, or retires and cancels the operation if its wake could not be allocated.
+    //! Returns false when the cache entry and its poll info have been released.
+    DLLLOCAL bool finishWaitRegistration(IoThreadContext& t, OpCache::node_t& node, WaitRegistration outcome,
+        ExceptionSink* xsink);
 
     //! Returns SOCKET-CLOSED if the operation waited for an object without a descriptor again after it ran again
     /** An operation whose object was closed before its descriptor could be registered runs again to see the close
         (see updateEventLoopRegistration()); one that waits for the object again would only run again and again.
     */
     DLLLOCAL static QoreHashNode* makeDescriptorlessWaitException(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Returns the SOCKET-TIMEOUT exception hash of an operation whose deadline has passed, or nullptr on error
+    DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD static QoreHashNode* makeOperationTimeoutException(
+        ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
     /** @param op_id the operation's ID; see OpCache
@@ -3500,6 +3604,14 @@ private:
     //! Get socket and poll info from a SocketPollInfo hash
     DLLLOCAL static QoreObject* getSocketFromPollInfo(QoreHashNode* poll_info, std::string& sock_hash,
         int& events, ExceptionSink* xsink);
+
+    //! Refuses the connection socket of a server in the poll info that an operation's step returned (qore#7338)
+    /** Called on the worker that ran the step, with the submitter's sandbox context applied: the socket and the
+        pollables of the extra descriptors
+
+        @return 0 if allowed, -1 if not (the exception is raised)
+    */
+    DLLLOCAL static int checkPollInfoServerSockets(const QoreHashNode* poll_info, ExceptionSink* xsink);
 
     //! Call continuePoll on an AbstractPollOperation object
     //! Enqueue a continuePoll result from a worker thread back to the I/O thread
