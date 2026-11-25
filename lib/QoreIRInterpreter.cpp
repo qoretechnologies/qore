@@ -26297,6 +26297,11 @@ static QORE_INTERN_ALWAYS_INLINE int qore_ir_unshift_on(LValueHelper& val, QoreV
         val.saveTemp(converted);
     }
 
+    // a weak reference to a list: its list is changed (qore#7297); the helper designates that list before the probe
+    // of qore#7391 looks at it
+    if (val.getType() == NT_WEAKREF_LIST && val.viewWeakContainer()) {
+        return -1;
+    }
     // an element type that can bind a reference: the value is checked with a probe before anything is changed,
     // also before an lvalue with no value is assigned the list that the operation makes for it
     std::optional<QoreReferenceBindProbe> probe;
@@ -26310,10 +26315,6 @@ static QORE_INTERN_ALWAYS_INLINE int qore_ir_unshift_on(LValueHelper& val, QoreV
                 return -1;
             }
         }
-    }
-    // a weak reference to a list: its list is changed (qore#7297)
-    if (val.getType() == NT_WEAKREF_LIST && val.viewWeakContainer()) {
-        return QoreValue();
     }
 
     // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist

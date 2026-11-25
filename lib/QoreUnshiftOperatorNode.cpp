@@ -133,6 +133,11 @@ QORE_INTERN_ALWAYS_INLINE int QoreUnshiftOperatorNode::unshiftOn(LValueHelper& v
     // an element type that can bind a reference: the value is checked with a probe before anything is changed,
     // also before an lvalue with no value is assigned the list that the operation makes for it; the store is
     // made again if the probe records references (qore#7391)
+    // a weak reference to a list: the helper designates its list before the probe of qore#7391 looks at it
+    // (qore#7297)
+    if (val.getType() == NT_WEAKREF_LIST && val.viewWeakContainer()) {
+        return -1;
+    }
     std::optional<QoreReferenceBindProbe> probe;
     {
         qore_type_t vt = val.getType();
@@ -177,7 +182,7 @@ QORE_INTERN_ALWAYS_INLINE int QoreUnshiftOperatorNode::unshiftOn(LValueHelper& v
     // a weak reference to a list: its list is changed, and the lvalue keeps the weak reference (qore#7297)
     QoreListNode* l = val.getListForChange();
     if (!l) {
-        return QoreValue();
+        return -1;
     }
     val.changedScannedValue(*res);
 

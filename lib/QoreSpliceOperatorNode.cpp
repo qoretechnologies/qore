@@ -208,6 +208,11 @@ QORE_INTERN_ALWAYS_INLINE int QoreSpliceOperatorNode::spliceOn(LValueHelper& val
     // the list changed: the lvalue's own list, or that of its weak reference, which the lvalue keeps (qore#7297)
     QoreListNode* vl = nullptr;
     if (vt == NT_LIST || vt == NT_WEAKREF_LIST) {
+        // a weak reference to a list: the helper designates its list, which the probe of qore#7391 looks at
+        // (qore#7297)
+        if (vt == NT_WEAKREF_LIST && val.viewWeakContainer()) {
+            return -1;
+        }
         vl = val.getListForChange();
         if (!vl) {
             return -1;
