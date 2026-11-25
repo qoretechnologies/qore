@@ -28,9 +28,9 @@ class ProviderIndexRestrictedSubclassTest inherits QUnit::Test {
         #! the only methods of the classes that are visible to subclasses without being public: those that the
         #! ProviderIndex module and the tests of the index format use
         const SubclassHelpers = {
-            "ProviderIndexUtil::ProviderIndexUtil": ("addTypeRefs", "getStoredAppActions", "packIndexData",
-                "packStoredMetadataCacheChunk", "refersToTypeGraph", "restoreIndexedAction", "unpackIndexData",
-                "unpackMetadataCacheChunk", "writeFileAtomic"),
+            "ProviderIndexUtil::ProviderIndexUtil": ("addTypeRefs", "checkWritableIndexDir", "getStoredAppActions",
+                "packIndexData", "packStoredMetadataCacheChunk", "refersToTypeGraph", "restoreIndexedAction",
+                "unpackIndexData", "unpackMetadataCacheChunk", "writeFileAtomic"),
             "ProviderIndex::ProviderIndex": (),
         };
 

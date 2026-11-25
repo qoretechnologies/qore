@@ -224,7 +224,8 @@ public hashdecl ProviderIndexFailureInfo {
 public hashdecl ProviderIndexInfo {
     #! Path to the index file
     /** The canonical index file (\c qore-data-index.yaml) if it was written, otherwise the routing index
-        (\c qore-routing-index.yaml), which identifies the published index
+        (\c qore-routing-index.yaml), which identifies the published index; for code that may not read external
+        information, the name of the file in the index directory (see @ref providerindexutil_external_info)
     */
     string path;
 
@@ -395,7 +396,8 @@ public hashdecl ProviderIndexReloadInfo {
 
     #! The error reading the published index, if it was not reloaded
     /** The error is also reported by
-        @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()"
+        @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "ProviderIndexUtil::getIndexReadError()",
+        and given to code that may not read external information as it is there
     */
     *string error;
 }
@@ -806,6 +808,9 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @ref getMaxCanonicalIndexSize() (\c PROVIDER-INDEX-TOO-LARGE); the metadata of an app is read when it is
         first needed, so an error can be reported after the index has been initialized.
 
+        The description of the error names the index files, so code that may not read external information gets the
+        error code with a description that does not (see @ref providerindexutil_external_info).
+
         @par Example:
         @code{.py}
 if (*string err = ProviderIndexUtil::getIndexReadError()) {
@@ -814,7 +819,7 @@ if (*string err = ProviderIndexUtil::getIndexReadError()) {
         @endcode
     */
     static *string getIndexReadError() {
-        return index_read_error;
+        return getCallerIndexError(index_read_error);
     }
 
     #! Reloads the published data provider index
@@ -941,7 +946,7 @@ map removeTools($1), info.removed;
             return <ProviderIndexReloadInfo>{
                 "sha256": index_sha256,
                 "previous_sha256": index_sha256,
-                "error": err,
+                "error": getCallerIndexError(err),
             };
         }
 
@@ -2810,6 +2815,11 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or
         the metadata cache or routing index cannot be written when no canonical index file is written
 
+        @note For code that may not read external information, the \c path of the result is the name of the file in
+        the index directory, and an error raised while the index is written has a description that names neither
+        the index directory nor the files in it, nor the IDs of the process; an exception raised by
+        \a get_app_actions is passed on as it is (see @ref providerindexutil_external_info)
+
         @par Example:
         @code{.py}
 # publish an index that also includes qore-data-index.yaml for a consumer that still reads it
@@ -2822,11 +2832,46 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps0, *list<string> action_apps,
             code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml)
             [dom=PROCESS_CONTROL,FILESYSTEM] {
+        if (SandboxManager::callerMayReadExternalInfo()) {
+            return writeDataProviderIndexByAppIntern(maps0, action_apps, get_app_actions, delta, summary,
+                write_canonical_yaml);
+        }
+        # the result and the errors name the index directory and the files in it, which the calling code may not
+        # read (qore#7597); an exception raised by the caller's code is passed on as it is, and the errors of the
+        # check of the index directory have their own description for such code
+        tryGetIndexDirIntern(True, True);
+        bool caller_error;
+        code get_actions = auto sub (string app) {
+            try {
+                return get_app_actions(app);
+            } catch (hash<ExceptionInfo> ex) {
+                caller_error = True;
+                rethrow;
+            }
+        };
+        try {
+            hash<ProviderIndexInfo> rv = writeDataProviderIndexByAppIntern(maps0, action_apps, get_actions, delta,
+                summary, write_canonical_yaml);
+            rv.path = basename(rv.path);
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            if (caller_error) {
+                rethrow;
+            }
+            throw ex.err, "the data provider index cannot be written; the description of the error names the host's "
+                "index directory, so it is given only to code that may read external information";
+        }
+    }
+
+    #! Writes the data provider index; see writeDataProviderIndexByApp()
+    static private:internal hash<ProviderIndexInfo> writeDataProviderIndexByAppIntern(hash<auto> maps0,
+            *list<string> action_apps, code get_app_actions, date delta, hash<auto> summary,
+            *bool write_canonical_yaml) {
         # a caller's literal may be narrowed (e.g. hash<string, hash<string, string>>), and adding the altmap member
         # would throw
         hash<auto!> maps = maps0;
         # verify that the target directory can be written to before writing anything
-        getWritableIndexDir();
+        tryGetIndexDirIntern(True, True);
 
         bool canonical = write_canonical_yaml || parse_boolean(getenv(ProviderIndexCanonicalYamlEnvVar));
 %ifdef NoMsgPack
@@ -2853,7 +2898,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
         map app_set{$1} = True, action_apps;
         hash<string, bool> action_app_set = (map {$1: True}, action_apps) ?? {};
 
-        string path = getIndexPath("data");
+        string path = getIndexPathIntern("data");
         int size = 0;
         # metadata cache chunks; without a canonical index file, any chunk that cannot be written fails the write,
         # otherwise the optional cache is not written
@@ -3072,7 +3117,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
             cache_sha256 ? failures.sha256 : NOTHING);
 
         return <ProviderIndexInfo>{
-            "path": canonical ? path : getIndexPath("routing"),
+            "path": canonical ? path : getIndexPathIntern("routing"),
             "size": canonical ? size : routing_size + cache_size,
             "delta": delta,
             "summary": summary,
@@ -3399,7 +3444,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     static private:internal removeUnreferencedIndexFiles(*hash<string, DataProviderMetadataCacheChunkInfo> chunks,
             *string manifest_sha256, bool canonical, *string factories_sha256, *string summaries_sha256,
             *string failures_sha256) {
-        *string dir = tryGetIndexDir();
+        *string dir = tryGetIndexDirIntern();
         if (!dir.val()) {
             return;
         }
@@ -3432,7 +3477,7 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
                 "cache files: %s: %s", ex.err, ex.desc);
         }
         if (!canonical) {
-            string path = getIndexPath("data", dir);
+            string path = getIndexPathIntern("data", dir);
             if (hlstat(path)) {
                 removeIndexFile(path);
             }
@@ -3522,6 +3567,8 @@ if (info) {
         @throw PROVIDER-INDEX-ERROR the directory holds no published index with a routing index and metadata cache,
         or the files are inconsistent, or the app is not in the index, or MessagePack support is not
         available
+        @throw INVALID-FUNCTION-ACCESS \a dir is not given and the calling code may not read external information,
+        as the errors name the configured index directory (see @ref providerindexutil_external_info)
 
         @par Example:
         @code{.py}
@@ -3537,11 +3584,15 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @since ProviderIndexUtil 1.2
     */
     static *string dumpIndexYaml(*string dir, *string app, *string output_path) [dom=FILESYSTEM] {
+        if (!dir.val()) {
+            # the errors name the directory
+            ProviderIndexUtil::checkExternalInfo("dumpIndexYaml");
+        }
 %ifdef NoMsgPack
         throw "PROVIDER-INDEX-ERROR", "MessagePack support is not available; cannot read the data provider metadata";
 %else
         if (!dir.val()) {
-            dir = tryGetIndexDir(True);
+            dir = tryGetIndexDirIntern(True);
         }
         *hash<CompactIndexInfo> compact = readCompactIndex(dir);
         if (!compact) {
@@ -3766,7 +3817,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         @throw any error reading the files
     */
     static private:internal *hash<CompactIndexInfo> readCompactIndex(string dir) {
-        string routing_path = getIndexPath("routing", dir);
+        string routing_path = getIndexPathIntern("routing", dir);
         if (!is_file(routing_path)) {
             return;
         }
@@ -3860,9 +3911,18 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         environment variable if it is a positive integer, otherwise
         @ref DefaultMaxCanonicalIndexSize "DefaultMaxCanonicalIndexSize"
 
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information (see
+        @ref providerindexutil_external_info)
+
         @since ProviderIndexUtil 1.2
     */
     static int getMaxCanonicalIndexSize() {
+        ProviderIndexUtil::checkExternalInfo("getMaxCanonicalIndexSize");
+        return getMaxCanonicalIndexSizeIntern();
+    }
+
+    #! Returns the size in bytes of the largest canonical index file that is read, for the module's own use
+    static private:internal int getMaxCanonicalIndexSizeIntern() {
         *string value = getenv(ProviderIndexMaxCanonicalSizeEnvVar);
         if (value =~ /^[0-9]+$/ && value.toInt() > 0) {
             return value.toInt();
@@ -4009,7 +4069,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         *hash<DataProviderRoutingIndexInfo> routing;
         *string routing_sha256;
         try {
-            routing_path = getIndexPath("routing");
+            routing_path = getIndexPathIntern("routing");
             routing_stat = statIndexFile(routing_path);
             if (!routing_stat) {
                 return;
@@ -4031,7 +4091,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         bool canonical = isCanonicalRoutingIndex(routing);
         try {
-            string data_path = getIndexPath("data");
+            string data_path = getIndexPathIntern("data");
             *hash<StatInfo> data_stat = statIndexFile(data_path);
             if (data_stat) {
                 if (canonical) {
@@ -4154,7 +4214,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             return;
         }
         try {
-            if (!statIndexFile(getIndexPath("data"))) {
+            if (!statIndexFile(getIndexPathIntern("data"))) {
                 return;
             }
             *hash<auto> index = readIndex("data");
@@ -4763,7 +4823,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
     #! Writes the index to the configured directory
     static private:internal hash<ProviderIndexInfo> writeIndex(*hash<auto> h, string type, date delta, hash<auto> summary) {
-        string path = getIndexPath(type);
+        string path = getIndexPathIntern(type);
         string yaml = make_yaml(h, BlockStyle);
         writeFileAtomic(path, yaml);
         return <ProviderIndexInfo>{
@@ -4818,10 +4878,10 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         }
         *string path;
         try {
-            path = getIndexPath(type);
+            path = getIndexPathIntern(type);
             if (type == "data") {
                 # the canonical index file is parsed in full, which takes several times its size in memory
-                int max = getMaxCanonicalIndexSize();
+                int max = getMaxCanonicalIndexSizeIntern();
                 *hash<StatInfo> info = statIndexFile(path);
                 if (info && info.size > max) {
                     throw "PROVIDER-INDEX-TOO-LARGE", sprintf("the canonical data provider index %y is %d bytes, "
@@ -5065,8 +5125,66 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Returns the index path for the given type
+    /** @param type the type of the index file (ex: \c "data", \c "routing")
+        @param dir the index directory; if not given, the configured index directory
+
+        @return the path of the index file
+
+        @throw INVALID-FUNCTION-ACCESS \a dir is not given and the calling code may not read external information
+        (see @ref providerindexutil_external_info)
+        @throw PROVIDER-INDEX-ERROR \a dir is not given and the index directory is not configured, or it cannot be
+        created, or it is not a directory
+    */
     static string getIndexPath(string type, *string dir) {
-        return sprintf("%s%sqore-%s-index.yaml", dir ?? tryGetIndexDir(True), DirSep, type);
+        if (!exists dir) {
+            ProviderIndexUtil::checkExternalInfo("getIndexPath");
+        }
+        return getIndexPathIntern(type, dir);
+    }
+
+    #! Returns the index path for the given type, for the module's own use; see getIndexPath()
+    static private:internal string getIndexPathIntern(string type, *string dir) {
+        return sprintf("%s%sqore-%s-index.yaml", dir ?? tryGetIndexDirIntern(True), DirSep, type);
+    }
+
+    #! Raises \c INVALID-FUNCTION-ACCESS if the calling code may not read external information
+    /** The configured index directory, the paths under it, the user and group IDs of the process and the values of
+        the environment variables of the index are information about the host (qore#7597)
+
+        @param method the name of the public method that is called
+    */
+    static private:internal checkExternalInfo(string method) {
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            throw "INVALID-FUNCTION-ACCESS", sprintf("ProviderIndexUtil::%s(): the result names the host's data "
+                "provider index directory or the environment of the index, which the calling code may not read "
+                "(PO_NO_EXTERNAL_INFO)", method);
+        }
+    }
+
+    #! Returns the text of an error for the calling code
+    /** @param full the text with the index directory, the paths under it or the IDs of the process
+        @param generic the text for code that may not read external information, without them
+
+        @return \a full if the calling code may read external information, otherwise \a generic (qore#7597)
+    */
+    static private:internal string getCallerText(string full, string generic) {
+        return SandboxManager::callerMayReadExternalInfo() ? full : generic;
+    }
+
+    #! Returns an error reading the index, as given to the calling code
+    /** @param err the error, as \c "<code>: <description>"
+
+        @return the error; for code that may not read external information, the error code with a description
+        without the paths of the index files (qore#7597)
+    */
+    static private:internal *string getCallerIndexError(*string err) {
+        if (!exists err || SandboxManager::callerMayReadExternalInfo()) {
+            return err;
+        }
+        *string code = (err =~ x/^([-A-Z0-9_]+): /)[0];
+        return sprintf("%s: the data provider index cannot be read; the description of the error names the host's "
+            "index files, so it is given only to code that may read external information",
+            code ?? "PROVIDER-INDEX-ERROR");
     }
 
     #! Returns the path of a metadata cache manifest
@@ -5076,9 +5194,9 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     */
     static private:internal string getMetadataCachePath(string sha256, int version = MetadataCacheVersion, *string dir) {
         if (version < 5) {
-            return sprintf("%s%sqore-data-index.msgpack", dir ?? tryGetIndexDir(True), DirSep);
+            return sprintf("%s%sqore-data-index.msgpack", dir ?? tryGetIndexDirIntern(True), DirSep);
         }
-        return sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir ?? tryGetIndexDir(True), DirSep, sha256);
+        return sprintf("%s%sqore-data-index-manifest-%s.msgpack", dir ?? tryGetIndexDirIntern(True), DirSep, sha256);
     }
 
     #! Returns the path of an app-specific metadata cache chunk
@@ -5090,7 +5208,7 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     */
     static private:internal string getMetadataCacheChunkPath(string app, string sha256, int version = MetadataCacheVersion,
             *string dir) {
-        return sprintf("%s%sqore-data-index-%s.msgpack", dir ?? tryGetIndexDir(True), DirSep,
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir ?? tryGetIndexDirIntern(True), DirSep,
             version < 5 ? digest("sha256", app).toHex() : sha256);
     }
 
@@ -5110,8 +5228,49 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         results in an immediate and actionable error instead of a failure after the index has been built
 
         @return the index directory
+
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information (see
+        @ref providerindexutil_external_info)
+        @throw PROVIDER-INDEX-ERROR \a throw_exception is @ref True and the environment variable is not set, or the
+        directory cannot be created, or it is not a directory, or, with \a for_write, it is not readable, writable,
+        and traversable by the current user
     */
     static *string tryGetIndexDir(*bool throw_exception, *bool for_write) {
+        ProviderIndexUtil::checkExternalInfo("tryGetIndexDir");
+        return tryGetIndexDirIntern(throw_exception, for_write);
+    }
+
+    #! Returns the index directory after verifying that index files can be written to it
+    /** @return the index directory
+
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information (see
+        @ref providerindexutil_external_info)
+        @throw PROVIDER-INDEX-ERROR the environment variable is not set, or the directory cannot be created, or the
+        directory is not readable, writable, and traversable by the current user
+    */
+    static string getWritableIndexDir() {
+        ProviderIndexUtil::checkExternalInfo("getWritableIndexDir");
+        return tryGetIndexDirIntern(True, True);
+    }
+
+    #! Verifies that index files can be written to the configured index directory, as before an index is built
+    /** For the code that builds an index (\c ProviderIndex); unlike @ref getWritableIndexDir(), it also serves code
+        that may not read external information, as it returns nothing, and the text of its errors names neither the
+        directory nor the IDs of the process for such code (qore#7597)
+
+        @throw PROVIDER-INDEX-ERROR the environment variable is not set, or the directory cannot be created, or the
+        directory is not readable, writable, and traversable by the current user
+    */
+    static private checkWritableIndexDir() {
+        tryGetIndexDirIntern(True, True);
+    }
+
+    #! Returns the index directory from the environment variable, for the module's own use; see tryGetIndexDir()
+    /** It serves every caller: the text of an error raised to code that may not read external information names
+        neither the directory nor the IDs of the process (qore#7597); the warnings logged are the module's own
+        diagnostics, which the host enables with its logger
+    */
+    static private:internal *string tryGetIndexDirIntern(*bool throw_exception, *bool for_write) {
         *string dir = ENV{ProviderIndexEnvVar};
         if (!dir.val()) {
             string err = sprintf("Environment variable %y is not set; provider index APIs cannot be used",
@@ -5134,7 +5293,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
                 string err = sprintf("Cannot create provider index directory %y (from environment variable %y): "
                     "%s: %s", dir, ProviderIndexEnvVar, ex.err, ex.desc);
                 if (throw_exception) {
-                    rethrow "PROVIDER-INDEX-ERROR", err;
+                    throw "PROVIDER-INDEX-ERROR", getCallerText(err, sprintf("Cannot create the provider index "
+                        "directory (from environment variable %y): %s", ProviderIndexEnvVar, ex.err));
                 }
                 logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
                 return;
@@ -5143,7 +5303,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             string err = sprintf("Environment variable %y is pointing to %y with type %y; must be a directory",
                 ProviderIndexEnvVar, dir, info.type);
             if (throw_exception) {
-                throw "PROVIDER-INDEX-ERROR", err;
+                throw "PROVIDER-INDEX-ERROR", getCallerText(err, sprintf("Environment variable %y is pointing to a "
+                    "file with type %y; must be a directory", ProviderIndexEnvVar, info.type));
             }
             logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
             return;
@@ -5151,7 +5312,10 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         if (for_write) {
             if (*string err = checkIndexDirAccess(dir)) {
                 if (throw_exception) {
-                    throw "PROVIDER-INDEX-ERROR", err;
+                    throw "PROVIDER-INDEX-ERROR", getCallerText(err, sprintf("The provider index directory (from "
+                        "environment variable %y) is not readable, writable, and traversable by the current user; "
+                        "the details are given only to code that may read external information",
+                        ProviderIndexEnvVar));
                 }
                 logDiagnostic(LoggerLevel::LevelWarn, "%s", err);
                 return;
@@ -5160,20 +5324,12 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
         return dir;
     }
 
-    #! Returns the index directory after verifying that index files can be written to it
-    /** @return the index directory
-
-        @throw PROVIDER-INDEX-ERROR the environment variable is not set, or the directory cannot be created, or the
-        directory is not readable, writable, and traversable by the current user
-    */
-    static string getWritableIndexDir() {
-        return tryGetIndexDir(True, True);
-    }
-
     #! Checks that the given directory can be used for writing index files
     /** @param dir the directory to check
 
-        @return an actionable error description if the directory cannot be used, otherwise @ref nothing
+        @return an actionable error description if the directory cannot be used, otherwise @ref nothing; it names
+        the directory and the IDs of the process, so it is only logged or given to code that may read external
+        information
     */
     static private:internal *string checkIndexDirAccess(string dir) {
         # NOTE: is_writable() on a directory verifies that a file can actually be created in it, which requires

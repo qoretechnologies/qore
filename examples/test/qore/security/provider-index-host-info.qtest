@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the checks run in the Programs of a worker process that set their execution modes themselves, and in qcc executables of the worker
+# test-platform: macos - JIT and AOT code generation and qcc executables of calls into the Programs of preloaded modules, and the file system permissions of the index directory
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ProviderIndexHostInfoTest
+
+#! ProviderIndexUtil gives code restricted from external information no host information (qore#7597)
+/** The index directory of the data provider index (QORE_PROVIDER_INDEX_DIR), the paths of the index files, the value
+    of QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES and the user and group IDs of the process in the errors of the access
+    check of the directory are information about the host: the public methods that return them refuse code restricted
+    from external information (PO_NO_EXTERNAL_INFO), the errors and results that they are part of leave them out for
+    such code, and such code still looks up apps in the index.  The checks are in
+    provider-index-host-info/provider-index-host-info-worker.q (in Programs of each kind in each execution mode, whose
+    top-level code calls the methods), whose output must be one "ok" line per check, run by the interpreter and as
+    programs compiled with qcc.
+*/
+class ProviderIndexHostInfoTest inherits QUnit::Test {
+    public {
+        #! the kinds of Programs of the worker
+        const Kinds = 5;
+        #! the execution modes of the worker's Programs
+        const Modes = 4;
+        #! the checks of each Program
+        const Cases = 20;
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = normalize_dir(get_script_dir());
+        string worker = dir + DirSep + "provider-index-host-info" + DirSep + "provider-index-host-info-worker.q";
+        TmpDir tmp("qore-provider-index-host-info-");
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ProviderIndexHostInfoTest", "1.0", \ARGV) {
+        prefix = (map sprintf("%s=%s ", $1.key, quote($1.value)), {
+            "LD_LIBRARY_PATH": libdir,
+            "DYLD_LIBRARY_PATH": libdir,
+            "QORE_LIBDIR": libdir,
+            # the host's index configuration: what the worker's Programs must not get when they are restricted
+            "QORE_PROVIDER_INDEX_DIR": tmp.path + DirSep + "index",
+            "QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES": "123456789",
+            "Q7597_CHILD": dir + DirSep + "provider-index-host-info" + DirSep + "provider-index-host-info-child.q",
+        }.pairIterator()).join("");
+        addTestCase("interpreter", \testInterpreter());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! checks the output of the worker: one "ok" line per check ("skipped" for the checks of a directory that cannot
+    #! be written to, when the test runs as root)
+    private checkOutput(string out, string label) {
+        list<string> lines = select out.split("\n"), $1.val();
+        string ok = getuid() ? "=ok$" : "=(ok|skipped)$";
+        list<string> failed = select lines, !regex($1, ok);
+        assertEq((), failed, label + ": failed checks");
+        assertEq(Kinds * Modes * Cases, lines.size(), label + ": number of checks");
+    }
+
+    testInterpreter() {
+        checkOutput(ExecModeHarness::run_any(prefix + quote(qore_bin) + " -b --enable-debug " + quote(worker)),
+            "interpreter");
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "provider-index-host-info" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            checkOutput(ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}

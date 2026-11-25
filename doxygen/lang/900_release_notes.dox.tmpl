@@ -110,10 +110,16 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
 
     @par Library Code Gives Restricted Code No Other Host Information
+    @parblock
     For code restricted from external information, the functions listed in @ref sandbox_ambient_host_data (ex:
     @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()", the connection and
     datasource providers) use no environment, working directory, hostname, PID or network interface for it, with the
     known limitations listed there (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
+
+    \c ProviderIndexUtil gives such code no index directory, index file path or process IDs: its methods that return
+    them raise \c INVALID-FUNCTION-ACCESS (see @ref providerindexutil_external_info;
+    <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>).
+    @endparblock
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s

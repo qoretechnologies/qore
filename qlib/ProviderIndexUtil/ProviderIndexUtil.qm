@@ -106,6 +106,33 @@ if (!info.reloaded) {
     diagnostics while serving restricted readers. Reserving pending app modules for initialization requires process
     control and a trusted caller. A restricted reader can still look up an app and its metadata on demand.
 
+    @section providerindexutil_external_info Code Restricted From External Information
+
+    The configured index directory (@ref ProviderIndexUtil::ProviderIndexEnvVar "ProviderIndexEnvVar"), the paths of
+    the files in it, the user and group IDs of the process and the values of the other environment variables of the
+    index are information about the host, which code restricted from external information
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()") may not
+    read itself, so the module does not give it to such code, also when other library code calls it for such code:
+    - @ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "tryGetIndexDir()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::getWritableIndexDir() "getWritableIndexDir()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::getMaxCanonicalIndexSize() "getMaxCanonicalIndexSize()", and
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexPath() "getIndexPath()" and
+      @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "dumpIndexYaml()" without a directory raise
+      \c INVALID-FUNCTION-ACCESS for such code; with a directory that the caller gives, they serve it
+    - @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "getIndexReadError()" and the \c error of
+      @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "reloadIndex()" give it the error code with a
+      description that names no index file
+    - the \c path of the result of
+      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()" and
+      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndex() "writeDataProviderIndex()" is the name of
+      the file in the index directory, and an error of the index directory or of writing the index has a
+      description that names neither the directory nor the IDs of the process
+
+    The module's own use of the index is not affected: such code looks up apps, actions, factories and schemes in
+    the index as other code does, and the module's diagnostics, which the host enables with its logger, name the
+    directory and the files (see @ref sandbox_ambient_host_data).
+
     @section providerindexutil_summaries Listing and Selecting Indexed Actions
 
     Restoring an indexed action restores the descriptions of its option types and of its data provider info, which
@@ -158,6 +185,10 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
 
 
     @section providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - code restricted from external information gets no index directory, no path of an index file and no IDs of the
+      process (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "tryGetIndexDir()" and
+      @ref ProviderIndexUtil::ProviderIndexUtil::getIndexPath() "getIndexPath()" refuse it; see
+      @ref providerindexutil_external_info; <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>)
     - @ref providerindexutil_sandbox "caller permissions" govern access to process-wide logging and initialization
       (<a href="https://github.com/qoretechnologies/qore/issues/7060">issue 7060</a> and
       <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)

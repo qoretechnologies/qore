@@ -961,6 +961,12 @@ authenticate();
       failures of
       @ref DataProvider::DataProvider::loadProvidersFromEnvironmentWithReport() "DataProvider::loadProvidersFromEnvironmentWithReport()"
       name no module of \c QORE_DATA_PROVIDERS (the modules are loaded as for other code)
+    - the data provider index: \c ProviderIndexUtil gives no index directory (\c QORE_PROVIDER_INDEX_DIR), no path
+      of an index file, no value of \c QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES and no user and group IDs of the
+      process (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "ProviderIndexUtil::tryGetIndexDir()" and
+      the methods that return them raise \c INVALID-FUNCTION-ACCESS, and its errors and results leave them out); such
+      code still looks up apps, actions, factories and schemes in the index (see
+      @ref providerindexutil_external_info "the ProviderIndexUtil module")
 
     Information about the host other than the environment is not used for such code either, as it may not read it
     itself (@ref Qore::getcwd() "getcwd()", @ref Qore::gethostname() "gethostname()",
@@ -1001,9 +1007,6 @@ authenticate();
     - the constant @ref Qore::Logger::LoggerLayoutPattern::HostName "LoggerLayoutPattern::HostName" gives the
       hostname to any code that can use the \c logger_bin module, as constants have no check of the calling code
       (<a href="https://github.com/qoretechnologies/qore/issues/7506">issue 7506</a>)
-    - the index directory of the data provider index (\c QORE_PROVIDER_INDEX_DIR) and the user and group IDs in the
-      errors of its access check are given by the public methods of \c ProviderIndexUtil
-      (<a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>)
 
     @since %Qore 3.0
 

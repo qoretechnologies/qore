@@ -486,11 +486,16 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
         @throw PROVIDER-INDEX-CANCELLED a worker build was stopped by cancelWorkers()
+        @throw INVALID-FUNCTION-ACCESS a worker build was requested by code that may not read external information
+            (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
         @note The index is built in index build mode (see
             @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()"), so the
             index being replaced is never read; when the build finishes, the next index lookup reads the new index.
         @note With @ref ProviderIndexCreateOptions::workers "workers" set, providers are loaded and indexed in
             worker processes; see @ref runIndexWorker()
+        @note For code that may not read external information, the \c path of the result is the name of the file
+            in the index directory, and the errors of the index directory and of writing the index do not name it
+            (see @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()")
         @note An app or action that cannot be initialized does not fail the build: it is recorded in the index with its
             error (see
             @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()"), and is unavailable in it, while the other apps and actions are
@@ -510,6 +515,14 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
             *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{})
             [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # the workers are started with the paths of a staging directory in the index directory, and their errors
+        # name them (qore#7597)
+        if (opts.workers > 0 && !SandboxManager::callerMayReadExternalInfo()) {
+            throw "INVALID-FUNCTION-ACCESS", "ProviderIndex::createDataProviderIndex(): a build with worker "
+                "processes uses the host's index directory and the ID of the process, which the calling code may "
+                "not read (PO_NO_EXTERNAL_INFO); build the index without workers";
+        }
+
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
@@ -521,7 +534,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         # check that the environment variable is set and that the index directory can be written to before
         # starting the (potentially very long) index build; any existing index is left untouched until the new
         # index has been written completely (index files are written atomically)
-        getWritableIndexDir();
+        checkWritableIndexDir();
 
         if (opts.workers > 0) {
             if (ProviderIndexUtil::hasMessagePack()) {
