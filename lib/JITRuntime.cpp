@@ -2795,7 +2795,8 @@ static const AbstractQoreNode* qore_rt_container_node(const QoreValue& v) {
 */
 static void qore_rt_check_weak_store_conversion_impl(const QoreTypeInfo* ti, uint64_t original, uint64_t stored,
         bool weak, ExceptionSink* xsink) {
-    if (*xsink) {
+    // the conversion kept the value, as it does unless it copies a container: nothing to check
+    if (stored == original || *xsink) {
         return;
     }
     QoreValue o = fromBits(original);

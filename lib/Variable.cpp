@@ -3910,16 +3910,12 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
-    return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque
-        ? assignImpl<false, false, true>(n, desc, check_types, mode, {})
-        : assignImpl<false>(n, desc, check_types, mode, {});
+    return assignImpl<false>(n, desc, check_types, mode, {});
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
         AssignmentMode mode) {
-    return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque
-        ? assignImpl<true, false, true>(n, desc, check_types, mode, policy)
-        : assignImpl<true>(n, desc, check_types, mode, policy);
+    return assignImpl<true>(n, desc, check_types, mode, policy);
 }
 
 int LValueHelper::assignNative(QoreValue n, const char* desc) {
@@ -3929,6 +3925,13 @@ int LValueHelper::assignNative(QoreValue n, const char* desc) {
 template <bool Lexical, bool Native, bool WeakOrOpaque>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
+    // a weak or opaque assignment takes the instantiation that refuses a value converted to a copy (qore#7572); the
+    // test is here, where the arguments are in place for the call, so that a normal assignment pays only for it
+    if constexpr (!WeakOrOpaque && !Native) {
+        if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
+            return assignImpl<Lexical, false, true>(n, desc, check_types, mode, policy);
+        }
+    }
     member_lvalue_modified = true;
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
