@@ -2785,6 +2785,20 @@ int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
     return -1;
 }
 
+int qore_check_system_object_change(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // fails closed, as qore_check_process_wide_registration(): true if the governing sandbox cannot be resolved; false
+    // under a module initialization barrier for the code that loads library code
+    if (!qore_caller_is_sandboxed()) {
+        return 0;
+    }
+    xsink->raiseException("SHARED-OBJECT-ERROR", "code that is sandboxed or acts for sandboxed code cannot call %s() "
+        "with a system constant object: the process-wide standard I/O objects are shared by every Program of the "
+        "process", what);
+    return -1;
+}
+
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {
     assert(what);
     assert(xsink);

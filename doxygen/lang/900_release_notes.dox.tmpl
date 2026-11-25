@@ -4866,6 +4866,13 @@
       submission that is refused or replaces another application's operation, now see an operation with the key on the
       I/O thread of another socket, which left two operations with one key
       (<a href="https://github.com/qoretechnologies/qore/issues/7624">issue 7624</a>)
+    - the process-wide standard I/O objects @ref Qore::stdin "stdin", @ref Qore::stdout "stdout" and
+      @ref Qore::stderr "stderr" cannot be changed by code that a sandbox governs, also when the sandbox allows terminal
+      I/O: the methods of @ref Qore::File "File" and @ref Qore::ReadOnlyFile "ReadOnlyFile" that reopen, close or redirect
+      them or change their encoding, position, locks, terminal attributes, owner or event queue raise
+      \c SHARED-OBJECT-ERROR for it, as for an object marked with
+      @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"; reading and writing through them is not
+      affected (<a href="https://github.com/qoretechnologies/qore/issues/7670">issue 7670</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 
