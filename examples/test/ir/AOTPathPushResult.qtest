@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class PathPushResultTest
+
+#! Tests push and unshift through lvalue paths in every execution mode and in compiled code
+/** The compiled-code helper for push and unshift through an lvalue path returned no value, so the operator used as
+    an expression (\c return \c push \c h.l, \c v) returned \c NOTHING, and an unshift on a value that is not a list
+    raised no exception unless strict arguments were in effect.  A program that allows the debugger lowers a push to
+    a plain local through the same path, so the debugger copy of the fixture covers that case too.
+*/
+class PathPushResultTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    public {
+        #! the interpreter's output for the fixture
+        const Expected = "localPush: [3]\nlocalUnshift: [2, 1]\nmemberPush: [7]\nmemberUnshift: [6, 7]\n"
+            "nestedPush: [1, 5]\nstatements: 400\nunshiftNonList: UNSHIFT-ERROR\npushNonList: PUSH-ERROR\n";
+    }
+
+    constructor() : Test("Push and unshift results through lvalue paths", "1.0", \ARGV) {
+        addTestCase("operator values and errors in every tier", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        TmpDir dir("qore-aot-path-push-");
+        string source = get_script_dir() + "/AOTPathPushResult.qr";
+        File reader();
+        reader.open2(source, O_RDONLY);
+        string text = reader.read(-1);
+        reader.close();
+        assertRegex("\n%modern\n", text);
+        string debugger = dir.path + "/AOTPathPushResultDebugger.qr";
+        File writer();
+        writer.open2(debugger, O_WRONLY | O_CREAT | O_TRUNC);
+        writer.write(replace(text, "\n%modern\n", "\n%modern\n%allow-debugger\n"));
+        writer.close();
+        foreach string fixture in ((source, debugger)) {
+            string label = fixture == source ? "" : "debugger ";
+            assertEq(Expected, run((qore, "--exec-mode=ast", fixture)), label + "ast");
+            foreach string mode in (("ir", "jit", "tiered")) {
+                assertEq(Expected, run((qore, "--exec-mode=" + mode, fixture),
+                    "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), label + mode);
+            }
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    run((qcc, level, "--strip-source", "-o", executable, fixture), prefix);
+                    assertEq(Expected, run((executable,)), label + prefix + level);
+                }
+            }
+        }
+    }
+}
