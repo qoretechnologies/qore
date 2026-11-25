@@ -342,10 +342,26 @@ authenticate();
     nor call their private methods (see @ref sandboxed_class_private_access).  It can still override and implement the
     private methods of the trusted class, and call the base class's version of a method that it overrides.
 
-    The rule is decided for a class when it is committed: a class parsed in a Program with a sandbox manager (or by
-    sandboxed code) is a class that sandboxed code declared.  A class that a Program parsed before a sandbox manager
-    was set for it keeps the private access that it had, so a host sets the manager before it parses code that it does
-    not trust.
+    The rule is decided for a class when it is committed: a class parsed in a Program whose sandbox manager does not
+    trust its code is a class that sandboxed code declared.  A sandbox manager trusts the code that it governs when it
+    allows uncontrolled APIs (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy(True)";
+    see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"): a host that gives its own trusted
+    Programs a manager to make their I/O interruptible and their threads terminable, and allows them uncontrolled
+    APIs, keeps the private access of their classes, while a tenant's Program with the default policy has none.  The
+    code that parses or loads the class counts too: a class that restricted code parses or loads in a Program whose
+    sandbox trusts its code, in a Program without a sandbox or in a Program that it creates is a class that sandboxed
+    code declared.  A class of a Program whose sandbox trusts its code is also a class that trusted code declared, so
+    a tenant's subclass of it has no private access to it.  Code that is sandboxed without a manager (the code of a
+    Program that sandboxed code marked sandboxed, which no manager governs) is restricted for this rule, as is the
+    code that it calls, though SandboxManager::isRestricted() returns \c False for it as no manager restricts it.  As
+    for every other policy, the code of a Program is governed by the Program's own sandbox: the code of a Program whose
+    sandbox trusts its code is trusted also when restricted code calls it, so a host gives restricted code a
+    @ref Qore::Program "Program" object whose code parses what it is given (see @ref sandbox_program_capability)
+    only if that code may declare classes with private access to trusted classes.  Code
+    that a sandbox restricts cannot relax the policy of the manager that governs it, and a class keeps the access that
+    it was committed with when the policy is changed later.  A class that a Program parsed before a sandbox manager
+    was set for it keeps the private access that it had, so a host sets the manager and its policy before it parses
+    code that it does not trust.
 
     @subsection sandbox_program_capability Program Objects Are Capabilities
 

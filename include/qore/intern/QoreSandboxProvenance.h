@@ -119,6 +119,10 @@ DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
     marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
 */
 DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the given Program; fails closed (qore#7303)
+/** As qore_object_program_is_restricted(), for a Program; false for nullptr (builtin code)
+*/
+DLLLOCAL bool qore_program_is_restricted(const QoreProgram* pgm);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
     object (SandboxManager::getSandboxedProgramId(); qore#7110)

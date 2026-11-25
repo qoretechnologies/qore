@@ -1429,6 +1429,21 @@ public:
     */
     std::atomic<bool> sandboxed{false};
 
+    //! true if code that no sandbox trusts marked the Program sandboxed (qore#7635); never cleared once set
+    /** Set with \c sandboxed when the code that creates the Program, parses code in it or loads a module that it
+        chose into it is restricted or sandboxed without a manager (qore_caller_marks_untrusted()); not when code whose
+        sandbox trusts its code does (a parse of such code that fails leaves the Program sandboxed, but its code is
+        not restricted).  A Program with this flag and without a manager of its own runs code that is restricted
+        without a manager (qore_caller_has_unmanaged_sandbox())
+    */
+    std::atomic<bool> untrusted_mark{false};
+
+    //! true if a manager was ever set for the Program, as its own or as its creator's (qore#7635); never cleared
+    /** A Program whose managers were released (releaseSandboxManagers()) is restricted without a manager for the
+        private access of its classes (see qore_program_code_is_restricted()), as is one with untrusted_mark
+    */
+    std::atomic<bool> ever_managed{false};
+
     //! the sandbox of the code that created the Program or added code to it (referenced), or nullptr
     /** Set when sandboxed code, or C++ code acting for it, creates the Program (in the constructor) or commits code
         that it parsed in it (internParseCommit()), to the manager that governs that code (qore_caller_sandbox_refs());
@@ -1480,6 +1495,15 @@ public:
     QoreSandboxManager* pending_creator_sandbox = nullptr;
     //! the policy manager of \c pending_creator_sandbox (referenced), or nullptr
     QoreSandboxManager* pending_creator_policy = nullptr;
+    //! true if code that is restricted without a manager parsed the pending code (qore#7635); with the parse lock held
+    /** Code that a Program marked sandboxed by code that no sandbox trusts makes sandboxed (see
+        qore_caller_has_unmanaged_sandbox()): it is not trusted, but no manager is attached to the Program for it, so
+        the private access of its classes is decided with this flag (see pendingCreatorSandboxIsRestricted())
+    */
+    bool pending_unmanaged_sandbox = false;
+    //! pending_unmanaged_sandbox of the code being committed, for the classes that the commit commits; with the parse
+    //! lock held
+    bool commit_unmanaged_sandbox = false;
 
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
@@ -2346,6 +2370,11 @@ struct QoreParseCreatorSandbox {
     QoreSandboxManager* sm = nullptr;
     //! the manager for policy checks (referenced), or nullptr
     QoreSandboxManager* policy = nullptr;
+    //! true if the parsing code is sandboxed, also when no manager of its sandbox was found (qore#7635)
+    bool sandboxed = false;
+    //! true if the parsing code is restricted without a manager, also when a manager of another Program was found
+    //! (see qore_caller_has_unmanaged_sandbox()) (qore#7635)
+    bool unmanaged = false;
 
     DLLLOCAL QoreParseCreatorSandbox() = default;
     DLLLOCAL ~QoreParseCreatorSandbox();
@@ -3574,6 +3603,26 @@ public:
 
     DLLLOCAL bool parsingLocked() const {
         return parse_tid == q_gettid();
+    }
+
+    //! Returns true if the sandbox of the code that parses the pending code does not trust its code (qore#7635)
+    /** As qore_program_is_restricted() for the sandbox that internParseCommit() attaches to the Program when it
+        commits the code (pending_creator_sandbox); also true if code that is restricted without a manager parses it
+        (pending_unmanaged_sandbox), or committed it (commit_unmanaged_sandbox); false if trusted code parses it.  To
+        be called only if the calling thread holds the parse lock (parsingLocked()), as the pending sandbox can be read
+        only with it
+    */
+    DLLLOCAL bool pendingCreatorSandboxIsRestricted() const;
+
+    //! Returns true if the code that the calling thread commits was parsed by code that is restricted without a
+    //! manager (qore#7635); false if the calling thread does not hold the parse lock
+    DLLLOCAL bool commitParsedByUnmanagedSandbox() const {
+        return parsingLocked() && commit_unmanaged_sandbox;
+    }
+
+    //! Clears commit_unmanaged_sandbox when the commit ends; called with plock held
+    DLLLOCAL void clearCommitUnmanagedSandbox() {
+        commit_unmanaged_sandbox = false;
     }
 
     //! Waits for the parse lock that another thread holds; called by lockParsing() with plock held

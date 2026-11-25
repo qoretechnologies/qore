@@ -2205,8 +2205,10 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            sandboxed.store(true, std::memory_order_release);
+            // the manager flag first: a reader that sees the Program sandboxed also sees that it has a manager
+            ever_managed.store(true, std::memory_order_release);
             any_sandbox_manager.store(true, std::memory_order_release);
+            sandboxed.store(true, std::memory_order_release);
         }
         own_manager_additive.store(sm && additive, std::memory_order_release);
         old = sandbox_manager.exchange(sm, std::memory_order_acq_rel);
@@ -2244,14 +2246,18 @@ bool qore_object_program_is_sandboxed(const QoreObject* obj) {
 }
 
 bool qore_object_program_is_restricted(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
+    return qore_program_is_restricted(obj->getProgram());
+}
+
+bool qore_program_is_restricted(const QoreProgram* pgm) {
     if (!pgm) {
         return false;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
         // its code only if every member does
-        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*const_cast<QoreProgram*>(pgm))
+            ->getSandboxManagerRef(), nullptr);
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed
@@ -2262,6 +2268,20 @@ bool qore_object_program_is_restricted(const QoreObject* obj) {
         // the composition of the Program's sandboxes could not be made: fails closed
         return true;
     }
+}
+
+bool qore_program_code_is_restricted(const QoreProgram* pgm) {
+    if (!pgm) {
+        return false;
+    }
+    const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    if (!pp->hasSandboxManager()) {
+        // a Program that only trusted code marked sandboxed runs trusted code; one that code that no sandbox trusts
+        // marked, or that had a manager, fails closed
+        return pp->sandboxed.load(std::memory_order_acquire) && (pp->untrusted_mark.load(std::memory_order_acquire)
+            || pp->ever_managed.load(std::memory_order_acquire));
+    }
+    return qore_program_is_restricted(pgm);
 }
 
 bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
@@ -2339,6 +2359,9 @@ bool qore_add_sandbox_to_slot(QoreThreadLock& lock, std::atomic<QoreSandboxManag
 
 void qore_program_private::addCreatorSandbox(QoreSandboxManager* sm, QoreSandboxManager* policy_sm) {
     assert(sm || policy_sm);
+    // before the manager is published, so that a Program that has one or had one is never taken for a Program that
+    // only trusted code marked sandboxed (qore#7635)
+    ever_managed.store(true, std::memory_order_release);
     // after a manager is published, also when the other one cannot be combined: a thread that finds the new
     // generation finds it (see ProgramThreadCountContextHelper::sandboxChainClear())
     bool changed = false;
@@ -2374,6 +2397,11 @@ int qore_program_private::getParseCreatorSandbox(QoreParseCreatorSandbox& pcs, E
     assert(!pcs.sm && !pcs.policy);
     if (!qore_caller_is_sandboxed()) {
         return 0;
+    }
+    pcs.sandboxed = true;
+    pcs.unmanaged = qore_caller_has_unmanaged_sandbox();
+    if (qore_caller_marks_untrusted()) {
+        untrusted_mark.store(true, std::memory_order_release);
     }
     sandboxed.store(true, std::memory_order_release);
     try {
@@ -2421,6 +2449,11 @@ int qore_program_private::pendCreatorSandbox(QoreParseCreatorSandbox& pcs, Excep
         }
         pending_creator_policy = policy.release();
     }
+    // code that a Program marked sandboxed by code that no sandbox trusts makes sandboxed, and which no manager
+    // governs, is not trusted, though no manager is attached for it; also when a manager of another Program is found
+    if (pcs.sandboxed && pcs.unmanaged) {
+        pending_unmanaged_sandbox = true;
+    }
     return 0;
 }
 
@@ -2444,7 +2477,14 @@ void qore_program_private::releaseSandboxManagers(ExceptionSink* xsink) {
     dropPendingCreatorSandbox();
 }
 
+bool qore_program_private::pendingCreatorSandboxIsRestricted() const {
+    assert(parsingLocked());
+    return pending_unmanaged_sandbox || commit_unmanaged_sandbox
+        || (pending_creator_sandbox && !pending_creator_sandbox->trustsUncontrolledApis());
+}
+
 void qore_program_private::dropPendingCreatorSandbox() {
+    pending_unmanaged_sandbox = false;
     if (pending_creator_sandbox) {
         pending_creator_sandbox->deref(nullptr);
         pending_creator_sandbox = nullptr;
@@ -2456,16 +2496,19 @@ void qore_program_private::dropPendingCreatorSandbox() {
 }
 
 int qore_program_private::commitPendingCreatorSandbox(ExceptionSink* xsink) {
-    if (!pending_creator_sandbox && !pending_creator_policy) {
-        return 0;
-    }
-    try {
-        addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
-    } catch (std::bad_alloc&) {
-        xsink->outOfMemory();
-        return -1;
+    // the classes that the commit commits are decided with it (see initSandboxAccess()); set only when the commit
+    // goes ahead, cleared when it ends
+    const bool unmanaged = pending_unmanaged_sandbox;
+    if (pending_creator_sandbox || pending_creator_policy) {
+        try {
+            addCreatorSandbox(pending_creator_sandbox, pending_creator_policy);
+        } catch (std::bad_alloc&) {
+            xsink->outOfMemory();
+            return -1;
+        }
     }
     dropPendingCreatorSandbox();
+    commit_unmanaged_sandbox = unmanaged;
     return 0;
 }
 
@@ -2479,8 +2522,12 @@ bool qore_program_is_sandboxed(const QoreProgram* pgm) {
     return pp->sandboxed.load(std::memory_order_acquire) || pp->hasSandboxManager();
 }
 
-void qore_program_mark_sandboxed(QoreProgram& pgm) {
-    qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
+void qore_program_mark_sandboxed(QoreProgram& pgm, bool untrusted) {
+    qore_program_private* pp = qore_program_private::get(pgm);
+    if (untrusted) {
+        pp->untrusted_mark.store(true, std::memory_order_release);
+    }
+    pp->sandboxed.store(true, std::memory_order_release);
 }
 
 namespace {

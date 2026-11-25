@@ -2230,7 +2230,10 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 DLLLOCAL void qore_program_cache_release_values(QoreProgram* pgm, ExceptionSink* xsink);
 
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
-DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
+/** @param pgm the Program
+    @param untrusted true if code that no sandbox trusts marks it (qore_program_private::untrusted_mark, qore#7635)
+*/
+DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm, bool untrusted);
 
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
@@ -2404,6 +2407,33 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
+//! Returns true if the calling code is restricted without a manager (qore#7635)
+/** Code of a Program that has no manager now and that code that no sandbox trusts marked sandboxed
+    (qore_program_private::untrusted_mark) or that had a manager (qore_program_private::ever_managed): it is not
+    trusted, though no manager governs it, also when a manager of another Program on the thread's call stack is found
+    for it (the Program that it parses code in, for example).  The Programs on the call stack are walked as in
+    qore_caller_is_sandboxed(), and a sandboxed caller that a parse or module load hid from the walk (see
+    QoreCallerSandboxHelper) counts if it was restricted without a manager
+*/
+DLLLOCAL bool qore_caller_has_unmanaged_sandbox();
+
+//! Returns true if the calling code is sandboxed and its sandbox does not trust it (qore#7635)
+/** Restricted (a sandbox that does not allow uncontrolled APIs governs it) or restricted without a manager (see
+    qore_caller_has_unmanaged_sandbox()); fails closed: true if its sandbox cannot be resolved.  Code that is
+    sandboxed only through a Program that trusted code marked sandboxed is not.  Decides whether a
+    Program that the code marks sandboxed gets qore_program_private::untrusted_mark
+*/
+DLLLOCAL bool qore_caller_marks_untrusted();
+
+//! Returns true if a sandbox that does not trust its code governs the Program, or none governs it now and it is
+//! restricted without a manager (qore#7635)
+/** As qore_program_is_restricted(), but a Program without a manager is restricted only if code that no sandbox trusts
+    marked it sandboxed or if it had a manager (qore_program_private::untrusted_mark, ever_managed): not a Program
+    that only trusted code marked sandboxed (by a parse of it that failed, for example); decides the private access
+    of the classes of the Program (qore_class_private::isRestrictedCode())
+*/
+DLLLOCAL bool qore_program_code_is_restricted(const QoreProgram* pgm);
+
 //! Returns the Program of the calling code whose per-Program cache a library class uses (see
 //! SandboxManager::setProgramCacheValue())
 /** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
@@ -2468,6 +2498,11 @@ public:
         return barrier_depth;
     }
 
+    //! Returns true if the caller is restricted without a manager (qore_caller_has_unmanaged_sandbox()) (qore#7635)
+    DLLLOCAL bool isUnmanaged() const {
+        return unmanaged;
+    }
+
     //! Returns the ID of the sandboxed Program of the caller, or 0 if it is not known (qore#7139)
     DLLLOCAL qore_program_id_t getSandboxedProgramId() const {
         return sandboxed_pgm_id;
@@ -2484,6 +2519,8 @@ private:
     //! the ID of the sandboxed Program of the caller (see qore_caller_is_sandboxed())
     qore_program_id_t sandboxed_pgm_id = 0;
     bool pushed = false;
+    //! see isUnmanaged()
+    bool unmanaged = false;
 };
 
 //! The generation of the sandbox managers of all Programs: incremented after a manager is set on any Program
