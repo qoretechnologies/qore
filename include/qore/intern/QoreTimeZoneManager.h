@@ -506,7 +506,22 @@ public:
         std::vector<QoreSandboxMemoryAccount*> accounts;
         //! the isolation domain of the calling code; empty if none
         std::string domain;
+        //! the referenced managers whose file-system policies decide, for a Program that is parsed (the
+        //! %set-time-zone directive); empty for the code that runs, whose policy the thread gives
+        std::vector<QoreSandboxManager*> policy_managers;
     };
+
+    //! loads the zone that the %set-time-zone directive names with a path in a Program that sandboxes govern
+    //! (qore#7566)
+    /** @param name the path
+        @param managers the managers that govern the Program and the code that parses it (borrowed; composites are
+        flattened)
+        @param xsink for the exception if the path cannot be used or loaded
+
+        @return the zone, or nullptr if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findLoadSandboxDirectivePath(const char* name,
+            const std::vector<QoreSandboxManager*>& managers, ExceptionSink* xsink);
 
     //! the most time zone names that code of one isolation domain can load from paths (qore#7566)
     static constexpr int64_t MaxDomainPathZones = 256;
@@ -542,7 +557,8 @@ private:
 
         @return 0 for OK, -1 if an exception was raised
     */
-    DLLLOCAL static int prepareSandboxCharge(const char* name, SandboxTzCharge& charge, ExceptionSink* xsink);
+    DLLLOCAL static int prepareSandboxCharge(const char* name, SandboxTzCharge& charge, ExceptionSink* xsink,
+            const std::vector<QoreSandboxManager*>* managers = nullptr);
 
     //! raises the error for a path that the policy does not permit
     DLLLOCAL static void raisePathDenied(const char* name, const char* code, ExceptionSink* xsink);

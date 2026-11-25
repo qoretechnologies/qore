@@ -2631,6 +2631,9 @@ QoreTimeZoneManager::SandboxTzCharge::~SandboxTzCharge() {
     for (QoreSandboxMemoryAccount* account : accounts) {
         account->deref();
     }
+    for (QoreSandboxManager* sm : policy_managers) {
+        sm->deref(nullptr);
+    }
 }
 
 QoreTimeZoneManager::TzChargeResult QoreTimeZoneManager::checkSandboxZone(const SandboxTzCharge& charge,
@@ -2853,7 +2856,20 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
             name);
         return nullptr;
     }
-    if (canon != path && checkPathPolicy(name, canon, xsink)) {
+    if (charge && !charge->policy_managers.empty()) {
+        // the policies of the Program that is parsed decide, for the file that was opened (qore#7566)
+        for (QoreSandboxManager* sm : charge->policy_managers) {
+            ExceptionSink xsink2;
+            if (!QoreSandboxComposition::checkCanonicalFilesystemAccess(*sm, canon.c_str(), name, QSEC_READ,
+                    &xsink2)) {
+                QoreStringDataHelper err(xsink2.getExceptionErr());
+                QoreString code(err ? err.c_str() : "FILESYSTEM-ACCESS-DENIED");
+                xsink2.clear();
+                raisePathDenied(name, code.c_str(), xsink);
+                return nullptr;
+            }
+        }
+    } else if (canon != path && checkPathPolicy(name, canon, xsink)) {
         return nullptr;
     }
     std::string data;
@@ -2870,7 +2886,8 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
     return getZone(name, data, rbuf, canon, false, path_aliases, name, xsink, charge);
 }
 
-int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge& charge, ExceptionSink* xsink) {
+int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge& charge, ExceptionSink* xsink,
+        const std::vector<QoreSandboxManager*>* managers) {
     // the name is checked before anything is allocated or resolved: an absolute path without ".", ".." or empty
     // components, which names the zone as given and cannot reach different files from different directories
     size_t len = strlen(name);
@@ -2891,17 +2908,38 @@ int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge&
     // the sandbox that governs the calling code, with every sandbox that governs it (not only the one whose
     // file-system policy applies, which a system-policy call can lift); code restricted only by its parse options
     // or that is restricted with no sandbox to charge cannot load paths (fail closed)
-    ReferenceHolder<QoreSandboxManager> all(qore_caller_sandbox_ref(), nullptr);
-    if (!all) {
+    ReferenceHolder<QoreSandboxManager> all(managers ? nullptr : qore_caller_sandbox_ref(), nullptr);
+    if (!managers && !all) {
         raiseRestrictedPath(name, xsink);
         return -1;
     }
-    std::vector<QoreSandboxManager*> single;
-    const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(*all);
-    if (!members) {
-        single.push_back(*all);
-        members = &single;
+    // the members of the sandboxes, flattened and without duplicates: never the account of a composite, which is
+    // new for each resolution (qore#7566)
+    std::vector<QoreSandboxManager*> flat;
+    auto add = [&flat] (QoreSandboxManager* sm) {
+        const std::vector<QoreSandboxManager*>* m = QoreSandboxComposition::members(sm);
+        if (m) {
+            for (QoreSandboxManager* i : *m) {
+                if (std::find(flat.begin(), flat.end(), i) == flat.end()) {
+                    flat.push_back(i);
+                }
+            }
+        } else if (std::find(flat.begin(), flat.end(), sm) == flat.end()) {
+            flat.push_back(sm);
+        }
+    };
+    if (managers) {
+        for (QoreSandboxManager* sm : *managers) {
+            add(sm);
+        }
+    } else {
+        add(*all);
     }
+    if (flat.empty()) {
+        raiseRestrictedPath(name, xsink);
+        return -1;
+    }
+    const std::vector<QoreSandboxManager*>* members = &flat;
     charge.accounts.reserve(members->size());
     for (QoreSandboxManager* sm : *members) {
         QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
@@ -2915,7 +2953,29 @@ int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge&
         charge.accounts.push_back(account);
     }
     // the code of one tenant is bounded also across the sandboxes that the host creates for it
-    charge.domain = qore_caller_isolation_domain();
+    if (managers) {
+        // the Program's sandboxes decide; members with different domains, or a mixed one, have no tenant
+        charge.domain.clear();
+        for (QoreSandboxManager* sm : *members) {
+            std::string d;
+            int rc = QoreSandboxComposition::foldIsolationDomain(sm, d);
+            if (rc < 0 || (rc > 0 && !charge.domain.empty() && charge.domain != d)) {
+                charge.domain = QoreSandboxComposition::MixedIsolationDomain;
+                break;
+            }
+            if (rc > 0) {
+                charge.domain = d;
+            }
+        }
+        // the file-system policy of each member decides
+        charge.policy_managers.reserve(members->size());
+        for (QoreSandboxManager* sm : *members) {
+            sm->ref();
+            charge.policy_managers.push_back(sm);
+        }
+    } else {
+        charge.domain = qore_caller_isolation_domain();
+    }
     if (qore_isolation_domain_is_mixed(charge.domain)) {
         xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': the code is "
             "governed by the sandboxes of different isolation domains", name);
@@ -3140,6 +3200,32 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
         return nullptr;
     }
     return loadPath(name, path, xsink, charge.get());
+#endif
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadSandboxDirectivePath(const char* name,
+        const std::vector<QoreSandboxManager*>& managers, ExceptionSink* xsink) {
+    assert(name && !managers.empty());
+#ifdef _Q_WINDOWS
+    raiseRestrictedPath(name, xsink);
+    return nullptr;
+#else
+    SandboxTzCharge charge;
+    if (prepareSandboxCharge(name, charge, xsink, &managers)) {
+        return nullptr;
+    }
+    // the name is checked against the policy of each sandbox before anything is accessed, also a zone that is cached
+    for (QoreSandboxManager* sm : charge.policy_managers) {
+        ExceptionSink xsink2;
+        if (!sm->checkFilesystemAccess(name, QSEC_READ, &xsink2)) {
+            QoreStringDataHelper err(xsink2.getExceptionErr());
+            QoreString code(err ? err.c_str() : "FILESYSTEM-ACCESS-DENIED");
+            xsink2.clear();
+            raisePathDenied(name, code.c_str(), xsink);
+            return nullptr;
+        }
+    }
+    return loadPath(name, std::string(name), xsink, &charge);
 #endif
 }
 
