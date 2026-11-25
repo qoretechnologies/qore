@@ -1053,6 +1053,9 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 } catch (const QoreJITException&) {
                     // The raise site has already populated xsink. Keep the normal
                     // top-level cleanup and Qore exception propagation path intact.
+                } catch (const std::bad_alloc&) {
+                    // memory that the native code needed could not be allocated (qore#7466)
+                    qore_raise_compiled_code_allocation_failure(xsink);
                 }
             }
 
@@ -1073,7 +1076,13 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             {
                 // see above
                 ToplevelCodeParseOptionsHelper code_po(runtime_parse_options);
-                result_bits = cached_toplevel_jit_fn(xsink);
+                try {
+                    result_bits = cached_toplevel_jit_fn(xsink);
+                } catch (const std::bad_alloc&) {
+                    // memory that the native code needed could not be allocated (qore#7466)
+                    qore_raise_compiled_code_allocation_failure(xsink);
+                    result_bits = 0;
+                }
             }
 
             QoreValue result;

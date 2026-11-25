@@ -2889,7 +2889,14 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
             // JIT-compiled code calls into normal Qore functions which manage
             // their own stack locations via CodeEvaluationHelper. Clearing
             // the stack breaks exception call stacks.
-            uint64_t result_bits = fn(xsink);
+            uint64_t result_bits;
+            try {
+                result_bits = fn(xsink);
+            } catch (const std::bad_alloc&) {
+                // memory that the native code needed could not be allocated: the call fails (qore#7466)
+                qore_raise_compiled_code_allocation_failure(xsink);
+                result_bits = 0;
+            }
 
             // Reconstruct QoreValue from NaN-boxed bits
             QoreValue result;

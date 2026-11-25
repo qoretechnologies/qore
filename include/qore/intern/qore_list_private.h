@@ -519,6 +519,15 @@ struct qore_list_private {
         initEntry(length, val);
     }
 
+    //! pushes the value of the holder, which keeps it if the list cannot grow (std::bad_alloc; qore#7466)
+    /** Not used by push(), whose callers are on the path of every list that code makes: holding the value until it is
+        stored adds instructions to each push
+    */
+    DLLLOCAL void pushIntern(ValueHolder& holder) {
+        initEntry(length, *holder);
+        holder.release();
+    }
+
     DLLLOCAL size_t checkOffset(ptrdiff_t offset) {
         if (offset < 0) {
             offset = length + offset;

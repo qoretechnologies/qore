@@ -10043,6 +10043,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 } catch (const QoreJITException&) {
                     result_bits = 0;
+                } catch (const std::bad_alloc&) {
+                    // memory that the native code needed could not be allocated: the call fails with a Qore
+                    // exception, which the caller can catch (qore#7466)
+                    qore_raise_compiled_code_allocation_failure(xsink);
+                    result_bits = 0;
                 }
 
                 // Check for JIT guard failure requesting deopt to AST.

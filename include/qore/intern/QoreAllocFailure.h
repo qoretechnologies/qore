@@ -110,6 +110,30 @@ DLLLOCAL inline void* qore_malloc_or_throw(size_t size) {
 */
 DLLLOCAL void qore_raise_allocation_failure(ExceptionSink* xsink, const char* context) noexcept;
 
+//! Raises \c MEMORY-ALLOCATION-ERROR for a std::bad_alloc that left compiled code, or ends the process (qore#7466)
+/** Called by the handler of a std::bad_alloc at a boundary of the C++ code with the compiled code that it calls (the
+    IR interpreter, JIT or AOT code), while the exception is handled.  The runtime helpers that allocate the storage of
+    a value raise the exception themselves (QORE_RT_CATCH_ALLOCATION_FAILURE() in JITRuntime.cpp), so that the compiled
+    code fails as on any exception; a std::bad_alloc that reaches a boundary comes from an allocation that no helper
+    handles.  The frames of native (JIT, AOT) code that it left released nothing and kept what they had pushed: when
+    the function whose allocation failed was the only frame of native code that the exception left, the call fails
+    with the exception, which the caller can catch; when frames of native code that it called directly were left too,
+    which have pushed their frames on the thread's call stack in their own storage (qore_native_frames_left()), the
+    thread cannot go on, and the process ends with std::terminate() (the message of the terminate handler).  Whether
+    native frames were left is only known here, from the addresses: nothing is recorded on the path that does not
+    fail.
+
+    @param xsink the sink to raise the exception in
+*/
+DLLLOCAL void qore_raise_compiled_code_allocation_failure(ExceptionSink* xsink) noexcept
+    __attribute__((noinline, cold));
+
+//! true if the thread's current call stack location is in the part of its stack below \a boundary (qore#7466)
+/** @param boundary an address in the stack frame of a function called by the boundary that handles a std::bad_alloc:
+    the frames of native code that the exception left were below it
+*/
+DLLLOCAL bool qore_native_frames_left(const void* boundary);
+
 //! Installs the terminate handler that reports a std::bad_alloc that no code could handle before the process ends,
 //! and holds back the memory for the exception of an allocation that fails (qore#7466); called by qore_init()
 DLLLOCAL void qore_install_terminate_handler();

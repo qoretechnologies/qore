@@ -50,15 +50,22 @@
     raises a \c MEMORY-ALLOCATION-ERROR exception, which the code can catch like any other, and the process goes on:
     - a call of builtin code (a function or a method of a builtin class, such as @ref Qore::strmul() "strmul()"),
       in every @ref execution_modes "execution mode" and in compiled code
-    - in the @ref exec_mode_ast "AST" execution mode, also a statement whose own evaluation needs the memory, such as
-      an assignment that adds an element to a list
+    - in the @ref exec_mode_ast "AST" execution mode, a statement whose own evaluation needs the memory, such as an
+      assignment that adds an element to a list
+    - in the @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and @ref exec_mode_tiered "tiered" execution modes and
+      in compiled code, an operation of the code itself that grows a list, a string or a hash, such as an assignment
+      that adds an element to a list, a \c push or a concatenation of strings
+    - in the @ref exec_mode_ir "IR" execution mode, also any other operation, which fails the call of the function
+      whose operation it is
 
     The value that the operation was changing is left as it was.  Where memory that the code needs cannot be
-    allocated outside of these operations (in the @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and
-    @ref exec_mode_tiered "tiered" execution modes and in compiled code, an operation of the code itself, such as an
-    assignment that adds an element to a list; or code of the runtime that runs no %Qore code), the process ends with
-    the message <tt>qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that cannot fail with a Qore
-    exception (std::bad_alloc); the process ends</tt> on stderr.
+    allocated outside of these operations (another operation of JIT or compiled code, such as the list that a
+    \c map expression makes or the addition of a \c float to a list of floats), the call of the function whose
+    operation it is fails with the exception, which its caller can catch, if the function was called by the runtime;
+    if it was called directly by other JIT or compiled code, which has not released what it holds, or where code of
+    the runtime that runs no %Qore code needs the memory, the process ends with the message <tt>qore:
+    MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that cannot fail with a Qore exception
+    (std::bad_alloc); the process ends</tt> on stderr.
 
     @section exception_location The Location of an Exception
 

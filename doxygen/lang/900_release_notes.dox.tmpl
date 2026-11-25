@@ -2876,8 +2876,8 @@
       loaded with code that the same module in a single file is refused for, and its parse-time warnings were errors
       also for @ref Qore::load_module_warn() "load_module_warn()" (see @ref user_modules;
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
-    - memory that cannot be allocated fails a call of builtin code (in the AST mode also a statement) with a catchable
-      \c MEMORY-ALLOCATION-ERROR exception and leaves the string or list that could not grow unchanged, where the
+    - memory that cannot be allocated fails a call of builtin code or an operation that grows a list or a string, in
+      every execution mode and in compiled code, with a catchable \c MEMORY-ALLOCATION-ERROR exception, where the
       process ended with a segmentation fault or \c std::terminate() (@ref exception_memory "allocation failures";
       <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser

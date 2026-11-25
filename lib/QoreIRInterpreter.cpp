@@ -12902,6 +12902,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
     };
 
+    // memory that an instruction needed and that no runtime helper or builtin call turned into an exception
+    // (std::bad_alloc) fails the call of the function: the frame is left as on an exception that no handler in it
+    // catches, and the caller gets MEMORY-ALLOCATION-ERROR (qore#7466); the dispatch loop is not indented for the try
+    // block, which adds no instruction to the path that does not fail, though GCC allocates registers differently
+    try {
     while (block) {
         if (ip >= block->instructions.size()) {
             if (xsink) {
@@ -23374,6 +23379,15 @@ weak_receiver_raised:
         } // end of current_block scope
 
     }
+    } catch (const std::bad_alloc&) {
+        if (!xsink) {
+            throw;
+        }
+        qore_raise_compiled_code_allocation_failure(xsink);
+        unwindForException();
+        cleanupLocalCaches(false);
+        return exitAfterUnwind();
+    }
 
     if (xsink) {
         xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
@@ -25398,7 +25412,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                     rc = lp->checkVal(right_holder, xsink);
                 }
                 if (!rc) {
-                    lp->pushIntern(right_holder.release());
+                    lp->pushIntern(right_holder);
                 }
             }
         }

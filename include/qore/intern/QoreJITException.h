@@ -42,6 +42,9 @@
 
 #include <exception>
 
+// the boundaries that catch QoreJITException also turn a std::bad_alloc into a Qore exception (qore#7466)
+#include "qore/intern/QoreAllocFailure.h"
+
 //! Clears the current thread's call site (see QoreRcCallSiteHelper)
 DLLLOCAL void clear_runtime_call_site();
 

@@ -13043,6 +13043,9 @@ static void runAOTModuleDelClosure(const std::string& mod_name, const std::strin
                 qore_aot_call_body(fn_ptr, ctx, &xsink);
             } catch (const QoreJITException&) {
                 // xsink is already populated at the raise site
+            } catch (const std::bad_alloc&) {
+                // memory that the native code needed could not be allocated (qore#7466)
+                qore_raise_compiled_code_allocation_failure(&xsink);
             }
             for (int k = instantiated - 1; k >= 0; --k) {
                 LocalVar* lv = body_locals[k];
@@ -14234,6 +14237,9 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
             raw_result = 0;
+        } catch (const std::bad_alloc&) {
+            qore_raise_compiled_code_allocation_failure(&init_xsink);
+            raw_result = 0;
         }
         set_module_context_path(old_path);
         set_module_context_name(old_name);
@@ -14690,6 +14696,9 @@ static int executeInitFunctions(
                         raw_result = qore_aot_call_body(info->fn_ptr, info->ctx, &xsink);
                     } catch (const QoreJITException&) {
                         raw_result = 0;
+                    } catch (const std::bad_alloc&) {
+                        qore_raise_compiled_code_allocation_failure(&xsink);
+                        raw_result = 0;
                     }
                 }
                 for (int k = instantiated - 1; k >= 0; --k) {
@@ -14702,6 +14711,9 @@ static int executeInitFunctions(
                 try {
                     raw_result = qore_aot_call_body(info->fn_ptr, info->ctx, &xsink);
                 } catch (const QoreJITException&) {
+                    raw_result = 0;
+                } catch (const std::bad_alloc&) {
+                    qore_raise_compiled_code_allocation_failure(&xsink);
                     raw_result = 0;
                 }
             }
