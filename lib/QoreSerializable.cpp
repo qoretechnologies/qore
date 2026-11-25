@@ -974,7 +974,10 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                     }
                     return QoreValue();
                 }
-                QoreObject* obj = new QoreObject(cls, pgm);
+                // the object has the Program of its class, as a constructed or copied object does; the deserializing
+                // Program only for a class without one
+                QoreProgram* obj_pgm = cls->getProgram();
+                QoreObject* obj = new QoreObject(cls, obj_pgm ? obj_pgm : pgm);
                 v = oh->getKeyValue("_object_type");
                 if (v) {
                     if (v.getType() != NT_STRING) {
