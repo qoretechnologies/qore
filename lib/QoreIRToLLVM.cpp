@@ -21852,6 +21852,84 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 registerInvokeCleanupAlloca(cleanup);
                 return cleanup;
             };
+            // a store to a local that can hold a reference at run time (qore#7617): while it holds one, a weak or
+            // opaque store, and a Normal store to a local of type any or auto!, assigns the original value to the
+            // referenced lvalue with that lvalue's type (qore_rt_assign_local_through()), as the AST interpreter
+            // assigns it (LocalVarValue::getLValue() resolves the reference), instead of applying the local's own
+            // type, the weak store check of qore#7572 and the weak or opaque wrapper to it first
+            auto store_through_reference = [&](bool plain_any) -> bool {
+                return linst->is_ref && linst->mode != AssignmentMode::Element
+                    && (qore_assignment_mode_converts_value(linst->mode)
+                        || (linst->mode == AssignmentMode::Normal && plain_any));
+            };
+            // emits the test of whether the local holds a reference at run time; returns the i1 result
+            auto emit_local_holds_reference = [&]() -> llvm::Value* {
+                llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
+                llvm::Value* holds;
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    auto holds_fn = module.getOrInsertFunction("qore_rt_local_holds_reference_aot",
+                        llvm::FunctionType::get(i8_type, {ptr_type, i32_type}, false));
+                    holds = builder->CreateCall(holds_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot)});
+                } else {
+                    auto holds_fn = module.getOrInsertFunction("qore_rt_local_holds_reference",
+                        llvm::FunctionType::get(i8_type, {ptr_type}, false));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(linst->local)), ptr_type);
+                    holds = builder->CreateCall(holds_fn, {var_as_ptr});
+                }
+                return builder->CreateICmpNE(holds, llvm::ConstantInt::get(i8_type, 0));
+            };
+            // emits the assignment of the original value through the reference that the local holds; returns the
+            // value of the assignment, owned by the code (NOTHING if it raised an exception)
+            auto emit_store_through_reference = [&](llvm::Value* original) -> llvm::Value* {
+                llvm::Value* mode_arg = llvm::ConstantInt::get(i32_type, static_cast<int32_t>(linst->mode));
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    auto ft = llvm::FunctionType::get(i64_type, {ptr_type, i32_type, i64_type, i32_type, ptr_type},
+                        false);
+                    auto through_fn = module.getOrInsertFunction(
+                        qore_store_helper_name("qore_rt_assign_local_through_aot", linst->foreach_assignment), ft);
+                    auto through_fn_throwing = module.getOrInsertFunction(
+                        qore_store_helper_name("qore_rt_assign_local_through_aot_throwing", linst->foreach_assignment),
+                        ft);
+                    return emitMaybeInvoke(through_fn, through_fn_throwing,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), original, mode_arg, xsink_arg},
+                        module, llvm_func, inst);
+                }
+                auto ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto through_fn = module.getOrInsertFunction(
+                    qore_store_helper_name("qore_rt_assign_local_through", linst->foreach_assignment), ft);
+                auto through_fn_throwing = module.getOrInsertFunction(
+                    qore_store_helper_name("qore_rt_assign_local_through_throwing", linst->foreach_assignment), ft);
+                llvm::Value* var_as_ptr = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(linst->local)), ptr_type);
+                return emitMaybeInvoke(through_fn, through_fn_throwing, {var_as_ptr, original, mode_arg, xsink_arg},
+                    module, llvm_func, inst);
+            };
+            // keeps the value of an assignment through a reference (see emit_store_through_reference()) in the
+            // cleanup slot given, which releases the value it held, if the store has a result, which borrows it;
+            // otherwise the value is released at once
+            auto keep_store_through_value = [&](llvm::Value* through_val, llvm::AllocaInst* cleanup) {
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                if (!inst->result.isValid()) {
+                    builder->CreateCall(decref_fn, {through_val, xsink_arg});
+                    return;
+                }
+                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
+                builder->CreateStore(through_val, cleanup);
+                builder->CreateCall(decref_fn, {old_val, xsink_arg});
+            };
+            // creates the cleanup slot of the function for the value of an assignment through a reference
+            auto create_store_through_cleanup = [&](const char* name) -> llvm::AllocaInst* {
+                llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
+                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+                llvm::AllocaInst* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, name);
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                registerInvokeCleanupAlloca(cleanup);
+                return cleanup;
+            };
 
             // Outer-scope variables: assign directly to the thread-local stack via
             // qore_rt_assign_local() without creating an alloca or lazy instantiation.
@@ -21940,6 +22018,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 bool needs_value_coerce_outer = !element_store_outer && (is_complex_typed_outer
                     || needs_scalar_coerce_outer || needs_plain_any_outer);
                 llvm::Value* consumed_cleanup_outer = nullptr;
+                // a store that assigns through a reference that the local holds at run time takes a path of its own,
+                // which joins this one after the store (qore#7617)
+                llvm::BasicBlock* through_bb_outer = nullptr;
+                llvm::BasicBlock* through_done_bb_outer = nullptr;
+                llvm::AllocaInst* through_cleanup_outer = nullptr;
+                llvm::Value* original_outer = boxed;
+                if (store_through_reference(needs_plain_any_outer)) {
+                    through_cleanup_outer = create_store_through_cleanup("through_cleanup_outer");
+                    llvm::Value* holds_ref = emit_local_holds_reference();
+                    through_bb_outer = llvm::BasicBlock::Create(ctx, "store_through_reference_outer", llvm_func);
+                    llvm::BasicBlock* value_bb = llvm::BasicBlock::Create(ctx, "store_local_value_outer", llvm_func);
+                    through_done_bb_outer = llvm::BasicBlock::Create(ctx, "store_through_done_outer", llvm_func);
+                    builder->CreateCondBr(holds_ref, through_bb_outer, value_bb,
+                        llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+                    builder->SetInsertPoint(value_bb);
+                    // the value that an earlier store through the reference kept
+                    clear_cleanup_alloca(through_cleanup_outer);
+                }
                 if (needs_value_coerce_outer) {
                     // Apply assignment coercion before publishing the value to
                     // keep any StoreLocal result aligned with the runtime stack.
@@ -22118,6 +22214,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             reinterpret_cast<uint64_t>(linst->local));
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                     builder->CreateCall(assign_helper, {var_as_ptr, boxed, xsink_arg});
+                }
+                if (through_bb_outer) {
+                    llvm::BasicBlock* value_end_bb = builder->GetInsertBlock();
+                    builder->CreateBr(through_done_bb_outer);
+
+                    builder->SetInsertPoint(through_bb_outer);
+                    llvm::Value* through_val = emit_store_through_reference(original_outer);
+                    keep_store_through_value(through_val, through_cleanup_outer);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    // the referenced lvalue can be a variable whose value a cache of this function holds
+                    reloadAllLocalsFromRuntime(module, llvm_func, false);
+                    llvm::BasicBlock* through_end_bb = builder->GetInsertBlock();
+                    builder->CreateBr(through_done_bb_outer);
+
+                    builder->SetInsertPoint(through_done_bb_outer);
+                    if (inst->result.isValid()) {
+                        bool converts = qore_assignment_mode_converts_value(linst->mode);
+                        llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "store_through_value_outer");
+                        phi->addIncoming(converts ? assigned_outer : boxed, value_end_bb);
+                        phi->addIncoming(through_val, through_end_bb);
+                        if (converts) {
+                            assigned_outer = phi;
+                        } else {
+                            boxed = phi;
+                        }
+                    }
                 }
                 // the store took its own reference; a weak or opaque store keeps the operand and its conversion to
                 // the end of the statement (see above)
@@ -22462,6 +22584,64 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 || (!element_store && !mode_store_through_runtime
                     && (is_complex_typed || needs_scalar_coerce || needs_plain_any));
             llvm::Value* consumed_cleanup = nullptr;
+            // the value assigned, before the local's own type is applied to it
+            llvm::Value* original_boxed = boxed;
+            // gives the value of the store to its consumers
+            auto set_store_result = [&](llvm::Value* store_value) {
+                // the value is the local's (or the operand's, which a consumer of the operand can release); a later
+                // write to the local before the result's last use would release it, so such a result takes a
+                // reference of its own (see overwritten_local_reads)
+                if (overwritten_local_reads.count(inst->result.id)) {
+                    store_value = emitHelperRef(module, store_value);
+                    trackResultForCleanup(store_value, inst->result.id, llvm_func);
+                }
+                values[inst->result.id] = store_value;
+                // the value of a weak or opaque assignment is NaN-boxed: a consumer read it as an integer (qore#7084);
+                // only these assignments give the store's result as their value (QoreIRLowering::lowerAssignment()),
+                // so the other stores keep their code
+                if (qore_assignment_mode_converts_value(linst->mode)) {
+                    nanboxed_values.insert(inst->result.id);
+                }
+            };
+            // a store that assigns through a reference that the local holds at run time takes a path of its own,
+            // which neither applies the local's type nor stores to its cache, and which joins this one after the
+            // store publishes the value (qore#7617); an IR-only local keeps a reference that it holds in its cache,
+            // through which its reference slot write below assigns; a weak or opaque store made on the runtime stack
+            // (mode_store_through_runtime, qore#7164) assigns through the reference there already
+            llvm::BasicBlock* through_bb = nullptr;
+            llvm::BasicBlock* through_done_bb = nullptr;
+            llvm::AllocaInst* through_cleanup = nullptr;
+            // the value of the store on this path, given where the paths join
+            llvm::Value* through_value_result = nullptr;
+            if (!is_ir_only && linst->local && !mode_store_through_runtime
+                    && store_through_reference(needs_plain_any)) {
+                through_cleanup = create_store_through_cleanup("through_cleanup");
+                if (block_scoped_locals.count(key)) {
+                    local_cleanup_allocas[key].push_back(through_cleanup);
+                }
+                llvm::Value* holds_ref;
+                if (readsThroughReference(linst->local)) {
+                    // a local of a reference type is assigned as the AST interpreter assigns it also when it holds
+                    // no reference: its type is a reference type, which the value assigned is checked against
+                    holds_ref = llvm::ConstantInt::getTrue(ctx);
+                } else {
+                    holds_ref = emit_local_holds_reference();
+                    auto flag_it = closure_pre_inst_flags.find(key);
+                    if (!aot_mode && flag_it != closure_pre_inst_flags.end()) {
+                        // a closure-captured local whose value the store instantiates again (see below) holds none
+                        holds_ref = builder->CreateAnd(holds_ref,
+                            builder->CreateLoad(llvm::Type::getInt1Ty(ctx), flag_it->second));
+                    }
+                }
+                through_bb = llvm::BasicBlock::Create(ctx, "store_through_reference", llvm_func);
+                llvm::BasicBlock* value_bb = llvm::BasicBlock::Create(ctx, "store_local_value", llvm_func);
+                through_done_bb = llvm::BasicBlock::Create(ctx, "store_through_done", llvm_func);
+                builder->CreateCondBr(holds_ref, through_bb, value_bb,
+                    llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+                builder->SetInsertPoint(value_bb);
+                // the value that an earlier store through the reference kept
+                clear_cleanup_alloca(through_cleanup);
+            }
 
             // IR-only locals still need their cached alloca value to match
             // the declared container type.  Only runtime-stack sync is
@@ -22733,8 +22913,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(write_bb);
                     auto write_fn = module.getOrInsertFunction("qore_rt_reference_slot_write",
                         llvm::FunctionType::get(void_type, {i64_type, i64_type, ptr_type}, false));
-                    // the helper takes the new reference; the cache keeps the reference it holds
-                    builder->CreateCall(write_fn, {old_val, owned_boxed, xsink_arg});
+                    // a weak or opaque store target is never IR-only (QoreIRFunction::computeIROnlyLocals())
+                    assert(linst->mode == AssignmentMode::Normal);
+                    if (original_boxed != boxed) {
+                        // the referenced lvalue's type is applied to the original value, as the AST interpreter
+                        // applies it, not the value that the local's own type converted (qore#7617), which is
+                        // released; the helper takes the new reference, and the cache keeps the reference it holds
+                        builder->CreateCall(write_fn, {old_val, emitHelperRef(module, original_boxed), xsink_arg});
+                        builder->CreateCall(decref_fn, {owned_boxed, xsink_arg});
+                    } else {
+                        // the helper takes the new reference; the cache keeps the reference it holds
+                        builder->CreateCall(write_fn, {old_val, owned_boxed, xsink_arg});
+                    }
                     // the referenced lvalue can be a variable whose value another cache holds
                     llvm::AllocaInst* epoch_alloca = getOrCreateLocalReloadEpoch(llvm_func);
                     builder->CreateStore(builder->CreateAdd(builder->CreateLoad(i64_type, epoch_alloca),
@@ -22859,19 +23049,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // the statement, as the AST interpreter gives it to its consumers (qore#7084)
                 llvm::Value* store_value = qore_assignment_mode_converts_value(linst->mode) ? assigned
                     : (reference_slot_store_value ? reference_slot_store_value : boxed);
-                // the value is the local's (or the operand's, which a consumer of the operand can release); a later
-                // write to the local before the result's last use would release it, so such a result takes a
-                // reference of its own (see overwritten_local_reads)
-                if (overwritten_local_reads.count(inst->result.id)) {
-                    store_value = emitHelperRef(module, store_value);
-                    trackResultForCleanup(store_value, inst->result.id, llvm_func);
-                }
-                values[inst->result.id] = store_value;
-                // the value of a weak or opaque assignment is NaN-boxed: a consumer read it as an integer (qore#7084);
-                // only these assignments give the store's result as their value (QoreIRLowering::lowerAssignment()),
-                // so the other stores keep their code
-                if (qore_assignment_mode_converts_value(linst->mode)) {
-                    nanboxed_values.insert(inst->result.id);
+                if (through_bb) {
+                    // the value of the store is given where its paths join (see below)
+                    through_value_result = store_value;
+                } else {
+                    set_store_result(store_value);
                 }
             }
             // Track cleanup alloca for block-scoped locals: if the stored value has
@@ -23061,6 +23243,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     retainOrReloadLocalCacheValue(key, boxed, module, llvm_func);
                 } else {
                     reloadLocalFromRuntime(key, module, llvm_func, false);
+                }
+                if (through_bb) {
+                    llvm::BasicBlock* value_end_bb = builder->GetInsertBlock();
+                    builder->CreateBr(through_done_bb);
+
+                    // the store through the reference that the local holds (see above)
+                    builder->SetInsertPoint(through_bb);
+                    llvm::Value* through_val = emit_store_through_reference(original_boxed);
+                    keep_store_through_value(through_val, through_cleanup);
+                    emitExceptionCheck(module, llvm_func, inst);
+                    // the referenced lvalue can be a variable whose value another cache holds, so every cache is
+                    // reloaded when next read; the local still holds the reference, which its cache is reloaded with
+                    // as after a store of the value path, unless the local is never read from its cache (a local of a
+                    // reference type or a weak or opaque store target)
+                    if (canReloadLocalFromRuntime(key, false)) {
+                        clearLocalCachedValue(key, module, llvm_func, LocalCacheClearMode::IncludeFastEntryOwner);
+                        clearLocalReloadTracker(key, module, llvm_func, false);
+                        reloadAllLocalsFromRuntime(module, llvm_func, false);
+                        reloadLocalFromRuntime(key, module, llvm_func, false);
+                    } else {
+                        reloadAllLocalsFromRuntime(module, llvm_func, false);
+                    }
+                    llvm::BasicBlock* through_end_bb = builder->GetInsertBlock();
+                    builder->CreateBr(through_done_bb);
+
+                    builder->SetInsertPoint(through_done_bb);
+                    if (inst->result.isValid()) {
+                        assert(through_value_result);
+                        llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "store_through_value");
+                        phi->addIncoming(through_value_result, value_end_bb);
+                        phi->addIncoming(through_val, through_end_bb);
+                        set_store_result(phi);
+                    }
                 }
                 // the store took its own reference; a weak or opaque store keeps the operand and its conversion to the
                 // end of the statement (see above)

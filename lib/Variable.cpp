@@ -4358,17 +4358,11 @@ int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& co
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
-    if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) [[unlikely]] {
-        return assignImpl<false, false, true>(n, desc, check_types, mode, {});
-    }
     return assignImpl<false>(n, desc, check_types, mode, {});
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
         AssignmentMode mode) {
-    if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) [[unlikely]] {
-        return assignImpl<true, false, true>(n, desc, check_types, mode, policy);
-    }
     return assignImpl<true>(n, desc, check_types, mode, policy);
 }
 
@@ -4426,7 +4420,15 @@ void LValueHelper::lockWeakAssignmentSource(QoreValue& n) {
 template <bool Lexical, bool Native, bool WeakOrOpaque>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
-    // a weak or opaque assignment is compiled in its own instantiation (see assign())
+    // a weak or opaque assignment takes the instantiation that refuses a value converted to a copy (qore#7572); the
+    // test is here, where the arguments are in place for the call, so that a normal assignment pays only for it (the
+    // assign() wrappers make no dispatch of their own)
+    if constexpr (!WeakOrOpaque && !Native) {
+        if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) [[unlikely]] {
+            return assignImpl<Lexical, false, true>(n, desc, check_types, mode, policy);
+        }
+    }
+    // a weak or opaque assignment runs in its own instantiation
     assert(WeakOrOpaque == (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque));
     // the container of the lvalue's weak reference is changed in place, never replaced (see viewWeakContainer()):
     // no operation assigns through a helper that designates it
