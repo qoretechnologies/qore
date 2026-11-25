@@ -42,6 +42,7 @@
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <algorithm>
 #include <cctype>
@@ -914,6 +915,179 @@ int qore_ds_private::checkConnectTargets(ExceptionSink* xsink) {
     }
     checked_targets = checked.release();
     return 0;
+}
+
+struct QoreDbiPinnedPath {
+    //! the pinned path, if any (dirfd >= 0)
+    QoreSandboxPinnedPath pin;
+    //! the path that a driver opens by name (qore_dbi_pinned_path_get())
+    std::string path;
+    //! the path as given, for a path that is not pinned
+    std::string given;
+    //! the access that the path was checked for (QSEC_*)
+    int mode = 0;
+};
+
+//! returns the name of a file that belongs to the file of a pinned path, or -1 for a suffix with a '/' (EINVAL)
+static int q_dbi_pinned_name(const QoreDbiPinnedPath* pin, const char* suffix, std::string& name) {
+    if (suffix && strchr(suffix, '/')) {
+        errno = EINVAL;
+        return -1;
+    }
+    name = pin->pin.dirfd >= 0 ? pin->pin.leaf : pin->given;
+    if (suffix) {
+        name += suffix;
+    }
+    return 0;
+}
+
+QoreDbiPinnedPath* qore_dbi_pin_connect_path(Datasource* ds, const char* path, int mode, ExceptionSink* xsink) {
+    assert(ds && path);
+    std::unique_ptr<QoreDbiPinnedPath> rv(new QoreDbiPinnedPath);
+    rv->given = path;
+    rv->mode = mode;
+    QoreDsRestrictingManagers managers;
+    if (qore_ds_private::get(*ds)->getRestrictingManagers(managers, xsink)) {
+        return nullptr;
+    }
+    // every policy checks the name
+    for (QoreSandboxManager* sm : managers.get()) {
+        if (!sm->checkFilesystemAccess(path, mode, xsink)) {
+            return nullptr;
+        }
+    }
+#ifndef _Q_WINDOWS
+    if (!managers.get().empty()) {
+        // the path is pinned with the first policy (the canonical path does not depend on the policy), and the
+        // canonical path pinned is checked with the others, so that every policy judges the path pinned (qore#7518)
+        QoreSandboxPinnedPath& pin = rv->pin;
+        int rc = q_sandbox_pin_path(*managers.get()[0], path, mode, mode & QSEC_CREATE, pin, xsink);
+        if (rc == -1) {
+            return nullptr;
+        }
+        if (rc) {
+            xsink->raiseErrnoException("DATASOURCE-PATH-ERROR", errno, "cannot open '%s'", path);
+            return nullptr;
+        }
+        if (pin.alias) {
+            // a descriptor alias names the file of a descriptor, which a connection does not keep
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: a descriptor alias cannot be "
+                "the file of a connection", path);
+            return nullptr;
+        }
+        for (size_t i = 1; i < managers.get().size(); ++i) {
+            if (!QoreSandboxComposition::checkCanonicalFilesystemAccess(*managers.get()[i], pin.canon.c_str(), path,
+                    mode, xsink)) {
+                return nullptr;
+            }
+        }
+#ifdef __linux__
+        // /proc/self and not /proc/thread-self, as the connection can outlive the thread that opens it
+        QoreStringMaker p("/proc/self/fd/%d/%s", pin.dirfd, pin.leaf.c_str());
+        rv->path = p.c_str();
+#else
+        rv->path = pin.canon;
+#endif
+        return rv.release();
+    }
+#endif
+    // no sandbox restricts the connection (or Windows, where the path is checked but not pinned)
+    rv->path = path;
+    return rv.release();
+}
+
+int qore_dbi_pinned_path_open(const QoreDbiPinnedPath* pin, const char* suffix, int flags, int mode) {
+    assert(pin);
+    // the access of the open must be one that the path was checked for
+    bool write = (flags & O_ACCMODE) != O_RDONLY || (flags & O_TRUNC) || (flags & O_CREAT);
+    if ((write && !(pin->mode & QSEC_WRITE)) || ((flags & O_CREAT) && !(pin->mode & QSEC_CREATE))) {
+        errno = EACCES;
+        return -1;
+    }
+    std::string name;
+    if (q_dbi_pinned_name(pin, suffix, name)) {
+        return -1;
+    }
+    int fd;
+#ifndef _Q_WINDOWS
+    if (pin->pin.dirfd >= 0) {
+        do {
+            fd = openat(pin->pin.dirfd, name.c_str(), flags | O_NOFOLLOW | O_CLOEXEC, mode);
+        } while (fd < 0 && errno == EINTR);
+        return fd;
+    }
+#endif
+#ifdef O_CLOEXEC
+    flags |= O_CLOEXEC;
+#endif
+    do {
+        fd = ::open(name.c_str(), flags, mode);
+    } while (fd < 0 && errno == EINTR);
+    return fd;
+}
+
+int qore_dbi_pinned_path_unlink(const QoreDbiPinnedPath* pin, const char* suffix) {
+    assert(pin);
+    if (!(pin->mode & (QSEC_DELETE | QSEC_WRITE))) {
+        errno = EACCES;
+        return -1;
+    }
+    std::string name;
+    if (q_dbi_pinned_name(pin, suffix, name)) {
+        return -1;
+    }
+#ifndef _Q_WINDOWS
+    if (pin->pin.dirfd >= 0) {
+        return unlinkat(pin->pin.dirfd, name.c_str(), 0);
+    }
+#endif
+    return unlink(name.c_str());
+}
+
+int qore_dbi_pinned_path_access(const QoreDbiPinnedPath* pin, const char* suffix, int amode) {
+    assert(pin);
+    std::string name;
+    if (q_dbi_pinned_name(pin, suffix, name)) {
+        return -1;
+    }
+#ifndef _Q_WINDOWS
+    if (pin->pin.dirfd >= 0) {
+        struct stat sbuf;
+        // a link is not followed: it does not give access to the file that it reaches
+        if (fstatat(pin->pin.dirfd, name.c_str(), &sbuf, AT_SYMLINK_NOFOLLOW)) {
+            return -1;
+        }
+        if (S_ISLNK(sbuf.st_mode)) {
+            errno = ELOOP;
+            return -1;
+        }
+        return amode == F_OK ? 0 : faccessat(pin->pin.dirfd, name.c_str(), amode, AT_EACCESS);
+    }
+#endif
+    return access(name.c_str(), amode);
+}
+
+int qore_dbi_pinned_path_dirfd(const QoreDbiPinnedPath* pin) {
+    assert(pin);
+#ifndef _Q_WINDOWS
+    return pin->pin.dirfd >= 0 ? pin->pin.dirfd : AT_FDCWD;
+#else
+    return -1;
+#endif
+}
+
+const char* qore_dbi_pinned_path_leaf(const QoreDbiPinnedPath* pin) {
+    assert(pin);
+    return pin->pin.dirfd >= 0 ? pin->pin.leaf.c_str() : pin->given.c_str();
+}
+
+const char* qore_dbi_pinned_path_get(const QoreDbiPinnedPath* pin) {
+    assert(pin);
+    return pin->path.c_str();
+}
+
+void qore_dbi_pinned_path_free(QoreDbiPinnedPath* pin) {
+    delete pin;
 }
 
 int qore_dbi_check_connect_path(Datasource* ds, const char* path, int mode, ExceptionSink* xsink) {
