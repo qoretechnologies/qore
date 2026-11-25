@@ -7717,14 +7717,42 @@ void QuicSession::cleanupStreamInputStreams(ExceptionSink* xsink) {
     updateKeepAliveAfterStreamStateChangeLocked();
 }
 
+bool QuicSession::needsTimedInputStreamPass() const {
+    if (!hasActiveStreamInputStreams()) {
+        return false;
+    }
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+        auto it = streaming_body_data_.find(stream_id);
+        if (it != streaming_body_data_.end() && it->second.data.size() > QUIC_MAX_STREAM_BODY) {
+            continue;
+        }
+        if (!info.is_pollable || info.stream_fd < 0 || info.is_regular_file) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void QuicSession::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [stream_id, info] : stream_input_streams_) {
         // a regular file is always ready, so waiting for it would wake the operation at once while the stream cannot
         // send; it is read when the operation runs, as a stream that is not pollable (see processStreamInputStreams())
-        if (!info.eof && info.is_pollable && info.stream_fd >= 0 && !info.is_regular_file) {
-            extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
+        if (info.eof || !info.is_pollable || info.stream_fd < 0 || info.is_regular_file) {
+            continue;
         }
+        // a stream whose staging buffer is full waits for the peer's credit, which comes as a packet on the socket;
+        // waiting for its readable source as well would wake the operation at once, again and again, without a read
+        // (qoretechnologies/qore#7654)
+        auto it = streaming_body_data_.find(stream_id);
+        if (it != streaming_body_data_.end() && it->second.data.size() > QUIC_MAX_STREAM_BODY) {
+            continue;
+        }
+        extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
     }
 }
 

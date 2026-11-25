@@ -1566,6 +1566,13 @@ public:
     */
     DLLLOCAL bool hasActiveStreamInputStreams() const;
 
+    //! Returns true if a pumped body can be read now and has no descriptor to wait for
+    /** A body read from memory or from a regular file, whose staging buffer has room, is read in timed passes; a
+        body whose staging buffer is full waits for the peer's credit, and one read from a descriptor that can wait
+        is woken by it (see getExtraFds()), so neither needs a timed pass (qoretechnologies/qore#7654)
+    */
+    DLLLOCAL bool needsTimedInputStreamPass() const;
+
     //! Process one chunk from each active InputStream (called by I/O thread)
     /** An error of one stream ends that stream only: it is logged and the stream is reset for the client; no error
         is raised in \a xsink, which is unused (qore#7434)

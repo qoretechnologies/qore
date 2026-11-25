@@ -4497,10 +4497,20 @@ bool Http2Session::needsInputStreamPass() const {
 void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [stream_id, info] : stream_input_streams_) {
-        if (!info.eof && info.is_pollable && info.stream_fd >= 0
-                && info.is_epoll_compatible) {
-            extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
+        if (info.eof || !info.is_pollable || info.stream_fd < 0 || !info.is_epoll_compatible) {
+            continue;
         }
+        // a stream that cannot read its source now (a full send buffer, or a chunk that the send refused) waits for
+        // the peer's credit, which comes as a frame on the socket; waiting for its readable source as well would wake
+        // the operation at once, again and again, without a read (qoretechnologies/qore#7654)
+        if (info.retained_chunk) {
+            continue;
+        }
+        auto it = pending_body_data.find(stream_id);
+        if (it != pending_body_data.end() && it->second.data.size() - it->second.offset > MAX_STREAM_BUFFER) {
+            continue;
+        }
+        extra_fds.push_back({info.stream_fd, SOCK_POLLIN});
     }
 }
 

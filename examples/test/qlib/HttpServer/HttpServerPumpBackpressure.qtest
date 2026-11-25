@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerPumpBackpressure.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - waits of the async I/O thread for the named pipe of an HTTP/2 or HTTP/3 body without credit
+# An HTTP/2 or HTTP/3 response body that the I/O thread pumps from a pipe that has data, on a stream that waits for
+# its client's flow-control credit, does not make the I/O thread run continuously (qoretechnologies/qore#7654).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+%requires ../../RawHttp2TestClient.qm
+%requires ../../TestCpuTime.qm
+%requires FsUtil
+
+%exec-class HttpServerPumpBackpressureTest
+
+#! how long the stream waits for credit, in seconds
+const WaitSecs = 6;
+
+#! the size of the body: far more than the stream's send buffer (1 MiB)
+const BodySize = 4 * 1024 * 1024;
+
+#! the size of each write of the pipe's writer
+const ChunkSize = 64 * 1024;
+
+#! responds with a body read from a named pipe, which the I/O thread sends
+class PipeBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the path of the named pipe
+        string path;
+        #! reports that the request was received
+        Queue received();
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> hi = cx."header-info";
+        if (hi.http3) {
+            # the client's credit is withheld
+            call_function("dbg_quic_hold_stream_data", hi.session_id, hi.stream_id);
+        }
+        received.push(True);
+        return makeResponse(200, new FileInputStream(path), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class HttpServerPumpBackpressureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerPumpBackpressure", "1.0") {
+        addTestCase("HTTP/2: a pipe body on a stream without credit does not make the I/O thread run continuously",
+            \testPump(), False);
+        addTestCase("HTTP/3: a pipe body on a stream without credit does not make the I/O thread run continuously",
+            \testPump(), True);
+        set_return_value(main());
+    }
+
+    #! reads a named pipe to its end, unless its writer has closed it
+    /** The pipe is opened without waiting, which also ends a writer's wait for a reader, and each read waits for
+        data at most 30 seconds
+    */
+    static drainPipe(string path, Mutex writer_lock, reference<bool> writer_closed) {
+        try {
+            File r();
+            {
+                writer_lock.lock();
+                on_exit writer_lock.unlock();
+                if (writer_closed) {
+                    return;
+                }
+                r.open2(path, O_RDONLY | O_NONBLOCK);
+            }
+            while (r.isDataAvailable(30s)) {
+                if (!r.readBinary(65536)) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    testPump(bool http3) {
+        if (http3 && !Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("requires a debug build");
+        }
+        TmpDir dir("pump-backpressure-");
+        string path = dir.path + "/body";
+        if (mkfifo(path)) {
+            testSkip("mkfifo: " + strerror());
+        }
+        PipeBodyHandler h(path);
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("pipe", h);
+        hs.waitForAsyncIo();
+        on_exit hs.stop();
+        if (http3) {
+            on_exit call_function("dbg_quic_release_stream_data");
+        }
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+            # no minimum rate: the stream is not reset while it waits for credit
+            "stream_send_min_rate": 0,
+        }).port;
+        hs.waitForAsyncIo();
+
+        # the writer writes the whole body as fast as the pipe takes it, so that the pipe has data while the stream
+        # waits for credit; it closes its end and records that it did under the lock (see drainPipe())
+        Counter done(1);
+        Queue writer_errors();
+        Mutex writer_lock();
+        bool writer_closed;
+        background sub () {
+            on_exit done.dec();
+            File f();
+            on_exit {
+                writer_lock.lock();
+                on_exit writer_lock.unlock();
+                if (f.isOpen()) {
+                    f.close();
+                }
+                writer_closed = True;
+            }
+            try {
+                f.open2(path, O_WRONLY);
+                binary chunk = binary(strmul("x", ChunkSize));
+                for (int i = 0; i < BodySize / ChunkSize; ++i) {
+                    f.write(chunk);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                writer_errors.push(get_exception_string(ex));
+            }
+        }();
+        on_exit {
+            if (done.waitForZero(1ms)) {
+                drainPipe(path, writer_lock, \writer_closed);
+                done.waitForZero(30s);
+            }
+        }
+
+        *RawHttp2Client c;
+        on_exit if (c) {
+            c.close();
+        }
+        int stream_id;
+        Queue h3_result();
+        if (http3) {
+            background sub () {
+                try {
+                    HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                        "protocol": "h3",
+                        "accept_all_certs": True,
+                        "request_timeout": 120s,
+                        "connect_timeout": 15s,
+                    });
+                    on_exit delete mgr;
+                    hash<auto> r = mgr.request("https://127.0.0.1:" + port, "GET", "/", NOTHING, NOTHING);
+                    h3_result.push({"status_code": r.status_code, "size": (r.body ?? binary()).size()});
+                } catch (hash<ExceptionInfo> ex) {
+                    h3_result.push({"err": get_exception_string(ex)});
+                }
+            }();
+        } else {
+            # the default windows (64 KiB) and no WINDOW_UPDATE until the end of the wait: the stream uses up its
+            # credit while the pipe still has data
+            c = new RawHttp2Client(port, True, DefaultWindow);
+            stream_id = c.get("/");
+        }
+        assertEq(True, h.received.get(30s), "the request was received");
+        # the stream's send buffer fills at once; then the server only waits for credit
+        usleep(1s);
+        hash<string, int> start = TestCpuTime::cpuSnapshot();
+        usleep(WaitSecs * 1000000);
+        float used = TestCpuTime::cpuTimeSince(start);
+        # an idle server uses a few milliseconds (under 0.05 s under valgrind); one that wakes again and again uses
+        # far more (a 1 ms timer: 0.15 to 0.3 s; continuous runs: the whole wait)
+        assertLt(0.1, used, sprintf("the server used %.2f s of CPU time while the stream waited %d s for "
+            "credit", used, WaitSecs));
+
+        # the credit comes: the whole body arrives
+        if (http3) {
+            call_function("dbg_quic_release_stream_data");
+            hash<auto> r = h3_result.get(120s);
+            assertEq(NOTHING, r.err);
+            assertEq(200, r.status_code);
+            assertEq(BodySize, r.size, "the whole body arrived");
+        } else {
+            hash<RawHttp2StreamResult> r = c.readStream(stream_id, 60s);
+            assertEq(BodySize, r.data_bytes, "the whole body arrived");
+            assertTrue(r.ended, "the stream ended");
+        }
+        assertEq(0, done.waitForZero(30s), "the writer ended");
+        assertEq(0, writer_errors.size(), writer_errors.size() ? writer_errors.get() : "");
+    }
+}
