@@ -4432,6 +4432,29 @@ public:
     //! populated. */
     bool importInheritedMembersPhase(std::string& error);
 
+    //! a class of a batch of images: (the index of its image's session, its index in the session's class_list)
+    typedef std::pair<uint32_t, uint32_t> batch_class_ref_t;
+
+    //! Returns the classes of all the images of a batch in one topological order (bases before derived, qore#7591)
+    /** The phases that process the classes of a batch bases first (rebuildBaseClassSmlOf(), importInheritedMembersOf(),
+        commitClassPrepareOf(), commitClassDoCommitOf(), commitClassImportAbstractOf() and
+        commitClassResolveAbstractOf()) process them in this order: a class of an image can inherit a class of a later
+        image, and processed image by image, the class was processed before its base classes, and the import of its
+        inherited members and its commit recursed through the hierarchy of its base classes, once per level.  The
+        classes of an image whose base classes are in the same image or in an earlier one keep the topological order
+        of their image.  Must run after the base classes of every image have been resolved.
+
+        @return false if a cycle of base classes across the images was found or if the thread was cancelled, with
+        \a error set
+    */
+    static bool getBatchClassOrder(const std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions,
+        std::vector<batch_class_ref_t>& order, std::string& error);
+
+    //! rebuildBaseClassSmlPhase() for one class; @p i is its index in class_list
+    void rebuildBaseClassSmlOf(uint32_t i);
+    //! importInheritedMembersPhase() for one class; @p i is its index in class_list
+    bool importInheritedMembersOf(uint32_t i, std::string& error);
+
     //! Phase-split 2a-2c — deserialize functions and methods.
     /** Adds method variants to every class's pending method map
         (hm/shm).  No parseCommit fires here.  Must run after
@@ -4477,6 +4500,11 @@ public:
     bool commitClassesDoCommit(std::string& error);
     bool commitClassesImportAbstract(std::string& error);
     bool commitClassesResolveAbstract(std::string& error);
+    //! the phases above for one class; @p i is its index in class_list
+    void commitClassPrepareOf(uint32_t i);
+    void commitClassDoCommitOf(uint32_t i);
+    void commitClassImportAbstractOf(uint32_t i);
+    void commitClassResolveAbstractOf(uint32_t i);
     bool commitClassesValidate(std::string& error);
     bool resolveBCAExpressionsPhase(std::string& error) {
         return resolveBCAExpressions(error);
@@ -4623,6 +4651,11 @@ class QoreAOTBinaryMultiDeserializer {
     QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>> sessions;
 
+    //! the classes of all the sessions, bases before derived, when there is more than one session (qore#7591)
+    /** Set by setBatchClassOrder() once the base classes of every session have been resolved
+    */
+    std::vector<QoreAOTBinaryDeserializer::batch_class_ref_t> batch_class_order;
+
     //! Propagated to every session added after it is set; see
     //! QoreAOTBinaryDeserializer::preload_parse_constant_values.
     bool preload_parse_constant_values = false;
@@ -4668,6 +4701,50 @@ class QoreAOTBinaryMultiDeserializer {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return (uint64_t)ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    }
+
+    //! Sets batch_class_order once the base classes of every session have been resolved (qore#7591)
+    bool setBatchClassOrder(std::string& error) {
+        batch_class_order.clear();
+        if (sessions.size() < 2) {
+            return true;
+        }
+        return QoreAOTBinaryDeserializer::getBatchClassOrder(sessions, batch_class_order, error);
+    }
+
+    //! Runs a phase that processes the classes bases first on every class of the batch (qore#7591)
+    /** The classes of a batch of more than one session are processed in batch_class_order with @p class_fn, so that
+        a class whose base classes are in a later session is not processed before them; otherwise each session
+        processes its classes in its own order with @p session_fn.
+    */
+    template <typename SessionFn, typename ClassFn>
+    bool runClassPhase(const char* context, std::string& error, SessionFn&& session_fn, ClassFn&& class_fn) {
+        if (batch_class_order.empty()) {
+            size_t i = 0;
+            for (auto& sess : sessions) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                    error = std::string("operation cancelled during ") + context;
+                    return false;
+                }
+                if (!session_fn(*sess)) {
+                    return false;
+                }
+                ++i;
+            }
+            return true;
+        }
+        size_t i = 0;
+        for (const auto& ref : batch_class_order) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                error = std::string("operation cancelled during ") + context;
+                return false;
+            }
+            if (!class_fn(*sessions[ref.first], ref.second)) {
+                return false;
+            }
+            ++i;
+        }
+        return true;
     }
 
 public:
@@ -4903,19 +4980,29 @@ public:
                     })) return false;
         });
         // 2a-sml: re-propagate super-class map lists now that
-        // every session has attached its direct bases.
+        // every session has attached its direct bases.  From here on, the
+        // phases that process the classes bases first process the classes
+        // of all the sessions in one order (qore#7591).
         AOT_PHASE_TIME(2, {
-            if (!runSessionPhase("AOT base class map rebuild",
+            if (!setBatchClassOrder(error)) return false;
+            if (!runClassPhase("AOT base class map rebuild", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.rebuildBaseClassSmlPhase(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.rebuildBaseClassSmlOf(i);
+                        return true;
                     })) return false;
         });
         // 2a-import: copy base-class members into derived classes
         // only AFTER every session has finished resolveTypesAndMembers.
         AOT_PHASE_TIME(3, {
-            if (!runSessionPhase("AOT inherited member import",
+            if (!runClassPhase("AOT inherited member import", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.importInheritedMembersPhase(error);
+                    },
+                    [&error](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        return sess.importInheritedMembersOf(i, error);
                     })) return false;
         });
         // 2a-post: top-level globals.  Already performed before
@@ -4933,27 +5020,43 @@ public:
         // sessions so a session's parseCommit walk can find
         // sibling sessions' classes prepared.
         AOT_PHASE_TIME(6, {
-            if (!runSessionPhase("AOT class commit prepare",
+            if (!runClassPhase("AOT class commit prepare", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesPrepare(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassPrepareOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(7, {
-            if (!runSessionPhase("AOT class commit",
+            if (!runClassPhase("AOT class commit", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesDoCommit(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassDoCommitOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(8, {
-            if (!runSessionPhase("AOT abstract import",
+            if (!runClassPhase("AOT abstract import", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesImportAbstract(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassImportAbstractOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(9, {
-            if (!runSessionPhase("AOT abstract resolution",
+            if (!runClassPhase("AOT abstract resolution", error,
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.commitClassesResolveAbstract(error);
+                    },
+                    [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                        sess.commitClassResolveAbstractOf(i);
+                        return true;
                     })) return false;
         });
         AOT_PHASE_TIME(10, {
@@ -5089,21 +5192,37 @@ public:
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT base class map rebuild",
+        // the phases that process the classes bases first process the classes of all the sessions in one order
+        // (qore#7591)
+        if (!setBatchClassOrder(error)) {
+            return false;
+        }
+        if (!runClassPhase("AOT base class map rebuild", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.rebuildBaseClassSmlPhase(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.rebuildBaseClassSmlOf(i);
+                    return true;
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT inherited member import",
+        if (!runClassPhase("AOT inherited member import", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.importInheritedMembersPhase(error);
+                },
+                [&error](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    return sess.importInheritedMembersOf(i, error);
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT class commit prepare",
+        if (!runClassPhase("AOT class commit prepare", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesPrepare(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.commitClassPrepareOf(i);
+                    return true;
                 })) {
             return false;
         }
@@ -5160,15 +5279,23 @@ public:
             }
         } batch_class_lookup_scope{sessions};
 
-        if (!runSessionPhase("AOT abstract import",
+        if (!runClassPhase("AOT abstract import", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesImportAbstract(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.commitClassImportAbstractOf(i);
+                    return true;
                 })) {
             return false;
         }
-        if (!runSessionPhase("AOT abstract resolution",
+        if (!runClassPhase("AOT abstract resolution", error,
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.commitClassesResolveAbstract(error);
+                },
+                [](QoreAOTBinaryDeserializer& sess, uint32_t i) {
+                    sess.commitClassResolveAbstractOf(i);
+                    return true;
                 })) {
             return false;
         }
