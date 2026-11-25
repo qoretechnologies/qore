@@ -14,7 +14,12 @@
 %requires PgsqlSqlUtilBase
 %requires MssqlSqlUtilBase
 %requires OracleSqlUtilBase
+%requires ./OracleTestIsolation.qm
 %requires ./PgsqlTestIsolation.qm
+
+%try-module oracle
+%define NoOracle
+%endtry
 
 %try-module pgsql
 %define NoPgsql
@@ -27,6 +32,7 @@ class IndexOptionChecksTest inherits QUnit::Test {
         addTestCase("PostgreSQL", \pgsqlTest());
         addTestCase("SQL Server", \mssqlTest());
         addTestCase("Oracle", \oracleTest());
+        addTestCase("Oracle reverse-key indexes", \oracleReverseIndexTest());
         addTestCase("PostgreSQL table descriptions", \pgsqlDescriptionTest());
         set_return_value(main());
     }
@@ -139,8 +145,74 @@ class IndexOptionChecksTest inherits QUnit::Test {
             ) {
             assertThrows("INDEX-OPTION-ERROR", \OracleTable::checkIndexOptions(), ("ix", opt), sprintf("%y", opt));
         }
+        # A requested bitmap index aligns with Oracle's catalog entry (qore#1611).
+        OracleIndex bitmap("ix", False, {"name": {}}, "NORMAL", NOTHING, "bitmap", NOTHING);
+        OracleIndex catalog("ix", False, {"name": {}}, "BITMAP", NOTHING, NOTHING, NOTHING);
+        assertTrue(bitmap.equal(catalog));
+        assertRegex("^create bitmap index ", bitmap.getCreateSql("t"));
+        assertThrows("INDEX-OPTION-ERROR", sub () {
+            OracleIndex invalid("ix", True, {"name": {}}, "normal", NOTHING, "BiTmAp", NOTHING);
+        });
+        OracleIndex rev("ix", True, {"name": {}}, "NORMAL", NOTHING, "ReVeRsE", NOTHING);
+        assertEq("create unique index ix on t (name) reverse", rev.getCreateSql("t"));
+        foreach string nt in ("NORMAL/REV", "FUNCTION-BASED NORMAL/REV") {
+            OracleIndex actual("ix", True, {"name": {}}, nt, NOTHING, NOTHING, NOTHING);
+            assertTrue(rev.equal(actual));
+            assertEq(rev.getCreateSql("t"), actual.getCreateSql("t"));
+        }
+        OracleIndex normal("ix", True, {"name": {}}, "NORMAL", NOTHING, NOTHING, NOTHING);
+        assertFalse(normal.equal(rev));
+        assertThrows("INDEX-OPTION-ERROR", sub () {
+            OracleIndex invalid("ix", False, {"name": {}}, "normal", NOTHING, "reverse", {"sync": "on_commit"});
+        });
         # the parameters are a string literal: a quote in a value is doubled
         OracleIndex ix("ix", False, {"name": {}}, "normal", NOTHING, "ctxsys.context", {"stoplist": "a')x"});
         assertRegex(" indextype is ctxsys\\.context parameters\\('stoplist=a''\\)x'\\)", ix.getCreateSql("t"));
+    }
+
+    oracleReverseIndexTest() {
+%ifdef NoOracle
+        testSkip("the oracle module is not available");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_ORACLE) {
+            testSkip("QORE_DB_CONNSTR_ORACLE is not set");
+        }
+        string conn = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "IndexOptionChecks");
+        on_exit OracleRunSchema::teardown();
+        Datasource ds(conn);
+        string name = "ioc_" + get_random_string(8).lwr();
+        string ix = name + "_ix";
+        ds.execRaw("create table " + name + " (id number(14))");
+        on_exit {
+            ds.execRaw("drop table " + name + " purge");
+            ds.commit();
+        }
+        ds.execRaw("create unique index " + ix + " on " + name + " (id)");
+        OracleTable actual(ds, name);
+        hash<auto> desc = actual.getDescriptionHash();
+        hash<auto> reverse_desc = desc;
+        reverse_desc.indexes{ix}.method = "reverse";
+        OracleTable desired(ds, name);
+        desired.setupTable(reverse_desc);
+        map ds.execRaw($1), actual.getAlignSql(desired);
+        ds.commit();
+        assertEq("NORMAL/REV", ds.selectRow("select index_type from user_indexes where index_name = %v",
+            ix.upr()).index_type);
+
+        OracleTable reversed(ds, name);
+        assertEq((), reversed.getAlignSql(desired));
+        hash<auto> exported = reversed.getDescriptionHash();
+        assertEq("reverse", exported.indexes{ix}.driver.oracle.method);
+        OracleTable copy(ds, name);
+        copy.setupTable(exported);
+        assertEq((), reversed.getAlignSql(copy));
+
+        OracleTable forward(ds, name);
+        forward.setupTable(desc);
+        map ds.execRaw($1), reversed.getAlignSql(forward);
+        ds.commit();
+        assertEq("NORMAL", ds.selectRow("select index_type from user_indexes where index_name = %v",
+            ix.upr()).index_type);
+        assertEq((), (new OracleTable(ds, name)).getAlignSql(forward));
     }
 }
