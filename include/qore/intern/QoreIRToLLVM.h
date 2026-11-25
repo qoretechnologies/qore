@@ -398,6 +398,10 @@ private:
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, AotExactClassGuard>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    //! the locals of the function that an outlined function-body helper that it calls can assign (the
+    //! written_shared_locals of its CallAOTHelper instructions), whose entry cleanup the call releases and reloads
+    //! (see recordHelperSite()): no exact-class check of such a receiver is hoisted (qore#7631)
+    std::unordered_set<const void*> aot_helper_written_locals;
     std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
 
     using NativeConversionCache =
