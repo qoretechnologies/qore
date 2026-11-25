@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class DumpLLVMIRTest
+
+#! Tests the LLVM IR dumps of qcc: QORE_DUMP_IR_BEFORE_OPT, QORE_DUMP_IR_AFTER_OPT and QORE_DUMP_LLVM_IR
+/** The dumps are written through a buffered stream: each module is complete and stays in order with the markers
+    written around it, and a closed stderr pipe does not stop the compilation.
+*/
+class DumpLLVMIRTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("LLVM IR dumps", "1.0", \ARGV) {
+        addTestCase("dumped modules are complete and in order", \dumpOrder());
+        addTestCase("a closed stderr pipe does not stop the compilation", \closedPipe());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(string cmd, *string prefix) {
+        int status;
+        string output = backquote((prefix ?? "") + "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH="
+            + quote(libdir) + " " + cmd, \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private string writeFixture(string dir) {
+        string source = dir + "/dump.qr";
+        File file();
+        file.open2(source, O_WRONLY | O_CREAT | O_TRUNC);
+        file.write("%modern\nint sub dumpedAdd(int a, int b) { return a + b; }\n"
+            "string sub dumpedName(string n) { return n + \"-dumped\"; }\n"
+            "printf(\"%d %s\\n\", dumpedAdd(2, 3), dumpedName(\"x\"));\n");
+        file.close();
+        return source;
+    }
+
+    #! returns the number of times \a needle occurs in \a text
+    private static int count(string text, string needle) {
+        int n = 0;
+        int pos = 0;
+        while ((pos = text.find(needle, pos)) >= 0) {
+            ++n;
+            pos += needle.size();
+        }
+        return n;
+    }
+
+    private dumpOrder() {
+        TmpDir dir("qore-dump-llvm-ir-");
+        string source = writeFixture(dir.path);
+        string exe = dir.path + "/dump";
+        string out = run(quote(qcc) + " -O1 --strip-source -o " + quote(exe) + " " + quote(source) + " 2>&1",
+            "QORE_DUMP_LLVM_IR=1 QORE_DUMP_IR_BEFORE_OPT=1 QORE_DUMP_IR_AFTER_OPT=1 ");
+        int before = out.find("=== IR BEFORE OPTIMIZATION (O1) ===\n");
+        int before_end = out.find("=== END IR BEFORE OPTIMIZATION ===\n");
+        int after = out.find("=== IR AFTER OPTIMIZATION (O1) ===\n");
+        int after_end = out.find("=== END IR AFTER OPTIMIZATION ===\n");
+        assertGe(0, before);
+        assertGt(before, before_end);
+        assertGt(before_end, after);
+        assertGt(after, after_end);
+        # each marked module is complete: it holds both functions and its metadata ends right before the marker
+        foreach list<int> range in ((before, before_end), (after, after_end)) {
+            string module = out.substr(range[0], range[1] - range[0]);
+            assertRegex("define [^\n]*dumpedAdd", module);
+            assertRegex("define [^\n]*dumpedName", module);
+            assertRegex("\n!llvm.module.flags = ", module);
+            assertRegex("\n![0-9]+ = [^\n]*\n+$", module);
+        }
+        # QORE_DUMP_LLVM_IR dumps the module once more, outside the markers
+        string rest = out.substr(0, before) + out.substr(before_end, after - before_end) + out.substr(after_end);
+        assertEq(1, count(rest, "!llvm.module.flags = "));
+        assertRegex("define [^\n]*dumpedAdd", rest);
+        assertEq("5 x-dumped\n", run(quote(exe)));
+    }
+
+    private closedPipe() {
+        TmpDir dir("qore-dump-llvm-ir-pipe-");
+        string source = writeFixture(dir.path);
+        string exe = dir.path + "/dump";
+        # the reader exits after the first bytes; the compilation must still produce the executable
+        run(quote(qcc) + " -O0 --strip-source -o " + quote(exe) + " " + quote(source)
+            + " 2>&1 >/dev/null | head -c 16 >/dev/null", "QORE_DUMP_LLVM_IR=1 ");
+        assertTrue(is_executable(exe));
+        assertEq("5 x-dumped\n", run(quote(exe)));
+    }
+}

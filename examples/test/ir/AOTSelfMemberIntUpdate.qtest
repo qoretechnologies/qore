@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class SelfMemberIntUpdateTest
+
+class SelfMemberIntUpdateTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+    constructor() : Test("checked inline integer member updates", "1.0", \ARGV) {
+        addTestCase("operations, representations, contexts and concurrent updates", \check());
+        set_return_value(main());
+    }
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+    private check() {
+        string original = File::readTextFile(get_script_dir() + "/AOTSelfMemberIntUpdate.qr");
+        string expected = "self-member-int-update: ok\n";
+        TmpDir dir("qore-self-member-update-");
+        foreach string access in (("public", "private", "private:internal")) {
+            string source = dir.path + "/fixture.qr";
+            File file();
+            file.open(source, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            string fixture = replace(original, "public { int value = 0; }", access + " { int value = 0; }");
+            if (access == "private:internal") { fixture = replace(fixture, "shadow_value", "value"); }
+            file.write(fixture);
+            file.close();
+            foreach string mode in (("ast", "ir", "jit", "tiered")) {
+                foreach string runtime in (("", "QORE_DISABLE_SELF_MEMBER_INT_UPDATE=1 ")) {
+                    assertEq(expected, run((qore, "--exec-mode=" + mode, source), runtime), access + mode + runtime);
+                }
+            }
+            foreach string prefix in (("", "QORE_AOT_EH=1 ", "QORE_AOT_NO_DEBUG_INFO=1 ",
+                    "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+                foreach string level in (("-O0", "-O3")) {
+                    string executable = dir.path + "/fixture";
+                    string ir = run((qcc, level, "--strip-source", "-o", executable, source),
+                        prefix + "QORE_DUMP_LLVM_IR=1 ");
+                    assertRegex("(?:call|invoke) i64 @qore_rt_self_member_update(?:_throwing)?\\(", ir);
+                    foreach string runtime in (("", "QORE_DISABLE_SELF_MEMBER_INT_UPDATE=1 ")) {
+                        assertEq(expected, run((executable,), runtime), access + prefix + level + runtime);
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class LocalUnwindOrderTest
+
+#! Tests that an exception leaving a function destroys its object locals in reverse declaration order
+/** Without an unwind cleanup anchored in the block, an exception leaving the frame releases the private IR locals
+    first, in declaration order, and the runtime-owned locals after them, in reverse declaration order.  The IR
+    lowering anchors an unwind cleanup only in a function whose declarations would otherwise be released out of
+    order: more than one local that can hold an object and can be private, or such a local followed by any other
+    object local.  Each case here covers one side of that rule; every execution mode and compiled executable must
+    match the interpreter.
+*/
+class LocalUnwindOrderTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    public {
+        #! the destructor order the interpreter produces for each case
+        const Expected = (
+            'typedTyped: ["a+", "b+", "body", "b-", "a-", "caught E"]',
+            'autoAuto: ["a+", "b+", "body", "b-", "a-", "caught E"]',
+            'autoAutoAuto: ["a+", "b+", "c+", "body", "c-", "b-", "a-", "caught E"]',
+            'typedAuto: ["a+", "b+", "body", "b-", "a-", "caught E"]',
+            'autoTyped: ["a+", "b+", "body", "b-", "a-", "caught E"]',
+            'mixed: ["first+", "middle+", "last+", "body", "last-", "middle-", "first-", "caught E"]',
+            'single: ["a+", "body", "a-", "caught E"]',
+            'outerInner: ["o+", "i+", "body", "i-", "o-", "caught E"]',
+            'innerTyped: ["o+", "i+", "body", "i-", "o-", "caught E"]',
+            'foreachLocal: ["v+", "a+", "body", "a-", "v-", "caught E"]',
+            'catchLocal: ["a+", "b+", "body", "b-", "a-", "caught E"]',
+            'captured: ["a+", "b+", "captured ab", "b-", "a-", "caught E"]',
+            'siblingScopes: ["a+", "first", "a-", "b+", "body", "b-", "caught E"]',
+            'sequentialCatches: ["x1+", "catch1", "x1-", "x2+", "a+", "body", "a-", "x2-", "caught E"]',
+            'nestedRuntimeAfterPrivate: ["a+", "b+", "body", "b-", "a-", "caught E"]',
+            'paramAuto: ["p+", "a+", "body", "a-", "p-", "caught E"]',
+            'switchLocal: ["o+", "a+", "b+", "body", "b-", "a-", "o-", "caught E"]',
+        );
+    }
+
+    constructor() : Test("IR local unwind order", "1.0", \ARGV) {
+        addTestCase("exception unwind destroys object locals in reverse declaration order", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/IRLocalUnwindOrder.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertEq(Expected.join("\n") + "\n", expected, "ast");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-ir-local-unwind-order-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ", "MAKEFLAGS= QCC_JOBS=4 QCC_SPLIT_THRESHOLD=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}
