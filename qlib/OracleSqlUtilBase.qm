@@ -979,7 +979,7 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
         *string tablespace;
 
         #! the explicit access method requested via the generic \c method index option (e.g. \c "bitmap"
-        #! or a domain-index \c INDEXTYPE name); \c NOTHING means the driver default (a normal B-tree)
+        #! or a domain-index \c INDEXTYPE name); a bitmap index must be nonunique
         *string method;
 
         #! method-specific storage parameters rendered into a \c PARAMETERS('k1=v1 k2=v2 ...') clause
@@ -999,6 +999,9 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
         native_type = nt;
         tablespace = t;
         method = n_method;
+        if (unique && (method.val() ? method : native_type).lwr() == "bitmap") {
+            throw "INDEX-OPTION-ERROR", sprintf("Oracle bitmap index %y cannot be unique", name);
+        }
         with_options = n_with;
         validatePartitionScope(NOTHING, unique, columns.keys(), method, "INDEX-OPTION-ERROR", "index", name);
     }
