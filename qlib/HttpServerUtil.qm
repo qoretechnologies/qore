@@ -3034,8 +3034,15 @@ class HttpRawRequestScope {
         }
         token = ++http_raw_request_seq;
         tid = gettid();
-        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "keep_for": keep_for,
-            "keep_handlers": (keep_for && handler) ? (handler,) : NOTHING, "token": token, "state": state},);
+        # the handlers whose options the credential trailer fields of a filtered request must all keep: the dispatched
+        # handler first (see trailerKeepFor()); a list of the base class, as handlers of other classes are added
+        *list<AbstractHttpRequestHandler> keep_handlers;
+        if (keep_for && handler) {
+            keep_handlers = cast<list<AbstractHttpRequestHandler>>(());
+            keep_handlers += handler;
+        }
+        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "keep_for": keep_for, "keep_handlers": keep_handlers,
+            "token": token, "state": state},);
         active = True;
     }
 
@@ -3074,18 +3081,61 @@ class HttpRawRequestScope {
 
     #! returns the credential trailer fields that the code serving a filtered request gets (qore#6843)
     /** Computed when a filtered stream request is created, not when the request is dispatched: the fields that the
-        trusted options of the dispatched handler keep (AbstractHttpRequestHandler::setRequestCredentialHeaders());
-        none without a dispatched handler, and none if they cannot be read (fails closed)
+        trusted options (AbstractHttpRequestHandler::setRequestCredentialHeaders()) of the dispatched handler, of each
+        handler that filters the request for the code that serves it in the dispatch (see pushFilteringHandler()), and
+        of the stream request's own handler all keep: each can only narrow them, so that the code that serves the
+        request gets a credential trailer field only where the filter that it got its header fields from gives the
+        field too.  None without a dispatched handler, and none if they cannot be read (fails closed).
 
         @param raw the raw request, as current() gives it
+        @param handler the handler of the stream request
     */
-    static *hash<string, bool> trailerKeepFor(hash<auto> raw) {
+    static *hash<string, bool> trailerKeepFor(hash<auto> raw, *AbstractHttpRequestHandler handler) {
         if (!raw.keep_for || !raw.keep_handlers) {
             return;
         }
         try {
-            return raw.keep_for(raw.keep_handlers[0]);
+            list<AbstractHttpRequestHandler> handlers = raw.keep_handlers;
+            if (handler) {
+                handlers += handler;
+            }
+            *hash<string, bool> keep = raw.keep_for(handlers[0]);
+            foreach AbstractHttpRequestHandler h in (handlers[1..]) {
+                if (!keep) {
+                    break;
+                }
+                *hash<string, bool> k = raw.keep_for(h);
+                keep = map {$1: True}, keys keep, k{$1};
+            }
+            return keep ?? NOTHING;
         } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! records a handler that filters the request for the code that serves it in the innermost dispatch of the
+    #! thread, until popFilteringHandler(): the credential trailer fields are narrowed to those that it keeps
+    /** See trailerKeepFor()
+    */
+    static pushFilteringHandler(AbstractHttpRequestHandler handler) {
+        HttpRawRequestScope::dropInvalid();
+        if (!http_raw_requests) {
+            return;
+        }
+        int i = http_raw_requests.size() - 1;
+        if (http_raw_requests[i].keep_handlers) {
+            http_raw_requests[i].keep_handlers += handler;
+        }
+    }
+
+    #! removes the handler that pushFilteringHandler() recorded last in the innermost dispatch of the thread
+    static popFilteringHandler(AbstractHttpRequestHandler handler) {
+        HttpRawRequestScope::dropInvalid();
+        if (!http_raw_requests) {
+            return;
+        }
+        int i = http_raw_requests.size() - 1;
+        if (http_raw_requests[i].keep_handlers.size() > 1 && http_raw_requests[i].keep_handlers.last() == handler) {
+            pop http_raw_requests[i].keep_handlers;
         }
     }
 
@@ -3586,7 +3636,7 @@ public class AbstractStreamRequest {
         # object gives, which restricted code chooses
         if (restricted || !raw_args) {
             filter_trailers = True;
-            trailer_keep = HttpRawRequestScope::trailerKeepFor(raw);
+            trailer_keep = HttpRawRequestScope::trailerKeepFor(raw, handler);
         }
         # what subclasses read: as the code that created the object gives it, which the request handler filtered for
         # restricted code
@@ -6122,6 +6172,11 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         bool restricted_code = servesRestrictedCode();
         if (restricted_code || filter_requests) {
             hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr);
+            # the credential trailer fields of the stream request are narrowed to those that this handler's filter
+            # keeps, as its header fields are: in a nested dispatch, the dispatched handler's own options are not this
+            # handler's (qore#6843)
+            HttpRawRequestScope::pushFilteringHandler(self);
+            on_exit HttpRawRequestScope::popFilteringHandler(self);
             # the socket of an HTTP/1.x request is the connection's: the restricted code that serves the request gets
             # a placeholder, which is not connected, and the stream request takes the socket from the raw request
             # (qore#6843); the handler socket of an HTTP/2 or HTTP/3 request is a view of its own stream

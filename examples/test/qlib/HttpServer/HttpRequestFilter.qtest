@@ -229,6 +229,29 @@ class PlainHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a trusted router that opts in to Authorization for its own endpoint and hands each request to another handler
+class RouterHandler inherits AbstractHttpRequestHandler {
+    private {
+        AbstractHttpRequestHandler target;
+    }
+
+    constructor(AbstractHttpRequestHandler target) : AbstractHttpRequestHandler(NOTHING, True) {
+        self.target = target;
+        # it runs the code of the handler that it hands the requests to
+        setHostsCode();
+        setRequestCredentialHeaders("Authorization");
+    }
+
+    private list<object> hostedObjects() {
+        return (target,);
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return target.handleRequest(listener, s, cx, hdr, body);
+    }
+}
+
 #! a trusted stream handler whose factory calls the given code, and that can run the code of another object
 class DelegatingHandler inherits AbstractHttpRequestHandler {
     public {
@@ -642,6 +665,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("a socket of a request alone is of an allowed class, or not open", \viewClassTest());
         addTestCase("the dispatch of a request that is not filtered reads no option of the filter",
             \lazyTrailerKeepTest());
+        addTestCase("a router that opts in hands its request to a handler that does not", \nestedTrailerKeepTest());
         set_return_value(main());
     }
 
@@ -1133,10 +1157,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             "Transfer-Encoding: chunked\r\nTrailer: Authorization, X-Checksum\r\n\r\n"
             "5\r\nhello\r\n0\r\nAuthorization: Bearer trailer\r\nX-Checksum: 1\r\n\r\n");
         hash<auto> resp = s.readHTTPHeader(10s);
-        assertEq(200, resp.status_code);
         string body = resp."transfer-encoding" == "chunked"
             ? s.readHTTPChunkedBody(10s).body
             : s.recv(resp."content-length".toInt(), 10s);
+        assertEq(200, resp.status_code, body);
         return parse_json(body);
     }
 
@@ -1354,6 +1378,28 @@ l50Xb2GWQesIt9k5jF5IOw==
             assertEq(200, s.readHTTPHeader(10s).status_code);
         }
         assertEq(0, auth.calls);
+    }
+
+    nestedTrailerKeepTest() {
+        # the server dispatches a trusted router that opts in to Authorization, which hands the request to a handler
+        # of restricted code that does not: the code of that handler gets the request filtered with its handler's
+        # options, without the Authorization header field, and its stream request does not get the client's
+        # Authorization trailer field either
+        Program t = tenantProgram();
+        hash<auto> rv = chunkedCall(new RouterHandler(t.callFunction("stream_handler")));
+        assertEq(5, rv.size);
+        assertFalse(rv.seen.authorization, "the header field");
+        assertEq({"x-checksum": "1"}, rv.trailers, "the trailer field");
+        # a trusted handler that opts in as well, behind the router: both keep the field
+        TestStreamHandler h();
+        h.setRequestCredentialHeaders("Authorization");
+        rv = chunkedCall(new RouterHandler(h));
+        assertTrue(rv.seen.authorization, "the header field");
+        assertEq("Bearer trailer", rv.trailers.authorization, "the trailer field");
+        # and one that does not
+        rv = chunkedCall(new RouterHandler(new TestStreamHandler()));
+        assertFalse(rv.seen.authorization, "the header field");
+        assertEq({"x-checksum": "1"}, rv.trailers, "the trailer field");
     }
 
     #! the capability of the test to make the raw request of a direct call of a handler current, as a host does
