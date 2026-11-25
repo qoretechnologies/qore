@@ -508,15 +508,26 @@ void qore_hash_member_map::rehash(size_t n) {
     // a map without buckets is not hardened; a map with buckets is hardened if its limit is 0
     bool set_limit = !buckets || getLimit();
     if (buckets) {
-        for (size_t b = 0, e = bucket_count(); b < e; ++b) {
-            for (HashMember* m = buckets[b]; m;) {
-                HashMember* next = m->bucket_next;
-                // the bucket of a member of a hardened map is given by the keyed hash of its key
-                HashMember*& nbucket = nb[(set_limit ? m->hash : qore_hash_keyed_bytes(m->key.data(), m->key.size()))
-                    & nmask];
-                m->bucket_next = nbucket;
-                nbucket = m;
-                m = next;
+        if (set_limit) {
+            for (size_t b = 0, e = bucket_count(); b < e; ++b) {
+                for (HashMember* m = buckets[b]; m;) {
+                    HashMember* next = m->bucket_next;
+                    HashMember*& nbucket = nb[m->hash & nmask];
+                    m->bucket_next = nbucket;
+                    nbucket = m;
+                    m = next;
+                }
+            }
+        } else {
+            // the bucket of a member of a hardened map is given by the keyed hash of its key
+            for (size_t b = 0, e = bucket_count(); b < e; ++b) {
+                for (HashMember* m = buckets[b]; m;) {
+                    HashMember* next = m->bucket_next;
+                    HashMember*& nbucket = nb[qore_hash_keyed_bytes(m->key.data(), m->key.size()) & nmask];
+                    m->bucket_next = nbucket;
+                    nbucket = m;
+                    m = next;
+                }
             }
         }
         delete[] buckets;
