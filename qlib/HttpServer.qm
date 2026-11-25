@@ -5757,27 +5757,30 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # handler's code returns, before the server sends the response and reads the next request on the
                     # connection (qore#7305)
                     Socket hsock = request_helper.handler_sock ?? http_handler_connection_socket(s);
-                    # the raw request is current on the thread while the handler serves it: only this dispatch makes
-                    # it current, with the request as the server made it; without the capability no request is
-                    # current, and a stream request is refused (qore#6843)
-                    *object raw_scope = dispatch_capability
-                        ? dispatch_capability.enter(cx, hdr, hsock, handler)
-                        : NOTHING;
-                    on_exit delete raw_scope;
-                    # a handler whose class is of a restricted Program, which trusted code serves the request to, gets
-                    # the request without its credentials (fails closed); the rest of its context is its own, as
-                    # before.  The code of the handler's base class filters what it dispatches to restricted code in
-                    # the other cases: a trusted handler that asks for it, and a request that is served for restricted
-                    # code (of a server that restricted code runs, or of a listener that was added for it), which is
-                    # that code's own (qore#7303); a stream request that the handler creates serves the request with
-                    # the raw request of the scope
                     hash<auto!> hrv;
-                    if (restricted_handler) {
-                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
-                            platform_changes);
-                        hrv = handler.handleRequest(hview, hsock, filtered.cx, filtered.hdr, body);
-                    } else {
-                        hrv = handler.handleRequest(hview, hsock, cx, hdr, body);
+                    {
+                        # the raw request is current on the thread while the handler serves it, and only then (not
+                        # in the calls of the handler that follow, such as isPersistent()): only this dispatch makes
+                        # it current, with the request as the server made it; without the capability no request is
+                        # current, and a stream request is refused (qore#6843)
+                        *object raw_scope = dispatch_capability
+                            ? dispatch_capability.enter(cx, hdr, hsock, handler)
+                            : NOTHING;
+                        on_exit delete raw_scope;
+                        # a handler whose class is of a restricted Program, which trusted code serves the request to,
+                        # gets the request without its credentials (fails closed); the rest of its context is its
+                        # own, as before.  The code of the handler's base class filters what it dispatches to
+                        # restricted code in the other cases: a trusted handler that asks for it, and a request that
+                        # is served for restricted code (of a server that restricted code runs, or of a listener that
+                        # was added for it), which is that code's own (qore#7303); a stream request that the handler
+                        # creates serves the request with the raw request of the scope
+                        if (restricted_handler) {
+                            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                                platform_changes);
+                            hrv = handler.handleRequest(hview, hsock, filtered.cx, filtered.hdr, body);
+                        } else {
+                            hrv = handler.handleRequest(hview, hsock, cx, hdr, body);
+                        }
                     }
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";

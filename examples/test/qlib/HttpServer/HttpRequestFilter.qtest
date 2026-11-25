@@ -323,6 +323,47 @@ class TenantAddingStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! a handler of the tenant that tries to create a stream request for its request after its handleRequest() returned
+class TenantLateStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the result of each attempt made after handleRequest() returned
+        list<string> late = ();
+    }
+
+    private:internal {
+        *HttpListenerInterface listener;
+        *Socket s;
+        *hash<auto> cx;
+        *hash<auto> hdr;
+    }
+
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        self.listener = listener;
+        self.s = s;
+        self.cx = cx;
+        self.hdr = hdr;
+        return <HttpResponseInfo>{'code': 200, 'body': 'served'};
+    }
+
+    bool isPersistent() {
+        if (cx) {
+            try {
+                # the request filtered, as the code of a stream request of restricted code is given it
+                hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(cx, hdr);
+                new TenantRequest(listener, self, s, f.cx, f.hdr, NOTHING);
+                late += 'OK';
+            } catch (hash<ExceptionInfo> ex) {
+                late += ex.err + ': ' + ex.desc;
+            }
+        }
+        return False;
+    }
+}
+
 #! a REST class of the tenant that reports what it gets
 class TenantRestClass inherits AbstractRestClass {
     string name() {
@@ -415,6 +456,14 @@ AbstractStreamRequest sub make_request_adding(HttpListenerInterface listener, Ab
 
 AbstractHttpRequestHandler sub adding_stream_handler() {
     return new TenantAddingStreamHandler();
+}
+
+AbstractHttpRequestHandler sub late_stream_handler() {
+    return new TenantLateStreamHandler();
+}
+
+list<string> sub late_results(AbstractHttpRequestHandler h) {
+    return cast<TenantLateStreamHandler>(h).late;
 }
 
 bool sub restricted() {
@@ -550,6 +599,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             \platformFilterAccessorsTest());
         addTestCase("the credential trailer fields come from the trusted options of the handler",
             \trailerKeepTest());
+        addTestCase("the raw request is current only while the handler serves the request", \lateScopeTest());
         set_return_value(main());
     }
 
@@ -1181,6 +1231,28 @@ l50Xb2GWQesIt9k5jF5IOw==
         serve(h, raw, header(), f.cx, f.hdr, NOTHING, True, binary("hello"));
         assertEq({"authorization": "Bearer trailer", "x-checksum": "1"}, h.made[0].trailers,
             "a host's dispatch with the handler");
+    }
+
+    lateScopeTest() {
+        # the server calls the handler's isPersistent() after its handleRequest() returned: a stream request that the
+        # handler's code creates there for its request gets no raw request, which is no longer current
+        Program t = tenantProgram();
+        AbstractHttpRequestHandler h = t.callFunction("late_stream_handler");
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
+        on_exit server.stop();
+        server.setHandler("late", "^late", NOTHING, h);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        on_exit s.close();
+        s.send("GET /late HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+        hash<auto> resp = s.readHTTPHeader(10s);
+        assertEq(200, resp.status_code);
+        list<string> late = t.callFunction("late_results", h);
+        assertTrue(late.size() > 0, "isPersistent() was called after handleRequest()");
+        assertEq((), (select late,
+            !$1.equalPartial("HTTP-SERVER-ERROR: a stream request can only be served in the dispatch")),
+            "no raw request is current after handleRequest()");
     }
 
     #! the capability of the test to make the raw request of a direct call of a handler current, as a host does
