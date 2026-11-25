@@ -6451,6 +6451,23 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         };
     }
 
+    #! Returns @ref True if the socket is a socket of its request alone, not the socket of a connection
+    /** A handler socket of the HTTP server (of an HTTP/1.x request, or of an HTTP/2 or HTTP/3 stream; see
+        @ref httpserver_handler_socket), or a socket of a class that a host registered with its dispatch capability
+        (see claimHostDispatch()); any other socket is not (an open one is the socket of a connection).  The decisions
+        about the socket that restricted code gets use it: those of this module, of the REST handler and of the data
+        stream handler.
+
+        @param s the socket
+
+        @return @ref True if the socket is a socket of its request alone
+
+        @since HttpServerUtil 1.6
+    */
+    static bool isRequestSocket(*Socket s) {
+        return HttpRawRequestScope::isStreamView(s);
+    }
+
     #! Returns @ref True if the code that serves the request of this handler gets it filtered
     /** The request is filtered (see @ref httpserverutil_request_credentials) for restricted code, which a sandbox that
         does not trust its code governs: when the calling code is restricted
