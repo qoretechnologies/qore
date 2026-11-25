@@ -33,6 +33,9 @@ class AllocFailureTest inherits QUnit::Test {
                 "nested: caught MEMORY-ALLOCATION-ERROR\nnested: again: 100000\n"
                 "method: caught MEMORY-ALLOCATION-ERROR\nmethod: again: 100000\n"
                 "caller local: caller\n",
+            # a function that holds a lock and has an on_exit handler: the lock is released and the handler runs
+            "locked": "caught MEMORY-ALLOCATION-ERROR\nlock free: True\ncaught MEMORY-ALLOCATION-ERROR\n"
+                "log: [\"on_exit 100000\"]\nagain: 100000\n",
             "callback": "caught MEMORY-ALLOCATION-ERROR\nagain: 10\n",
             "thread": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
             "server": "ping: 200 pong\nfail: 503 MEMORY-ALLOCATION-ERROR\nping: 200 pong\n"
@@ -41,11 +44,13 @@ class AllocFailureTest inherits QUnit::Test {
 
         const Modes = ("ast", "ir", "jit", "tiered");
 
-        #! the scenarios of an allocation of native code that no runtime helper handles
-        const UnhandledScenarios = ("unhandled-direct", "unhandled-nested");
-
-        #! what such a scenario prints when the call fails with the exception
-        const UnhandledCaught = "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n";
+        #! the scenarios of an allocation of native code that no runtime helper handles and what each prints in the AST
+        #! and IR modes, where the call fails with the exception; native code ends the process
+        const UnhandledScenarios = {
+            "unhandled-direct": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
+            "unhandled-nested": "caught MEMORY-ALLOCATION-ERROR\nagain: 100000\n",
+            "locked-unhandled": "caught MEMORY-ALLOCATION-ERROR\nlock free: True\nagain: 100000\n",
+        };
     }
 
     private {
@@ -119,35 +124,37 @@ class AllocFailureTest inherits QUnit::Test {
         }
     }
 
-    #! the call fails with the exception, which the caller catches, or the process ends with the message of the
-    #! terminate handler (SIGABRT), when frames of native code were left; never with another signal or an assertion
+    #! in the AST and IR modes the call fails with the exception, which the caller catches; native code (the JIT and
+    #! tiered modes, compiled with qcc) ends the process with the message of the terminate handler (SIGABRT), as its
+    #! frames were left without their cleanup
     unhandledTest() {
         checkDebug();
         list<hash<auto>> runs;
         foreach string mode in (Modes) {
-            runs += {"name": mode, "cmd": interpreter(mode)};
+            runs += {"name": mode, "cmd": interpreter(mode), "native": mode == "jit" || mode == "tiered"};
         }
         *string qcc = TestInterpreter::qcc_compiler();
         if (qcc) {
             foreach int opt in ((0, 3)) {
                 *string exe = compiledChild(qcc, opt);
                 if (exe) {
-                    runs += {"name": sprintf("qcc -O%d", opt), "cmd": quote(exe)};
+                    runs += {"name": sprintf("qcc -O%d", opt), "cmd": quote(exe), "native": True};
                 }
             }
         }
         foreach hash<auto> c in (runs) {
-            foreach string scenario in (UnhandledScenarios) {
-                string name = sprintf("%s, %s", c.name, scenario);
-                hash<auto> r = run(sprintf("%s %s", c.cmd, scenario), True);
-                if (!r.rc) {
-                    assertEq(UnhandledCaught, r.out, name);
-                } else {
-                    assertEq(134, r.rc, sprintf("%s: SIGABRT: %s", name, r.out));
-                    assertRegex("qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that cannot "
-                        "fail", r.out, name);
-                    assertNRegex("Assertion|Segmentation", r.out, name);
+            foreach hash<auto> s in (UnhandledScenarios.pairIterator()) {
+                string name = sprintf("%s, %s", c.name, s.key);
+                hash<auto> r = run(sprintf("%s %s", c.cmd, s.key), True);
+                if (!c.native) {
+                    assertEq(0, r.rc, sprintf("%s: the process goes on: %s", name, r.out));
+                    assertEq(s.value, r.out, name);
+                    continue;
                 }
+                assertEq(134, r.rc, sprintf("%s: SIGABRT: %s", name, r.out));
+                assertRegex("qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that cannot "
+                    "fail", r.out, name);
+                assertNRegex("caught|Assertion|Segmentation", r.out, name);
             }
         }
     }
@@ -168,10 +175,13 @@ class AllocFailureTest inherits QUnit::Test {
         return exes{key} = exe;
     }
 
+    #! the command of the child in a mode; the JIT and tiered modes compile synchronously, so that the functions run
+    #! as native code once compiled, and not in the IR interpreter while they are compiled in the background
     private string interpreter(string mode) {
         string opts = mode == "tiered" ? "--exec-mode=tiered --jit-ir-threshold=3 --jit-jit-threshold=10"
             : "--exec-mode=" + mode;
-        return sprintf("%s %s %s", quote(TestInterpreter::qore_interpreter()), opts, quote(child));
+        string env = mode == "jit" || mode == "tiered" ? "QORE_JIT_SYNC_COMPILE=1 " : "";
+        return sprintf("%s%s %s %s", env, quote(TestInterpreter::qore_interpreter()), opts, quote(child));
     }
 
     private static string quote(string s) {

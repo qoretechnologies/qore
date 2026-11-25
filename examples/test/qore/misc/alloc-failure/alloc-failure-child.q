@@ -100,6 +100,35 @@ int sub grow_floats_nested(int n) {
     return rv;
 }
 
+#! makes a list with map, which grows it, while holding a lock
+int sub grow_map_locked(Mutex m, int n) {
+    AutoLock al(m);
+    list<int> l = map $1, xrange(n);
+    return l.size();
+}
+
+#! grows a list of floats as grow_floats() while holding a lock
+int sub grow_floats_locked(Mutex m, int n) {
+    AutoLock al(m);
+    list<float> l = ();
+    for (int i = 0; i < n; ++i) {
+        float f = i * 1.5;
+        push l, f;
+    }
+    return l.size();
+}
+
+#! grows a list with an on_exit handler that uses a local
+int sub grow_on_exit(reference<list<string>> log, int n) {
+    string tag = sprintf("on_exit %d", n);
+    on_exit log += tag;
+    list<int> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += i;
+    }
+    return l.size();
+}
+
 #! grows a list in a method
 class Grower {
     int grow(int n) {
@@ -115,6 +144,8 @@ class AllocFailureChild {
     constructor() {
         switch (ARGV[0]) {
             case "compiled": compiled(); break;
+            case "locked": locked(); break;
+            case "locked-unhandled": lockedUnhandled(); break;
             case "unhandled-direct": unhandled(False); break;
             case "unhandled-nested": unhandled(True); break;
             case "builtin": builtin(); break;
@@ -235,9 +266,58 @@ class AllocFailureChild {
         printf("caller local: %s\n", caller_local);
     }
 
-    #! an allocation of native code that no runtime helper handles: the call fails with the exception if the
-    #! function whose allocation failed was the only native frame left, or the process ends with the message of the
-    #! terminate handler if native frames that called it directly were left too; never anything else
+    #! a function that holds a lock and runs an on_exit handler that uses a local fails with the exception: the lock
+    #! is released, the handler runs, and the function runs again
+    static locked() {
+        Mutex m();
+        list<string> log;
+        for (int i = 0; i < 50; ++i) {
+            grow_map_locked(m, 10);
+            grow_on_exit(\log, 10);
+        }
+        log = ();
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", grow_map_locked(m, 100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("lock free: %y\n", !m.lockOwner() && m.trylock() == 0);
+        m.unlock();
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", grow_on_exit(\log, 100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("log: %y\n", log);
+        printf("again: %d\n", grow_map_locked(m, 100000));
+    }
+
+    #! a function that holds a lock makes an allocation that no runtime helper handles: in the AST and IR modes the
+    #! call fails with the exception and the lock is released; native code ends the process with the message of the
+    #! terminate handler, as its frames were left without their cleanup
+    static lockedUnhandled() {
+        Mutex m();
+        for (int i = 0; i < 50; ++i) {
+            grow_floats_locked(m, 10);
+        }
+        try {
+            fail_next_allocation();
+            printf("no exception: %d\n", grow_floats_locked(m, 100000));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s\n", ex.err);
+        }
+        disarm();
+        printf("lock free: %y\n", !m.lockOwner() && m.trylock() == 0);
+        m.unlock();
+        printf("again: %d\n", grow_floats_locked(m, 100000));
+    }
+
+    #! an allocation of native code that no runtime helper handles: in the AST and IR modes the call fails with the
+    #! exception; native code ends the process with the message of the terminate handler
     static unhandled(bool nested) {
         for (int i = 0; i < 50; ++i) {
             nested ? grow_floats_nested(10) : grow_floats(10);
