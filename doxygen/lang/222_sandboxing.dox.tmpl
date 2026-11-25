@@ -964,8 +964,9 @@ authenticate();
     - the data provider index: \c ProviderIndexUtil gives no index directory (\c QORE_PROVIDER_INDEX_DIR), no path
       of an index file, no value of \c QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES and no user and group IDs of the
       process (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "ProviderIndexUtil::tryGetIndexDir()" and
-      the methods that return them raise \c INVALID-FUNCTION-ACCESS, and its errors and results leave them out); such
-      code still looks up apps, actions, factories and schemes in the index (see
+      the methods that return them raise \c INVALID-FUNCTION-ACCESS, and its errors and results leave them out), and
+      such code may neither set nor get its process-wide logger, which receives the module's diagnostics that name
+      them; such code still looks up apps, actions, factories and schemes in the index (see
       @ref providerindexutil_external_info "the ProviderIndexUtil module")
 
     Information about the host other than the environment is not used for such code either, as it may not read it

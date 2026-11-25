@@ -52,6 +52,18 @@ try {
     q_r.write_caller = ex.err + ": " + ex.desc;
 }
 
+# the process-wide logger receives the module's diagnostics, which name the index directory
+try { q_r.logger_get = exists ProviderIndexUtil::getGlobalLogger(); } catch (hash<ExceptionInfo> ex) { q_r.logger_get = ex.err; }
+try {
+    *Logger::LoggerInterface old = ProviderIndexUtil::getGlobalLogger();
+    ProviderIndexUtil::setGlobalLogger(new Logger::Logger("q7597-child", Logger::LoggerLevel::getLevelAll()));
+    # the host's logger is restored
+    ProviderIndexUtil::setGlobalLogger(old);
+    q_r.logger_set = "set";
+} catch (hash<ExceptionInfo> ex) {
+    q_r.logger_set = ex.err;
+}
+
 # the index directory cannot be written to
 q_set_writable(False);
 on_exit q_set_writable(True);

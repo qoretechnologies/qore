@@ -128,10 +128,17 @@ if (!info.reloaded) {
       @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndex() "writeDataProviderIndex()" is the name of
       the file in the index directory, and an error of the index directory or of writing the index has a
       description that names neither the directory nor the IDs of the process
+    - the process-wide logger receives the module's diagnostics, which name the index directory, the files in it and
+      the IDs of the process (for every caller, also while the module serves such code), so
+      @ref ProviderIndexUtil::ProviderIndexUtil::setGlobalLogger() "setGlobalLogger()" raises
+      \c INVALID-FUNCTION-ACCESS for such code and
+      @ref ProviderIndexUtil::ProviderIndexUtil::getGlobalLogger() "getGlobalLogger()" returns @ref nothing for it;
+      the logger is the host's, and a host that lends it to such code gives it the diagnostics
 
     The module's own use of the index is not affected: such code looks up apps, actions, factories and schemes in
-    the index as other code does, and the module's diagnostics, which the host enables with its logger, name the
-    directory and the files (see @ref sandbox_ambient_host_data).
+    the index as other code does.  Whether the process is in index build mode
+    (@ref ProviderIndexUtil::ProviderIndexUtil::inBuildMode() "inBuildMode()") is given to such code, as it decides
+    what its lookups find (see @ref sandbox_ambient_host_data).
 
     @section providerindexutil_summaries Listing and Selecting Indexed Actions
 

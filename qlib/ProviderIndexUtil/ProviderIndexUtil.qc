@@ -677,6 +677,10 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     #! Returns @ref True if the process is in index build mode
     /** @return @ref True if the process is in index build mode, in which case the published index is never read
 
+        @note It also serves code that may not read external information, although the mode can be set with the
+        @ref ProviderIndexBuildEnvVar environment variable: the mode decides whether the lookups of such code find
+        the published index, so it can tell the mode from them in any case
+
         @see setBuildMode()
 
         @since ProviderIndexUtil 1.2
@@ -2736,21 +2740,35 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
     #! Sets or clears the global logger
     /** @param logger the global data provider logger
+
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information: the module's diagnostics,
+        which the logger receives, name the index directory, the files in it and the IDs of the process (see
+        @ref providerindexutil_external_info)
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # the logger is process-wide and receives the messages of every caller (qore#6747)
         ProviderIndexUtil::checkChange("set the logger of");
+        # the logger receives the module's diagnostics, which name the host's index directory (qore#7597)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            throw "INVALID-FUNCTION-ACCESS", "ProviderIndexUtil::setGlobalLogger(): the logger receives the module's "
+                "diagnostics, which name the host's data provider index directory and the IDs of the process, which "
+                "the calling code may not read (PO_NO_EXTERNAL_INFO)";
+        }
         ProviderIndexUtil::logger = logger;
     }
 
     #! Returns the global data provider logger
-    /** @return the configured logger, or @ref nothing "NOTHING" when no logger is set or the caller may not use it
+    /** @return the configured logger, or @ref nothing "NOTHING" when no logger is set or the caller may not use it:
+        when it has no terminal I/O, is sandboxed, or may not read external information, as the logger receives the
+        module's diagnostics, which name the index directory, the files in it and the IDs of the process (see
+        @ref providerindexutil_external_info)
 
-        The process-wide logger is visible to trusted code with terminal I/O. Module-generated diagnostics may
-        still reach the logger while serving a restricted caller (see @ref sandbox_process_wide_registries).
+        Module-generated diagnostics may still reach the logger while serving a restricted caller (see
+        @ref sandbox_process_wide_registries).
     */
     static *LoggerInterface getGlobalLogger() {
-        if (!ProviderIndexUtil::mayUseGlobalLogger()) {
+        if (!ProviderIndexUtil::mayUseGlobalLogger() || !SandboxManager::callerMayReadExternalInfo()) {
             return;
         }
         return logger;
@@ -5268,7 +5286,8 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     #! Returns the index directory from the environment variable, for the module's own use; see tryGetIndexDir()
     /** It serves every caller: the text of an error raised to code that may not read external information names
         neither the directory nor the IDs of the process (qore#7597); the warnings logged are the module's own
-        diagnostics, which the host enables with its logger
+        diagnostics, which go to the process-wide logger, which only code that may read external information can set
+        or get (see setGlobalLogger()), or to stderr without one
     */
     static private:internal *string tryGetIndexDirIntern(*bool throw_exception, *bool for_write) {
         *string dir = ENV{ProviderIndexEnvVar};

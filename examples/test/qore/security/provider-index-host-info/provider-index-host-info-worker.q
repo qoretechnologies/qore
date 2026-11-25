@@ -44,8 +44,30 @@ sub check(string key, auto expected, auto actual) {
     push results, key + "=" + (expected === actual ? "ok" : sprintf("expected %y, got %y", expected, actual));
 }
 
-# the module's diagnostics go to the host's logger, which has no appenders here, instead of stderr
-ProviderIndexUtil::setGlobalLogger(new Logger::Logger("q7597", Logger::LoggerLevel::getLevelInfo()));
+#! records the messages of the host's logger
+class Capture inherits Logger::LoggerAppenderWithLayout {
+    public {
+        list<string> got = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("q7597", new Logger::LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == Logger::LoggerAppender::EVENT_LOG) {
+            got += params;
+        }
+    }
+}
+
+# the module's diagnostics go to the host's logger, which records them, instead of stderr
+Capture host_capture();
+{
+    Logger::Logger host_logger("q7597", Logger::LoggerLevel::getLevelInfo());
+    host_logger.addAppender(host_capture);
+    ProviderIndexUtil::setGlobalLogger(host_logger);
+}
 
 string child_source = ReadOnlyFile::readTextFile(ENV.Q7597_CHILD);
 string index_dir = ProviderIndexUtil::tryGetIndexDir(True);
@@ -138,6 +160,8 @@ hash<auto> may_read = {
     "pi_denied": "names the directory and the IDs",
     "pi_workers": "names the directory and the IDs",
     "writable_denied": "names the directory and the IDs",
+    "logger_get": True,
+    "logger_set": "set",
 };
 
 #! what code restricted from external information gets: no index directory, no paths under it and no IDs
@@ -156,6 +180,15 @@ hash<auto> may_not_read = may_read + {
     "pi_denied": "generic",
     "pi_workers": "INVALID-FUNCTION-ACCESS",
     "writable_denied": "INVALID-FUNCTION-ACCESS",
+    "logger_get": False,
+    "logger_set": "INVALID-FUNCTION-ACCESS",
+};
+
+#! what sandboxed code gets in addition: the process-wide logger is not shared with it, whether it may read external
+#! information or not
+const Sandboxed = {
+    "logger_get": False,
+    "logger_set": "PROVIDER-INDEX-REGISTRATION-DENIED",
 };
 
 const Classified = ("reload_error", "read_error", "write_denied", "pi_denied", "pi_workers", "writable_denied");
@@ -209,7 +242,7 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
         p.run();
         hash<auto> r = p.getGlobalVariable("q_r");
         map r{$1} = classify(r{$1}), Classified;
-        hash<auto> expected = kind.value.restricted ? may_not_read : may_read;
+        hash<auto> expected = (kind.value.restricted ? may_not_read : may_read) + (kind.value.sandboxed ? Sandboxed : {});
         foreach string k in (keys expected) {
             if (denied_skipped && inlist(k, denied)) {
                 push results, key + "/" + k + "=skipped";
@@ -220,5 +253,9 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
         delete p;
     }
 }
+
+# the host's own logger got the module's diagnostics, with the paths of the index files, also while the module
+# served restricted code: each Program's reload of the corrupt index was logged
+check("host/logger", True, (select host_capture.got, $1.find(index_dir) >= 0).size() >= Kinds.size() * Modes.size());
 
 map printf("%s\n", $1), results;
