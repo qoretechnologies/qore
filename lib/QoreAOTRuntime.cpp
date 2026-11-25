@@ -14969,14 +14969,21 @@ static int executeInitFunctions(
                     if (!var || var->isAOTInitDone()) {
                         return;
                     }
-                    LValueHelper lvh(&xsink);
-                    if (var->getLValue(lvh, false)) {
-                        return;
-                    }
-                    lvh.assign(result.refSelf(), "<AOT global variable initializer>");
-                    if (!xsink) {
-                        var->setAOTInitDone();
-                    }
+                    // a store whose check records reference elements is made again after they have been bound with
+                    // no lvalue lock held (qore#7391)
+                    qore_store_with_bind_retry_lazy(&xsink, false, [&]() -> QoreValue { return result.refSelf(); },
+                        [var](LValueHelper& lvh) -> int {
+                            return var->getLValue(lvh, false);
+                        },
+                        [var, &xsink](LValueHelper& lvh, QoreValue v) -> int {
+                            if (lvh.assign(v, "<AOT global variable initializer>")) {
+                                return -1;
+                            }
+                            if (!xsink) {
+                                var->setAOTInitDone();
+                            }
+                            return 0;
+                        });
                 };
 
                 assign_global(target_var);
@@ -15019,13 +15026,21 @@ static int executeInitFunctions(
                 }
                 if (write_shadow && shadow_var && (!target_var
                         || target_var->parseGetVar() != shadow_var->parseGetVar())) {
-                    LValueHelper lvh(&xsink);
-                    if (!shadow_var->getLValue(lvh, false)) {
-                        lvh.assign(result.refSelf(), "<AOT global variable constructor initializer>");
-                        if (!xsink) {
-                            shadow_var->setAOTInitDone();
-                        }
-                    }
+                    // a store whose check records reference elements is made again after they have been bound with
+                    // no lvalue lock held (qore#7391)
+                    qore_store_with_bind_retry_lazy(&xsink, false, [&]() -> QoreValue { return result.refSelf(); },
+                        [shadow_var](LValueHelper& lvh) -> int {
+                            return shadow_var->getLValue(lvh, false);
+                        },
+                        [shadow_var, &xsink](LValueHelper& lvh, QoreValue v) -> int {
+                            if (lvh.assign(v, "<AOT global variable constructor initializer>")) {
+                                return -1;
+                            }
+                            if (!xsink) {
+                                shadow_var->setAOTInitDone();
+                            }
+                            return 0;
+                        });
                 }
                 result.discard(&xsink);
                 if (xsink) {

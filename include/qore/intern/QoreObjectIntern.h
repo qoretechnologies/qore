@@ -50,6 +50,8 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+class QoreReferenceBindPairList;
+
 #define OS_OK            0
 #define OS_DELETED      -1
 
@@ -465,10 +467,36 @@ public:
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
             LexicalSemanticPolicy policy);
 
+    //! merges \a h and \a new_internal_data with the object's lock held
+    /** @param bound the reference elements of the values of \a h bound before the lock was taken
+        (mergeBindReferences()), or nullptr: a value of a member whose type can bind a reference is checked with a
+        probe, and a reference element that is not in \a bound fails the merge closed with REFERENCE-BIND-ERROR, as it
+        is not bound under the lock (qore#7391)
+    */
     template <bool Lexical>
     DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
         const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
-            LexicalSemanticPolicy policy);
+            LexicalSemanticPolicy policy, const QoreReferenceBindPairList* bound = nullptr);
+
+    //! binds the reference elements of the values of \a h that the members merged into the object bind (qore#7391)
+    /** Called before the object's lock is taken: each value of a member whose type can bind a reference is checked
+        as the merge checks it, with a probe that records the references instead of binding them, and they are bound
+        then, with no lvalue lock held, and added to \a bound.  If \a vl holds a lock, nothing is bound and the merge
+        fails closed with REFERENCE-BIND-ERROR (a merge whose lvalue holds a lock and that can bind a reference is
+        made by the += operator after it has released it; see mergeMayBindReference()).  An exception that the check
+        raises is not reported here: the merge raises it.
+
+        @return -1 if an exception was raised, 0 if not
+    */
+    template <bool Lexical>
+    DLLLOCAL int mergeBindReferences(const QoreHashNode* h, const qore_class_private* class_ctx, const AutoVLock& vl,
+            QoreReferenceBindPairList& bound, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    //! returns true if a merge of \a src (a hash or an object) into the object can bind a reference (qore#7391)
+    /** True if a member of the object that a key of \a src names has a type that can bind a reference; the += operator
+        then merges after the lvalue that holds the object has released its lock
+    */
+    DLLLOCAL bool mergeMayBindReference(const QoreValue& src) const;
 
     //! merges the members of the object that the current class context can use into \a hash
     DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
@@ -1363,12 +1391,8 @@ public:
         // unlock previous lock and release from AutoVLock structure
         vl.del();
 
-        // lock current object, unless the assignment of this thread holds its lock while it binds a reference: the lock
-        // and the reference to the object stay with that assignment (qore#7380)
-        if (!qore_var_rwlock_ops(pobj->rml).wrlockUnlessHeldForBind(&vl)) {
-            pobj->obj->tDeref();
-            pobj = nullptr;
-        }
+        // lock current object
+        qore_var_rwlock_ops(pobj->rml).wrlock();
     }
 
     DLLLOCAL ~qore_object_lock_handoff_helper() {
@@ -1381,10 +1405,8 @@ public:
     }
 
     DLLLOCAL void stayLocked() {
-        if (pobj) {
-            qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
-            pobj = nullptr;
-        }
+        qore_auto_vlock_ops(vl).set(pobj->obj, &pobj->rml);
+        pobj = nullptr;
     }
 };
 
