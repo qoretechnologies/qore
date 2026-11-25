@@ -7545,10 +7545,24 @@ static std::string getAOTMethodVariantKey(const QoreClass* qc, const char* metho
     return getVariantKey(key.c_str(), variant);
 }
 
+//! Returns a concrete variant with the signature of a variant in the base classes of a class, or nullptr
+/** The hierarchy is walked depth first, each base class before its own base classes and the base classes in their
+    order, with a stack of its own instead of a recursion, as the depth of a hierarchy is not limited by the stack of
+    the thread that loads it (qore#7553)
+*/
 static MethodVariantBase* findInheritedConcreteMethodVariant(const BCList* scl, const QoreClass* origin_class,
-        const char* method_name, MethodVariantBase* variant, std::unordered_set<const QoreClass*>& visited) {
-    for (auto& i : *scl) {
-        const QoreClass* nqc = (*i).sclass;
+        const char* method_name, MethodVariantBase* variant) {
+    typedef std::pair<BCList::const_iterator, BCList::const_iterator> base_range_t;
+    std::vector<base_range_t> bases;
+    bases.emplace_back(scl->begin(), scl->end());
+    std::unordered_set<const QoreClass*> visited;
+    while (!bases.empty()) {
+        base_range_t& range = bases.back();
+        if (range.first == range.second) {
+            bases.pop_back();
+            continue;
+        }
+        const QoreClass* nqc = (*range.first++)->sclass;
         if (!nqc || nqc == origin_class || !visited.insert(nqc).second) {
             continue;
         }
@@ -7564,12 +7578,9 @@ static MethodVariantBase* findInheritedConcreteMethodVariant(const BCList* scl, 
                 return ov;
             }
         }
+        // the base classes of this class are searched before its next sibling
         if (npriv->scl) {
-            MethodVariantBase* ov = findInheritedConcreteMethodVariant(npriv->scl, origin_class, method_name,
-                variant, visited);
-            if (ov) {
-                return ov;
-            }
+            bases.emplace_back(npriv->scl->begin(), npriv->scl->end());
         }
     }
     return nullptr;
@@ -7583,8 +7594,7 @@ static bool hasInheritedConcreteMethodVariant(QoreClass* qc, const char* method_
     if (!priv->scl) {
         return false;
     }
-    std::unordered_set<const QoreClass*> visited;
-    MethodVariantBase* inherited = findInheritedConcreteMethodVariant(priv->scl, qc, method_name, variant, visited);
+    MethodVariantBase* inherited = findInheritedConcreteMethodVariant(priv->scl, qc, method_name, variant);
     return inherited && inherited != variant;
 }
 
@@ -9505,14 +9515,11 @@ static bool aotAppendInheritedStaticMethodAliases(const std::string& class_path,
     return emitted;
 }
 
-static bool aotAppendInheritedClassMemberAliasesFromBase(const qore_class_private* base_priv,
+//! Appends the aliases of the static members of a base class, not of its own base classes
+static bool aotAppendInheritedClassMemberAliasesFromOneBase(const qore_class_private* base_priv,
         const std::string& class_path, const std::string& class_source_file, uint32_t class_slot,
         AOTInheritedClassMemberAliasState& state, std::vector<QoreAOTSymbolIndexRecord>& defined,
         std::string* error) {
-    if (!base_priv || !state.visited_bases.insert(base_priv).second) {
-        return true;
-    }
-
     for (auto& vi : base_priv->vars.member_list) {
         if (!aotCheckSymbolIndexCancel(state.record_count++,
                 error, "AOT symbol-index inherited static-var alias collection")) {
@@ -9553,12 +9560,28 @@ static bool aotAppendInheritedClassMemberAliasesFromBase(const qore_class_privat
             state.static_methods.erase(mi.first);
         }
     }
+    return true;
+}
 
-    if (!base_priv->scl) {
-        return true;
-    }
-
-    for (auto* bcn : *base_priv->scl) {
+//! Appends the aliases of the static members of the base classes of a class and of their base classes
+/** The hierarchy is walked depth first, each base class before its own base classes and the base classes in their
+    order, with a stack of its own instead of a recursion, as the depth of a hierarchy is not limited by the stack of
+    the thread that compiles it (qore#7553); a base class reached through more than one path is visited once
+*/
+static bool aotAppendInheritedClassMemberAliasesFromBases(const BCList& scl,
+        const std::string& class_path, const std::string& class_source_file, uint32_t class_slot,
+        AOTInheritedClassMemberAliasState& state, std::vector<QoreAOTSymbolIndexRecord>& defined,
+        std::string* error) {
+    typedef std::pair<BCList::const_iterator, BCList::const_iterator> base_range_t;
+    std::vector<base_range_t> bases;
+    bases.emplace_back(scl.begin(), scl.end());
+    while (!bases.empty()) {
+        base_range_t& range = bases.back();
+        if (range.first == range.second) {
+            bases.pop_back();
+            continue;
+        }
+        const BCNode* bcn = *range.first++;
         if (!aotCheckSymbolIndexCancel(state.record_count++,
                 error, "AOT symbol-index inherited class-member alias base walk")) {
             return false;
@@ -9566,9 +9589,17 @@ static bool aotAppendInheritedClassMemberAliasesFromBase(const qore_class_privat
         if (!bcn || !bcn->sclass) {
             continue;
         }
-        if (!aotAppendInheritedClassMemberAliasesFromBase(qore_class_private::get(*bcn->sclass),
-                class_path, class_source_file, class_slot, state, defined, error)) {
+        const qore_class_private* base_priv = qore_class_private::get(*bcn->sclass);
+        if (!base_priv || !state.visited_bases.insert(base_priv).second) {
+            continue;
+        }
+        if (!aotAppendInheritedClassMemberAliasesFromOneBase(base_priv, class_path, class_source_file, class_slot,
+                state, defined, error)) {
             return false;
+        }
+        // the base classes of this class are visited before its next sibling
+        if (base_priv->scl) {
+            bases.emplace_back(base_priv->scl->begin(), base_priv->scl->end());
         }
     }
     return true;
@@ -9596,20 +9627,8 @@ static bool aotAppendInheritedClassMemberAliases(const AOTSerializeState::ClassI
 
     std::string class_path = aotStripLeadingColons(priv->path);
     std::string class_source_file = aotLocationFile(priv->loc);
-    for (auto* bcn : *priv->scl) {
-        if (!aotCheckSymbolIndexCancel(state.record_count++,
-                error, "AOT symbol-index inherited class-member alias base walk")) {
-            return false;
-        }
-        if (!bcn || !bcn->sclass) {
-            continue;
-        }
-        if (!aotAppendInheritedClassMemberAliasesFromBase(qore_class_private::get(*bcn->sclass),
-                class_path, class_source_file, class_slot, state, defined, error)) {
-            return false;
-        }
-    }
-    return true;
+    return aotAppendInheritedClassMemberAliasesFromBases(*priv->scl, class_path, class_source_file, class_slot,
+        state, defined, error);
 }
 
 bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
@@ -18520,6 +18539,12 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
 
         printd(5, "AOT deser: topological order for %d classes computed (%d in topo sort)\n",
             (int)count, (int)topo_order.size());
+        // every class is in the order: a class left out (a cycle of base classes, which no valid image has) would not
+        // import its inherited members, so the load fails (qore#7553)
+        if (topo_order.size() != count) {
+            error = "AOT image has a cycle of base classes";
+            return false;
+        }
     }
 
     // the classes of this binary whose base classes have been resolved
@@ -21607,8 +21632,19 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
     // During normal parsing, BCNode::initializeMembers() calls parseImportMembers()
     // to copy base class members into the derived class's member map. AOT deserialization
     // skips this step, so derived classes can't access inherited members at runtime.
-    for (size_t i = 0; i < class_list.size(); ++i) {
-        if (preexisting_classes.count(i)) {
+    // The classes are processed in topological order (bases before derived) when it is known, so that the base
+    // classes of a class have imported their members when it imports them, and initializeMembers() does not recurse
+    // through the hierarchy: a class listed before its base classes recursed once per level of the hierarchy
+    // (qore#7553).
+    std::vector<uint32_t> order;
+    if (topo_order.empty()) {
+        order.reserve(class_list.size());
+        for (size_t i = 0; i < class_list.size(); ++i) {
+            order.push_back(static_cast<uint32_t>(i));
+        }
+    }
+    for (uint32_t i : (topo_order.empty() ? order : topo_order)) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
             continue;  // already fully initialized from module loading
         }
         QoreClass* qc = class_list[i];
@@ -21623,9 +21659,29 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
             error = QORE_PARSE_STACK_DESC;
             return false;
         }
+        // the stack check of initializeMembers() raises its error in the parse sink of the current Program, which
+        // is the one that the classes are loaded into
+        assert(getProgram() == pgm);
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        ExceptionSink* parse_sink = pp->parseSink ? pp->parseSink : pp->pendingParseSink;
+        // only an error that this call raises is removed below: a sink that holds an exception already is left as
+        // it is (qore#7553)
+        bool parse_sink_clean = !parse_sink || !*parse_sink;
         // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
         // iterates base class list, and calls parseImportMembers() for each base class
-        priv->initializeMembers();
+        if (priv->initializeMembers()) {
+            // its stack check raised the parse stack error in the Program, where no parse reports it, and the class
+            // has not imported the members of its base classes: the load fails with the error, which the parse
+            // exception would have counted as active in this thread until the Program is deleted (qore#7553)
+            // the sink is read again: the error makes a new pending parse sink in a Program that had none
+            ExceptionSink* err_sink = pp->parseSink ? pp->parseSink : pp->pendingParseSink;
+            if (err_sink && (err_sink != parse_sink || parse_sink_clean)) {
+                err_sink->clear();
+            }
+            thread_stack_exceeded = true;
+            error = QORE_PARSE_STACK_DESC;
+            return false;
+        }
         printd(5, "AOT deser: imported inherited members for class '%s'\n", qc->getName());
     }
     return true;

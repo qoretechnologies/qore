@@ -2456,15 +2456,33 @@ static QoreValue read_aot_function_call_ref(AOTExprReadCtx& ctx) {
 
 // see QoreAOT.h
 const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* name, bool is_static) {
-    const qore_class_private* qcp = qore_class_private::get(*qc);
-    const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name) : qcp->parseFindLocalMethod(name);
-    if (m) {
-        return m;
-    }
-    if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
-        for (const auto& i : *scl) {
-            if (i->sclass && (m = qore_aot_find_loading_method(i->sclass, name, is_static))) {
-                return m;
+    // the hierarchy is walked depth first, each class before its base classes and the base classes in their order,
+    // with a stack of its own instead of a recursion, as the depth of a hierarchy is not limited by the stack of the
+    // thread that loads it (qore#7553); a class reached through more than one path is searched once, as a second
+    // search could find nothing that the first one did not
+    typedef std::pair<BCList::const_iterator, BCList::const_iterator> base_range_t;
+    std::vector<base_range_t> bases;
+    std::unordered_set<const QoreClass*> visited;
+    while (qc) {
+        const qore_class_private* qcp = qore_class_private::get(*qc);
+        if (const QoreMethod* m = is_static ? qcp->parseFindLocalStaticMethod(name)
+                : qcp->parseFindLocalMethod(name)) {
+            return m;
+        }
+        if (const BCList* scl = qore_class_private::getBaseClassList(*qc)) {
+            bases.emplace_back(scl->begin(), scl->end());
+        }
+        // the next class is the first base class not searched yet of the most recently searched class that has one
+        qc = nullptr;
+        while (!qc && !bases.empty()) {
+            base_range_t& range = bases.back();
+            if (range.first == range.second) {
+                bases.pop_back();
+                continue;
+            }
+            const BCNode* bcn = *range.first++;
+            if (bcn && bcn->sclass && visited.insert(bcn->sclass).second) {
+                qc = bcn->sclass;
             }
         }
     }

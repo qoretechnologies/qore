@@ -1883,26 +1883,6 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
     return std::unique_ptr<QoreIRInstruction>(ci);
 }
 
-//! Returns a normal or static method of a class or of one of its base classes that is not committed yet, or nullptr
-static const QoreMethod* instRegistryFindPendingMethod(const qore_class_private& qcp, const char* method_name,
-        bool is_static) {
-    if (const QoreMethod* method = is_static ? qcp.parseFindLocalStaticMethod(method_name)
-            : qcp.parseFindLocalMethod(method_name)) {
-        return method;
-    }
-    if (qcp.scl) {
-        for (const BCNode* bc : *qcp.scl) {
-            if (bc && bc->sclass) {
-                if (const QoreMethod* method = instRegistryFindPendingMethod(*qore_class_private::get(*bc->sclass),
-                        method_name, is_static)) {
-                    return method;
-                }
-            }
-        }
-    }
-    return nullptr;
-}
-
 //! Returns the method of a direct method call, or nullptr if the class and its base classes have no such method
 /** A closure in a member initializer is read before the classes' methods are committed (see
     QoreAOTBinaryDeserializer::resolveTypesAndMembers()), and a method that is not committed yet is not found by name
@@ -1916,12 +1896,12 @@ static const QoreMethod* instRegistryFindDirectMethod(const QoreClass& qc, const
     if (const QoreMethod* method = qc.findStaticMethod(method_name)) {
         return method;
     }
-    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed
-    const qore_class_private& qcp = *qore_class_private::get(qc);
-    if (const QoreMethod* method = instRegistryFindPendingMethod(qcp, method_name, false)) {
+    // normal methods of the hierarchy before static ones, as the calls are resolved when the code is parsed; the
+    // hierarchy is walked without a recursion (qore#7553)
+    if (const QoreMethod* method = qore_aot_find_loading_method(&qc, method_name, false)) {
         return method;
     }
-    return instRegistryFindPendingMethod(qcp, method_name, true);
+    return qore_aot_find_loading_method(&qc, method_name, true);
 }
 
 // ============================================================================
