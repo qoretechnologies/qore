@@ -19113,6 +19113,27 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         it->second = nullptr;
     }
 
+    // the blocks of the lowered function that its entry reaches: a Phi's incoming edge from any other block is never
+    // taken; its value can be one that native code does not have, as a block that only the paths of a debugger's flow
+    // requests enter (which native code does not have, and which are not in the function while it is outlined) can
+    // pass on a value that such a path defines: after an unconditional break, the update block of a loop is entered
+    // only through the path of a "continue" flow request (qore#7639)
+    std::unordered_set<const llvm::BasicBlock*> native_reachable;
+    if (!pending_phis.empty()) {
+        std::vector<const llvm::BasicBlock*> work{&llvm_func->getEntryBlock()};
+        native_reachable.insert(work.front());
+        while (!work.empty()) {
+            const llvm::BasicBlock* b = work.back();
+            work.pop_back();
+            // a block without its terminator yet (an exit block, finished after this pass) has no successor here
+            qoreForEachSuccessor(b, [&](const llvm::BasicBlock* s) {
+                if (native_reachable.insert(s).second) {
+                    work.push_back(s);
+                }
+            });
+        }
+    }
+
     // PHI fixup pass: add incoming values now that all blocks are lowered
     for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind, phi_temp_cleanup] : pending_phis) {
         llvm::BasicBlock* phi_bb = phi_node->getParent();
@@ -19131,10 +19152,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // native code has no paths of the debugger's flow requests (see above)
             if (inc.block && inc.block->debug_flow) {
                 continue;
-            }
-            llvm::Value* val = getVal(inc.value.id, error);
-            if (!val) {
-                return false;
             }
             // Resolve the actual LLVM predecessor block for this incoming edge.
             // When a block's terminator emits its outgoing branches from different
@@ -19178,6 +19195,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     + "', which is not a predecessor";
                 return false;
             }
+            // an edge that native code never takes (see native_reachable) has no value
+            if (!native_reachable.count(bb)) {
+                phi_node->addIncoming(llvm::PoisonValue::get(phi_node->getType()), bb);
+                continue;
+            }
+            llvm::Value* val = getVal(inc.value.id, error);
+            if (!val) {
+                return false;
+            }
             // a Phi that takes its incoming values over does so on its own edge: a predecessor with other successors
             // (the header of a loop, whose exit block has the Phi of the loop's value) gets a block of its own on the
             // edge, or the reference moved on every edge, and the loop's accumulator left its slot for the exit Phi's
@@ -19195,6 +19221,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         pn.replaceIncomingBlockWith(bb, edge);
                     }
                     edge_block_map[{inc.block, phi_ir_block}] = edge;
+                    // reached as its predecessor is: a later Phi of the block on the same edge finds it
+                    native_reachable.insert(edge);
                     bb = edge;
                 }
             }
