@@ -103,7 +103,7 @@ module HttpServerUtil {
     |!Key|!Type|!Description
     |\c auth|*string|the original \c Authorization header value, if any
     |\c char_encoding|string|the character encoding of the Socket object handling the request
-    |\c client-cert|@ref Qore::SSLCertificate "SSLCertificate"|the client certificate if the server is configured to capture them and one is present in the request
+    |\c client-cert|@ref Qore::SSLCertificate "SSLCertificate"|the client certificate if the server is configured to capture them and one is present in the request; not given to the code of a handler of restricted code
     |\c close|*bool|set to @ref True "True" if the connection should be closed after responding (as derived from request headers)
     |\c compression-levels|hash<string, int>|the compression level of each content encoding for response bodies compressed on the fly (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"); a handler that compresses its own response uses the level of the encoding it selects
     |\c debug|*bool|@ref True "True" if the debug flag is enabled on the HTTP server
@@ -114,11 +114,11 @@ module HttpServerUtil {
     |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers); its \c body_reader key is the @ref HttpServer::Http1BodyReader "Http1BodyReader" of an HTTP/1.x body with a \c Content-Length that a stream handler wants as a stream (see @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()")
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
-    |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
+    |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server; not given to the code of a handler of restricted code
     |\c masked_path|string|the URI path after URL decoding the resource path and masking sensitive information
     |\c orig_path|string|the URI path in the request after URL decoding the resource path; the query string remains percent-encoded until parsed
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
-    |\c peer-info-future|*@ref Qore::Thread::Future "Future"|Future resolving to peer information with reverse DNS hostname fields; set only if the server has the \c peer_hostname_lookup option; handlers may wait on it if hostname resolution is required
+    |\c peer-info-future|*@ref Qore::Thread::Future "Future"|Future resolving to peer information with reverse DNS hostname fields; set only if the server has the \c peer_hostname_lookup option; handlers may wait on it if hostname resolution is required; not given to the code of a handler of restricted code
     |\c raw_path|string|the raw URI request path in the request
     |\c response-encoding|*string|the response encoding chosen from any \c "Accept-Charset" in the request (see @ref Qore::get_http_accept_charset() "get_http_accept_charset()")
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
@@ -178,8 +178,12 @@ module HttpServerUtil {
     HTTP server calls for a request (handleExpectHeader(), wantsBodyStreaming(), preprocessRequest(),
     authenticateRequest(), canHandleInline(), handleInlineRequest() and
     @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()") get the request without its
-    credentials (@ref HttpServer::AbstractHttpRequestHandler::withholdCredentialsForDispatch() "withholdCredentialsForDispatch()");
-    the rest of the context is the handler's.  The trusted authenticator of such a handler authenticates the raw
+    credentials
+    (@ref HttpServer::AbstractHttpRequestHandler::withholdCredentialsForDispatch() "withholdCredentialsForDispatch()")
+    and without the objects of the server (the logger, the listener, the future of the peer information and the
+    peer's certificate); the rest of the context is the handler's: its request, its stream (\c header-info), the
+    listener's address (\c socket, \c socket-info), its session (\c sock_key) and its user thread context
+    (\c uctx).  The trusted authenticator of such a handler authenticates the raw
     request first (@ref HttpServer::AbstractHttpRequestHandler::authenticateRestrictedRequest() "authenticateRestrictedRequest()"),
     and the handler's code gets the platform context keys that it sets, but not the other keys that it adds, such as
     a session token; an authenticator of restricted code gets the request without its credentials.
@@ -3119,6 +3123,12 @@ public class AbstractStreamRequest {
         #! gives, also not as the keys of the platform's authorization context
         /** (see @ref HttpServer::HttpRequestFilterOptions::platform_context_keys "HttpRequestFilterOptions.platform_context_keys")
 
+            The user thread context (\c uctx) and the session key (\c sock_key) are the state of the handler that
+            serves the request (see HttpListenerInterface::addUserThreadContext()), which a handler of restricted code
+            keeps for its own code (see AbstractHttpRequestHandler::withholdCredentialsForDispatch()); the code that a
+            trusted handler dispatches a request to (a stream request or a REST class of restricted code) does not get
+            the trusted handler's state.
+
             @since HttpServerUtil 1.6
         */
         const ServerContextKeys = ("auth", "client-cert", "listener", "logger", "peer-info-future", "sock_key",
@@ -5943,10 +5953,15 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()", with the
         options of this handler): the credential header fields (also in \c cx.hdr), the credential trailer fields,
         those of the raw header fields and of the request URI in \c cx."header-info", the user information of the URL
-        and the credential query parameters of the paths, and the raw \c Authorization value (\c cx.auth).  The rest of
-        the context is the handler's, as before: the socket and the stream of its request, its own thread context
-        (\c cx.uctx); the code that the handler dispatches the request to gets it filtered further by the code of this
-        class (see withholdRequestCredentials()).
+        and the credential query parameters of the paths, and the raw \c Authorization value (\c cx.auth).  The objects
+        of the server are withheld too, as the request filter withholds them (see
+        @ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys"): the server's logger
+        (\c cx.logger), the listener (\c cx.listener), the future of the peer information (\c cx."peer-info-future")
+        and the peer's certificate (\c cx."client-cert").  The rest of the context is the handler's, as before: the
+        stream of its request (\c cx."header-info"), the address of the listener (\c cx.socket, \c cx."socket-info"),
+        its session (\c cx.sock_key) and its user thread context (\c cx.uctx), which the server keeps apart for each
+        handler; the code that the handler dispatches the request to gets it filtered further by the code of this class
+        (see withholdRequestCredentials()).
 
         It returns only a copy of the request that it is given, so it is not restricted.
 
@@ -5998,6 +6013,9 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         map rcx{$1.key} = $1.value, platform_changes.changed.pairIterator();
         # the raw Authorization value is never given back, also not as a value from before the authentication
         remove rcx.auth;
+        # the objects of the server and of its host, as the request filter withholds them; the handler's own request
+        # (its socket, the socket's information and its session key) stays (qore#7303)
+        remove rcx{"logger", "listener", "peer-info-future", "client-cert"};
         return <HttpFilteredRequestInfo>{
             "cx": rcx,
             "hdr": filtered.hdr,

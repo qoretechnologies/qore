@@ -2958,7 +2958,8 @@
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
-      setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
+      setups of restricted code get the request without its credentials and without the objects of the server, such
+      as its logger (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
     - the @ref push "push" and @ref unshift "unshift" operators whose operand is the lvalue's own list (\c push l, l)
       add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an
