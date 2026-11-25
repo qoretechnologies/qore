@@ -139,6 +139,14 @@ class IndexOptionChecksTest inherits QUnit::Test {
             ) {
             assertThrows("INDEX-OPTION-ERROR", \OracleTable::checkIndexOptions(), ("ix", opt), sprintf("%y", opt));
         }
+        # A requested bitmap index aligns with Oracle's catalog entry (qore#1611).
+        OracleIndex bitmap("ix", False, {"name": {}}, "NORMAL", NOTHING, "bitmap", NOTHING);
+        OracleIndex catalog("ix", False, {"name": {}}, "BITMAP", NOTHING, NOTHING, NOTHING);
+        assertTrue(bitmap.equal(catalog));
+        assertRegex("^create bitmap index ", bitmap.getCreateSql("t"));
+        assertThrows("INDEX-OPTION-ERROR", sub () {
+            OracleIndex invalid("ix", True, {"name": {}}, "normal", NOTHING, "BiTmAp", NOTHING);
+        });
         # the parameters are a string literal: a quote in a value is doubled
         OracleIndex ix("ix", False, {"name": {}}, "normal", NOTHING, "ctxsys.context", {"stoplist": "a')x"});
         assertRegex(" indextype is ctxsys\\.context parameters\\('stoplist=a''\\)x'\\)", ix.getCreateSql("t"));
