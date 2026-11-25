@@ -368,7 +368,7 @@ size_t qore_hash_keyed_bytes(const char* str, size_t len) {
 HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
     assert(isHardened() && count);
     size_t h = qore_hash_keyed_bytes(str, len);
-    for (HashMember* m = buckets[h & mask]; m; m = m->bucket_next) {
+    for (HashMember* m = buckets[h & getMask()]; m; m = m->bucket_next) {
         if (m->hash == h && qore_key_equal(m->key.data(), m->key.size(), str, len)) {
             return m;
         }
@@ -377,19 +377,22 @@ HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
 }
 
 void qore_hash_member_map::insertSlow(HashMember* m) {
-    assert(count < bucket_count());
-    if (limit) {
-        HashMember* first = buckets[m->hash & mask];
+    // a hardened map grows here (its limit is 0, so insert() does not grow it)
+    if (count >= bucket_count()) {
+        grow();
+    }
+    if (getLimit()) {
+        HashMember* first = buckets[m->hash & getMask()];
         if (!first || !chainFull(first) || !tryHarden()) {
             // the map is not hardened: the member keeps its member hash
             m->bucket_next = first;
-            buckets[m->hash & mask] = m;
+            buckets[m->hash & getMask()] = m;
             ++count;
             return;
         }
     }
     m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
-    HashMember*& b = buckets[m->hash & mask];
+    HashMember*& b = buckets[m->hash & getMask()];
     m->bucket_next = b;
     b = m;
     ++count;
@@ -423,7 +426,7 @@ void qore_hash_member_map::harden() {
         for (HashMember* m = buckets[b]; m;) {
             HashMember* next = m->bucket_next;
             m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
-            HashMember*& nbucket = nb[m->hash & mask];
+            HashMember*& nbucket = nb[m->hash & getMask()];
             m->bucket_next = nbucket;
             nbucket = m;
             m = next;
@@ -432,7 +435,7 @@ void qore_hash_member_map::harden() {
     delete[] buckets;
     buckets = nb;
     // every insert into a hardened map takes the slow path
-    limit = 0;
+    setLimit(0);
 }
 
 size_t qore_hash_member_map::maxChain() const {
@@ -463,7 +466,7 @@ void qore_hash_member_map::rehash(size_t n) {
     HashMember** nb = new HashMember*[n]();
     uint32_t nmask = static_cast<uint32_t>(n - 1);
     // a map without buckets is not hardened; a map with buckets is hardened if its limit is 0
-    bool set_limit = !buckets || limit;
+    bool set_limit = !buckets || getLimit();
     if (buckets) {
         for (size_t b = 0, e = bucket_count(); b < e; ++b) {
             for (HashMember* m = buckets[b]; m;) {
@@ -477,12 +480,9 @@ void qore_hash_member_map::rehash(size_t n) {
         delete[] buckets;
     }
     buckets = nb;
-    mask = nmask;
     // a map that is not hardened takes inserts on the fast path until it has as many members as buckets (n is at
     // most MaxBuckets, so the limit is not 0); a hardened map keeps its limit of 0
-    if (set_limit) {
-        limit = static_cast<uint32_t>(n);
-    }
+    setMaskLimit(nmask, set_limit ? static_cast<uint32_t>(n) : 0);
 }
 
 QoreValue qore_hash_private::takeKeyValueIntern(const char* key, qore_object_private* obj) {
