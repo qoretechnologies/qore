@@ -415,7 +415,8 @@ public:
     DLLLOCAL void clear() {
         delete[] buckets;
         buckets = nullptr;
-        mask_limit = 0;
+        mask = 0;
+        limit = 0;
         count = 0;
     }
 
@@ -454,34 +455,35 @@ public:
 
 private:
     HashMember** buckets = nullptr;
-    //! the number of buckets - 1, if the array is allocated
-    //! the mask (the number of buckets - 1, if the array is allocated) in the low 32 bits, and the insert limit in
-    //! the high 32 bits (see getLimit()): one word, so that a new map is initialized as before qore#7557, when the
-    //! mask was a word of its own
-    uint64_t mask_limit = 0;
+    size_t count = 0;
+    //! the mask: the number of buckets - 1, if the array is allocated; with the insert limit after the member count,
+    //! so that a new map is initialized with as many stores as before qore#7557, when the mask was a word of its own
+    uint32_t mask = 0;
     //! the number of members from which an insert takes the slow path (qore#7557): the number of buckets in a map
     //! that is not hardened, where the buckets grow then, and 0 in a map without buckets and in a hardened map, whose
     //! inserts all take the slow path
+    uint32_t limit = 0;
+
     //! the mask: the number of buckets - 1, if the array is allocated
     DLLLOCAL uint32_t getMask() const {
-        return static_cast<uint32_t>(mask_limit);
+        return mask;
     }
 
     //! the insert limit
     DLLLOCAL uint32_t getLimit() const {
-        return static_cast<uint32_t>(mask_limit >> 32);
+        return limit;
     }
 
     //! sets the mask and the insert limit
     DLLLOCAL void setMaskLimit(uint32_t new_mask, uint32_t new_limit) {
-        mask_limit = static_cast<uint64_t>(new_mask) | (static_cast<uint64_t>(new_limit) << 32);
+        mask = new_mask;
+        limit = new_limit;
     }
 
     //! sets the insert limit
     DLLLOCAL void setLimit(uint32_t new_limit) {
-        setMaskLimit(getMask(), new_limit);
+        limit = new_limit;
     }
-    size_t count = 0;
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
     DLLLOCAL static size_t bucketsFor(size_t n) {
