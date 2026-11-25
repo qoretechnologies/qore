@@ -981,8 +981,6 @@ static bool isSharedVar(const VarRefNode* var) {
     }
 }
 
-static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
-
 //! Returns the runtime location of a statement whose location is \a loc in the code of the statement whose runtime
 //! location is \a outer (see QoreIRInstruction::stmt_loc)
 /** A statement on the lines of the statement that contains it, such as the body of a loop written on one line, takes
@@ -1877,8 +1875,8 @@ static const LocalVar* qore_ir_get_returned_local(const QoreValue& expr) {
     return var->ref.id;
 }
 
-//! Returns true if a value of the type can be or hold an object, whose destructor can run when it is released
-static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth) {
+// documented in QoreIRAnalysis.h
+bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth) {
     if (!QoreTypeInfo::needsScan(ti)) {
         return false;
     }

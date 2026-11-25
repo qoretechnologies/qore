@@ -20606,3 +20606,115 @@ const std::vector<uint32_t>* qore_ir_exception_catch_returns(const QoreIRFunctio
     }
     return nullptr;
 }
+
+// the release analysis of reflective frames (QoreIRFunction::reflective_frame, qore#7646)
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_lvalue_type_may_hold_object(const QoreTypeInfo* ti) {
+    if (const QoreTypeInfo* target = QoreTypeInfo::getReferenceTarget(ti)) {
+        return qore_ir_type_may_hold_object(target);
+    }
+    return qore_ir_type_may_hold_object(ti);
+}
+
+//! Returns true if the variable of an lvalue expression can hold a value that may hold an object
+/** A local of the function counts with its declared type, or the type that it refers to for a reference; any other
+    variable, and an expression without a variable, as possibly holding an object.
+*/
+static bool qore_ir_var_ref_may_hold_object(const VarRefNode* var) {
+    if (!var) {
+        return true;
+    }
+    switch (var->getType()) {
+        case VT_LOCAL:
+        case VT_LOCAL_TS:
+        case VT_CLOSURE:
+            return !var->ref.id || qore_ir_lvalue_type_may_hold_object(var->ref.id->getTypeInfo());
+        case VT_GLOBAL:
+            return !var->ref.var || qore_ir_lvalue_type_may_hold_object(var->ref.var->getTypeInfo());
+        default:
+            return true;
+    }
+}
+
+// documented in QoreIRAnalysis.h
+bool qore_ir_instruction_may_release_object(const QoreIRInstruction* inst) {
+    if (!inst) {
+        return true;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::StoreLocal:
+        case QoreIROpcode::StoreClosure:
+        case QoreIROpcode::UninstantiateLocal: {
+            const auto* store = static_cast<const QoreIRLocalInstruction*>(inst);
+            return !store->local || store->is_ref || qore_ir_lvalue_type_may_hold_object(store->local->getTypeInfo());
+        }
+        case QoreIROpcode::StoreGlobal:
+        case QoreIROpcode::StoreThreadLocal: {
+            const auto* store = static_cast<const QoreIRVarInstruction*>(inst);
+            return !store->var || qore_ir_lvalue_type_may_hold_object(store->var->getTypeInfo());
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary: {
+            const auto* path = static_cast<const QoreIRLValuePathInstruction*>(inst);
+            if (path->path.empty()) {
+                return true;
+            }
+            const LVPathStep& root = path->path.front();
+            const QoreTypeInfo* type = root.type_info;
+            if (root.kind == LVPathStepKind::LocalVar && root.ref_ptr) {
+                type = reinterpret_cast<const LocalVar*>(root.ref_ptr)->getTypeInfo();
+            }
+            return !type || qore_ir_lvalue_type_may_hold_object(type);
+        }
+        case QoreIROpcode::HashKeyStore: {
+            const auto* store = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            return store->container_lv ? qore_ir_lvalue_type_may_hold_object(store->container_lv->getTypeInfo())
+                : qore_ir_var_ref_may_hold_object(store->container);
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            const auto* store = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst);
+            return store->container_lv ? qore_ir_lvalue_type_may_hold_object(store->container_lv->getTypeInfo())
+                : qore_ir_var_ref_may_hold_object(store->container);
+        }
+        case QoreIROpcode::ListIndexStore: {
+            const auto* store = static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            return store->container_lv ? qore_ir_lvalue_type_may_hold_object(store->container_lv->getTypeInfo())
+                : qore_ir_var_ref_may_hold_object(store->container);
+        }
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::SpliceLValue:
+            return qore_ir_var_ref_may_hold_object(extractLValueBaseVarRef(
+                static_cast<const QoreIRLValueInstruction*>(inst)->lvalue));
+        // the expression forms of the removing and assigning operators carry no lvalue that the analysis can type
+        case QoreIROpcode::ExtractAny:
+        case QoreIROpcode::ExtractList:
+        case QoreIROpcode::RemoveAny:
+        case QoreIROpcode::RemoveList:
+        case QoreIROpcode::RemoveHash:
+        case QoreIROpcode::RemoveObject:
+        case QoreIROpcode::ListAssignAny:
+            return true;
+        default:
+            return false;
+    }
+}

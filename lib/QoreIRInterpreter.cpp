@@ -3980,6 +3980,22 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     return true;
 }
 
+//! Returns true if releasing the value can release an object, whose destructor runs user code
+static bool interpreterValueMayHoldObject(const QoreValue& value) {
+    if (!value.hasNode()) {
+        return false;
+    }
+    switch (value.getType()) {
+        case NT_STRING:
+        case NT_BINARY:
+        case NT_NUMBER:
+        case NT_DATE:
+            return false;
+        default:
+            return true;
+    }
+}
+
 static bool interpreterEffectSummaryDisabled() {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_EFFECT_SUMMARY");
     const bool disabled = disabled_env.get();
@@ -12395,6 +12411,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     using TempCleanupMark = IRCallFrame::TempCleanupMark;
     auto& temp_cleanup_marks = frame.temp_cleanup_marks;
 
+    // A destructor run by the release of a value that may hold an object can replace a local of a frame that
+    // reflection can reach by name (set_local_var_value()), as a callee can: in such a frame, the caches of the locals
+    // on the runtime stack are invalidated after an instruction that can release one when it changes an lvalue
+    // (qore_ir_instruction_may_release_object()), and after the release of a temporary that is or can hold an object,
+    // before the next instruction runs (qore#7646)
+    const bool reflective_frame = func.reflective_frame;
+    bool reflective_release_pending = false;
+    auto noteReleasedTemp = [&](const QoreValue& value) {
+        if (reflective_frame && !reflective_release_pending && interpreterValueMayHoldObject(value)) {
+            reflective_release_pending = true;
+        }
+    };
+
     // Returns true if the destructor of the object that the load kept for a call whose receiver it is raised an
     // exception: only such a load (see the LoadLocal of a weak-assigned local, qore#6590) has a cleanup entry, as it
     // holds a reference; any other borrows its value.  Such a load is released by its last use or with the temps of
@@ -12453,6 +12482,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             removeAllCleanupEntries(cleanup, id);
             QoreValue v = values[id];
             values[id] = QoreValue();
+            noteReleasedTemp(v);
             // an exception raised by a destructor is added to any exception raised by the call, as in the AST
             v.discard(xsink);
         }
@@ -12594,6 +12624,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanup_log->push_back(slot.getTypeName());
                 }
             }
+            noteReleasedTemp(slot);
             slot.discard(eff_xsink);
             slot = QoreValue();
             weak_load_temp_slots.erase(id);
@@ -12983,6 +13014,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         QoreIRBasicBlock* current_block = block;
 next_instruction:
         QoreIRInstruction* inst = block->instructions[ip].get();
+        if (reflective_frame) {
+            // the previous instruction may have released an object, whose destructor may have replaced locals of this
+            // frame on the runtime stack (qore#7646)
+            if (reflective_release_pending) {
+                reflective_release_pending = false;
+                invalidateExternalCaches();
+            }
+            if (qore_ir_instruction_may_release_object(inst)) {
+                reflective_release_pending = true;
+            }
+        }
         // Track the last instruction dispatched so silent-failure tracing
         // (QORE_IR_TRACE_SILENT_FAIL=1) can identify which opcode returned
         // `ok=false` without raising an xsink exception.  Thread-local so

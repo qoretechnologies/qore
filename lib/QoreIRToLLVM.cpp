@@ -7211,6 +7211,8 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
+    // a temporary released can be an object, whose destructor can replace a local of a reflective frame (qore#7646)
+    bool released = false;
     {
         // last registered first
         std::vector<llvm::Value*> release;
@@ -7235,6 +7237,7 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
                 release.swap(others);
             }
         }
+        released = !release.empty() || !held.empty();
         emitTempReleaseSequence(module, release, 0, release.size());
         if (!held.empty()) {
             llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
@@ -7253,6 +7256,7 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
     }
 
     if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
+        released = true;
         llvm::BasicBlock* cur = builder->GetInsertBlock();
         for (size_t i = pending_ssa_cleanup.size(); i > mark.pending_ssa_count; --i) {
             const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
@@ -7270,6 +7274,10 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
             }
         }
         pending_ssa_cleanup.resize(mark.pending_ssa_count);
+    }
+
+    if (released && current_ir_func && current_ir_func->reflective_frame) {
+        reloadAllLocalsFromRuntime(module, builder->GetInsertBlock()->getParent());
     }
 
     if (statement_end) {
@@ -17074,7 +17082,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // block (laid out at the end of the function) after that block's handlers ran, published the stale cached
         // value of a local to the runtime stack before running its own handlers, losing the value the handlers had
         // assigned.
-        if (has_on_block_exit_handlers) {
+        // In a reflective frame (QoreIRFunction::reflective_frame), any call can replace a local or a parameter by
+        // name with set_local_var_value(), also before a read that is lowered before the first call that would
+        // create the epoch (the read of a receiver at the top of a loop body): the epoch exists from the entry
+        // (qore#7646)
+        if (has_on_block_exit_handlers || func.reflective_frame) {
             getOrCreateLocalReloadEpoch(llvm_func);
         }
         // an outlined helper with in-region returns of a value or with handlers that can return a value hands the
@@ -18956,6 +18968,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
             endCallTargetReload(inst);
+            // In a reflective frame, a destructor run by the release of a value that may hold an object can replace a
+            // local by name on the runtime stack (set_local_var_value()), as a callee can: the locals are reloaded
+            // after an instruction that can release one when it changes an lvalue, as after a call (qore#7646)
+            if (current_ir_func && current_ir_func->reflective_frame && qore_ir_instruction_may_release_object(inst)
+                    && !qoreGetTerminator(builder->GetInsertBlock())) {
+                reloadAllLocalsFromRuntime(module, llvm_func);
+            }
             if (call_site) {
                 llvm::BasicBlock* cur = builder->GetInsertBlock();
                 llvm::Instruction* term = qoreGetTerminator(cur);
