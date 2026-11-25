@@ -293,8 +293,8 @@
     The description of the pool passed to a
     @ref Qore::SQL::DatasourcePool::setWarningCallback() "DatasourcePool warning callback" shows the driver name, host
     and port of the pool with its user name, password and database name masked as \c "****" (ex:
-    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of the pool
-    with its password;
+    <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>), where it was the configuration string of
+    the pool with its password;
     @ref Qore::SQL::DatasourcePool::getConfigString() "DatasourcePool::getConfigString()" still returns the
     configuration (issue #6961).
 
@@ -304,9 +304,9 @@
     @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()" and
     @ref SqlUtil::AbstractTable::getDesc() "AbstractTable::getDesc()", is the masked description of
     @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()" (ex:
-    <tt>pgsql:****</tt><tt>/****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the database name;
-    so it no longer identifies a connection, and the names of the database data providers, which are the
-    description, are the same for all the connections of a driver to a host and port; the key of the
+    <tt>pgsql:****</tt><tt>/</tt><tt>****</tt><tt>\@****%dbhost:5432</tt>), where it showed the user name and the
+    database name; so it no longer identifies a connection, and the names of the database data providers, which are
+    the description, are the same for all the connections of a driver to a host and port; the key of the
     @ref SqlUtil::TableCache "SqlUtil table cache" is given by the new
     @ref SqlUtil::AbstractSqlUtilBase::makeDatasourceKey() "AbstractSqlUtilBase::makeDatasourceKey()" (issue #6988).
 
