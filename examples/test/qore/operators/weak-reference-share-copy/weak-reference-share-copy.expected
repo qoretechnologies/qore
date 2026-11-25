@@ -32,4 +32,8 @@ move into a parameter: {}
 move into an untyped parameter that the function returns: {}
 move into an untyped parameter that a method returns: {}
 move into an untyped parameter that a static method returns: {}
+list += scalar: [1, 5], [1, 5]
+list += list: [1, 5, 6, 7], [1, 5, 6, 7], [1, 5, 6, 7]
+hash += hash: {a: 1, b: 2}, {a: 1, b: 2}
+hash += existing key: {a: 3, b: 2}, {a: 3, b: 2}, {a: 3, b: 2}
 done

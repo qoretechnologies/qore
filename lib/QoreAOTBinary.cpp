@@ -17399,34 +17399,38 @@ bool QoreAOTBinaryDeserializer::rebuildBaseClassSmlPhase(std::string& error) {
         }
     }
     for (uint32_t i : (topo_order.empty() ? order : topo_order)) {
-        if (i >= class_list.size() || preexisting_classes.count(i)) {
-            continue;
-        }
-        QoreClass* qc = class_list[i];
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* priv = qore_class_private::get(*qc);
-        if (!priv->scl) {
-            continue;
-        }
-        for (auto* bcn : *priv->scl) {
-            QoreClass* base = bcn->sclass;
-            if (!base) {
-                continue;
-            }
-            qore_class_private* base_priv = qore_class_private::get(*base);
-            if (!base_priv->scl || !base_priv->scl->valid) {
-                continue;
-            }
-            // Re-propagate base's ancestors into qc's sml. Safe
-            // to call repeatedly — BCSMList::add skips duplicates.
-            base_priv->scl->addBaseClassesToSubclass(base, qc, bcn->is_virtual);
-        }
-        // every session's base classes have been resolved now
-        markSmlComplete(qc, nullptr);
+        rebuildBaseClassSmlOf(i);
     }
     return true;
+}
+
+void QoreAOTBinaryDeserializer::rebuildBaseClassSmlOf(uint32_t i) {
+    if (i >= class_list.size() || preexisting_classes.count(i)) {
+        return;
+    }
+    QoreClass* qc = class_list[i];
+    if (!qc) {
+        return;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    if (!priv->scl) {
+        return;
+    }
+    for (auto* bcn : *priv->scl) {
+        QoreClass* base = bcn->sclass;
+        if (!base) {
+            continue;
+        }
+        qore_class_private* base_priv = qore_class_private::get(*base);
+        if (!base_priv->scl || !base_priv->scl->valid) {
+            continue;
+        }
+        // Re-propagate base's ancestors into qc's sml. Safe
+        // to call repeatedly — BCSMList::add skips duplicates.
+        base_priv->scl->addBaseClassesToSubclass(base, qc, bcn->is_virtual);
+    }
+    // every session's base classes have been resolved now
+    markSmlComplete(qc, nullptr);
 }
 
 // Phase-split 2a-b.  Import inherited members from base classes
@@ -21713,7 +21717,7 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
     // The classes are processed in topological order (bases before derived) when it is known, so that the base
     // classes of a class have imported their members when it imports them, and initializeMembers() does not recurse
     // through the hierarchy: a class listed before its base classes recursed once per level of the hierarchy
-    // (qore#7553).
+    // (qore#7553).  The classes of the images of a batch are processed in one order (see getBatchClassOrder()).
     std::vector<uint32_t> order;
     if (topo_order.empty()) {
         order.reserve(class_list.size());
@@ -21722,45 +21726,141 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
         }
     }
     for (uint32_t i : (topo_order.empty() ? order : topo_order)) {
-        if (i >= class_list.size() || preexisting_classes.count(i)) {
-            continue;  // already fully initialized from module loading
-        }
-        QoreClass* qc = class_list[i];
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* priv = qore_class_private::get(*qc);
-        // initializeMembers() recurses to the base classes whose members are not yet imported, and stops while the
-        // parse stack reserve remains (issue #6047); no parse reports that here, so the load fails with the error
-        if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-            thread_stack_exceeded = true;
-            error = QORE_PARSE_STACK_DESC;
+        if (!importInheritedMembersOf(i, error)) {
             return false;
         }
-        // the stack check of initializeMembers() raises its error in the parse sink of the current Program, which
-        // is the one that the classes are loaded into
-        assert(getProgram() == pgm);
-        qore_program_private* pp = qore_program_private::get(*pgm);
-        ExceptionSink* parse_sink = pp->parseSink ? pp->parseSink : pp->pendingParseSink;
-        // only an error that this call raises is removed below: a sink that holds an exception already is left as
-        // it is (qore#7553)
-        bool parse_sink_clean = !parse_sink || !*parse_sink;
-        // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
-        // iterates base class list, and calls parseImportMembers() for each base class
-        if (priv->initializeMembers()) {
-            // its stack check raised the parse stack error in the Program, where no parse reports it, and the class
-            // has not imported the members of its base classes: the load fails with the error, which the parse
-            // exception would have counted as active in this thread until the Program is deleted (qore#7553)
-            // the sink is read again: the error makes a new pending parse sink in a Program that had none
-            ExceptionSink* err_sink = pp->parseSink ? pp->parseSink : pp->pendingParseSink;
-            if (err_sink && (err_sink != parse_sink || parse_sink_clean)) {
-                err_sink->clear();
+    }
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::importInheritedMembersOf(uint32_t i, std::string& error) {
+    if (i >= class_list.size() || preexisting_classes.count(i)) {
+        return true;  // already fully initialized from module loading
+    }
+    QoreClass* qc = class_list[i];
+    if (!qc) {
+        return true;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    // initializeMembers() recurses to the base classes whose members are not yet imported, and stops while the
+    // parse stack reserve remains (issue #6047); no parse reports that here, so the load fails with the error
+    if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
+        thread_stack_exceeded = true;
+        error = QORE_PARSE_STACK_DESC;
+        return false;
+    }
+    // the stack check of initializeMembers() raises its error in the parse sink of the current Program, which
+    // is the one that the classes are loaded into
+    assert(getProgram() == pgm);
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    ExceptionSink* parse_sink = pp->parseSink ? pp->parseSink : pp->pendingParseSink;
+    // only an error that this call raises is removed below: a sink that holds an exception already is left as
+    // it is (qore#7553)
+    bool parse_sink_clean = !parse_sink || !*parse_sink;
+    // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
+    // iterates base class list, and calls parseImportMembers() for each base class
+    if (priv->initializeMembers()) {
+        // its stack check raised the parse stack error in the Program, where no parse reports it, and the class
+        // has not imported the members of its base classes: the load fails with the error, which the parse
+        // exception would have counted as active in this thread until the Program is deleted (qore#7553)
+        // the sink is read again: the error makes a new pending parse sink in a Program that had none
+        ExceptionSink* err_sink = pp->parseSink ? pp->parseSink : pp->pendingParseSink;
+        if (err_sink && (err_sink != parse_sink || parse_sink_clean)) {
+            err_sink->clear();
+        }
+        thread_stack_exceeded = true;
+        error = QORE_PARSE_STACK_DESC;
+        return false;
+    }
+    printd(5, "AOT deser: imported inherited members for class '%s'\n", qc->getName());
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::getBatchClassOrder(
+        const std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>>& sessions,
+        std::vector<batch_class_ref_t>& order, std::string& error) {
+    // The order is the post-order of a depth-first walk of the base classes of each class, with a stack of its own,
+    // from the classes of each image in the image's own topological order, so that the classes of an image whose
+    // base classes are in the same image or in an earlier one keep the order of their image.
+    // the classes of the batch, with their state in the walk: 0 = not visited, 1 = on the walk's stack, 2 = ordered
+    struct ClassState {
+        batch_class_ref_t ref;
+        uint8_t state = 0;
+    };
+    std::unordered_map<const QoreClass*, ClassState> classes;
+    size_t total = 0;
+    for (auto& sess : sessions) {
+        total += sess->class_list.size();
+    }
+    qoreAOTReserveAdditional(classes, total);
+    for (uint32_t s = 0; s < sessions.size(); ++s) {
+        const QoreAOTBinaryDeserializer& sess = *sessions[s];
+        for (uint32_t i = 0; i < sess.class_list.size(); ++i) {
+            if (sess.class_list[i] && !sess.preexisting_classes.count(i)) {
+                classes[sess.class_list[i]].ref = batch_class_ref_t(s, i);
             }
-            thread_stack_exceeded = true;
-            error = QORE_PARSE_STACK_DESC;
-            return false;
         }
-        printd(5, "AOT deser: imported inherited members for class '%s'\n", qc->getName());
+    }
+
+    order.clear();
+    order.reserve(classes.size());
+    typedef std::pair<BCList::const_iterator, BCList::const_iterator> base_range_t;
+    // the classes being walked, each with the range of its base classes not walked yet
+    std::vector<std::pair<ClassState*, base_range_t>> stack;
+    auto push = [&stack](ClassState& cs, const QoreClass* qc) {
+        cs.state = 1;
+        const BCList* scl = qore_class_private::getBaseClassList(*qc);
+        stack.emplace_back(&cs, scl ? base_range_t(scl->begin(), scl->end()) : base_range_t());
+    };
+    size_t steps = 0;
+    for (uint32_t s = 0; s < sessions.size(); ++s) {
+        const QoreAOTBinaryDeserializer& sess = *sessions[s];
+        std::vector<uint32_t> idx_order;
+        if (sess.topo_order.empty()) {
+            idx_order.resize(sess.class_list.size());
+            std::iota(idx_order.begin(), idx_order.end(), 0);
+        }
+        for (uint32_t i : (sess.topo_order.empty() ? idx_order : sess.topo_order)) {
+            if (i >= sess.class_list.size() || !sess.class_list[i] || sess.preexisting_classes.count(i)) {
+                continue;
+            }
+            ClassState& root = classes[sess.class_list[i]];
+            if (root.state) {
+                continue;
+            }
+            push(root, sess.class_list[i]);
+            while (!stack.empty()) {
+                if (!(++steps % 100) && qore_check_cancel(nullptr, "AOT batch class order")) {
+                    error = "operation cancelled during AOT batch class order";
+                    return false;
+                }
+                base_range_t& range = stack.back().second;
+                if (range.first == range.second) {
+                    // every base class of the batch is ordered before the class
+                    stack.back().first->state = 2;
+                    order.push_back(stack.back().first->ref);
+                    stack.pop_back();
+                    continue;
+                }
+                const BCNode* bcn = *range.first++;
+                if (!bcn || !bcn->sclass) {
+                    continue;
+                }
+                auto it = classes.find(bcn->sclass);
+                if (it == classes.end() || it->second.state == 2) {
+                    // not a class of the batch, or ordered already
+                    continue;
+                }
+                if (it->second.state == 1) {
+                    // a class that inherits itself through the images of the batch, which no valid batch has (a
+                    // cycle in one image fails in resolveClassBases())
+                    error = "AOT images have a cycle of base classes (class '"
+                        + std::string(bcn->sclass->getName()) + "')";
+                    return false;
+                }
+                push(it->second, bcn->sclass);
+            }
+        }
     }
     return true;
 }
@@ -21802,72 +21902,76 @@ bool QoreAOTBinaryDeserializer::commitClassesPrepare(std::string& error) {
 
     // Pre-commit pass: set flags + parseAddAncestors on every class.
     for (uint32_t i : order) {
-        if (i >= class_list.size() || preexisting_classes.count(i)) {
-            continue;  // already initialized and committed
-        }
-        QoreClass* qc = class_list[i];
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* priv = qore_class_private::get(*qc);
-        // Mirror initializeIntern(): class signature hashing must use resolved
-        // method signatures, not the empty pre-resolve signature text.
-        for (auto& mi : priv->hm) {
-            qore_method_private::get(*mi.second)->getFunction()->resolvePendingSignatures();
-        }
-        for (auto& mi : priv->shm) {
-            qore_method_private::get(*mi.second)->getFunction()->resolvePendingSignatures();
-        }
-        priv->initialized = true;
-        // Force has_new_user_changes so parseCommit() runs its full path:
-        //   - addLocalMembersForInit() populates member_init_list (so
-        //     `string name = "p"` defaults aren't silently dropped)
-        //   - parseCommitMethod() moves pending variants to committed vlist
-        //   - checkAssignSpecial() binds priv->constructor / destructor / copy
-        //     / methodGate / memberGate / memberNotification pointers from the
-        //     method map, so block-exit destructors (and the other special
-        //     methods) actually run on AOT-deserialized class instances.
-        // In source parse this flag is set by addUserMethod() for ANY newly
-        // added method; mirror that here for every newly deserialized class.
-        // addMember() only bumps has_sig_changes, which is not sufficient.
-        priv->has_new_user_changes = true;
-        // Populate each method's inheritance list (ilist) from base-class methods
-        // with the same name.  In source parse this is done in initializeHierarchy()
-        // via parseAddAncestors(); the AOT deserializer skips that path, so without
-        // this step an overloaded method that the derived class overrides for only
-        // SOME variants cannot dispatch to the inherited parent variants.
-        // Concrete symptom: HashDeclDataType overrides
-        //   isAssignableFrom(AbstractDataProviderType)
-        // but inherits
-        //   isAssignableFrom(Type)
-        // from AbstractDataProviderType; calling the Type overload at runtime
-        // raises RUNTIME-OVERLOAD-ERROR because the ilist only sees the derived
-        // variant. Runs in topo order — parent hm is populated first.
-        // Special methods (constructor/destructor/copy) are skipped by
-        // initializeHierarchy; mirror that via checkSpecial().
-        if (priv->scl) {
-            // the access of the ancestors is computed once for the lists of the methods (qore#7410)
-            AncestorAccessCache ancestor_access;
-            for (auto& mi : priv->hm) {
-                const char* mn = mi.second->getName();
-                if (strcmp(mn, "constructor") && strcmp(mn, "destructor") && strcmp(mn, "copy")) {
-                    priv->parseAddAncestors(mi.second, &ancestor_access);
-                }
-            }
-            for (auto& mi : priv->shm) {
-                priv->parseAddStaticAncestors(mi.second, &ancestor_access);
-            }
-        }
-        // The hierarchy is resolved above, as initializeHierarchy() resolves it in source parsing, so the class is
-        // marked as resolved like a parsed one; otherwise the first later parse that resolves it - a Program
-        // parsing a subclass while other threads run the class - repeats the resolution and writes the class's
-        // parse state while it is in use.
-        priv->parse_resolve_hierarchy = true;
-        // and its hierarchy is not initialized again for a subclass (issue #6106)
-        priv->hierarchy_initialized = true;
+        commitClassPrepareOf(i);
     }
 
     return true;
+}
+
+void QoreAOTBinaryDeserializer::commitClassPrepareOf(uint32_t i) {
+    if (i >= class_list.size() || preexisting_classes.count(i)) {
+        return;  // already initialized and committed
+    }
+    QoreClass* qc = class_list[i];
+    if (!qc) {
+        return;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    // Mirror initializeIntern(): class signature hashing must use resolved
+    // method signatures, not the empty pre-resolve signature text.
+    for (auto& mi : priv->hm) {
+        qore_method_private::get(*mi.second)->getFunction()->resolvePendingSignatures();
+    }
+    for (auto& mi : priv->shm) {
+        qore_method_private::get(*mi.second)->getFunction()->resolvePendingSignatures();
+    }
+    priv->initialized = true;
+    // Force has_new_user_changes so parseCommit() runs its full path:
+    //   - addLocalMembersForInit() populates member_init_list (so
+    //     `string name = "p"` defaults aren't silently dropped)
+    //   - parseCommitMethod() moves pending variants to committed vlist
+    //   - checkAssignSpecial() binds priv->constructor / destructor / copy
+    //     / methodGate / memberGate / memberNotification pointers from the
+    //     method map, so block-exit destructors (and the other special
+    //     methods) actually run on AOT-deserialized class instances.
+    // In source parse this flag is set by addUserMethod() for ANY newly
+    // added method; mirror that here for every newly deserialized class.
+    // addMember() only bumps has_sig_changes, which is not sufficient.
+    priv->has_new_user_changes = true;
+    // Populate each method's inheritance list (ilist) from base-class methods
+    // with the same name.  In source parse this is done in initializeHierarchy()
+    // via parseAddAncestors(); the AOT deserializer skips that path, so without
+    // this step an overloaded method that the derived class overrides for only
+    // SOME variants cannot dispatch to the inherited parent variants.
+    // Concrete symptom: HashDeclDataType overrides
+    //   isAssignableFrom(AbstractDataProviderType)
+    // but inherits
+    //   isAssignableFrom(Type)
+    // from AbstractDataProviderType; calling the Type overload at runtime
+    // raises RUNTIME-OVERLOAD-ERROR because the ilist only sees the derived
+    // variant. Runs in topo order — parent hm is populated first.
+    // Special methods (constructor/destructor/copy) are skipped by
+    // initializeHierarchy; mirror that via checkSpecial().
+    if (priv->scl) {
+        // the access of the ancestors is computed once for the lists of the methods (qore#7410)
+        AncestorAccessCache ancestor_access;
+        for (auto& mi : priv->hm) {
+            const char* mn = mi.second->getName();
+            if (strcmp(mn, "constructor") && strcmp(mn, "destructor") && strcmp(mn, "copy")) {
+                priv->parseAddAncestors(mi.second, &ancestor_access);
+            }
+        }
+        for (auto& mi : priv->shm) {
+            priv->parseAddStaticAncestors(mi.second, &ancestor_access);
+        }
+    }
+    // The hierarchy is resolved above, as initializeHierarchy() resolves it in source parsing, so the class is
+    // marked as resolved like a parsed one; otherwise the first later parse that resolves it - a Program
+    // parsing a subclass while other threads run the class - repeats the resolution and writes the class's
+    // parse state while it is in use.
+    priv->parse_resolve_hierarchy = true;
+    // and its hierarchy is not initialized again for a subclass (issue #6106)
+    priv->hierarchy_initialized = true;
 }
 
 // Sub-phase 2c-2: call parseCommit on every newly deserialized
@@ -21885,28 +21989,32 @@ bool QoreAOTBinaryDeserializer::commitClassesDoCommit(std::string& error) {
         order = fallback_order;
     }
     for (uint32_t i : order) {
-        if (i >= class_list.size() || preexisting_classes.count(i)) {
-            continue;
-        }
-        QoreClass* qc = class_list[i];
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* priv = qore_class_private::get(*qc);
-        // Commits all pending method variants (hm, shm maps); handles base-class recursion
-        priv->parseCommit();
-        // The class's constants and static variables are initialized by the module's compiled init functions
-        // (AOTCompiledInitFunc::CLASS_CONSTANT and STATIC_VAR), not by parseCommitRuntimeInit(); marked as done, as a
-        // source parse marks it, so that a later parse commit in another Program sharing the class does not run it
-        // on a class that other threads are running
-        priv->parseCommitRuntimeInitDone = true;
-        if (i < class_signature_hashes.size() && class_signature_hashes[i].size() == SH_SIZE) {
-            priv->hash.setRawHash(class_signature_hashes[i].data());
-        }
-        printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",
-            qc->getName(), (void*)priv->constructor, (int)priv->hm.size());
+        commitClassDoCommitOf(i);
     }
     return true;
+}
+
+void QoreAOTBinaryDeserializer::commitClassDoCommitOf(uint32_t i) {
+    if (i >= class_list.size() || preexisting_classes.count(i)) {
+        return;
+    }
+    QoreClass* qc = class_list[i];
+    if (!qc) {
+        return;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    // Commits all pending method variants (hm, shm maps); handles base-class recursion
+    priv->parseCommit();
+    // The class's constants and static variables are initialized by the module's compiled init functions
+    // (AOTCompiledInitFunc::CLASS_CONSTANT and STATIC_VAR), not by parseCommitRuntimeInit(); marked as done, as a
+    // source parse marks it, so that a later parse commit in another Program sharing the class does not run it
+    // on a class that other threads are running
+    priv->parseCommitRuntimeInitDone = true;
+    if (i < class_signature_hashes.size() && class_signature_hashes[i].size() == SH_SIZE) {
+        priv->hash.setRawHash(class_signature_hashes[i].data());
+    }
+    printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",
+        qc->getName(), (void*)priv->constructor, (int)priv->hm.size());
 }
 
 // Sub-phase 2c-3: import abstract methods from parent classes into
@@ -21925,55 +22033,59 @@ bool QoreAOTBinaryDeserializer::commitClassesImportAbstract(std::string& error) 
     // pending list until committed — parseHasVariantWithSignature() only searches
     // the committed vlist. This mirrors mergeAbstract() and parseInitPartialIntern() (lib/QoreClass.cpp).
     for (uint32_t i : order) {
-        if (i >= class_list.size() || preexisting_classes.count(i)) {
-            continue;
-        }
-        QoreClass* qc = class_list[i];
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* priv = qore_class_private::get(*qc);
-        if (!priv->scl) {
-            continue;
-        }
-        // the abstract methods of every parent class are merged into the class's abstract method of the same name as
-        // source parsing merges them: first by qore_class_private::mergeAbstract(), when the class is initialized,
-        // which skips a parent class's abstract method without pending variants, then by
-        // qore_class_private::parseInitPartialIntern(); the variants of every parent class that the class's own
-        // method does not implement are merged (AbstractMethod::parseMergeBase() with the method), also into a method
-        // that the class has already (qore#7330), of two variants with the same signature the const one (qore#7317).
-        // Only the first parent class that declared a method was imported, so that the overloads that the other
-        // parent classes declare were lost (qore#7313).
-        for (int pass = 0; pass < 2; ++pass) {
-            for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
-                QoreClass* parent = (*bi)->sclass;
-                if (!parent) {
+        commitClassImportAbstractOf(i);
+    }
+    return true;
+}
+
+void QoreAOTBinaryDeserializer::commitClassImportAbstractOf(uint32_t i) {
+    if (i >= class_list.size() || preexisting_classes.count(i)) {
+        return;
+    }
+    QoreClass* qc = class_list[i];
+    if (!qc) {
+        return;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    if (!priv->scl) {
+        return;
+    }
+    // the abstract methods of every parent class are merged into the class's abstract method of the same name as
+    // source parsing merges them: first by qore_class_private::mergeAbstract(), when the class is initialized,
+    // which skips a parent class's abstract method without pending variants, then by
+    // qore_class_private::parseInitPartialIntern(); the variants of every parent class that the class's own
+    // method does not implement are merged (AbstractMethod::parseMergeBase() with the method), also into a method
+    // that the class has already (qore#7330), of two variants with the same signature the const one (qore#7317).
+    // Only the first parent class that declared a method was imported, so that the overloads that the other
+    // parent classes declare were lost (qore#7313).
+    for (int pass = 0; pass < 2; ++pass) {
+        for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
+            QoreClass* parent = (*bi)->sclass;
+            if (!parent) {
+                continue;
+            }
+            AbstractMethodMap& parent_ahm = qore_class_private::get(*parent)->ahm;
+            for (auto ai = parent_ahm.begin(), ae = parent_ahm.end(); ai != ae; ++ai) {
+                if (!pass && ai->second->vlist.empty()) {
                     continue;
                 }
-                AbstractMethodMap& parent_ahm = qore_class_private::get(*parent)->ahm;
-                for (auto ai = parent_ahm.begin(), ae = parent_ahm.end(); ai != ae; ++ai) {
-                    if (!pass && ai->second->vlist.empty()) {
-                        continue;
-                    }
-                    auto mi = priv->hm.find(ai->first);
-                    MethodFunctionBase* f = (mi != priv->hm.end())
-                        ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
-                    amap_t::iterator vi = priv->ahm.find(ai->first);
-                    if (vi != priv->ahm.end()) {
-                        vi->second->parseMergeBase(*(ai->second), f);
-                        continue;
-                    }
-                    std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
-                    m->parseMergeBase(*(ai->second), f);
-                    if (!m->empty()) {
-                        priv->ahm.insert(amap_t::value_type(ai->first, m.get()));
-                        m.release();
-                    }
+                auto mi = priv->hm.find(ai->first);
+                MethodFunctionBase* f = (mi != priv->hm.end())
+                    ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
+                amap_t::iterator vi = priv->ahm.find(ai->first);
+                if (vi != priv->ahm.end()) {
+                    vi->second->parseMergeBase(*(ai->second), f);
+                    continue;
+                }
+                std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
+                m->parseMergeBase(*(ai->second), f);
+                if (!m->empty()) {
+                    priv->ahm.insert(amap_t::value_type(ai->first, m.get()));
+                    m.release();
                 }
             }
         }
     }
-    return true;
 }
 
 // Sub-phase 2c-3b: resolve imported abstract methods by searching
@@ -22011,50 +22123,58 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         order = fallback_order;
     }
     for (uint32_t i : order) {
-        if (i >= class_list.size() || preexisting_classes.count(i)) {
-            continue;
-        }
-        QoreClass* qc = class_list[i];
-        if (!qc) {
-            continue;
-        }
-        qore_class_private* priv = qore_class_private::get(*qc);
-        if (!priv->scl) {
-            continue;
-        }
-        // the methods that the parent classes created here by resolving abstract methods are in the inheritance
-        // lists of the class's methods, which commitClassesPrepare() built before (qore#7307)
-        priv->parseUpdateAbstractAncestors(true);
-        if (priv->ahm.empty()) {
-            continue;
-        }
-        // the abstract variants that commitClassesImportAbstract() imported from a parent class before that parent
-        // class resolved them here (the classes are resolved in topological order, parent classes first) are not
-        // pending in this class, as in qore_class_private::parseResolveAbstract(); otherwise they would be
-        // implemented again here, with the first concrete variant of the whole hierarchy (qore#7219, qore#7206)
-        priv->ahm.parseDropResolvedInParents(*priv, *priv->scl);
-        if (priv->ahm.empty()) {
-            priv->parse_resolve_abstract = true;
-            continue;
-        }
-        // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
-        // the inherited overload list that source parsing attaches during initializeHierarchy() (issue #6161)
-        priv->ahm.parseInit(*priv, priv->scl);
-        // parseResolveAbstract() is a no-op once this flag is true; set it
-        // so any later source-parse pass in the same Program doesn't
-        // redundantly walk the same classes.
-        priv->parse_resolve_abstract = true;
+        commitClassResolveAbstractOf(i);
     }
+    releaseResolvedAbstractVariants();
+    return true;
+}
+
+void QoreAOTBinaryDeserializer::releaseResolvedAbstractVariants() {
     // the abstract variants that the classes have implemented (their pending_save lists) are released, as
     // AbstractMethod::parseCommit() releases them when a parsed class is committed (qore#7313); a merge does not use
     // a parent class's pending_save list (qore#7330), and resolution uses only the parent classes' pending variants
-    for (uint32_t i : order) {
-        if (i >= class_list.size() || preexisting_classes.count(i) || !class_list[i]) {
+    for (uint32_t i = 0; i < class_list.size(); ++i) {
+        if (preexisting_classes.count(i) || !class_list[i]) {
             continue;
         }
         qore_class_private::get(*class_list[i])->ahm.parseCommit();
     }
-    return true;
+}
+
+void QoreAOTBinaryDeserializer::commitClassResolveAbstractOf(uint32_t i) {
+    if (i >= class_list.size() || preexisting_classes.count(i)) {
+        return;
+    }
+    QoreClass* qc = class_list[i];
+    if (!qc) {
+        return;
+    }
+    qore_class_private* priv = qore_class_private::get(*qc);
+    if (!priv->scl) {
+        return;
+    }
+    // the methods that the parent classes created here by resolving abstract methods are in the inheritance
+    // lists of the class's methods, which commitClassesPrepare() built before (qore#7307)
+    priv->parseUpdateAbstractAncestors(true);
+    if (priv->ahm.empty()) {
+        return;
+    }
+    // the abstract variants that commitClassesImportAbstract() imported from a parent class before that parent
+    // class resolved them here (the classes are resolved in topological order, parent classes first) are not
+    // pending in this class, as in qore_class_private::parseResolveAbstract(); otherwise they would be
+    // implemented again here, with the first concrete variant of the whole hierarchy (qore#7219, qore#7206)
+    priv->ahm.parseDropResolvedInParents(*priv, *priv->scl);
+    if (priv->ahm.empty()) {
+        priv->parse_resolve_abstract = true;
+        return;
+    }
+    // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
+    // the inherited overload list that source parsing attaches during initializeHierarchy() (issue #6161)
+    priv->ahm.parseInit(*priv, priv->scl);
+    // parseResolveAbstract() is a no-op once this flag is true; set it
+    // so any later source-parse pass in the same Program doesn't
+    // redundantly walk the same classes.
+    priv->parse_resolve_abstract = true;
 }
 
 // Sub-phase 2c-4: verify base-class reachability.

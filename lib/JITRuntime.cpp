@@ -5984,12 +5984,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
         if (method->isPrivate()) {
             xsink->raiseException("ILLEGAL-CALL-REFERENCE",
                 "cannot create a call reference to %s %s::%s() from outside the class",
-                privpub(access), obj->getClassName(), method_name);
+                privpub(access), qore_class_private::get(*obj->getClass())->memberDiagnosticName(), method_name);
         } else {
             xsink->raiseException("ILLEGAL-CALL-REFERENCE",
                 "cannot create a call reference to %s::%s() because the parent class that implements the method "
-                "(%s::%s()) is privately inherited", obj->getClassName(), method_name,
-                method->getClass()->getName(), method_name);
+                "(%s::%s()) is privately inherited", qore_class_private::get(*obj->getClass())->memberDiagnosticName(),
+                method_name, qore_class_private::get(*method->getClass())->memberDiagnosticName(), method_name);
         }
         return toBits(QoreValue());
     }
