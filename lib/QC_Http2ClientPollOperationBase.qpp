@@ -3038,9 +3038,13 @@ nothing Http2ClientPollOperationBase::installSseState(int stream_id,
     }
 }
 
-//! Returns the socket object
-/** @return the socket
+//! Returns the socket object to the subclass that implements the connection
+/** The socket is not given to other code: the poll operation's subclass of the HTTP client
+    (\c HttpClientIo::Http2ClientPollOperation) gives it out with the rules of a connection of a connection
+    manager (qore#7544)
+
+    @return the socket
 */
-Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
+private Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
     return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }

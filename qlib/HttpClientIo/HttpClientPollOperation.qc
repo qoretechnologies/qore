@@ -88,9 +88,10 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
 
     #! Sets the owning connection reference
     /** @param conn the connection that owns this poll operation
-        @note Must be called during construction, before any continuePoll().
+        @note Must be called during construction, before any continuePoll(); only the subclass that implements the
+        connection's protocol sets it (qore#7544)
     */
-    setConnection(HttpClientConnection conn) {
+    private setConnection(HttpClientConnection conn) {
         connection_ref = conn;
     }
 
@@ -99,9 +100,21 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
         neither outlives the connection's close and keeps the Program of the module alive.  A completion delivered
         after the close finds no connection, which a closed connection does not need.
 
+        @param token the module's token: only the connection clears it, when it is closed, so that other code that
+        holds the operation cannot cut the connection's requests off from it (qore#7544)
+        @param conn the connection that is closed: the reference is released only if it is this operation's
+
+        @throw PERMISSION-DENIED \a token is not the module's token
+
         @since HttpClientIo 1.0
     */
-    clearConnection() {
+    final clearConnection(object token, HttpClientConnection conn) {
+        HttpClientIoSocketAccess::check(token);
+        # only the connection of this operation releases it, not another connection that returns this operation as
+        # its own (qore#7544)
+        if (connection_ref !== conn) {
+            return;
+        }
         # an assignment, not "remove": the assignment invalidates the recursive-reference set that the connection and
         # this operation form, while a removal of the member leaves it stale, so that the operation, which the
         # connection still references, is collected as if the cycle still stood
@@ -161,6 +174,15 @@ public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
     /** Implemented by the C++ base class of each protocol-specific poll operation, which keeps the socket (qore#6772)
     */
     abstract Socket getSocket();
+
+    #! Returns the socket of the connection for the code of this module (qore#7544)
+    /** @param access the token of the module's code (not exported)
+
+        @throw PERMISSION-DENIED \a access is not the module's token
+
+        @since HttpClientIo 1.0
+    */
+    abstract Socket getSocketFor(object access);
 
     #! Returns the time in microseconds since data was last received on the connection, or -1 if none was received
     /** Implemented by the protocol-specific poll operations

@@ -82,6 +82,37 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
         @ref httpclientio_caller_domains)
     */
+
+    #! Returns the socket of the connection
+    /** The socket of a connection carries the requests of every caller of its connection manager: code that a sandbox
+        restricts (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()") gets it as the
+        connection gives it (see @ref HttpClientIo::HttpClientConnection::getSocket()
+        "HttpClientConnection::getSocket()"): only for a connection of its own (qore#7544)
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and the connection gives it no socket
+    */
+    Socket getSocket() {
+        if (SandboxManager::isRestricted()) {
+            *HttpClientConnection conn = connection_ref;
+            if (!conn) {
+                throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the socket of an HTTP client "
+                    "poll operation that has no connection";
+            }
+            return conn.getSocket();
+        }
+        return Http2ClientPollOperationBase::getSocket();
+    }
+
+    #! Returns the socket of the connection for the code of this module (qore#7544)
+    /** @param access the token of the module's code (not exported)
+
+        @throw PERMISSION-DENIED \a access is not the module's token
+    */
+    final Socket getSocketFor(object access) {
+        HttpClientIoSocketAccess::check(access);
+        return Http2ClientPollOperationBase::getSocket();
+    }
+
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info, HttpClientConnection connection,
@@ -181,7 +212,7 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         # Cancel at the nghttp2 level; the RST_STREAM enqueue is safe from any thread, including
         # a continuePoll worker delivering events, so a failure here is a real error worth
         # reporting rather than something to swallow silently
-        Socket sock = self.getSocket();
+        Socket sock = Http2ClientPollOperationBase::getSocket();
         try {
             sock.cancelHttp2Stream(stream_id);
         } catch (hash<ExceptionInfo> ex) {

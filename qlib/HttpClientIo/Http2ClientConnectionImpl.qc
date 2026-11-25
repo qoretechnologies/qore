@@ -77,7 +77,9 @@ public class Http2ClientConnection inherits HttpClientConnection {
             : HttpClientConnection(url_info, connect_timeout, logger,
                     max_streams, proxy_info) {
         # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
-        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
+        # the connection is owned by the owner of the manager that creates it, or by the code that creates it
+        # (qore#7544)
+        setConnectionOwner(HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path));
         log(LoggerLevel::DEBUG, "creating connection to %s:%d (ssl=%y max_streams=%d proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https", max_streams,
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING,
@@ -101,8 +103,24 @@ public class Http2ClientConnection inherits HttpClientConnection {
     }
 
     #! Returns the underlying socket
+    /** The socket of a HTTP/2 connection carries the streams of every caller of its connection manager, so code that a
+        sandbox restricts (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()") and whose
+        %Program does not own the connection (the owner of the manager that created it, or the code that created it)
+        cannot take it (qore#7544)
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the connection
+    */
     Socket getSocket() {
-        return poll_op.getSocket();
+        if (!callerOwnsConnection()) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the socket of a HTTP/2 connection of a "
+                "connection manager that it does not own";
+        }
+        return HttpClientIoSocketAccess::socketOf(poll_op);
+    }
+
+    #! Returns the underlying socket for the connection's own code (qore#7544)
+    private Socket getSocketIntern() {
+        return HttpClientIoSocketAccess::socketOf(poll_op);
     }
 
     #! Submits a request on this connection (protocol-specific)
@@ -142,7 +160,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(sock: self.getSocket());
+                ctl.cancelAndClose(sock: getSocketIntern());
             } catch () {
                 # Ignore close errors during close
             }
@@ -154,7 +172,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             }
         }
         try {
-            self.getSocket().close();
+            getSocketIntern().close();
         } catch () {
             # Ignore close errors during close
         }
@@ -213,14 +231,14 @@ public class Http2ClientConnection inherits HttpClientConnection {
                 }
                 # the buffered data is sent by the I/O thread
                 if (ctl) {
-                    ctl.wakeSocket(sock: getSocket());
+                    ctl.wakeSocket(sock: getSocketIntern());
                 }
                 # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send
                 # is made again in each case, and reports a closed or reset stream
                 try {
-                    taken_before = getSocket().getHttp2StreamTakenBytes(stream_id);
-                    if (getSocket().waitForHttp2StreamDrain(stream_id, drain_timeout) == 1) {
-                        taken_after = getSocket().getHttp2StreamTakenBytes(stream_id);
+                    taken_before = getSocketIntern().getHttp2StreamTakenBytes(stream_id);
+                    if (getSocketIntern().waitForHttp2StreamDrain(stream_id, drain_timeout) == 1) {
+                        taken_after = getSocketIntern().getHttp2StreamTakenBytes(stream_id);
                     }
                 } catch (hash<ExceptionInfo> wait_ex) {
                     # the wait failed (for example, the session is gone, or the wait was made on the I/O thread):
@@ -246,7 +264,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
     }
 
@@ -284,9 +302,9 @@ public class Http2ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         log(LoggerLevel::DEBUG, "sending trailers on stream %d", stream_id);
-        getSocket().sendHttp2Trailers(stream_id, trailers);
+        getSocketIntern().sendHttp2Trailers(stream_id, trailers);
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
     }
 
@@ -378,7 +396,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming, notifier, sse_install_eligible);
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
 
         return stream_id;
@@ -417,7 +435,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, notifier);
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
 
         return stream_id;
