@@ -616,6 +616,16 @@ public:
     //! returns true if the code of the given Program is restricted (see callerRestricted())
     DLLLOCAL static bool programRestricted(QoreProgram* pgm);
 
+    //! raises the error for a path that restricted code cannot load
+    DLLLOCAL static void raiseRestrictedPath(const char* name, ExceptionSink* xsink);
+
+    //! finds or loads the zone of a region name from data (deserialized dates and TimeZone objects, names that the
+    //! C++ API find_create_timezone() gets from database drivers and imported files)
+    /** As findLoadRegion(), but for any code the region gets the zone of the canonical name of the file reached, so
+        that data cannot make the runtime add names; on Windows as findLoadRegion()
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findLoadDataRegion(const char* name, ExceptionSink* xsink);
+
     //! finds or loads a time zone region: a name in the zoneinfo database (ex: \c "Europe/Prague")
     /** For names that come from data (deserialized dates, imported files, database values, compiled literals) and for
         the C++ API (find_create_timezone()): a name is never loaded as a path.
@@ -705,8 +715,9 @@ public:
 
     //! finds or loads the zone of a region name from data, such as a deserialized date or TimeZone object
     /** Data never opens a path: the region name of the local zone returns the local zone without file access, a
-        canonical region name is loaded by the region loader, and any other name, a path or one with a NUL
-        character raises the error of raiseUnknownRegion(); an empty name is UTC
+        canonical region name gets the zone of the canonical name of the file reached (findLoadDataRegion()), and
+        any other name, a path or one with a NUL character raises the error of raiseUnknownRegion(); an empty name
+        is UTC
 
         @param region the name from the data
         @param xsink an exception is raised here if the zone cannot be found or loaded

@@ -134,6 +134,8 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         addTestCase("%set-time-zone in a restricted Program", \testRestrictedDirectives());
         addTestCase("the code of a module acts for its caller", \testModuleCalls());
         addTestCase("a host that restricts itself is not restricted", \testHostUnrestricted());
+        addTestCase("region names from data get the canonical zone", \testDataNameCanonical());
+        addTestCase("restricted code gets the path error first", \testRestrictedNulPath());
         set_return_value(main());
     }
 
@@ -1147,5 +1149,70 @@ print(out.join(\"|\"));
     #! returns the Qore source of a list of strings
     static string qoreList(list<string> l) {
         return "(" + (map sprintf("%y", $1), l).join(", ") + ")";
+    }
+
+    testDataNameCanonical() {
+        # case variants of a region in deserialized data (on a file system that does not distinguish case)
+        bool case_insensitive = True;
+        try {
+            TimeZone t("asia/thimphu");
+        } catch (hash<ExceptionInfo> ex) {
+            case_insensitive = False;
+        }
+        if (case_insensitive) {
+            string region = "Asia/Colombo";
+            date d = (new TimeZone(region)).date("2026-01-15T10:00:00");
+            binary data = Serializable::serialize(d);
+            foreach string sp in (caseSpellings(region, 16)) {
+                if (sp == region) {
+                    continue;
+                }
+                binary bad = replaceRegion(data, region, sp);
+                date rv = Serializable::deserialize(bad);
+                assertEq(region, rv.info().zone.region(), "a spelling in data in trusted code: " + sp);
+            }
+        }
+
+        # a link in the zoneinfo directory
+        *string root = ENV.QORE_TEST_ZONEINFO_ROOT;
+        if (!root || !zoneinfo) {
+            if (!case_insensitive) {
+                testSkip("no writable zoneinfo directory and the file system distinguishes the case of names");
+            }
+            return;
+        }
+        string subname = "Qore" + get_random_string(10, 1);
+        string subdir = root + "/" + subname;
+        mkdir(subdir);
+        on_exit {
+            try {
+                remove_tree(subdir);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        mkdir(subdir + "/AA");
+        copyFile(zoneinfo, subdir + "/AA/Real");
+        symlink("AA", subdir + "/BB");
+        string canonical = subname + "/AA/Real";
+        string linked = subname + "/BB/Real";
+        date d = (new TimeZone(canonical)).date("2026-01-15T10:00:00");
+        binary bad = replaceRegion(Serializable::serialize(d), canonical, linked);
+        date rv = Serializable::deserialize(bad);
+        assertEq(canonical, rv.info().zone.region(), "a name through a link in data in trusted code");
+        # trusted code that names the region explicitly gets the name as given
+        assertEq(linked, (new TimeZone(linked)).region(), "an explicit name in trusted code");
+    }
+
+    testRestrictedNulPath() {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.parse(TenantCode, "restricted-nul");
+        string nul_path = "/usr/share/zoneinfo/UTC\x00/x";
+        foreach string fn in ("tz", "set_region") {
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "restricted code can load time zone regions only",
+                \p.callFunction(), (fn, nul_path), fn + " of a path with a NUL character in restricted code");
+        }
+        # trusted code gets the error of a path with a NUL character
+        assertThrows("TZINFO-ERROR", "NUL character", sub () { TimeZone t(nul_path); }, NOTHING,
+            "a path with a NUL character in trusted code");
     }
 }

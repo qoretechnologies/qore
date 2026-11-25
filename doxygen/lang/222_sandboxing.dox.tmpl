@@ -1133,19 +1133,28 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
     @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" or
     @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()".  Restricted code, which is code that a
-    sandbox governs or whose parse options restrict a functional domain, in any %Program but the host %Program (one
-    created with no %Program running, such as the main %Program of the \c qore program), can load time zone regions
-    only: a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, also when restricted code calls
-    the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with a path in a
-    restricted %Program; restricted code also gets the time zone of a region by the canonical name of the region's
+    sandbox governs (in any %Program, also the host %Program) or code whose parse options restrict a functional
+    domain in any %Program but the host %Program, can load time zone regions only.  The host %Program is a %Program
+    that is created where no %Program is running, such as the main %Program of the \c qore program or a %Program
+    that an embedding application creates: its code is not restricted for time zones even if its parse options
+    restrict functional domains (but @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" still refuses paths).  For
+    restricted code, a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, also when restricted
+    code calls the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with
+    a path in a restricted %Program; restricted code also gets the time zone of a region by the canonical name of the
+    region's
     file (its path in the zoneinfo directory with the links resolved, and on macOS its true name), so the time zones
-    that restricted code can add are bounded by the files of the zoneinfo directory.  Limits on the time zones of
-    each tenant, which would allow restricted code to load paths, are a follow-up
-    (<a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>).  For other code, a relative path
-    is a path in the current directory; the path is subject to @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to
-    the filesystem policy, also when the time zone of the path was loaded already; the file is opened at exactly
-    this path without blocking, the policy is checked again for the file that the open reached, by its canonical
-    path, and the file must be a regular file.  The time zone is named by the path as given.
+    that restricted code can add are bounded by the files of the zoneinfo directory; a name that other code loaded
+    already gets that code's time zone, so the name that @ref Qore::TimeZone::region() "TimeZone::region()" returns
+    can depend on which name of a region was loaded first.  A region name from data (a deserialized date or
+    @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API \c find_create_timezone() gets) gets the time
+    zone of the canonical name of its file for any code.  Limits on the time zones of each tenant, which would allow
+    restricted code to load paths, are a follow-up
+    (<a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>).  For other code, a relative
+    path is a path in the current directory; the path is subject to
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to the filesystem policy, also when the time zone of the path
+    was loaded already; the file is opened at exactly this path without blocking, the policy is checked again for
+    the file that the open reached, by its canonical path, and the file must be a regular file.  The time zone is
+    named by the path as given.
 
     Each name of a region or path has a time zone of its own; the time zones of the names that reach the same file
     with the same data share that data, so a time zone never gets the data of another file or the data that a file

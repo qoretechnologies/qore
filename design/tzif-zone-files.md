@@ -30,12 +30,20 @@ parsed from memory (`QoreZoneInfo::init()`):
   or whose parse options restrict a functional domain, in any Program but a host Program (one created with no
   Program running, `qore_program_private::tz_host`). The calling code is found past the code of modules, which acts
   for its caller (`qore_caller_restricts_domain()`, `qore_get_calling_program()`). Restricted code can load regions
-  only: `findLoadRegionFromPath()` raises `ILLEGAL-FILESYSTEM-ACCESS` before anything else, and the
-  `%set-time-zone` directive refuses a path in a restricted Program (decided by the Program's own options and
-  sandbox managers, as the directive is processed while other code parses it). A region that restricted code loads
+  only: `findLoadRegionFromPath()` raises `ILLEGAL-FILESYSTEM-ACCESS` before anything else (`checkRegion()` raises
+  it first for a path-like name, also one with a NUL character), and the `%set-time-zone` directive refuses a path
+  in a restricted Program: one with a sandbox manager, or a non-host Program whose parse options restrict any
+  functional domain (decided by the Program's own options and sandbox managers, as the directive is processed while
+  other code parses it). Code that a sandbox governs is restricted also in the host Program. A region that restricted code loads
   gets the zone of the canonical name of the file reached (the walked path with links resolved; on macOS the true
   name from `F_GETPATH`), so the names that restricted code can add are bounded by the files of the zoneinfo
-  directory, and zone data is bounded by the identities of those files. Limits per tenant, which would let
+  directory, and zone data is bounded by the identities of those files. Region names from data
+  (`findDataRegion()`, `find_create_timezone()` through `findLoadDataRegion()`) get the canonical zone for any code.
+  A name that is not canonical (a link, a spelling) is not cached for restricted code or data, so each load of such
+  a name walks and reads the file again (only the canonical name is cached). On Windows, restricted code can use only
+  zoneinfo region names in the runtime's zoneinfo-to-Windows map (exact names; no Windows time zone names), names
+  are at most 255 bytes, and restricted code gets the unknown-region error for any registry failure (unverified: no
+  Windows build). Limits per tenant, which would let
   restricted code load paths, are a follow-up (qore#7566). Every allocation is made before a map refers to a new
   zone, and vectors grow geometrically. On Windows, the zone of a path that unrestricted code loads is read without
   the lock and cached by its absolute path (at most 16384).

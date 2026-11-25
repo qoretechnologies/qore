@@ -2169,8 +2169,8 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findDataRegion(const QoreString
         raiseUnknownRegion(region, xsink);
         return nullptr;
     }
-    // the local zone by its name, or a region; never a path
-    return findLoadRegion(region.c_str(), xsink);
+    // the local zone by its name, or a region by its canonical name; never a path
+    return findLoadDataRegion(region.c_str(), xsink);
 }
 
 void QoreTimeZoneManager::raiseUnknownRegion(const char* region, ExceptionSink* xsink) {
@@ -2183,9 +2183,50 @@ bool QoreTimeZoneManager::isPathName(const char* name) {
     return *name == '.' || q_absolute_path(name);
 }
 
+//! true if the parse options restrict a functional domain
+static bool qore_tz_po_restricted(const QoreParseOptions& po) {
+    return po.hasAny(QoreParseOptions(QDOM_ALL & ~(QDOM_INJECTION | QDOM_DEBUGGER | QDOM_IN_MODULE)));
+}
+
+void QoreTimeZoneManager::raiseRestrictedPath(const char* name, ExceptionSink* xsink) {
+    xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': restricted code can "
+        "load time zone regions only", name);
+}
+
+bool QoreTimeZoneManager::callerRestricted() {
+    // code that a sandbox governs
+    {
+        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
+        if (policy) {
+            return true;
+        }
+    }
+    // the code that calls the library, found past the code of modules (a module's code acts for its caller), with the
+    // restrictions of objects and callbacks that restricted code created; the host Program is not restricted
+    if (!qore_caller_restricts_domain(QDOM_ALL)) {
+        return false;
+    }
+    QoreProgram* caller = qore_get_calling_program();
+    return !caller || !qore_program_private::get(*caller)->tz_host;
+}
+
+bool QoreTimeZoneManager::programRestricted(QoreProgram* pgm) {
+    assert(pgm);
+    qore_program_private* priv = qore_program_private::get(*pgm);
+    if (priv->hasSandboxManager()) {
+        return true;
+    }
+    return !priv->tz_host && qore_tz_po_restricted(qore_program_private::readParseOptions(*pgm));
+}
+
 int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, ExceptionSink* xsink) {
-    // a name that is a path is loaded as a path (findLoadRegion() passes it to findLoadRegionFromPath())
+    // a name that is a path is loaded as a path (findLoadRegion() passes it to findLoadRegionFromPath()); restricted
+    // code gets the error of a path that it cannot load first, whatever the path
     if (is_path || isPathName(region.c_str())) {
+        if (callerRestricted()) {
+            raiseRestrictedPath(region.c_str(), xsink);
+            return -1;
+        }
         return q_check_no_nul(region.c_str(), region.size(), "time zone region or path",
             "time zone regions and paths", "TZINFO-ERROR", xsink);
     }
@@ -2373,19 +2414,28 @@ static int open_region_file(const QoreString& root, const char* region, std::str
             fd = openat(dirs.top(), comp.c_str(), flags);
         } while (fd < 0 && errno == EINTR);
         if (fd >= 0) {
-            if (last) {
-                if (!rel.empty()) {
-                    rel += '/';
+            // the descriptor is owned by dirs or returned before anything that can fail (std::bad_alloc) is done
+            // with it: the new relative path is made first
+            std::string new_rel;
+            try {
+                new_rel = rel;
+                if (!new_rel.empty()) {
+                    new_rel += '/';
                 }
-                rel += comp;
+                new_rel += comp;
+                if (!last) {
+                    rel_len.push_back(rel.size());
+                }
+            } catch (...) {
+                ::close(fd);
+                throw;
+            }
+            rel.swap(new_rel);
+            if (last) {
                 return fd;
             }
+            // closes the descriptor if it cannot be stored
             dirs.push(fd);
-            rel_len.push_back(rel.size());
-            if (!rel.empty()) {
-                rel += '/';
-            }
-            rel += comp;
             continue;
         }
         // the component cannot be opened without following it: it is followed only if it is a symbolic link now
@@ -2478,37 +2528,6 @@ int QoreAliasZoneInfo::getUTCOffsetImpl(int64 epoch_offset, bool& is_dst, const 
 }
 
 //! the governing restrictions of the code that loads a zone, resolved before the lock is taken
-//! true if the parse options restrict a functional domain
-static bool qore_tz_po_restricted(const QoreParseOptions& po) {
-    return po.hasAny(QoreParseOptions(QDOM_ALL & ~(QDOM_INJECTION | QDOM_DEBUGGER | QDOM_IN_MODULE)));
-}
-
-bool QoreTimeZoneManager::callerRestricted() {
-    // code that a sandbox governs
-    {
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-        if (policy) {
-            return true;
-        }
-    }
-    // the code that calls the library, found past the code of modules (a module's code acts for its caller), with the
-    // restrictions of objects and callbacks that restricted code created; the host Program is not restricted
-    if (!qore_caller_restricts_domain(QDOM_ALL)) {
-        return false;
-    }
-    QoreProgram* caller = qore_get_calling_program();
-    return !caller || !qore_program_private::get(*caller)->tz_host;
-}
-
-bool QoreTimeZoneManager::programRestricted(QoreProgram* pgm) {
-    assert(pgm);
-    qore_program_private* priv = qore_program_private::get(*pgm);
-    if (priv->hasSandboxManager()) {
-        return true;
-    }
-    return !priv->tz_host && qore_tz_po_restricted(qore_program_private::readParseOptions(*pgm));
-}
-
 const AbstractQoreZoneInfo* QoreTimeZoneManager::getZone(const std::string& name, const std::string& data,
         const struct stat& sbuf, const std::string& primary_name, bool region, alias_map_t& aliases,
         const char* label, ExceptionSink* xsink) {
@@ -2765,16 +2784,52 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegion(const char* name
         return local;
     }
 #ifdef _Q_WINDOWS
-    // a name from data is never loaded as a path
-    if (q_absolute_path_windows(name)) {
+    // a name from data is never loaded as a path, and no name is longer than the limit
+    size_t len = strlen(name);
+    if (len > MaxRegionNameLength || q_absolute_path_windows(name)) {
         raiseUnknownRegion(name, xsink);
         return nullptr;
+    }
+    // restricted code can use only the zoneinfo region names that the runtime knows exactly (not Windows time zone
+    // names or other spellings), so the names that it adds to the cache are bounded, and it gets the same error for
+    // any name that cannot be loaded
+    if (callerRestricted()) {
+        if (!isRegionName(name, len) || !win_lookup_tz(name)) {
+            raiseUnknownRegion(name, xsink);
+            return nullptr;
+        }
+        ExceptionSink xsink2;
+        QoreAutoRWWriteLocker al(rwl);
+        const AbstractQoreZoneInfo* rv = processFile(name, false, &xsink2);
+        if (xsink2) {
+            xsink2.clear();
+            raiseUnknownRegion(name, xsink);
+            return nullptr;
+        }
+        return rv;
     }
     QoreAutoRWWriteLocker al(rwl);
     // a zoneinfo region or Windows time zone name from the registry
     return processFile(name, false, xsink);
 #else
     return loadRegion(name, xsink, callerRestricted());
+#endif
+}
+
+const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadDataRegion(const char* name, ExceptionSink* xsink) {
+    assert(name);
+#ifdef _Q_WINDOWS
+    return findLoadRegion(name, xsink);
+#else
+    if (!*name) {
+        return nullptr;
+    }
+    if (const AbstractQoreZoneInfo* local = findLocalZone(name)) {
+        return local;
+    }
+    // a name from data gets the zone of the canonical name of the file reached for any code, so that data cannot make
+    // the runtime add names (spellings, links to ".")
+    return loadRegion(name, xsink, true);
 #endif
 }
 
@@ -2829,8 +2884,7 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
     // that is not the host Program, also when it calls the code of a module) loads regions only; for the
     // %set-time-zone directive, the caller has checked that the Program is not restricted
     if (!pgm && callerRestricted()) {
-        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': restricted code "
-            "can load time zone regions only", name);
+        raiseRestrictedPath(name, xsink);
         return nullptr;
     }
     // the restrictions of the calling code apply before anything else, also to a zone that is cached already
@@ -2930,7 +2984,7 @@ const AbstractQoreZoneInfo* find_create_timezone(const char* name, ExceptionSink
         return QTZM.findCreateOffsetZone(name, xsink);
     }
 
-    return QTZM.findLoadRegion(name, xsink);
+    return QTZM.findLoadDataRegion(name, xsink);
 }
 
 int tz_get_utc_offset(const AbstractQoreZoneInfo* tz, int64 epoch_offset, bool &is_dst, const char*& zone_name) {
