@@ -1434,6 +1434,33 @@ void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
     untrusted_creators[sm] = id;
 }
 
+int qore_sandbox_set_tz_path_limits(QoreSandboxManager* sm, int64 max_zones, int64 max_bytes,
+        ExceptionSink* xsink) {
+    assert(sm);
+    if (max_zones < 0 || max_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the time zone path limits cannot be negative; got: zones "
+            QLLD ", bytes " QLLD, max_zones, max_bytes);
+        return -1;
+    }
+    if (QoreSandboxComposition::members(sm)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "a composite sandbox has no time zone path limits of its own; "
+            "the limits of each of its sandboxes apply");
+        return -1;
+    }
+    QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+    // restricted code (also through the code of a module that acts for it) can only lower a limit: a budget that it
+    // could raise, also of a manager that it created, would let it pin memory that the host did not grant (qore#7566)
+    if ((max_zones > account->tz_max_zones.load() || max_bytes > account->tz_max_bytes.load())
+            && qore_caller_is_untrusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setTimeZonePathLimits(): restricted code can "
+            "only lower the time zone path limits of a sandbox");
+        return -1;
+    }
+    account->tz_max_zones.store(max_zones);
+    account->tz_max_bytes.store(max_bytes);
+    return 0;
+}
+
 int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink) {
     if (!qore_calling_code_is_untrusted()) {
         return 0;

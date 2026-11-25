@@ -1347,8 +1347,9 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     that is created where no %Program is running, such as the main %Program of the \c qore program or a %Program
     that an embedding application creates: its code is not restricted for time zones even if its parse options
     restrict functional domains (but @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" still refuses paths).  For
-    restricted code, a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, also when restricted
-    code calls the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with
+    restricted code, a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, unless every sandbox
+    that governs the code grants a budget for time zones from paths (see @ref sandbox_time_zone_paths), also when
+    restricted code calls the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with
     a path in a restricted %Program; restricted code also gets the time zone of a region by the canonical name of the
     region's
     file (its path in the zoneinfo directory with the links resolved, and on macOS its true name), so the time zones
@@ -1356,9 +1357,7 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     already gets that code's time zone, so the name that @ref Qore::TimeZone::region() "TimeZone::region()" returns
     can depend on which name of a region was loaded first.  This applies to region names from data as well (a
     deserialized date or @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API
-    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  Limits on the time
-    zones of each tenant, which would allow restricted code to load paths, are a follow-up
-    (<a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>).  For other code, a relative
+    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  For other code, a relative
     path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to the filesystem policy, also when the time zone of the path
     was loaded already; the file is opened at exactly this path without blocking, the policy is checked again for
@@ -1376,6 +1375,46 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     <tt>unknown time zone region</tt>.  The name of the local zone denotes the local zone in data, also when it is
     a path (a local time file outside of a zoneinfo directory), without any file access.  The time zone of a date
     literal in code is the time zone that the code had when it was parsed, also one loaded from a path.
+
+    @since %Qore 3.0
+
+    @subsection sandbox_time_zone_paths Time Zones from Paths in a Sandbox
+
+    Code that a sandbox governs can load a time zone from a zoneinfo file path only if the host grants every sandbox
+    that governs it a budget with
+    @ref Qore::SandboxManager::setTimeZonePathLimits() "SandboxManager::setTimeZonePathLimits()": a most number of
+    time zone names and a most memory.  A sandbox has no budget by default, so its code loads time zone regions only
+    (see @ref sandbox_fs_tz_regions).  Only code that is not restricted can raise a budget, also of a sandbox that
+    restricted code created; restricted code can lower one, and a copy of a sandbox has none.
+
+    @code{.py}
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(False);
+sm.addFilesystemAllowedPath("/srv/tenant/zoneinfo", QSEC_READ);
+sm.setTimeZonePathLimits(16, 4 * 1024 * 1024);
+    @endcode
+
+    With a budget:
+    - the path must be absolute, without \c ".", \c ".." or empty components; the time zone is named by the path as
+      given
+    - the file-system policy of each sandbox must allow reading the path, and again the file that the open reached,
+      by its canonical path; the file is opened without blocking and must be a regular zoneinfo file
+    - time zones are never freed, so every new time zone name that the code loads (also a name whose file or data
+      changed since it was loaded) is charged to each sandbox that governs the code, for the life of the sandbox, with
+      the memory of its time zone; a name that is loaded already costs nothing.  The use is reported by
+      @ref Qore::SandboxManager::getTimeZonePathLimits() "SandboxManager::getTimeZonePathLimits()"; a load beyond a
+      budget raises \c SANDBOX-TIMEZONE-LIMIT
+    - the code of one @ref sandbox_isolation_domains "isolation domain" can load at most 256 time zone names
+      (32 MiB) from paths in all, across the sandboxes of the domain
+    - the code of a module that the sandboxed code calls, and the threads and the Programs that it starts, are
+      governed and charged in the same way
+    - the @ref set-time-zone "%set-time-zone" directive with a path in a %Program that sandboxes govern is decided by
+      and charged to the sandboxes of the %Program and of the code that parses it
+    - in a date literal of restricted code, a path names only the %Program's own time zone (in code compiled ahead of
+      time, such a literal is in UTC)
+
+    Code restricted only by its parse options has no sandbox to charge and cannot load paths.  On Windows, restricted
+    code cannot load paths.
 
     @since %Qore 3.0
 
