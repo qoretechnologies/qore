@@ -1639,6 +1639,12 @@
     \c HAVE_HTTP3 are always \c True; see the \c BUILDING file for versions, package names, pinned source
     archives, mirrors and reproducible builds.
 
+    @par Faster Thread-Local Variable Access on x86_64 Linux
+    The %Qore library accesses its thread-local variables through TLS descriptors on x86_64 Linux with GCC or Clang
+    (the \c QORE_TLS_DESCRIPTORS build option, on by default; see the \c BUILDING file) instead of a call of
+    \c __tls_get_addr() for each access, and @ref Qore::get_qore_library_info() "get_qore_library_info()" reports it
+    as \c TlsDescriptors.
+
     @par Standard Descriptors at Startup
     \c qore, \c qcc and library initialization open a missing standard file descriptor on the null device before
     opening any other file, so a script or data file can never receive output meant for standard output or error;
