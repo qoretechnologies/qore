@@ -1953,7 +1953,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
         "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
-        "dbg_finish_hold",
+        "dbg_finish_hold", "type_wait_entry", "type_epoch_holds", "type_tombstones", "generic_cache_registry",
+        "type_owner_registry", "type_info_registry",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -26164,6 +26165,89 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
     return rv.release();
 }
 
+//! Debug-only: creates a child process with fork() while another thread holds a process-wide lock of type retirement
+/** The other thread holds the lock named (see qore_type_dbg_fork_lock(): \c "type_wait_entry", \c "type_epoch_holds",
+    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry" or \c "type_info_registry"), as a
+    thread does that enters a quiescent wait, arms an epoch hold, makes a tombstone, registers a generic cache entry or
+    creates a type or a declaration at the moment of fork().  It holds the lock until the prepare handlers reach the
+    fork handler of the same name, which then waits for it, or, if no such handler is registered, until fork() has
+    returned in the parent.  The child first checks that it can take the lock and exits with 98 at once if it cannot,
+    so that a child that inherited the lock held fails without waiting for it (qore#7549); then it runs the code
+    given, if any, and exits with the value it returns (99 if it raised an exception).  DEBUG builds only.
+
+    @return a hash: \c status: the exit status of the child (-1 if it did not exit normally), \c waited: True if
+    fork() waited for the thread holding the lock
+
+    @throw DBG-FORK-ERROR no lock with the given name exists, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_type_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    std::mutex* lock = qore_type_dbg_fork_lock(name->c_str());
+    if (!lock) {
+        xsink->raiseException("DBG-FORK-ERROR", "no type retirement lock named '%s' exists", name->c_str());
+        return QoreValue();
+    }
+    ForkHoldTest t;
+    t.target = name->c_str();
+    std::thread holder([&t, lock]() {
+        std::unique_lock<std::mutex> held(*lock);
+        std::unique_lock<std::mutex> ul(t.m);
+        t.held = true;
+        t.cv.notify_all();
+        t.cv.wait(ul, [&t] { return t.release; });
+        // the lock is released after the test state's mutex, which the prepare hook holds while it releases this
+        // thread
+    });
+    {
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.held; });
+    }
+    fork_hold_test = &t;
+    qore_fork_prepare_hook = fork_hold_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        // a lock inherited held would block the code below forever
+        if (!lock->try_lock()) {
+            _exit(98);
+        }
+        lock->unlock();
+        int status = 0;
+        if (child_code) {
+            ExceptionSink child_xsink;
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+            child_xsink.clear();
+        }
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    fork_hold_test = nullptr;
+    {
+        // releases the holder if the prepare handlers did not (no handler covers the lock, or fork() failed)
+        std::lock_guard<std::mutex> lg(t.m);
+        t.release = true;
+        t.cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    int status = ut_wait_child(pid);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("status", status, xsink);
+    rv->setKeyValue("waited", t.hook_saw_held, xsink);
+    return rv.release();
+}
+
+//! Debug-only: returns the number of armed epoch holds of type retirement (QoreTypeEpochHold; qore#7549)
+static QoreValue f_dbg_type_epoch_holds(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_type_epoch_hold_count());
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the parse options lock of a Program
 /** The other thread holds the lock that serializes the changes of the Program's parse options (issue #6078) until
     fork() has returned in the parent.  The child runs the code given, which can change the Program's options, and exits
@@ -30977,6 +31061,15 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
     }
+    return QoreValue();
+}
+
+//! makes the next background JIT compile of the function named that is accepted arm an epoch hold of type
+//! retirement, as the compile of a specialization does (qore#7549)
+static QoreValue f_dbg_force_bg_compile_epoch_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper func(get_param_value(params, 0));
+    QoreJIT::instance().dbgForceBgCompileEpochHold(func->c_str());
     return QoreValue();
 }
 
@@ -37259,6 +37352,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
+    qns.addBuiltinVariant("dbg_force_bg_compile_epoch_hold", f_dbg_force_bg_compile_epoch_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
@@ -37721,6 +37816,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_thread_wait_lock_held", f_dbg_fork_while_thread_wait_lock_held,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_while_type_lock_held", f_dbg_fork_while_type_lock_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_type_epoch_holds", f_dbg_type_epoch_holds, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_arm_parse_scope_gate", f_dbg_arm_parse_scope_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
         QORE_PARAM_NO_ARG, "kind", bigIntTypeInfo, QORE_PARAM_NO_ARG, "set_options", bigIntTypeInfo,

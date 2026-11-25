@@ -817,6 +817,13 @@ public:
         return by_type.size();
     }
 
+#ifdef DEBUG
+    //! the registry's lock, for qore_type_dbg_fork_lock()
+    std::mutex& dbgMutex() {
+        return m;
+    }
+#endif
+
     //! Returns true if an entry of a cache names one of the given types
     bool hasType(const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
         if (empty.load(std::memory_order_acquire)) {
@@ -874,6 +881,9 @@ private:
     cache_map_t weak_by_cache;
     //! true while no type is registered
     std::atomic<bool> empty{true};
+    //! taken with the complex types lock held; its holders take only the locks of the caches, and a child of fork()
+    //! gets it free (qore#7549)
+    QoreForkStdMutex fork_handler{m, QFLR_GENERIC_CACHE_REGISTRY, "generic_cache_registry"};
 
     //! the caller holds the lock
     void updateEmpty() {
@@ -919,6 +929,10 @@ QoreGenericCacheRegistry& qore_generic_cache_registry() {
     static QoreGenericCacheRegistry* registry = new QoreGenericCacheRegistry;
     return *registry;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] QoreGenericCacheRegistry& qore_generic_cache_registry_init = qore_generic_cache_registry();
 }
 
 void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
@@ -1108,6 +1122,8 @@ namespace {
 struct QoreTypeOwnerRegistry {
     std::mutex m;
     std::set<const QoreTypeOwner*> live;
+    //! taken whenever a declaration is created or destroyed; a child of fork() gets it free (qore#7549)
+    QoreForkStdMutex fork_handler{m, QFLR_TYPE_DEBUG_REGISTRIES, "type_owner_registry"};
 };
 
 // not destroyed: declarations are freed at library cleanup and at static destruction
@@ -1115,6 +1131,10 @@ QoreTypeOwnerRegistry& type_owner_registry() {
     static QoreTypeOwnerRegistry* registry = new QoreTypeOwnerRegistry;
     return *registry;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] QoreTypeOwnerRegistry& type_owner_registry_init = type_owner_registry();
 }
 
 QoreTypeOwner::QoreTypeOwner() {
@@ -1152,6 +1172,8 @@ namespace {
 struct QoreTypeInfoRegistry {
     std::mutex m;
     std::set<const QoreTypeInfo*> live;
+    //! taken whenever a type is created or destroyed; a child of fork() gets it free (qore#7549)
+    QoreForkStdMutex fork_handler{m, QFLR_TYPE_DEBUG_REGISTRIES, "type_info_registry"};
 };
 
 // not destroyed: types are freed at library cleanup and at static destruction
@@ -1159,6 +1181,10 @@ QoreTypeInfoRegistry& type_info_registry() {
     static QoreTypeInfoRegistry* registry = new QoreTypeInfoRegistry;
     return *registry;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] QoreTypeInfoRegistry& type_info_registry_init = type_info_registry();
 }
 
 void qore_type_info_created(const QoreTypeInfo* ti) {
@@ -1177,6 +1203,22 @@ bool qore_type_info_is_live(const QoreTypeInfo* ti) {
     QoreTypeInfoRegistry& r = type_info_registry();
     std::lock_guard<std::mutex> lock(r.m);
     return r.live.count(ti) > 0;
+}
+
+std::mutex* qore_type_dbg_fork_lock(const char* name) {
+    if (!strcmp(name, "type_tombstones")) {
+        return qore_type_tombstone_dbg_fork_lock();
+    }
+    if (!strcmp(name, "generic_cache_registry")) {
+        return &qore_generic_cache_registry().dbgMutex();
+    }
+    if (!strcmp(name, "type_owner_registry")) {
+        return &type_owner_registry().m;
+    }
+    if (!strcmp(name, "type_info_registry")) {
+        return &type_info_registry().m;
+    }
+    return qore_thread_type_dbg_fork_lock(name);
 }
 #endif
 

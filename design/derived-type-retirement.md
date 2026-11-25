@@ -504,6 +504,14 @@ declaration's own type is not checked, as it is read from an owner that keeps th
 repository that check values in threads of their own (registered with `q_register_foreign_thread()`) must enter a
 Program for it.
 
+### Child processes created with fork()
+
+The locks of the scheme (the registries of tombstones, epoch holds and generic caches, the debug registries of types
+and declarations, and the lock of the debug count of entries into quiescent waits) are acquired before `fork()` by fork
+handlers, and the epoch hold of a background JIT compile that a child loses with its thread is released in the child
+(qore#7549); see "Type retirement" in `design/fork-handlers.md`.  A free or a retirement that another thread had begun
+at `fork()` is not finished in the child: the declarations that it had taken off the retire list stay allocated there.
+
 ### Bounding and reporting the delay
 
 A long native call, or a thread blocked in a wait inside generic code with type arguments, delays the frees; it never
