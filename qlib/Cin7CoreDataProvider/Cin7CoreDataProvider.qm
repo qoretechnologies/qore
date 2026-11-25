@@ -66,6 +66,15 @@ module Cin7CoreDataProvider {
                 "obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, "
                 "then find the credentials on the Setup tab.",
             "scheme": "cin7core",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "dearsystems.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.cin7.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": Cin7CoreLogo,
             "logo_file_name": "cin7core-logo.svg",
             "logo_mime_type": MimeTypeSvg,
