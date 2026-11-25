@@ -16,7 +16,7 @@ try {
     p.loadModule(ARGV[0]);
     printf("loaded\n");
 } catch (hash<ExceptionInfo> ex) {
-    if (ex.err == "HTTP-SERVER-ERROR" && ex.desc =~ /^the dispatch capability of the HTTP server cannot be claimed by sandboxed code/) {
+    if (ex.err == "HTTP-SERVER-ERROR" && ex.desc =~ /^the dispatch capability of the HTTP server cannot be claimed by restricted code/) {
         printf("refused (claim)\n");
     } else if (ex.err == "LOAD-MODULE-ERROR" && ex.desc =~ /cannot load a module outside the module path under the name of module/) {
         printf("refused (module path)\n");

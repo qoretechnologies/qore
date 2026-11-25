@@ -376,6 +376,7 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
             \testDeserializedFlag());
         addTestCase("a capability of a module that is not the loaded HttpServer module makes no request current",
             \testUnusableCapability());
+        addTestCase("sandboxed code that loads the HttpServer module first", \testFirstLoadSandboxed());
 
         rest.addClass(new ProbeRestClass());
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -430,6 +431,42 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
             \AbstractHttpRequestHandler::claimServerDispatch());
         # sandboxed code
         assertEq("HTTP-SERVER-ERROR", tenant.callFunction("claim"));
+        # restricted code is refused for its sandbox; trusted code under a sandbox that allows everything is not, and
+        # is refused as it is not the initialization of the HttpServer module
+        string code = "%requires HttpServerUtil
+string sub claim() {
+    try {
+        AbstractHttpRequestHandler::claimServerDispatch();
+        return 'claimed';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc;
+    }
+}";
+        Program restricted(TenantOpts);
+        restricted.setSandboxManager(new SandboxManager());
+        restricted.parse(code, "restricted");
+        assertRegex("cannot be claimed by restricted code", restricted.callFunction("claim"));
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        Program permissive(TenantOpts);
+        permissive.setSandboxManager(sm);
+        permissive.parse(code, "permissive");
+        assertRegex("can only be claimed by the initialization of the HttpServer module",
+            permissive.callFunction("claim"));
+    }
+
+    testFirstLoadSandboxed() {
+        # sandboxed code that loads the HttpServer module first, in a process of its own: the initialization of the
+        # module claims the capability, also under a sandbox (see permissive-load.q)
+        foreach string mode in ("permissive", "restricted") {
+            int rc;
+            string out = backquote(sprintf("%s -b %s/HttpServerDispatchCapability/permissive-load.q %s",
+                TestInterpreter::qore_interpreter(), get_script_dir(), mode), \rc);
+            assertEq(0, rc, out);
+            assertEq(sprintf("HttpServer loaded: True\n%s: plain: 200, stream: 200\n", mode), out, mode);
+        }
     }
 
     testReach() {

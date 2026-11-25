@@ -6394,7 +6394,9 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
         @return the capability, which is of a class that is not public
 
-        @throw HTTP-SERVER-ERROR the caller is sandboxed: only trusted code can claim the capability
+        @throw HTTP-SERVER-ERROR the caller is sandboxed: only trusted code that no sandbox governs can claim the
+        capability of a host, and use it (unlike the capability of the HTTP server, see claimServerDispatch()), as a
+        host capability that its holder exposes by mistake could otherwise make a request of its own making current
 
         @since HttpServerUtil 1.6
     */
@@ -6409,8 +6411,13 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     /** @internal
         Gives the initialization of the HttpServer module the capability of its dispatch to make the raw request of a
         request current, which only the HTTP server's own dispatch does (see getRawRequest(); qore#6843).  Every other
-        caller is refused: code that a sandbox governs, also a module named HttpServer that sandboxed code loads by its
-        path, and code that is not the initialization of a module named HttpServer.  The capability is checked
+        caller is refused: restricted code
+        (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), also a module named HttpServer
+        that restricted code loads by its path, and code that is not the initialization of a module named HttpServer.
+        Trusted code that a sandbox governs only to interrupt or limit it is not refused for its sandbox, as the
+        decisions of the HTTP server about sandboxed code apply to restricted code only (qore#7577); the
+        initialization of the module's static members, which claims it, does not run under the sandbox of the code
+        that loads the module.  The capability is checked
         against the record of the loaded HttpServer module when it is first used: the file of the module that claimed
         it must be the file of that module.  A trusted initialization of the HttpServer module that runs again in the
         process (a private copy of the module, Program::loadApplyToPrivateUserModule()) gets a capability of its own,
@@ -6419,13 +6426,14 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
         @return the capability, which is of a class that is not public
 
-        @throw HTTP-SERVER-ERROR the caller is not the trusted initialization of the HttpServer module
+        @throw HTTP-SERVER-ERROR the caller is not the trusted initialization of the HttpServer module (fails closed:
+        also if it cannot be decided whether the caller is restricted)
 
         @since HttpServerUtil 1.6
     */
     static object claimServerDispatch() {
-        if (HttpRawRequestScope::callerIsSandboxed()) {
-            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server cannot be claimed by sandboxed code";
+        if (HttpRawRequestScope::callerIsRestricted()) {
+            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server cannot be claimed by restricted code";
         }
         *string name;
         *string path;
