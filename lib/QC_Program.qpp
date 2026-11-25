@@ -3725,15 +3725,14 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object can have been deleted or taken over meanwhile in another thread
-    AbstractPrivateData* pgm = qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-    if (!pgm) {
-        if (!*xsink) {
-            makeAccessDeletedObjectException(xsink, self->getClassName());
-        }
-        return QoreValue();
-    }
-    assert(pgm == p);
+#ifdef DEBUG
+    QoreProgram* pgm = (QoreProgram*)
+#endif
+    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
+#ifdef DEBUG
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
+#endif
     if (!*xsink) {
         QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p,
             QMLO_INJECT | (reinject ? QMLO_REINJECT : 0), warning_mask, reexport);
@@ -3786,15 +3785,14 @@ Program::loadApplyToUserModule(string module_name, *softbool reinject,
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object can have been deleted or taken over meanwhile in another thread
-    AbstractPrivateData* pgm = qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-    if (!pgm) {
-        if (!*xsink) {
-            makeAccessDeletedObjectException(xsink, self->getClassName());
-        }
-        return QoreValue();
-    }
-    assert(pgm == p);
+#ifdef DEBUG
+    QoreProgram* pgm = (QoreProgram*)
+#endif
+    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
+#ifdef DEBUG
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
+#endif
     if (!*xsink) {
         ExceptionSink wsink;
         QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, p,
@@ -3846,15 +3844,14 @@ Program::loadApplyToPrivateUserModule(
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object can have been deleted or taken over meanwhile in another thread
-    AbstractPrivateData* pgm = qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-    if (!pgm) {
-        if (!*xsink) {
-            makeAccessDeletedObjectException(xsink, self->getClassName());
-        }
-        return QoreValue();
-    }
-    assert(pgm == p);
+#ifdef DEBUG
+    QoreProgram* pgm = (QoreProgram*)
+#endif
+    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
+#ifdef DEBUG
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
+#endif
     if (!*xsink) {
         QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
             warning_mask);
@@ -3903,15 +3900,14 @@ Program::loadApplyToPrivateUserModule(
     }
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: " QLLD ", self: %p\n", p, (int64)p->getProgramId(), self);
-    // the object can have been deleted or taken over meanwhile in another thread
-    AbstractPrivateData* pgm = qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
-    if (!pgm) {
-        if (!*xsink) {
-            makeAccessDeletedObjectException(xsink, self->getClassName());
-        }
-        return QoreValue();
-    }
-    assert(pgm == p);
+#ifdef DEBUG
+    QoreProgram* pgm = (QoreProgram*)
+#endif
+    qore_object_private::get(*self)->getAndRemovePrivateData(CID_PROGRAM, xsink);
+#ifdef DEBUG
+    // or the object was deleted meanwhile
+    assert(pgm == p || *xsink);
+#endif
     if (!*xsink) {
         ExceptionSink wsink;
         QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
