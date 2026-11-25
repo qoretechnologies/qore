@@ -948,14 +948,35 @@ private:
     /** The request becomes that of the block, as with the AST interpreter (StatementBlock::execIntern()): its path is
         the code of a return statement without a value or of a break or a continue statement placed after the block,
         whose handlers have run: the cleanups of the entries below the scope's and the jump.  The paths are lowered
-        once for each scope (scope_exit_flow_paths).  Only for code with step events, and not in the code of a handler
-        lowered inline.
+        once for each scope (scope_exit_flow_paths).  Only for code with step events.  A scope in the body of a
+        handler lowered inline (the code of a debugger's request there runs the handlers of the blocks of the body out
+        of line) takes the paths of a request made after the block in that body: those of a loop or switch statement
+        of the body, or the end of the handler (getScopeFlowPaths() with the handler, qore#7008).
     */
     bool setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error);
+    //! Gives the ScopeExit \a se past the inline cap in the code of a debugger's request, whose handlers can hand a
+    //! value over (its result), the paths of setScopeExitFlowTargets(): a request in its handlers replaces the value
+    //! that one of them handed over before it, which the entry of each path releases (qore#7008)
+    bool setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
+            const QoreProgramLocation* loc, std::string& error);
     //! Returns the shared paths of the requests after the handlers of the scope whose entry is
     //! cleanup_stack[\a scope_entry] (scope_exit_flow_paths), lowering them the first time; nullptr with \a error
     //! set on failure
-    const DebugFlowSegment* getScopeFlowPaths(size_t scope_entry, std::string& error);
+    /** @param hf_index SIZE_MAX, or the index in inline_handler_flow_stack of the handler lowered inline whose body
+        has the scope: the paths are those of a request made after the block in that body
+        (lowerInlineHandlerRequestPaths(), inline_scope_exit_flow_paths, qore#7008)
+    */
+    const DebugFlowSegment* getScopeFlowPaths(size_t scope_entry, std::string& error, size_t hf_index = SIZE_MAX);
+    //! Lowers the paths of a debugger's requests at the current lowering position in the body of the handler at
+    //! \a hf_index of inline_handler_flow_stack (see setInlineHandlerFlowTargets()) into \a paths (return, break,
+    //! continue); false with \a error set on failure
+    /** @param own_segment the cache of the paths, or nullptr for the segment of the handler's entry
+        (InlineHandlerFlow::segment)
+        @param max_cleanup_depth only a loop or switch statement pushed at this cleanup depth or below takes a break
+        or a continue (see findLoopJumpTarget())
+    */
+    bool lowerInlineHandlerRequestPaths(size_t hf_index, DebugFlowSegment* own_segment, size_t max_cleanup_depth,
+            const QoreProgramLocation* loc, QoreIRBasicBlock* (&paths)[3], std::string& error);
     //! Gives the step event \a dbg of a statement of the body of a handler lowered inline the paths of a debugger's
     //! requests: those of the loops and switch statements of the body, or the end of the handler
     //! (InlineHandlerFlow)
@@ -963,6 +984,10 @@ private:
             std::string& error);
     //! the paths of the ScopeExit instructions of each scope (setScopeExitFlowTargets())
     std::unordered_map<uint32_t, DebugFlowSegment> scope_exit_flow_paths;
+    //! the paths of the ScopeExit instructions of each scope in the body of a handler lowered inline, which go on in
+    //! that handler (getScopeFlowPaths() with a handler, qore#7008); the paths of the same scope in
+    //! scope_exit_flow_paths are those of the scope's last handler lowered inline (getInlineHandlerFlowEndAt())
+    std::unordered_map<uint32_t, DebugFlowSegment> inline_scope_exit_flow_paths;
     //! The end of the body of a handler being lowered inline in the code of an exit, where a debugger's request at a
     //! step event of the body that no loop or switch statement of the body takes goes (#6201)
     /** The request ends the handler, as with the AST interpreter, where the block of the handler returns it to the
