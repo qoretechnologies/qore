@@ -1,46 +1,46 @@
 FtpPoller::FtpPoller::setFatal same signature: PARSE-EXCEPTION: child class method X::setFatal(bool fatal = True) cannot override parent class method final FtpPoller::setFatal(bool fatal = True)
 FtpPoller::FtpPoller::setFatal other return type: PARSE-EXCEPTION: child class method X::setFatal(bool fatal = True) cannot override parent class method final FtpPoller::setFatal(bool fatal = True)
 FtpPoller::FtpPoller::setFatal private: PARSE-EXCEPTION: child class method X::setFatal(bool fatal = True) cannot override parent class method final FtpPoller::setFatal(bool fatal = True)
-FtpPoller::FtpPoller::setFatal other parameters: parse OK
-FtpPoller::FtpPoller::setFatal static: parse OK
+FtpPoller::FtpPoller::setFatal other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'setFatal': its name is reserved by parent class method final FtpPoller::setFatal(bool fatal = True)
+FtpPoller::FtpPoller::setFatal static: PARSE-EXCEPTION: class 'X' cannot declare static method 'setFatal': its name is reserved by parent class method final FtpPoller::setFatal(bool fatal = True)
 FtpPoller::FtpPoller::isFatal same signature: PARSE-EXCEPTION: child class method X::isFatal() cannot override parent class method final FtpPoller::isFatal()
 FtpPoller::FtpPoller::isFatal other return type: PARSE-EXCEPTION: child class method X::isFatal() cannot override parent class method final FtpPoller::isFatal()
 FtpPoller::FtpPoller::isFatal private: PARSE-EXCEPTION: child class method X::isFatal() cannot override parent class method final FtpPoller::isFatal()
-FtpPoller::FtpPoller::isFatal other parameters: parse OK
-FtpPoller::FtpPoller::isFatal static: parse OK
+FtpPoller::FtpPoller::isFatal other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'isFatal': its name is reserved by parent class method final FtpPoller::isFatal()
+FtpPoller::FtpPoller::isFatal static: PARSE-EXCEPTION: class 'X' cannot declare static method 'isFatal': its name is reserved by parent class method final FtpPoller::isFatal()
 DataProvider::Observable::hasObservers same signature: PARSE-EXCEPTION: child class method X::hasObservers() cannot override parent class method final Observable::hasObservers()
 DataProvider::Observable::hasObservers other return type: PARSE-EXCEPTION: child class method X::hasObservers() cannot override parent class method final Observable::hasObservers()
 DataProvider::Observable::hasObservers private: PARSE-EXCEPTION: child class method X::hasObservers() cannot override parent class method final Observable::hasObservers()
-DataProvider::Observable::hasObservers other parameters: parse OK
-DataProvider::Observable::hasObservers static: parse OK
+DataProvider::Observable::hasObservers other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'hasObservers': its name is reserved by parent class method final Observable::hasObservers()
+DataProvider::Observable::hasObservers static: PARSE-EXCEPTION: class 'X' cannot declare static method 'hasObservers': its name is reserved by parent class method final Observable::hasObservers()
 DataProvider::Observable::getObserverCount same signature: PARSE-EXCEPTION: child class method X::getObserverCount() cannot override parent class method final Observable::getObserverCount()
 DataProvider::Observable::getObserverCount other return type: PARSE-EXCEPTION: child class method X::getObserverCount() cannot override parent class method final Observable::getObserverCount()
 DataProvider::Observable::getObserverCount private: PARSE-EXCEPTION: child class method X::getObserverCount() cannot override parent class method final Observable::getObserverCount()
-DataProvider::Observable::getObserverCount other parameters: parse OK
-DataProvider::Observable::getObserverCount static: parse OK
+DataProvider::Observable::getObserverCount other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'getObserverCount': its name is reserved by parent class method final Observable::getObserverCount()
+DataProvider::Observable::getObserverCount static: PARSE-EXCEPTION: class 'X' cannot declare static method 'getObserverCount': its name is reserved by parent class method final Observable::getObserverCount()
 HttpServer::AbstractStreamRequest::getContext same signature: PARSE-EXCEPTION: child class method X::getContext() cannot override parent class method final AbstractStreamRequest::getContext()
 HttpServer::AbstractStreamRequest::getContext other return type: PARSE-EXCEPTION: child class method X::getContext() cannot override parent class method final AbstractStreamRequest::getContext()
 HttpServer::AbstractStreamRequest::getContext private: PARSE-EXCEPTION: child class method X::getContext() cannot override parent class method final AbstractStreamRequest::getContext()
-HttpServer::AbstractStreamRequest::getContext other parameters: parse OK
-HttpServer::AbstractStreamRequest::getContext static: parse OK
+HttpServer::AbstractStreamRequest::getContext other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'getContext': its name is reserved by parent class method final AbstractStreamRequest::getContext()
+HttpServer::AbstractStreamRequest::getContext static: PARSE-EXCEPTION: class 'X' cannot declare static method 'getContext': its name is reserved by parent class method final AbstractStreamRequest::getContext()
 HttpServer::AbstractStreamRequest::getHeaders same signature: PARSE-EXCEPTION: child class method X::getHeaders() cannot override parent class method final AbstractStreamRequest::getHeaders()
 HttpServer::AbstractStreamRequest::getHeaders other return type: PARSE-EXCEPTION: child class method X::getHeaders() cannot override parent class method final AbstractStreamRequest::getHeaders()
 HttpServer::AbstractStreamRequest::getHeaders private: PARSE-EXCEPTION: child class method X::getHeaders() cannot override parent class method final AbstractStreamRequest::getHeaders()
-HttpServer::AbstractStreamRequest::getHeaders other parameters: parse OK
-HttpServer::AbstractStreamRequest::getHeaders static: parse OK
+HttpServer::AbstractStreamRequest::getHeaders other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'getHeaders': its name is reserved by parent class method final AbstractStreamRequest::getHeaders()
+HttpServer::AbstractStreamRequest::getHeaders static: PARSE-EXCEPTION: class 'X' cannot declare static method 'getHeaders': its name is reserved by parent class method final AbstractStreamRequest::getHeaders()
 HttpServer::AbstractStreamRequest::getBody same signature: PARSE-EXCEPTION: child class method X::getBody() cannot override parent class method final AbstractStreamRequest::getBody()
 HttpServer::AbstractStreamRequest::getBody other return type: PARSE-EXCEPTION: child class method X::getBody() cannot override parent class method final AbstractStreamRequest::getBody()
 HttpServer::AbstractStreamRequest::getBody private: PARSE-EXCEPTION: child class method X::getBody() cannot override parent class method final AbstractStreamRequest::getBody()
-HttpServer::AbstractStreamRequest::getBody other parameters: parse OK
-HttpServer::AbstractStreamRequest::getBody static: parse OK
+HttpServer::AbstractStreamRequest::getBody other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'getBody': its name is reserved by parent class method final AbstractStreamRequest::getBody()
+HttpServer::AbstractStreamRequest::getBody static: PARSE-EXCEPTION: class 'X' cannot declare static method 'getBody': its name is reserved by parent class method final AbstractStreamRequest::getBody()
 RestHandler::AbstractRestStreamRequestHandler::getContext same signature: PARSE-EXCEPTION: child class method X::getContext() cannot override parent class method final AbstractRestStreamRequestHandler::getContext()
 RestHandler::AbstractRestStreamRequestHandler::getContext other return type: PARSE-EXCEPTION: child class method X::getContext() cannot override parent class method final AbstractRestStreamRequestHandler::getContext()
 RestHandler::AbstractRestStreamRequestHandler::getContext private: PARSE-EXCEPTION: child class method X::getContext() cannot override parent class method final AbstractRestStreamRequestHandler::getContext()
-RestHandler::AbstractRestStreamRequestHandler::getContext other parameters: parse OK
-RestHandler::AbstractRestStreamRequestHandler::getContext static: parse OK
+RestHandler::AbstractRestStreamRequestHandler::getContext other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'getContext': its name is reserved by parent class method final AbstractRestStreamRequestHandler::getContext()
+RestHandler::AbstractRestStreamRequestHandler::getContext static: PARSE-EXCEPTION: class 'X' cannot declare static method 'getContext': its name is reserved by parent class method final AbstractRestStreamRequestHandler::getContext()
 RestHandler::AbstractRestStreamRequestHandler::getArgs same signature: PARSE-EXCEPTION: child class method X::getArgs() cannot override parent class method final AbstractRestStreamRequestHandler::getArgs()
 RestHandler::AbstractRestStreamRequestHandler::getArgs other return type: PARSE-EXCEPTION: child class method X::getArgs() cannot override parent class method final AbstractRestStreamRequestHandler::getArgs()
 RestHandler::AbstractRestStreamRequestHandler::getArgs private: PARSE-EXCEPTION: child class method X::getArgs() cannot override parent class method final AbstractRestStreamRequestHandler::getArgs()
-RestHandler::AbstractRestStreamRequestHandler::getArgs other parameters: parse OK
-RestHandler::AbstractRestStreamRequestHandler::getArgs static: parse OK
-final method called: [0, 0, 99, False, False, True]
+RestHandler::AbstractRestStreamRequestHandler::getArgs other parameters: PARSE-EXCEPTION: class 'X' cannot declare method 'getArgs': its name is reserved by parent class method final AbstractRestStreamRequestHandler::getArgs()
+RestHandler::AbstractRestStreamRequestHandler::getArgs static: PARSE-EXCEPTION: class 'X' cannot declare static method 'getArgs': its name is reserved by parent class method final AbstractRestStreamRequestHandler::getArgs()
+final method called: [0, 0, False, False]

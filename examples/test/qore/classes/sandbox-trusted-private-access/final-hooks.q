@@ -53,26 +53,22 @@ foreach list<string> m in (Methods) {
     # a private redeclaration
     printf("%s::%s private: %s\n", m[0], name, try_parse("private", sprintf("class X inherits %s { private %s %s { %s } "
         "}", m[0], m[2], m[1], body)));
-    # other parameters: not refused by final; a variant of its own
+    # other parameters: refused, as the name of a final method is reserved (qore#7111)
     printf("%s::%s other parameters: %s\n", m[0], name, try_parse("params", sprintf("class X inherits %s { %s %s(string "
         "x) { %s } }", m[0], m[2], name, body)));
-    # a static method of the name: not refused by final
+    # a static method of the name: refused, as the name of a final method is reserved (qore#7111)
     printf("%s::%s static: %s\n", m[0], name, try_parse("static", sprintf("class X inherits %s { static %s %s(string "
         "x) { %s } }", m[0], m[2], name, body)));
 }
 
-# a call with the signature of the final method always calls it, also on an object of a subclass that has another
-# variant or a static method of the name
+# a call of a final method on an object of a subclass that sandboxed code declares calls the library's method
 Program p(Opts);
 p.loadModule("DataProvider");
 p.parse("class X inherits DataProvider::Observable {
-    int getObserverCount(string x) { return 99; }
-    static bool hasObservers(string x) { return True; }
 }
 auto sub run() {
     X x();
     DataProvider::Observable o = x;
-    return (x.getObserverCount(), o.getObserverCount(), x.getObserverCount('x'), x.hasObservers(), o.hasObservers(),
-        X::hasObservers('x'));
+    return (x.getObserverCount(), o.getObserverCount(), x.hasObservers(), o.hasObservers());
 }", "variants");
 printf("final method called: %y\n", p.callFunction("run"));
