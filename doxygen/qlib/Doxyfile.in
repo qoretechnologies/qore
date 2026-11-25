@@ -801,13 +801,13 @@ HTML_FILE_EXTENSION    = .html
 # each generated HTML page. If it is left blank doxygen will generate a
 # standard header.
 
-HTML_HEADER            = ../../doxygen/header_template.html
+HTML_HEADER            = "@CMAKE_SOURCE_DIR@/doxygen/header_template.html"
 
 # The HTML_FOOTER tag can be used to specify a personal HTML footer for
 # each generated HTML page. If it is left blank doxygen will generate a
 # standard footer.
 
-HTML_FOOTER            = ../../doxygen/footer_template.html
+HTML_FOOTER            = "@CMAKE_SOURCE_DIR@/doxygen/footer_template.html"
 
 # The HTML_STYLESHEET tag can be used to specify a user-defined cascading
 # style sheet that is used by each HTML page. It can be used to
@@ -818,9 +818,9 @@ HTML_FOOTER            = ../../doxygen/footer_template.html
 
 HTML_STYLESHEET        =
 
-HTML_EXTRA_STYLESHEET  = ../../doxygen/dox_qore.css
+HTML_EXTRA_STYLESHEET  = "@CMAKE_SOURCE_DIR@/doxygen/dox_qore.css"
 
-HTML_EXTRA_FILES       = ../../doxygen/Qore-Q.ico
+HTML_EXTRA_FILES       = "@CMAKE_SOURCE_DIR@/doxygen/Qore-Q.ico"
 
 HTML_COLORSTYLE        = DARK
 
