@@ -109,12 +109,11 @@
     sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
     <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
 
-    @par Preloaded Modules Give Restricted Code No Host Information
-    For code restricted from external information, the functions of the standard modules do not use the host's
-    environment, current working directory, hostname, PID or network interfaces for it (ex:
+    @par Library Code Gives Restricted Code No Other Host Information
+    For code restricted from external information, the functions listed in @ref sandbox_ambient_host_data (ex:
     @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()", the connection and
-    datasource providers; see @ref sandbox_ambient_host_data;
-    <a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
+    datasource providers) use no environment, working directory, hostname, PID or network interface for it, with the
+    known limitations listed there (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s

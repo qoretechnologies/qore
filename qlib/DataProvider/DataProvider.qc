@@ -1782,6 +1782,13 @@ if (errors) {
         @return every module loading failure in environment declaration order; an empty list means that all declared
             modules loaded successfully
 
+        For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+        modules of the \c QORE_DATA_PROVIDERS environment variable are loaded as for other code, but the failures
+        name no module of the environment: \c module is \c "QORE_DATA_PROVIDERS[<n>]" (the position of the module in
+        the variable), \c description is a generic text and \c argument is not set, as the module names, their paths
+        and the texts of their errors are information about the host (see @ref sandbox_ambient_host_data)
+
         @since DataProvider 3.8
     */
     static list<hash<DataProviderEnvironmentLoadFailureInfo>> loadProvidersFromEnvironmentWithReport(
@@ -1792,6 +1799,29 @@ if (errors) {
             sub (hash<DataProviderEnvironmentLoadFailureInfo> failure) {
                 failures += failure;
             });
+        # the names of the environment's modules only for a caller that could read the environment itself
+        # (qore#7586)
+        if (failures && !SandboxManager::callerMayReadExternalInfo()) {
+            list<string> mods = (getenv("QORE_DATA_PROVIDERS") ?? "").split(PathSep);
+            list<hash<DataProviderEnvironmentLoadFailureInfo>> hidden
+                = new list<hash<DataProviderEnvironmentLoadFailureInfo>>();
+            foreach hash<DataProviderEnvironmentLoadFailureInfo> failure in (failures) {
+                int pos = -1;
+                foreach string mod in (mods) {
+                    if (mod == failure.module) {
+                        pos = $#;
+                        break;
+                    }
+                }
+                hidden += <DataProviderEnvironmentLoadFailureInfo>{
+                    "phase": failure.phase,
+                    "module": sprintf("QORE_DATA_PROVIDERS[%d]", pos),
+                    "error": failure.error,
+                    "description": "a data provider module of the environment could not be loaded",
+                };
+            }
+            failures = hidden;
+        }
         return failures;
     }
 

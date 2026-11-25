@@ -28,11 +28,11 @@
 class ModuleHostInfoTest inherits QUnit::Test {
     public {
         #! the kinds of Programs of the worker
-        const Kinds = 4;
+        const Kinds = 5;
         #! the execution modes of the worker's Programs
         const Modes = 4;
         #! the checks of each Program
-        const Cases = 50;
+        const Cases = 61;
     }
 
     private {
@@ -49,6 +49,15 @@ class ModuleHostInfoTest inherits QUnit::Test {
         string providers = dir + DirSep + "module-host-info" + DirSep + "Q7586Providers.qm";
         mkdir(tmp.path + DirSep + "tmp");
         mkdir(tmp.path + DirSep + "edifact");
+        # a directory with schema files that the worker's Programs read with a relative path
+        mkdir(tmp.path + DirSep + "files" + DirSep + "schema", 0755, True);
+        File f();
+        f.open2(tmp.path + DirSep + "files" + DirSep + "schema" + DirSep + "a.yaml", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("q7586-a");
+        f.close();
+        f.open2(tmp.path + DirSep + "files" + DirSep + "schema" + DirSep + "b.yaml", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("q7586-b");
+        f.close();
         prefix = (map sprintf("%s=%s ", $1.key, quote($1.value)), {
             "LD_LIBRARY_PATH": libdir,
             "DYLD_LIBRARY_PATH": libdir,
@@ -62,6 +71,10 @@ class ModuleHostInfoTest inherits QUnit::Test {
             "TERM": "q7586-term",
             "DISPLAY": "q7586:0",
             "PRINTER": "q7586-printer",
+            "QORE_DATA_PROVIDERS": "q7586-no-such-data-provider-module",
+            "QORE_ONNX_PYTHON": "/q7586/no-such-python",
+            # relative to the working directory of the worker, which is the test's
+            "Q7586_RELDIR": dirname(get_relative_path(getcwd(), tmp.path + DirSep + "files" + DirSep + "x")),
             "QORE_CONNECTION_PROVIDERS": providers,
             "QORE_DATASOURCE_PROVIDERS": providers,
             "Q7586_CHILD": dir + DirSep + "module-host-info" + DirSep + "module-host-info-child.q",

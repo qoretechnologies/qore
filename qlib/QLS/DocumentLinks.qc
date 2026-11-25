@@ -266,7 +266,14 @@ public class DocumentLinks {
     }
 
     #! Returns the directories in the QORE_MODULE_DIR environment variable
+    /** None for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"),
+        for which the environment is empty (see @ref sandbox_ambient_host_data)
+    */
     static list<string> getEnvModuleDirs() {
+        # the environment of the host only for a caller that could read it itself (qore#7586)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            return ();
+        }
         # the current environment of the process
         return select (getenv("QORE_MODULE_DIR") ?? "").split(PlatformOS == "Windows" ? ";" : ":"), $1;
     }
@@ -283,13 +290,18 @@ public class DocumentLinks {
     }
 
     #! Expands ${SCRIPT_DIR} and environment variables in a directive argument
+    /** For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"), the
+        environment is empty: every variable expands to an empty string (see @ref sandbox_ambient_host_data)
+    */
     static string expand(string arg, string dir) {
+        # the environment of the host only for a caller that could read it itself (qore#7586)
+        bool env_allowed = SandboxManager::callerMayReadExternalInfo();
         string ret = replace(arg, "${SCRIPT_DIR}", dir);
         foreach string name in ((ret =~ x/\$\{(\w+)\}/g) ?? ()) {
-            ret = replace(ret, "${" + name + "}", getenv(name) ?? "");
+            ret = replace(ret, "${" + name + "}", (env_allowed ? getenv(name) : NOTHING) ?? "");
         }
         foreach string name in ((ret =~ x/\$(\w+)/g) ?? ()) {
-            ret = replace(ret, "$" + name, getenv(name) ?? "");
+            ret = replace(ret, "$" + name, (env_allowed ? getenv(name) : NOTHING) ?? "");
         }
         return ret;
     }

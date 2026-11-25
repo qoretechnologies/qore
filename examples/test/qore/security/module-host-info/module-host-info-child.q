@@ -11,6 +11,9 @@ our *int q_smtp_port;
 our *object q_lent;
 our *object q_server;
 our *object q_layout;
+our *object q_logger;
+our *object q_logger2;
+our *string q_reldir;
 our hash<auto> q_r;
 
 # subclasses that reach the protected methods of the modules' classes
@@ -185,6 +188,64 @@ try {
         "m"));
 } catch (hash<ExceptionInfo> ex) {
     q_r.lent_layout = ex.err;
+}
+
+# loggers of the host: the host's appender formats its fields for the line that the code logs; a layout of the host
+# whose pattern the code sets formats no host values for it
+try { q_logger.info("m"); } catch (hash<ExceptionInfo> ex) { q_r.lent_logger_error = ex.err; }
+try {
+    Logger::LoggerLayoutPattern l = cast<Logger::LoggerLayoutPattern>(
+        cast<Logger::LoggerAppenderWithLayout>(q_logger2.getAppenders()[0]).getLayout());
+    l.setPattern("%E{Q7586_SECRET}|%h|%P");
+    q_r.lent_layout_set = l.format(new Logger::LoggerEvent("q7586", "q7586", Logger::LoggerLevel::getLevelInfo(),
+        "m"));
+} catch (hash<ExceptionInfo> ex) {
+    q_r.lent_layout_set = ex.err;
+}
+
+# the asynchronous SMTP connection (a poll operation run by the async I/O controller)
+try {
+    SmtpClient::SmtpConnection conn("q7586", "", sprintf("smtp://127.0.0.1:%d", q_smtp_port));
+    AbstractPollOperation op = conn.startPollConnect();
+    *hash<SocketPollInfo> pi = op.continuePoll();
+    if (pi) {
+        hash<SocketPollResultInfo> res = AsyncIoController::exec(operation_info: <SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": "q7586",
+            "to": 30s,
+        });
+        if (res.ex) {
+            throw res.ex.err, res.ex.desc;
+        }
+    }
+    q_r.smtp_async = op.goalReached() ? "connected" : op.getState();
+} catch (hash<ExceptionInfo> ex) {
+    q_r.smtp_async = ex.err + ": " + ex.desc;
+}
+
+# QLS
+try { q_r.qls_expand = QLS::DocumentLinks::expand("${Q7586_SECRET}/$Q7586_SECRET/${SCRIPT_DIR}", "d"); } catch (hash<ExceptionInfo> ex) { q_r.qls_expand = ex.err; }
+try { q_r.qls_moddirs = QLS::DocumentLinks::getEnvModuleDirs(); } catch (hash<ExceptionInfo> ex) { q_r.qls_moddirs = ex.err; }
+
+# DataProvider: the failures of the modules of QORE_DATA_PROVIDERS
+try { q_r.dp_failures = map $1.module, DataProvider::DataProvider::loadProvidersFromEnvironmentWithReport(); } catch (hash<ExceptionInfo> ex) { q_r.dp_failures = ex.err; }
+
+# QoreOnnxTools: the Python executable of the environment
+try { q_r.onnx_python = QoreOnnxTools::OnnxQuantizer::checkPythonDependencies().python; } catch (hash<ExceptionInfo> ex) { q_r.onnx_python = ex.err; }
+
+# FileLocationHandler: a relative file location, and references resolved against its effective location
+try {
+    hash<auto> res = FileLocationHandler::FileLocationHandler::getResourceFromLocation("file://" + q_reldir
+        + "/schema/a.yaml");
+    q_r.file_eff = res.info.effective_location;
+    q_r.file_resolved = ReadOnlyFile::readTextFile(FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri(
+        resolve_url(res.info.effective_location, "b.yaml")));
+    q_r.file_resolved_up = ReadOnlyFile::readTextFile(
+        FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri(
+        resolve_url(res.info.effective_location, "../schema/b.yaml")));
+} catch (hash<ExceptionInfo> ex) {
+    q_r.file_eff = ex.err + ": " + ex.desc;
 }
 
 # the host's grants: a policy barrier and a system-policy capability (the host's values for every caller)

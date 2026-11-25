@@ -213,9 +213,9 @@ Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 suc
 
 
     @section qunit_v0_5_2 Version 0.5.2
-    - @ref QUnit::Test::getEnv() "Test::getEnv()" gives no values of the host's environment, and the JUnit report
-      names \c localhost instead of the hostname, for code restricted from external information (see
-      @ref sandbox_ambient_host_data)
+    - @ref QUnit::Test::getEnv() "Test::getEnv()" gives no values of the host's environment, the \c QUNIT_* options
+      of the environment are not used, and the JUnit report names \c localhost instead of the hostname, for code
+      restricted from external information (see @ref sandbox_ambient_host_data)
     - added @ref QUnit::Test::assertContains() "Test::assertContains()" and
       @ref QUnit::Test::assertNContains() "Test::assertNContains()": a list has (or has not) an element, a hash a
       key, a string a substring (<a href="https://github.com/qoretechnologies/qore/issues/3374">issue 3374</a>)
@@ -1063,14 +1063,17 @@ public class TestReporter {
             usage();
         }
 
+        # the environment of the host only for a caller that could read it itself (qore#7586)
+        bool env_allowed = SandboxManager::callerMayReadExternalInfo();
+
         # Enable timestamps from -T flag or QUNIT_TIMESTAMPS env var
-        if (m_options.timestamps || getenv("QUNIT_TIMESTAMPS")) {
+        if (m_options.timestamps || (env_allowed && getenv("QUNIT_TIMESTAMPS"))) {
             QUnit::timestamps_enabled = True;
         }
 
         # Allow QUNIT_NAME_MAX_CHARS to override the default OK / SKIP name truncation budget
         {
-            *string mc = getenv("QUNIT_NAME_MAX_CHARS");
+            *string mc = env_allowed ? getenv("QUNIT_NAME_MAX_CHARS") : NOTHING;
             if (mc.val()) {
                 QUnit::name_max_chars = mc.toInt();
             }
@@ -1103,18 +1106,18 @@ public class TestReporter {
 
         # Handle include patterns (command-line + env var)
         m_include_patterns = m_options.include ?? ();
-        if (*string env_include = ENV{ENV_INCLUDE}) {
+        if (*string env_include = env_allowed ? ENV{ENV_INCLUDE} : NOTHING) {
             m_include_patterns += map trim($1), env_include.split(",");
         }
 
         # Handle exclude patterns (command-line + env var)
         m_exclude_patterns = m_options.exclude ?? ();
-        if (*string env_exclude = ENV{ENV_EXCLUDE}) {
+        if (*string env_exclude = env_allowed ? ENV{ENV_EXCLUDE} : NOTHING) {
             m_exclude_patterns += map trim($1), env_exclude.split(",");
         }
 
         # Handle shard selector "i/K" (command-line takes precedence over env var)
-        *string shard_spec = m_options.shard ?? ENV{ENV_SHARD};
+        *string shard_spec = m_options.shard ?? (env_allowed ? ENV{ENV_SHARD} : NOTHING);
         if (shard_spec.val()) {
             list<string> parts = shard_spec.split("/");
             if (parts.size() != 2 || !parts[0].val() || !parts[1].val()) {

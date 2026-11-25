@@ -219,6 +219,14 @@ class FileLocationCallerToken {
 
 #! The abstract file location handler class
 public class AbstractFileLocationHandler {
+    private:internal {
+        #! the token of the names of the directories of the virtual working directory of getFileUri() (qore#7586)
+        static string cwd_token = get_random_string(12, 1).lwr();
+
+        #! the number of parent directories of the virtual working directory beyond those that a path names
+        const VirtualCwdSlack = 8;
+    }
+
     public {
         #! The \c encoding_errors read option of the handlers that read text
         /** See @ref filelocationhandler_encoding_errors
@@ -648,6 +656,14 @@ public class AbstractFileLocationHandler {
         removed; symbolic links are not resolved, so relative references resolved against the URI behave as
         they would for the path as given.  Each path segment is percent-encoded.
 
+        For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"), which
+        may not read the current working directory, a relative path is resolved against a virtual working directory
+        instead: a directory of the root of the URI whose name (\c "qore-cwd-<token>-<n>", with a token of the
+        process) stands for the current working directory, below as many virtual parent directories as the path
+        names plus 8 more.  Relative references resolved against such a URI behave as for the path as given, and
+        @ref getPathFromFileUri() returns the relative path of the target; a reference that climbs above all virtual
+        parent directories resolves to a path of the root (see @ref sandbox_ambient_host_data).
+
         @par Example:
         @code{.py}
 string uri = AbstractFileLocationHandler::getFileUri("/var/data/my file#1.xml");
@@ -662,6 +678,10 @@ string uri = AbstractFileLocationHandler::getFileUri("/var/data/my file#1.xml");
     */
     static string getFileUri(string path) {
         string abs = normalize_dir(path);
+        if (!absolute_path(abs)) {
+            # a relative path for a caller that may not read the current working directory (qore#7586)
+            abs = AbstractFileLocationHandler::getVirtualCwdPath(abs);
+        }
         if (PlatformOS == "Windows") {
             abs =~ s/\\/\//g;
         }
@@ -692,7 +712,8 @@ string path = AbstractFileLocationHandler::getPathFromFileUri("file:///var/data/
 
         @param uri the absolute \c file:// URI
 
-        @return the local path named by the URI
+        @return the local path named by the URI; for a path below the virtual working directory of
+        @ref getFileUri() of this process, the relative path (ex: \c "./schema/b.yaml" or \c "../b.yaml")
 
         @throw LOCATION-ERROR the URI is not an absolute \c file URI of a supported form: it has another scheme, an
         authority other than \c localhost, a query (even an empty one), a relative path, a malformed
@@ -723,10 +744,74 @@ string path = AbstractFileLocationHandler::getPathFromFileUri("file:///var/data/
             throw "LOCATION-ERROR", sprintf("file URI %y has an encoded NUL character", uri);
         }
         path = decode_url(path);
+        # a path below the virtual working directory of getFileUri() (qore#7586)
+        if (*string rel = AbstractFileLocationHandler::getVirtualCwdRelativePath(path)) {
+            return rel;
+        }
         if (PlatformOS == "Windows" && path =~ /^\/[A-Za-z]:/) {
             path = path.substr(1);
         }
         return path;
+    }
+
+    #! Returns the name of a directory of the virtual working directory: the working directory for 0, its parents for
+    #! higher levels
+    private:internal static string getVirtualCwdName(int level) {
+        return sprintf("qore-cwd-%s-%d", cwd_token, level);
+    }
+
+    #! Returns the absolute path below the virtual working directory for a normalized relative path (qore#7586)
+    private:internal static string getVirtualCwdPath(string rel) {
+        if (PlatformOS == "Windows") {
+            rel =~ s/\\/\//g;
+        }
+        list<string> segs = select rel.split("/"), $1 != "" && $1 != ".";
+        int up = 0;
+        foreach string seg in (segs) {
+            if (seg != "..") {
+                break;
+            }
+            ++up;
+        }
+        list<string> path = ();
+        for (int level = up + VirtualCwdSlack; level >= 0; --level) {
+            push path, AbstractFileLocationHandler::getVirtualCwdName(level);
+        }
+        foreach string seg in (segs) {
+            if (seg == "..") {
+                pop path;
+            } else {
+                push path, seg;
+            }
+        }
+        return "/" + path.join("/");
+    }
+
+    #! Returns the relative path for a path below the virtual working directory, or @ref nothing for another path
+    private:internal static *string getVirtualCwdRelativePath(string path) {
+        list<string> segs = path.split("/");
+        if (segs.size() < 2 || segs[0] !== "") {
+            return;
+        }
+        *list<*string> m = (segs[1] =~ x/^qore-cwd-([a-z0-9]+)-([0-9]+)$/);
+        if (!m || m[0] != cwd_token) {
+            return;
+        }
+        int level = m[1].toInt();
+        int i = 2;
+        while (level > 0 && i < segs.size() && segs[i] == AbstractFileLocationHandler::getVirtualCwdName(level - 1)) {
+            --level;
+            ++i;
+        }
+        list<string> rv = ();
+        for (int n = 0; n < level; ++n) {
+            push rv, "..";
+        }
+        rv += select segs[i..], $1 != "";
+        if (!rv) {
+            return ".";
+        }
+        return (level ? "" : "." + DirSep) + rv.join(DirSep);
     }
 
     #! Returns HTTP headers with lower-case names, each with the list of values received

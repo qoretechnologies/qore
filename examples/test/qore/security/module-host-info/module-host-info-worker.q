@@ -31,17 +31,25 @@
 %requires McpServerHandler
 %requires A2aServerHandler
 %requires QoreRepl
+%requires QLS
+%requires DataProvider
+%requires QoreOnnxTools
+%requires FileLocationHandler
 %requires AmbientCallers
 
 #! the modules that the host preloads into each Program
 const Modules = ("Util", "FsUtil", "HttpServerUtil", "HttpServer", "Logger", "ElasticSearchLoggerAppender",
     "OpenSearchLoggerAppender", "SmtpClient", "TelnetClient", "QUnit", "ConnectionProvider", "DatasourceProvider",
-    "EdifactUtil", "McpServerHandler", "A2aServerHandler", "QoreRepl");
+    "EdifactUtil", "McpServerHandler", "A2aServerHandler", "QoreRepl", "QLS", "DataProvider", "QoreOnnxTools",
+    "FileLocationHandler");
 
 #! the kinds of Programs: whether the code may read external information
 const Kinds = {
     "unrestricted": {"restricted": False, "sandboxed": False},
     "restricted": {"restricted": True, "sandboxed": False},
+    # restricted from the start: the code requires the modules that the host's process has loaded, which are not
+    # parsed again for it
+    "restricted-requires": {"restricted": True, "sandboxed": False, "requires": True},
     "sandboxed-restricted": {"restricted": True, "sandboxed": True},
     # a sandbox that allows everything: it governs the code without restricting it from external information
     "sandboxed": {"restricted": False, "sandboxed": True},
@@ -75,11 +83,8 @@ class SmtpRecorder {
     private run() {
         on_exit done.dec();
         while (True) {
-            *Socket s = server.accept(60s);
-            if (!s) {
-                lines.push("NO-CONNECTION");
-                return;
-            }
+            # no timeout: the loop ends with the "STOP" connection of stop(), however long the checks take
+            Socket s = server.accept();
             s.send("220 q7586 ESMTP\r\n");
             string line = trim(SmtpRecorder::readLine(s));
             if (line == "STOP") {
@@ -171,6 +176,18 @@ hash<auto> may_read = {
     "repl_cd": "Changed to: " + cwd,
     "lent_errpage": True,
     "lent_layout": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
+    "lent_layout_set": sprintf("%s|%s|%s", ENV.Q7586_SECRET, hostname, pid),
+    # an appender of the host keeps its fields whatever code logs through it
+    "lent_logger_line": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
+    "smtp_async": "connected",
+    "smtp_async_ehlo": "EHLO " + hostname,
+    "qls_expand": ENV.Q7586_SECRET + "/" + ENV.Q7586_SECRET + "/d",
+    "qls_moddirs": QLS::DocumentLinks::getEnvModuleDirs(),
+    "dp_failures": ("q7586-no-such-data-provider-module",),
+    "onnx_python": ENV.QORE_ONNX_PYTHON,
+    "file_eff_virtual": False,
+    "file_resolved": "q7586-b",
+    "file_resolved_up": "q7586-b",
     "grant_barrier": tmp_host,
     "grant_capability": tmp_host,
     "lent_tmp": tmp_host,
@@ -218,6 +235,15 @@ hash<auto> may_not_read = may_read + {
     "repl_pwd": "REPL-ERROR",
     "repl_cd": "Changed directory",
     "lent_errpage": False,
+    # a lent layout lends nothing: the code that calls its format methods gets no host values
+    "lent_layout": "||",
+    "lent_layout_set": "||",
+    "smtp_async_ehlo": "EHLO localhost",
+    "qls_expand": "//d",
+    "qls_moddirs": (),
+    "dp_failures": ("QORE_DATA_PROVIDERS[0]",),
+    "onnx_python": "python3",
+    "file_eff_virtual": True,
     # a lent object lends nothing
     "lent_tmp": tmp_free,
     "lent_url": "http://127.0.0.1:8080",
@@ -225,23 +251,43 @@ hash<auto> may_not_read = may_read + {
 
 # the values must differ, or the checks would not show what the code gets
 foreach string k in (keys may_read) {
-    if (may_read{k} === may_not_read{k} && k !~ /^(norm_abs|norm_explicit|rel|rel_abs|rel_dot|rel_dotdir|rel_sib|smtp|edifact_explicit|grant_.*|lent_layout)$/) {
+    if (may_read{k} === may_not_read{k} && k !~ /^(norm_abs|norm_explicit|rel|rel_abs|rel_dot|rel_dotdir|rel_sib|smtp|smtp_async|edifact_explicit|grant_.*|lent_logger_line|file_resolved.*)$/) {
         check("setup/" + k, "distinct values", "the same value");
     }
 }
 
-# objects that the host lends: of the AmbientCallers module, an HTTP server and a logger layout
+# objects that the host lends: of the AmbientCallers module, an HTTP server, a logger layout and loggers whose
+# appenders write to the host's streams
 AmbientCallers::LentWorker lent();
 HttpServer::HttpServer host_server();
 Logger::LoggerLayoutPattern host_layout("%h|%P|%E{Q7586_SECRET}");
+StringOutputStream host_log_stream();
+Logger::Logger host_logger("q7586-host", Logger::LoggerLevel::getLevelInfo());
+{
+    Logger::LoggerAppenderStream app("host", new Logger::LoggerLayoutPattern("%h|%P|%E{Q7586_SECRET}%n"),
+        new StreamWriter(host_log_stream));
+    app.open();
+    host_logger.addAppender(app);
+}
+# a logger whose layout the Programs take and set a pattern of
+Logger::Logger host_logger2("q7586-host2", Logger::LoggerLevel::getLevelInfo());
+{
+    Logger::LoggerAppenderStream app("host2", new Logger::LoggerLayoutPattern("%m%n"),
+        new StreamWriter(new StringOutputStream()));
+    host_logger2.addAppender(app);
+}
+string requires = (map sprintf("%%requires %s\n", $1), Modules + ("AmbientCallers",)).join("");
 
 SmtpRecorder smtp();
+# the server's thread ends also if a check raises an exception
+on_exit smtp.stop();
 
 foreach hash<auto> mode in (Modes.pairIterator()) {
     foreach hash<auto> kind in (Kinds.pairIterator()) {
         string key = kind.key + "/" + mode.key;
-        # the host creates the Program, preloads the modules into it and then restricts it
-        Program p(PO_MODERN);
+        # the host creates the Program, preloads the modules into it and then restricts it, or creates it restricted
+        # and the code requires the modules
+        Program p(PO_MODERN | (kind.value.requires ? PO_NO_EXTERNAL_INFO : 0));
         p.setExecMode(mode.value);
         if (kind.value.sandboxed) {
             SandboxManager sm();
@@ -249,21 +295,38 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
             sm.setFilesystemDefaultPolicy(True);
             p.setSandboxManager(sm);
         }
-        map p.loadModule($1), Modules;
-        # loaded by the worker (also into a qcc executable of the worker)
-        p.loadModule("AmbientCallers");
-        if (kind.value.restricted) {
-            p.setParseOptions(PO_NO_EXTERNAL_INFO);
+        if (kind.value.requires) {
+            p.parse(requires + child_source, "module-host-info-child");
+        } else {
+            map p.loadModule($1), Modules;
+            # loaded by the worker (also into a qcc executable of the worker)
+            p.loadModule("AmbientCallers");
+            if (kind.value.restricted) {
+                p.setParseOptions(PO_NO_EXTERNAL_INFO);
+            }
+            p.parse(child_source, "module-host-info-child");
         }
-        p.parse(child_source, "module-host-info-child");
         p.setGlobalVarValue("q_hostname", hostname);
         p.setGlobalVarValue("q_smtp_port", smtp.port);
         p.setGlobalVarValue("q_lent", lent);
         p.setGlobalVarValue("q_server", host_server);
         p.setGlobalVarValue("q_layout", host_layout);
+        p.setGlobalVarValue("q_logger", host_logger);
+        p.setGlobalVarValue("q_logger2", host_logger2);
+        p.setGlobalVarValue("q_reldir", ENV.Q7586_RELDIR);
         p.setGlobalVarValue("q_r", {});
+        int log_size = host_log_stream.getData().size();
         p.run();
         hash<auto> r = p.getGlobalVariable("q_r");
+        # the line that the host's appender wrote while the code logged through the host's logger
+        r.lent_logger_line = trim(host_log_stream.getData().substr(log_size));
+        # the effective location of a file resource: whether it names the virtual working directory and no
+        # directory of the real one
+        if (r.file_eff.typeCode() == NT_STRING && r.file_eff =~ /^file:/) {
+            string eff = decode_url(r.file_eff);
+            r.file_eff_virtual = eff =~ /\/qore-cwd-[a-z0-9]+-[0-9]+\// && eff.find(cwd) < 0;
+            delete r.file_eff;
+        }
         # the task IDs: whether they contain the PID (an error as it is)
         r.mcp_pid = r.mcp_id =~ /^task-/ ? r.mcp_id.find("-" + pid + "-") >= 0 : r.mcp_id;
         r.a2a_pid = r.a2a_id =~ /^task-/ ? r.a2a_id.find("-" + pid + "-") >= 0 : r.a2a_id;
@@ -273,6 +336,7 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
             }
         }
         r.smtp_ehlo = r.smtp == "connected" ? smtp.lines.get(30s) : NOTHING;
+        r.smtp_async_ehlo = r.smtp_async == "connected" ? smtp.lines.get(30s) : NOTHING;
         hash<auto> expected = kind.value.restricted ? may_not_read : may_read;
         foreach string k in (keys expected) {
             check(key + "/" + k, expected{k}, r{k});
@@ -281,5 +345,4 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
     }
 }
 
-smtp.stop();
 map printf("%s\n", $1), results;

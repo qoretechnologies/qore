@@ -75,6 +75,9 @@ QoreValue QoreLoggerAppenderWithLayout::serializeImpl(ExceptionSink* xsink, cons
         assert(this->layout);
         layout = this->layout->objectRefSelf();
     }
+    // the layout formats the event for the appender: an appender of the host keeps its fields whatever code logs
+    // through it (qore#7586)
+    QoreLoggerAppenderFormatHelper appender_format_helper;
     if (e && llp) {
         return llp->format(xsink, event, event, e);
     }

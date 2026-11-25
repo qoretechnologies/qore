@@ -40,6 +40,40 @@ SimpleRefHolder<QoreStringNode> QoreLoggerLayoutPattern::LineDelimeter(new QoreS
 SimpleRefHolder<QoreStringNode> QoreLoggerLayoutPattern::LineDelimeter(new QoreStringNode("\n"));
 #endif
 
+// the depth of the public format calls of code restricted from external information in this thread (qore#7586)
+static thread_local int logger_host_info_suppressed = 0;
+// true while an appender formats in this thread
+static thread_local bool logger_appender_formats = false;
+
+QoreLoggerHostInfoHelper::QoreLoggerHostInfoHelper() {
+    if (!logger_appender_formats && !QoreLoggerLayoutPattern::callerMayReadExternalInfo()) {
+        ++logger_host_info_suppressed;
+        set = true;
+    }
+}
+
+QoreLoggerHostInfoHelper::~QoreLoggerHostInfoHelper() {
+    if (set) {
+        --logger_host_info_suppressed;
+    }
+}
+
+bool QoreLoggerHostInfoHelper::suppressed() {
+    return logger_host_info_suppressed > 0 && !logger_appender_formats;
+}
+
+QoreLoggerAppenderFormatHelper::QoreLoggerAppenderFormatHelper() : prev(logger_appender_formats) {
+    logger_appender_formats = true;
+}
+
+QoreLoggerAppenderFormatHelper::~QoreLoggerAppenderFormatHelper() {
+    logger_appender_formats = prev;
+}
+
+bool QoreLoggerAppenderFormatHelper::active() {
+    return logger_appender_formats;
+}
+
 QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEvent* ev, const QoreStringNode* key,
         const QoreStringNode* option, ExceptionSink* xsink) const {
     //printd(5, "QoreLoggerLayoutPattern::resolveField() key: '%s' (%llu) option: %p\n", key->c_str(), key->size(),
@@ -80,7 +114,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
         case 'E': {
             // the environment is external information (qore#7586)
             // no variable without an option (ex: "%E" instead of "%E{HOME}")
-            if (!host_info || !option) {
+            if (!host_info || QoreLoggerHostInfoHelper::suppressed() || !option) {
                 return new QoreStringNode;
             }
             return SystemEnvironment::getAsStringNode(option->c_str());
@@ -99,7 +133,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
         }
         case 'h': {
             // the hostname is external information (qore#7586)
-            if (!host_info) {
+            if (!host_info || QoreLoggerHostInfoHelper::suppressed()) {
                 return new QoreStringNode;
             }
             return HostName->stringRefSelf();
@@ -173,7 +207,7 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
         }
         case 'P': {
             // the PID is external information (qore#7586)
-            if (!host_info) {
+            if (!host_info || QoreLoggerHostInfoHelper::suppressed()) {
                 return new QoreStringNode;
             }
             return new QoreStringNodeMaker("%d", getpid());

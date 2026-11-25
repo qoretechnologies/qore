@@ -62,8 +62,10 @@
     The hostname, the PID and the values of environment variables are information about the host, which code
     restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
     @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()") may not
-    read: the \c %%h, \c %%P and \c %%E fields of a layout that such code created are empty.  It is decided when
-    the layout is created, so a layout that the host created keeps its fields whatever code logs through it (see
+    read: the \c %%h, \c %%P and \c %%E fields of a layout that such code created, or whose pattern it set
+    (@ref Qore::Logger::LoggerPattern::setPattern() "setPattern()"), are empty, and so are those that such code gets
+    by calling format() itself, also with a layout of the host; the appender of a layout of the host formats them
+    whatever code logs through it, as the file names of the Logger file appenders do (see
     @ref sandbox_ambient_host_data).
 
     For example, the \c LoggerLayoutPattern with the conversion pattern \c "%r [%t] %-5p %c - %m%n" will output
@@ -95,6 +97,8 @@ LoggerLayoutPattern::constructor(string pattern = "%r [%t] %p %c - %m%n") {
     Format event record
 */
 string LoggerLayoutPattern::format(LoggerEvent[QoreLoggerEvent] event) {
+    // a direct call by code restricted from external information formats no values of the host (qore#7586)
+    QoreLoggerHostInfoHelper host_info_helper;
     return llp->format(xsink, obj_event, obj_event, *event);
 }
 
