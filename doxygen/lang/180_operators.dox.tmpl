@@ -2463,7 +2463,13 @@ if (x || y)
     @subsection assignment_operator Assignment Operator (=)
 
     @par Synopsis
-    Assigns a value to an lvalue and returns the value assigned.
+    Assigns a value to an lvalue and returns the value stored in the lvalue.
+
+    @anchor assignment_value The value of an assignment is the value stored in the \a lvalue, in every
+    @ref execution_modes "execution mode": the value converted to the declared type of the \a lvalue, or to the value
+    type of the hash or list holding it (ex: with <tt>hash&lt;string, softint&gt; h</tt>, <tt>(h.x = "5")</tt> is the int
+    5, and an untyped list or hash element stores a container without its complex type), as for the
+    @ref compound_assignment_conversion "compound assignment operators".
 
     @anchor lvalue_evaluation_order The keys and indices of an lvalue path are evaluated from the root out, and the index of its last step after them, in every @ref execution_modes "execution mode", as when the path is read as a value: <tt>h.(k1()).(k2())[i()] = v()</tt> evaluates \c v(), \c k1(), \c k2() and \c i() in this order.  The same order applies to every operator that changes an lvalue (compound assignments, \c ++ and \c --, @ref remove "remove", @ref delete "delete", @ref splice "splice", @ref extract "extract", @ref push "push", @ref unshift "unshift", @ref pop "pop") and to a @ref lvalue_references "reference" to it; a key or an index of the path that raises an exception stops the evaluation, and the lvalue is not changed.
 

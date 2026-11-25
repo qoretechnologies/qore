@@ -11059,22 +11059,30 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             return loadVarRef(left_var, error, "assignment result", assign->getLeft());
         }
     } else if (assign->getLeft().hasNode()) {
+        // the fast paths below give the value assigned, while the value of the assignment is the value stored, which
+        // the element's type can convert (a softint element stores an integer for a string, an untyped element
+        // strips a complex type), as the AST interpreter gives it: an assignment whose value is used takes the lvalue
+        // path, which gives the value stored (qore#7575)
+        bool fast_store = !is_weak && !assign->needsReturnValue();
         // Fast path: const-key hash subscript → LoadLocal + HashKeyStore (no EXPR_TREE)
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (!is_weak && isConstKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_name, key_expr)) {
+        if (fast_store && isConstKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_name,
+                key_expr)) {
             return emitHashKeyDirectStore(container_var, key_name, key_expr, right, expr,
                 assign->loc, error);
         }
         // Fast path: dynamic-key hash subscript → LoadLocal + HashKeyStoreDynamic (no EXPR_TREE)
-        if (!is_weak && isDynamicKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_expr)) {
+        if (fast_store && isDynamicKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var,
+                key_expr)) {
             return emitHashKeyDynamicStore(container_var, key_expr, right, expr,
                 assign->loc, error);
         }
         // Fast path: const-index list subscript → LoadLocal + ListIndexStore (no EXPR_TREE)
         QoreValue index_expr;
-        if (!is_weak && isConstIndexListSubscript(foreach_element_locals, assign->getLeft(), container_var, index_expr)) {
+        if (fast_store && isConstIndexListSubscript(foreach_element_locals, assign->getLeft(), container_var,
+                index_expr)) {
             return emitListIndexDirectStore(container_var, index_expr, right, expr,
                 assign->loc, error);
         }
