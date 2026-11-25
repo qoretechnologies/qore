@@ -4185,6 +4185,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(match_block);
         }
+        // with %broken-loop-statement, the switch statement takes a continue as a break, as
+        // SwitchStatement::execImpl() does (qore#7606)
+        QoreIRBasicBlock* switch_continue = switch_stmt->getSemanticPolicy().brokenLoop() ? end_block : nullptr;
 
         struct CaseInfo {
             const CaseNode* node = nullptr;
@@ -4259,7 +4262,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchInt(switch_val, default_block_for_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            pushFlowTarget({end_block, nullptr, true, cleanup_stack.size(), QoreIRValue()});
+            pushFlowTarget({end_block, switch_continue, true, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -4375,7 +4378,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createSwitchString(switch_val, default_block_for_str_switch, switch_cases);
 
             // Lower case bodies (same as before)
-            pushFlowTarget({end_block, nullptr, true, cleanup_stack.size(), QoreIRValue()});
+            pushFlowTarget({end_block, switch_continue, true, cleanup_stack.size(), QoreIRValue()});
             for (size_t i = 0; i < cases.size(); ++i) {
                 builder.setBlock(cases[i].block);
                 if (cases[i].node->code) {
@@ -4492,7 +4495,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(end_block);
         }
 
-        pushFlowTarget({end_block, nullptr, true, cleanup_stack.size(), QoreIRValue()});
+        pushFlowTarget({end_block, switch_continue, true, cleanup_stack.size(), QoreIRValue()});
         for (size_t i = 0; i < cases.size(); ++i) {
             builder.setBlock(cases[i].block);
             if (cases[i].node->code) {
