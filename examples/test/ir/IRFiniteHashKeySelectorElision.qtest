@@ -39,12 +39,13 @@ class IRFiniteHashKeySelectorElisionTest inherits QUnit::Test {
 
         #! the functions whose hashes are replaced, with the number of hashes
         const Replaced = {
+            "constMemberKey": 1,
             "finiteKey": 1, "directKey": 1, "linkedKey": 1, "repeatedKey": 1, "duplicateKey": 1, "unicodeKey": 1,
             "extremeKey": 1, "loopKey": 1, "observableKey": 1, "twoHashKey": 2, "copiedKey": 1, "sideEffectKey": 1,
             "wideKey": 1, "wideConstantKey": 1, "partialKey": 2, "floatKey": 1, "boolKey": 1, "autoKey": 1,
         };
         #! the functions whose key and its literals are removed too
-        const SelectorRemoved = ("finiteKey", "directKey", "repeatedKey", "duplicateKey", "unicodeKey", "extremeKey",
+        const SelectorRemoved = ("finiteKey", "constMemberKey", "directKey", "repeatedKey", "duplicateKey", "unicodeKey", "extremeKey",
             "loopKey", "twoHashKey", "sideEffectKey", "wideKey", "wideConstantKey", "partialKey", "floatKey", "boolKey",
             "autoKey");
         #! the functions whose key is used otherwise, so it stays while the hash is replaced
