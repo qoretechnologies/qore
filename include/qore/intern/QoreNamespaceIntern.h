@@ -52,6 +52,7 @@
 #include <unordered_set>
 #include <vector>
 #include <list>
+#include <memory>
 
 //! the guidance given when a module declares a public thread_local variable or an AOT module image holds one
 /** A module's public variable is one variable shared by every Program that imports the module (qore#5662).
@@ -166,6 +167,17 @@ public:
     std::string path;
 
     QoreNamespace* ns = nullptr;
+
+    //! The mortal declarations of the parent Program that the copy of its namespaces for a child Program did not copy,
+    //! referenced (qore#7607); set only in the root namespace of a child Program
+    /** The code, constants, typedefs and global variables that the child inherits can name declarations that it does
+        not inherit (PO_NO_INHERIT_USER_CLASSES, PO_NO_INHERIT_SYSTEM_CLASSES for the declarations that a binary module
+        added to the parent at run time, ...; a public function naming a class that is not public), which are freed
+        with the parent, which the child can outlive; also those that the parent kept so, which a child of the child
+        inherits as well; released when the namespace is destroyed, after its content (declared before it; see
+        qore_root_ns_private::refLeftOutDecls())
+    */
+    std::unique_ptr<QoreTypeDeclRefs> left_out_decl_refs;
 
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
@@ -2688,12 +2700,19 @@ public:
         // Program, as when it imports the modules (qore#5664)
         markCopiedModuleVarImportsFrom(old);
 
+        // the declarations of the parent that the copy left out are kept with it (qore#7607)
+        refLeftOutDecls(old);
+
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
 
     //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src
     DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
+
+    //! References the mortal declarations of \a src, the root namespace of the parent Program from which this one was
+    //! copied, that the copy did not copy (left_out_decl_refs; qore#7607)
+    DLLLOCAL void refLeftOutDecls(const qore_root_ns_private& src);
 
     DLLLOCAL ~qore_root_ns_private() {
         releaseRuntimeVariants();

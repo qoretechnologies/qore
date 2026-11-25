@@ -3975,6 +3975,28 @@ public:
         }
     }
 
+    //! References the given declarations, which are distinct; the caller holds the type lock (qore#7607)
+    DLLLOCAL void addDistinct(const std::vector<const QoreClass*>& n_classes,
+            const std::vector<const TypedHashDecl*>& n_hashdecls, const std::vector<const QoreEnumDecl*>& n_enums) {
+        // reserved first, so that nothing can throw once the references are taken
+        classes.reserve(classes.size() + n_classes.size());
+        hashdecls.reserve(hashdecls.size() + n_hashdecls.size());
+        enums.reserve(enums.size() + n_enums.size());
+        for (const QoreClass* qc : n_classes) {
+            QoreClass* c = const_cast<QoreClass*>(qc);
+            classes.push_back(c);
+            qore_class_private::refClass(*c);
+        }
+        for (const TypedHashDecl* hd : n_hashdecls) {
+            hashdecls.push_back(hd);
+            hd->ref();
+        }
+        for (const QoreEnumDecl* ed : n_enums) {
+            enums.push_back(ed);
+            qore_enum_decl_private::get(*ed)->ref();
+        }
+    }
+
     DLLLOCAL ~qore_type_decl_refs_private() {
         for (QoreClass* c : classes) {
             qore_class_private::derefClass(*c, false, false, false);
@@ -4174,6 +4196,42 @@ void QoreTypeDeclRefs::addMortal(const QoreTypeInfo* ti) {
         throw;
     }
     priv = p.release();
+}
+
+void QoreTypeDeclRefs::addMortalDecls(const std::vector<const QoreClass*>& classes,
+        const std::vector<const TypedHashDecl*>& hashdecls, const std::vector<const QoreEnumDecl*>& enums) {
+    assert(!priv);
+    if (classes.empty() && hashdecls.empty() && enums.empty()) {
+        return;
+    }
+#ifdef DEBUG
+    for (const QoreClass* qc : classes) {
+        assert(!qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner.isTypeOwnerSystem());
+    }
+    for (const TypedHashDecl* hd : hashdecls) {
+        assert(!typed_hash_decl_private::get(*hd)->type_owner.isTypeOwnerSystem());
+    }
+    for (const QoreEnumDecl* ed : enums) {
+        assert(!qore_enum_decl_private::get(*ed)->type_owner.isTypeOwnerSystem());
+    }
+#endif
+    std::unique_ptr<qore_type_decl_refs_private> p(new qore_type_decl_refs_private);
+    {
+        // under the type lock, as for add()
+        AutoLocker al(ctl);
+        p->addDistinct(classes, hashdecls, enums);
+    }
+    priv = p.release();
+}
+
+void QoreTypeDeclRefs::getDecls(std::vector<const QoreClass*>& classes,
+        std::vector<const TypedHashDecl*>& hashdecls, std::vector<const QoreEnumDecl*>& enums) const {
+    if (!priv) {
+        return;
+    }
+    classes.insert(classes.end(), priv->classes.begin(), priv->classes.end());
+    hashdecls.insert(hashdecls.end(), priv->hashdecls.begin(), priv->hashdecls.end());
+    enums.insert(enums.end(), priv->enums.begin(), priv->enums.end());
 }
 
 void QoreTypeDeclRefs::add(const QoreTypeInfo* ti) {
