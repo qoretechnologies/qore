@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    get_parent_caller_location() returns the frame at the given offset of the call stack, as get_thread_call_stack()
+    lists them, and nothing past the end of the stack or for a negative offset (qore#7564)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ParentCallerLocationTest
+
+#! the frames that get_parent_caller_location() gives at every offset, and get_thread_call_stack()
+hash<auto> sub frames() {
+    list<hash<CallStackInfo>> cs = get_thread_call_stack();
+    list<auto> pcl = ();
+    for (int i = 0; i <= cs.size() + 1; ++i) {
+        pcl += get_parent_caller_location(i);
+    }
+    return {"cs": cs, "pcl": pcl, "negative": get_parent_caller_location(-1), "default": get_parent_caller_location()};
+}
+
+hash<auto> sub f() {
+    return g();
+}
+
+hash<auto> sub g() {
+    return frames();
+}
+
+class C {
+    hash<auto> m() {
+        return frames();
+    }
+
+    static hash<auto> s() {
+        return (auto sub () { return frames(); })();
+    }
+}
+
+class ParentCallerLocationTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ParentCallerLocationTest", "1.0") {
+        addTestCase("functions", \functionTest());
+        addTestCase("methods and closures", \methodTest());
+        set_return_value(main());
+    }
+
+    #! checks the frames against the call stack: every frame but the innermost (the calls of the two functions)
+    private check(hash<auto> h, string label) {
+        list<hash<CallStackInfo>> cs = h.cs;
+        assertEq("get_parent_caller_location", h.pcl[0].function, label + ": offset 0");
+        for (int i = 1; i < cs.size(); ++i) {
+            hash<auto> p = h.pcl[i];
+            assertEq(cs[i]{"function", "line", "file", "programid", "type"}, p{"function", "line", "file",
+                "programid", "type"}, sprintf("%s: offset %d", label, i));
+        }
+        # past the end of the stack
+        assertNothing(h.pcl[cs.size()], label + ": past the end");
+        assertNothing(h.pcl[cs.size() + 1], label + ": past the end + 1");
+        assertNothing(h.negative, label + ": a negative offset");
+        # the default offset is the frame of the code that called the function that calls it
+        assertEq(cs[1].function, h."default".function, label + ": the default offset");
+    }
+
+    functionTest() {
+        hash<auto> h = f();
+        assertEq("frames", h.pcl[1].function);
+        assertEq("g", h.pcl[2].function);
+        assertEq("f", h.pcl[3].function);
+        check(h, "functions");
+    }
+
+    methodTest() {
+        hash<auto> h = new C().m();
+        assertEq("C::m", h.pcl[2].function);
+        check(h, "method");
+        h = C::s();
+        check(h, "closure in a static method");
+    }
+}
