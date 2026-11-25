@@ -177,9 +177,21 @@ bool sub pending() { return dbg_runtime_refresh_pending(); }";
     }
 
     addSystemAfterAttachTest() {
-        # a declaration added one at a time to a namespace already attached to a Program keeps the lifetime handling
-        # of a system declaration: a function variant added after it that names it does not keep it
-        testSkip("qore#7649: declarations added with addSystemClass() to an attached Program namespace");
+        skipIfNoDebugging();
+        # a class added one at a time (addSystemClass()) to a namespace already attached to a Program is owned by that
+        # Program, as one attached with its namespace is: an imported function added after it that names it keeps it
+        # after the Program is deleted (qore#7649)
+        checkFreed(sub () {
+            Program q(PO_NEW_STYLE);
+            Program p = getSource(1, 5);
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_one");
+            delete p;
+            q.parse("auto sub call(softlist<auto> args) { return call_function_args(\"dbg_rt_one\", args); }", "q");
+            # the call checks its argument against the type of the class after the Program that added it is deleted
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtNs::DbgRtOne", \q.callFunction(), ("call", ("x",)),
+                "a wrong argument is checked against the class's type");
+            assertEq(1, q.callFunction("call", (NOTHING,)), "NOTHING");
+        }, "a class added one at a time");
     }
 
     importClassTest() {

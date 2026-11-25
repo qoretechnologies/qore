@@ -439,6 +439,24 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    // variant 5: a namespace is attached empty, then a class is added to it one at a time (addSystemClass()), then a
+    // function whose parameter names the class (qore#7649)
+    if (variant == 5) {
+        if (sep != std::string::npos) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 5 takes a name without '::'");
+        }
+        RootQoreNamespace* root = getProgram()->getRootNS();
+        root->addNamespace(new QoreNamespace(inner.c_str()));
+        QoreNamespace* ans = getProgram()->findNamespace(QoreString(inner.c_str()));
+        if (!ans) {
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attached namespace was not found");
+        }
+        QoreClass* one = new QoreClass("DbgRtOne", (path + "::DbgRtOne").c_str());
+        ans->addSystemClass(one);
+        ans->addBuiltinVariant("dbg_rt_one", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            one->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+        return QoreValue();
+    }
     // variant 4: variant 2 with a failure of the marking event of the attach of a namespace (see below)
     bool fail_refresh = variant == 4;
     if (fail_refresh) {
