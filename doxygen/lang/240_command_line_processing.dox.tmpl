@@ -197,6 +197,9 @@ example.q:4: error: MISSING-RETURN: ...
     @endverbatim
     The location includes a 1-based column when available. A diagnostic without a line starts with the
     file name, or with \c qore if the file is unknown. Embedded newlines appear as <tt>\\n</tt>.
+    As in the legacy format, at most @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" diagnostics are written
+    (10 by default); when more were raised, the last line is
+    <tt>qore: note: maximum exception count reached (</tt><em>n</em><tt>); suppressing further output</tt>.
     Use <tt>\--diag-format=legacy</tt> for the original multi-line exception and warning reports.
     Both formats execute the program after a successful parse. Warnings allow execution unless
     <tt>\--warnings-are-errors</tt> is set. Unhandled runtime exceptions retain their stack traces.
