@@ -2930,7 +2930,8 @@
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
-      setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
+      setups of restricted code get the request without its credentials and without the objects of the server, such
+      as its logger (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
