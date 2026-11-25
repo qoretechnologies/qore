@@ -552,9 +552,9 @@ sub closure_var_hash_cycle() {
 }
 
 #! a thread reads the closure of a cycle of a closure-bound variable through a weak reference after the collection
-#! of the cycle was decided, and calls it after the collection has taken the variable's value: the call reads
-#! nothing for the variable (#7556), and a value that it assigns to the variable is released with the variable
-#! (qore#7546)
+#! of the cycle has taken the variable's value, and calls it after the value was released: the call reads nothing
+#! for the variable, and a value that it assigns to the variable is released with the variable (qore#7546); a closure
+#! read before the value was taken keeps the cycle (qore#7556; weak-read-collected-set-member.qtest)
 sub closure_var_late_write() {
     int destroyed = T::destroyed.getCount();
     Counter held(1);
@@ -563,7 +563,7 @@ sub closure_var_late_write() {
     background sub () {
         on_exit done.dec();
         code c2 = make_closure_var_hash_cycle();
-        call_function("dbg_hold_closure_var_collect", "cvh", held, release);
+        call_function("dbg_hold_closure_var_collected", "cvh", held, release);
         remove c2;
     }();
     if (held.waitForZero(HoldTimeout)) {

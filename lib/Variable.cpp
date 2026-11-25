@@ -6054,6 +6054,7 @@ std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook
 std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook{nullptr};
 std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook{nullptr};
 std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_decided_hook{nullptr};
+std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collected_hook{nullptr};
 #endif
 
 void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
@@ -6186,19 +6187,30 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
 #endif
                 // a reference taken since the decision (a call of a closure that captured the variable, made through
                 // a weak reference to an object of the set) keeps the value: the collection is abandoned, and the
-                // later releases decide again (qore#7546)
+                // later releases decide again (qore#7546); so does a reference taken since to another member or a
+                // node of the set (an object of the set or a closure that captured the variable, read through a weak
+                // reference), which the members' and nodes' counts recorded at the decision show (qore#7556).  Lock
+                // order: the variable's rml, then the rlck of each member in turn, then the variable's rlck
                 bool abandoned;
                 {
                     QoreAutoVarRWWriteLocker al(rml);
-                    abandoned = abandonCollectionIfReferenced(decided_refs, decided_releases);
+                    abandoned = abandonCollectionIfReferenced(decided_refs, decided_releases,
+                        cycle_cleanup.referencedSinceDecision());
                     if (!abandoned) {
                         // the value is taken in the same critical section, and released when the deletion is made
                         takeCollectedValue();
                     }
                 }
+                // the record's weak references are released with no lock held
+                cycle_cleanup.releaseDecision();
 #ifdef DEBUG
                 if (!abandoned) {
                     if (qore_dbg_closure_var_collect_hook_t hook = qore_dbg_closure_var_collect_hook.load()) {
+                        hook(getName());
+                    }
+                    // the value has been taken and is not released yet; tests hold this thread here, so that another
+                    // thread reads a closure that captured the variable meanwhile
+                    if (qore_dbg_closure_var_collect_hook_t hook = qore_dbg_closure_var_collected_hook.load()) {
                         hook(getName());
                     }
                 }
@@ -6212,7 +6224,10 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                     // this dereference decides again, with the count as it is now: the reference taken since can
                     // have been released already, and its release, which found the collection claimed by this
                     // dereference, decided nothing; a reference still held makes the decision fail, and its release
-                    // decides then
+                    // decides then.  The other members of a set with nodes are still retained by this dereference
+                    // (cycle_cleanup), so a decision made while they are fails at them; their releases at the end of
+                    // this dereference decide then, and the one that finds a node held from outside the set watches
+                    // it (RSet::canDelete(), qore#7556)
                     goto decide_again;
                 }
             }

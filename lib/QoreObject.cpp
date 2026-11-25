@@ -2517,6 +2517,9 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             }
 #endif
 
+            // a dereference that abandons a collection because another value of the set has been referenced since
+            // the decision decides again: see below (qore#7556)
+        decide_again:
             while (true) {
                 bool recalc = false;
                 {
@@ -2663,12 +2666,36 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // a weak reference: a call, or a value read from one) keeps the object: the deletion is abandoned, and that
         // thread's last release decides again, so that a call that holds a reference never runs while the object is
         // destroyed (qore#7509)
-        bool abandoned = rrf ? !takeCollectDeleteReference(decided_refs, decided_releases)
+        // So does a reference taken since the decision to another object or closure-bound variable of the set, or to
+        // a list, hash, closure or reference of it (read through a weak reference), which the counts recorded at the
+        // decision show (RSetDerefHelper::referencedSinceDecision(), qore#7556); this dereference then decides again.
+        // Lock order: the object's rml, then the rlck of each member in turn, then the object's rlck
+        bool others_referenced = rrf && cycle_cleanup.referencedSinceDecision();
+        bool abandoned = rrf ? !takeCollectDeleteReference(decided_refs, decided_releases, others_referenced)
             : !takeLastDeleteReference();
         if (abandoned) [[unlikely]] {
             recursive_ref_found = prev_recursive_ref_found;
             sl.unlock();
             qodh.abandonDelete();
+            if (rrf) {
+                // the record's weak references are released with no lock held
+                cycle_cleanup.releaseDecision();
+                if (others_referenced) {
+                    printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' another value of the set "
+                        "referenced since the collection was decided; deciding again\n", this, getClassName());
+                    // this dereference decides again with the counts as they are now, so that the decision does not
+                    // depend on what the release of the reference taken since decided (a release of a member made
+                    // since finds its set invalidated and rescans; a node's release decides nothing unless the node
+                    // is watched).  A reference still held makes the decision fail.  When the set has nodes, the
+                    // other members are still retained by this dereference (cycle_cleanup), so the decision fails
+                    // at them; their releases at the end of this dereference (~RSetDerefHelper()) decide then, and
+                    // the one that finds a node held from outside the set watches it (RSet::canDelete()), so that the
+                    // node's release decides once it is released
+
+                    rrf = false;
+                    goto decide_again;
+                }
+            }
             if (!qodh.getRefs()) {
                 // the thread that took the count from zero took the weak reference that the dereference to zero that
                 // deletes the object releases (customRefIntern()); this dereference to zero does not delete it
