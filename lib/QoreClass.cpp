@@ -9183,16 +9183,23 @@ bool qore_class_private::isRestrictedCode() const {
     }
     QoreProgram* p = spgm.load();
     if (!p) {
-        return released_restricted.load();
+        // fails closed: true whenever the source Program could have been restricted when it released the class
+        return released_sandboxed.load();
     }
     // the current Program cannot be deleted while the thread runs in it
     if (p == getProgram()) {
         return qore_program_is_restricted(p);
     }
-    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
-    std::lock_guard<std::mutex> al(dataLock());
-    p = spgm.load();
-    return p ? qore_program_is_restricted(p) : released_restricted.load();
+    // the sandboxes are looked up outside the lock of the class data, which takes no other lock
+    p = getReferencedSourceProgram();
+    if (!p) {
+        // released, or being deleted: as for a released source Program
+        std::lock_guard<std::mutex> al(dataLock());
+        return spgm.load() ? true : released_sandboxed.load();
+    }
+    bool rv = qore_program_is_restricted(p);
+    p->deref();
+    return rv;
 }
 
 bool qore_class_private::isSandboxDeclared() const {
