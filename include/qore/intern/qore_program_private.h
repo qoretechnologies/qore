@@ -4725,8 +4725,22 @@ public:
 
         printd(5, "QoreProgram::parseFile(%s)\n", filename);
 
-        FILE *fp;
-        if (!(fp = fopen(open_path ? open_path : filename, "r"))) {
+        FILE *fp = nullptr;
+        {
+            // the file-system policy of the sandbox of the calling code applies to a source that it reads by name:
+            // the file read is the file that the policy checked (qore#7518); a module read from a directory of library
+            // code (open_path) is read as without a policy
+            if (!open_path && q_source_read_policy_applies()) {
+                fp = q_open_policy_checked_source(filename, xsink);
+                if (!fp && *xsink) {
+                    exceptions_raised++;
+                    return;
+                }
+            } else {
+                fp = fopen(open_path ? open_path : filename, "r");
+            }
+        }
+        if (!fp) {
             if ((first_except_only && !exceptions_raised) || !first_except_only)
                 xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
             exceptions_raised++;
