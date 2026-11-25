@@ -228,6 +228,32 @@ static void qore_mark_weak_assignment_sources(const QoreValue& expr) {
     }
 }
 
+//! returns true if a weak or opaque assignment of a value of type \a value_ti to an lvalue of type \a target_ti is
+//! known at parse time to convert the value to a copy (qore#7572)
+/** The value has a definite complex container type (a hashdecl, hash<T> or list<T> with T other than auto) and the
+    lvalue's type strips it (hash, *hash, list, *list, softlist, *softlist, auto! and the auto! containers); in other
+    cases the run-time check of LValueHelper::assign() refuses a conversion that makes a copy; an any lvalue is left to
+    it, as it can hold a reference, through which the value is stored in the referenced lvalue
+*/
+static bool qore_parse_weak_store_converts(const QoreTypeInfo* target_ti, const QoreTypeInfo* value_ti) {
+    if (!QoreTypeInfo::hasType(value_ti)) {
+        return false;
+    }
+    if (!QoreTypeInfo::getTypedHash(value_ti)) {
+        const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexHash(value_ti);
+        if (!vti) {
+            vti = QoreTypeInfo::getUniqueReturnComplexList(value_ti);
+        }
+        if (!vti || vti == autoTypeInfo) {
+            return false;
+        }
+    }
+    return target_ti == hashTypeInfo || target_ti == hashOrNothingTypeInfo
+        || target_ti == listTypeInfo || target_ti == listOrNothingTypeInfo || target_ti == softListTypeInfo
+        || target_ti == softListOrNothingTypeInfo || target_ti == autoNoNarrowTypeInfo
+        || QoreTypeInfo::isNoNarrowContainer(target_ti);
+}
+
 int QoreAssignmentOperatorNode::parseInitMode(QoreValue& val, QoreParseContext& parse_context,
         AssignmentMode mode) {
     int err = parseInitIntern(parse_context, mode);
@@ -655,6 +681,37 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             op_name);
         qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc, metadata);
         if (!err) {
+            err = -1;
+        }
+    }
+
+    // a weak or opaque assignment whose value the lvalue's type is known to convert to a copy is refused: the reference
+    // would designate the copy, a temporary, instead of the value assigned (qore#7572); the cases known only at run
+    // time are refused by LValueHelper::assign()
+    // a reference lvalue stores the value in the referenced lvalue, whose type parse does not know: the run-time check
+    // decides
+    if (!err && !lvalue_err && (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque)
+            && !QoreTypeInfo::isReference(ti)) {
+        const QoreTypeInfo* target_ti = ti;
+        // the type that a variable stores its value with, which the type of the lvalue does not give for the auto!
+        // types (LocalVar::getTypeInfoForLValue())
+        if (left.getType() == NT_VARREF) {
+            const VarRefNode* vrn = left.get<const VarRefNode>();
+            qore_var_t vtype = vrn->getType();
+            const QoreTypeInfo* decl_ti = nullptr;
+            if ((vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) && vrn->ref.id) {
+                decl_ti = vrn->ref.id->getTypeInfoForLValue();
+            } else if ((vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) && vrn->ref.var) {
+                decl_ti = vrn->ref.var->getTypeInfo();
+            }
+            if (decl_ti && qore_parse_weak_store_converts(decl_ti, parse_context.typeInfo)) {
+                target_ti = decl_ti;
+            }
+        }
+        if (qore_parse_weak_store_converts(target_ti, parse_context.typeInfo)) {
+            qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
+                qore_weak_store_conversion_desc(mode == AssignmentMode::Weak,
+                    QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(target_ti)));
             err = -1;
         }
     }

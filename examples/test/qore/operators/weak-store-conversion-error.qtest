@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the compiled child program
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakStoreConversionErrorTest
+
+#! Tests that a weak (:=) or opaque (@=) assignment of a container that the lvalue's type converts to a copy is refused
+/** The lvalue's type (an untyped list element or hash key, any, hash, *hash, list, softlist, hash<auto!>, auto!, ...)
+    would convert the container to a copy of its own, which the weak or opaque reference would designate instead of the
+    value assigned; the assignment is refused with PARSE-TYPE-ERROR where both types are known at parse time, and with
+    RUNTIME-TYPE-ERROR otherwise, while the lvalues that keep the value (auto, hash<auto>, list<auto>, a matching type)
+    store a reference to it (issue #7572).  The run-time cases
+    (weak-store-conversion-error/weak-store-conversion-error.q) run in every execution mode and compiled with AOT at
+    optimization levels 0 and 3 against the same expected output (weak-store-conversion-error.expected); each
+    parse-time case is a script of its own, parsed and run in a child process, and one is compiled with AOT.
+*/
+class WeakStoreConversionErrorTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+        #! the output of the child script
+        string expected_output;
+
+        TmpDir tmp("qore-weak-store-conversion-error-");
+
+        #! the header of the parse-time scripts
+        const ParseHeader = "%new-style\n%strict-args\n%require-types\n%strong-encapsulation\n"
+            "%allow-weak-references\n%allow-opaque-references\n"
+            "hashdecl PcHash { int a = 1; }\n"
+            "class PcHolder { public { hash hh; any av; hash<auto> ha; } }\n";
+
+        #! parse-time cases: name, code, expected error (or "ok" for a script that is parsed and run)
+        const ParseCases = (
+            ("hash", "hash<string, int> th = {\"a\": 1}; hash v; v := th;", "PARSE-TYPE-ERROR"),
+            ("*hash", "hash<string, int> th = {\"a\": 1}; *hash v; v := th;", "PARSE-TYPE-ERROR"),
+            ("list", "list<int> tl = (1,); list v; v := tl;", "PARSE-TYPE-ERROR"),
+            ("softlist", "list<int> tl = (1,); softlist v; v := tl;", "PARSE-TYPE-ERROR"),
+            ("hashdecl into hash", "hash<PcHash> d = <PcHash>{}; hash v; v := d;", "PARSE-TYPE-ERROR"),
+            ("hash<auto!>", "hash<string, int> th = {\"a\": 1}; hash<auto!> v; v := th;", "PARSE-TYPE-ERROR"),
+            ("auto!", "hash<string, int> th = {\"a\": 1}; auto! v; v := th;", "PARSE-TYPE-ERROR"),
+            ("global hash", "our hash gv; hash<string, int> th = {\"a\": 1}; gv := th;", "PARSE-TYPE-ERROR"),
+            ("opaque hash member", "hash<string, int> th = {\"a\": 1}; PcHolder o(); o.hh @= th;",
+                "PARSE-TYPE-ERROR"),
+            ("auto keeps", "hash<string, int> th = {\"a\": 1}; auto v; v := th;", "ok"),
+            ("hash<auto> keeps", "hash<string, int> th = {\"a\": 1}; hash<auto> v; v := th;", "ok"),
+            ("matching type keeps", "hash<string, int> th = {\"a\": 1}; hash<string, int> v; v := th;", "ok"),
+            ("list<auto> keeps", "list<int> tl = (1,); list<auto> v; v := tl;", "ok"),
+            ("plain hash into hash", "hash ph = {}; hash v; v := ph;", "ok"),
+            ("object into any", "PcHolder h(); any v; v := h;", "ok"),
+            ("reference parameter to auto", "sub f(reference r, hash<string, int> v) { r := v; } "
+                "hash<string, int> th = {\"a\": 1}; auto x; f(\\x, th);", "ok"),
+            ("reference local to auto", "hash<string, int> th = {\"a\": 1}; auto x; reference r = \\x; r := th;",
+                "ok"),
+            ("any holding a reference to auto", "hash<string, int> th = {\"a\": 1}; auto x; any r = \\x; r := th;",
+                "ok"),
+        );
+    }
+
+    constructor() : QUnit::Test("WeakStoreConversionError", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/weak-store-conversion-error/weak-store-conversion-error.q";
+        expected_output = ReadOnlyFile::readTextFile(get_script_dir()
+            + "/weak-store-conversion-error/weak-store-conversion-error.expected");
+
+        addTestCase("run-time errors, in every mode", \testModes());
+        addTestCase("run-time errors, compiled with AOT", \testAot());
+        addTestCase("parse-time errors", \testParse());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(expected_output, r.out, mode);
+        }
+    }
+
+    testAot() {
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/weak-store-conversion-error-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(expected_output, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+
+    testParse() {
+        int i = 0;
+        foreach list<string> c in (ParseCases) {
+            string file = sprintf("%s/parse-case-%d.q", tmp.path, ++i);
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(ParseHeader + c[1] + "\nprintf(\"ok\\n\");\n");
+            f.close();
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b %s", env(),
+                qore_bin, file));
+            if (c[2] == "ok") {
+                assertEq(0, r.rc, sprintf("%s: exit code: %s", c[0], r.out));
+                assertEq("ok\n", r.out, c[0]);
+                continue;
+            }
+            assertNeq(0, r.rc, c[0]);
+            assertRegex(c[2] + ": the (weak|opaque) assignment operator ", r.out, c[0]);
+            assertRegex("converts the value to a copy of its own", r.out, c[0]);
+        }
+        # a script that the parse refuses is not compiled
+        string bin = tmp.path + "/parse-case-compiled";
+        string out = backquote(sprintf("%s %s -b --compile --output %s %s/parse-case-1.q 2>&1", env(), qore_bin, bin,
+            tmp.path));
+        assertFalse(is_file(bin), "compiled parse case: " + out);
+        assertRegex("PARSE-TYPE-ERROR: the weak assignment operator ", out, "compiled parse case");
+    }
+}

@@ -1976,7 +1976,9 @@ public:
 
     DLLLOCAL int assignNative(QoreValue val, const char* desc);
 
-    template <bool Lexical, bool Native = false>
+    //! assigns a value; \a WeakOrOpaque for the weak and opaque modes, which refuse a value that the lvalue's type
+    //! converts to a copy (qore#7572): a parameter of the template, so that a normal assignment has no code for it
+    template <bool Lexical, bool Native = false, bool WeakOrOpaque = false>
     DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
             LexicalSemanticPolicy policy);
 
@@ -2148,6 +2150,19 @@ DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
     one must release the reference taken when it was built.
 */
 DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
+
+//! Returns the description of the error of a weak (:=) or opaque (@=) assignment of a container that the lvalue's type
+//! would convert to a copy (qore#7572)
+/** The type of the lvalue (an untyped list element or hash key, any, hash, *hash, list, softlist, hash<auto!>, ...)
+    strips the complex type of the value, which makes a copy of it; the weak or opaque reference would designate that
+    copy, a temporary, instead of the value assigned, so the assignment is refused at parse time where the types are
+    known, and at run time otherwise
+
+    @param weak true for a weak assignment (:=), false for an opaque assignment (@=)
+    @param value_type the type of the value assigned
+    @param target_type the type of the lvalue
+*/
+DLLLOCAL QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_type, const char* target_type);
 
 //! Assigns a value through the reference that an element of a container holds, as the AST interpreter assigns an
 //! element that holds a reference (LValueHelper::doLValue() follows it; qore#6661)

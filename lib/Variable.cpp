@@ -3863,6 +3863,14 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
     return rv;
 }
 
+QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_type, const char* target_type) {
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type converts the value to a copy of its own, so the %s reference "
+        "would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that "
+        "keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type '%s'",
+        weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type, weak ? "weak" : "opaque", value_type);
+}
+
 bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink) {
     if (cur.getType() != NT_REFERENCE) {
         return false;
@@ -3892,19 +3900,23 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
-    return assignImpl<false>(n, desc, check_types, mode, {});
+    return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque
+        ? assignImpl<false, false, true>(n, desc, check_types, mode, {})
+        : assignImpl<false>(n, desc, check_types, mode, {});
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
         AssignmentMode mode) {
-    return assignImpl<true>(n, desc, check_types, mode, policy);
+    return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque
+        ? assignImpl<true, false, true>(n, desc, check_types, mode, policy)
+        : assignImpl<true>(n, desc, check_types, mode, policy);
 }
 
 int LValueHelper::assignNative(QoreValue n, const char* desc) {
     return assignImpl<false, true>(n, desc, true, AssignmentMode::Normal, {});
 }
 
-template <bool Lexical, bool Native>
+template <bool Lexical, bool Native, bool WeakOrOpaque>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
     member_lvalue_modified = true;
@@ -3916,6 +3928,28 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     //printd(5, "LValueHelper::assign() this: %p '%s' ti: %p '%s' check_types: %d n: '%s' (%d) val: %p qv: %p\n",
     //    this, desc, typeInfo, QoreTypeInfo::getName(typeInfo), check_types, n.getFullTypeName(), n.getType(), val,
     //    qv);
+    // the container that a weak or opaque assignment stores a reference to: the lvalue's type must not convert it to
+    // a copy, which the reference would designate instead of it (qore#7572); its type is kept for the error, as the
+    // conversion can release it: the node is only compared after that
+    [[maybe_unused]] const AbstractQoreNode* weak_source = nullptr;
+    [[maybe_unused]] bool weak_source_hash = false;
+    [[maybe_unused]] const TypedHashDecl* weak_source_hd = nullptr;
+    [[maybe_unused]] const QoreTypeInfo* weak_source_ti = nullptr;
+    if constexpr (WeakOrOpaque) {
+        if (n.isPointer()) {
+            const AbstractQoreNode* p = n.getPtr();
+            if (p && p->getType() == NT_HASH) {
+                const qore_hash_private* hp = qore_hash_private::get(*static_cast<const QoreHashNode*>(p));
+                weak_source = p;
+                weak_source_hash = true;
+                weak_source_hd = hp->getHashDecl();
+                weak_source_ti = hp->complexTypeInfo;
+            } else if (p && p->getType() == NT_LIST) {
+                weak_source = p;
+                weak_source_ti = qore_list_private::get(*static_cast<const QoreListNode*>(p))->complexTypeInfo;
+            }
+        }
+    }
     if (check_types) {
         // check type for assignment
         if constexpr (Native) {
@@ -3948,6 +3982,25 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables
     // (shared with parameter binding — see QoreTypeInfo::applyNoNarrowCoercion())
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
+
+    // a weak or opaque assignment whose value the lvalue's type converted to a copy is refused (qore#7572)
+    if constexpr (WeakOrOpaque) {
+        if (weak_source && (n.isPointer() ? n.getPtr() : nullptr) != weak_source) {
+            QoreString value_type;
+            if (weak_source_hd) {
+                value_type.sprintf("hash<%s>", weak_source_hd->getName());
+            } else if (weak_source_ti) {
+                value_type.concat(QoreTypeInfo::getName(weak_source_ti));
+            } else {
+                value_type.concat(weak_source_hash ? "hash" : "list");
+            }
+            vl.xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_conversion_desc(
+                mode == AssignmentMode::Weak, value_type.c_str(), QoreTypeInfo::getName(typeInfo)));
+            saveTempRef(n);
+            rollbackVivification();
+            return -1;
+        }
+    }
 
     // process weak assignment
     // the value replaced by its weak or opaque form is released through the temporary list as it is held, as the

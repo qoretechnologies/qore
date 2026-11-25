@@ -2554,6 +2554,15 @@ if (x || y)
     target that the parameter's type would convert to another value (ex: an untyped hash for a
     <tt>reference<hash<string, int>></tt>) is refused with \c RUNTIME-TYPE-ERROR, as the weak reference would not
     designate the converted value.\n<br>
+    @anchor weak_assignment_conversion A weak assignment of a hash or a list to an lvalue whose type converts it to a
+    copy of its own is an error: the weak reference would designate the copy, a temporary, instead of the value
+    assigned.  Such an lvalue is one of a type that strips the complex type of the value (ex: an untyped list element
+    or hash key, \c any, \c hash, \c *hash, \c list, \c softlist, <tt>hash&lt;auto!&gt;</tt> or \c auto! for a
+    <tt>hash&lt;string, int&gt;</tt>, a <tt>list&lt;int&gt;</tt> or a @ref hashdecl "hashdecl" value) or that converts
+    its elements (ex: <tt>list&lt;softstring&gt;</tt> for a <tt>list&lt;int&gt;</tt>); the assignment is refused with
+    \c PARSE-TYPE-ERROR when the types of a stripping lvalue and of a typed value are known at parse time, and with
+    \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value.  An lvalue of a type that keeps the value (\c auto,
+    <tt>hash&lt;auto&gt;</tt>, <tt>list&lt;auto&gt;</tt> or the value's own type) takes the weak reference to it.\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
@@ -2611,7 +2620,9 @@ if (x || y)
     This makes it the opposite trade from the @ref weak_assignment_operator "weak assignment operator (:=)":
     <tt>:=</tt> gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
     ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
-    still in use; a mistake with \c \@= leaks one.
+    still in use; a mistake with \c \@= leaks one.\n<br>
+    As for the weak assignment operator, an opaque assignment of a hash or a list to an lvalue whose type converts it
+    to a copy of its own is an error (see @ref weak_assignment_conversion).
 
     @par Warning
     <b>This operator must be used very carefully.</b>  Use it only where it can be shown that the value

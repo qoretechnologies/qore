@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par A Weak Assignment That Would Reference a Converted Copy Is an Error
+    A @ref weak_assignment_operator "weak assignment (:=)" of a hash or a list to an lvalue whose type converts it to a
+    copy (ex: a <tt>hash&lt;string, int&gt;</tt> to a \c hash or \c any lvalue, or to an untyped list element) is
+    refused instead of referencing the copy, a temporary (see @ref weak_assignment_conversion;
+    <a href="https://github.com/qoretechnologies/qore/issues/7572">issue 7572</a>).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or

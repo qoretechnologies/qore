@@ -105,8 +105,6 @@ sub values() {
 
 our float gf;
 our softint gsi;
-our hash gh;
-thread_local hash tlh;
 
 #! the value of a weak assignment is the value assigned, converted to the variable's type
 sub conversions() {
@@ -127,20 +125,8 @@ sub conversions() {
     printf("global float %y %s softint %y %s\n", v3, v3.type(), v4, v4.type());
     list<auto> l = ((f := 7), (cf := 8), (gf := 9));
     printf("list %y\n", l);
-    # a container that the variable's type converts to a copy of its own: the copy is a temporary of the statement,
-    # and the value of the assignment (qore#7085)
-    hash<string, int> th = {"a": 1};
-    hash ph;
-    auto v5 = (ph := th);
-    printf("plain strip: %y %s ph=%y\n", v5, v5.fullType(), ph);
-    hash ch;
-    code c2 = auto sub () { return ch; };
-    auto v6 = (ch := th);
-    printf("closure strip: %y %s ch=%y\n", v6, v6.fullType(), c2());
-    remove v5;
-    remove v6;
-    printf("strip released: ph=%y ch=%y\n", ph, c2());
-    printf("global strip: %y thread_local strip: %y\n", (gh := th), (tlh := th));
+    # a weak assignment of a container that the variable's type converts to a copy of its own is an error
+    # (qore#7572, weak-store-conversion-error.qtest)
 }
 
 #! a class whose destructor raises an exception: releasing the previous value of a variable fails
@@ -216,7 +202,6 @@ class M {
     public {
         *object m;
         float f;
-        hash h;
     }
 
     #! assigns members of self
@@ -231,8 +216,6 @@ class M {
         printf("self member receiver: %s\n", (m := new C()).n());
         auto vf = (f := 1);
         printf("self member float: %y %s\n", vf, vf.type());
-        hash<string, int> th = {"a": 1};
-        printf("self member strip: %y\n", (h := th));
     }
 }
 
@@ -278,9 +261,6 @@ sub paths() {
     remove c6;
     remove om;
     printf("opaque member value: %s\n", desc(v7));
-    M om2();
-    hash<string, int> oth = {"a": 1};
-    printf("opaque member strip: %y\n", (om2.h @= oth));
 
     list<auto!> l = (NOTHING,);
     before = destroyed;

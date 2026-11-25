@@ -21372,6 +21372,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 module, llvm_func, inst);
                     }
                     emitExceptionCheck(module, llvm_func, inst);
+                    if (qore_assignment_mode_converts_value(linst->mode)) {
+                        // a weak or opaque store whose value the local's type converted to a copy is refused, as
+                        // LValueHelper::assign() refuses it (qore#7572)
+                        llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
+                            linst->mode == AssignmentMode::Weak ? 1 : 0);
+                        if (aot_mode) {
+                            int32_t check_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                            auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                            builder->CreateCall(check_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, check_slot),
+                                boxed, coerced, weak_flag, xsink_arg});
+                        } else {
+                            auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                            llvm::Value* check_ti = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(outer_ti)), ptr_type);
+                            builder->CreateCall(check_fn, {check_ti, boxed, coerced, weak_flag, xsink_arg});
+                        }
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
                     boxed = coerced;
                     registerInvokeCleanupAlloca(cleanup);
                 } else if (needs_type_strip_outer) {
@@ -21413,6 +21435,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 module, llvm_func, inst);
                     }
                     emitExceptionCheck(module, llvm_func, inst);
+                    if (qore_assignment_mode_converts_value(linst->mode)) {
+                        // a weak or opaque store whose value the local's type converted to a copy is refused, as
+                        // LValueHelper::assign() refuses it (qore#7572)
+                        llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
+                            linst->mode == AssignmentMode::Weak ? 1 : 0);
+                        if (aot_mode) {
+                            int32_t check_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                            auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                            builder->CreateCall(check_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, check_slot),
+                                boxed, stripped, weak_flag, xsink_arg});
+                        } else {
+                            auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                            llvm::Value* check_ti = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(outer_ti)), ptr_type);
+                            builder->CreateCall(check_fn, {check_ti, boxed, stripped, weak_flag, xsink_arg});
+                        }
+                        emitExceptionCheck(module, llvm_func, inst);
+                    }
                     boxed = stripped;
                     registerInvokeCleanupAlloca(cleanup);
                 }
@@ -21852,6 +21896,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
                 emitExceptionCheck(module, llvm_func, inst);
+                if (qore_assignment_mode_converts_value(linst->mode)) {
+                    // a weak or opaque store whose value the local's type converted to a copy is refused, as
+                    // LValueHelper::assign() refuses it (qore#7572)
+                    llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
+                        linst->mode == AssignmentMode::Weak ? 1 : 0);
+                    if (aot_mode) {
+                        int32_t check_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                        builder->CreateCall(check_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, check_slot),
+                            boxed, coerced, weak_flag, xsink_arg});
+                    } else {
+                        auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                        llvm::Value* check_ti = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(local_ti)), ptr_type);
+                        builder->CreateCall(check_fn, {check_ti, boxed, coerced, weak_flag, xsink_arg});
+                    }
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 boxed = coerced;
                 registerInvokeCleanupAlloca(cleanup);
                 if (block_scoped_locals.count(key)) {
@@ -21891,6 +21957,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {ti_as_ptr, boxed, cleanup, xsink_arg});
                 }
                 emitExceptionCheck(module, llvm_func, inst);
+                if (qore_assignment_mode_converts_value(linst->mode)) {
+                    // a weak or opaque store whose value the local's type converted to a copy is refused, as
+                    // LValueHelper::assign() refuses it (qore#7572)
+                    llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
+                        linst->mode == AssignmentMode::Weak ? 1 : 0);
+                    if (aot_mode) {
+                        int32_t check_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                        builder->CreateCall(check_fn, {aot_ctx_arg, llvm::ConstantInt::get(i32_type, check_slot),
+                            boxed, stripped, weak_flag, xsink_arg});
+                    } else {
+                        auto check_fn = module.getOrInsertFunction("qore_rt_check_weak_store_conversion",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                        llvm::Value* check_ti = builder->CreateIntToPtr(llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(local_ti)), ptr_type);
+                        builder->CreateCall(check_fn, {check_ti, boxed, stripped, weak_flag, xsink_arg});
+                    }
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
                 boxed = stripped;
                 registerInvokeCleanupAlloca(cleanup);
                 if (block_scoped_locals.count(key)) {
