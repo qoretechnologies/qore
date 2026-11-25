@@ -12771,12 +12771,35 @@ static bool qore_aot_collect_int_expression_summaries(
                     }
                     auto nested = batch_callees.find(call.variant);
                     assert(nested != batch_callees.end());
-                    if (!allow_fallible_operations && nested->second.int_expression
-                            && std::any_of(nested->second.int_expression.nodes.begin(),
-                                nested->second.int_expression.nodes.end(),
+                    // the nodes of a composed summary run in the inline frame of the call of this function, with no
+                    // frame of the nested callee and at the location of the statement of the call here: a nested
+                    // callee whose summary can raise an exception is called, so that the exception has the callee's
+                    // frame and the location of its operation (qore#7632)
+                    // a division or a modulo by a constant other than 0 and -1 cannot raise one (-1 can, with the
+                    // smallest integer as the dividend)
+                    auto can_raise_division = [](bool constant_divisor, int64_t divisor) {
+                        return !constant_divisor || !divisor || divisor == -1;
+                    };
+                    const AOTIntExpressionInfo& nested_expression = nested->second.int_expression;
+                    const AOTScalarLeafInfo& nested_leaf = nested->second.scalar_leaf;
+                    if ((nested_expression
+                            && std::any_of(nested_expression.nodes.begin(), nested_expression.nodes.end(),
                                 [&](const AOTIntExpressionNodeInfo& node) {
-                                    return is_fallible_node(node.kind);
-                                })) {
+                                    if (node.kind != AOTIntExpressionNodeKind::Div
+                                            && node.kind != AOTIntExpressionNodeKind::Mod) {
+                                        return is_fallible_node(node.kind);
+                                    }
+                                    const AOTIntExpressionNodeInfo* divisor = node.rhs < nested_expression.nodes.size()
+                                        ? &nested_expression.nodes[node.rhs] : nullptr;
+                                    return can_raise_division(divisor
+                                            && divisor->kind == AOTIntExpressionNodeKind::Constant,
+                                        divisor ? divisor->constant : 0);
+                                }))
+                            || (!nested_expression
+                                && nested_leaf.kind == AOTScalarLeafKind::IntBinary
+                                && (nested_leaf.opcode == static_cast<uint16_t>(QoreIROpcode::DivInt)
+                                    || nested_leaf.opcode == static_cast<uint16_t>(QoreIROpcode::ModInt))
+                                && can_raise_division(nested_leaf.rhs_param < 0, nested_leaf.rhs_int))) {
                         return false;
                     }
                     std::vector<int> args;
@@ -13617,21 +13640,30 @@ static bool qore_aot_collect_float_expression_summaries(
                     }
                     auto nested = batch_callees.find(call.variant);
                     assert(nested != batch_callees.end());
-                    if (!allow_division
-                            && ((nested->second.float_expression
-                                    && std::any_of(
-                                        nested->second.float_expression.nodes.begin(),
-                                        nested->second.float_expression.nodes.end(),
-                                        [](const AOTFloatExpressionNodeInfo& node) {
-                                            return node.kind
-                                                == AOTFloatExpressionNodeKind::Div;
-                                        }))
-                                || (!nested->second.float_expression
-                                    && nested->second.scalar_leaf.kind
-                                        == AOTScalarLeafKind::FloatBinary
-                                    && nested->second.scalar_leaf.opcode
-                                        == static_cast<uint16_t>(
-                                            QoreIROpcode::DivFloat)))) {
+                    // as for an integer summary: a nested callee whose summary can raise an exception (a division
+                    // other than by a nonzero constant, or a hash projection) is called, so that the exception has the
+                    // callee's frame and the location of its operation (qore#7632)
+                    const AOTFloatExpressionInfo& nested_expression = nested->second.float_expression;
+                    const AOTScalarLeafInfo& nested_leaf = nested->second.scalar_leaf;
+                    if ((nested_expression
+                            && std::any_of(nested_expression.nodes.begin(), nested_expression.nodes.end(),
+                                [&](const AOTFloatExpressionNodeInfo& node) {
+                                    if (node.kind == AOTFloatExpressionNodeKind::HashKeyFloat) {
+                                        return true;
+                                    }
+                                    if (node.kind != AOTFloatExpressionNodeKind::Div) {
+                                        return false;
+                                    }
+                                    const AOTFloatExpressionNodeInfo* divisor
+                                        = node.rhs < nested_expression.nodes.size()
+                                        ? &nested_expression.nodes[node.rhs] : nullptr;
+                                    return !divisor || divisor->kind != AOTFloatExpressionNodeKind::Constant
+                                        || divisor->constant == 0.0;
+                                }))
+                            || (!nested_expression
+                                && nested_leaf.kind == AOTScalarLeafKind::FloatBinary
+                                && nested_leaf.opcode == static_cast<uint16_t>(QoreIROpcode::DivFloat)
+                                && (nested_leaf.rhs_param >= 0 || nested_leaf.rhs_float == 0.0))) {
                         return false;
                     }
                     std::vector<int> args;
@@ -25643,41 +25675,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
             }
             del_c.discard(nullptr);
         }
-        // the modules that each module requires, directly or through other modules
-        std::map<std::string, std::set<std::string>> requires_map;
+        // in the order of the teardown of the data of the module Programs, as the closures of AOT modules run: a cycle
+        // is broken at one of its own modules, never at a module that it requires (qore#7445)
+        QMM.orderModulesDependentsFirst(del_modules);
         for (const std::string& name : del_modules) {
-            std::set<std::string> all;
-            std::vector<std::string> todo{name};
-            while (!todo.empty()) {
-                std::string cur = std::move(todo.back());
-                todo.pop_back();
-                std::set<std::string> deps;
-                QMM.getModuleDependencies(cur.c_str(), deps);
-                for (const std::string& d : deps) {
-                    if (all.insert(d).second) {
-                        todo.push_back(d);
-                    }
-                }
-            }
-            requires_map[name] = std::move(all);
-        }
-        std::vector<std::string> ordered;
-        while (!del_modules.empty()) {
-            size_t pick = 0;
-            for (size_t i = 0; i < del_modules.size(); ++i) {
-                bool required = false;
-                for (size_t j = 0; j < del_modules.size() && !required; ++j) {
-                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
-                }
-                if (!required) {
-                    pick = i;
-                    break;
-                }
-            }
-            ordered.push_back(del_modules[pick]);
-            del_modules.erase(del_modules.begin() + pick);
-        }
-        for (const std::string& name : ordered) {
             QoreAbstractModule* mod = QMM.findModule(name.c_str());
             QoreUserModule* user_mod = dynamic_cast<QoreUserModule*>(mod);
             assert(user_mod);
@@ -39160,7 +39161,13 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const CaseNodeRegex* cnode = reinterpret_cast<const CaseNodeRegex*>(ptr);
         AOTRegexCaseSlotId& rcid = out.regex_cases[slot];
         QoreRegex* re = cnode->getRegex();
-        rcid.pattern = re->getPatternCStr();
+        // every case regex has its pattern saved, which is an empty string for an empty pattern (#7623)
+        const char* pattern = re ? re->getPatternCStr() : nullptr;
+        assert(pattern);
+        if (!pattern) {
+            continue;
+        }
+        rcid.pattern = pattern;
         rcid.options = re->getOptions();
         // Check if it's a negated regex case
         rcid.is_negated = dynamic_cast<const CaseNodeNegRegex*>(cnode) != nullptr;

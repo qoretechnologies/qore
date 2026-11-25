@@ -97,6 +97,8 @@ std::mutex qore_parse_options_values_mutex;
 static QoreForkStdMutex parse_options_values_fork_handler(qore_parse_options_values_mutex, QFLR_LEAF,
     "parse_options_values");
 
+std::atomic<bool> qore_no_external_info_used{false};
+
 // Optional callback invoked before program data is cleared (issue #4816)
 // Can be used by modules to perform cleanup before namespace data is freed
 // More than one module needs this notification, so it is a list; a single slot meant whichever
@@ -2250,6 +2252,7 @@ bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_
         std::swap(thr_init_po.override, po.override);
         // the init code runs for the code that set it, with its restrictions (qore#6844)
         std::swap(thr_init_po.caller_domain_restrictions, po.caller_domain_restrictions);
+        std::swap(thr_init_po.lent_to_domain_restrictions, po.lent_to_domain_restrictions);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -4145,6 +4148,7 @@ void qore_program_private::del(ExceptionSink* xsink) {
         std::swap(old_thr_init_po.po, thr_init_po.po);
         std::swap(old_thr_init_po.override, thr_init_po.override);
         std::swap(old_thr_init_po.caller_domain_restrictions, thr_init_po.caller_domain_restrictions);
+        std::swap(old_thr_init_po.lent_to_domain_restrictions, thr_init_po.lent_to_domain_restrictions);
     }
     if (old_thr_init) {
         old_thr_init->deref(xsink);
@@ -7885,4 +7889,31 @@ void qore_drop_exit_hooks(QoreProgram* pgm) {
         i.code->deref(&xsink);
     }
     xsink.handleExceptions();
+}
+
+int QoreForeignCodeProgramHold::hold(QoreProgram* code_pgm, ExceptionSink* n_xsink) {
+    assert(!pgm);
+    int t = q_gettid();
+    if (qore_program_private::get(*code_pgm)->incThreadCount(t, n_xsink)) {
+        return -1;
+    }
+    pgm = code_pgm;
+    xsink = n_xsink;
+    tid = t;
+    return 0;
+}
+
+void QoreForeignCodeProgramHold::release() {
+    QoreProgram* p = pgm;
+    pgm = nullptr;
+    // a deletion of the Program that the code made while it was held is completed here (see deferDerefIfRunning()):
+    // the exceptions of the destructors that it runs go to the sink of the call; without one (see hold()), they are
+    // reported here, as no caller receives them
+    if (xsink) {
+        qore_program_private::decThreadCount(*p, tid, xsink);
+        return;
+    }
+    ExceptionSink local_xsink;
+    qore_program_private::decThreadCount(*p, tid, &local_xsink);
+    local_xsink.handleExceptions();
 }

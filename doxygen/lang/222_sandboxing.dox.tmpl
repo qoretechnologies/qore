@@ -396,6 +396,25 @@ authenticate();
       it made during trusted startup with
       @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()": what that builds
       keeps no sandbox of the caller, and is governed only by the manager that the host gives it
+    - <b>Code runs in the %Program that compiled it</b>: the methods of a class that a %Program imported from another
+      %Program, the functions that it imported from it and the @ref closure_program "closures" and call references
+      that their code creates run in the %Program that compiled them, wherever they are called from, with that
+      %Program's restrictions and sandbox: the checks of the calling code (such as
+      @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()",
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()",
+      @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()",
+      and the terminal, see @ref sandbox_terminal_io), made by that code or by the module code that it calls, count
+      that %Program, and so do the tests of sandboxed or restricted code that the code itself makes (such as those that
+      refuse to change a sandbox, the host's registry values and the sandbox introspection APIs; module code that it
+      calls answers for itself in them).  The names that the code looks up at run time (with
+      @ref Qore::call_function() "call_function()", @ref Qore::create_object() "create_object()",
+      @ref Qore::get_call_reference() "get_call_reference()" and the like) are resolved in that %Program as well: such
+      code finds by name what its own %Program has, never the code of the %Program that it is called from.  The host code that
+      it calls answers for itself, and a host grant lends what it lends.  Code compiled in one %Program is never the
+      code of another %Program: should it run in another %Program, it runs with the restrictions of both (and with
+      only the explicitly-allowed options that both have), its %Program counts in the checks above, and the sandbox
+      of that %Program governs it.  The deletion of the %Program that compiled the code waits for such code that
+      runs, and the code is refused with \c PROGRAM-ERROR once that deletion has started (qore#7202)
     - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
       @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
       host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
@@ -969,6 +988,104 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_ambient_host_data The Host's Environment and Ambient Credentials
+
+    Data that library code resolves from the host rather than taking it from its caller is ambient: the values of
+    environment variables, instance and container metadata endpoints, application default credential files, the
+    process's default credentials and options that a module takes from the environment.  A module's code runs with
+    its own %Program's options, so it would otherwise give a restricted caller what the caller may not read itself;
+    such code therefore asks first:
+    - @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"
+      (\c qore_caller_may_read_external_info() in the C++ API) returns @ref False if the calling code is restricted
+      from @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO" (for example with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" or @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN"), as
+      @ref Qore::SandboxManager::isLentToRestricted() "isLentToRestricted()" resolves it
+    - @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"
+      (\c qore_caller_may_receive_host_secrets()) returns @ref False in addition if the calling code is sandboxed
+      (a sandboxed %Program on the way, a sandbox that governs the code, or an object or callback that sandboxed code
+      created)
+
+    Both fail closed: a method of an object that the host lent (see @ref sandbox_lent_objects) lends nothing here, so
+    a restricted borrower gets no ambient data through it, also for the work that a lent client continues on a thread
+    of the async I/O controller; the host grants access through a policy barrier
+    (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()") or a capability
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"), inside which
+    only the code that runs inside the grant counts.  Credentials that the caller gives explicitly are the caller's
+    own and are not affected.
+
+    The host's own code (a function, method or call reference of a %Program that is not a module's) that restricted
+    code calls answers for itself, as a policy barrier does: it is the nearest calling code that is not a module's,
+    so the restrictions of its caller do not count for the library code that it calls, and it resolves the host's
+    ambient data for itself.  A host must therefore not expose to restricted code functions, methods or objects of its
+    own that resolve the host's credentials unless it means to grant them.  Sandboxed callers are refused regardless
+    (the sandboxed code on the way counts), and a closure or call reference that the restricted code created remains
+    its code, also when the host's code calls it.
+
+    The ambient credentials of the host are the host's secrets: the paths that resolve them ask
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "callerMayReceiveHostSecrets()", so the library resolves
+    them neither for code restricted from external information nor for sandboxed code, unless the host grants them.
+    How far this protects them depends on the source:
+    - credentials that the host's environment holds (the AWS key, secret and session token, the path of an application
+      default credential file, the user name and password of a proxy) are a boundary only where the embedder also
+      restricts the untrusted %Program from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO",
+      @ref Qore::DOM_EXTERNAL_INFO "DOM_EXTERNAL_INFO"): a sandbox does not restrict it by default, and sandboxed code
+      that is not restricted from it reads the environment itself (@ref Qore::getenv() "getenv()", \c ENV, and the
+      expansions of library code that follow
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "callerMayReadExternalInfo()"), so for such code the
+      refusal of the library to resolve them is defence in depth; an embedder that runs untrusted code therefore
+      restricts its Programs from external information
+    - the metadata endpoints of the clouds (IMDS, the ECS task-role endpoint, the GCP metadata server, the Azure managed
+      identity endpoint) are protected from sandboxed code only as far as the network policy of its sandbox blocks
+      them, as such code can request them itself if it may connect to them
+    - the process's default Kerberos credential, the default credential cache and keytab and their names, the listing
+      of the host's credential caches, the credential stores that are not files (KCM, KEYRING, API, MSLSA) and the
+      credentials that the host's SqlUtil credential resolver gives are refused regardless: they are a boundary also
+      for sandboxed code that is not restricted from external information, as such code reaches them only through the
+      library; a file-backed credential cache or keytab that the caller names (\c FILE:, \c DIR:, for example
+      \c FILE:/tmp/krb5cc_<uid> or \c /etc/krb5.keytab) is protected only as far as the file system policy of its
+      sandboxes (and a restriction from the file system) is, as such code could read the file itself
+
+    Each module has a function or method that answers for its credentials
+    (@ref AwsRestClient::AwsRestClientBase::hostCredentialsAllowed() "AwsRestClientBase::hostCredentialsAllowed()",
+    @ref GcpAuth::hostCredentialsAllowed() "GcpAuth::hostCredentialsAllowed()",
+    @ref AzureAuth::hostCredentialsAllowed() "AzureAuth::hostCredentialsAllowed()",
+    @ref Krb5Util::hostCredentialsAllowed() "Krb5Util::hostCredentialsAllowed()"):
+    - the AWS credential chain (\c AwsRestClient) takes no key, secret or session token from the environment and
+      queries neither the ECS task-role endpoint nor IMDSv2 (nor probes the host's hardware for it); a client without
+      credentials raises \c AWSRESTCLIENT-ERROR, and the static helpers for the endpoints \c AWSRESTCLIENT-IMDS-ERROR
+    - \c GcpAuth resolves no application default credentials of the environment or of the user's home and gives no
+      token of the metadata server (\c GCP-AUTH-ERROR), also not one that it cached for the host, and \c AzureAuth no
+      token of the managed identity (\c AZURE-AUTH-ERROR)
+    - Kerberos: the HTTP Negotiate client of \c Krb5Util, which \c RestClient and \c RestClientIo use, and the
+      classes of the \c krb5 module use no default credential of the process (\c KRB5-GSS-ERROR from
+      @ref Qore::Krb5::GssClientContext::step() "GssClientContext::step()" and
+      @ref Qore::Krb5::GssAcceptorContext::step() "GssAcceptorContext::step()" without an explicit credential), give
+      no default credential cache or keytab and its name and list no credential caches of the host
+      (@ref Qore::Krb5::Krb5Context "Krb5Context"; \c KRB5-CACHE-ERROR, \c KRB5-KEYTAB-ERROR); a credential store that
+      the caller names is its own only if it is a memory store or a file that the caller may use (it is not
+      restricted from the file system, as @ref Qore::SandboxManager::isLentToRestricted() "isLentToRestricted()"
+      resolves it, and a sandbox's file system policy allows it): the other backends (KCM, KEYRING, API, MSLSA) hold
+      the host's credentials
+    - \c SqlUtil restores no datasource with the credentials that the host's credential resolver
+      (@ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()") gives
+      (\c PERMISSION-DENIED), and @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()"
+      is @ref False, so data providers take no options (passwords and client secrets) from the environment
+    - the proxy of the environment is given without its user name and password
+      (@ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()", also for
+      @ref UrlDownloader::UrlDownloader "UrlDownloader")
+
+    For code that may not read external information, the host's environment is empty, as it is in that code itself:
+    - environment variables expand to empty strings: @ref Util::substitute_env_vars() "substitute_env_vars()" (also for
+      the connection options, file locations and paths that library code expands with it), the \c $VAR references of
+      a \c file:// URL of @ref Util::get_file_from_url() "get_file_from_url()" and the external references of OpenApi3
+      and Swagger schemas; the \c %%E{VAR} field of the file names of the Logger file appenders is empty for an
+      appender that such code created (it is decided when the appender is created, so an appender of the host keeps
+      its file names whatever code logs through it)
+    - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
+      environment; such code gives them explicitly
+
+    @since %Qore 3.0
+
     @subsection sandbox_terminal_io The Terminal Is Not Lent
 
     A module is a capability (see @ref sandbox_caller_domains), but the terminal is not lent to code that is
@@ -1008,8 +1125,9 @@ authenticate();
     It follows that when the host calls a method of a module object that restricted code created (such as a logger
     with a terminal appender and a layout of its own), the module code writes to the terminal what the object holds:
     the host decides whether to make the call, and should not call such objects when the terminal must stay closed to
-    that code.  The code of a %Program that has released its classes runs in its caller's %Program with the caller's
-    options, so the code of a released restricted %Program that the host calls is the host's code for the terminal.
+    that code.  The code of another %Program that the host calls runs in the %Program that compiled it and is never
+    trusted host code (see @ref sandbox_program_capability): the restrictions of that %Program decide for the
+    terminal, also when the code is called from a %Program of the host.
 
     @subsection sandbox_exception_reports Exception Reports of Sandboxed Code
 

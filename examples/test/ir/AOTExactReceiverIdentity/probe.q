@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+# set_local_var_value() replaces receivers in parameters that the code does not write: each call after it runs the
+# method of the class of the new receiver (qore#7631)
+
+class IdentityBase {
+    int next(int value) { return value + 1; }
+}
+class IdentityDerived inherits IdentityBase {
+    int next(int value) { return value + 10; }
+}
+
+class IdentityThird inherits IdentityBase {
+    int next(int value) { return value + 100; }
+}
+
+thread_local int identityDestructorResult = 0;
+class IdentityDestroying {
+    int next(int value) { return value + 1; }
+    destructor() { identityDestructorResult = identityDuringDestructor(self); }
+}
+
+int sub identityDuringDestructor(IdentityDestroying receiver) {
+    int value = 0;
+    for (int i = 0; i < 3; ++i) {
+        value = receiver.next(value);
+    }
+    return value;
+}
+
+sub replaceIdentity(IdentityBase replacement) {
+    set_local_var_value(1, "receiver", replacement);
+}
+
+sub deleteIdentity(IdentityBase receiver) {
+    delete receiver;
+}
+
+bool sub identityDeleted(IdentityBase receiver) {
+    try {
+        int value = receiver.next(0);
+        if (value != 1) {
+            throw "IDENTITY-TEST", "initial receiver call failed";
+        }
+        deleteIdentity(receiver);
+        value = receiver.next(value);
+        return False;
+    } catch (hash<auto> ex) {
+        if (ex.err != "OBJECT-ALREADY-DELETED") {
+            rethrow;
+        }
+        return True;
+    }
+}
+
+int sub identityOnce(IdentityBase receiver, IdentityBase replacement) {
+    int first = receiver.next(0);
+    replaceIdentity(replacement);
+    return first * 100 + receiver.next(0);
+}
+
+int sub identityLoop(IdentityBase receiver, IdentityBase replacement, IdentityBase original) {
+    int sum = 0;
+    for (int i = 0; i < 6; ++i) {
+        if (i == 2) {
+            replaceIdentity(replacement);
+        } else if (i == 4) {
+            replaceIdentity(original);
+        }
+        sum += receiver.next(0);
+    }
+    return sum;
+}
+
+sub replaceIdentityLeft(IdentityBase replacement) {
+    set_local_var_value(1, "left", replacement);
+}
+
+int sub identitySelectedLoop(IdentityBase left, IdentityBase right,
+        IdentityBase original, IdentityBase replacement) {
+    int result = 0;
+    for (int i = 0; i < 6; ++i) {
+        if (i == 2) { replaceIdentityLeft(replacement); }
+        else if (i == 4) { replaceIdentityLeft(original); }
+        result += (i % 2 == 0 ? left : right).next(0);
+    }
+    return result;
+}
+
+# Nested receiver PHIs must follow the same incoming edges as their metadata.
+# Reflection deliberately substitutes another retained owner, then restores it.
+int sub identityNestedSelectedLoop(IdentityBase left, IdentityBase right, IdentityBase third,
+        IdentityBase original, IdentityBase replacement) {
+    int result = 0;
+    for (int i = 0; i < 9; ++i) {
+        if (i == 2) { replaceIdentityLeft(replacement); }
+        else if (i == 6) { replaceIdentityLeft(original); }
+        result += (i % 3 == 0 ? left : i % 3 == 1 ? right : third).next(0);
+    }
+    return result;
+}
+
+int sub identityInvoke(IdentityBase receiver, IdentityBase replacement) {
+    int first = receiver.next(0);
+    try {
+        replaceIdentity(replacement);
+        throw "IDENTITY-REPLACED", "test";
+    } catch (hash<auto> ex) {
+        if (ex.err != "IDENTITY-REPLACED") {
+            rethrow;
+        }
+        return first * 100 + receiver.next(0);
+    }
+}
+
+int sub identityCrossProgram(IdentityBase receiver, IdentityBase replacement, Program mutator) {
+    int first = receiver.next(0);
+    mutator.callFunction("replaceReceiver", replacement);
+    return first * 100 + receiver.next(0);
+}
+
+# A handler run out of line that replaces the receiver twice: the entry receiver is released at the first
+# assignment, and the object of the second can be given its address (the entry cleanup of the receiver is released
+# before the handler runs, see QoreIRToLLVM::finalizeHandlerSites())
+int sub identityOnExit(IdentityBase receiver) {
+    int first = receiver.next(0);
+    {
+        on_exit {
+            receiver = new IdentityThird();
+            receiver = new IdentityDerived();
+        }
+        first += receiver.next(0) - 1;
+    }
+    return first * 100 + receiver.next(0);
+}
+
+int sub identityOnError(IdentityBase receiver) {
+    int first = receiver.next(0);
+    try {
+        on_error {
+            receiver = new IdentityThird();
+            receiver = new IdentityDerived();
+        }
+        throw "IDENTITY-REPLACED", "test";
+    } catch (hash<auto> ex) {
+        if (ex.err != "IDENTITY-REPLACED") {
+            rethrow;
+        }
+    }
+    return first * 100 + receiver.next(0);
+}
+
+int sub identityHandlerLoop(IdentityBase receiver) {
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        {
+            on_exit {
+                if (i == 1) {
+                    receiver = new IdentityThird();
+                    receiver = new IdentityDerived();
+                }
+            }
+            sum += receiver.next(0);
+        }
+    }
+    return sum;
+}
+
+sub identityWorker(Counter done, Queue results) {
+    on_exit done.dec();
+    IdentityBase base();
+    results.push(identityLoop(base, new IdentityDerived(), base));
+}
+
+IdentityBase base();
+IdentityDerived derived();
+if (identitySelectedLoop(base, base, base, derived) != 15) {
+    throw "IDENTITY-TEST", "selected receiver reflection was not observed";
+}
+if (identitySelectedLoop(base, derived, base, derived) != 42) {
+    throw "IDENTITY-TEST", "replacement by another retained owner was not observed";
+}
+if (identityNestedSelectedLoop(base, derived, new IdentityThird(), base, derived) != 342) {
+    throw "IDENTITY-TEST", "nested receiver metadata did not follow the selected source";
+}
+printf("%d:%d:%d:%d:%d:%d\n",
+    identityOnce(base, derived), identityOnce(derived, base),
+    identityOnce(base, new IdentityBase()), identityOnce(base, base),
+    identityLoop(base, derived, base), identityInvoke(base, derived));
+Program mutator(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_DEBUGGER);
+mutator.parse("sub replaceReceiver(object replacement) { set_local_var_value(1, \"receiver\", replacement); }",
+    "identity-mutator");
+printf("%d\n", identityCrossProgram(base, derived, mutator));
+# the receivers are temporary arguments, so that the handlers release the last reference to them
+list<int> handler_results;
+for (int i = 0; i < 3; ++i) {
+    push handler_results, identityOnExit(new IdentityBase());
+    push handler_results, identityOnError(new IdentityBase());
+    push handler_results, identityHandlerLoop(new IdentityBase());
+}
+printf("%s\n", handler_results.join(":"));
+Counter done(4);
+Queue results();
+for (int i = 0; i < 4; ++i) {
+    background identityWorker(done, results);
+}
+done.waitForZero();
+for (int i = 0; i < 4; ++i) {
+    if (results.get(1000) != 24) {
+        throw "IDENTITY-TEST", "thread-local receiver replacement was not observed";
+    }
+}
+if (!identityDeleted(new IdentityBase())) {
+    throw "IDENTITY-TEST", "cached receiver deletion was not observed";
+}
+IdentityDestroying destroying();
+delete destroying;
+if (identityDestructorResult != 3) {
+    throw "IDENTITY-TEST", "receiver was rejected while its destructor was running";
+}
+printf("exact-receiver-identity: ok\n");

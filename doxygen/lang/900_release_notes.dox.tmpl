@@ -101,6 +101,18 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Closures Run in the Program That Compiled Them
+    A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
+    that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
+    @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
+
+    @par Library Code Gives Restricted Code No Values of the Host's Environment
+    For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
+    URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
+    Logger file names expand no environment variables, and
+    @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
+    sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -226,6 +238,11 @@
     @par Reading Build Information Constants Requires External Information Access
     @ref no-external-info "%no-external-info" now restricts reads of the @ref system_and_build_constants
     "build constants" BuildHost, Compiler, CFLAGS and LDFLAGS, including reads through reflection.
+    @par Code Restricted From External Information Gets Locations and Module Load Errors Without Directories
+    Exceptions caught, call stacks, reflection source locations and module load errors and warnings name files without
+    their directories for code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"; the host gets the
+    same exceptions with full paths (see @ref no-external-info "%no-external-info";
+    <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
@@ -1920,6 +1937,14 @@
     (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>);
     @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()" tells it whether it may use
     the terminal for its caller (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
+
+    @par Asking Whether the Calling Code May Read the Host's Environment or Receive Its Secrets
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()",
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()" and the C++
+    functions \c qore_caller_may_read_external_info() and \c qore_caller_may_receive_host_secrets()
+    (\c QORE_HAVE_CALLER_AMBIENT_PREDICATES) tell library code whether it may resolve ambient data or credentials of
+    the host for its caller (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
 
     @par Process-Wide Registries Refuse Sandboxed Code
     Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
@@ -4795,6 +4820,10 @@
     - the \c keys operator, the merge of an object into a hash and the iteration over its members list, for the code of a
       class that a subclass inherits with \c private:internal, the members that it uses on an object of a further
       subclass; they returned nothing (<a href="https://github.com/qoretechnologies/qore/issues/7180">issue 7180</a>)
+    - a typed call or a call reference in the code of a class with \c private:internal variants of a method calls the
+      class's own method, as the untyped call does, on an object of a subclass that overrides the method, and no call
+      calls it on an object of a parent class (<a href="https://github.com/qoretechnologies/qore/issues/7440">issue
+      7440</a>)
     - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message

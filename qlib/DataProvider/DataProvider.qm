@@ -1759,6 +1759,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       tells consumers whether the source redelivers a refused event
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" returns @ref False for code
+      restricted from external information and for sandboxed code, so data providers take no options (which include
+      passwords and client secrets) from the host's environment for it (see @ref sandbox_ambient_host_data)
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
       @ref DataProvider::AbstractDataField::freeze() "AbstractDataField::freeze()" also mark the type or field as a
       @ref sandbox_shared_objects "shared object" when the calling code may share objects
