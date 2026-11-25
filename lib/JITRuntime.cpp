@@ -133,6 +133,7 @@
 #include <qore/intern/QoreObjectIntern.h>  // qore_object_private::takeMembers for HashKeySlice over object
 #include <qore/intern/BackquoteNode.h>
 
+
 // JITRuntimeGivenArgs.cpp compiles this file with QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT defined, outside the single
 // compilation unit, for the code of the calls that give the references of their temporary arguments to the callee
 // (the CONSUME instantiations of the fast call executors, issue #5882): it leaves out what that code does not use,
@@ -9010,10 +9011,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
@@ -9037,10 +9042,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             new_l->setEntry(index, entry, xsink);
@@ -9115,10 +9124,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
@@ -9143,10 +9156,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             new_l->setEntry(index, entry, xsink);
@@ -16357,7 +16374,6 @@ extern "C" DLLEXPORT void qore_rt_discard_on_block_exit(int64_t saved_count) {
 
 // --- AOT context-based helpers (Phase 7b) ---
 
-
 extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* ctx, int32_t slot) {
     assert(ctx && slot >= 0 && slot < ctx->num_regex_cases);
     return ctx->regex_cases[slot];
@@ -21181,6 +21197,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,

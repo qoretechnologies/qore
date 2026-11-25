@@ -2967,6 +2967,13 @@ DLLLOCAL int64 get_ms_zero(const QoreValue& v);
 DLLLOCAL AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n);
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n);
 
+//! applies the element type of a list whose element type has no type (untyped or auto) to a pointer value
+/** as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment()): an untyped element (list, softlist,
+    list<any>) strips the complex type of a container, an auto element (list<auto>) keeps it; used by the IR
+    interpreter and native code, out of line so that a store of another value costs one test (qore#7573)
+*/
+DLLLOCAL void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry, ExceptionSink* xsink);
+
 // for IPv4/v6 only
 DLLLOCAL void* qore_get_in_addr(struct sockaddr *sa);
 // for IPv4/v6 only
