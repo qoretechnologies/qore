@@ -38,6 +38,7 @@
 #include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/LocalVar.h"
 
 QoreString QoreHashObjectDereferenceOperatorNode::op_str(". or {} operator expression");
 
@@ -319,6 +320,34 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     return err;
 }
 
+//! Returns the member or the slice \a key of the value that the reference \a ref names (qore#6662)
+QoreValue qore_hash_object_deref_through_reference(const QoreValue& ref,
+        const QoreValue& key, ExceptionSink* xsink) {
+    ValueHolder l(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (l->getType() == NT_HASH) {
+        const QoreHashNode* h = l->get<const QoreHashNode>();
+        if (key.getType() == NT_LIST) {
+            return qore_hash_private::get(*h)->getSlice(key.get<const QoreListNode>(), xsink);
+        }
+        QoreStringNodeValueHelper k(key);
+        QoreValue v = h->getKeyValue(**k, xsink);
+        return *xsink ? QoreValue() : v.refSelf();
+    }
+    if (l->getType() != NT_OBJECT) {
+        return QoreValue();
+    }
+    QoreObject* o = const_cast<QoreObject*>(l->get<const QoreObject>());
+    if (key.getType() == NT_LIST) {
+        return qore_object_ops(o).getSlice(key.get<const QoreListNode>(), xsink);
+    }
+    QoreStringNodeValueHelper k(key);
+    ValueHolder rv(o->evalMember(*k, xsink), xsink);
+    return *xsink ? QoreValue() : rv.release();
+}
+
 //! the value of the operator for its evaluated operands; see QoreHashObjectDereferenceOperatorNode::evalOnValues()
 static QORE_INTERN_ALWAYS_INLINE QoreValue qore_hash_object_deref_values(const QoreValue l, const QoreValue r,
         ExceptionSink* xsink) {
@@ -332,8 +361,13 @@ static QORE_INTERN_ALWAYS_INLINE QoreValue qore_hash_object_deref_values(const Q
         QoreValue v = h->getKeyValue(**key, xsink);
         return *xsink ? QoreValue() : v.refSelf();
     }
-    if (l.getType() != NT_OBJECT)
+    if (l.getType() != NT_OBJECT) {
+        // a member of a reference element is a member of the referenced value (qore#6662)
+        if (l.getType() == NT_REFERENCE) {
+            return qore_hash_object_deref_through_reference(l, r, xsink);
+        }
         return QoreValue();
+    }
 
     QoreObject* o = const_cast<QoreObject*>(l.get<const QoreObject>());
 

@@ -549,6 +549,7 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::ReleasePlainLocalRead, {G::Base}},
     {O::CopyCallArg, {G::Base}},
     {O::ReleaseCallArgSource, {G::Base}},
+    {O::ReadReferenceThrough, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

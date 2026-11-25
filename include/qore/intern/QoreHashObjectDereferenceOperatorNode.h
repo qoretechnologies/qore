@@ -38,6 +38,10 @@
 //! Warns when a hash member is converted directly to bool by a condition expression
 DLLLOCAL void qore_warn_hash_member_truth_test(QoreProgram* pgm, const QoreValue& condition);
 
+//! Returns the member or the slice \a key of the value that the reference \a ref names (qore#6662)
+DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_hash_object_deref_through_reference(const QoreValue& ref,
+        const QoreValue& key, ExceptionSink* xsink);
+
 // final: qore_exact_node_cast() tests it by its exact type on the lvalue and reference paths
 class QoreHashObjectDereferenceOperatorNode final : public QoreBinaryOperatorNode<> {
 OP_COMMON
