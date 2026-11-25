@@ -1152,6 +1152,7 @@ print(out.join(\"|\"));
     }
 
     testDataNameCanonical() {
+        Program p = tenant();
         # case variants of a region in deserialized data (on a file system that does not distinguish case)
         bool case_insensitive = True;
         try {
@@ -1168,8 +1169,11 @@ print(out.join(\"|\"));
                     continue;
                 }
                 binary bad = replaceRegion(data, region, sp);
-                date rv = Serializable::deserialize(bad);
-                assertEq(region, rv.info().zone.region(), "a spelling in data in trusted code: " + sp);
+                # restricted code gets the canonical zone, also when it reads the spelling again
+                assertEq(region, p.callFunction("des", bad).info().zone.region(), "a spelling in data: " + sp);
+                assertEq(region, p.callFunction("des", bad).info().zone.region(), "the spelling again: " + sp);
+                # trusted code keeps the name of its data
+                assertEq(sp, Serializable::deserialize(bad).info().zone.region(), "a spelling in trusted data: " + sp);
             }
         }
 
@@ -1195,12 +1199,14 @@ print(out.join(\"|\"));
         symlink("AA", subdir + "/BB");
         string canonical = subname + "/AA/Real";
         string linked = subname + "/BB/Real";
-        date d = (new TimeZone(canonical)).date("2026-01-15T10:00:00");
-        binary bad = replaceRegion(Serializable::serialize(d), canonical, linked);
-        date rv = Serializable::deserialize(bad);
-        assertEq(canonical, rv.info().zone.region(), "a name through a link in data in trusted code");
-        # trusted code that names the region explicitly gets the name as given
-        assertEq(linked, (new TimeZone(linked)).region(), "an explicit name in trusted code");
+        # restricted code gets the canonical zone for a link name in data (before any other code loads the name)
+        binary data = replaceRegion(Serializable::serialize((new TimeZone(canonical)).date("2026-01-15T10:00:00")),
+            canonical, linked);
+        assertEq(canonical, p.callFunction("des", data).info().zone.region(), "a link name in restricted data");
+        # the host's data round-trips: a date in the zone of the link keeps its name
+        date d = (new TimeZone(linked)).date("2026-01-15T10:00:00");
+        data = Serializable::serialize(d);
+        assertEq(linked, Serializable::deserialize(data).info().zone.region(), "a link name in trusted data");
     }
 
     testRestrictedNulPath() {

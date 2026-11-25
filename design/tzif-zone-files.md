@@ -38,9 +38,11 @@ parsed from memory (`QoreZoneInfo::init()`):
   gets the zone of the canonical name of the file reached (the walked path with links resolved; on macOS the true
   name from `F_GETPATH`), so the names that restricted code can add are bounded by the files of the zoneinfo
   directory, and zone data is bounded by the identities of those files. Region names from data
-  (`findDataRegion()`, `find_create_timezone()` through `findLoadDataRegion()`) get the canonical zone for any code.
-  A name that is not canonical (a link, a spelling) is not cached for restricted code or data, so each load of such
-  a name walks and reads the file again (only the canonical name is cached). On Windows, restricted code can use only
+  (`findDataRegion()`, `find_create_timezone()` through `findLoadDataRegion()`) follow the same rule: canonical for
+  restricted code, named as given for other code, so that host data round-trips. For restricted code, a name that
+  is not canonical (a link, a spelling) is not added to `region_aliases`; `restricted_spellings` remembers the
+  canonical names of up to `MaxRestrictedSpellings` (512) such spellings (emptied when full), so restricted code
+  reads the file of a spelling again only after that. On Windows, restricted code can use only
   zoneinfo region names in the runtime's zoneinfo-to-Windows map (exact names; no Windows time zone names), names
   are at most 255 bytes, and restricted code gets the unknown-region error for any registry failure (unverified: no
   Windows build). Limits per tenant, which would let

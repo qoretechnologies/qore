@@ -2620,6 +2620,16 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
         if (i != region_aliases.end()) {
             return i->second.zone;
         }
+        // a spelling that restricted code used before maps to the canonical name of its file
+        if (restricted) {
+            spelling_map_t::iterator si = restricted_spellings.find(region);
+            if (si != restricted_spellings.end()) {
+                i = region_aliases.find(si->second);
+                if (i != region_aliases.end()) {
+                    return i->second.zone;
+                }
+            }
+        }
     }
 
     // the file is read without the lock
@@ -2656,8 +2666,21 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadRegion(const char* region, 
     // restricted code gets the zone of the file's canonical name, so the names that it can add are bounded by the
     // files of the zoneinfo directory, whatever names it uses (spellings, links to "."); other code gets a zone with
     // the name as given
-    return getZone(restricted ? canonical : std::string(region), data, sbuf, canonical, true, region_aliases,
-        label.c_str(), xsink);
+    const AbstractQoreZoneInfo* rv = getZone(restricted ? canonical : std::string(region), data, sbuf, canonical,
+        true, region_aliases, label.c_str(), xsink);
+    if (rv && restricted && canonical != region) {
+        // the spelling is remembered, so that restricted code does not read the file for each use of it; the map is
+        // bounded (it is emptied when it is full), and it is only a cache, so a failure to remember is ignored
+        QoreAutoRWWriteLocker al(rwl);
+        try {
+            if (restricted_spellings.size() >= MaxRestrictedSpellings) {
+                restricted_spellings.clear();
+            }
+            restricted_spellings.emplace(region, canonical);
+        } catch (std::bad_alloc&) {
+        }
+    }
+    return rv;
 }
 
 //! returns the canonical path of an open file, verified to name that file now
@@ -2827,9 +2850,9 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadDataRegion(const char* 
     if (const AbstractQoreZoneInfo* local = findLocalZone(name)) {
         return local;
     }
-    // a name from data gets the zone of the canonical name of the file reached for any code, so that data cannot make
-    // the runtime add names (spellings, links to ".")
-    return loadRegion(name, xsink, true);
+    // restricted code gets the zone of the canonical name of the file reached; other code keeps the name as given, so
+    // that its data round-trips
+    return loadRegion(name, xsink, callerRestricted());
 #endif
 }
 

@@ -1145,10 +1145,10 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     file (its path in the zoneinfo directory with the links resolved, and on macOS its true name), so the time zones
     that restricted code can add are bounded by the files of the zoneinfo directory; a name that other code loaded
     already gets that code's time zone, so the name that @ref Qore::TimeZone::region() "TimeZone::region()" returns
-    can depend on which name of a region was loaded first.  A region name from data (a deserialized date or
-    @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API \c find_create_timezone() gets) gets the time
-    zone of the canonical name of its file for any code.  Limits on the time zones of each tenant, which would allow
-    restricted code to load paths, are a follow-up
+    can depend on which name of a region was loaded first.  This applies to region names from data as well (a
+    deserialized date or @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API
+    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  Limits on the time
+    zones of each tenant, which would allow restricted code to load paths, are a follow-up
     (<a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>).  For other code, a relative
     path is a path in the current directory; the path is subject to
     @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to the filesystem policy, also when the time zone of the path

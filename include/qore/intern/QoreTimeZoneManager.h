@@ -481,6 +481,9 @@ private:
     alias_map_t region_aliases;
     //! the zones of zoneinfo paths, by the path as given
     alias_map_t path_aliases;
+    typedef std::map<std::string, std::string> spelling_map_t;
+    //! the canonical names of the spellings of regions that restricted code used (at most MaxRestrictedSpellings)
+    spelling_map_t restricted_spellings;
     //! zones whose name reaches another file or other data now; kept as dates refer to them
     std::vector<AbstractQoreZoneInfo*> retired_zones;
 
@@ -603,6 +606,9 @@ public:
     //! the maximum length of a region name in bytes; real region names are less than 40 bytes long
     static constexpr size_t MaxRegionNameLength = 255;
 
+    //! the maximum number of spellings of regions whose canonical names are remembered for restricted code
+    static constexpr size_t MaxRestrictedSpellings = 512;
+
     //! the maximum number of zones loaded from paths on Windows, where they are cached by the path
     static constexpr unsigned MaxPathZones = 16384;
 
@@ -621,8 +627,8 @@ public:
 
     //! finds or loads the zone of a region name from data (deserialized dates and TimeZone objects, names that the
     //! C++ API find_create_timezone() gets from database drivers and imported files)
-    /** As findLoadRegion(), but for any code the region gets the zone of the canonical name of the file reached, so
-        that data cannot make the runtime add names; on Windows as findLoadRegion()
+    /** As findLoadRegion(): restricted code gets the zone of the canonical name of the file reached, other code the
+        zone named as given, so that its data round-trips
     */
     DLLLOCAL const AbstractQoreZoneInfo* findLoadDataRegion(const char* name, ExceptionSink* xsink);
 
@@ -715,9 +721,8 @@ public:
 
     //! finds or loads the zone of a region name from data, such as a deserialized date or TimeZone object
     /** Data never opens a path: the region name of the local zone returns the local zone without file access, a
-        canonical region name gets the zone of the canonical name of the file reached (findLoadDataRegion()), and
-        any other name, a path or one with a NUL character raises the error of raiseUnknownRegion(); an empty name
-        is UTC
+        canonical region name is loaded with findLoadDataRegion(), and any other name, a path or one with a NUL
+        character raises the error of raiseUnknownRegion(); an empty name is UTC
 
         @param region the name from the data
         @param xsink an exception is raised here if the zone cannot be found or loaded
