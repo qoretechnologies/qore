@@ -1139,6 +1139,18 @@
           "source": "Optional headers to send with the attachment",
           "message": "Opcjonalne nagłówki do wysłania z załącznikiem"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "Alternatywa w zwykłym tekście"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "Reprezentacja treści HTML w zwykłym tekście"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "Przy niepustej treści będącej ciągiem text/html wysyła najpierw ten niepusty zwykły tekst w wiadomości multipart/alternative. Pomiń go, aby wysłać samą treść."
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
           "message": "Kodowanie treści"
@@ -1862,6 +1874,18 @@
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.field.aGRy.desc": {
           "source": "Optional headers to send with the attachment",
           "message": "Opcjonalne nagłówki do wysłania z załącznikiem"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.display_name": {
+          "source": "Plain-Text Alternative",
+          "message": "Alternatywa w zwykłym tekście"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.short_desc": {
+          "source": "Plain-text representation of the HTML body",
+          "message": "Reprezentacja treści HTML w zwykłym tekście"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cGxhaW4tYm9keQ.desc": {
+          "source": "With a nonempty text/html string body, send this nonempty plain text first in a multipart/alternative message. Omit it to send the body by itself.",
+          "message": "Przy niepustej treści będącej ciągiem text/html wysyła najpierw ten niepusty zwykły tekst w wiadomości multipart/alternative. Pomiń go, aby wysłać samą treść."
         },
         "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.display_name": {
           "source": "Body Encoding",
