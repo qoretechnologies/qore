@@ -9491,9 +9491,9 @@ bool qore_class_private::isRestrictedCode() const {
     // other lock
     class ProgramRefHolder {
     public:
-        DLLLOCAL ProgramRefHolder(QoreProgram* p) : p(p) {
+        ProgramRefHolder(QoreProgram* p) : p(p) {
         }
-        DLLLOCAL ~ProgramRefHolder() {
+        ~ProgramRefHolder() {
             if (p) {
                 p->deref();
             }
