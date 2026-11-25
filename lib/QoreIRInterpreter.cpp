@@ -6985,16 +6985,16 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     if (qore_sandbox_isolation_refused()) {
         return false;
     }
+    const UserVariantBase* uvb = inst->cached_uvb;
+    if (uvb->hasCachedFunction()) {
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
+        return false;
+    }
     // the sandboxed rule of non-public method calls (qore#7102), in the class context of the caller; outlined
     if (qore_sandboxed_code_active()
             && interpreterInlineMethodCallDenied(inst->variant, method, self, xsink)) {
         result = QoreValue();
         return true;
-    }
-    const UserVariantBase* uvb = inst->cached_uvb;
-    if (uvb->hasCachedFunction()) {
-        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
-        return false;
     }
     // the method's code belongs to the Program of its class, which is kept for the whole inlined call (see
     // QoreSourceProgramHolder); a class without a source Program is not inlined: the regular call path reports it
