@@ -401,7 +401,8 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
     there is no parse
 */
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    // a short string value is inline: read through the helper
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
     int64 variant = HARD_QORE_VALUE_INT(params, 1);
     // "outer::inner": the declarations are in a subnamespace of the namespace that is added
     std::string full = name->c_str();
