@@ -4244,6 +4244,14 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
     return rv;
 }
 
+QoreStringNode* qore_weak_store_conversion_desc(bool weak, const char* value_type, const char* target_type) {
+    return new QoreStringNodeMaker("the %s assignment operator '%s' cannot store a reference to a value of type '%s' "
+        "in an lvalue of type '%s': the lvalue's type converts the value to a copy of its own, so the %s reference "
+        "would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that "
+        "keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type '%s'",
+        weak ? "weak" : "opaque", weak ? ":=" : "@=", value_type, target_type, weak ? "weak" : "opaque", value_type);
+}
+
 bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue& val, ExceptionSink* xsink) {
     if (cur.getType() != NT_REFERENCE) {
         return false;
@@ -4272,22 +4280,6 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
     }
 }
 
-//! Returns true if \a v is a list or hash without a complex type of its own: a plain list or hash, or one of \c auto
-static bool qore_weak_assign_is_plain_container(const QoreValue& v) {
-    switch (v.getType()) {
-        case NT_LIST: {
-            const QoreTypeInfo* ti = v.get<const QoreListNode>()->getTypeInfo();
-            return ti == listTypeInfo || ti == autoListTypeInfo;
-        }
-        case NT_HASH: {
-            const QoreTypeInfo* ti = v.get<const QoreHashNode>()->getTypeInfo();
-            return ti == hashTypeInfo || ti == autoHashTypeInfo;
-        }
-        default:
-            return false;
-    }
-}
-
 //! Returns the container that the weak assignment of \a source assigns: the target of a weak reference, borrowed
 static QoreValue qore_weak_assign_source_container(const QoreValue& source) {
     switch (source.getType()) {
@@ -4300,49 +4292,64 @@ static QoreValue qore_weak_assign_source_container(const QoreValue& source) {
     }
 }
 
-int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, const char* desc,
-        ExceptionSink* xsink) {
+//! Returns true if \a v is a list or hash without a complex type of its own (not one of auto, nor a hashdecl's)
+static bool qore_weak_assign_is_untyped_container(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_LIST:
+            return !qore_list_private::get(*v.get<const QoreListNode>())->complexTypeInfo;
+        case NT_HASH: {
+            const qore_hash_private* hp = qore_hash_private::get(*v.get<const QoreHashNode>());
+            return !hp->complexTypeInfo && !hp->getHashDecl();
+        }
+        default:
+            return false;
+    }
+}
+
+int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, bool weak,
+        const QoreTypeInfo* target_ti, ExceptionSink* xsink) {
     assert(xsink);
-    assert(source.getType() == NT_LIST || source.getType() == NT_HASH || source.getType() == NT_WEAKREF_LIST
-        || source.getType() == NT_WEAKREF_HASH);
     if (converted.getInternalNode() == source.getInternalNode()) {
         return 0;
     }
     // the container that a weak reference designates is compared, which a type converts as it converts the reference
     QoreValue container = qore_weak_assign_source_container(source);
+    assert(container.getType() == NT_LIST || container.getType() == NT_HASH);
     if (converted.getInternalNode() == container.getInternalNode()) {
         return 0;
     }
-    // a type that only strips the container's type (an untyped lvalue, list, hash, any, a list or hash of auto!):
-    // the container assigned is kept, as its own type accepts what it holds, and a change of it is read through the
-    // weak reference
-    if (converted.getType() == container.getType() && qore_weak_assign_is_plain_container(converted)) {
+    // a container without a type of its own that a hash<auto!> or list<auto!> lvalue copied only to tag it as a
+    // container of auto, as it is shared: no type is stripped, and the container assigned is kept as it is
+    if (qore_weak_assign_is_untyped_container(container) && converted.getType() == container.getType()
+        && (container.getType() == NT_HASH
+            ? qore_hash_private::get(*converted.get<const QoreHashNode>())->complexTypeInfo == autoHashTypeInfo
+            : qore_list_private::get(*converted.get<const QoreListNode>())->complexTypeInfo == autoListTypeInfo)) {
         return 1;
     }
-    // a type that converts the container to another (ex: to another element type, or a hash to a softlist): the weak
-    // reference would designate the converted copy, which nothing else holds
-    xsink->raiseException("RUNTIME-TYPE-ERROR", "%s: a weak assignment (:=) of a value of type '%s' converts the "
-        "container assigned to a new value of type '%s', which only the weak reference would hold; assign a container "
-        "of the lvalue's type, or make a normal assignment (=)", desc, container.getFullTypeName(),
-        converted.getFullTypeName());
+    // every other copy is refused, also one that only strips the container's type: the reference would designate the
+    // copy, a temporary, instead of the value assigned (qore#7572)
+    QoreString value_type;
+    if (container.getType() == NT_HASH) {
+        const qore_hash_private* hp = qore_hash_private::get(*container.get<const QoreHashNode>());
+        const TypedHashDecl* hd = hp->getHashDecl();
+        if (hd) {
+            value_type.sprintf("hash<%s>", hd->getName());
+        } else if (hp->complexTypeInfo) {
+            value_type.concat(QoreTypeInfo::getName(hp->complexTypeInfo));
+        } else {
+            value_type.concat("hash");
+        }
+    } else {
+        const QoreTypeInfo* ti = qore_list_private::get(*container.get<const QoreListNode>())->complexTypeInfo;
+        value_type.concat(ti ? QoreTypeInfo::getName(ti) : "list");
+    }
+    xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_conversion_desc(weak, value_type.c_str(),
+        QoreTypeInfo::getName(target_ti)));
     return -1;
 }
 
-int LValueHelper::keepWeakAssignmentContainer(QoreValue& weak_source, QoreValue& n, const char* desc) {
-    int rc = qore_weak_assignment_conversion(weak_source, n, desc, vl.xsink);
-    if (rc > 0) {
-        // the copy is released as it is held, and the container assigned takes its place with the reference kept
-        saveTemp(n);
-        n = weak_source;
-    } else {
-        saveTemp(weak_source);
-    }
-    weak_source.clear();
-    return rc < 0 ? -1 : 0;
-}
-
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
-    if (mode == AssignmentMode::Weak) [[unlikely]] {
+    if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) [[unlikely]] {
         return assignImpl<false, false, true>(n, desc, check_types, mode, {});
     }
     return assignImpl<false>(n, desc, check_types, mode, {});
@@ -4350,7 +4357,7 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, Assign
 
 int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
         AssignmentMode mode) {
-    if (mode == AssignmentMode::Weak) [[unlikely]] {
+    if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) [[unlikely]] {
         return assignImpl<true, false, true>(n, desc, check_types, mode, policy);
     }
     return assignImpl<true>(n, desc, check_types, mode, policy);
@@ -4407,11 +4414,11 @@ void LValueHelper::lockWeakAssignmentSource(QoreValue& n) {
     n = target;
 }
 
-template <bool Lexical, bool Native, bool Weak>
+template <bool Lexical, bool Native, bool WeakOrOpaque>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
-    // a weak assignment is compiled in its own instantiation (see assign())
-    assert(Weak == (mode == AssignmentMode::Weak));
+    // a weak or opaque assignment is compiled in its own instantiation (see assign())
+    assert(WeakOrOpaque == (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque));
     // the container of the lvalue's weak reference is changed in place, never replaced (see viewWeakContainer()):
     // no operation assigns through a helper that designates it
     assert(!weak_target_view);
@@ -4423,25 +4430,31 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // the source of a weak assignment, held weakly while the path was resolved (qore#7405), is assigned as its
     // container, which the lvalue's type checks as it checks any other value, or as a new empty one that cannot be
     // changed if another thread released it meanwhile (qore#7163)
-    if constexpr (Weak) {
-        lockWeakAssignmentSource(n);
+    if constexpr (WeakOrOpaque) {
+        if (mode == AssignmentMode::Weak) {
+            lockWeakAssignmentSource(n);
+        }
     }
 
     //printd(5, "LValueHelper::assign() this: %p '%s' ti: %p '%s' check_types: %d n: '%s' (%d) val: %p qv: %p\n",
     //    this, desc, typeInfo, QoreTypeInfo::getName(typeInfo), check_types, n.getFullTypeName(), n.getType(), val,
     //    qv);
-    // a weak reference designates the container assigned, which a conversion by the lvalue's type must not replace
-    // with a copy that only the weak reference would hold (qore#7237): a reference of its own is kept to compare it;
-    // a weak reference assigned as it is (a store of the IR interpreter) is kept to compare the container that it
-    // designates
+    // the container that a weak or opaque assignment stores a reference to: the lvalue's type must not convert it to
+    // a copy, which the reference would designate instead of it (qore#7572); a reference of its own is kept to compare
+    // it, as the conversion can release it; a weak reference assigned as it is (a store of the IR interpreter) is kept
+    // to compare the container that it designates
     QoreValue weak_source;
-    if constexpr (Weak) {
+    if constexpr (WeakOrOpaque) {
         switch (n.getType()) {
             case NT_LIST:
             case NT_HASH:
+                weak_source = n.refSelf();
+                break;
             case NT_WEAKREF_LIST:
             case NT_WEAKREF_HASH:
-                weak_source = n.refSelf();
+                if (mode == AssignmentMode::Weak) {
+                    weak_source = n.refSelf();
+                }
                 break;
             default:
                 break;
@@ -4459,7 +4472,7 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (*vl.xsink) {
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
-            if constexpr (Weak) {
+            if constexpr (WeakOrOpaque) {
                 if (weak_source.hasNode()) {
                     saveTemp(weak_source);
                 }
@@ -4474,9 +4487,10 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // a weakly designated container is assigned as a copy of its own (qore#7342): to a local variable while another
     // holder holds it (one that nothing else holds is moved), to any other lvalue always; a weak assignment designates
     // it, and an opaque one keeps the reference
-    if (mode != AssignmentMode::Weak && mode != AssignmentMode::Opaque
-            && (val && val == local_var_lvalue ? qore_weak_shared_local(n) : qore_weak_shared(n))) [[unlikely]] {
-        n = qore_weak_share_copy(n, vl.xsink);
+    if constexpr (!WeakOrOpaque) {
+        if ((val && val == local_var_lvalue ? qore_weak_shared_local(n) : qore_weak_shared(n))) [[unlikely]] {
+            n = qore_weak_share_copy(n, vl.xsink);
+        }
     }
 
     if (lvid_set && n.getType() == NT_REFERENCE
@@ -4495,15 +4509,25 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // (shared with parameter binding — see QoreTypeInfo::applyNoNarrowCoercion())
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
-    if constexpr (Weak) {
-        if (weak_source.hasNode() && (*vl.xsink || keepWeakAssignmentContainer(weak_source, n, desc))) [[unlikely]] {
-            if (weak_source.hasNode()) {
+    // a weak or opaque assignment whose value the lvalue's type converted to a copy is refused (qore#7572): every
+    // copy, also one that only strips the container's type, which qore#7237 kept the container assigned in place of;
+    // a container without a type of its own that the lvalue copied only to tag it is kept in place of the copy
+    if constexpr (WeakOrOpaque) {
+        if (weak_source.hasNode()) {
+            if (!*vl.xsink && qore_weak_assignment_conversion(weak_source, n, mode == AssignmentMode::Weak, typeInfo,
+                    vl.xsink) > 0) {
+                // the copy is released as it is held, and the container assigned takes its place
+                saveTemp(n);
+                n = weak_source;
+            } else {
                 saveTemp(weak_source);
             }
-            saveTemp(n);
-            n.clear();
-            rollbackVivification();
-            return -1;
+            weak_source.clear();
+            if (*vl.xsink) [[unlikely]] {
+                saveTempRef(n);
+                rollbackVivification();
+                return -1;
+            }
         }
     }
 
@@ -4512,36 +4536,37 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // target cannot be dereferenced while the lvalue lock is held: a value read through an opaque reference keeps its
     // opaque representation, and releasing it as a plain node would leave its registration with the opaque target
     // registry (see design/dgc.md, "Opaque references")
-    if constexpr (Weak) {
+    if constexpr (WeakOrOpaque) {
         QoreValue old = n;
-        if (n.getType() == NT_OBJECT) {
-            n = new WeakReferenceNode(n.get<QoreObject>());
-            saveTemp(old);
-        } else if (n.getType() == NT_HASH || n.getType() == NT_LIST) {
-            // the container that the weak reference designates: pinned, or a pinned copy of the container of an
-            // expression, which the helper holds until the caller has taken it as the value of the assignment
-            // (qore#7318)
-            saveTemp(old);
-            QoreValue target = qore_weak_source_container(old);
-            saveTemp(target);
-            n = target.getType() == NT_HASH
-                ? QoreValue(new WeakHashReferenceNode(target.get<QoreHashNode>()))
-                : QoreValue(new WeakListReferenceNode(target.get<QoreListNode>()));
-        }
-    } else if (mode == AssignmentMode::Opaque) {
-        // an opaque reference keeps the strong reference the value already carries but stores it in
-        // a representation the DGC scanner does not follow; the reference taken by the make*()
-        // calls replaces the one held by "n"
-        QoreValue old = n;
-        if (n.getType() == NT_OBJECT) {
-            n = QoreValue::makeOpaqueObject(n.get<QoreObject>());
-            saveTemp(old);
-        } else if (n.getType() == NT_HASH) {
-            n = QoreValue::makeOpaqueHash(n.get<QoreHashNode>());
-            saveTemp(old);
-        } else if (n.getType() == NT_LIST) {
-            n = QoreValue::makeOpaqueList(n.get<QoreListNode>());
-            saveTemp(old);
+        if (mode == AssignmentMode::Weak) {
+            if (n.getType() == NT_OBJECT) {
+                n = new WeakReferenceNode(n.get<QoreObject>());
+                saveTemp(old);
+            } else if (n.getType() == NT_HASH || n.getType() == NT_LIST) {
+                // the container that the weak reference designates: pinned, or a pinned copy of the container of an
+                // expression, which the helper holds until the caller has taken it as the value of the assignment
+                // (qore#7318)
+                saveTemp(old);
+                QoreValue target = qore_weak_source_container(old);
+                saveTemp(target);
+                n = target.getType() == NT_HASH
+                    ? QoreValue(new WeakHashReferenceNode(target.get<QoreHashNode>()))
+                    : QoreValue(new WeakListReferenceNode(target.get<QoreListNode>()));
+            }
+        } else {
+            // an opaque reference keeps the strong reference the value already carries but stores it in
+            // a representation the DGC scanner does not follow; the reference taken by the make*()
+            // calls replaces the one held by "n"
+            if (n.getType() == NT_OBJECT) {
+                n = QoreValue::makeOpaqueObject(n.get<QoreObject>());
+                saveTemp(old);
+            } else if (n.getType() == NT_HASH) {
+                n = QoreValue::makeOpaqueHash(n.get<QoreHashNode>());
+                saveTemp(old);
+            } else if (n.getType() == NT_LIST) {
+                n = QoreValue::makeOpaqueList(n.get<QoreListNode>());
+                saveTemp(old);
+            }
         }
     }
 

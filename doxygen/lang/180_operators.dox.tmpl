@@ -2570,6 +2570,15 @@ if (x || y)
     with such an operand, and give @ref nothing "NOTHING" with any other operand.  The other compound assignment
     operators replace the weak reference with their result, as a plain assignment does (as they replace a list, a
     hash or an object that the lvalue holds).\n<br>
+    @anchor weak_assignment_conversion A weak assignment of a hash or a list to an lvalue whose type converts it to a
+    copy of its own is an error: the weak reference would designate the copy, a temporary, instead of the value
+    assigned.  Such an lvalue is one of a type that strips the complex type of the value (ex: an untyped list element
+    or hash key, \c any, \c hash, \c *hash, \c list, \c softlist, <tt>hash&lt;auto!&gt;</tt> or \c auto! for a
+    <tt>hash&lt;string, int&gt;</tt>, a <tt>list&lt;int&gt;</tt> or a @ref hashdecl "hashdecl" value) or that converts
+    its elements (ex: <tt>list&lt;softstring&gt;</tt> for a <tt>list&lt;int&gt;</tt>); the assignment is refused with
+    \c PARSE-TYPE-ERROR when the types of a stripping lvalue and of a typed value are known at parse time, and with
+    \c RUNTIME-TYPE-ERROR otherwise, and the lvalue keeps its value.  An lvalue of a type that keeps the value (\c auto,
+    <tt>hash&lt;auto&gt;</tt>, <tt>list&lt;auto&gt;</tt> or the value's own type) takes the weak reference to it.\n<br>
     A method called through a weak reference keeps its object until the call returns, as any method call does
     (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
     object, the object is destroyed when the method returns, or, for a weak reference read from a hash, a list, a
@@ -2633,14 +2642,11 @@ if (x || y)
     <tt>h.a.x := h.a.b</tt>) keep designating them.  If another thread releases the source meanwhile (ex: while a key
     or an index of the lvalue is evaluated), the weak reference designates a freed hash or list, as described above, in
     every @ref exec_mode_overview "execution mode".\n<br>
-    The weak reference designates the hash or list assigned itself: a type of the lvalue that only strips the type of
-    the container (ex: a <tt>hash<string, int></tt> assigned to a \c hash variable, or a <tt>list<int></tt> assigned to
-    an element of an untyped list or to an \c any, \c softlist or <tt>list<auto!></tt> lvalue) keeps the container
-    with its own type, so that a change made to it is read through the weak reference, and a type that would convert
-    it to another container (ex: a <tt>list<string></tt> assigned to a <tt>list<softint></tt> lvalue, or a hash
-    assigned to a \c softlist lvalue, which makes a list of it)
-    raises a \c RUNTIME-TYPE-ERROR exception, as the weak reference would designate a copy that nothing else holds;
-    this is the same in every @ref exec_mode_overview "execution mode".\n<br>
+    The weak reference designates the hash or list assigned itself: a type of the lvalue that would convert it to a
+    copy, also one that only strips the type of the container (ex: a <tt>hash<string, int></tt> assigned to a \c hash
+    variable, or a <tt>list<string></tt> assigned to a <tt>list<softint></tt> lvalue), is an error (see
+    @ref weak_assignment_conversion), as the weak reference would designate a copy that nothing else holds; this is
+    the same in every @ref exec_mode_overview "execution mode".\n<br>
     The value of the operator is the value assigned, converted to the type of the lvalue, as a strong reference: a
     call that is given it uses the value, and a variable or a container that is given a hash or a list from it takes a
     copy of its own, as from any value that a weak reference designates (see above).  A temporary value assigned, as in
@@ -2675,7 +2681,9 @@ if (x || y)
     This makes it the opposite trade from the @ref weak_assignment_operator "weak assignment operator (:=)":
     <tt>:=</tt> gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
     ownership and asks the collector to ignore the reference.  A mistake with <tt>:=</tt> loses an object that is
-    still in use; a mistake with \c \@= leaks one.
+    still in use; a mistake with \c \@= leaks one.\n<br>
+    As for the weak assignment operator, an opaque assignment of a hash or a list to an lvalue whose type converts it
+    to a copy of its own is an error (see @ref weak_assignment_conversion).
 
     @par Warning
     <b>This operator must be used very carefully.</b>  Use it only where it can be shown that the value

@@ -2886,7 +2886,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
         val.refSelf();
     }
     // the container that a weak assignment assigns, with a reference of its own, which the conversion cannot consume
-    // (qore#7237; see LValueHelper::assign())
+    // (qore#7237, qore#7572; see LValueHelper::assign())
     ValueHolder weak_source(xsink);
     if (weak && (val.getType() == NT_LIST || val.getType() == NT_HASH)) [[unlikely]] {
         weak_source = val.refSelf();
@@ -2898,9 +2898,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
         q_apply_no_narrow_container_type(ti, val, xsink);
     }
     if (weak_source && (!xsink || !*xsink)) [[unlikely]] {
-        int rc = qore_weak_assignment_conversion(*weak_source, val, desc, xsink);
+        int rc = qore_weak_assignment_conversion(*weak_source, val, true, ti, xsink);
         if (rc) {
-            // the copy is released, and the weak reference designates the container assigned, or nothing is assigned
+            // a copy is refused, as LValueHelper::assign() refuses it (qore#7572): it is released, and nothing is
+            // assigned, or the container assigned takes the place of a copy that only tagged it
             val.discard(xsink);
             val = rc > 0 ? weak_source.release() : QoreValue();
         }
@@ -2918,15 +2919,69 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
     return result;
 }
 
+//! returns the node that a hash or list value designates, also for an opaque reference, or nullptr
+static const AbstractQoreNode* qore_rt_container_node(const QoreValue& v) {
+    if (v.isOpaqueHash()) {
+        return v.getOpaqueHash();
+    }
+    if (v.isOpaqueList()) {
+        return v.getOpaqueList();
+    }
+    switch (v.getType()) {
+        case NT_HASH:
+        case NT_LIST:
+            return v.getInternalNode();
+        default:
+            return nullptr;
+    }
+}
+
+//! raises the error of a weak or opaque store of a local whose value the local's type converted to a copy (qore#7572)
+/** As LValueHelper::assign() refuses it: \a original is the value assigned, \a stored the value that the conversion of
+    the local's type (qore_rt_coerce_value()) gave; a weak reference read as the value assigned is compared by its
+    target, as the conversion reads it
+*/
+static void qore_rt_check_weak_store_conversion_impl(const QoreTypeInfo* ti, uint64_t original, uint64_t stored,
+        bool weak, ExceptionSink* xsink) {
+    if (*xsink) {
+        return;
+    }
+    QoreValue o = fromBits(original);
+    ValueHolder target(xsink);
+    if (qore_rt_is_weak_reference_type(o.getType())) {
+        target = qore_rt_take_weak_reference_target(o);
+        o = *target;
+    }
+    const AbstractQoreNode* node = qore_rt_container_node(o);
+    if (!node || qore_rt_container_node(fromBits(stored)) == node) {
+        return;
+    }
+    xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_conversion_desc(weak,
+        QoreTypeInfo::getName(o.getTypeInfo()), QoreTypeInfo::getName(ti)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_check_weak_store_conversion(const QoreTypeInfo* ti, uint64_t original,
+        uint64_t stored, int32_t weak, ExceptionSink* xsink) {
+    qore_rt_check_weak_store_conversion_impl(ti, original, stored, weak, xsink);
+    return 0;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_check_weak_store_conversion_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t original, uint64_t stored, int32_t weak, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    qore_rt_check_weak_store_conversion_impl(ctx->locals[local_idx]->getTypeInfoForLValue(), original, stored, weak,
+        xsink);
+    return 0;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true);
 }
 
 //! Coerces the value of a weak assignment to a local as qore_rt_coerce_value() does
-/** A list or hash that the local's type only strips is kept, as the weak reference designates the container assigned,
-    and one that it converts to another container is refused with an exception (qore#7237; see
-    qore_weak_assignment_conversion())
+/** A list or hash that the local's type converts to a copy, also one that it only strips, is refused with an
+    exception, as the weak reference would designate the copy (qore#7572; see qore_weak_assignment_conversion())
 */
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_weak(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
