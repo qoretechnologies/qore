@@ -765,10 +765,7 @@ public:
         // the members instead of testing both lists' ends, which costs a test less per member (qore#7272)
         const HashMember* om = other.member_list.front();
         for (size_t n = size(); n; --n, m = m->next, om = om->next) {
-            // always inline: the compiler inlined it here before qore#7557 by its heuristics alone, which other changes
-            // can turn
-            if (!qore_key_equal_always_inline(m->key.data(), m->key.size(), om->key.data(), om->key.size()))
-                    [[unlikely]] {
+            if (!qore_key_equal(m->key.data(), m->key.size(), om->key.data(), om->key.size())) [[unlikely]] {
                 break;
             }
             // the keys are unique, so the member with the same key is the member at the same place
@@ -777,10 +774,8 @@ public:
             }
         }
         for (; m; m = m->next) {
-            // the key is searched with the hash that the member keeps (qore#7265), its member hash, which finds it in
-            // any hash (qore#7557)
-            const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
-                qore_hash_lookup_key::stored_hash_t()));
+            // the key is searched with the hash that the member keeps (qore#7265)
+            const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash));
             if (!found || !value_equal(m->val, found->val)) {
                 return false;
             }

@@ -49,17 +49,8 @@
     @param len the number of bytes to compare
 
     @return true if the ranges are equal
-
-    @see qore_key_bytes_equal_always_inline()
 */
-inline bool qore_key_bytes_equal(const char* a, const char* b, size_t len);
-
-//! qore_key_bytes_equal(), always inline: for a loop that must not depend on the compiler's inlining budget, such as
-//! the comparison of the keys of two hashes in their order (qore#7557)
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((always_inline))
-#endif
-inline bool qore_key_bytes_equal_always_inline(const char* a, const char* b, size_t len) {
+inline bool qore_key_bytes_equal(const char* a, const char* b, size_t len) {
     if (len >= 8) {
         uint64_t x, y;
         const size_t last = len - 8;
@@ -93,23 +84,11 @@ inline bool qore_key_bytes_equal_always_inline(const char* a, const char* b, siz
     return !len || *a == *b;
 }
 
-inline bool qore_key_bytes_equal(const char* a, const char* b, size_t len) {
-    return qore_key_bytes_equal_always_inline(a, b, len);
-}
-
 //! Returns true if the string \a a of \a alen bytes is equal to the string \a b of \a blen bytes (qore#7194)
 /** @see qore_key_bytes_equal()
 */
 inline bool qore_key_equal(const char* a, size_t alen, const char* b, size_t blen) {
     return alen == blen && qore_key_bytes_equal(a, b, alen);
-}
-
-//! qore_key_equal(), always inline (see qore_key_bytes_equal_always_inline())
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((always_inline))
-#endif
-inline bool qore_key_equal_always_inline(const char* a, size_t alen, const char* b, size_t blen) {
-    return alen == blen && qore_key_bytes_equal_always_inline(a, b, alen);
 }
 
 #endif
