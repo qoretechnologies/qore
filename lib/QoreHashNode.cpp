@@ -375,6 +375,16 @@ HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
     return nullptr;
 }
 
+void qore_hash_member_map::insertSlow(HashMember* m) {
+    if (hardened || tryHarden()) {
+        m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
+    }
+    HashMember*& b = buckets[m->hash & mask];
+    m->bucket_next = b;
+    b = m;
+    ++count;
+}
+
 bool qore_hash_member_map::tryHarden() {
     try {
         harden();
@@ -411,7 +421,7 @@ void qore_hash_member_map::harden() {
     }
     delete[] buckets;
     buckets = nb;
-    hardened = true;
+    hardened = 1;
 }
 
 size_t qore_hash_member_map::maxChain() const {

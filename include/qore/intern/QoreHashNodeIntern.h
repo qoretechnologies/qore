@@ -317,7 +317,7 @@ public:
 
     //! true if the map hashes its keys with the keyed hash (qore#7557)
     DLLLOCAL bool isHardened() const {
-        return hardened;
+        return hardened != 0;
     }
 
     //! true if the members of both maps keep hashes of the same kind, so that the hash that a member of one keeps
@@ -362,18 +362,20 @@ public:
         if (count >= bucket_count()) {
             grow();
         }
+        // a hardened map, and a full chain, take the slow path; the insert into a map that is not hardened costs a
+        // test of the flag and of the first member of the chain more than before qore#7557
         if (hardened) [[unlikely]] {
-            m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
+            insertSlow(m);
+            return;
         }
-        HashMember** b = &buckets[m->hash & mask];
-        if (*b && !hardened && chainFull(*b)) [[unlikely]] {
-            if (tryHarden()) {
-                m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
-                b = &buckets[m->hash & mask];
-            }
+        HashMember*& b = buckets[m->hash & mask];
+        HashMember* first = b;
+        if (first && chainFull(first)) [[unlikely]] {
+            insertSlow(m);
+            return;
         }
-        m->bucket_next = *b;
-        *b = m;
+        m->bucket_next = first;
+        b = m;
         ++count;
     }
 
@@ -409,7 +411,7 @@ public:
         buckets = nullptr;
         mask = 0;
         count = 0;
-        hardened = false;
+        hardened = 0;
     }
 
     //! makes room for \a n members without a rehash; throws std::bad_alloc, with nothing changed, if the bucket array
@@ -446,8 +448,9 @@ private:
     HashMember** buckets = nullptr;
     //! the number of buckets - 1, if the array is allocated
     uint32_t mask = 0;
-    //! true if the keys are hashed with the keyed hash (qore#7557)
-    bool hardened = false;
+    //! 1 if the keys are hashed with the keyed hash, else 0 (qore#7557); 32 bits wide, as the mask that it follows,
+    //! so that both are initialized and cleared with one store
+    uint32_t hardened = 0;
     size_t count = 0;
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
@@ -481,6 +484,10 @@ private:
 
     //! returns the member with the key of \a len bytes at \a str in a hardened map, or nullptr
     QORE_HASH_NOINLINE DLLLOCAL HashMember* findKeyed(const char* str, size_t len) const;
+
+    //! inserts \a m into a hardened map, or into a map that is not hardened whose chain of the bucket of \a m is
+    //! full: the map is hardened then (tryHarden()), or, if it cannot be, \a m is inserted as it is
+    QORE_HASH_NOINLINE DLLLOCAL void insertSlow(HashMember* m);
 
     //! hardens the map (harden()); returns false, with nothing changed, if it cannot, so that a later insert tries
     //! again
