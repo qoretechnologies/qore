@@ -2826,6 +2826,14 @@ static void ensureLocalInstantiated(LocalVar* var, IRLocalVarSet& locals,
 
         if (!skip_instantiation) {
             var->instantiate(QoreParseOptions());
+        } else if (locally_uninst) {
+            // a pre-instantiated local that UninstantiateLocal cleared at the end of its block stays on the stack,
+            // marked as cleared (LocalVarValue::del()); the block runs again, so the entry is active again, as an
+            // instantiation would make it, and reflection gives it (qore#7640); the interpreter's stores do not all
+            // take the variable's lvalue (see LocalVarValue::getLValue() for the compiled tiers)
+            if (LocalVarValue* lvar = thread_try_find_lvar(var)) {
+                lvar->block_cleared = false;
+            }
         }
         // Clear the "locally uninstantiated" flag if present
         if (locally_uninstantiated) {
