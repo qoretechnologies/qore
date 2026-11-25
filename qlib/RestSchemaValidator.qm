@@ -447,7 +447,7 @@ public namespace RestSchemaValidator {
             @param oh deserialized hash from the source schema description
         */
         public initialize(hash<auto> oh) {
-            vendorExtensions = map {$1.key: $1.value}, oh.pairIterator(), $1.key =~ /^x-/;
+            vendorExtensions = map {$1: oh{$1}}, keys oh, $1.startsWith("x-");
         }
 
         #! Returns True if this object has the x-deprecated extension set
@@ -1688,6 +1688,9 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.5
         */
         static string schemaIdentityToken(string token) {
+            if (token !~ /[~\/]/) {
+                return token;
+            }
             return replace(replace(token, "~", "~0"), "/", "~1");
         }
 
