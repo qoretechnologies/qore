@@ -42,11 +42,15 @@ private:
     bool sr = false,
         tr = false;
 
-    DLLLOCAL void doRange(QoreString& str, char end);
+    DLLLOCAL void doRange(QoreString& str, char end, ExceptionSink* xsink = nullptr);
+    DLLLOCAL bool compilePattern(QoreString& result, const QoreString& pattern, ExceptionSink* xsink);
 
 public:
     DLLLOCAL QoreTransliteration(const QoreProgramLocation* loc);
     DLLLOCAL virtual ~QoreTransliteration();
+
+    DLLLOCAL static QoreStringNode* translate(const QoreString& input, const QoreString& from,
+        const QoreString& to, ExceptionSink* xsink);
 
     DLLLOCAL void finishSource();
     DLLLOCAL void finishTarget();
