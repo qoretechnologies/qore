@@ -1268,6 +1268,11 @@ nothing sub run_code(code c) {
             DefaultBodyStreamThreshold / 2);
         addTestCase("a stream handler reads no more than its body", \streamGrabTest());
         addTestCase("sandboxed code cannot abort the connection", \sandboxedAbortTest());
+        addTestCase("a handler of trusted code under a permissive sandbox gets the connection's socket",
+            \permissiveHandlerTest());
+        addTestCase("a REST class of trusted code under a permissive sandbox gets the connection's socket",
+            \permissiveRestClassTest());
+        addTestCase("trusted code under a permissive sandbox aborts the connection", \permissiveAbortTest());
         addTestCase("the server's target aborts a request", \targetAbortTest());
         addTestCase("WebSocket", \webSocketTest());
         addTestCase("the framing of a response that the handler sends", \framingTest());
@@ -1541,6 +1546,78 @@ nothing sub run_code(code c) {
     }
 
     #! a sandboxed handler cannot abort the connection of its request, which then serves the next request
+    #! a handler declared by code that a sandbox governs only for its policy, and that may use uncontrolled APIs, is
+    #! trusted: it gets the connection's socket, as any trusted handler (qore#7577)
+    permissiveHandlerTest() {
+        Program p = getTenantProgram(True);
+        AbstractHttpRequestHandler h = p.callFunction("get_http_handler", new Queue(), new Queue());
+        assertTrue(SandboxManager::isFromSandboxedProgram(h), "a sandbox governs the handler's Program");
+        assertFalse(SandboxManager::isFromRestrictedProgram(h), "the Program is not restricted");
+        assertFalse(h.needsHandlerSocketView(), "the handler gets the connection's socket");
+        server.setHandler("trusted-permissive", "^class", NOTHING, h);
+        on_exit server.removeHandler("trusted-permissive");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("class=Socket", readResponse(c), "the connection's socket");
+        c.send("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served after", readResponse(c), "the connection serves the next request");
+
+        # the same handler under a restricting sandbox gets a socket of its request
+        Program r = getTenantProgram();
+        AbstractHttpRequestHandler rh = r.callFunction("get_http_handler", new Queue(), new Queue());
+        assertTrue(rh.needsHandlerSocketView(), "a handler of restricted code");
+        server.setHandler("restricted", "^class", NOTHING, rh);
+        on_exit server.removeHandler("restricted");
+        server.removeHandler("trusted-permissive");
+        Socket c2 = connect();
+        on_exit c2.close();
+        c2.send("GET /class HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("class=Http1HandlerSocket", readResponse(c2), "a socket of the request");
+    }
+
+    #! a RestHandler whose REST class is of a Program that a sandbox governs only for its policy, and that may use
+    #! uncontrolled APIs, gives the class the connection's socket and is not refused (qore#7577)
+    permissiveRestClassTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        RestHandler rest = p.callFunction("get_class_rest_handler");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        assertFalse(rest.needsHandlerSocketView(), "the RestHandler runs only code of a trusted Program");
+        server.setHandler("rest-permissive", "^sockclass", NOTHING, rest);
+        on_exit server.removeHandler("rest-permissive");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /sockclass HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("\"Socket\"", readResponse(c), "the REST class gets the connection's socket");
+        c.send("GET /victim HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served victim", readResponse(c), "the connection serves the next request");
+    }
+
+    #! trusted code under a permissive sandbox can abort the connection with the socket of its request (qore#7577)
+    permissiveAbortTest() {
+        Program p = getTenantProgram(True);
+        AbstractHttpRequestHandler h = p.callFunction("get_http_handler", new Queue(), new Queue());
+        # a socket of the request, which the handler asked for
+        h.setHandlerSocketView();
+        server.setHandler("trusted-permissive", "^abort", NOTHING, h);
+        on_exit server.removeHandler("trusted-permissive");
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /abort HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the connection is aborted: no response, and the server closes it
+        string got;
+        try {
+            got = c.recv(-1, HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+            got = ex.err;
+        }
+        assertEq(-1, got.find("HTTP/1.1"), "no response: " + got);
+    }
+
     sandboxedAbortTest() {
         Program p = getTenantProgram();
         Queue entered();
@@ -2668,10 +2745,15 @@ class Peek inherits WebSocketHandler::WebSocketConnection {
     }
 
     #! Returns a sandboxed Program with the tenant's handlers
-    private Program getTenantProgram() {
+    #! returns a sandboxed Program with the tenant's code; a permissive sandbox allows uncontrolled APIs: the host
+    #! trusts its code and governs it only for its policy (qore#7577)
+    private Program getTenantProgram(bool permissive = False) {
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
+        if (permissive) {
+            sm.setUncontrolledApiPolicy(True);
+        }
         p.setSandboxManager(sm);
         p.parse(TenantSource, "tenant");
         return p;
