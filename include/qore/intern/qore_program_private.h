@@ -5511,14 +5511,56 @@ public:
 
         @return the zone; nullptr for UTC or if an exception was raised
     */
+    DLLLOCAL static void raiseDirectivePathError(ExceptionSink* xsink) {
+        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a zoneinfo file "
+            "path in a restricted Program that no sandbox with a time zone path budget governs; such code can load "
+            "time zone regions only");
+    }
+
     DLLLOCAL const AbstractQoreZoneInfo* findTimeZoneDirectiveZone(const char* zone, ExceptionSink* xsink) {
         if (*zone == '-' || *zone == '+') {
             return QTZM.findCreateOffsetZone(zone, xsink);
         }
         if (*zone && QoreTimeZoneManager::isPathName(zone)) {
-            if ((pwo.parse_options & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
-                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a "
-                    "zoneinfo file path in a restricted Program; restricted code can load time zone regions only");
+            if (pwo.parse_options & PO_NO_FILESYSTEM) {
+                raiseDirectivePathError(xsink);
+                return nullptr;
+            }
+            // the sandboxes of the Program (its own, that of its creator and that of the code that adds the code
+            // being parsed) and of the code that parses it decide and are charged, not only the caller of the parse
+            // (qore#7566)
+            std::vector<QoreSandboxManager*> managers;
+            // the capacity is reserved before any reference is taken, so that no reference leaks
+            managers.reserve(4);
+            ON_BLOCK_EXIT([&managers] () {
+                for (QoreSandboxManager* sm : managers) {
+                    sm->deref(nullptr);
+                }
+            });
+            {
+                QoreSandboxManager* own = nullptr;
+                QoreSandboxManager* creator = nullptr;
+                getSandboxManagerRefs(own, creator);
+                if (own) {
+                    managers.push_back(own);
+                }
+                if (creator) {
+                    managers.push_back(creator);
+                }
+                if (pending_creator_sandbox) {
+                    pending_creator_sandbox->ref();
+                    managers.push_back(pending_creator_sandbox);
+                }
+                if (QoreSandboxManager* parser = qore_caller_sandbox_ref()) {
+                    managers.push_back(parser);
+                }
+            }
+            if (!managers.empty()) {
+                return QTZM.findLoadSandboxDirectivePath(zone, managers, xsink);
+            }
+            // a Program restricted only by its parse options loads regions only
+            if (QoreTimeZoneManager::programRestricted(pgm)) {
+                raiseDirectivePathError(xsink);
                 return nullptr;
             }
             return QTZM.findLoadRegionFromPath(zone, xsink, pgm);

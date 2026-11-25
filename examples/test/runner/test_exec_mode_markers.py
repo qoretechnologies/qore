@@ -385,6 +385,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   as the checks are of the exit of the process that holds the Program
         # - AOTEmptyRegex (#7623): its checks run in child processes that set their own execution modes and in qcc
         #   executables
+        # - sandbox-timezone-paths-library (#7566): its checks run in child interpreters without an execution mode,
+        #   started with a module directory of library code, as a module's initialization runs once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTEmptyRegex.qtest",
                                  "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
@@ -485,6 +487,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/IrEnvironmentLookups.qtest",
                                  "examples/test/qore/parser/nested-callable-types.qtest",
                                  "examples/test/qore/threads/restricted-first-modules.qtest",
+                                 "examples/test/qore/security/sandbox-timezone-paths-library.qtest",
                                  "examples/test/qore/parser/include-failure-diagnostics.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
                                  "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",

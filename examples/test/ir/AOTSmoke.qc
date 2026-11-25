@@ -11500,7 +11500,13 @@ public namespace TzPathMod {
         f.open2(dir + "/restricted.q", O_WRONLY | O_CREAT | O_TRUNC);
         f.write("%modern\n%no-child-restrictions\n"
             "if (ENV.PRELOAD) {\n    TimeZone tz(ENV.PRELOAD);\n}\n"
-            "Program p(PO_NO_FILESYSTEM | (ENV.NLC ? PO_NO_LOCALE_CONTROL : 0));\ntry {\n"
+            "Program p((ENV.SB ? 0 : PO_NO_FILESYSTEM) | (ENV.NLC ? PO_NO_LOCALE_CONTROL : 0));\n"
+            # with SB set, a sandbox that allows reading the directory governs the Program, with a time zone path budget
+            # if BUDGET is set (qore#7566)
+            "if (ENV.SB) {\n    SandboxManager sm();\n    sm.setFilesystemDefaultPolicy(False);\n"
+            "    sm.addFilesystemAllowedPath(ENV.SB, QSEC_READ);\n"
+            "    if (ENV.BUDGET) {\n        sm.setTimeZonePathLimits(10, 50000000);\n    }\n"
+            "    p.setSandboxManager(sm);\n}\ntry {\n"
             "    p.parse(\"%requires TzPathMod\\nstring sub t() { return TzPathMod::Winter.format(\\\"IF\\\") + \\\" \\\" "
             "+ TzPathMod::summer(); }\", \"r\");\n"
             "    printf(\"%s\\n\", p.callFunction(\"t\"));\n"
@@ -11527,7 +11533,17 @@ public namespace TzPathMod {
             # the zone is loaded already, but the restricted Program cannot use it, as in a fresh process
             ("NLC=1 PRELOAD=" + path, "the time zone of a date literal is the zoneinfo file path '" + path + "', which "
                 "cannot be loaded in a restricted Program"),
+            # a sandbox without a time zone path budget (qore#7566)
+            ("SB=" + dir, "the %set-time-zone directive cannot name a zoneinfo file path in a restricted Program"),
+            # with a budget, a Program that ignores the module's directive still cannot use the path of its literals,
+            # which is not its own zone
+            ("SB=" + dir + " BUDGET=1 NLC=1", "the time zone of a date literal is the zoneinfo file path '" + path
+                + "', which cannot be loaded in a restricted Program"),
         );
+        # a sandbox with a time zone path budget that allows the directory: the module's directive loads the zone,
+        # and its compiled date literals are in it (qore#7566)
+        assertEq(expected, backquote(sprintf("%s SB=%s BUDGET=1 %s -b %s/restricted.q 2>&1", env, dir, qore_bin,
+            dir)), "a sandbox with a time zone path budget");
         foreach list<string> c in (cases) {
             string out = backquote(sprintf("%s %s %s -b %s/restricted.q 2>&1", env, c[0], qore_bin, dir));
             string name = "restricted Program [" + c[0] + "]";
