@@ -28,7 +28,7 @@ class HashdeclUnknownKeyStoreTest inherits QUnit::Test {
         string dir = get_script_dir() + "/hashdecl-unknown-key-store";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("hashdecl-unknown-key-store",);
+        const Programs = ("hashdecl-unknown-key-store", "absent-hashdecl");
     }
 
     constructor() : QUnit::Test("HashdeclUnknownKeyStoreTest", "1.0", \ARGV) {

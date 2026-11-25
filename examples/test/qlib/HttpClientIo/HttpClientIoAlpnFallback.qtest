@@ -149,7 +149,7 @@ class AlpnTestServer {
         self.alpn = alpn;
         listener.setCertificate(new SSLCertificate(cert_pem));
         listener.setPrivateKey(new SSLPrivateKey(key_pem));
-        listener.bind("localhost:0", True);
+        listener.bind("127.0.0.1:0", True);
         listener.listen();
         port = listener.getPort();
         background serve();
@@ -160,7 +160,7 @@ class AlpnTestServer {
     }
 
     string getUrl() {
-        return "https://localhost:" + port;
+        return "https://127.0.0.1:" + port;
     }
 
     #! Returns the number of TCP connections accepted so far
@@ -196,7 +196,7 @@ class AlpnTestServer {
         }
         try {
             Socket s();
-            s.connect("localhost:" + port);
+            s.connect("127.0.0.1:" + port);
             s.close();
         } catch (hash<ExceptionInfo> ex) {
             # the accept loop has already exited
@@ -341,7 +341,7 @@ class HttpClientIoAlpnFallbackTest inherits QUnit::Test {
             assertEq("happy-eyeballs", mgr.selectProtocol(url), "expired cache races both protocols");
         }
         AltSvcTestManager proxied(<HttpClientIo::HttpClientConnectionManagerOptions>{
-            "proxy_url": "http://localhost:8080",
+            "proxy_url": "http://127.0.0.1:8080",
         });
         proxied.advertise(url, "h3=\":8443\"");
         assertEq("h2", proxied.selectProtocol(url), "proxy connections do not attempt QUIC");

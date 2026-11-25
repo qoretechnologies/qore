@@ -1097,6 +1097,7 @@ public class FireworksManifest {
             <RestSchemaActionInfo>{
                 "action": "query-usage-costs",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/usageCosts:query",
                 "operation_id": "Gateway_QueryUsageCosts",
                 "display_name": "Query Usage Costs",
@@ -4327,6 +4328,7 @@ public class FireworksManifest {
             <RestSchemaActionInfo>{
                 "action": "preview-evaluation",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/evaluations/{evaluation_id}:preview",
                 "operation_id": "Gateway_PreviewEvaluation",
                 "display_name": "Preview Evaluation",
@@ -4367,6 +4369,7 @@ public class FireworksManifest {
             <RestSchemaActionInfo>{
                 "action": "validate-assertions",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/evaluations:validateAssertions",
                 "operation_id": "Gateway_ValidateAssertions",
                 "display_name": "Validate Assertions",
@@ -5072,6 +5075,7 @@ public class FireworksManifest {
             <RestSchemaActionInfo>{
                 "action": "preview-evaluator",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/evaluators:previewEvaluator",
                 "operation_id": "Gateway_PreviewEvaluator",
                 "display_name": "Preview Evaluator",
@@ -7500,6 +7504,7 @@ public class FireworksManifest {
             <RestSchemaActionInfo>{
                 "action": "estimate-supervised-fine-tuning-job-cost",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/accounts/{account_id}/supervisedFineTuningJobs:estimateCost",
                 "operation_id": "Gateway_EstimateSupervisedFineTuningJobCost",
                 "display_name": "Estimate Supervised Fine Tuning Job Cost",
@@ -8245,6 +8250,7 @@ public class FireworksManifest {
             <RestSchemaActionInfo>{
                 "action": "create-message",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/messages",
                 "operation_id": "messages_post",
                 "display_name": "Create Message",

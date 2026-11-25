@@ -19,38 +19,42 @@
 %exec-class WeakLocalChangesTest
 
 #! Tests the operators that change a local variable assigned with the weak assignment operator (:=)
-/** A read of such a variable gives the target of its weak reference, but an operator that changes the variable (+=,
-    -=, *=, ++, push, ...) sees the weak reference as the variable holds it, as the AST interpreter's lvalue does, and
-    the target is not changed; every execution mode must give the AST interpreter's results, also when the weak
-    assignment follows the change in the code.  The checks are in weak-local-change-checks.qi and run in this program,
-    in a worker in each execution mode and from a compiled module.
+/** A read of such a variable gives the target of its weak reference; an operator that changes the list or the hash
+    that the variable holds (+=, a hash -=, push, ...) changes the container that the weak reference designates, and
+    the variable keeps the weak reference (qore#7297), as += changes the object that it designates (qore#7403), while
+    an arithmetic operator (-=, *=, ++, ...) changes the variable; every execution mode must give the AST interpreter's
+    results, also when the weak assignment follows the change in the code.  The checks are in
+    weak-local-change-checks.qi and run in this program, in a worker in each execution mode and from a compiled
+    module.
 */
 class WeakLocalChangesTest inherits QUnit::Test {
     public {
         #! the result of each check, as the AST interpreter gives it: the variable and the target after the change
         const Expected = {
-            "assigned-later": "3/[1, 2]",
-            "hash-minus": "0/{a: 1, b: 2}",
-            "hash-plus": "0/{a: 1}",
+            # the container that the weak reference designates is changed (qore#7297)
+            "assigned-later": "[1, 2, 3]/[1, 2, 3]",
+            "hash-minus": "{b: 2}/{b: 2}",
+            "hash-plus": "{a: 1, c: 3}/{a: 1, c: 3}",
             "list-and": "0/[1, 2]",
             "list-divide": "0/[1, 2]",
             "list-minus": "-1/[1, 2]",
             "list-modulo": "0/[1, 2]",
             "list-multiply": "0/[1, 2]",
             "list-or": "3/[1, 2]",
-            "list-plus": "3/[1, 2]",
+            "list-plus": "[1, 2, 3]/[1, 2, 3]",
             "list-post-decrement": "-1/[1, 2]",
             "list-post-increment": "1/[1, 2]",
             "list-pre-decrement": "-1/[1, 2]",
             "list-pre-increment": "1/[1, 2]",
-            "list-push": "PUSH-ERROR",
+            "list-push": "[1, 2, 3]/[1, 2, 3]",
             "list-shift-left": "0/[1, 2]",
             "list-shift-right": "0/[1, 2]",
             "list-xor": "3/[1, 2]",
-            "object-plus": "null/1",
+            # the object that the weak reference designates is changed (qore#7403)
+            "object-plus": "2/2",
             # an opaque reference is a strong reference: the change sees the list
             "opaque-plus": "[1, 2, 3]/[1, 2]",
-            "result-used": "3 3/[1, 2]",
+            "result-used": "[1, 2, 3] [1, 2, 3]/[1, 2, 3]",
         };
     }
 

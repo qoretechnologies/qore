@@ -604,6 +604,11 @@ enum QoreProgramRecordSite {
 #define QORE_DBG_RECORD_CHANGE_TID(site, pp, tid)
 #endif
 
+//! returns the execution mode requested for the process in \a mode, if any (see qore_set_default_exec_mode())
+/** @return true if a mode was requested for the process
+*/
+DLLLOCAL bool qore_get_default_exec_mode(qore_exec_mode_t& mode);
+
 class qore_program_private_base {
     friend class QoreProgramAccessHelper;
 
@@ -1449,6 +1454,10 @@ public:
     */
     std::atomic<bool> any_sandbox_manager{false};
 
+    //! true if the Program is a host Program: created with no Program running; its code is not restricted for time
+    //! zones (QoreTimeZoneManager::callerRestricted())
+    bool tz_host = false;
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
@@ -1596,6 +1605,9 @@ public:
         } else {
             TZ.store(QTZM.getLocalZoneInfo(), std::memory_order_release);
             newProgram();
+            // a Program without a parent takes the execution mode requested for the process, if any
+            // (qore_set_default_exec_mode())
+            inheritExecMode(nullptr);
         }
         // Apply parse-option implications once pwo.parse_options is fully populated
         // (setParent may OR in inherited restrictions from the parent Program).
@@ -1824,11 +1836,14 @@ public:
 
     //! Inherits the explicitly requested execution mode of the given parent, if any, and sets the mode
     /** Used for child Programs (setParent()) and for the Programs of user modules (see ModuleManager.cpp); see
-        syncExecModeWithParseOptions()
+        syncExecModeWithParseOptions().  Without a parent (a Program created without one, or the Program of a module
+        loaded without a requesting Program), the mode requested for the process (qore_set_default_exec_mode(): the
+        qore binary's --exec-mode) is inherited, so that no Program runs in another mode than the one requested (a
+        script run with --exec-mode=ir compiles no code to native code)
     */
     DLLLOCAL void inheritExecMode(const qore_program_private_base* parent) {
         qore_exec_mode_t mode = QEM_AST;
-        bool inherited = parent && parent->getInheritableExecMode(mode);
+        bool inherited = parent ? parent->getInheritableExecMode(mode) : qore_get_default_exec_mode(mode);
         inherited_exec_mode = inherited ? mode : QEM_AST;
         inherited_user_requested_exec_mode.store(inherited, std::memory_order_release);
         user_requested_exec_mode.store(false, std::memory_order_release);
@@ -2411,21 +2426,118 @@ public:
     }
 
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
-    // map for line to statement
-    typedef std::map<int, AbstractStatement*> sline_statement_map_t;
+    struct IndexedStatement {
+        AbstractStatement* statement;
+        int line_count;
+        int16_t start_column, end_column;
+
+        bool matches(const QoreProgramLocation& loc) const {
+            return start_column == loc.start_column && end_column == loc.end_column
+                && line_count == loc.end_line - loc.start_line;
+        }
+    };
+    using sline_statement_map_t = std::map<int, IndexedStatement>;
 
     struct section_sline_statement_map {
         section_offset_map_t sectionMap;
         sline_statement_map_t statementMap;
+        // Only additional distinct spans on a line need a separate entry.
+        using Span = std::tuple<int, int, int, int>;
+        std::map<Span, AbstractStatement*> otherSpans;
+
+        static Span spanKey(int line, const QoreProgramLocation& loc) {
+            return {line, loc.start_column, loc.end_line - loc.start_line, loc.end_column};
+        }
+
+        AbstractStatement* findSpan(int line, const QoreProgramLocation& loc) const {
+            auto first = statementMap.find(line);
+            if (first == statementMap.end()) {
+                return nullptr;
+            }
+            if (loc.start_column < 0 || first->second.matches(loc)) {
+                return first->second.statement;
+            }
+            auto match = otherSpans.find(spanKey(line, loc));
+            return match == otherSpans.end() ? nullptr : match->second;
+        }
         //! the name of the file normalized as an absolute path, made absolute with the working directory when the
         //! file was parsed, so that a debugger can give the file with another path than it was parsed with
         std::string abs_path;
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
-    // map for filenames
-    typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
-    //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
+
+    //! map of file names (or labels) to their statement maps
+    /** Iterates in insertion order, which getStatementFromIndex() relies on for its suffix match, and finds keys
+        through a hash index: AOT registration of a program that allows the debugger looks up and adds every
+        statement location of every function here, and a linear scan with strcmp() per lookup made that
+        O(statements x files), most of the startup time of a large AOT program on a slow CPU.
+
+        Keys are not copied; they must stay valid while they are in the map, as the strings that the Program owns
+        (file names, labels and runtime strings) do.
+    */
+    class name_section_sline_statement_map_t {
+    public:
+        typedef vector_map_t<const char*, section_sline_statement_map_t*> vmap_t;
+        typedef vmap_t::value_type value_type;
+        typedef vmap_t::iterator iterator;
+        typedef vmap_t::const_iterator const_iterator;
+
+        DLLLOCAL iterator find(const char* key) {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        DLLLOCAL const_iterator find(const char* key) const {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        //! adds the key with its value, or replaces the value of a key that is already in the map
+        DLLLOCAL std::pair<iterator, bool> insert(value_type vt) {
+            auto [i, created] = index.try_emplace(std::string_view(vt.first), vmap.size());
+            if (!created) {
+                iterator vi = vmap.begin() + i->second;
+                vi->second = vt.second;
+                return std::pair<iterator, bool>(vi, false);
+            }
+            return std::pair<iterator, bool>(vmap.append(std::move(vt)), true);
+        }
+
+        DLLLOCAL iterator begin() {
+            return vmap.begin();
+        }
+
+        DLLLOCAL const_iterator begin() const {
+            return vmap.begin();
+        }
+
+        DLLLOCAL iterator end() {
+            return vmap.end();
+        }
+
+        DLLLOCAL const_iterator end() const {
+            return vmap.end();
+        }
+
+        DLLLOCAL bool empty() const {
+            return vmap.empty();
+        }
+
+        DLLLOCAL size_t size() const {
+            return vmap.size();
+        }
+
+        DLLLOCAL void clear() {
+            index.clear();
+            vmap.clear();
+        }
+
+    private:
+        vmap_t vmap;
+        //! the position of each key in vmap
+        std::unordered_map<std::string_view, size_t> index;
+    };
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
             QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
@@ -2475,7 +2587,7 @@ public:
     DLLLOCAL static void dbgProgramDestroyed();
 #endif
 
-    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)
+    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::FAST_CALL_BLOCK_PGM_DELETED)
     /** A variant can outlive its Program (a closure or a call reference stored in another Program, for example); the
         fast paths that evaluate its code without entering the Program (the native leaf of a closure) check the mark,
         so that the call path refuses the call with PROGRAM-ERROR, as for the AST interpreter (qore#5822)
@@ -4642,14 +4754,32 @@ public:
     DLLLOCAL static int checkModernSourceDefault(const QoreParseOptions& current, const char* filename,
             ExceptionSink* xsink);
 
+    /** @param open_path the file opened, if not \a filename, which is the name of the source and the script path: a
+        module that is library code is read from the path where it was judged to be, and keeps the name it was found
+        by (qore#7319)
+    */
     DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
-            bool first_except_only = false) {
+            bool first_except_only = false, const char* open_path = nullptr) {
         QORE_TRACE("QoreProgram::parseFile()");
 
         printd(5, "QoreProgram::parseFile(%s)\n", filename);
 
-        FILE *fp;
-        if (!(fp = fopen(filename, "r"))) {
+        FILE *fp = nullptr;
+        {
+            // the file-system policy of the sandbox of the calling code applies to a source that it reads by name:
+            // the file read is the file that the policy checked (qore#7518); a module read from a directory of library
+            // code (open_path) is read as without a policy
+            if (!open_path && q_source_read_policy_applies()) {
+                fp = q_open_policy_checked_source(filename, xsink);
+                if (!fp && *xsink) {
+                    exceptions_raised++;
+                    return;
+                }
+            } else {
+                fp = fopen(open_path ? open_path : filename, "r");
+            }
+        }
+        if (!fp) {
             if ((first_except_only && !exceptions_raised) || !first_except_only)
                 xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
             exceptions_raised++;
@@ -5342,11 +5472,7 @@ public:
             // that load
             if (module_header_closed && (module_own_dom & QDOM_LOCALE_CONTROL)
                     && !(module_trusted_dom & QDOM_LOCALE_CONTROL) && !locale_control_restricted_after_header) {
-                if (*zone == '-' || *zone == '+') {
-                    QTZM.findCreateOffsetZone(zone, &xsink);
-                } else {
-                    QTZM.findLoadRegion(zone, &xsink);
-                }
+                findTimeZoneDirectiveZone(zone, &xsink);
                 if (xsink) {
                     mergeParseException(xsink);
                     return;
@@ -5369,6 +5495,34 @@ public:
         time_zone_trusted_only = false;
     }
 
+    //! returns the zone that the %set-time-zone directive with the given argument names in this Program
+    /** A UTC offset, a region, or a zoneinfo file path.  A path is refused in a restricted Program (one that a
+        sandbox governs or whose parse options restrict a functional domain, unless it is the host Program), which can
+        load regions only; the directive is processed while the Program is parsed, when the code that runs is the
+        caller of the parse, so the Program's own restrictions decide; otherwise the path is loaded subject to the
+        restrictions of that caller.
+
+        @param zone the argument of the directive
+        @param xsink for the exception if the zone cannot be found or created or the path is refused
+
+        @return the zone; nullptr for UTC or if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findTimeZoneDirectiveZone(const char* zone, ExceptionSink* xsink) {
+        if (*zone == '-' || *zone == '+') {
+            return QTZM.findCreateOffsetZone(zone, xsink);
+        }
+        if (*zone && QoreTimeZoneManager::isPathName(zone)) {
+            if ((pwo.parse_options & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a "
+                    "zoneinfo file path in a restricted Program; restricted code can load time zone regions only");
+                return nullptr;
+            }
+            return QTZM.findLoadRegionFromPath(zone, xsink, pgm);
+        }
+        // the zone is charged to the limits of this Program, not of the code that parses it
+        return QTZM.findLoadRegionForProgram(zone, pgm, xsink);
+    }
+
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
     /** @param zone a region name or a UTC offset (starting with \c + or \c -)
         @param xsink for the exception if the zone cannot be found or created
@@ -5378,8 +5532,7 @@ public:
         Also used by the AOT loader for the directive recorded in an AOT image (qore#6270)
     */
     DLLLOCAL int setTimeZoneDirective(const char* zone, ExceptionSink* xsink) {
-        const AbstractQoreZoneInfo *tz = (*zone == '-' || *zone == '+') ? QTZM.findCreateOffsetZone(zone, xsink)
-            : QTZM.findLoadRegion(zone, xsink);
+        const AbstractQoreZoneInfo *tz = findTimeZoneDirectiveZone(zone, xsink);
         if (*xsink) {
             assert(!tz);
             return -1;
@@ -7524,10 +7677,7 @@ public:
     }
 
     DLLLOCAL void addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement* statement, int offs, const char* section, int sectionOffs);
-    DLLLOCAL AbstractStatement* findStatementInIndexIntern(const name_section_sline_statement_map_t& statementIndex,
-            const char* key, int line) const;
-    DLLLOCAL AbstractStatement* findIndexedStatementForLocation(const char* file, const char* source,
-            int start_line, int offset) const;
+    DLLLOCAL AbstractStatement* findIndexedStatementForLocation(const QoreProgramLocation& loc) const;
     DLLLOCAL static void registerStatement(QoreProgram* pgm, AbstractStatement* statement, bool addToIndex);
     DLLLOCAL QoreHashNode* getSourceIndicesIntern(name_section_sline_statement_map_t* statementIndex, ExceptionSink* xsink) const;
     DLLLOCAL QoreHashNode* getSourceLabels(ExceptionSink* xsink) {
@@ -7537,10 +7687,11 @@ public:
         return getSourceIndicesIntern(&statementByFileIndex, xsink);
     }
 
-    DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
+    DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line,
+            const QoreProgramLocation* span = nullptr) {
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
-        name_section_sline_statement_map_t::iterator it;
+        name_section_sline_statement_map_t::const_iterator it;
         if (statementByFileIndex.empty()) {
             return nullptr;
         }
@@ -7594,6 +7745,11 @@ public:
                 printd(5, "qore_program_private::getStatementFromIndex('%s',%d) found by file full match, this: %p\n", name, line, this);
             }
         }
+        if (span && span->start_column >= 0) {
+            if (auto* match = it->second->findSpan(line, *span)) {
+                return match;
+            }
+        }
         sline_statement_map_t *ssm = &it->second->statementMap;
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d) found '%s', this: %p, ssm#: %d\n", name, line, it->first, this, (int)(ssm->size()));
         if (ssm->size() == 0)
@@ -7614,16 +7770,16 @@ public:
                 break;
                 // we do not try to find outer statement when looking for line behind inner statement
             }
-            if (li->second->loc->start_line + (addOffs ? li->second->loc->offset : 0) <= line && li->second->loc->end_line + (addOffs ? li->second->loc->offset : 0) >= line) {
-                int n = li->second->loc->end_line - li->second->loc->start_line;
+            if (li->second.statement->loc->start_line + (addOffs ? li->second.statement->loc->offset : 0) <= line && li->second.statement->loc->end_line + (addOffs ? li->second.statement->loc->offset : 0) >= line) {
+                int n = li->second.statement->loc->end_line - li->second.statement->loc->start_line;
                 if (minnl >= 0) {
                     if (n < minnl) {
                         minnl = n;
-                        st = li->second;
+                        st = li->second.statement;
                     }
                 } else {
                     minnl = n;
-                    st = li->second;
+                    st = li->second.statement;
                 }
                 if (minnl == 0)
                     break;
@@ -8267,6 +8423,10 @@ public:
     QoreModulePathScope(const QoreModulePathScope&) = delete;
     QoreModulePathScope& operator=(const QoreModulePathScope&) = delete;
 };
+
+//! sets the execution mode requested for the process (the qore binary's --exec-mode): the mode of the Programs that
+//! have no parent and of the Programs of the modules loaded without a requesting Program
+DLLEXPORT void qore_set_default_exec_mode(qore_exec_mode_t mode);
 
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them

@@ -153,6 +153,20 @@ public class AzureOpenAiSchema {
         return action_sets;
     }
 
+    #! Returns the complete catalog action definitions for this app or an alias
+    static list<hash<DataProviderActionInfo>> getActionInfoList(string app) {
+        list<hash<DataProviderActionInfo>> result = ();
+        foreach RestSchemaActions::RestSchemaActionSet set in (getActionSets()) {
+            foreach hash<DataProviderActionInfo> action in (set.getActionInfoList(app)) {
+                if (inlist(action.action, ("list-models", "get-model", "list-batches", "get-batch"))) {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
+                push result, action;
+            }
+        }
+        return result;
+    }
+
     #! Finds the action set owning a stable action ID
     /** @param action the action ID
         @return its action set, or nothing if it is unknown

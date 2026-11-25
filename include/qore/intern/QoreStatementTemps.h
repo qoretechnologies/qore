@@ -223,8 +223,13 @@ public:
         @param exp the operand, which must outlive the holder (the operand of an operator node)
         @param xs the exception sink of the evaluation; null when an operator is folded at parse time (keys), when
         nothing is held
+
+        Always inlined: every operator of the AST evaluates its operands with it, and whether it is inlined must not
+        depend on the size of the code around it in the library's single compilation unit (as for
+        ProgramThreadCountContextHelper, qore#7009)
     */
-    DLLLOCAL QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(xs) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs)
+            : ValueEvalOptimizedRefHolder(xs) {
         evalOperand(exp);
     }
 
@@ -235,7 +240,24 @@ private:
     //! evaluates the operand as ValueEvalOptimizedRefHolder::eval() does, and hands a temporary node to the
     //! innermost scope of the thread (QoreStatementTempScope::holdReceiver()); one call, so that an operand that holds
     //! no reference costs only a test of the value that it has at hand
-    DLLLOCAL void evalOperand(const QoreValue& exp);
+    /** Always inlined with the constructor, in the header, so that whether every AST operator's operand evaluation is
+        inlined does not depend on the size of the code around it in the library's single compilation unit (qore#7052
+        callgrind rows; ProgramThreadCountContextHelper, qore#7009)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void evalOperand(const QoreValue& exp) {
+        if (!exp.needsEval()) {
+            needs_deref = false;
+            v = exp;
+            return;
+        }
+        bool nd = true;
+        v = exp.eval(nd, xsink);
+        needs_deref = nd;
+        // a value folded at parse time (no exception sink) is not a temporary of a statement
+        if (nd && xsink && v.needsRef()) {
+            QoreStatementTempScope::holdReceiver(exp, *this, xsink);
+        }
+    }
 };
 
 //! returns true if the operand of a change to an lvalue is evaluated as a statement of its own

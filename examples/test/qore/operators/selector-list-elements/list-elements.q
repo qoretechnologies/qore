@@ -1,6 +1,8 @@
 %modern
 # selectors and indexes of every kind on lists, lists of lists, strings and binaries; see selector-list-elements.qtest
 
+hashdecl IndexRecord { int member; }
+
 list<auto> ll = ((1, 2), (3, 4), (5, 6));
 list<list<int>> tl = ((1, 2), (3, 4), (5, 6));
 list<auto> mixed = ((1, 2), "a", {"k": 1}, (3,));
@@ -71,6 +73,25 @@ auto sub auto_loop() {
     return s;
 }
 
+# The same read lowers to a plain instruction outside try and an invoke inside it.
+auto sub hash_indexes(auto container, int index) {
+    auto before = container[index];
+    try {
+        return (before, container[index]);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub numeric_hash_key() {
+    return hash_indexes({"-1": 42}, -1);
+}
+
+auto sub hashdecl_index() {
+    hash<IndexRecord> record({"member": 42});
+    return hash_indexes(record, 0);
+}
+
 sub main() {
     # every case runs more than once, so that the functions are compiled with tiered execution
     for (int i = 0; i < 3; ++i) {
@@ -100,6 +121,8 @@ sub main() {
         t("auto indexes", \auto_indexes());
         t("nullable loop", \nullable_loop());
         t("auto loop", \auto_loop());
+        t("numeric hash key", \numeric_hash_key());
+        t("hashdecl index", \hashdecl_index());
     }
 }
 

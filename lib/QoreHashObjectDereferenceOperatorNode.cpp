@@ -186,6 +186,7 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                     parse_context.pflag) && !err) {
                     err = -1;
                 }
+                parse_context.typeInfo = qore_substitute_type_params_if_needed(parse_context.typeInfo, lti);
                 if (!only_class && QoreTypeInfo::hasType(parse_context.typeInfo)) {
                     parse_context.typeInfo = get_or_nothing_type_check(parse_context.typeInfo);
                 }

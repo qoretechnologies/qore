@@ -35,6 +35,7 @@
 #define QORE_QORE_STRING_PRIVATE_H
 
 #include "qore/intern/QoreSandboxMemory.h"
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/qore_encoding_private.h"
 
 #include <atomic>
@@ -440,7 +441,8 @@ public:
     DLLLOCAL qore_string_private(const qore_string_private &p) {
         allocated = p.len + STR_CLASS_EXTRA;
         allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-        ownedBuffer() = (char*)malloc(sizeof(char) * allocated);
+        // memory that cannot be allocated fails with std::bad_alloc (qore#7466)
+        ownedBuffer() = static_cast<char*>(qore_malloc_or_throw(sizeof(char) * allocated));
         sb.sync(allocated);
         len = p.len;
         if (len)
@@ -540,9 +542,41 @@ public:
             size_t d = i >> 2;
             allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            ownedBuffer() = (char*)realloc(ownedBuffer(), allocated * sizeof(char));
+            char* p = static_cast<char*>(qore_realloc_or_null(ownedBuffer(), allocated * sizeof(char)));
+            if (__builtin_expect(!p, 0)) {
+                // memory that cannot be allocated fails the operation and leaves the string's text unchanged: the
+                // buffer was replaced with a null pointer, and the next write ended the process (qore#7466); the
+                // string keeps its buffer, which holds at least its text and terminator (if it has one)
+                allocated = ownedBuffer() ? len + 1 : 0;
+                qore_throw_bad_alloc();
+            }
+            ownedBuffer() = p;
             sb.sync(allocated);
         }
+    }
+
+    //! grows the string to hold \a i bytes, as check_char() does, without ending the process if the memory cannot be
+    //! allocated
+    /** @return 0 for OK, -1 if the memory could not be allocated; the string is then unchanged
+    */
+    DLLLOCAL int tryGrow(size_t i) {
+        if (view_parent) {
+            materialize();
+        }
+        if (i < allocated) {
+            return 0;
+        }
+        size_t d = i >> 2;
+        size_t new_allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
+        new_allocated = (new_allocated / 0x10 + 1) * 0x10; // use complete cache line
+        char* nbuf = static_cast<char*>(realloc(ownedBuffer(), new_allocated));
+        if (!nbuf) {
+            return -1;
+        }
+        ownedBuffer() = nbuf;
+        allocated = new_allocated;
+        sb.sync(allocated);
+        return 0;
     }
 
     DLLLOCAL size_t check_offset(qore_offset_t offset) {
@@ -1437,15 +1471,17 @@ public:
             materialize();
         }
         if (allocated) {
+            // the string is grown first, so that memory that cannot be allocated leaves it unchanged (qore#7466)
+            check_char(len + 1);
             ownedBuffer()[len] = c;
-            check_char(++len);
-            ownedBuffer()[len] = '\0';
+            ownedBuffer()[++len] = '\0';
             return;
         }
         // allocate new string buffer
+        // memory that cannot be allocated fails with std::bad_alloc and leaves the string unchanged (qore#7466)
+        ownedBuffer() = static_cast<char*>(qore_malloc_or_throw(sizeof(char) * STR_CLASS_BLOCK));
         allocated = STR_CLASS_BLOCK;
         len = 1;
-        ownedBuffer() = (char*)malloc(sizeof(char) * allocated);
         sb.sync(allocated);
         ownedBuffer()[0] = c;
         ownedBuffer()[1] = '\0';
@@ -1743,13 +1779,8 @@ public:
         if ((unsigned)allocated >= requested_size)
             return 0;
         requested_size = (requested_size / 0x10 + 1) * 0x10; // fill complete cache line
-        char* aux = (char*)realloc(ownedBuffer(), requested_size * sizeof(char));
-        if (!aux) {
-            assert(false);
-            // FIXME: std::bad_alloc() should be thrown here;
-            return -1;
-        }
-        ownedBuffer() = aux;
+        // memory that cannot be allocated fails with std::bad_alloc and leaves the string unchanged (qore#7466)
+        ownedBuffer() = static_cast<char*>(qore_realloc_or_throw(ownedBuffer(), requested_size * sizeof(char)));
         allocated = requested_size;
         sb.sync(allocated);
         return 0;
@@ -1860,7 +1891,8 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
         return new QoreStringNode;
     }
 
-    qore_string_private *p = new qore_string_private;
+    // the string's data is released if the conversion fails with std::bad_alloc (qore#7466)
+    std::unique_ptr<qore_string_private> p(new qore_string_private);
     p->len = b->size() - 1;
     p->ownedBuffer() = (char*)b->giveBuffer();
     p->encoding = qe;
@@ -1870,15 +1902,16 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
 
     // check for null termination
     if (p->ownedBuffer()[p->len]) {
+        // memory that cannot be allocated fails with std::bad_alloc and leaves the string unchanged (qore#7466)
+        p->ownedBuffer() = static_cast<char*>(qore_realloc_or_throw(p->ownedBuffer(), p->len + 2));
         ++p->len;
-        p->ownedBuffer() = (char*)realloc(p->ownedBuffer(), p->len + 1);
         p->ownedBuffer()[p->len] = '\0';
     }
 
     p->allocated = p->len + 1;
     p->sb.sync(p->allocated);
     T* rv = new T();
-    qore_string_private::adopt(*rv, p);
+    qore_string_private::adopt(*rv, p.release());
     return rv;
 }
 

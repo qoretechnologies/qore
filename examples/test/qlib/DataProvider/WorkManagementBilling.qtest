@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class WorkManagementBillingTest
+
+class WorkManagementBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("WorkManagement provider billing") {
+        addVendor("Linear", "Linear", "linear.app", "included",
+            "https://linear.app/pricing");
+        addVendor("Tally", "Tally", "tally.so", "included",
+            "https://tally.so/help/api");
+        addVendor("Insightly", "Insightly", "insightly.com", "included",
+            "https://api.insightly.com/v3.1/Help");
+        addVendor("SmartSheet", "Smartsheet", "smartsheet.com", "subscription",
+            "https://www.smartsheet.com/pricing");
+        addVendor("Katana", "Katana", "katanamrp.com", "subscription",
+            "https://katanamrp.com/pricing/");
+        set_return_value(main());
+    }
+}

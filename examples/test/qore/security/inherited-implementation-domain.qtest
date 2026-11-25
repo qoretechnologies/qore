@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation, qcc executables and a TCP listener
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class InheritedImplementationDomainTest
+
+#! The functional domain of a builtin method holds when it is called through a method of a Qore class (qore#7543)
+/** A %Qore class of another %Program or of a module can call a builtin method that it inherits from a builtin class
+    in a functional domain through a method of its own: the implementation of an abstract method that it inherits
+    from a parent class without a domain, or an overload of a method that it declares itself.  Code restricted from
+    the domain is refused that call as any other call of a builtin method of the class, in every form of the call,
+    while an implementation without a domain, the class's own %Qore code and the module code that calls the builtin
+    method for the restricted code stay callable.
+    The checks are in inherited-implementation-domain/inherited-implementation-domain-worker.q, which is run in each
+    execution mode and as a program compiled with qcc.
+*/
+class InheritedImplementationDomainTest inherits QUnit::Test {
+    public {
+        #! the cases of the worker, in the order it runs them
+        const Cases = ("network-poll-operation", "network-no-connection", "network-poll-operation-allowed",
+            "network-module-method", "filesystem-file", "filesystem-file-allowed", "filesystem-own-overload",
+            "filesystem-own-overload-own", "no-domain-builtin", "no-domain-qore");
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string worker = get_script_dir() + DirSep + "inherited-implementation-domain" + DirSep
+            + "inherited-implementation-domain-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("InheritedImplementationDomainTest", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("each execution mode", \testModes());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the expected output of the worker
+    private static string expected() {
+        return (map $1 + "=ok\n", Cases).join("");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the Programs that the worker creates run with its execution mode
+            assertEq(expected(), ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        assertEq(expected(), ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-inherited-implementation-domain-exe-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "inherited-implementation-domain" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(expected(), ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}

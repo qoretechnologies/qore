@@ -393,6 +393,10 @@ public:
     DLLLOCAL virtual ~LocalMethodCallReferenceNode() {
     }
 
+    //! binds the method of a reference to the method \a mname of the class \a qc deferred when it was parsed once the
+    //! abstract methods are resolved (qore#7411)
+    DLLLOCAL int parseDeferredMethodBind(QoreParseContext& parse_context, const QoreClass* qc, const char* mname);
+
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {
         return LocalMethodCallReferenceNode::is_equal_hard(v, xsink);
     }

@@ -33,11 +33,92 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "retNonLastLoop", "retDeep", "retDeepLast",
             "twoHandlersLoop", "twoHandlers", "twoHandlersInner", "twoHandlersInnerReturn", "twoHandlersMid",
             "twoHandlersTry", "twoHandlersLaterReturn", "threeHandlers", "mixedHandlers",
-            "mixedHandlersLoop", "mixedInHandler");
+            "mixedHandlersLoop", "mixedInHandler", "abandonedReturn", "abandonedObject", "outerPendingReturn", "eagerOuter",
+            "innerLoopPending", "unchangedObject", "nrcLost", "dtorThrow", "abandonTiming", "abandonedNested",
+            "abandonedNestedTry", "outerPendingTry", "dtorThrowLoop", "endsFunctionObject", "onErrorAfterExit",
+            "tryInHandler", "tryLastHandler", "tryCalled");
+
+        #! Expected return values and destructor order when a debugger request abandons a return (#7022).
+        const AbandonedResults = {
+            "abandonedReturn": "RESULT:null LOG:[]",
+            "abandonedObject": "RESULT:3 LOG:[\"released\", \"after\"]",
+            "innerLoopPending": "RESULT:-7 LOG:[\"after\"]",
+            "unchangedObject": "RESULT:3 LOG:[\"released\"]",
+            "outerPendingReturn": "RESULT:-7 LOG:[\"last\"]",
+            "outerPendingReturn/string": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingReturn/list": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingReturn/hash": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingReturn/number": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingReturn/date": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingReturn/binary": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingReturn/object": "RESULT:null LOG:[\"released\", \"last\"]",
+            "outerPendingReturn/object-list": "RESULT:null LOG:[\"released\", \"last\"]",
+            "outerPendingReturn/object-opaque": "RESULT:null LOG:[\"released\", \"last\"]",
+            # the return of an earlier handler resumes when a later handler takes the request
+            "nrcLost": "RESULT:3 LOG:[\"last\"]",
+            # the release of the abandoned object throws, and the next handler runs (bug 380)
+            "dtorThrow": "RESULT:MARKER-ERROR: the destructor threw LOG:[\"throw\", \"last\"]",
+            # the abandoned object is released when the request abandons its return, before the handler of the
+            # enclosing block
+            "abandonTiming": "RESULT:-7 LOG:[\"released\", \"between\", \"last\"]",
+            "abandonedNested": "RESULT:null LOG:[\"outer\", \"inner\"]",
+            "abandonedNestedTry": "RESULT:null LOG:[\"outer\", \"inner\"]",
+            "abandonedNestedHit1": "RESULT:null LOG:[]",
+            "abandonedNestedTryHit1": "RESULT:null LOG:[]",
+            "dtorThrowLoop": "RESULT:MARKER-ERROR: the destructor threw LOG:[\"throw\"]",
+            # a request that ends the function leaves the return, which goes on with its object (#6949)
+            "endsFunctionObject": "RESULT:{<ReturnMarker object>: {}} LOG:[\"outer\", \"released\"]",
+            # the on_exit handler is the last that runs: the on_error handler after it does not run at a normal exit
+            "onErrorAfterExit": "RESULT:{<ReturnMarker object>: {}} LOG:[\"released\"]",
+            # the request passes the try statement in the handler, and a later handler takes it
+            "tryInHandler": "RESULT:-7 LOG:[\"released\", \"last\"]",
+            # a try statement in the only handler: the request ends the function, whose return goes on with the
+            # object (#6949)
+            "tryLastHandler": "RESULT:{<ReturnMarker object>: {}} LOG:[\"released\"]",
+            # a request in a function called in a handler is one of the called function, whose return goes on
+            "tryCalled": "RESULT:-7 LOG:[\"callee returned the marker\", \"released\", \"last\"]",
+            "outerPendingTry": "RESULT:-7 LOG:[\"last\"]",
+            "outerPendingTry/string": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingTry/object": "RESULT:null LOG:[\"released\", \"last\"]",
+        };
 
         #! the function, the request, the tag of its statement and the hit of its step event, and optionally a second
         #! request, tag and hit
         const Requests = (
+            ("abandonedReturn", "continue", "abandoned_step", 1, "return", "abandoned_step", 2),
+            ("abandonedObject", "break", "abandoned_object", 1),
+            ("nrcLost", "break", "nrc_mid", 1),
+            ("dtorThrow", "break", "dtor_throw", 1),
+            ("abandonTiming", "break", "abandon_timing", 1),
+            ("abandonedNested", "continue", "abandoned_nested_inner", 1, "return", "abandoned_nested_outer", 2),
+            ("abandonedNestedTry", "continue", "abandoned_try_inner", 1, "return", "abandoned_try_outer", 2),
+            ("abandonedNestedHit1", "continue", "abandoned_nested_inner", 1, "return", "abandoned_nested_outer", 1),
+            # the same requests with a try statement in the inner handler: the second request, in the outer handler
+            # on the path of the first one from the try statement, is taken in every mode (qore#7008)
+            ("abandonedNestedTryHit1", "continue", "abandoned_try_inner", 1, "return", "abandoned_try_outer", 1),
+            ("dtorThrowLoop", "break", "dtor_throw_loop", 1),
+            ("endsFunctionObject", "break", "ends_function_object", 1),
+            ("onErrorAfterExit", "break", "on_error_after_exit", 1),
+            ("tryInHandler", "break", "try_in_handler", 1),
+            ("tryLastHandler", "break", "try_last_handler", 1),
+            ("tryCalled", "break", "try_callee", 1),
+            ("outerPendingTry", "break", "outer_pending_try", 1),
+            ("outerPendingTry/string", "break", "outer_pending_try", 1),
+            ("outerPendingTry/object", "break", "outer_pending_try", 1),
+            ("innerLoopPending", "break", "inner_loop_pending", 1),
+            ("innerLoopPending", "continue", "inner_loop_pending", 1),
+            ("unchangedObject", "break", "keep_marker", 1),
+            ("outerPendingReturn", "break", "outer_pending", 1),
+            ("outerPendingReturn/string", "break", "outer_pending", 1),
+            ("outerPendingReturn/list", "break", "outer_pending", 1),
+            ("outerPendingReturn/hash", "break", "outer_pending", 1),
+            ("outerPendingReturn/number", "break", "outer_pending", 1),
+            ("outerPendingReturn/date", "break", "outer_pending", 1),
+            ("outerPendingReturn/binary", "break", "outer_pending", 1),
+            ("outerPendingReturn/object", "break", "outer_pending", 1),
+            ("outerPendingReturn/object-list", "break", "outer_pending", 1),
+            ("outerPendingReturn/object-opaque", "break", "outer_pending", 1),
+            ("outerPendingReturn", "continue", "outer_pending", 1),
             ("loopThrow", "break", "throw_inner", 1),
             ("loopThrow", "continue", "throw_inner", 1),
             ("loopThrow", "return", "throw_inner", 1),
@@ -254,6 +335,9 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             string expected = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=ast %s %s", env, qore_bin, script,
                 f));
             assertRegex("^RESULT:", expected, f + ": AST");
+            if (f == "eagerOuter") {
+                assertEq("RESULT:3 LOG:[\"released\", \"cleanup\", \"last\"]", expected.split(" STEPS:")[0], f);
+            }
             foreach string mode in (ExecModeHarness::ExecModes) {
                 if (mode == "ast") {
                     continue;
@@ -264,6 +348,25 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --exec-mode=tiered %s %s", env,
                 qore_bin, script, f)), f + ": IR tier");
         }
+        # A source program with a debugger attached must give the same specific result in each execution mode.
+        foreach list<auto> r in (Requests) {
+            if (AbandonedResults.hasKey(r[0])) {
+                string args = requestArgs(r);
+                foreach string mode in (ExecModeHarness::ExecModes) {
+                    string out = ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s %s", env, qore_bin,
+                        mode, script, args));
+                    assertEq(AbandonedResults{r[0]}, out.split(" STEPS:")[0], sprintf("%s: %s", args, mode));
+                }
+            }
+        }
+    }
+
+    private string requestArgs(list<auto> r) {
+        string args = sprintf("%s %s %d %d", r[0], r[1], tags{r[2]}, r[3]);
+        if (r.size() > 4) {
+            args += sprintf(" %s %d %d", r[4], tags{r[5]}, r[6]);
+        }
+        return args;
     }
 
     testQcc(int opt) {
@@ -286,10 +389,7 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             }
             # with a debugger's request in a handler: the AST interpreter is the reference
             foreach list<auto> r in (Requests) {
-                string args = sprintf("%s %s %d %d", r[0], r[1], tags{r[2]}, r[3]);
-                if (r.size() > 4) {
-                    args += sprintf(" %s %d %d", r[4], tags{r[5]}, r[6]);
-                }
+                string args = requestArgs(r);
                 string expected = backquote(sprintf("%s %s -b --exec-mode=ast %s %s 2>&1", env, qore_bin, script,
                     args));
                 assertRegex("^RESULT:", expected, args + ": AST");

@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%include generic-subclass-programs/classes.ql
+%exec-class GenericSubclassProgramsTest
+
+class GenericSubclassProgramsTest inherits QUnit::Test {
+    private {
+        string classes = ReadOnlyFile::readTextFile(get_script_dir() + "/generic-subclass-programs/classes.ql");
+    }
+
+    constructor() : QUnit::Test("GenericSubclassPrograms", "1.0", \ARGV) {
+        addTestCase("same declarations in separately parsed Programs", \compatibility());
+        addTestCase("inherited member binds its declaring class's type parameter", \memberType());
+        set_return_value(main());
+    }
+
+    compatibility() {
+        Program p(PO_NEW_STYLE);
+        p.parse("%modern\n" + classes + "
+            string sub take(GenericSub<string> x) { return \"sub\"; }
+            string sub parent(GenericBase<string> x) { return \"base\"; }
+            GenericSub<string> sub make() { return new GenericSub<string>(); }
+        ", "peer");
+        assertEq("sub", p.callFunction("take", new GenericSub<string>()));
+        assertEq("base", p.callFunction("parent", new GenericSub<string>()));
+        assertEq("base", p.callFunction("parent", new ConcreteSub()));
+        assertEq("sub", take(p.callFunction("make")));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("take", new GenericSub<int>()));
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("parent", new GenericSub<int>()));
+
+        Program other(PO_NEW_STYLE);
+        other.parse("%modern\nclass GenericSub<T> { public { int other; } } "
+            "string sub take(GenericSub<string> x) { return \"unrelated\"; }", "different declaration");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \other.callFunction(), ("take", new GenericSub<string>()));
+    }
+
+    private static string take(GenericSub<string> x) { return "sub"; }
+
+    memberType() {
+        Program p(PO_NEW_STYLE);
+        p.parse("%modern\n" + classes + "
+            string sub check() {
+                GenericSub<string> x();
+                x.next = new GenericSub<string>();
+                x.next.value = \"bound\";
+                return x.next.value;
+            }
+        ", "inherited member");
+        assertEq("bound", p.callFunction("check"));
+
+        GenericSub<string> x();
+        x.next = new GenericSub<string>();
+        x.next.value = "local";
+        assertEq("local", x.next.value);
+        Program wrong(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \wrong.parse(), ("%modern\n" + classes
+            + "sub check() { GenericSub<string> x(); x.next = new GenericSub<int>(); }", "wrong argument"));
+    }
+}

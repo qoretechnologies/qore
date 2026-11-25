@@ -179,7 +179,7 @@ class SseRestClientIoTest inherits Test {
         server.setDefaultHandler("sse", handler);
         server.setHandler("sse-comment", "/comment", NOTHING, comment_handler);
         server.setHandler("sse-error", "/error", NOTHING, new TestSseErrorHandler());
-        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     globalTearDown() {
@@ -190,7 +190,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseReader() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         SseStreamReader reader = rest.restSseReader("GET", "/sse");
 
@@ -206,7 +206,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseReaderMultiple() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         SseStreamReader reader = rest.restSseReader("GET", "/sse");
 
@@ -228,7 +228,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseStream() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         list<hash<SseMessageInfo>> events();
 
@@ -257,7 +257,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseStreamStop() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         int count = 0;
         rest.restSseStream("GET", "/sse", bool sub(hash<SseMessageInfo> evt) {
@@ -269,7 +269,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseReaderSkipsComments() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         SseStreamReader reader = rest.restSseReader("GET", "/comment");
         on_exit reader.cancel();
@@ -341,7 +341,7 @@ class SseRestClientIoTest inherits Test {
 
     testRestSseReaderThrowsResponseError() {
         RestClientIo rest({
-            "url": sprintf("http://localhost:%d", port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "data": "json",
         });
 
@@ -470,7 +470,7 @@ class SseRestClientIoTest inherits Test {
 
     testRestObserveSse() {
         RestClientIo rest({
-            "url": sprintf("http://localhost:%d", port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "data": "json",
         });
         on_exit rest.close();
@@ -533,13 +533,13 @@ class SseRestClientIoTest inherits Test {
 
     testPollOperationHeartbeatDefault() {
         Socket listener();
-        listener.bindINET("localhost", 0, True, AF_INET, SOCK_STREAM);
+        listener.bindINET("127.0.0.1", 0, True, AF_INET, SOCK_STREAM);
         listener.listen();
         on_exit listener.close();
 
         int lport = listener.getSocketInfo().port;
         Socket client();
-        client.connect("localhost:" + lport, 5s);
+        client.connect("127.0.0.1:" + lport, 5s);
         on_exit client.close();
 
         Socket server_sock = listener.accept(30s);

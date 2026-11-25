@@ -740,6 +740,12 @@ void RObject::setRegion(RRegion* r, int comp) {
     }
 }
 
+namespace {
+// take and release the weak reference of a list, hash, closure or reference of a recursive set; defined below
+void qore_dgc_node_weak_ref(AbstractQoreNode* n);
+void qore_dgc_node_weak_deref(AbstractQoreNode* n);
+}
+
 RSetDerefHelper::~RSetDerefHelper() {
     // Releasing a shared container does not necessarily release its objects. Dereferencing every retained
     // member gives any surviving subcycle its own collection opportunity after the initiator is destroyed.
@@ -747,6 +753,110 @@ RSetDerefHelper::~RSetDerefHelper() {
     for (RObject* obj : objects) {
         obj->releaseCycleReference(xsink);
     }
+    releaseDecision();
+}
+
+bool RSetDerefHelper::recordDecision(RSet& rs, RObject& initiator) {
+    assert(!decided);
+    bool retain = rs.nodeCount() > 0;
+    // value-initialized: the entry after the last one recorded has neither a member nor a node
+    decided = new DecidedValue[rs.size() + rs.nodeCount() + 1]();
+    size_t n = 0;
+    for (RObject* member : rs) {
+        if (member == &initiator) {
+            continue;
+        }
+        bool changed;
+        {
+            AutoLocker al(member->rlck);
+            int r = member->references.load(std::memory_order_acquire);
+            // a reference taken or released since the decision read the count: the scan finds the graph as it is
+            changed = r != member->rcount;
+            if (!changed) {
+                // the member's rset is the set, which is valid: its releases are made in the locking path, which
+                // counts them, and from now on also once a scan has replaced its set
+                member->collect_pending.fetch_add(1, std::memory_order_relaxed);
+                // kept allocated until releaseDecision(): the set's weak reference is released when it is
+                // invalidated
+                member->tRef();
+                decided[n++] = DecidedValue{member, nullptr, r, member->locked_releases, true};
+            }
+        }
+        if (changed) {
+            // the set holds weak references to the members and nodes recorded: none is freed here
+            releaseDecision();
+            return false;
+        }
+    }
+    for (std::vector<RSet::SetNode>::const_iterator i = rs.nodeBegin(), e = rs.nodeEnd(); i != e; ++i) {
+        // a reference taken or released since the decision read the count
+        if (i->node->reference_count() != i->internal) {
+            releaseDecision();
+            return false;
+        }
+        // the set's weak reference is released when it is invalidated
+        qore_dgc_node_weak_ref(i->node);
+        decided[n++] = DecidedValue{nullptr, i->node, i->internal, 0, false};
+    }
+    if (retain) {
+        // the other members are retained until the initiator has been deleted (see RSet::canDelete()); the retention
+        // is part of the count with which the collection is decided.  A dereference that decides again after
+        // abandoning a collection still retains the members of the first decision, whose retention is a reference
+        // from outside the set, so no second decision can reach this point while they are retained
+        assert(objects.empty());
+        objects.reserve(rs.size());
+        for (DecidedValue* d = decided; d->obj || d->node; ++d) {
+            if (d->obj) {
+                add(d->obj);
+                ++d->decided;
+            }
+        }
+    }
+    return true;
+}
+
+bool RSetDerefHelper::referencedSinceDecision() {
+    // a decided collection is always recorded (RSet::canDelete())
+    assert(decided);
+    bool rv = false;
+    for (DecidedValue* d = decided; d->obj || d->node; ++d) {
+        if (d->obj) {
+            if (!d->pending) {
+                continue;
+            }
+            AutoLocker al(d->obj->rlck);
+            d->obj->collect_pending.fetch_sub(1, std::memory_order_relaxed);
+            d->pending = false;
+            int since = static_cast<int>(d->obj->locked_releases - d->releases);
+            if (d->obj->references.load(std::memory_order_acquire) + since > d->decided) {
+                printd(QRO_LVL, "RSetDerefHelper::referencedSinceDecision() member %p '%s' referenced since the "
+                    "decision\n", d->obj, d->obj->getName());
+                rv = true;
+            }
+        } else if (d->node->reference_count() > d->decided) {
+            printd(QRO_LVL, "RSetDerefHelper::referencedSinceDecision() node %p (%s) referenced since the "
+                "decision\n", d->node, get_type_name(d->node));
+            rv = true;
+        }
+    }
+    return rv;
+}
+
+void RSetDerefHelper::releaseDecisionIntern() {
+    assert(decided);
+    for (DecidedValue* d = decided; d->obj || d->node; ++d) {
+        if (d->obj) {
+            if (d->pending) {
+                AutoLocker al(d->obj->rlck);
+                d->obj->collect_pending.fetch_sub(1, std::memory_order_relaxed);
+            }
+            d->obj->tDeref();
+        } else {
+            qore_dgc_node_weak_deref(d->node);
+        }
+    }
+    delete[] decided;
+    decided = nullptr;
 }
 
 namespace {
@@ -1191,8 +1301,10 @@ int RObject::tryFastDeref(bool real) {
             return -1;
         }
         hazard_publish(slot, this);
-        // a set committed before the publication is seen here; one committed after it waits for this release
-        if (rset.load(std::memory_order_relaxed)) {
+        // a set committed before the publication is seen here; one committed after it waits for this release; a
+        // collection decided with the object in a set is seen as well, and its releases are counted (collect_pending):
+        // acquire, so that a set removed after the decision is read with the raised collect_pending
+        if (rset.load(std::memory_order_acquire) || collect_pending.load(std::memory_order_relaxed)) {
             hazard_clear(slot);
             return -1;
         }
@@ -1226,8 +1338,10 @@ int RObject::tryFastDeref(bool real) {
         return -1;
     }
     hazard_publish(slot, this);
-    // a set committed before the publication is seen here; one committed after it waits for this release
-    if (rset.load(std::memory_order_relaxed)) {
+    // a set committed before the publication is seen here; one committed after it waits for this release; a
+    // collection decided with the object in a set is seen as well, and its releases are counted (collect_pending):
+    // acquire, so that a set removed after the decision is read with the raised collect_pending
+    if (rset.load(std::memory_order_acquire) || collect_pending.load(std::memory_order_relaxed)) {
         hazard_clear(slot);
         return -1;
     }
@@ -1306,6 +1420,7 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
 
     // dereference the object and save the resulting value as the return value
     int rv_refs = --references;
+    ++locked_releases;
 
     do_scan = !rrefs;
 
@@ -1340,7 +1455,8 @@ void RObject::derefDone(bool del, bool wait_only) {
         rcond.broadcast();
         // a deleting dereference never completes while another deleting dereference waits for it; a dereference
         // that handed the deletion off and waits before releasing a weak reference (wait_only) can wait for the
-        // deleting one, which holds its own reference to the object (qore_object_private::takeDeleteReference())
+        // deleting one, which holds its own reference to the object (qore_object_private::takeLastDeleteReference(),
+        // takeCollectDeleteReference())
         assert(ref_inprogress || !del || !dbg_del_waiting);
     }
     if (del || wait_only) {
@@ -1793,7 +1909,8 @@ bool RSet::edgesUnchangedSinceScan() const {
 }
 
 // if we return 1, the rset has been invalidated already
-int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup) {
+int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup,
+        int* decided, unsigned* releases) {
     printd(QRO_LVL, "RSet::canDelete() this: %p valid: %d\n", this, (int)valid);
 
     if (q_disable_gc)
@@ -1801,7 +1918,17 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
 
     // Another reference operation superseded this dereference's snapshot. A rescan records the current
     // reference count, so comparing it with the old ref_copy would request the same rescan forever.
-    int refs = initiator.refs();
+    int refs;
+    if (releases) {
+        // the count and the releases of the locking path are read together, as RObject::deref() writes them: the
+        // dereference that deletes the set compares the count when it marks the object with this one, plus the
+        // releases made since, which are all made in the locking path from now on (RObject::collect_pending)
+        AutoLocker al(initiator.rlck);
+        refs = initiator.refs();
+        *releases = initiator.locked_releases;
+    } else {
+        refs = initiator.refs();
+    }
     if (ref_copy != refs) {
         // A reference taken since the snapshot is still held, and its release finds this set and decides then; with
         // no reference left, the dereference that released the last one deletes the object.
@@ -1815,6 +1942,9 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
         // that claims its collection (RObject::claimCollection()).  See design/dgc.md, "A count superseded by a
         // release that decided nothing".
         ref_copy = refs;
+    }
+    if (decided) {
+        *decided = ref_copy;
     }
 
     if (!valid)
@@ -1931,15 +2061,13 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
     if (!valid)
         return -1;
 
-    // Retain members before dropping the set's weak references. The initiating object is already protected
-    // by its dereference helper. Cleanup runs outside the r-section and rset locks, after its destructor.
-    if (!nodes.empty()) {
-        cleanup.reserve(set.size());
-        for (RObject* member : set) {
-            if (member != &initiator) {
-                cleanup.add(member);
-            }
-        }
+    // The other members and the nodes are recorded with their counts, so that a reference that another thread takes
+    // to one of them since the decision (through a weak reference) keeps the set: the dereference checks them before
+    // it makes the collection (RSetDerefHelper::referencedSinceDecision(), qore#7556).  With nodes, the members are
+    // also retained before the set's weak references are dropped; the initiating object is already protected by its
+    // dereference helper.  Cleanup runs outside the r-section and rset locks, after its destructor.
+    if (!cleanup.recordDecision(*this, initiator)) {
+        return -1;
     }
     invalidateIntern();
 

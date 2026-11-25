@@ -79,7 +79,8 @@ printf("%y %y %y\n", ib.mi, ib.ml, ib.nested);
 
 # a value of another type is refused by the member of the inherited instantiation
 try {
-    ib.mi.y = "no";
+    auto wrong = "no";
+    ib.mi.y = wrong;
 } catch (hash<ExceptionInfo> ex) {
     printf("refused: %s\n", ex.err);
 }
@@ -88,7 +89,8 @@ GBox<string> gb("a");
 gb.mi.x = "v";
 printf("%y\n", gb.mi);
 try {
-    gb.ml += 7;
+    auto wrong = 7;
+    gb.ml += wrong;
 } catch (hash<ExceptionInfo> ex) {
     printf("refused: %s\n", ex.err);
 }

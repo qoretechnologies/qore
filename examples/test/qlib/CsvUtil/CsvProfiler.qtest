@@ -181,6 +181,10 @@ public class CsvProfilerTest inherits QUnit::Test {
         assertEq(DPAT_API, action.action_code);
         assertEq(TabularWorkbookProfileDataType.getName(), action.output_type.getName());
         assertTrue(action.options.data.preselected);
+        # profiling reads the data and stores nothing: the action declares that it is read-only (qore#7454)
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(action));
 
         hash<auto> opts = {"data": "PO;Qty\nPO-1;5\nPO-2;x\n", "redact": False};
         AbstractDataProvider prov = DataProviderActionCatalog::getDataProviderForAction(action, \opts);

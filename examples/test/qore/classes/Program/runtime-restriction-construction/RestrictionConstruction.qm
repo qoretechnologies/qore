@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# classes of a module that inherit a builtin class whose constructor has a functional domain (THREAD_CLASS), with and
+# without a constructor of their own, for runtime-restriction-construction.qtest
+
+%modern
+
+module RestrictionConstruction {
+    version = "1.0";
+    desc = "test classes for runtime-restriction-construction.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public class MT inherits Counter {
+}
+
+public class MTC inherits Counter {
+    constructor() {
+    }
+}

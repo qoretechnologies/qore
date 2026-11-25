@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class ContentBillingTest
+
+class ContentBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Content provider billing") {
+        addVendor("Bitbucket", "Bitbucket", "bitbucket.org", "included",
+            "https://support.atlassian.com/bitbucket-cloud/docs/api-request-limits/");
+        addVendor("Confluence", "Confluence", "atlassian.com", "included",
+            "https://developer.atlassian.com/cloud/confluence/rate-limiting/");
+        addVendor("Dropbox", "Dropbox", "dropboxapi.com", "included",
+            "https://www.dropbox.com/developers/reference/data-transport-limit");
+        addVendor("Jotform", "JotForm", "jotform.com", "included",
+            "https://www.jotform.com/help/406-daily-api-call-limits/");
+        set_return_value(main());
+    }
+}

@@ -70,6 +70,15 @@ module PaddleDataProvider {
                 "dashboard. **Sandbox and production are separate environments** with separate data and "
                 "separate keys.\n\n"
                 "Paddle is a trademark of Paddle.com Market Ltd.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "paddle.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://www.paddle.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "paddle",
             "logo": Priv::PaddleLogo,
             "logo_file_name": "paddle-logo.svg",
@@ -82,7 +91,19 @@ module PaddleDataProvider {
         DataProviderActionCatalog::registerLazyAppActions(PaddleDataProvider::AppName, sub () {
             # register every action in the manifest
             RestSchemaActionSet action_set = PaddleSchema::getActionSet();
-            action_set.registerActions(PaddleDataProvider::AppName);
+            foreach hash<DataProviderActionInfo> action in (action_set.getActionInfoList(PaddleDataProvider::AppName)) {
+                # Catalog maintenance and retrieval do not create a payment transaction.
+                if (action_set.getOperationEx(action.action).getMethod().upr() == "GET"
+                        || inlist(action.action, ("archive_product", "create_customer", "create_product",
+                                "create_price", "update_customer", "update_price", "update_product"))) {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
+                # Transactions can remain drafts or proceed to a billable checkout.
+                if (action.action == "create_transaction") {
+                    action.billing = <DataProviderBillingInfo>{"model": "unknown"};
+                }
+                DataProviderActionCatalog::registerAction(action);
+            }
 
             # register the record-based table actions; declaring the tables is only half of it, and a table no
             # action reaches is offered to nobody
@@ -101,6 +122,7 @@ module PaddleDataProvider {
                     "display_name": event.display_name,
                     "short_desc": event.short_desc,
                     "desc": event.desc,
+                    "billing": <DataProviderBillingInfo>{"model": "included"},
                     "action_code": DPAT_EVENT,
                     "action_val": event.event,
                     "groups": ("Events",),

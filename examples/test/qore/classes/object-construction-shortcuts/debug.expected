@@ -1,0 +1,28 @@
+run 0:
+enter work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Base::constructor:user:89 < Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exit Base::constructor:user:89 < Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exit Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Base::destructor:user:90 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exit Base::destructor:user:90 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Thrower::constructor:user:94 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exception THROWER
+exception THROWER
+exit Thrower::constructor:user:94 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exception THROWER
+exit work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+run 1:
+enter work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Base::constructor:user:89 < Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exit Base::constructor:user:89 < Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exit Sub::constructor:user:89 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Base::destructor:user:90 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exit Base::destructor:user:90 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+enter Thrower::constructor:user:94 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exception THROWER
+exception THROWER
+exit Thrower::constructor:user:94 < work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103
+exception THROWER
+exit work:user:-1 < call_function:builtin:107 < <anonymous closure>:user:103 < <background operator>:new-thread:103

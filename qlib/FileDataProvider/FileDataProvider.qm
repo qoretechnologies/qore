@@ -131,6 +131,7 @@ module FileDataProvider {
             "short_desc": "Get a file on the server filesystem",
             "desc": "Get a file on the server filesystem",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "output_type": FileGetResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FileGetRequestDataType::Fields{"path", "text"}, {
@@ -150,6 +151,7 @@ module FileDataProvider {
             "short_desc": "List files and subdirectories in a folder on the server filesystem",
             "desc": "List files and subdirectories in a folder on the server filesystem",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "output_type": FileListResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FilePathDataType::Fields{"path",}, {
@@ -203,6 +205,7 @@ module FileDataProvider {
             "short_desc": "Get details about a file or directory on the server filesystem",
             "desc": "Get details about a file or directory on the server filesystem",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "output_type": FileStatResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FileStatRequestDataType::Fields{"path",}, {

@@ -139,7 +139,10 @@ public namespace StaticVarInitLoader {
         write(mods.path + "/StaticVarInitLoader.qm", LoaderModuleSource);
         # the host loads the loader module, so that its code runs with its own options for the sandboxed caller
         Program p(PO_NO_TERMINAL_IO);
-        p.setSandboxManager(new SandboxManager());
+        SandboxManager sm();
+        # the modules are read with the policy of the sandbox, which must allow them (qore#7518)
+        sm.addFilesystemAllowedPath(mods.path, QSEC_READ);
+        p.setSandboxManager(sm);
         p.parse(sprintf("%%modern\n%%prepend-module-path %s\n%%requires StaticVarInitLoader\n"
             "hash<auto> sub get() { return StaticVarInitLoader::load(); }\n", mods.path), "sandboxed");
         hash<auto> h = p.callFunction("get");

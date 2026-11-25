@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the release of the thread-local data of the Programs between the tasks of a pool worker
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires TldSaverA
+%requires TldSaverB
+
+%exec-class PoolThreadDataReleaseTest
+
+#! Regression test for issue #7398: the thread-local data that a destructor saves while a pool worker releases the data
+#! of its task survives into the next task
+/** The data of the task of a ThreadPool worker is released between two tasks, one Program family after the other: a
+    destructor run by the release of one family could save data in a family released before it, and the data was not
+    released: it stayed in the worker's thread-local data for the next task.  The release now repeats until it finds no
+    data, and refuses what destructors save in its last pass, so that it ends if a destructor saves data again at
+    each pass.
+*/
+class PoolThreadDataReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("thread-local data saved by a destructor in the release between pool tasks", "1.0",
+            \ARGV) {
+        addTestCase("data saved in a family released before is released too", \savedDataTest());
+        addTestCase("a destructor that saves data at every pass does not keep the release going",
+            \perpetualSaveTest());
+        set_return_value(main());
+    }
+
+    #! runs a task that saves a Saver in the data of each module, then a task that reads the data of both
+    /** The thread-local data of each module's Program is a family of its own, and is released between the tasks one
+        family after the other: whichever the order, the destructor of the Saver of the family released last saves data
+        in the family released first.
+    */
+    private hash<auto> run(bool chain) {
+        hash<string, code> a = TldSaverA::ops();
+        hash<string, code> b = TldSaverB::ops();
+        ThreadPool pool(1, 1, 1, 60s);
+        hash<auto> seen;
+        # one worker: the second task runs on the thread of the first, after the release of its data
+        pool.submit(sub () {
+            a.setup("fromA", chain, b, a);
+            b.setup("fromB", chain, a, b);
+        });
+        pool.submit(sub () {
+            seen = {"a": a.dump(), "b": b.dump()};
+        });
+        pool.stopWait();
+        return seen;
+    }
+
+    savedDataTest() {
+        hash<auto> seen = run(False);
+        assertEq({"a": {}, "b": {}}, seen,
+            "the next task finds no thread-local data of the previous one, in either module");
+    }
+
+    perpetualSaveTest() {
+        # without the refusal of the last pass the release would never end and the test would hang
+        hash<auto> seen = run(True);
+        assertEq({"a": {}, "b": {}}, seen, "the release ended and left no data");
+    }
+}

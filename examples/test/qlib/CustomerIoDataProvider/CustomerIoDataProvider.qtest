@@ -516,12 +516,12 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeCustomerIoHandler handler();
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
 
-        CustomerIoRestClient::CustomerIoRestClient rest({"app_api_key": "test-key", "url": "http://localhost:" + port},
+        CustomerIoRestClient::CustomerIoRestClient rest({"app_api_key": "test-key", "url": "http://127.0.0.1:" + port},
             True);
         handler.rate_limited = 1;
         hash<auto> info;
@@ -538,11 +538,11 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeCustomerIoHandler handler();
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
 
         # the example event data is requested once
         CustomerIoDataProvider::CustomerIoEmailSentEventDataProvider watch(
@@ -699,13 +699,13 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeCustomerIoHandler handler();
         server.setHandler("customerio", "", NOTHING, handler);
         server.setDefaultHandler("customerio", handler);
 
         CustomerIoDataProvider::CustomerIoDataProvider provider(new CustomerIoRestClient::CustomerIoRestClientIo(
-            {"app_api_key": "test-key", "url": "http://localhost:" + port}));
+            {"app_api_key": "test-key", "url": "http://127.0.0.1:" + port}));
         assertTrue(provider.getRestClient() instanceof CustomerIoRestClient::CustomerIoRestClientIo);
 
         # a GET request is sent with the async client and the response is returned
@@ -857,6 +857,19 @@ public class CustomerIoDataProviderTest inherits QUnit::Test {
         assertTrue(actionNames.contains("watch-slack-sent") || actionNames.contains(CustomerIoDataProvider::EVENT_SLACK_SENT));
         assertTrue(actionNames.contains("watch-subscribed") || actionNames.contains(CustomerIoDataProvider::EVENT_SUBSCRIBED));
         assertTrue(actionNames.contains("watch-unsubscribed") || actionNames.contains(CustomerIoDataProvider::EVENT_UNSUBSCRIBED));
+
+        # the actions that only make a GET request declare that they do not change state (qore#7454)
+        list<string> read_only = ("get-broadcast", "get-campaign", "get-campaign-actions", "get-campaign-metrics",
+            "get-collection", "get-export-status", "get-message", "get-newsletter", "get-person", "get-segment",
+            "get-segment-people", "get-snippet");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, read_only.contains($1.action);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # actions that change state, or return a signed download link, keep the default
+        map assertTrue(DataProviderActionCatalog::actionMutatesState($1), $1.action),
+            select actions, ("create-export", "download-export", "trigger-broadcast").contains($1.action);
     }
 
     # ========== INTEGRATION TESTS ==========

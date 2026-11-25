@@ -201,6 +201,22 @@ public:
     int dbg_del_waiting = 0;
 #endif
 
+    //! The number of references released in the locking path (deref()), written under rlck; wraps around
+    /** A dereference that decided to delete the object tells the references counted at its decision that have been
+        released since from references taken since with it (qore_object_private::takeLastDeleteReference(),
+        takeCollectDeleteReference(), qore#7509): every release made since is made there, as the count was zero, or as
+        the object is in a recursive set or has a collection pending (see collect_pending)
+    */
+    unsigned locked_releases = 0;
+
+    //! The number of dereferences that have decided to collect the object and have not marked it yet
+    /** Raised under rlck while the decision's rsection is held, so while the object is in a committed recursive set,
+        whose releases are made in the locking path; tryFastDeref() leaves the releases to that path while it is not
+        zero, also once a change of the graph has taken the object out of its set, so that they are counted in
+        locked_releases (qore#7509).  Lowered under rlck when the dereference marks the object or abandons.
+    */
+    std::atomic<int> collect_pending{0};
+
     //! Whether the last scan rooted at this object had to assign a recursive set
     /** Chooses the mode of the next scan started here.  A scan that changes nothing can share the rsection of
         every object it enters with other scans, but a scan that finds it has to change a set has to walk the
@@ -599,6 +615,31 @@ public:
         return !collection_claimed.exchange(true, std::memory_order_acq_rel);
     }
 
+    //! returns true if another thread has taken a reference to a closure-bound variable since its collection was
+    //! decided (RSet::canDelete()), and then abandons the collection; lowers collect_pending
+    /** As qore_object_private::takeCollectDeleteReference() for an object (qore#7509, qore#7546): the count plus the
+        releases made since the decision, which collect_pending keeps in the locking path that counts them, is above
+        \a decided exactly when a reference has been taken since (a closure that captured the variable is called
+        through a weak reference to an object of the set, for one, which references the variable).  The collection
+        is then released (claimCollection()), and the releases of that thread decide again.  Called with the
+        object's lock held exclusively.
+
+        @param decided the count with which the collection was decided
+        @param releases locked_releases, read with that count
+        @param others_referenced true if another member or a node of the set has been referenced since the decision
+        (RSetDerefHelper::referencedSinceDecision(), qore#7556): the collection is abandoned as well
+    */
+    DLLLOCAL bool abandonCollectionIfReferenced(int decided, unsigned releases, bool others_referenced) {
+        AutoLocker al(rlck);
+        collect_pending.fetch_sub(1, std::memory_order_relaxed);
+        int since = static_cast<int>(locked_releases - releases);
+        if (others_referenced || references.load(std::memory_order_acquire) + since > decided) {
+            collection_claimed.store(false, std::memory_order_release);
+            return true;
+        }
+        return false;
+    }
+
     DLLLOCAL void removeInvalidateRSet();
 
     //! Marks the object's recursive set stale, and not closed, instead of invalidating it; see RSet::markStale()
@@ -770,10 +811,6 @@ public:
 
     DLLLOCAL ~RSetDerefHelper();
 
-    DLLLOCAL void reserve(size_t size) {
-        objects.reserve(size);
-    }
-
     DLLLOCAL void add(RObject* obj) {
         objects.push_back(obj);
         AutoLocker al(obj->rlck);
@@ -787,9 +824,70 @@ public:
         vec.swap(objects);
     }
 
+    //! Records the members of the set other than the initiator, and its nodes, at the decision to collect the set
+    /** Called by RSet::canDelete() with the set's write lock held, while the set is valid, before the members are
+        retained and the set is invalidated (qore#7556).  Each member's count is read with its releases of the locking
+        path (RObject::locked_releases) under its rlck, which is taken after rwl (rwl -> rlck, as for the
+        retention), and its collect_pending is raised there, so that its releases are counted until
+        referencedSinceDecision(): every member's rset is the set then, so none has been released in the lock-free
+        path since the decision read its count.  The members are kept allocated with a weak reference, and the nodes
+        with theirs, until releaseDecision().
+
+        @return true if every member's count is the one the set recorded and every node's count the number of its
+        references from the set; false if one has changed since the decision read it: the record is released, and
+        the decision has to be made again with a scan
+    */
+    DLLLOCAL bool recordDecision(RSet& rs, RObject& initiator);
+
+    //! Returns true if a member of the set other than the initiator, or a node, has been referenced since the
+    //! decision recorded by recordDecision(), and lowers the members' collect_pending
+    /** Called before the collection is made, with the initiator's lock held exclusively; takes the rlck of each member
+        in turn (the initiator's rml -> a member's rlck).  A member's count plus its releases since the decision is
+        above the recorded count exactly when another thread has taken a reference since (the reasoning of
+        qore_object_private::takeCollectDeleteReference()); a node's count above the number of its references from the
+        set means a reference from outside the set (a closure of the set read through a weak reference to a hash of
+        it, for one).  The record's weak references are released by releaseDecision().
+    */
+    DLLLOCAL bool referencedSinceDecision();
+
+    //! Releases the record of recordDecision(): lowers the collect_pending of the members whose collection the record
+    //! still holds pending, and releases the weak references
+    /** Called with no lock held, or by recordDecision() with the set's write lock held, while the set's own weak
+        references keep what the record holds allocated.
+    */
+    DLLLOCAL void releaseDecision() {
+        if (decided) {
+            releaseDecisionIntern();
+        }
+    }
+
 private:
+    //! A member of a set or a node recorded at the decision to collect the set; see recordDecision()
+    struct DecidedValue {
+        //! the member, or nullptr for a node (both are nullptr in the entry after the last one)
+        RObject* obj;
+        //! the node, or nullptr for a member
+        AbstractQoreNode* node;
+        //! the member's count at the decision (with the retention of the set's collection), or the node's number of
+        //! references from the set
+        int decided;
+        //! RObject::locked_releases of the member, read with \a decided
+        unsigned releases;
+        //! true while the member's collect_pending is raised for the record
+        bool pending;
+    };
+
     ExceptionSink* xsink;
     std::vector<RObject*> objects;
+    //! the members other than the initiator and the nodes of the set whose collection was decided, followed by an
+    //! entry with neither, or nullptr; see recordDecision()
+    /** A pointer, not a vector, as the helper is made by every dereference that takes the locking path, which
+        constructs and destroys it whether or not a collection is decided
+    */
+    DecidedValue* decided = nullptr;
+
+    //! releases a record; see releaseDecision()
+    DLLLOCAL void releaseDecisionIntern();
 
     RSetDerefHelper(const RSetDerefHelper&) = delete;
     RSetDerefHelper& operator=(const RSetDerefHelper&) = delete;
@@ -868,7 +966,12 @@ public:
         @param initiator the object being dereferenced
         @param cleanup collects the members to release if the set is collected
     */
-    DLLLOCAL int canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup);
+    //! returns 1 if the set can be deleted, 0 if not, -1 if it has to be rescanned
+    /** @param decided if not null, set to the count of \a initiator with which the set is deleted
+        @param releases if not null, set to RObject::locked_releases of \a initiator, read with that count (qore#7509)
+    */
+    DLLLOCAL int canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup,
+            int* decided = nullptr, unsigned* releases = nullptr);
 
     //! Returns true if a verdict of "cannot delete" must be checked by a rescan
     /** Called with rwl held.  A reference from outside the set keeps it, unless the set has gained an edge between
@@ -1489,6 +1592,19 @@ public:
     DLLLOCAL void willDelete() {
         assert(!del);
         del = true;
+    }
+
+    //! the deletion that this dereference decided is abandoned, as another thread has taken a reference since
+    /** (qore_object_private::takeLastDeleteReference(), takeCollectDeleteReference()): the dereference does not delete
+        the object, so it does not wait as a deleter for the other dereferences, and a scan that it captured and has not
+    made is due again
+    */
+    DLLLOCAL void abandonDelete() {
+        del = false;
+        if (deferred_scan) {
+            deferred_scan = false;
+            o->deferred_scan.store(true, std::memory_order_release);
+        }
     }
 };
 

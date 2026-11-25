@@ -1,0 +1,41 @@
+list variable: refused (weak assignment); kept [0] (list)
+hash variable: refused (weak assignment); kept {z: 0} (hash)
+any variable: refused (weak assignment); kept 0 (integer)
+softlist variable: refused (weak assignment); kept [0] (list)
+*list variable: refused (weak assignment); kept [0] (list)
+*hash variable: refused (weak assignment); kept {z: 0} (hash)
+list<auto!> variable: refused (weak assignment); kept [0] (list<auto>)
+hash<auto!> variable: refused (weak assignment); kept {z: 0} (hash<auto>)
+auto! variable: refused (weak assignment); kept 0 (integer)
+closure list variable: refused (weak assignment); kept [0] (list)
+global list: refused (weak assignment); kept [0] (list)
+global hash: refused (weak assignment); kept {z: 0} (hash)
+thread_local list: refused (weak assignment); kept [0] (list)
+kept: list<int> [1, 2] (list<int>) list<auto> [1, 2] (list<int>) hash<auto> {a: 1} (hash<string, int>) auto {a: 1} (hash<string, int>) closure [1, 2] (list<int>)
+changed: list<int> [1, 2, 3] list<auto> [1, 2, 3] hash<auto> {a: 1, b: 2} auto {a: 1, b: 2} closure [1, 2, 3]
+released: list<int> [] list<auto> [] hash<auto> {} auto {} closure []
+untyped list element: refused (weak assignment); kept [1]
+list<list> element: refused (weak assignment); kept [[]]
+untyped hash member: refused (weak assignment); kept {}
+hash<string, list> member: refused (weak assignment); kept {}
+hashdecl key: refused (weak assignment); kept {l: null}
+object list member: refused (weak assignment); kept [0]
+object hash member: refused (weak assignment); kept {z: 0}
+object softlist member: refused (weak assignment); kept null
+object any member (opaque): refused (weak assignment); kept 0
+nested: refused (weak assignment); kept [1]
+hashdecl to hash: refused (weak assignment); kept {z: 0}
+hashdecl to hash<auto!>: refused (weak assignment); kept {z: 0}
+weak source variable: refused (weak assignment); kept [0]
+weak source element: refused (weak assignment); kept [1]
+kept: list<auto> element [1, 2] (list<int>) hash<string, auto> member {a: 1} (hash<string, int>) weak source [1, 2] (list<int>) hashdecl {a: 5} (hash<Decl>)
+overload: list<string>
+changed: [1, 2, 3] {a: 1, c: 3} [1, 2, 3] {a: 6}
+written through the element: [1, 2, 3, 4]
+released: [] {} [] {}
+hashdecl: RUNTIME-TYPE-ERROR: <lvalue> expects type 'hash<Decl>', but got type 'hash' instead; kept {a: 0}
+list<softint>: refused (weak assignment); kept [0]
+list<list<softint>> element: refused (weak assignment); kept [[0]]
+hash<string, hash<string, softint>> member: refused (weak assignment); kept {}
+softlist from a hash: refused (weak assignment)
+list to hash: RUNTIME-TYPE-ERROR rejected

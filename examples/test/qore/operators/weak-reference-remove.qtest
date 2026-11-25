@@ -26,7 +26,10 @@
     closures, references, members, globals, static class variables, hash keys and list elements that hold the weak
     reference, nested paths, typed lists and hashes, freed containers, objects removed and deleted, and the same
     changes without a weak reference.  Every mode must print the output of the AST.
-    A second program runs remove of a range with \c %broken-list-range, which \c %modern refuses, so that only the
+    A second program removes the entry or the key that holds the weak reference from the container that it designates,
+    which frees or moves the storage of the lvalue: it is not read afterwards (valgrind reported invalid reads of it in
+    every mode; qore#7402); and a removal that ends a cycle through an object lets the object be collected.
+    A third program runs remove of a range with \c %broken-list-range, which \c %modern refuses, so that only the
     AST interpreter runs it: through a weak reference, and of a copy of a list freed under a weak reference, which
     raises \c LIST-ERROR.
 
@@ -38,7 +41,7 @@ class WeakReferenceRemoveTest inherits QUnit::Test {
         string dir = get_script_dir() + "/weak-reference-remove";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("weak-reference-remove",);
+        const Programs = ("weak-reference-remove", "weak-reference-remove-own-entry");
         #! programs with %broken-list-range, which %modern refuses, so that only the AST interpreter runs them
         const AstPrograms = ("weak-reference-remove-broken-range",);
     }

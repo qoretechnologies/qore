@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitFramesThrow.qm - test module whose initialization raises an exception (qore#7289)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires InitFramesProbe
+
+module InitFramesThrow {
+    version = "1.0";
+    desc = "test module whose initialization fails";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace InitFramesThrow {
+public class InitFramesThrow {
+    public {
+        static int at_init = InitFramesProbe::Probe::callerPgm();
+        static int fails = InitFramesThrow::fail();
+    }
+
+    static int fail() {
+        throw "INIT-FRAMES-TEST-ERROR", "the initialization fails";
+    }
+}
+}
