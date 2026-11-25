@@ -52,6 +52,7 @@
 %requires ServerSentEventHandler
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+%requires AwsEventStream
 %requires WebSocketUtil
 
 %exec-class ClientReceiveCreditTest
@@ -365,6 +366,9 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             addTestCase(proto + ": events larger than the stream window arrive", \testLargeEvents(), proto);
             addTestCase(proto + ": an event in progress waits for the unconsumed event before it",
                 \testItemBehindUnconsumed(), (proto, "sse"));
+            # the AWS binary event stream (qore#7247)
+            addTestCase(proto + ": an AWS event-stream frame in progress waits for the unconsumed frame before it",
+                \testItemBehindUnconsumed(), (proto, "aws"));
             # the messages that this case needs with the production HTTP/3 window exceed the decoder's maximum
             # message size (16 MiB), so it runs on HTTP/2 only
             if (proto == "h2") {
@@ -787,6 +791,8 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         Queue q();
         if (fmt == "sse") {
             s.stream.installSseState(q);
+        } else if (fmt == "aws") {
+            s.stream.installEventStreamState(q);
         } else {
             s.stream.installFrameState(q);
         }
@@ -810,10 +816,23 @@ class ClientReceiveCreditTest inherits QUnit::Test {
             return bytes;
         };
 
+        # an AWS event-stream frame is encoded whole (its CRCs cover it), and written in pieces
+        code write_bytes = int sub (binary b) {
+            for (int off = 0; off < b.size(); off += piece) {
+                w.writeAll(b.substr(off, piece));
+            }
+            return b.size();
+        };
+
         # item 0: twice the window, complete
         int size0 = 2 * window;
         int bytes0 = 0;
-        if (fmt == "sse") {
+        # item 1 as a frame: its first part is written now, its rest once item 0 is taken
+        binary frame1;
+        int frame1_first;
+        if (fmt == "aws") {
+            bytes0 = write_bytes(AwsEventStreamEncoder::encode({":event-type": "a"}, binary(strmul("a", size0))));
+        } else if (fmt == "sse") {
             w.writeAll("id: 0\ndata: ");
             bytes0 = 12 + write_item("a", size0, True, True);
             w.writeAll("\n\n");
@@ -825,11 +844,18 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         # credit for it
         int size1 = window / 2;
         int bytes1 = 0;
-        if (fmt == "sse") {
-            w.writeAll("id: 1\ndata: ");
-            bytes1 = 12;
+        if (fmt == "aws") {
+            frame1 = AwsEventStreamEncoder::encode({":event-type": "b"}, binary(strmul("b", size1 + 2 * window)));
+            # the prelude, the headers and the first size1 bytes of the payload
+            frame1_first = frame1.size() - 2 * window - 4;
+            bytes1 = write_bytes(frame1.substr(0, frame1_first));
+        } else {
+            if (fmt == "sse") {
+                w.writeAll("id: 1\ndata: ");
+                bytes1 = 12;
+            }
+            bytes1 += write_item("b", size1, True, False);
         }
-        bytes1 += write_item("b", size1, True, False);
         # the client has received item 0 and the first part of item 1 except its last piece, which the window may not
         # admit (the window is announced in steps of half its size)
         assertGt(-1, call_function("dbg_http_stream_credit_wait_deferred", before.deferred + bytes0 + bytes1 - piece,
@@ -842,13 +868,17 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         # item 0 is taken: the data of item 1 that waited is credited, and item 1 completes, although its rest is
         # larger than the window
         auto e0 = q.get(HangGuard);
-        assertEq(size0, e0.data.size(), "item 0 arrives whole");
+        assertEq(size0, fmt == "aws" ? e0.payload.size() : e0.data.size(), "item 0 arrives whole");
         Counter done(1);
         *hash<ExceptionInfo> write_err;
         background sub () {
             on_exit done.dec();
             try {
-                write_item("b", 2 * window, False, True);
+                if (fmt == "aws") {
+                    write_bytes(frame1.substr(frame1_first));
+                } else {
+                    write_item("b", 2 * window, False, True);
+                }
                 if (fmt == "sse") {
                     w.writeAll("\n\n");
                 }
@@ -859,10 +889,13 @@ class ClientReceiveCreditTest inherits QUnit::Test {
         auto e1 = q.get(HangGuard);
         if (fmt == "sse") {
             assertEq("1", e1.id, "item 1 is the second event");
+        } else if (fmt == "aws") {
+            assertEq("b", e1.headers.":event-type", "item 1 is the second frame");
         } else {
             assertEq("binary", e1.type, "item 1 is a binary message");
         }
-        assertEq(size1 + 2 * window, e1.data.size(), "item 1 arrives whole once item 0 is taken");
+        assertEq(size1 + 2 * window, fmt == "aws" ? e1.payload.size() : e1.data.size(),
+            "item 1 arrives whole once item 0 is taken");
         assertEq(0, done.waitForZero(HangGuard));
         assertNothing(write_err);
     }

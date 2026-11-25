@@ -196,7 +196,7 @@ public:
     //! Installs an SSE parser on an active ChannelAction stream
     DLLLOCAL void installSseState(int64_t stream_id, Queue* queue,
         QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, bool aws_event_stream = false);
 
     //! Wait on stream_capacity_cond (for STREAM_ID_BLOCKED retry)
     DLLLOCAL void waitStreamCapacity(int64_t timeout_ms);

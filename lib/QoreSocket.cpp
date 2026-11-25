@@ -36,6 +36,7 @@
 #ifdef __APPLE__
 #include <dlfcn.h>
 #endif
+#include <zlib.h>
 #include <cerrno>
 #include <cctype>
 #include <climits>
@@ -12585,6 +12586,275 @@ bool SseAction::addData(const char* data, size_t len, ExceptionSink* xsink) {
     // the event in progress can be larger than the stream's window (issue #5820)
     reportProgressLocked();
     return pushed;
+}
+
+
+void EventStreamAction::pushErrorLocked(const char* err, QoreStringNode* desc, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> desc_holder(desc);
+    failed = true;
+    if (!queue) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+    err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
+    err_hash->setKeyValue("desc", desc_holder.release(), xsink);
+    queue->pushAndTakeRef(err_hash.release());
+    queue->pushAndTakeRef(QoreValue());  // sentinel
+}
+
+void EventStreamAction::failAtLocked(size_t off, const char* err, QoreStringNode* desc, ExceptionSink* xsink) {
+    // the frames decoded before the error were reported with them
+    buf.erase(0, off);
+    failLocked(err, desc, xsink);
+}
+
+void EventStreamAction::failLocked(const char* err, QoreStringNode* desc, ExceptionSink* xsink) {
+    // the frame read so far and the rest of the data are discarded, and count as consumed
+    creditPendingLocked();
+    pushErrorLocked(err, desc, xsink);
+}
+
+static uint32_t qore_aws_es_u32(const unsigned char* p) {
+    return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
+        | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+
+static uint64_t qore_aws_es_u64(const unsigned char* p) {
+    return (static_cast<uint64_t>(qore_aws_es_u32(p)) << 32) | qore_aws_es_u32(p + 4);
+}
+
+static uint32_t qore_aws_es_crc32(const unsigned char* p, size_t len) {
+    return static_cast<uint32_t>(crc32(0, p, static_cast<uInt>(len)));
+}
+
+int EventStreamAction::nextFrameLocked(size_t& off, bool& pushed, ExceptionSink* xsink) {
+    const size_t avail = buf.size() - off;
+    if (avail < PreludeSize) {
+        return 0;
+    }
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(buf.data()) + off;
+    // the checks and messages of AwsEventStream::AwsEventStreamDecoder::nextFrame()
+    uint32_t total_len = qore_aws_es_u32(p);
+    uint32_t headers_len = qore_aws_es_u32(p + 4);
+    uint32_t prelude_crc = qore_aws_es_u32(p + 8);
+    if (total_len < PreludeSize + MessageCrcSize) {
+        failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNodeMaker("invalid total length %u (must be at "
+            "least %u)", static_cast<unsigned>(total_len), static_cast<unsigned>(PreludeSize + MessageCrcSize)),
+            xsink);
+        return -1;
+    }
+    if (headers_len > total_len - PreludeSize - MessageCrcSize) {
+        failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNodeMaker("invalid headers length %u for total "
+            "%u", static_cast<unsigned>(headers_len), static_cast<unsigned>(total_len)), xsink);
+        return -1;
+    }
+    if (headers_len > MaxHeaders || total_len - headers_len - PreludeSize - MessageCrcSize > MaxPayload) {
+        failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNode("event frame exceeds protocol size limits"),
+            xsink);
+        return -1;
+    }
+    uint32_t computed = qore_aws_es_crc32(p, 8);
+    if (computed != prelude_crc) {
+        failAtLocked(off, "AWS-EVENT-STREAM-CRC-ERROR", new QoreStringNodeMaker("prelude CRC mismatch: expected 0x%08x "
+            "got 0x%08x", static_cast<unsigned>(prelude_crc), static_cast<unsigned>(computed)), xsink);
+        return -1;
+    }
+    if (avail < total_len) {
+        return 0;
+    }
+    uint32_t msg_crc = qore_aws_es_u32(p + total_len - MessageCrcSize);
+    computed = qore_aws_es_crc32(p, total_len - MessageCrcSize);
+    if (computed != msg_crc) {
+        failAtLocked(off, "AWS-EVENT-STREAM-CRC-ERROR", new QoreStringNodeMaker("message CRC mismatch: expected 0x%08x "
+            "got 0x%08x", static_cast<unsigned>(msg_crc), static_cast<unsigned>(computed)), xsink);
+        return -1;
+    }
+
+    // the headers: a name (u8 length), a type tag and the value of the type
+    ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), xsink);
+    size_t hpos = PreludeSize;
+    const size_t hend = PreludeSize + headers_len;
+    static const unsigned char widths[] = {0, 0, 1, 2, 4, 8, 2, 2, 8, 16};
+    while (hpos < hend) {
+        size_t name_len = p[hpos++];
+        if (!name_len || hpos + name_len >= hend) {
+            failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNode("header name extends past headers "
+                "block"), xsink);
+            return -1;
+        }
+        std::string name(reinterpret_cast<const char*>(p + hpos), name_len);
+        if (headers->existsKey(name.c_str())) {
+            failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNodeMaker("duplicate event header: %s",
+                name.c_str()), xsink);
+            return -1;
+        }
+        hpos += name_len;
+        unsigned type_tag = p[hpos++];
+        if (type_tag >= sizeof(widths) || hpos + widths[type_tag] > hend) {
+            failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNode("invalid or truncated event header "
+                "value"), xsink);
+            return -1;
+        }
+        QoreValue value;
+        switch (type_tag) {
+            case 0:
+                value = true;
+                break;
+            case 1:
+                value = false;
+                break;
+            case 2:
+                value = static_cast<int64>(static_cast<int8_t>(p[hpos]));
+                hpos += 1;
+                break;
+            case 3:
+                value = static_cast<int64>(static_cast<int16_t>((p[hpos] << 8) | p[hpos + 1]));
+                hpos += 2;
+                break;
+            case 4:
+                value = static_cast<int64>(static_cast<int32_t>(qore_aws_es_u32(p + hpos)));
+                hpos += 4;
+                break;
+            case 5:
+                value = static_cast<int64>(qore_aws_es_u64(p + hpos));
+                hpos += 8;
+                break;
+            case 6:
+            case 7: {
+                size_t len = (static_cast<size_t>(p[hpos]) << 8) | p[hpos + 1];
+                hpos += 2;
+                if (hpos + len > hend) {
+                    failAtLocked(off, "AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNode(type_tag == 6
+                        ? "byte-array header extends past headers block"
+                        : "string header extends past headers block"), xsink);
+                    return -1;
+                }
+                if (type_tag == 6) {
+                    SimpleRefHolder<BinaryNode> b(new BinaryNode);
+                    b->append(p + hpos, len);
+                    value = b.release();
+                } else {
+                    value = new QoreStringNode(reinterpret_cast<const char*>(p + hpos), len, QCS_UTF8);
+                }
+                hpos += len;
+                break;
+            }
+            case 8: {
+                // milliseconds since the epoch, as a date in UTC
+                int64 ms = static_cast<int64>(qore_aws_es_u64(p + hpos));
+                int64 secs = ms / 1000;
+                int64 rem = ms % 1000;
+                if (rem < 0) {
+                    --secs;
+                    rem += 1000;
+                }
+                value = DateTimeNode::makeAbsolute(nullptr, secs, static_cast<int>(rem * 1000));
+                hpos += 8;
+                break;
+            }
+            case 9: {
+                // the canonical 8-4-4-4-12 lowercase hex form
+                QoreStringNode* uuid = new QoreStringNode;
+                for (unsigned i = 0; i < 16; ++i) {
+                    if (i == 4 || i == 6 || i == 8 || i == 10) {
+                        uuid->concat('-');
+                    }
+                    uuid->sprintf("%02x", static_cast<unsigned>(p[hpos + i]));
+                }
+                value = uuid;
+                hpos += 16;
+                break;
+            }
+        }
+        // a key that is new to a hash of its own (duplicates are refused above)
+        headers->setKeyValue(name.c_str(), value, xsink);
+        assert(!*xsink);
+    }
+
+    ReferenceHolder<QoreHashNode> frame(new QoreHashNode(autoTypeInfo), xsink);
+    frame->setKeyValue("headers", headers.release(), xsink);
+    SimpleRefHolder<BinaryNode> payload(new BinaryNode);
+    size_t payload_len = total_len - headers_len - PreludeSize - MessageCrcSize;
+    if (payload_len) {
+        payload->append(p + hend, payload_len);
+    }
+    frame->setKeyValue("payload", payload.release(), xsink);
+    // the frame is complete: its data is reported with it, or at once
+    closeItemLocked();
+    if (queue) {
+        if (item_hook) {
+            item_hook->record(*frame, stream_hook, total_len);
+        }
+        queue->pushAndTakeRef(frame.release());
+        pushed = true;
+    } else {
+        creditNow(total_len);
+    }
+    off += total_len;
+    return 1;
+}
+
+void EventStreamAction::execute(QoreValue output, ExceptionSink* xsink) {
+    AsyncActionLocker lg(mtx);
+    // the stream is discarded after an error; its data counts as consumed
+    if (failed) {
+        creditNow(qore_http_stream_value_body_size(output));
+        output.discard(xsink);
+        return;
+    }
+    // the body of the streaming data hash is binary (the content type maps to binary); a string body is taken as its
+    // bytes
+    bool pushed = false;
+    if (output.getType() == NT_HASH) {
+        QoreValue body_val = output.get<QoreHashNode>()->getKeyValue("body");
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* data = body_val.get<const BinaryNode>();
+            buf.append(static_cast<const char*>(data->getPtr()), data->size());
+        } else if (body_val.getType() == NT_STRING) {
+            const QoreStringNode* data = body_val.get<const QoreStringNode>();
+            buf.append(data->c_str(), data->size());
+        }
+    }
+    output.discard(xsink);
+    // the frames are decoded from a read offset, and their bytes removed once, so that a chunk of many frames is
+    // decoded in linear time
+    size_t off = 0;
+    while (off < buf.size()) {
+        int rc = nextFrameLocked(off, pushed, xsink);
+        if (rc <= 0) {
+            if (rc < 0) {
+                pushed = true;
+            }
+            break;
+        }
+    }
+    if (!failed && off) {
+        buf.erase(0, off);
+    }
+    // the frame in progress can be larger than the stream's window (issue #5820)
+    if (!failed) {
+        reportProgressLocked();
+    }
+    if (pushed) {
+        notify();
+    }
+}
+
+void EventStreamAction::complete(ExceptionSink* xsink) {
+    AsyncActionLocker lg(mtx);
+    // a stream that ends inside a frame is truncated, as AwsEventStreamDecoder::finish() reports it
+    if (!failed && !buf.empty()) {
+        size_t left = buf.size();
+        failLocked("AWS-EVENT-STREAM-FORMAT-ERROR", new QoreStringNodeMaker("stream ended with %zu unconsumed frame "
+            "bytes", left), xsink);
+        notify();
+        return;
+    }
+    creditPendingLocked();
+    if (queue && !failed) {
+        queue->pushAndTakeRef(QoreValue());
+        notify();
+    }
 }
 
 void qore_socket_ops::doException(int rc, const char* meth, int timeout_ms, ExceptionSink* xsink) {
