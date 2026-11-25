@@ -1266,8 +1266,14 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     - the paths in the errors of the operations of the object, including the denials of the filesystem policy
 
     @ref Qore::realpath() "realpath()" gives such code its result in the same form for a relative path, and for an
-    absolute path whose resolution reaches more of the current directory than the path names (a link to it, ex:
-    \c "/proc/self/cwd"); the canonical form of any other absolute path is given as it is.
+    absolute path whose canonical form shares more leading directories with the current directory than the path given
+    does: a link to the current directory or into it (ex: \c "/proc/self/cwd"), but also a link whose target is on
+    the branch of the current directory (ex: with the current directory below \c "/private/var" on macOS,
+    \c "/var/x" gives a path starting with \c ".."); the canonical form of any other absolute path is given as it is.
+    The current directory is read after the path is resolved: a change of the current directory of the process
+    meanwhile (which only C++ code or the code of another language can make) can give a result relative to the new
+    one.  On Windows, a result on another drive or share than the current directory is given without its
+    directories.
 
     An absolute path given to @ref Qore::Dir::chdir() "Dir::chdir()" replaces the current directory, and the paths
     that derive from it are given as they are; so is the name of a file that was opened by an absolute path.  The form
@@ -1285,7 +1291,8 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     Windows, the relative paths use the platform's directory separator (ex: <tt>.\\sub</tt>).
 
     This hides the name of the directory, not the directory itself: code that may read the parent directories of the
-    current directory can find it, from the depth that the relative paths show (\c "../..") and the names in the
+    current directory can find it, from the depth that the relative paths of @ref Qore::Dir "Dir" objects and of
+    @ref Qore::realpath() "realpath()" show (\c "../..") and the names in the
     listings of the parents, as it can without a @ref Qore::Dir "Dir" object; a
     @ref sandbox_filesystem "file-system policy" that denies those directories prevents it.  The targets of symbolic
     links are file-system data and are given as they are, by @ref Qore::readlink() "readlink()" and in the \c link

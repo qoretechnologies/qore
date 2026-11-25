@@ -3931,7 +3931,8 @@ int q_realpath(const QoreString& path, QoreString& rv, ExceptionSink* xsink) {
     // verify that the path exists
     if (!q_get_mode(rv)) {
         if (xsink)
-            xsink->raiseException("REALPATH-ERROR", "path '%s' does not exist", rv.getBuffer());
+            // the path can include the current directory: named in the form for the caller (qore#7662)
+            xsink->raiseException("REALPATH-ERROR", "path '%s' does not exist", qore_msg_path(rv.getBuffer()).c_str());
         return -1;
     }
     return 0;

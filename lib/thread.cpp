@@ -10568,8 +10568,9 @@ int qore_canonical_path_for_caller(const char* arg, QoreString& canon, Exception
     }
     bool relative = !q_absolute_path(arg);
     if (!relative) {
-        // an absolute path that the code gave keeps its canonical form, unless resolving it reached more of the
-        // current directory than the path that the code gave names (ex: "/proc/self/cwd")
+        // an absolute path that the code gave keeps its canonical form, unless its canonical form shares more leading
+        // directories with the current directory than the path that the code gave does (ex: "/proc/self/cwd"): every
+        // directory of the current directory that a result gives was then given by the code itself
         std::vector<std::string> ccomps, acomps, wcomps;
         qore_split_abs_path(canon.c_str(), ccomps);
         qore_split_abs_path(arg, acomps);

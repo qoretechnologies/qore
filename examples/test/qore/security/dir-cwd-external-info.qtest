@@ -360,7 +360,7 @@ File sub file() { return (new Dir()).openFile(\"a.txt\"); }", "dir-cwd-receiver-
             }
             assertEq(exp, rv, m.key);
             # the results other than those for the absolute paths that name the current directory themselves
-            checkNoCwd(rv[0..3] + rv[6] + rv[8..], m.key);
+            checkNoCwd(rv[0..4] + rv[6] + rv[8..], m.key);
         }
     }
 
@@ -475,7 +475,8 @@ string sub module_path() { Dir d(); d.chdir(\"sub\"); return dir_path(d); }", mo
                 }
                 return (hd.path(), can_getcwd);
             });
-            assertEq(l[1] ? cwd : ".", l[0], m.key + ": host closure called by restricted code");
+            # the closure runs as the code of the host, which may call getcwd()
+            assertEq((cwd, True), l, m.key + ": host closure called by restricted code");
             # a closure of the restricted code called by the host runs as the restricted code
             code c = p.callFunction("get_closure");
             assertEq(".", c(), m.key + ": restricted closure called by the host");

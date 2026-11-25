@@ -316,7 +316,7 @@ int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
         return rc ? -1 : 0;
 #endif
     }
-    return priv->mkdir(subdir, mode, xsink);
+    return qore_qd_private::mkdirPath(path, mode, xsink);
 }
 
 int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
@@ -346,7 +346,7 @@ int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
         return rc ? -1 : 0;
 #endif
     }
-    return priv->rmdir(subdir, xsink);
+    return qore_qd_private::rmdirPath(path, xsink);
 }
 
 std::string QoreDir::getPath(const char* sub) const {

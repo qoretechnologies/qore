@@ -1734,8 +1734,8 @@ string realpath = realpath(path);
     @return the corresponding absolute path with all relative references removed and all symbolic links resolved (if applicable for the current platform);
     code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets the result
     relative to the current directory of the process (ex: \c ".", \c "./sub", \c "../x") for a relative \a path, and
-    for an absolute \a path whose resolution reaches more of the current directory than \a path names (ex:
-    \c "/proc/self/cwd"); see @ref sandbox_fs_dir_cwd
+    for an absolute \a path whose canonical form shares more leading directories with the current directory than
+    \a path does (ex: \c "/proc/self/cwd"); see @ref sandbox_fs_dir_cwd
 
     @throw REALPATH-ERROR if an error occurs calculating the return value then this exception is thrown
     @throw REALPATH-ERROR the path contains a NUL character; see @ref path_nul_characters
@@ -1774,8 +1774,20 @@ string realpath(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    }
 #endif
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(path->getEncoding()));
-   if (q_realpath(*path, **rv, xsink)) {
-      return QoreValue();
+   {
+      // an error that names the path made absolute (without realpath(3)) names it relative to the current directory
+      // for code restricted from external information (qore#7662)
+      std::string base;
+      if (!q_absolute_path(path->c_str()) && qore_caller_no_host_dirs()) {
+         QoreString cwd;
+         if (!q_getcwd(cwd)) {
+            base = cwd.c_str();
+         }
+      }
+      QoreHostDirBaseMessageScopeHelper msg_scope(std::move(base));
+      if (q_realpath(*path, **rv, xsink)) {
+         return QoreValue();
+      }
    }
    // the form for the caller: no current directory for code restricted from external information (qore#7662)
    return qore_canonical_path_for_caller(path->c_str(), **rv, xsink) ? QoreValue() : rv.release();

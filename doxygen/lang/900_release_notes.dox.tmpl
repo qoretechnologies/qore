@@ -2937,6 +2937,12 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - on Windows, @ref Qore::Dir::mkdir() "Dir::mkdir()", @ref Qore::Dir::rmdir() "Dir::rmdir()",
+      @ref Qore::Dir::openFile() "Dir::openFile()", @ref Qore::Dir::openDir() "Dir::openDir()" and
+      @ref Qore::Dir::removeFile() "Dir::removeFile()" refuse a name with either directory separator (slash or backslash), and the
+      @ref sandbox_filesystem "sandbox file-system policy" checks the path that is created or removed; a name starting
+      with a slash was checked as an absolute path but used in the directory of the object
+      (<a href="https://github.com/qoretechnologies/qore/issues/7662">issue 7662</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API

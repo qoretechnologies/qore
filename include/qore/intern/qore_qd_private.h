@@ -329,9 +329,11 @@ public:
 
     DLLLOCAL int mkdir(const char* subdir, int mode, ExceptionSink* xsink) const {
         assert(subdir);
-        AutoLocker al(m);
+        return mkdirPath(getPath(subdir), mode, xsink);
+    }
 
-        std::string path = getPathIntern(subdir);
+    //! creates the directory at the given path, which getPath() gave (qore#7662: the path that the policy checked)
+    DLLLOCAL static int mkdirPath(const std::string& path, int mode, ExceptionSink* xsink) {
         if (::mkdir(path.c_str(), mode)) {
             xsink->raiseErrnoException("DIR-MKDIR-FAILURE", errno, "error creating directory '%s'",
                 qore_msg_path(path.c_str()).c_str());
@@ -342,9 +344,11 @@ public:
 
     DLLLOCAL int rmdir(const char* subdir, ExceptionSink* xsink) const {
         assert(subdir);
-        AutoLocker al(m);
+        return rmdirPath(getPath(subdir), xsink);
+    }
 
-        std::string path = getPathIntern(subdir);
+    //! removes the directory at the given path, which getPath() gave (qore#7662: the path that the policy checked)
+    DLLLOCAL static int rmdirPath(const std::string& path, ExceptionSink* xsink) {
         if (::rmdir(path.c_str())) {
             xsink->raiseErrnoException("DIR-RMDIR-FAILURE", errno, "error removing directory '%s'",
                 qore_msg_path(path.c_str()).c_str());
