@@ -64,6 +64,14 @@ int sub constMemberKey(int a, int b, bool right) {
     return values{key};
 }
 
+# a member read from an int local initialized with a literal
+int sub literalMemberKey(int b, bool right) {
+    int member = 7;
+    hash<string, int> values = {"left": member, "right": b & 65535};
+    string key = right ? "right" : "left";
+    return values{key};
+}
+
 int sub loopKey(int count, int seed) {
     int sum = 0;
     for (int i = 0; i < count; ++i) {
@@ -245,6 +253,7 @@ foreach int a in ((-9223372036854775807 - 1, -65537, -1, 0, 1, 65535, 9223372036
             int expected = right ? (b & 65535) : (a & 65535);
             equal(expected, finiteKey(a, b, right));
             equal(expected, constMemberKey(a, b, right));
+            equal(right ? (b & 65535) : 7, literalMemberKey(b, right));
             equal(expected, directKey(a, b, right));
             equal(expected * 2, linkedKey(a, b, right));
             equal(a & 65535, repeatedKey(a, b, right));
