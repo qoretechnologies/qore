@@ -160,6 +160,12 @@ struct ChildModuleInfo {
     std::string err;
     //! the description of the child's own load exception with CMS_FAILED, the reason with CMS_SKIPPED
     std::string desc;
+    //! true if \a desc can be given to code restricted from external information (qore#7507)
+    /** The description of a failure is that of the child's load exception, built for the code that requested the load
+        (see QoreRestrictedMessageScopeHelper): it names files of the host unless that code was restricted from external
+        information, and it is then not given to code with this restriction, which reads the module hash later
+    */
+    bool desc_restricted_safe = true;
 
     DLLLOCAL ChildModuleInfo(const char* spec, const char* name) : spec(spec), name(name) {
     }

@@ -10380,6 +10380,104 @@ QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po_state.po;
 }
 
+bool runtime_no_external_info() {
+    // no Program has had the restriction: no code is restricted, and the thread's data is not looked up
+    if (!qore_no_external_info_used.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the code of a Program that is not a module's, with no restrictions of a sandboxed caller and no provenance of
+    // restricted code: the rule below decides on the Program's options alone, without walking further (see
+    // qore_get_caller_domain_restrictions())
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !td->runtime_po_state.caller_restrictions && !td->sandbox_provenance
+            && !qore_program_is_module_inline(pgm)) {
+        return !!(qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO);
+    }
+    // the rule of every check of the caller's domains: the code runs for code with the restriction (library module
+    // code called by it, a thread or a continuation of work that it started)
+    if (qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO))) {
+        return true;
+    }
+    // the code of a module whose own Program has the restriction, which it inherited from the Program that loaded it,
+    // where no other code is the caller: under the initialization barrier of a library module, which hides the
+    // loader (the init closure, the module code that it calls), and in a thread that such code started
+    if (pgm && qore_program_is_module_inline(pgm)
+            && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return !qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td));
+    }
+    return false;
+}
+
+std::string qore_path_file_name(const char* path) {
+    const char* end = path + strlen(path);
+    // separators at the end of the path (a directory) are not part of the last component
+    while (end > path + 1 && (end[-1] == '/' || end[-1] == '\\')) {
+        --end;
+    }
+    const char* last = end;
+    while (last > path && last[-1] != '/' && last[-1] != '\\') {
+        --last;
+    }
+    return last == end ? std::string(path, end - path) : std::string(last, end - last);
+}
+
+// true while the module loader builds messages for code restricted from external information (qore#7507)
+static thread_local bool qore_msg_restricted_scope = false;
+
+QoreRestrictedMessageScopeHelper::QoreRestrictedMessageScopeHelper(bool restricted)
+        : old(qore_msg_restricted_scope) {
+    if (restricted) {
+        qore_msg_restricted_scope = true;
+    }
+}
+
+QoreRestrictedMessageScopeHelper::~QoreRestrictedMessageScopeHelper() {
+    qore_msg_restricted_scope = old;
+}
+
+bool qore_msg_restricted() {
+    return qore_msg_restricted_scope;
+}
+
+std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope || qore_caller_no_external_info(pgm) ? qore_path_file_name(path)
+        : std::string(path);
+}
+
+bool qore_caller_no_external_info(const QoreProgram* pgm) {
+    if (runtime_no_external_info()) {
+        return true;
+    }
+    if (pgm && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return true;
+    }
+    const QoreProgram* cpgm = qore_thread_current_program_if_any();
+    return cpgm && (qore_program_private::getParseOptions(*cpgm) & PO_NO_EXTERNAL_INFO);
+}
+
+std::string qore_msg_path(const char* path) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope ? qore_path_file_name(path) : std::string(path);
+}
+
+QoreStringNode* qore_msg_path_node(const char* path) {
+    return new QoreStringNode(qore_msg_path(path));
+}
+
+const char* qore_msg_detail(const char* text) {
+    return qore_msg_restricted_scope ? "(the details name files of the host, which code restricted from external "
+        "information is not given)" : text;
+}
+
 void qore_get_aot_dispatch_thread_context(QoreAOTDispatchThreadContext& ctx) {
     ThreadData* td = thread_data.get();
     if (!td) {
