@@ -3249,6 +3249,8 @@ DLLLOCAL bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm);
 
 //! see qore_thread_intern.h
 DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
+//! see QoreSandboxProvenance.h
+DLLLOCAL bool qore_program_is_restricted(const QoreProgram* pgm);
 //! see qore_thread_intern.h
 DLLLOCAL bool qore_module_lifetime_active();
 
@@ -3658,6 +3660,12 @@ public:
     /** Set with released_spgm_id, under dataLock()
     */
     std::atomic<bool> released_sandboxed{false};
+
+    //! true if a sandbox that does not trust its code governed the source Program when it released the class (see
+    //! isRestrictedCode())
+    /** Set with released_spgm_id, under dataLock()
+    */
+    std::atomic<bool> released_restricted{false};
 
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
@@ -5268,6 +5276,7 @@ public:
                 std::lock_guard<std::mutex> al(dataLock());
                 released_spgm_id.store(pgm->getProgramId());
                 released_sandboxed.store(qore_program_is_sandboxed(pgm));
+                released_restricted.store(qore_program_is_restricted(pgm));
                 taken = spgm.compare_exchange_strong(expected, nullptr);
             }
             if (taken) {
@@ -5287,6 +5296,7 @@ public:
                 if (p) {
                     released_spgm_id.store(p->getProgramId());
                     released_sandboxed.store(qore_program_is_sandboxed(p));
+                    released_restricted.store(qore_program_is_restricted(p));
                     p = spgm.exchange(nullptr);
                 }
             }
@@ -5306,6 +5316,13 @@ public:
         inlined in the callers, such as execDestructor() (qore#6732).
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
+
+    //! Returns true if the code of the class is restricted: a sandbox that does not trust its code governs the Program
+    //! that defined it (see qore_program_is_restricted())
+    /** As isSandboxedCode(): a builtin class is trusted, the source Program is read when called, and once it has
+        released the class, the state it had then is used
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isRestrictedCode() const;
 
     //! Returns true if sandboxed code declared the class (qore#6843)
     /** For a committed class, the state of its Program when it was committed (sandbox_ctx); for a class being parsed,

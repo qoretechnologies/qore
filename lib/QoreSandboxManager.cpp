@@ -2259,19 +2259,13 @@ bool qore_class_own_code_sandboxed(const qore_class_private& qc, qore_program_id
     return true;
 }
 
-//! Returns true if the code that declares the class, or one of its base classes, is sandboxed (qore#7576)
-/** The Program whose code declares a class is its source Program (qore_class_private::spgm), also for a class that
-    was imported into another Program, whose namespace then holds it; once that Program has released the class, the
-    state that it had then is used (see qore_class_private::isSandboxedCode()).
-
-    The hierarchy is walked depth first, the class before its base classes, in the order of their declaration, each
+//! Returns true if \a check is true for the class or one of its base classes (qore#7576)
+/** The hierarchy is walked depth first, the class before its base classes, in the order of their declaration, each
     class once: a class reached through more than one path is not looked at again, so that the walk is linear in the
     number of classes of the hierarchy
-
-    @param qc the class
-    @param id if not null, set to the ID of the Program that declares the first sandboxed class found
 */
-bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_program_id_t* id) {
+template <typename F>
+bool qore_class_hierarchy_any(const qore_class_private& qc, F check) {
     std::vector<const qore_class_private*> stack{&qc};
     std::vector<const qore_class_private*> visited;
     while (!stack.empty()) {
@@ -2281,7 +2275,7 @@ bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_pr
             continue;
         }
         visited.push_back(c);
-        if (qore_class_own_code_sandboxed(*c, id)) {
+        if (check(*c)) {
             return true;
         }
         if (c->scl) {
@@ -2295,6 +2289,27 @@ bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_pr
     }
     return false;
 }
+
+//! Returns true if the code that declares the class, or one of its base classes, is sandboxed (qore#7576)
+/** The Program whose code declares a class is its source Program (qore_class_private::spgm), also for a class that
+    was imported into another Program, whose namespace then holds it; once that Program has released the class, the
+    state that it had then is used (see qore_class_private::isSandboxedCode()).
+
+    @param qc the class
+    @param id if not null, set to the ID of the Program that declares the first sandboxed class found
+*/
+bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_program_id_t* id) {
+    return qore_class_hierarchy_any(qc, [id] (const qore_class_private& c) {
+        return qore_class_own_code_sandboxed(c, id);
+    });
+}
+
+//! Returns true if the code that declares the class, or one of its base classes, is restricted (qore#7576)
+bool qore_class_declared_by_restricted_code(const qore_class_private& qc) {
+    return qore_class_hierarchy_any(qc, [] (const qore_class_private& c) {
+        return c.isRestrictedCode();
+    });
+}
 }
 
 bool qore_object_program_is_sandboxed(const QoreObject* obj) {
@@ -2306,6 +2321,15 @@ bool qore_object_program_is_sandboxed(const QoreObject* obj) {
 }
 
 bool qore_object_program_is_restricted(const QoreObject* obj) {
+    try {
+        // the code that declares the class or a base class (qore#7576), and the Program the class is used in
+        if (qore_class_declared_by_restricted_code(*qore_class_private::get(*obj->getClass()))) {
+            return true;
+        }
+    } catch (std::bad_alloc&) {
+        // fails closed
+        return true;
+    }
     return qore_program_is_restricted(obj->getProgram());
 }
 

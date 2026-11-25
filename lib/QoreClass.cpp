@@ -9176,6 +9176,25 @@ bool qore_class_private::isSandboxedCode() const {
     return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
 }
 
+bool qore_class_private::isRestrictedCode() const {
+    // builtin classes are trusted, as for isSandboxedCode()
+    if (sys) {
+        return false;
+    }
+    QoreProgram* p = spgm.load();
+    if (!p) {
+        return released_restricted.load();
+    }
+    // the current Program cannot be deleted while the thread runs in it
+    if (p == getProgram()) {
+        return qore_program_is_restricted(p);
+    }
+    // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
+    std::lock_guard<std::mutex> al(dataLock());
+    p = spgm.load();
+    return p ? qore_program_is_restricted(p) : released_restricted.load();
+}
+
 bool qore_class_private::isSandboxDeclared() const {
     if (sys) {
         return false;
