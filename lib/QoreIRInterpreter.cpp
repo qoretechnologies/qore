@@ -25497,7 +25497,8 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 return QoreValue();
             }
             QoreStringNode* vs = v.getValue().get<QoreStringNode>();
-            vs->concat(*str, xsink);
+            // memory that cannot be allocated raises the exception (qore#7466)
+            qore_string_private::get(*vs)->concatRaising(*str, xsink);
         }
     } else if (vtype == NT_NUMBER) {
         // a char is added as its one-character string is (LValueHelper::plusEqualsNumber())

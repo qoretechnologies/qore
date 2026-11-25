@@ -82,9 +82,9 @@ static __attribute__((noinline, cold)) void qore_rt_raise_allocation_failure(Exc
     own error path releases its values, runs its handlers and branches to a try block of the same function.  The
     helpers on the paths of most operations (list push and append, string append, +=) do not have this handler,
     which costs a saved register and changes their code: they grow lists and strings with the sink, which raises
-    the exception without a std::bad_alloc (qore_list_private::pushHeld(), qore_string_private::check_char(size_t,
-    ExceptionSink*)).  A std::bad_alloc that leaves a helper ends the process at the boundary of the native code
-    (qore_native_allocation_failure()).
+    the exception without a std::bad_alloc (qore_list_private::pushRaising(), pushCanonicalRaising(), pushHeld(),
+    qore_string_private::concatRaising()).  A std::bad_alloc that leaves a helper ends the process at the boundary
+    of the native code (qore_native_allocation_failure()).
 */
 #define QORE_RT_CATCH_ALLOCATION_FAILURE(rv) catch (const std::bad_alloc&) { \
     qore_rt_raise_allocation_failure(xsink); \
@@ -6977,14 +6977,14 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         QoreListNode* l = list_val.get<QoreListNode>();
         if (l->reference_count() > 1) {
             ReferenceHolder<QoreListNode> copy(l->copy(), xsink);
-            qore_list_private::pushCanonical(**copy, push_val.refSelf(), xsink);
+            qore_list_private::pushCanonicalRaising(**copy, push_val.refSelf(), xsink);
             if (xsink && *xsink) {
                 return toBits(QoreValue());
             }
             // the copy of a list held through an opaque reference is held through one (see qore_value_with_copy())
             return toBits(qore_value_with_copy(list_val, copy.release()));
         }
-        qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
+        qore_list_private::pushCanonicalRaising(*l, push_val.refSelf(), xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
@@ -6998,7 +6998,7 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         element_type = qore_substitute_type_params_if_needed(element_type);
         ReferenceHolder<QoreListNode> l(
             new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
-        qore_list_private::pushCanonical(**l, push_val.refSelf(), xsink);
+        qore_list_private::pushCanonicalRaising(**l, push_val.refSelf(), xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
@@ -7030,7 +7030,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_in_place(uint64_t list_bits,
             list_val.getTypeName());
         return toBits(QoreValue());
     }
-    qore_list_private::pushCanonical(*list_val.get<QoreListNode>(), fromBits(val_bits).refSelf(), xsink);
+    qore_list_private::pushCanonicalRaising(*list_val.get<QoreListNode>(), fromBits(val_bits).refSelf(), xsink);
     return xsink && *xsink ? toBits(QoreValue()) : list_bits;
 }
 
@@ -9797,7 +9797,7 @@ extern "C" DLLEXPORT int64_t qore_rt_list_append_element(uint64_t list_val, uint
         val.discard(xsink);
         return state;
     }
-    priv->push(val, vtype, xsink);
+    priv->pushRaising(val, vtype, xsink);
     return state;
 }
 
@@ -11837,7 +11837,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
     // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
     QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
-        left_node->concat(*right_string, xsink);
+        qore_string_private::get(*left_node)->concatRaising(*right_string, xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
@@ -11847,7 +11847,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
 
     QoreStringValueHelper left_string(left);
     ReferenceHolder<QoreStringNode> result(new QoreStringNode(*left_string), xsink);
-    result->concat(*right_string, xsink);
+    qore_string_private::get(*result)->concatRaising(*right_string, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
@@ -11893,13 +11893,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     // the base value of an enum value on the right is its member's, which holds a reference of its own (qore#6254)
     QoreStringNode* right_node = right.isShortString() || right.isEnum() ? nullptr : right.get<QoreStringNode>();
     if (left_node && left_node != right_node && left_node->reference_count() == 1) {
-        left_node->concat(*right_string, xsink);
+        qore_string_private::get(*left_node)->concatRaising(*right_string, xsink);
         return xsink && *xsink ? toBits(QoreValue()) : left_bits;
     }
 
     QoreStringValueHelper left_string(left);
     ReferenceHolder<QoreStringNode> result(new QoreStringNode(*left_string), xsink);
-    result->concat(*right_string, xsink);
+    qore_string_private::get(*result)->concatRaising(*right_string, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
@@ -11932,9 +11932,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
     QoreStringValueHelper right_string(right);
     if (left_string == right_node) {
         ReferenceHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string), xsink);
-        left_string->concat(*right_copy, xsink);
+        qore_string_private::get(*left_string)->concatRaising(*right_copy, xsink);
     } else {
-        left_string->concat(*right_string, xsink);
+        qore_string_private::get(*left_string)->concatRaising(*right_string, xsink);
     }
     return xsink && *xsink ? toBits(QoreValue()) : left_bits;
 }
