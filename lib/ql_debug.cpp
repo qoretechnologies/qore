@@ -16334,6 +16334,164 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QorePro
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
+//! Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
+//! for the update scopes of shared objects (also while it runs the code that it called and after the scope opened),
+//! the per-Program cache, the check of a builtin's caller and the Program of the calling code (qore#7202)
+/** The code is entered as a call of a user variant enters it (a context that does not switch the Program, the hold
+    of the Program that compiled the code and the override that records it), and as the options of a callback install
+    it (a hold and the override)
+*/
+static void ut_foreign_code_counts_for_scopes(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    auto make_pgm = [parent](const QoreParseOptions& po) -> QoreProgram* {
+        return parent ? new QoreProgram(parent, QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po)
+            : new QoreProgram(QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS) | po);
+    };
+    // the Program that the code runs in, the sandboxed Program that compiled it and a restricted one
+    QoreProgram* host = make_pgm(QoreParseOptions());
+    QoreProgram* tenant = make_pgm(QoreParseOptions());
+    QoreProgram* restricted = make_pgm(QoreParseOptions(PO_NO_FILESYSTEM));
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    tenant->setSandboxManager(sm);
+    UT_ASSERT(c, qore_program_is_sandboxed(tenant), "foreign code: the tenant is sandboxed");
+    UT_ASSERT(c, !qore_program_is_sandboxed(host), "foreign code: the host is not sandboxed");
+    UT_ASSERT(c, !qore_builtin_caller_is_sandboxed(), "foreign code: the caller of the builtin is not sandboxed");
+    // the override of a call of code compiled in another Program than the one it runs in
+    auto foreign_override = [](const QoreProgram* code_pgm) -> QoreCallParseOptionsOverride {
+        QoreCallParseOptionsOverride o;
+        o.code_pgm = code_pgm;
+        return o;
+    };
+    // true if the tenant's sandbox governs the policy of the code that runs
+    auto tenant_policy = [sm]() -> bool {
+        QoreSandboxManager* found = qore_find_thread_sandbox_policy_manager_ref();
+        if (!found) {
+            return false;
+        }
+        const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(found);
+        bool rv = found == sm || (members && std::find(members->begin(), members->end(), sm) != members->end());
+        found->deref(nullptr);
+        return rv;
+    };
+    UT_ASSERT(c, !qore_caller_is_sandboxed() && !tenant_policy(), "foreign code: the caller is not sandboxed at first");
+    {
+        ProgramThreadCountContextHelper host_ctx(&xsink, host, true);
+        UT_ASSERT(c, !xsink, "foreign code: the host is entered");
+        // the point where trusted code of the host opens an update scope
+        QoreThreadProgramMarker marker = qore_thread_program_marker();
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "foreign code: nothing is entered at first");
+        UT_ASSERT(c, qore_get_calling_program() == host, "foreign code: the calling Program is the host at first");
+        {
+            // the tenant's code runs in the host, as a call of a user variant runs it (UserVariantExecHelper)
+            ProgramThreadCountContextHelper foreign_ctx(&xsink, host, true);
+            UT_ASSERT(c, !foreign_ctx.holdForeignCodeProgram(tenant, &xsink), "foreign code: the tenant is held");
+            RuntimeParseOptionsOverrideHelper po(foreign_override(tenant));
+            UT_ASSERT(c, qore_caller_is_sandboxed(), "foreign code: the tenant's code is sandboxed");
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "foreign code: the tenant's code is entered since the scope opened");
+            UT_ASSERT(c, qore_caller_cache_program() == tenant, "foreign code: the tenant's code uses its cache");
+            UT_ASSERT(c, qore_builtin_caller_is_sandboxed(),
+                "foreign code: the caller of the builtin is the tenant's code");
+            UT_ASSERT(c, qore_get_calling_program() == tenant, "foreign code: the calling Program is the tenant");
+            {
+                // code of the host that the tenant's code calls clears the override; the tenant's code stays on the
+                // stack below it
+                RuntimeParseOptionsOverrideHelper cleared;
+                cleared.setCleared();
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                    "foreign code: code that the tenant's code calls is entered since the scope opened");
+                // and it is called by sandboxed code, as code that a sandboxed Program's own code calls is
+                UT_ASSERT(c, qore_caller_is_sandboxed(), "foreign code: code that the tenant's code calls is sandboxed");
+                UT_ASSERT(c, qore_scope_creator_is_sandboxed(),
+                    "foreign code: code that the tenant's code calls creates a scope as sandboxed code");
+                UT_ASSERT(c, !qore_caller_may_receive_host_secrets(),
+                    "foreign code: code that the tenant's code calls receives no host secrets");
+                UT_ASSERT(c, tenant_policy(), "foreign code: the tenant's sandbox governs the code that it calls");
+                UT_ASSERT(c, qore_caller_cache_program() == tenant,
+                    "foreign code: code that the tenant's code calls uses the tenant's cache");
+                // a host grant established by that code lends to the code inside it, as the walk of the Program
+                // contexts stops at the grant
+                UT_ASSERT(c, !qore_push_sandbox_policy_barrier(), "foreign code: the policy barrier is pushed");
+                UT_ASSERT(c, qore_caller_may_receive_host_secrets(),
+                    "foreign code: inside the grant, the tenant's code entered before it does not count");
+                UT_ASSERT(c, !tenant_policy(), "foreign code: inside the grant, the tenant's sandbox does not govern");
+                {
+                    // the tenant's code entered inside the grant
+                    ProgramThreadCountContextHelper granted_ctx(&xsink, host, true);
+                    UT_ASSERT(c, !granted_ctx.holdForeignCodeProgram(tenant, &xsink),
+                        "foreign code: the tenant is held inside the grant");
+                    RuntimeParseOptionsOverrideHelper granted_po(foreign_override(tenant));
+                    RuntimeParseOptionsOverrideHelper granted_cleared;
+                    granted_cleared.setCleared();
+                    UT_ASSERT(c, !qore_caller_may_receive_host_secrets(),
+                        "foreign code: inside the grant, the tenant's code entered there counts");
+                    UT_ASSERT(c, tenant_policy(), "foreign code: inside the grant, the tenant's code entered there is "
+                        "governed by its sandbox");
+                }
+                qore_pop_sandbox_policy_barrier();
+            }
+            // a scope that opens while the tenant's code runs (in module code that it calls) is not refused for the
+            // code that ran when it opened
+            QoreThreadProgramMarker inner = qore_thread_program_marker();
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "foreign code: the code that runs when a scope opens is not entered since");
+            {
+                // the tenant's code entered again since then
+                ProgramThreadCountContextHelper again_ctx(&xsink, host, true);
+                UT_ASSERT(c, !again_ctx.holdForeignCodeProgram(tenant, &xsink),
+                    "foreign code: the tenant is held again");
+                RuntimeParseOptionsOverrideHelper again_po(foreign_override(tenant));
+                RuntimeParseOptionsOverrideHelper cleared;
+                cleared.setCleared();
+                UT_ASSERT(c, qore_thread_sandboxed_entered_since(inner),
+                    "foreign code: the tenant's code entered again counts");
+            }
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(inner),
+                "foreign code: the tenant's code entered again has been left");
+        }
+        UT_ASSERT(c, !xsink, "foreign code: no exception");
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "foreign code: the tenant's code has been left");
+        {
+            // the options of a callback that the tenant's code registered install it without a call
+            QoreForeignCodeProgramHold hold;
+            UT_ASSERT(c, !hold.hold(tenant, &xsink), "foreign code: the callback's Program is held");
+            RuntimeParseOptionsOverrideHelper po(foreign_override(tenant));
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "foreign code: the tenant's callback is entered since the scope opened");
+            RuntimeParseOptionsOverrideHelper cleared;
+            cleared.setCleared();
+            UT_ASSERT(c, qore_thread_sandboxed_entered_since(marker),
+                "foreign code: code that the tenant's callback calls is entered since the scope opened");
+            UT_ASSERT(c, qore_caller_is_sandboxed(), "foreign code: code that the tenant's callback calls is sandboxed");
+        }
+        UT_ASSERT(c, !qore_caller_is_sandboxed() && !qore_scope_creator_is_sandboxed() && !tenant_policy(),
+            "foreign code: the caller is not sandboxed once the tenant's code has been left");
+        UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker), "foreign code: the tenant's callback has ended");
+        {
+            // the code of a Program that is restricted but not sandboxed
+            ProgramThreadCountContextHelper foreign_ctx(&xsink, host, true);
+            UT_ASSERT(c, !foreign_ctx.holdForeignCodeProgram(restricted, &xsink),
+                "foreign code: the restricted Program is held");
+            RuntimeParseOptionsOverrideHelper po(foreign_override(restricted));
+            UT_ASSERT(c, !qore_thread_sandboxed_entered_since(marker),
+                "foreign code: restricted code that is not sandboxed is not sandboxed code");
+            UT_ASSERT(c, qore_get_calling_program() == restricted,
+                "foreign code: the calling Program is the restricted Program");
+            RuntimeParseOptionsOverrideHelper cleared;
+            cleared.setCleared();
+            UT_ASSERT(c, !qore_caller_is_sandboxed() && !qore_scope_creator_is_sandboxed(),
+                "foreign code: code that restricted code that is not sandboxed calls is not sandboxed");
+        }
+        UT_ASSERT(c, qore_get_calling_program() == host, "foreign code: the calling Program is the host again");
+    }
+    UT_ASSERT(c, !xsink, "foreign code: no exception at the end");
+    sm->deref(nullptr);
+    restricted->waitForTerminationAndDeref(&xsink);
+    tenant->waitForTerminationAndDeref(&xsink);
+    host->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "foreign code: the Programs are destroyed");
+}
+
 //! the first user call in the scope of a QoreCallbackCallerHelper, while the Program that was running when it was
 //! created still runs, is made with the options of the helper's Program; later calls and calls made in another
 //! Program have the effective options of their own callers
@@ -29361,6 +29519,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_ir_fold_debug_statements_exception_target(c);
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_foreign_code_counts_for_scopes(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
@@ -30284,6 +30443,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_ir_fold_debug_statements_exception_target(c);
     ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
+    ut_foreign_code_counts_for_scopes(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());

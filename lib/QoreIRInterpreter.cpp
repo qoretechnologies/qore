@@ -88,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 443,
+static_assert(QORE_IR_MAX_OPCODE == 445,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -3943,6 +3943,14 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 continue;
             }
             qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                // The comparison just after CopyCallArg observes its snapshot before the call. It
+                // does not take a reference or require the argument after the call has consumed it.
+                if (inst->opcode == QoreIROpcode::ReleaseCallArgSource && inst_pos
+                        && inst->operands.size() == 2 && operand.id == inst->operands[1].id
+                        && block->instructions[inst_pos - 1]->opcode == QoreIROpcode::CopyCallArg
+                        && block->instructions[inst_pos - 1]->result.id == operand.id) {
+                    return;
+                }
                 countIRValueUse(counts, operand);
             });
             if ((inst->opcode == QoreIROpcode::GuardNotNothing || inst->opcode == QoreIROpcode::GuardType)
@@ -3989,7 +3997,8 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 // a RefSelf gives the value a reference of the frame's own: the value of a fold or of a functional
                 // operator over a single value, whose source has been released (see lowerWithSourceRelease()), which
                 // a call takes over as a call's value (f(foldl $1 + $2, l); issue #6262)
-                def_by_call[inst->result.id] = arg_start >= 0 || qore_ir_is_sequence_temp(inst)
+                def_by_call[inst->result.id] = arg_start >= 0 || inst->opcode == QoreIROpcode::CopyCallArg
+                    || qore_ir_is_sequence_temp(inst)
                     || inst->opcode == QoreIROpcode::RefSelf;
                 def_by_variable_read[inst->result.id] = qore_ir_reads_variable_for_call_arg(inst->opcode);
                 def_inst[inst->result.id] = inst;
@@ -4251,6 +4260,13 @@ static bool interpreterEffectSummaryStatsEnabled() {
     return enabled;
 }
 
+// Both nonzero values protect a cross-block slot during block-local cleanup. A store in the
+// sole normal continuation of an invoke can still move its result.
+enum : uint8_t {
+    CrossBlockSlot = 1,
+    MovableInvokeSlot = 2,
+};
+
 static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
@@ -4261,6 +4277,8 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // the result is cached for every thread that runs the function: a cancellation pending in the thread that runs
     // it first must not change it
     std::vector<uint8_t> reused_call_args;
+    std::unordered_set<uint32_t> invoke_store_moves;
+    qore_ir_find_invoke_store_moves(func, invoke_store_moves, nullptr);
     bool reuse_complete = qore_ir_find_reused_call_args(func, reused_call_args, nullptr);
     assert(reuse_complete);
     (void)reuse_complete;
@@ -4370,7 +4388,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         }
         if (slot_multi_use_block[id] || slot_multi_def_block[id]
                 || slot_def_block[id] == no_block || slot_def_block[id] != slot_use_block[id]) {
-            cross_block_slots[id] = 1;
+            cross_block_slots[id] = invoke_store_moves.count(id) ? MovableInvokeSlot : CrossBlockSlot;
         }
     }
     int max_param_idx = -1;
@@ -13266,14 +13284,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     const std::vector<int32_t>& operand_use_counts = func.interpreter_operand_use_counts;
 
     // Takes over the reference of the value of an operand that an lvalue operation stores (an assignment, += or a
-    // push) when its slot owns it (it has a cleanup entry), this is its only use, in the block defining it, and it is
+    // push) when its slot owns it and this is its only use, in its defining block or in the single-entry normal
+    // continuation of the invoke that defined it (MovableInvokeSlot), and it is
     // not a borrowed weak-reference temporary, as compiled code does (see qore_rt_lv_path_assign_consume()); the
     // slot no longer holds the value afterwards.  Handing the value over keeps a dereference with no real reference
     // from happening once the value is linked into the graph, which would make a scan that its constructor deferred.
     auto consumeLValueOperand = [&](QoreIRValue operand, const QoreValue& val) -> bool {
         uint32_t id = operand.id;
         if (!val.hasNode() || id >= value_use_counts.size() || value_use_counts[id] != 1
-                || (id < cross_block_slots.size() && cross_block_slots[id])
+                || (id < cross_block_slots.size() && cross_block_slots[id] == CrossBlockSlot)
                 || (id < return_protected_slots.size() && return_protected_slots[id])
                 || weak_load_temp_slots.find(id) != weak_load_temp_slots.end()
                 || !removeAllCleanupEntries(cleanup, id)) {
@@ -14388,6 +14407,15 @@ dispatch_folded_step_host:
                 QoreValue val = getIRValue(values, id);
                 val.ref();
                 cleanup.push_back(id.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CopyCallArg: {
+                QoreValue arg = getIRValue(values, inst->operands.front()).refSelf();
+                if (qore_weak_shared(arg)) {
+                    arg = qore_weak_share_copy(arg, xsink);
+                }
+                setOwnedValueSlot(values, cleanup, inst->result.id, arg, xsink);
                 ++ip;
                 break;
             }
@@ -17748,8 +17776,44 @@ load_local_done:
                             && local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
-                    LValueHelper helper(xsink);
-                    if (local_inst->local->getLValue(helper, false, true)) {
+                    // the helper releases the value that the store replaces when it is destroyed, which can run
+                    // a destructor that raises an exception: it is destroyed before the exception is checked, so
+                    // that the exception reaches the store's handler (qore#7629); the result is taken and evaluated
+                    // while the value is locked
+                    QoreValue res;
+                    bool lvalue_error = false;
+                    {
+                        LValueHelper helper(xsink);
+                        if (local_inst->local->getLValue(helper, false, true)) {
+                            lvalue_error = true;
+                        } else {
+                            // a store whose check records reference elements is made again out of line after
+                            // they have been bound with no lvalue lock held, in this helper (qore#7391)
+                            helper.enableBindRetry();
+                            // the store's own mode, not Weak: this branch is taken for every
+                            // non-Normal mode, and assigning as Weak here made '@=' on a local give up
+                            // the ownership that separates it from ':=', destroying a target whose only
+                            // reference was the opaque one; an element store assigns its weak reference as
+                            // a Normal store would assign it
+                            if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
+                                    && helper.isBindPending()) [[unlikely]] {
+                                qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc,
+                                    store_mode);
+                            }
+                            if (local_inst->result.isValid() && !*xsink) {
+                                // the result of a weak or opaque assignment is the value assigned, converted to the
+                                // variable's type, as the AST interpreter gives it to its consumers (qore#7084); an
+                                // element store gives the value the variable holds
+                                res = helper.getReferencedValue();
+                                // the target of a weak or opaque result is read while the helper still holds the
+                                // temporaries of the store, which can be its only references
+                                if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
+                                    evaluateOwnedWeakReferenceResult(res, xsink);
+                                }
+                            }
+                        }
+                    }
+                    if (lvalue_error) {
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
@@ -17757,23 +17821,12 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
-                    // a store whose check records reference elements is made again out of line after they have been
-                    // bound with no lvalue lock held, in this helper (qore#7391)
-                    helper.enableBindRetry();
-                    // the store's own mode, not Weak: this branch is taken for every
-                    // non-Normal mode, and assigning as Weak here made '@=' on a local give up
-                    // the ownership that separates it from ':=', destroying a target whose only
-                    // reference was the opaque one; an element store assigns its weak reference as
-                    // a Normal store would assign it
-                    if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
-                            && helper.isBindPending()) [[unlikely]] {
-                        qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc, store_mode);
-                    }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
                     if (xsink && *xsink) {
+                        res.discard(xsink);
                         if (inst->exception_target) {
                             cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                             prev_block = block;
@@ -17786,13 +17839,6 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                     if (local_inst->result.isValid()) {
-                        // the result of a weak or opaque assignment is the value assigned, converted to the variable's
-                        // type, as the AST interpreter gives it to its consumers (qore#7084); an element store gives
-                        // the value the variable holds
-                        QoreValue res = helper.getReferencedValue();
-                        if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
-                            evaluateOwnedWeakReferenceResult(res, xsink);
-                        }
                         setValueSlot(values, local_inst->result.id, res, xsink);
                         if (res.needsRef()) {
                             cleanup.push_back(local_inst->result.id);
@@ -19636,16 +19682,20 @@ load_local_done:
                 }
                 [[fallthrough]];
             }
+            case QoreIROpcode::ReleaseCallArgSource:
             case QoreIROpcode::ReleaseOwnedTemp: {
                 uint32_t id = inst->operands.front().id;
-                if (id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
+                // A pipeline keeps a matching value. A call keeps a distinct original temporary when
+                // the argument copied it. A single-operand release has no value to compare.
+                bool release = inst->operands.size() < 2;
+                if (!release && id < values.size()) {
+                    bool same = toBits(values[id]) == toBits(getIRValue(values, inst->operands[1]));
+                    release = inst->opcode == QoreIROpcode::ReleaseCallArgSource ? same : !same;
+                }
+                if (release && id < values.size() && values[id].needsRef() && hasCleanupEntry(cleanup, id)
                         && (!inst->element_type || qore_return_release_observable(values[id]))
                         && (weak_load_temp_slots.empty() || !weak_load_temp_slots.count(id))
-                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)
-                        // a value that is the kept value (a second operand, see
-                        // QoreIRBuilder::createReleaseStageInput()) stays in its slot
-                        && (inst->operands.size() < 2
-                            || toBits(values[id]) != toBits(getIRValue(values, inst->operands[1])))) {
+                        && !(id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
                     // a value that is not a node has no reference to release: its entry stays for the slot's next
                     // value, as when the slot is overwritten (the release of a fused pipeline's stage value runs for
                     // each element, see QoreIRLowering::lowerLazyPipelineFused())
@@ -20488,9 +20538,14 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                if (inst->opcode == QoreIROpcode::AddAssignAny && addAssignGaveOperand(res, right)) [[unlikely]] {
-                    releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
-                        weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                // the result's tag first, which is in a register: the result of most operations holds no node; the
+                // operand is read again from its slot, which the operation does not change, so that it need not be
+                // kept across the call
+                if (res.isPlainPointer() && inst->opcode == QoreIROpcode::AddAssignAny) [[unlikely]] {
+                    if (addAssignGaveOperand(res, getIRValue(values, inst->operands[1]))) {
+                        releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
+                            weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                    }
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.needsRef()) {

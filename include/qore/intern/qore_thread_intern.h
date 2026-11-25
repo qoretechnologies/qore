@@ -2134,6 +2134,20 @@ private:
     DLLLOCAL void derefPrograms();
 };
 
+//! Records on the calling thread that code compiled in \a code_pgm runs in another Program, until
+//! qore_thread_pop_foreign_code_entry() (qore#7202)
+/** Called by the holds of such Programs (ProgramThreadCountContextHelper::holdForeignCodeProgram(),
+    QoreForeignCodeProgramHold), so that the code counts as on the thread's stack while it runs, also while it runs
+    code that it called (see qore_thread_sandboxed_entered_since())
+
+    @return 0 for OK, -1 if no memory could be allocated, with the exception raised in \a xsink if it is given: the
+    code must not run
+*/
+DLLLOCAL int qore_thread_push_foreign_code_entry(const QoreProgram* code_pgm, ExceptionSink* xsink);
+
+//! Removes the innermost entry of qore_thread_push_foreign_code_entry() of \a code_pgm on the calling thread
+DLLLOCAL void qore_thread_pop_foreign_code_entry(const QoreProgram* code_pgm);
+
 //! Holds the Program that compiled code that runs in another Program while that code runs (qore#7202)
 /** The code does not enter the Program that compiled it, while it refers to what is deleted with it (functions,
     classes, constants, types): the hold counts the thread in that Program as an entry into it does, so the deletion of
@@ -2164,10 +2178,14 @@ public:
         thread or callback (QoreThreadRuntimeParseOptionsHelper), which has no caller that receives exceptions when it
         ends
 
+        @param on_stack true if the hold records that the code runs on the thread's stack
+        (qore_thread_push_foreign_code_entry()); false for a caller that enters \a code_pgm right after the hold (a
+        direct call of a closure, see UserClosureFunction::evalForeignClosure()), whose Program context records it
+
         @return 0 for OK, -1 if the Program cannot be entered (its deletion has started, or code is parsed in it), with
         PROGRAM-ERROR raised if \a xsink is given
     */
-    DLLLOCAL QORE_INTERN_NOINLINE int hold(QoreProgram* code_pgm, ExceptionSink* xsink);
+    DLLLOCAL QORE_INTERN_NOINLINE int hold(QoreProgram* code_pgm, ExceptionSink* xsink, bool on_stack = true);
 
     //! releases the hold, if any
     DLLLOCAL void reset() {
@@ -2181,6 +2199,8 @@ private:
     //! receives the exceptions of the release, or nullptr (see hold())
     ExceptionSink* xsink = nullptr;
     int tid = 0;
+    //! true if the hold recorded the code on the thread's stack (see hold())
+    bool entry = false;
 
     DLLLOCAL QORE_INTERN_NOINLINE void release();
 };
@@ -2607,6 +2627,12 @@ struct QoreThreadProgramMarker {
     const ProgramThreadCountContextHelper* ctx = nullptr;
     //! the sandboxed caller that a parse or module load hid when the marker was taken
     const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
+    //! the number of the thread's entries of code compiled in another Program than the one it runs in when the marker
+    //! was taken (see qore_thread_push_foreign_code_entry())
+    size_t foreign_entries = 0;
+    //! the Program that compiled the code that ran in another Program when the marker was taken, if any
+    //! (QoreRuntimePoState::code_pgm)
+    const QoreProgram* code_pgm = nullptr;
 };
 
 //! Returns the current point of the calling thread's Program context stack
@@ -2615,7 +2641,8 @@ DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
 //! Returns true if the calling thread has entered the code of a sandboxed Program since \a marker was taken and not
 //! left it yet: the thread runs code that sandboxed code supplied (a callback, a method of a class of a sandboxed
 //! Program, a destructor), or code that such code called
-/** Fails closed: true if \a marker is not on the thread's Program context stack
+/** Code compiled in a sandboxed Program that runs in another Program counts as the code of the sandboxed Program
+    (qore#7202).  Fails closed: true if \a marker is not on the thread's Program context stack
 */
 DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
 
@@ -2624,7 +2651,9 @@ DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker&
 /** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
     outermost Program of the stack (the Program whose code made the call).  Fails closed: nullptr if the calling code
     is sandboxed but no sandboxed Program is on the stack (a sandbox inherited by the thread), so that nothing is
-    cached for it
+    cached for it.  Code compiled in a sandboxed Program that runs in another Program, and the code that it calls, use
+    the cache of the Program that compiled it; nullptr if another sandboxed Program is on the stack as well, as the
+    innermost of the two is not known then (qore#7202)
 */
 DLLLOCAL QoreProgram* qore_caller_cache_program();
 

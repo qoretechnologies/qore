@@ -728,12 +728,13 @@ QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, c
             if (om->isPrivate()) {
                 xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
                     "cannot create a call reference to %s %s::%s() from outside the class",
-                    privpub(access), o->getClassName(), method.c_str());
+                    privpub(access), qore_class_private::get(*o->getClass())->memberDiagnosticName(),
+                    method.c_str());
             } else {
                 xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
                     "cannot create a call reference to %s::%s() because the parent class that implements the method "
-                    "(%s::%s()) is privately inherited", o->getClassName(), method.c_str(),
-                    om->getClass()->getName(), method.c_str());
+                    "(%s::%s()) is privately inherited", qore_class_private::get(*o->getClass())->memberDiagnosticName(),
+                    method.c_str(), qore_class_private::get(*om->getClass())->memberDiagnosticName(), method.c_str());
             }
             return QoreValue();
         }

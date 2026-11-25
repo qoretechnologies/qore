@@ -2429,7 +2429,8 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
                 qore_class_private::get(*mv->getClass()), class_ctx)
                 && !qore_class_private::runtimeTakeSandboxSuperCall(variant, self))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
-                mv->className(), func->getName(), mv->getSignature()->getSignatureText());
+                qore_class_private::get(*mv->getClass())->memberDiagnosticName(), func->getName(),
+                mv->getSignature()->getSignatureText());
             return -1;
         }
     }
@@ -11409,7 +11410,8 @@ static bool enterForeignClosureProgram(QoreForeignCodeProgramHold& hold, const A
     if (!uvb || !uvb->pgm || !exec_pgm || exec_pgm == uvb->pgm) {
         return false;
     }
-    if (hold.hold(uvb->pgm, xsink)) {
+    // the call enters the Program right after the hold: its Program context records the code on the thread's stack
+    if (hold.hold(uvb->pgm, xsink, false)) {
         return true;
     }
     exec_pgm = uvb->pgm;
