@@ -5037,8 +5037,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
     // the application that the operation is submitted for; sandboxed code does not take the key of another
     // application's operation (qore#7010)
-    qore_program_id_t app_id = callerAppId();
     bool sandboxed = qore_caller_is_sandboxed();
+    qore_program_id_t app_id = callerAppId(sandboxed);
 
     // An operation submitted by the I/O thread it is routed to (e.g., by a poll operation's continuePoll()) goes
     // straight into that thread's cache, which only that thread may access; any other thread - including another
@@ -5911,7 +5911,15 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
     return *xsink ? -1 : 0;
 }
 
-qore_program_id_t AsyncIoControllerPriv::callerAppId() {
+qore_program_id_t qore_aio_caller_app_id(int sandboxed) {
+    return AsyncIoControllerPriv::callerAppId(sandboxed);
+}
+
+const qore_program_id_t* qore_aio_callback_app_id() {
+    return aio_callback_app_set ? &aio_callback_app_id : nullptr;
+}
+
+qore_program_id_t AsyncIoControllerPriv::callerAppId(int sandboxed) {
     // the initialization of library code, and a trusted build, run for no application, also in the callback of an
     // operation of an application
     if (qore_runtime_under_library_init_barrier()) {
@@ -5922,6 +5930,29 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
         return app_id;
     }
     QoreProgram* pgm = getProgram();
+    // the trusted code of a Program that is not a module (the host's code) runs for the application of the sandboxed
+    // code that it runs for (qore#7148): the sandboxed code that called it, also in the callback of an operation, the
+    // sandboxed code that created the object or closure that runs, the operation whose callback runs, or the code that
+    // the thread or task runs for, unless it elevated explicitly with SandboxManager::callWithSystemPolicy() or a
+    // capability of SandboxManager::createSystemPolicyCall(), and then acts for its own Program's application
+    if (pgm && !qore_program_is_module(pgm) && !qore_program_is_sandboxed(pgm)) {
+        return qore_host_code_app_id(pgm, sandboxed);
+    }
+    // module code that the host's code called (where no module call recorded an application) acts for what the host's
+    // code acts for (qore#7148), also in the callback of an operation: the sandboxed code that called the host's code
+    // there comes before the operation's application
+    bool module_sandboxed = false;
+    if (pgm && qore_program_is_module(pgm)) {
+        module_sandboxed = sandboxed >= 0 ? (bool)sandboxed : qore_caller_is_sandboxed();
+        if (module_sandboxed) {
+            QoreProgram* caller;
+            qore_program_id_t caller_id;
+            if (!qore_find_caller_program(caller, caller_id) && caller && !qore_program_is_module(caller)
+                    && !qore_program_is_sandboxed(caller)) {
+                return qore_host_code_app_id(caller, 1);
+            }
+        }
+    }
     // the code of a callback of an operation runs for the application of the operation, unless it is the code of a
     // sandboxed application Program, which runs for its own application: the callback of an operation that other
     // code submitted with an object of sandboxed code does not act for the submitter
@@ -5932,7 +5963,7 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
     // runs for no application, so that it acts on no operation; such is the code of a thread that module code starts,
     // which can serve every caller of the module, as #6208 has it (giving a call's application to the thread that
     // serves it is issue #6245)
-    if (pgm && qore_program_is_module(pgm) && qore_caller_is_sandboxed()) {
+    if (module_sandboxed) {
         return QORE_NO_PROGRAM_ID;
     }
     return pgm ? runtime_get_module_call_app_id(pgm) : QORE_NO_PROGRAM_ID;
@@ -5954,7 +5985,7 @@ AioAppRestriction AsyncIoControllerPriv::cancelRestriction(bool& none) {
         return rv;
     }
     rv.restricted = true;
-    rv.app_id = callerAppId();
+    rv.app_id = callerAppId(1);
     // fails closed: sandboxed code that runs for no known application acts on no operation
     none = rv.app_id == QORE_NO_PROGRAM_ID || !rv.app_id;
     return rv;

@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
+    The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
+    tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
+    elevates explicitly; embedding applications must check the host APIs that they export to sandboxed code (see
+    @ref sandbox_host_code_application; <a href="https://github.com/qoretechnologies/qore/issues/7148">issue 7148</a>).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or

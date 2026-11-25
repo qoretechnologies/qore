@@ -2700,9 +2700,15 @@ private:
         AioCallbackAppScope), except the sandboxed code of an application Program, which runs for its own application
 
         Operations record the application that they are submitted for; code that is sandboxed cancels, flushes and
-        replaces only the operations of its own application, as keys and owners can be guessed
+        replaces only the operations of its own application, as keys and owners can be guessed.  The trusted code of
+        a Program that is not a module and that runs for sandboxed code acts for that code's application, unless it
+        elevated explicitly (see qore_host_code_sandboxed_app_id(), qore#7148)
+
+        @param sandboxed the result of qore_caller_is_sandboxed() if the caller has it, or -1
     */
-    DLLLOCAL static qore_program_id_t callerAppId();
+    DLLLOCAL static qore_program_id_t callerAppId(int sandboxed = -1);
+    //! gives callerAppId() to the capture of the sandbox contexts (QoreSandboxContext::app_id, qore#7148)
+    friend qore_program_id_t qore_aio_caller_app_id(int sandboxed);
 
     //! Returns the operations that the calling code may cancel or flush by key or owner
     /** @param none set to true if the calling code is sandboxed but runs for no known application: it then acts on no
