@@ -11314,8 +11314,84 @@ int MethodFunctionBase::checkFinal() const {
             }
         }
     }
+    // A child class may add a variant with another signature under the name of a final method of a parent class, as
+    // long as no call of the final variant can select it (see checkFinalVariant()); a call that the final variant
+    // cannot take then reaches the new variant of the child class, which is easily unintended (issue #7111).
+    // Overriding a variant that a parent class already has under that name (the request handler pattern of
+    // SoapHandler, whose final handleRequest() has a non-final variant beside it) is not reported: the parent class
+    // designed the name for it.  The warning is in the language-traps category, which only the strict warnings
+    // enable.
+    [&]() {
+        QoreProgram* pgm = getProgram();
+        if (!pgm || !pgm->checkWarning(QP_WARN_LANGUAGE_TRAPS)) {
+            return;
+        }
+        // the first final variant under this name in the parent classes; the first entry of ilist is this method
+        const MethodFunctionBase* final_m = nullptr;
+        const MethodVariantBase* final_v = nullptr;
+        ilist_t::const_iterator ib = ilist.begin(), ie = ilist.end();
+        if (ib == ie) {
+            return;
+        }
+        ++ib;
+        for (ilist_t::const_iterator i = ib; i != ie && !final_m; ++i) {
+            const MethodFunctionBase* m = METHFB_const((*i).func);
+            if (!m->has_final) {
+                continue;
+            }
+            for (vlist_t::const_iterator vi = m->vlist.begin(), ve = m->vlist.end(); vi != ve; ++vi) {
+                const MethodVariantBase* v = METHVB_const(*vi);
+                // a private:internal variant is not inherited
+                if (v->isFinal() && v->getAccess() != Internal) {
+                    final_m = m;
+                    final_v = v;
+                    break;
+                }
+            }
+        }
+        if (!final_m) {
+            return;
+        }
+        const char* stat = isStatic() ? "static " : "";
+        for (vlist_t::const_iterator vi = vlist.begin(), ve = vlist.end(); vi != ve; ++vi) {
+            MethodVariantBase* cv = const_cast<MethodVariantBase*>(METHVB_const(*vi));
+            if (cv->isAbstract() || cv->getAccess() == Internal) {
+                continue;
+            }
+            cv->parseResolveUserSignature();
+            const AbstractFunctionSignature* csig = cv->getSignature();
+            // a variant that overrides one that a parent class has under this name
+            bool overrides = false;
+            for (ilist_t::const_iterator i = ib; i != ie; ++i) {
+                const AbstractFunctionSignature* vs = nullptr;
+                if (parseCompareResolvedSignature(METHFB_const((*i).func)->vlist, csig, vs) != QTI_NOT_EQUAL) {
+                    overrides = true;
+                    break;
+                }
+            }
+            if (overrides) {
+                continue;
+            }
+            const UserSignature* usig = dynamic_cast<const UserSignature*>(csig);
+            const QoreProgramLocation* loc = usig ? usig->getParseLocation() : &loc_builtin;
+            std::string fsig = std::string(final_m->qc->getName()) + "::" + getName() + "("
+                + final_v->getSignature()->getSignatureText() + ")";
+            QoreDiagnosticMetadata metadata("NEW-VARIANT-UNDER-FINAL-NAME",
+                "a call that the final method cannot take selects the new variant of the child class");
+            metadata.addFact("class", qc->getName());
+            metadata.addFact("method", getName());
+            metadata.addFact("final_method", fsig.c_str());
+            metadata.addSuggestion("give the new variant another name, or override a variant that a parent class has "
+                "under this name");
+            QoreStringNode* desc = new QoreStringNodeMaker("child class method %s%s::%s(%s) adds a variant under the "
+                "name of parent class method final %s%s; a call that the final method cannot take selects it",
+                stat, qc->getName(), getName(), csig->getSignatureText(), stat, fsig.c_str());
+            qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc, metadata);
+        }
+    }();
     return 0;
 }
+
 
 int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, const MethodFunctionBase& final_func,
         bool local, const ilist_t* hierarchy) const {
