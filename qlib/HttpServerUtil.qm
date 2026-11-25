@@ -3320,15 +3320,18 @@ public class AbstractStreamRequest {
     }
 
     #! Returns a copy of the request context of the request without the server's objects and the credentials
-    /** For subclasses, which cannot use the private members of this class when sandboxed code declares them; see
-        filterRequest()
+    /** For subclasses, which cannot use the private members of this class when sandboxed code declares them: a
+        request context that the request handler filtered for the code that serves the request (see
+        @ref httpserverutil_request_credentials) is given as filterRequest() gave it, with the platform's
+        authorization context that it kept; else the request metadata of the request (see filterContext())
 
-        @return a copy of the request context as filterRequest() gives it
+        @return a copy of the request context without the server's objects and the credentials
 
         @since HttpServerUtil 1.6
     */
     final hash<auto> getContext() {
-        return AbstractStreamRequest::filterContext(raw_cx);
+        # filter_trailers: the request is filtered for the code that serves it, which got the context filtered
+        return filter_trailers ? cx : AbstractStreamRequest::filterContext(raw_cx);
     }
 
     #! Returns a copy of the request headers without the credentials of the request

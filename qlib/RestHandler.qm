@@ -717,7 +717,11 @@ public namespace RestHandler {
             only the keys in @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys"
             (with the keys of its \c "header-info" hash in
             @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "AbstractStreamRequest::HeaderInfoKeys") and in
-            @ref RestContextKeys
+            @ref RestContextKeys; a call context that the REST handler filtered for the REST class (it has none of the
+            server's objects, see @ref rest_request_credentials) also gives the keys that the filter kept: the
+            platform's authorization context and the keys of
+            @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()", without the
+            values that hold an object
 
             @return a copy of the call context with the keys in the lists that it has
 
@@ -727,6 +731,17 @@ public namespace RestHandler {
             hash<auto> rv = HttpServer::AbstractStreamRequest::filterContext(cx);
             foreach string key in (RestContextKeys) {
                 if (cx.hasKey(key)) {
+                    rv{key} = cx{key};
+                }
+            }
+            # a call context filtered for the REST class has none of the server's objects
+            foreach string key in (HttpServer::AbstractStreamRequest::ServerContextKeys) {
+                if (cx.hasKey(key)) {
+                    return rv;
+                }
+            }
+            foreach string key in (keys cx) {
+                if (!rv.hasKey(key) && !HttpServer::AbstractStreamRequest::holdsObject(cx{key})) {
                     rv{key} = cx{key};
                 }
             }

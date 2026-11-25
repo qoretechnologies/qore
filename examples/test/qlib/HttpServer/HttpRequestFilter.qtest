@@ -274,7 +274,8 @@ class TenantRequest inherits AbstractStreamRequest {
         return <HttpResponseInfo>{
             'code': 200,
             'hdr': {'Content-Type': 'application/json'},
-            'body': make_json({'size': size, 'trailers': trailers, 'seen': seen}),
+            'body': make_json({'size': size, 'trailers': trailers, 'seen': seen,
+                'ctx': getContext(){'group_namespace', 'sandboxed', 'user_flags', 'socket', 'uctx'}}),
         };
     }
 }
@@ -345,6 +346,30 @@ class TenantAuth inherits AbstractAuthenticator {
     *list<string> getPlatformContextKeys() {
         return ('group_namespace', 'sandboxed', 'user_flags');
     }
+}
+
+#! a REST stream handler of the tenant
+class TenantRestStream inherits AbstractRestStreamRequestHandler {
+    constructor(hash<auto> cx) : AbstractRestStreamRequestHandler(cx) {
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {'code': 200};
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+    }
+
+    private auto sendImpl() {
+    }
+
+    hash<auto> ctx() {
+        return getContext(){'group_namespace', 'sandboxed', 'user_flags', 'socket', 'uctx', 'socketobject'};
+    }
+}
+
+hash<auto> sub rest_stream_context(hash<auto> cx) {
+    return new TenantRestStream(cx).ctx();
 }
 
 AbstractHttpRequestHandler sub stream_handler() {
@@ -914,9 +939,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         # the keys that a trusted authenticator declares are kept for restricted code; never the server's objects
         # or a value that holds an object at any depth
         object h = t.callFunction("stream_handler_auth", new TrustedAuth());
-        serve(h, pcx, header());
+        hash<auto> srv = serve(h, pcx, header());
         assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "plain": {"a": (1, "two")},
             "socket": False, "obj": False, "nested": False, "listed": False}, h.platform_seen);
+        # the stream request of restricted code gets them from getContext() as well
+        assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2}, parse_json(srv.body).ctx);
         # an authenticator of restricted code declares none
         h = t.callFunction("stream_handler_auth", t.callFunction("tenant_auth"));
         serve(h, rawContext(1, "hello") + {"group_namespace": 42, "sandboxed": True, "user_flags": 2}, header());
@@ -930,6 +957,12 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(200, rv.code);
         assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "plain": {"a": (1, "two")},
             "socket": False, "obj": False, "nested": False, "listed": False}, parse_json(rv.body));
+        # a REST stream handler of restricted code gets them from getContext(): from the context filtered for its
+        # REST class, not from a context of the server
+        hash<auto> rcx = pcx + {"hdr": header(), "socketobject": new Socket()};
+        assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2},
+            t.callFunction("rest_stream_context", rest.getRestClassContext(rcx)));
+        assertEq({}, t.callFunction("rest_stream_context", rcx));
     }
 
     restrictedRequestTest() {

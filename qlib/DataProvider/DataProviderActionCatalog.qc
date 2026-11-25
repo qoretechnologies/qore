@@ -2073,7 +2073,7 @@ class MyProvider {
                 "loaded";
         }
         # the value belongs to the Program of the code that registers it; fails closed if it cannot be identified
-        int owner = DataProviderActionCatalog::getDirectCallerProgramId("registerLazyValue");
+        int owner = DataProviderActionCatalog::getDirectCallerProgramId();
         if (!owner) {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", "the code that registers a lazy value cannot be identified";
         }
@@ -2102,25 +2102,19 @@ class MyProvider {
         return id;
     }
 
-    #! Returns the ID of the Program of the code that called the given method of this class, or 0 if it cannot be
-    #! identified
-    /** The frame of the call of \a method on the thread's call stack is the frame of the code that called it; its
+    #! Returns the ID of the Program of the code that called the method of this class that calls this method, or 0 if
+    #! it cannot be identified
+    /** The frame of the call of that method on the thread's call stack is the frame of the code that called it; its
         Program is the Program of that code (a module's, also when a module's code calls it for a caller of the
         module, and in the initialization of a module loaded at run time; a tenant's for a tenant's code, also in a
         subclass of a module's class and in a closure of the tenant that a module's code calls), as every execution
         mode records it (qore#7289, qore#7394)
-
-        @param method the name of the method of this class whose caller is identified
     */
-    private:internal static int getDirectCallerProgramId(string method) {
-        # the innermost frames are the call of get_parent_caller_location(), the call of this method and the call of
-        # the method, whose Program is that of the code that made the call: only that frame is read; fails closed if
-        # it is not the call of the method (qore#7564)
-        *hash<CallStackInfo> frame = get_parent_caller_location(2);
-        if (!frame || frame.function != "DataProviderActionCatalog::" + method) {
-            return 0;
-        }
-        return frame.programid ?? 0;
+    private:internal static int getDirectCallerProgramId() {
+        # the innermost frames are the call of get_caller_program_id(), the call of this method and the call of the
+        # method, whose Program is that of the code that made the call: only the Program ID of that frame is read,
+        # without building a CallStackInfo hash (qore#7564, qore#7581); fails closed if it has none
+        return get_caller_program_id(2) ?? 0;
     }
 
     #! Removes a lazy value of a module whose load failed; a build running ends without storing its value
@@ -2146,11 +2140,12 @@ class MyProvider {
         string key = id.toString();
         *hash<auto> v = lazy_values{key};
         # only the code of the Program that registered the value can read it; fails closed if the calling code cannot
-        # be identified, and gives the same error as for an unknown ID; the frame of the call of this method is read
-        # here, as reading it costs much less than the call of a helper (see getDirectCallerProgramId())
-        *hash<CallStackInfo> frame = v ? get_parent_caller_location(1) : NOTHING;
-        if (!v || !frame || frame.function != "DataProviderActionCatalog::getLazyValue"
-                || v.owner != (frame.programid ?? 0)) {
+        # be identified, and gives the same error as for an unknown ID; the Program ID of the frame of the call of this
+        # method is read here, as reading it costs much less than the call of a helper (see
+        # getDirectCallerProgramId())
+        # (the owner of a registered value is never 0: registerLazyValue() refuses code that it cannot identify, and
+        # the ID of a frame without a Program is NOTHING, which no owner equals)
+        if (!v || v.owner != get_caller_program_id(1)) {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d for the calling "
                 "code", id);
         }
