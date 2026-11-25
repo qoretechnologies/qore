@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StreamContextClosedSocket.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Http2StreamContext and Http3StreamContext of a WebSocket stream whose connection the client has already closed when
+# the handler sets the stream up (qore#7542): the context is made, and the frames that the transport queued before the
+# close (the error of an invalid close frame and the close code that the server sent for it) are read from it, so that
+# the stream processor records the close code before the end of the stream; the socket is not connected, so the tests
+# need no network
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AsyncSocketIo
+
+%exec-class StreamContextClosedSocketTest
+
+class StreamContextClosedSocketTest inherits QUnit::Test {
+    constructor() : QUnit::Test("StreamContextClosedSocketTest", "1.0") {
+        addTestCase("HTTP/2: the context of a stream whose connection is closed gives the frames queued before the "
+            "close", \h2Test());
+        addTestCase("HTTP/3: the context of a stream whose connection is closed gives the frames queued before the "
+            "close", \h3Test());
+        addTestCase("HTTP/2: the context of a closed connection without queued frames is closed", \h2EmptyTest());
+        set_return_value(main());
+    }
+
+    #! Returns the queue of a stream whose transport queued the error of an invalid close frame before the connection
+    #! closed
+    private Queue getQueue() {
+        Queue q();
+        q.push(<auto>{"type": "error", "code": 1007, "reason": "Invalid UTF-8 in the close reason"});
+        # the end of the stream
+        q.push();
+        return q;
+    }
+
+    private checkFrames(AsyncSocketIo::AbstractStreamContext ctx) {
+        assertTrue(ctx.usesFrameState());
+        *hash<auto> frame = ctx.readFrame();
+        assertEq("error", frame.type, "the frame queued before the close is read");
+        assertEq(1007, frame.code);
+        assertEq("Invalid UTF-8 in the close reason", frame.reason);
+        assertNothing(ctx.readFrame(), "the end of the stream follows");
+        assertFalse(ctx.isOpen(), "the context is closed after the end of the stream");
+        assertNothing(ctx.readFrame(), "nothing is read after the end of the stream");
+    }
+
+    h2Test() {
+        # a socket that is not connected, as the socket of the handler is once the client closed the connection
+        Socket sock();
+        assertFalse(sock.isOpen());
+        checkFrames(new AsyncSocketIo::Http2StreamContext(sock, 1, getQueue(), True));
+    }
+
+    h3Test() {
+        Socket sock();
+        assertFalse(sock.isOpen());
+        checkFrames(new AsyncSocketIo::Http3StreamContext(sock, 1, 0, NOTHING, getQueue(), True));
+    }
+
+    h2EmptyTest() {
+        Socket sock();
+        Queue q();
+        AsyncSocketIo::Http2StreamContext ctx(sock, 3, q, True);
+        assertNothing(ctx.readFrame(), "no frame is queued");
+        assertFalse(ctx.isOpen(), "the socket of the context is closed");
+    }
+}

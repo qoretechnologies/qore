@@ -1748,6 +1748,15 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         */
         *Socket async_wake_socket;
 
+        #! With HTTP/2 and HTTP/3, the HttpClientIo connection of the stream, whose I/O controller is woken
+        /** Its socket carries the streams of other requests too, so it is not taken for the wake: the connection
+            wakes its controller (see HttpClientIo::HttpClientConnection::notifyPendingData()), also for code that a
+            sandbox restricts, which does not get the socket of a connection that it does not own (qore#7544)
+
+            @since WebSocketClient 2.5
+        */
+        *HttpClientIo::HttpClientConnection async_wake_conn;
+
 
         #! HttpClientIo stream handle for the active H2 CONNECT tunnel
         /** Provides async sendData()/readData() for bidirectional WebSocket
@@ -2560,8 +2569,8 @@ ws.connect();
             # H1 HCIO after socket extraction: the socket was extracted from the
             # H1 connection and is no longer managed by HCIO. Close it explicitly
             # since stopAsyncIo() only cancels the controller registration.
-            # NOTE: for H2/H3, async_wake_socket is the shared HCIO socket —
-            # do NOT close it here (the HCIO manager handles its lifecycle).
+            # with H2/H3, the connection is kept in async_wake_conn instead, and its shared socket is never closed
+            # here (the HCIO manager handles its lifecycle)
             # The `else` ensures we only close when hcio_stream is already gone
             # (i.e., after stopAsyncIo() cleaned up — H1 extraction case).
             try {
@@ -2571,6 +2580,7 @@ ws.connect();
             }
             remove async_wake_socket;
         }
+        remove async_wake_conn;
     }
 
     #! Returns the active Socket for stats/monitoring; NOTHING if not connected
@@ -2585,7 +2595,10 @@ ws.connect();
         *HttpClientIo::HttpClientStreamHandle stream = hcio_stream;
         if (stream) {
             try {
-                return stream.getConnection().getSocket();
+                # the public accessor of the poll operation, which applies the rules of the connection for code that a
+                # sandbox restricts: the socket of a shared connection is refused, and an idle HTTP/1.1 connection is
+                # taken out of the pool (qore#7544); a refusal gives no socket here
+                return stream.getConnection().getPollOperation().getSocket();
             } catch () {
             }
         }
@@ -3921,6 +3934,7 @@ ws.setEventQueue();
         # with HTTP/1.1, the socket taken from the HttpClientIo connection after the upgrade; see
         # shutdownAndCloseUnlocked()
         res.wake_socket = remove async_wake_socket;
+        remove async_wake_conn;
         clearTid();
         cid = -1;
         return res;
@@ -4533,9 +4547,8 @@ ws.setEventQueue();
             remove async_state_queue;
             async_owner = "wsc-hcio-" + get_random_string(12);
             async_close_sent = False;
-            # Cache the socket for wake calls
-            HttpClientIo::HttpClientConnection conn = hcio_stream.getConnection();
-            async_wake_socket = conn.getPollOperation().getSocket();
+            # the connection wakes its I/O controller (qore#7544)
+            async_wake_conn = hcio_stream.getConnection();
             # Mark as started — enables on_poll_complete delivery from notifyIo.
             # The data already in the Channel is drained by runInitialDrain(),
             # which schedules a delivery only when it drained something.
@@ -4686,6 +4699,8 @@ ws.setEventQueue();
             if (async_wake_socket) {
                 # the static API: no controller wrapper per message (issue #6836)
                 Qore::AsyncIoController::wakeSocket(io_object: async_wake_socket);
+            } else if (*HttpClientIo::HttpClientConnection wc = async_wake_conn) {
+                wc.notifyPendingData();
             }
         } catch (hash<ExceptionInfo> ex) {
             logDebug("async I/O wake error: %s: %s", ex.err, ex.desc);

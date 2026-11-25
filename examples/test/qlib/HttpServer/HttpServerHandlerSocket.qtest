@@ -284,7 +284,7 @@ class HttpServerHandlerSocketTest inherits QUnit::Test {
             assertTrue(False, "the request is refused");
         } catch (hash<ExceptionInfo> ex) {
             assertEq(500, ex.arg.status_code);
-            assertRegex("HTTP-HANDLER-ERROR: a stream request of a class of a sandboxed Program", ex.arg.body);
+            assertRegex("HTTP-HANDLER-ERROR: a stream request of a class of a restricted Program", ex.arg.body);
         }
     }
 

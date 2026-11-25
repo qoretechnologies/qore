@@ -75,7 +75,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
             *int address_family, *list<int> avoid_families)
             : HttpClientConnection(url_info, connect_timeout, logger, max_streams) {
         # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
-        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
+        # the connection is owned by the owner of the manager that creates it, or by the code that creates it
+        # (qore#7544)
+        setConnectionOwner(HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path));
         log(LoggerLevel::DEBUG, "creating QUIC connection to %s:%d (max_streams=%d)",
             url_info.host, url_info.port, max_streams);
 
@@ -111,8 +113,24 @@ public class Http3ClientConnection inherits HttpClientConnection {
     }
 
     #! Returns the underlying socket
+    /** The socket of a HTTP/3 connection carries the streams of every caller of its connection manager, so code that a
+        sandbox restricts (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()") and whose
+        %Program does not own the connection (the owner of the manager that created it, or the code that created it)
+        cannot take it (qore#7544)
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the connection
+    */
     Socket getSocket() {
-        return poll_op.getSocket();
+        if (!callerOwnsConnection()) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the socket of a HTTP/3 connection of a "
+                "connection manager that it does not own";
+        }
+        return HttpClientIoSocketAccess::socketOf(poll_op);
+    }
+
+    #! Returns the underlying socket for the connection's own code (qore#7544)
+    private Socket getSocketIntern() {
+        return HttpClientIoSocketAccess::socketOf(poll_op);
     }
 
     #! Returns @ref True once the QUIC handshake of the connection has completed, also after it has closed
@@ -238,13 +256,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(sock: self.getSocket());
+                ctl.cancelAndClose(sock: getSocketIntern());
             } catch () {
                 # Ignore close errors during close
             }
         }
         try {
-            self.getSocket().close();
+            getSocketIntern().close();
         } catch () {
             # Ignore close errors (socket may already be closed)
         }
@@ -321,7 +339,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send trailers in state: %y", self.getConnectionState());
         }
-        Socket sock = poll_op.getSocket();
+        Socket sock = HttpClientIoSocketAccess::socketOf(poll_op);
         if (sock.isQuicSessionClosed()) {
             setCloseReason("its QUIC session is closed");
             self.setClosed();
@@ -370,7 +388,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
-        Socket sock = poll_op.getSocket();
+        Socket sock = HttpClientIoSocketAccess::socketOf(poll_op);
         # Check if the underlying QUIC session is dead before sending
         if (sock.isQuicSessionClosed()) {
             setCloseReason("its QUIC session is closed");
@@ -468,7 +486,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming);
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
 
         return stream_id;
@@ -508,7 +526,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             sse_install_eligible);
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
 
         return stream_id;
@@ -547,7 +565,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             queue, max_concurrent_streams, notifier);
 
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
 
         return stream_id;
@@ -631,7 +649,7 @@ try {
             ctl = controller_ref;
         }
 
-        Socket sock = getSocket();
+        Socket sock = getSocketIntern();
         int old_port = sock.getSocketInfo().port;
         log(LoggerLevel::DEBUG, "initiating QUIC connection migration from local port %d", old_port);
         int id = poll_op.migrate();
