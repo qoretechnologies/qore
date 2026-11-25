@@ -3980,22 +3980,6 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     return true;
 }
 
-//! Returns true if releasing the value can release an object, whose destructor runs user code
-static bool interpreterValueMayHoldObject(const QoreValue& value) {
-    if (!value.hasNode()) {
-        return false;
-    }
-    switch (value.getType()) {
-        case NT_STRING:
-        case NT_BINARY:
-        case NT_NUMBER:
-        case NT_DATE:
-            return false;
-        default:
-            return true;
-    }
-}
-
 static bool interpreterEffectSummaryDisabled() {
     static constinit QoreEnvFlag disabled_env("QORE_DISABLE_IR_EFFECT_SUMMARY");
     const bool disabled = disabled_env.get();
@@ -12418,11 +12402,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // before the next instruction runs (qore#7646)
     const bool reflective_frame = func.reflective_frame;
     bool reflective_release_pending = false;
-    auto noteReleasedTemp = [&](const QoreValue& value) {
-        if (reflective_frame && !reflective_release_pending && interpreterValueMayHoldObject(value)) {
-            reflective_release_pending = true;
-        }
-    };
+    // a release of temporaries is a reload point of a reflective frame, whatever the values: the releases only set the
+    // flag (no test), and only a reflective frame reads it, in the per-instruction hooks
 
     // Returns true if the destructor of the object that the load kept for a call whose receiver it is raised an
     // exception: only such a load (see the LoadLocal of a weak-assigned local, qore#6590) has a cleanup entry, as it
@@ -12482,7 +12463,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             removeAllCleanupEntries(cleanup, id);
             QoreValue v = values[id];
             values[id] = QoreValue();
-            noteReleasedTemp(v);
+            reflective_release_pending = true;
             // an exception raised by a destructor is added to any exception raised by the call, as in the AST
             v.discard(xsink);
         }
@@ -12616,6 +12597,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 continue;
             }
             QoreValue& slot = values[id];
+            reflective_release_pending = true;
             if (cleanup_log && slot.hasNode()) {
                 if (slot.getType() == NT_STRING) {
                     QoreStringValueHelper str(slot);
@@ -12624,7 +12606,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     cleanup_log->push_back(slot.getTypeName());
                 }
             }
-            noteReleasedTemp(slot);
             slot.discard(eff_xsink);
             slot = QoreValue();
             weak_load_temp_slots.erase(id);
@@ -12942,6 +12923,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // the last instruction dispatched is recorded for dumpLastSilentFail() only when silent failures are traced
     static constinit QoreEnvFlag trace_silent_fail_env("QORE_IR_TRACE_SILENT_FAIL");
     const bool trace_silent_fail = trace_silent_fail_env.get();
+    // the per-instruction work that only some frames do is behind one test (reflective frames: qore#7646)
+    const bool per_instruction_hooks = trace_silent_fail || reflective_frame;
 
     // defined outside the dispatch loop, so that the dispatch of each instruction does not set up its captures
     auto raiseMissingAOTExpr = [&func, xsink](const QoreIRInstruction* inst, const QoreIRBasicBlock* block, size_t ip,
@@ -13014,25 +12997,27 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         QoreIRBasicBlock* current_block = block;
 next_instruction:
         QoreIRInstruction* inst = block->instructions[ip].get();
-        if (reflective_frame) {
-            // the previous instruction may have released an object, whose destructor may have replaced locals of this
-            // frame on the runtime stack (qore#7646)
-            if (reflective_release_pending) {
-                reflective_release_pending = false;
-                invalidateExternalCaches();
+        if (per_instruction_hooks) {
+            if (reflective_frame) {
+                // the previous instruction may have released an object, whose destructor may have replaced locals
+                // of this frame on the runtime stack (qore#7646)
+                if (reflective_release_pending) {
+                    reflective_release_pending = false;
+                    invalidateExternalCaches();
+                }
+                if (qore_ir_instruction_may_release_object(inst)) {
+                    reflective_release_pending = true;
+                }
             }
-            if (qore_ir_instruction_may_release_object(inst)) {
-                reflective_release_pending = true;
+            // Track the last instruction dispatched so silent-failure tracing
+            // (QORE_IR_TRACE_SILENT_FAIL=1) can identify which opcode returned
+            // `ok=false` without raising an xsink exception.  Thread-local so
+            // the caller (StatementBlock::execImpl / evalTiered fallback) can
+            // read it post-return without plumbing it through the return value.
+            if (trace_silent_fail) {
+                tls_last_silent_fail_opcode = inst->opcode;
+                tls_last_silent_fail_loc = inst->loc;
             }
-        }
-        // Track the last instruction dispatched so silent-failure tracing
-        // (QORE_IR_TRACE_SILENT_FAIL=1) can identify which opcode returned
-        // `ok=false` without raising an xsink exception.  Thread-local so
-        // the caller (StatementBlock::execImpl / evalTiered fallback) can
-        // read it post-return without plumbing it through the return value.
-        if (trace_silent_fail) {
-            tls_last_silent_fail_opcode = inst->opcode;
-            tls_last_silent_fail_loc = inst->loc;
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions
