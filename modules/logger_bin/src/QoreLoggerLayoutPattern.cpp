@@ -78,8 +78,9 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             return rv.release();
         }
         case 'E': {
+            // the environment is external information (qore#7586)
             // no variable without an option (ex: "%E" instead of "%E{HOME}")
-            if (!option) {
+            if (!host_info || !option) {
                 return new QoreStringNode;
             }
             return SystemEnvironment::getAsStringNode(option->c_str());
@@ -97,6 +98,10 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             return new QoreStringNode;
         }
         case 'h': {
+            // the hostname is external information (qore#7586)
+            if (!host_info) {
+                return new QoreStringNode;
+            }
             return HostName->stringRefSelf();
         }
         case 'l': {
@@ -167,6 +172,10 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             return obj->evalMethod(*obj->getClass()->findMethod("getStr"), nullptr, xsink);
         }
         case 'P': {
+            // the PID is external information (qore#7586)
+            if (!host_info) {
+                return new QoreStringNode;
+            }
             return new QoreStringNodeMaker("%d", getpid());
         }
         case 'r': {

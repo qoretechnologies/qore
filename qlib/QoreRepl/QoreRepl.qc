@@ -202,8 +202,9 @@ public class QoreRepl {
                 # Use explicit value (can be NOTHING to disable history)
                 history_file = opts.history_file;
             } else {
-                # Default to $HOME/.qore-repl-history (or $USERPROFILE on Windows)
-                *string home = ENV.HOME ?? ENV.USERPROFILE;
+                # Default to $HOME/.qore-repl-history (or $USERPROFILE on Windows); not for a REPL whose code or
+                # caller may not read the environment (qore#7586)
+                *string home = isExternalInfoRestricted() ? NOTHING : (ENV.HOME ?? ENV.USERPROFILE);
                 if (home) {
                     history_file = home + DirSep + HistoryFile;
                 }
@@ -403,6 +404,14 @@ foreach string line in (QoreRepl::formatThreadNotices(events, "summary")) {
     #! Returns True if filesystem access is restricted by parse options
     private bool isFilesystemRestricted() {
         return (pgm.getParseOptions() & PO_NO_FILESYSTEM) != 0;
+    }
+
+    #! Returns True if external information (the current working directory, the environment) may not be shown
+    /** True if the REPL's Program is restricted from external information or the code that calls the REPL may not
+        read it (qore#7586)
+    */
+    private bool isExternalInfoRestricted() {
+        return (pgm.getParseOptions() & PO_NO_EXTERNAL_INFO) != 0 || !SandboxManager::callerMayReadExternalInfo();
     }
 
     #! Keywords that indicate the code is a statement, not a pure expression
@@ -1155,6 +1164,11 @@ if (!exists result) {
             case "/pwd":
                 if (isFilesystemRestricted()) {
                     return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "/pwd is disabled: filesystem access is restricted (PO_NO_FILESYSTEM)"}};
+                }
+                # the current working directory is external information (qore#7586)
+                if (isExternalInfoRestricted()) {
+                    return {"error": <ExceptionInfo>{"err": "REPL-ERROR", "desc": "/pwd is disabled: external "
+                        "information is restricted (PO_NO_EXTERNAL_INFO)"}};
                 }
                 return {"value": getcwd()};
 
@@ -1927,6 +1941,10 @@ if (!exists result) {
     private *hash<auto> changeDirectory(string dir) {
         try {
             chdir(dir);
+            # the current working directory is external information (qore#7586)
+            if (isExternalInfoRestricted()) {
+                return {"value": "Changed directory"};
+            }
             return {"value": sprintf("Changed to: %s", getcwd())};
         } catch (hash<ExceptionInfo> ex) {
             return {"error": ex};

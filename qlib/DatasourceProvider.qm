@@ -92,6 +92,10 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
     @section datasourceproviderrelnotes Release Notes
 
     @subsection datasourceprovider_1_2 DatasourceProvider 1.2
+    - for code restricted from external information, the \c QORE_DATASOURCE_PROVIDERS environment variable of the
+      host is empty, so @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
+      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" use no datasource provider modules for such code (see
+      @ref sandbox_ambient_host_data)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
       output of @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
       @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code or the code that calls
@@ -135,6 +139,10 @@ string connstr = get_ds_string(str);
         @note
         - datasource provider modules are processed in the order they are declared with the \c QORE_DATASOURCE_PROVIDERS environment variable; datasource provider modules must be separated with @ref Qore::PathSep "PathSep" characters
         - no database connection is attempted with this function call
+        - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+          @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+          environment is empty, as it is in that code itself: no datasource provider modules are used for such code,
+          whose datasources are the host's (see @ref sandbox_ambient_host_data)
 
         @see @ref datasourceprovider_modules
      */
@@ -143,8 +151,8 @@ string connstr = get_ds_string(str);
         bool driver = (str =~ /^.+:/);
 
         # process datasource provider modules in declaration order
-        if (ENV.QORE_DATASOURCE_PROVIDERS) {
-            list<string> pl = ENV.QORE_DATASOURCE_PROVIDERS.split(PathSep);
+        if (*string providers = get_datasource_providers()) {
+            list<string> pl = providers.split(PathSep);
             foreach string mod in (pl) {
                 try {
                     return try_get_ds_string(mod, str);
@@ -171,13 +179,15 @@ string connstr = get_ds_string(str);
     #! Returns all datasource supported with their connection strings prefixed by \c "db://"
     /** @param verbose display datasource provider module errors on stdout (otherwise errors are ignored); nothing is
             displayed when the module's code or the code that calls it has no terminal I/O (see get_ds_string())
+
+        No datasource provider modules are used for code restricted from external information (see get_ds_string())
     */
     public *hash<string, string> sub get_ds_hash(*bool verbose) {
         hash<string, string> rv;
 
         # process datasource provider modules in declaration order
-        if (ENV.QORE_DATASOURCE_PROVIDERS) {
-            list<string> pl = ENV.QORE_DATASOURCE_PROVIDERS.split(PathSep);
+        if (*string providers = get_datasource_providers()) {
+            list<string> pl = providers.split(PathSep);
             foreach string mod in (pl) {
                 try {
                     rv += try_get_ds_hash(mod);
@@ -197,6 +207,12 @@ string connstr = get_ds_string(str);
 
 # private, non-exported namespace
 namespace Priv {
+    # returns the datasource provider modules of the environment, only for a caller that could read the environment
+    # itself: the datasources that they give are the host's, with their credentials (qore#7586)
+    *string sub get_datasource_providers() {
+        return SandboxManager::callerMayReadExternalInfo() ? ENV.QORE_DATASOURCE_PROVIDERS : NOTHING;
+    }
+
     # returns the string given for messages: a datasource identifier as given, and the masked description of any
     # other string, such as a datasource string, which can have a user name, a password and a database name
     # (issue #6988)

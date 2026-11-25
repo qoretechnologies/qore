@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,21 +43,28 @@
     |\c %%c|Used to output the category of the logging event, i.e. logger name
     |\c %%C|Used to output the class name of the caller issuing the logging request, i.e. logger class name
     |\c %%d|Used to output the date of the logging event using @ref Qore::format_date() "format_date()". Option may specify date format, e.g. \c "%d{DD.MM.YYYY HH:mm:SS}"
-    |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"
+    |\c %%E|Used to output the environment variable with name given by option, e.g. \c "%E{HOME}"; empty if code restricted from external information created the layout (see below)
     |\c %%F|Used to output the file name where the logging request was issued
-    |\c %%h|Used to output the hostname where the logging event was generated
+    |\c %%h|Used to output the hostname where the logging event was generated; empty if code restricted from external information created the layout (see below)
     |\c %%l|Used to output location information of the caller which generated the logging event, i.e. \c "file:line [function()]"
     |\c %%L|Used to output the line number from where the logging request was issued, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
     |\c %%m|Used to output the application supplied message associated with the logging event
     |\c %%M|Used to output the method name where the logging request was issued
     |\c %%n|Outputs the platform dependent line separator character or characters
     |\c %%p|Used to output the priority of the logging event
-    |\c %%P|Used to output the PID where the logging event was generated
+    |\c %%P|Used to output the PID where the logging event was generated; empty if code restricted from external information created the layout (see below)
     |\c %%r|Used to output the number of milliseconds elapsed from the construction of the layout until the creation of the logging event, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
     |\c %%t|Used to output the thread id that generated the logging event, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
     |\c %%u|Used to output logging event unique id, option may specify @ref Qore::sprintf() "sprintf()"() format, e.g. \c "%.3d"
     |\c %%x|Used to output exception string using \c Util::get_exception_string()
     |\c %%|The literal percent sign. \c "%%" will print a \c "%" sign
+
+    The hostname, the PID and the values of environment variables are information about the host, which code
+    restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()") may not
+    read: the \c %%h, \c %%P and \c %%E fields of a layout that such code created are empty.  It is decided when
+    the layout is created, so a layout that the host created keeps its fields whatever code logs through it (see
+    @ref sandbox_ambient_host_data).
 
     For example, the \c LoggerLayoutPattern with the conversion pattern \c "%r [%t] %-5p %c - %m%n" will output
     something like:

@@ -111,6 +111,11 @@ module Util {
     - @ref Util::substitute_env_vars() "substitute_env_vars()" and the \c $VAR references of a \c file:// URL of
       @ref Util::get_file_from_url() "get_file_from_url()" expand no environment variables of the host for code
       restricted from external information (see @ref sandbox_ambient_host_data)
+    - for code restricted from external information, @ref Util::tmp_location() "tmp_location()" takes no
+      directory from the environment, the @ref Util::normalize_dir() "normalize_dir()" functions and
+      @ref Util::get_relative_path() "get_relative_path()" do not use the current working directory when none is given,
+      and @ref Util::TerminalColor::isColorDisabled() "TerminalColor::isColorDisabled()" does not read \c NO_COLOR
+      (see @ref sandbox_ambient_host_data)
     - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character in
       UTF-8 and other multi-byte encodings (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"; it was
       @ref False "False") (issue #6246)
@@ -645,15 +650,25 @@ string path = normalize_dir(path);
 
     @param path the path to normalize
     @param cwd the current working directory for normalizing relative paths; if not given and the current working
-    directory cannot be determined, relative paths are normalized relative to the root directory
+    directory cannot be determined, relative paths are normalized relative to the root directory; if not given and
+    the calling code may not read external information, a relative path is returned normalized as a relative path
+    (see the note below)
 
     @return a normalized path name for the current platform
+
+    @note The current working directory is information about the host, which code restricted from external
+    information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()") may not
+    read: if \a cwd is not given for such code, a relative path is not prefixed with it; the result is the
+    normalized relative path (\c "." and repeated separators removed, \c ".." resolved where it can be, leading
+    \c ".." segments kept, \c "." for an empty path), which names the same file for the file system functions
+    (see @ref sandbox_ambient_host_data)
 
     @see
     - @ref Util::normalize_dir_unix() or
     - @ref Util::normalize_dir_windows()
     */
-public string sub normalize_dir(string path, string cwd = getcwd() ?? "") {
+public string sub normalize_dir(string path, *string cwd) {
     return PlatformOS != "Windows" ? normalize_dir_unix(path, cwd) : normalize_dir_windows(path, cwd);
 }
 
@@ -670,14 +685,24 @@ string path = normalize_dir_unix(path, "/var/tmp");
 
     @param path the path to normalize
     @param cwd the current working directory; if not given and the current working
-    directory cannot be determined, relative paths are normalized relative to the root directory
+    directory cannot be determined, relative paths are normalized relative to the root directory; if not given and
+    the calling code may not read external information, a relative path is returned normalized as a relative path
+    (see normalize_dir())
 
     @return a normalized path name (starting from /, eliminates \c ".", \c "..", and \c "//")
     */
-public string sub normalize_dir_unix(string path, string cwd = getcwd() ?? "") {
+public string sub normalize_dir_unix(string path, *string cwd) {
     # if the path begins with a ".", prefix the cwd to the string
-    if (!absolute_path_unix(path))
+    if (!absolute_path_unix(path)) {
+        # the current working directory only for a caller that could read it itself (qore#7586)
+        if (!exists cwd) {
+            cwd = Util::default_cwd();
+        }
+        if (!exists cwd) {
+            return Util::normalize_relative_path(path, "/");
+        }
         path = cwd + "/" + path;
+    }
 
     # substitute "/./" with "/" until all occurrences are gone
     while (True) {
@@ -716,17 +741,27 @@ string path = normalize_dir_windows(path, "c:\\qore"));
 
     @param path the path to normalize
     @param cwd the current working directory; if not given and the current working
-    directory cannot be determined, relative paths are normalized relative to the root directory
+    directory cannot be determined, relative paths are normalized relative to the root directory; if not given and
+    the calling code may not read external information, a relative path is returned normalized as a relative path
+    (see normalize_dir())
 
     @return a normalized path name; eliminates \c ".", \c "..", and \c "\\" (except at the beginning of a UNC path)
     */
-public string sub normalize_dir_windows(string path, string cwd = getcwd() ?? "") {
+public string sub normalize_dir_windows(string path, *string cwd) {
     # change all occurrences of "/" to "\"
     path =~ s/\//\\/g;
 
     # if the path begins with a ".", prefix the cwd to the string
-    if (!absolute_path_windows(path))
+    if (!absolute_path_windows(path)) {
+        # the current working directory only for a caller that could read it itself (qore#7586)
+        if (!exists cwd) {
+            cwd = Util::default_cwd();
+        }
+        if (!exists cwd) {
+            return Util::normalize_relative_path(path, "\\");
+        }
         path = cwd + "\\" + path;
+    }
 
     # substitute "\.\" with "\" until all occurrences are gone
     while (True) {
@@ -756,6 +791,40 @@ public string sub normalize_dir_windows(string path, string cwd = getcwd() ?? ""
 
     path = l.join("\\");
     return path ? path : "\\";
+}
+
+#! returns the current working directory for the path functions, or @ref nothing if the calling code may not read it
+/** The current working directory is external information (getcwd()): code restricted from external information
+    does not get it through the path functions either (qore#7586); an empty string if it cannot be determined
+*/
+*string sub default_cwd() {
+    if (!SandboxManager::callerMayReadExternalInfo()) {
+        return;
+    }
+    return getcwd() ?? "";
+}
+
+#! normalizes a relative path as a relative path: removes \c "." and empty segments and resolves \c ".." where it can
+/** Leading \c ".." segments are kept, as the path is relative to a directory that is not known
+
+    @param path the relative path
+    @param sep the path separator
+
+    @return the normalized relative path; \c "." if it is empty
+*/
+string sub normalize_relative_path(string path, string sep) {
+    list<string> rv = ();
+    foreach string seg in (path.split(sep)) {
+        if (seg == "" || seg == ".") {
+            continue;
+        }
+        if (seg == ".." && rv && rv.last() != "..") {
+            pop rv;
+            continue;
+        }
+        push rv, seg;
+    }
+    return rv ? rv.join(sep) : ".";
 }
 
 #! removes ".." segments and the segments they refer to from a list of path segments
@@ -788,13 +857,28 @@ string path = get_relative_path("/var/tmp", path);
     @param path the path to return as a relative path from \a base
     @param cwd the current working directory, used in case \a base or \a path are relative paths; if not given
     and the current working directory cannot be determined, relative paths are normalized relative to the root
-    directory
+    directory; if not given and the calling code may not read external information, \a basedir and \a path must be
+    both absolute or both relative paths
 
     @return a path as a relative path from another directory
 
+    @throw INVALID-FUNCTION-ACCESS \a cwd is not given, the calling code may not read external information
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"; the current working directory is information about the
+    host), and one of \a basedir and \a path is an absolute path and the other a relative one, so that the result
+    would depend on the current working directory (see @ref sandbox_ambient_host_data)
+
     @since %Util 1.8
 */
-public string sub get_relative_path(string basedir, string path, string cwd = getcwd() ?? "") {
+public string sub get_relative_path(string basedir, string path, *string cwd) {
+    if (!exists cwd) {
+        # the current working directory only for a caller that could read it itself (qore#7586)
+        cwd = Util::default_cwd();
+        if (!exists cwd && absolute_path(basedir) != absolute_path(path)) {
+            throw "INVALID-FUNCTION-ACCESS", sprintf("get_relative_path(): the relative path from %y to %y depends "
+                "on the current working directory, which the calling code may not read (PO_NO_EXTERNAL_INFO); give "
+                "the current working directory explicitly", basedir, path);
+        }
+    }
     basedir = normalize_dir(basedir, cwd);
     string dir = normalize_dir(dirname(path), cwd);
     string file = basename(path);
@@ -1929,13 +2013,23 @@ unlink(testfile);
 
     If none of these are present, then \c "/tmp" (UNIX) or \c "c:\temp" (Windows) is checked.
 
+    For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+    environment is empty, as it is in that code itself: the variables are not read, and \c "/tmp" (UNIX) or
+    \c "c:\temp" (Windows) is always used; this also holds for the temporary files and directories that library code
+    creates for such code (ex: FsUtil::TmpDir), which such code can place elsewhere by giving their directory
+    explicitly (see @ref sandbox_ambient_host_data)
+
     @throw TMP-ERROR unable to find the location of the temporary directory; temporary directory is not writable
 
     @since Util 1.2
 */
 public string sub tmp_location() {
     # TODO: add support for other platforms
-    *string dir = ENV.TMPDIR ?* ENV.TMP ?* ENV.TEMP ?* ENV.TEMPDIR;
+    # the environment of the host only for a caller that could read it itself (qore#7586)
+    *string dir = SandboxManager::callerMayReadExternalInfo()
+        ? (ENV.TMPDIR ?* ENV.TMP ?* ENV.TEMP ?* ENV.TEMPDIR)
+        : NOTHING;
     if (!dir)
         dir = PlatformOS == "Windows" ? "c:\\temp" : "/tmp";
 
@@ -2931,9 +3025,14 @@ public class TerminalColor {
 
     #! Returns @ref True "True" if color output is disabled by the \c NO_COLOR environment variable
     /** Color output is disabled if \c NO_COLOR is set to a non-empty value; see https://no-color.org
+
+        For code restricted from external information (see
+        @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+        environment is empty, so this is @ref False "False" (see @ref sandbox_ambient_host_data)
     */
     static bool isColorDisabled() {
-        return getenv("NO_COLOR").val();
+        # the environment of the host only for a caller that could read it itself (qore#7586)
+        return SandboxManager::callerMayReadExternalInfo() && getenv("NO_COLOR").val();
     }
 
     #! Apply a color code to text if colors are enabled

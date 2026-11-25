@@ -1,0 +1,58 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a connection and datasource provider module of the host for module-host-info.qtest (qore#7586): the
+# QORE_CONNECTION_PROVIDERS and QORE_DATASOURCE_PROVIDERS environment variables of the test's worker name it
+
+%modern
+%requires ConnectionProvider
+
+module Q7586Providers {
+    version = "1.0";
+    desc = "host connection and datasource provider for the module host information test (qore#7586)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the connection of the host
+class Q7586HostConnection inherits ConnectionProvider::AbstractConnection {
+    constructor() : AbstractConnection({
+        "name": "q7586",
+        "desc": "host connection",
+        "url": "q7586://host-user:host-secret@host.example",
+    }) {
+    }
+
+    string getType() {
+        return "Q7586HostConnection";
+    }
+
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new Mutex();
+    }
+}
+
+public namespace Q7586Providers {
+    public Q7586HostConnection sub get_mod_connection(string str) {
+        if (str != "q7586") {
+            throw "Q7586-ERROR", sprintf("unknown connection %y", str);
+        }
+        return new Q7586HostConnection();
+    }
+
+    public hash<string, Q7586HostConnection> sub get_mod_connections() {
+        return {"q7586": new Q7586HostConnection()};
+    }
+
+    public string sub get_mod_ds_string(string str) {
+        if (str != "q7586") {
+            throw "Q7586-ERROR", sprintf("unknown datasource %y", str);
+        }
+        return "pgsql:host-user/host-secret@hostdb";
+    }
+
+    public hash<string, string> sub get_mod_ds_hash() {
+        return {"q7586": "pgsql:host-user/host-secret@hostdb"};
+    }
+}

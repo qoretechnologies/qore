@@ -184,6 +184,10 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - for code restricted from external information, the \c QORE_CONNECTION_PROVIDERS environment variable of the
+      host is empty, so @ref ConnectionProvider::get_connection() "get_connection()",
+      @ref ConnectionProvider::get_connections() "get_connections()" and the functions that call them use no
+      connection provider modules for such code (see @ref sandbox_ambient_host_data)
     - a connection is a capability of the code that creates it: code restricted from the functional domain of a
       connection's clients (\c NETWORK, \c FILESYSTEM or \c DATABASE) cannot create the connection, by a constructor
       or by deserialization (\c PERMISSION-DENIED), while a connection that unrestricted code created and lends to it
@@ -815,7 +819,12 @@ string connstr = get_connection_url(str);
 
     @throw CONNECTION-ERROR the connection string cannot be matched as an external url identifier by a connection provider module and there is no scheme (i.e. protocol) specification in the string followed by at least one character (ex: \c "scheme://x...")
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
+      whose connections are the host's (see @ref sandbox_ambient_host_data)
 
     @see @ref connectionprovider_modules
 */
@@ -837,15 +846,20 @@ string connstr = get_connection(str);
 
     @throw CONNECTION-ERROR the connection string cannot be matched as an external url identifier by a connection provider module
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
+      whose connections are the host's (see @ref sandbox_ambient_host_data)
 
     @see @ref connectionprovider_modules
 */
 public AbstractConnection sub get_connection(string conn) {
     # process connection provider modules in declaration order
-    if (ENV.QORE_CONNECTION_PROVIDERS) {
+    if (*string providers = Priv::priv_get_connection_providers()) {
         list<string> el = ();
-        list<string> pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
+        list<string> pl = providers.split(PathSep);
         foreach string mod in (pl) {
             try {
                 return priv_try_get_connection(mod, conn);
@@ -874,7 +888,12 @@ public AbstractConnection sub get_connection(string conn) {
 
     @return a hash keyed by connection identifier; values are AbstractConnection objects; @ref nothing is returned if no connections are known
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
+      whose connections are the host's (see @ref sandbox_ambient_host_data)
 
     @see
     - get_connection_hash()
@@ -883,8 +902,8 @@ public AbstractConnection sub get_connection(string conn) {
 public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
     hash<string, AbstractConnection> h();
     # process connection provider modules in declaration order
-    if (ENV.QORE_CONNECTION_PROVIDERS) {
-        list pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
+    if (*string providers = Priv::priv_get_connection_providers()) {
+        list pl = providers.split(PathSep);
         foreach string mod in (pl) {
             try {
                 map h.($1.key) = $1.value, priv_try_get_connections(mod).pairIterator(), !exists h.($1.key);
@@ -913,7 +932,12 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
 
     @return a hash keyed by connection identifier; values are @ref ConnectionInfo hashes as returned by @ref AbstractConnection::getInfo() (with passwords included); @ref nothing is returned if no connections are known
 
-    @note connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    @note
+    - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
+    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
+      whose connections are the host's (see @ref sandbox_ambient_host_data)
 
     @see
     - get_connections()
@@ -928,6 +952,12 @@ public *hash<string, hash<ConnectionInfo>> sub get_connection_hash(*bool verbose
 
 # private, non-exported namespace
 namespace Priv {
+# returns the connection provider modules of the environment, only for a caller that could read the environment
+# itself: the connections that they give are the host's (qore#7586)
+*string sub priv_get_connection_providers() {
+    return SandboxManager::callerMayReadExternalInfo() ? ENV.QORE_CONNECTION_PROVIDERS : NOTHING;
+}
+
 *hash sub priv_try_get_connections(string mod) {
     Program p();
     p.loadModule(mod);

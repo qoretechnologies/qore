@@ -8,6 +8,10 @@
 
     @section logger_bin_3_0 logger_bin Module Version 3.0
 
+    The \c %%h (hostname), \c %%P (PID) and \c %%E (environment variable) fields of a
+    @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" that code restricted from external information
+    created are empty (see @ref sandbox_ambient_host_data).
+
     The \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
     formats as an empty string instead of crashing the process.
 

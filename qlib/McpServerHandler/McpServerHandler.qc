@@ -576,6 +576,13 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         #! Task ID counter
         int taskIdCounter = 0;
 
+        #! The part of the task IDs that makes them unique to the process: the PID, or a random string if code
+        #! restricted from external information created the handler, as the PID is information about the host
+        #! (qore#7586)
+        string task_id_process = SandboxManager::callerMayReadExternalInfo()
+            ? getpid().toString()
+            : get_random_string(16);
+
         #! Default task TTL in milliseconds (5 minutes)
         int defaultTaskTtl = 300000;
 
@@ -3332,7 +3339,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     #! Generates a unique task ID
     private string generateTaskId() {
         AutoWriteLock al(rwl);
-        return sprintf("task-%d-%d", getpid(), ++taskIdCounter);
+        return sprintf("task-%s-%d", task_id_process, ++taskIdCounter);
     }
 
     #! Creates a new task for background execution

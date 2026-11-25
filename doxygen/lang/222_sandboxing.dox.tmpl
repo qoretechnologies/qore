@@ -938,6 +938,40 @@ authenticate();
       its file names whatever code logs through it)
     - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
       environment; such code gives them explicitly
+    - the providers of the environment are not used: @ref ConnectionProvider::get_connection() "get_connection()",
+      @ref ConnectionProvider::get_connections() "get_connections()",
+      @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
+      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" use no modules of \c QORE_CONNECTION_PROVIDERS and
+      \c QORE_DATASOURCE_PROVIDERS, whose connections and datasources are the host's
+    - @ref Util::tmp_location() "tmp_location()" takes no directory from the environment (\c TMPDIR and the others):
+      it is the platform's default (\c /tmp), also for the temporary files and directories that library code creates
+      without a directory (ex: @ref FsUtil::TmpDir "TmpDir"), which such code places elsewhere by giving their
+      directory; @ref Util::TerminalColor::isColorDisabled() "TerminalColor::isColorDisabled()" does not read
+      \c NO_COLOR, @ref QUnit::Test::getEnv() "QUnit::Test::getEnv()" gives no values,
+      @ref EdifactUtil::EdifactDirectoryCache "EdifactDirectoryCache" takes no cache root from the environment and
+      expands no \c ~ (\c EDIFACT-CACHE-ERROR), and a @ref TelnetClient::TelnetClient "TelnetClient" that such code
+      created sends the server no \c DISPLAY, \c PRINTER and \c TERM
+
+    Information about the host other than the environment is not used for such code either, as it may not read it
+    itself (@ref Qore::getcwd() "getcwd()", @ref Qore::gethostname() "gethostname()",
+    @ref Qore::getpid() "getpid()", @ref Qore::get_netif_list() "get_netif_list()"):
+    - the current working directory: @ref Util::normalize_dir() "normalize_dir()" and its UNIX and Windows variants
+      return a relative path without \a cwd normalized as a relative path (which names the same file), and
+      @ref Util::get_relative_path() "get_relative_path()" without \a cwd raises \c INVALID-FUNCTION-ACCESS when one
+      path is absolute and the other relative; the REPL's \c /pwd command is refused
+    - the hostname, the PID and the addresses of the network interfaces:
+      @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" uses the loopback address for a wildcard
+      bind address; the \c %%h, \c %%P and \c %%E fields of a @ref Qore::Logger::LoggerLayoutPattern
+      "LoggerLayoutPattern", the hostname in the error pages of an @ref HttpServer::HttpServer "HttpServer", the
+      \c host field of the documents of the ElasticSearch and OpenSearch logger appenders and the PID in the task IDs
+      of the MCP and A2A server handlers are left out for an object that such code created (it is decided when the
+      object is created); the SMTP client names \c localhost in its \c EHLO and \c HELO commands
+
+    The host grants this information as it grants ambient data, with a policy barrier or a capability, and an object
+    that it lends lends nothing here.  Library code that uses this information for its own work and gives the caller
+    nothing of it (ex: the temporary file names of its own atomic writes, its own diagnostics that a host enables with
+    environment variables, and the environment variables with which the host restricts what the library does, such as
+    \c QORE_FILE_LOCATION_CONNECTIONS) is not affected.
 
     @since %Qore 3.0
 

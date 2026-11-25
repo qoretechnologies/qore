@@ -81,6 +81,10 @@ module FsUtil {
     @section fsutil_relnotes Release Notes
 
     @subsection fsutil_v1_4 Version 1.4
+    - the temporary files and directories that are created without a directory for code restricted from external
+      information are created in the platform's default temporary directory, as
+      @ref Util::tmp_location() "tmp_location()" takes no directory from the environment for such code (see
+      @ref sandbox_ambient_host_data)
     - @ref FsUtil::remove_tree() and @ref FsUtil::TmpDir preserve filesystem names during cleanup
       even when the names use a different encoding from the process
     - fixed @ref FsUtil::path_exists() "path_exists()" to correctly return \c False for permission errors
@@ -354,7 +358,9 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
     /** @param prefix prefix to be used in the newly created directory name
         @param suffix suffix to be used in the newly created directory name
         @param path path to a dir in which the caller wants to create the new directory; if not provided, standard temp
-                    location will be used
+                    location will be used (@ref Util::tmp_location() "tmp_location()", which takes no directory from
+                    the environment for code restricted from external information; see
+                    @ref sandbox_ambient_host_data)
 
         @return absolute path to the newly created directory
 
@@ -407,7 +413,8 @@ bool b = path_exists("/tmp/broken_link", True);  # False (target doesn't exist)
     /** @param prefix prefix to be used in the newly created file name
         @param suffix suffix to be used in the newly created file name
         @param path path to a dir in which the caller wants to create the new file; if not provided, standard temp
-        location will be used
+        location will be used (@ref Util::tmp_location() "tmp_location()", which takes no directory from the
+        environment for code restricted from external information; see @ref sandbox_ambient_host_data)
 
         @return hash<TmpFileHash> with absolute path to the newly created file and its File object
         (keys "path" and "file" respectively)

@@ -181,6 +181,10 @@ module ElasticSearchLoggerAppender {
     }
     @endcode
 
+    The \c host field is not written by an appender that code restricted from external information
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created, as the hostname is information about the host
+    that such code may not read (see @ref sandbox_ambient_host_data).
+
     @section elasticsearchloggerappenderfields Constant Document Fields
 
     The \c fields option adds the same fields to every document the appender writes, so the documents can be
@@ -240,6 +244,10 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     }
 
     private:internal {
+        #! if the documents contain the hostname: not if code restricted from external information created the
+        #! appender (qore#7586)
+        bool add_host = True;
+
         #! REST client for ElasticSearch communication
         RestClientIo::RestClientIo rest;
 
@@ -327,6 +335,8 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         pipeline = options.pipeline;
         allowSearchIndexOverride = options.allow_search_index_override ?? False;
         setDocumentFields(options);
+        # the hostname is external information: it is decided when the appender is created (qore#7586)
+        add_host = SandboxManager::callerMayReadExternalInfo();
     }
 
     #! Creates the ElasticSearch logger appender with an existing REST client
@@ -357,6 +367,8 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         pipeline = options.pipeline;
         allowSearchIndexOverride = options.allow_search_index_override ?? False;
         setDocumentFields(options);
+        # the hostname is external information: it is decided when the appender is created (qore#7586)
+        add_host = SandboxManager::callerMayReadExternalInfo();
     }
 
     #! Destructor - ensures cleanup
@@ -1098,7 +1110,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         }
 
         # Add host info
-        doc.host = {"name": gethostname()};
+        if (add_host) {
+            doc.host = {"name": gethostname()};
+        }
 
         return doc;
     }

@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,8 @@
 #include "QoreLoggerPattern.h"
 #include "QoreLoggerEvent.h"
 
+#include <qore/QoreSandboxManager.h>
+
 //! default layout pattern
 #define DEFAULT_PATTERN "%r [%t] %p %c - %m%n"
 
@@ -46,7 +48,8 @@ public:
     static SimpleRefHolder<QoreStringNode> HostName;
     static SimpleRefHolder<QoreStringNode> LineDelimeter;
 
-    DLLLOCAL QoreLoggerLayoutPattern(QoreObject* self) : QoreLoggerPattern(self) {
+    DLLLOCAL QoreLoggerLayoutPattern(QoreObject* self) : QoreLoggerPattern(self),
+            host_info(callerMayReadExternalInfo()) {
     }
 
     DLLLOCAL virtual ~QoreLoggerLayoutPattern() {
@@ -58,6 +61,23 @@ public:
     //! Format event record
     DLLLOCAL virtual QoreStringNode* format(ExceptionSink* xsink, const QoreValue data, const QoreObject* event,
             QoreLoggerEvent* e) const;
+
+private:
+    //! if the hostname, the PID and the values of environment variables are formatted (\c %h, \c %P, \c %E)
+    /** Not if code restricted from external information created the layout: it is decided when the layout is
+        created, so a layout of the host keeps its fields whatever code logs through it (qore#7586)
+    */
+    const bool host_info;
+
+    //! Returns true if the code that creates the layout may read external information; fails closed
+    DLLLOCAL static bool callerMayReadExternalInfo() {
+#ifdef QORE_HAVE_CALLER_AMBIENT_PREDICATES
+        return qore_caller_may_read_external_info();
+#else
+        // a libqore that cannot evaluate the rule: fail closed
+        return false;
+#endif
+    }
 };
 
 #endif

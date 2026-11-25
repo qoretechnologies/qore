@@ -164,6 +164,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" uses neither the hostname nor the
+      addresses of the network interfaces for code restricted from external information (see
+      @ref sandbox_ambient_host_data)
     - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
       @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
       @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
@@ -1311,8 +1314,18 @@ public bool sub is_websocket_extended_connect(hash<auto> cx, hash<auto> hdr) {
 /** @param bind the bind address; if for any reason there is a path in the bind address, it will be ignored
     @param host the hostname to use in case the bind string is only a port number; if none is passed or the value
     passed is equal to the return value of @ref Qore::gethostname(), then \c "localhost" is used
+
+    For a wildcard bind address (\c "0.0.0.0" or \c "::") without \a host, the first address of a network
+    interface that is not a loopback address is used, or the loopback address if there is none.
+
+    For code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
+    hostname and the addresses of the network interfaces are not used: \a host is used as given (\c "localhost" if
+    none is given), and the loopback address for a wildcard bind address (see @ref sandbox_ambient_host_data)
 */
 public string sub http_get_url_from_bind(softstring bind, *string host) {
+    # the hostname and the network interfaces only for a caller that could read them itself (qore#7586)
+    bool host_info = SandboxManager::callerMayReadExternalInfo();
     hash<UrlInfo> h = parse_url(bind);
     # if there is only a port number, it will appear in the "host" key
     if (h.size() == 1 && h.host && int(h.host) == h.host) {
@@ -1326,19 +1339,21 @@ public string sub http_get_url_from_bind(softstring bind, *string host) {
             h.host =~ s/ /%20/g;
             h.host =~ s/\//%2f/g;
         } else {
-            h.host = (!host || host == gethostname()) ? "localhost" : host;
+            h.host = (!host || (host_info && host == gethostname())) ? "localhost" : host;
         }
     }
 
     # issue #4266: return a usable address when an explicit wildcard address is used
     if (h.host == "0.0.0.0") {
         # try to get the first non-loopback IPv4 address
-        h.host = host ?? (map $1.address, get_netif_list(), $1.family == AF_INET && $1.address != "127.0.0.1")[0]
-            ?? "127.0.0.1";
+        h.host = host ?? (host_info
+            ? (map $1.address, get_netif_list(), $1.family == AF_INET && $1.address != "127.0.0.1")[0]
+            : NOTHING) ?? "127.0.0.1";
     } else if (h.host == "::") {
         # try to get the first non-loopback IPv6 address
-        h.host = host ?? (map $1.address, get_netif_list(), $1.family == AF_INET6 && $1.address != "::1")[0]
-            ?? "::1";
+        h.host = host ?? (host_info
+            ? (map $1.address, get_netif_list(), $1.family == AF_INET6 && $1.address != "::1")[0]
+            : NOTHING) ?? "::1";
     }
 
     # encose IPv6 addresses in "[]"

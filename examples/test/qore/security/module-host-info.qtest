@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the checks run in the Programs of a worker process that set their execution modes themselves, and in qcc executables of the worker
+# test-platform: macos - JIT and AOT code generation and qcc executables of calls into the Programs of preloaded modules
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ModuleHostInfoTest
+
+#! The functions of preloaded modules give code restricted from external information no host information (qore#7586)
+/** An application preloads modules into a Program and then restricts it from external information
+    (PO_NO_EXTERNAL_INFO); the modules' functions run with the modules' own options, so they ask
+    SandboxManager::callerMayReadExternalInfo() before they give the caller the environment, the current working
+    directory, the temporary directory of the environment, the hostname, the PID or the addresses of the network
+    interfaces, or use them in what they give or send for it.  The checks are in
+    module-host-info/module-host-info-worker.q (in Programs of each kind in each execution mode, whose top-level code
+    calls the functions), whose output must be one "ok" line per check, run by the interpreter and as programs compiled
+    with qcc.
+*/
+class ModuleHostInfoTest inherits QUnit::Test {
+    public {
+        #! the kinds of Programs of the worker
+        const Kinds = 4;
+        #! the execution modes of the worker's Programs
+        const Modes = 4;
+        #! the checks of each Program
+        const Cases = 40;
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = normalize_dir(get_script_dir());
+        string worker = dir + DirSep + "module-host-info" + DirSep + "module-host-info-worker.q";
+        TmpDir tmp("qore-module-host-info-");
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("ModuleHostInfoTest", "1.0", \ARGV) {
+        string providers = dir + DirSep + "module-host-info" + DirSep + "Q7586Providers.qm";
+        mkdir(tmp.path + DirSep + "tmp");
+        mkdir(tmp.path + DirSep + "edifact");
+        prefix = (map sprintf("%s=%s ", $1.key, quote($1.value)), {
+            "LD_LIBRARY_PATH": libdir,
+            "DYLD_LIBRARY_PATH": libdir,
+            "QORE_LIBDIR": libdir,
+            # the host's environment: what the worker's Programs must not get when they are restricted
+            "TMPDIR": tmp.path + DirSep + "tmp",
+            "NO_COLOR": "1",
+            "Q7586_SECRET": "q7586-secret",
+            "QUNIT_Q7586": "q7586-qunit",
+            "QORE_EDIFACT_DIRCACHE": tmp.path + DirSep + "edifact",
+            "TERM": "q7586-term",
+            "DISPLAY": "q7586:0",
+            "PRINTER": "q7586-printer",
+            "QORE_CONNECTION_PROVIDERS": providers,
+            "QORE_DATASOURCE_PROVIDERS": providers,
+            "Q7586_CHILD": dir + DirSep + "module-host-info" + DirSep + "module-host-info-child.q",
+        }.pairIterator()).join("");
+        addTestCase("interpreter", \testInterpreter());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! checks the output of the worker: one "ok" line per check
+    private checkOutput(string out, string label) {
+        list<string> lines = select out.split("\n"), $1.val();
+        list<string> failed = select lines, $1 !~ /=ok$/;
+        assertEq((), failed, label + ": failed checks");
+        assertEq(Kinds * Modes * Cases, lines.size(), label + ": number of checks");
+    }
+
+    testInterpreter() {
+        checkOutput(ExecModeHarness::run_any(prefix + quote(qore_bin) + " -b --enable-debug " + quote(worker)
+           ), "interpreter");
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "module-host-info" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            checkOutput(ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}
