@@ -13227,46 +13227,29 @@ DLLLOCAL void qore_aot_run_all_module_del_closures() {
         std::reverse(dels.begin(), dels.end());
     }
     // the closure of a module that requires another module, directly or through other modules, runs before that of
-    // the module it requires, which it can use; a cycle (not possible for loaded modules) runs the rest in any order
-    // the modules that a module requires, directly or through other modules (also user modules loaded from source and
-    // native binary modules), found once for each module
-    std::unordered_map<std::string, std::unordered_set<std::string>> requires_map;
-    auto requires_module = [&requires_map](const std::string& from, const std::string& target) {
-        auto ri = requires_map.find(from);
-        if (ri == requires_map.end()) {
-            std::unordered_set<std::string> all;
-            std::vector<std::string> todo{from};
-            while (!todo.empty()) {
-                std::string name = std::move(todo.back());
-                todo.pop_back();
-                std::set<std::string> deps;
-                QMM.getModuleDependencies(name.c_str(), deps);
-                for (const std::string& d : deps) {
-                    if (all.insert(d).second) {
-                        todo.push_back(d);
-                    }
-                }
-            }
-            ri = requires_map.emplace(from, std::move(all)).first;
+    // the module it requires, which it can use: in the order of the teardown of the data of the module Programs
+    // (QoreModuleManager::orderModulesDependentsFirst(), qore#7432), with the requirements recorded at run time (an
+    // AOT module that loaded another one from its code requires it), and with a cycle (which run-time loads can make)
+    // broken at one of its own modules, never at a module that it requires (qore#7445).  The order is computed before
+    // any closure runs, as a closure can load modules
+    std::vector<std::string> order;
+    order.reserve(dels.size());
+    for (const DelInfo& d : dels) {
+        order.push_back(d.name);
+    }
+    QMM.orderModulesDependentsFirst(order);
+    std::unordered_map<std::string, size_t> index;
+    for (size_t i = 0, e = dels.size(); i < e; ++i) {
+        index.emplace(dels[i].name, i);
+    }
+    for (const std::string& name : order) {
+        auto ii = index.find(name);
+        // the names ordered are those of the closures
+        assert(ii != index.end());
+        if (ii == index.end()) {
+            continue;
         }
-        return ri->second.find(target) != ri->second.end();
-    };
-    while (!dels.empty()) {
-        size_t pick = 0;
-        for (size_t i = 0; i < dels.size(); ++i) {
-            bool required = false;
-            for (size_t j = 0; j < dels.size() && !required; ++j) {
-                if (i != j) {
-                    required = requires_module(dels[j].name, dels[i].name);
-                }
-            }
-            if (!required) {
-                pick = i;
-                break;
-            }
-        }
-        DelInfo d = std::move(dels[pick]);
-        dels.erase(dels.begin() + pick);
+        DelInfo& d = dels[ii->second];
         runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
     }
 }

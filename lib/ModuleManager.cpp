@@ -7469,7 +7469,8 @@ struct QoreTeardownDependencies {
     strset_t native_mods;
 };
 
-//! orders the given module Programs so that each comes before those of the modules that it requires (qore#7432)
+//! orders the given modules (their Programs, or only their names) so that each comes before the modules that it
+//! requires (qore#7432); also the order of the del closures of the AOT modules (orderModulesDependentsFirst())
 /** A module requires the modules that it requires directly or through other modules, user modules (loaded from source
     or AOT modules) and binary modules alike, also those recorded at run time
     (QoreModuleManager::getTeardownModuleDependencies()).  Dependencies outside a cycle always outlive it. Within a
@@ -7546,6 +7547,22 @@ static void qore_order_module_programs_dependents_first(std::vector<QoreModulePr
         left.erase(left.begin() + pick);
     }
     mpgms = std::move(ordered);
+}
+
+void QoreModuleManager::orderModulesDependentsFirst(std::vector<std::string>& names) {
+    std::vector<QoreModuleProgramInfo> mods;
+    mods.reserve(names.size());
+    for (const std::string& name : names) {
+        mods.push_back({name, nullptr});
+    }
+    {
+        QoreTeardownDependencies graph;
+        getTeardownModuleDependencies(graph);
+        qore_order_module_programs_dependents_first(mods, graph);
+    }
+    for (size_t i = 0, e = mods.size(); i < e; ++i) {
+        names[i] = std::move(mods[i].name);
+    }
 }
 
 // deletes only user modules
