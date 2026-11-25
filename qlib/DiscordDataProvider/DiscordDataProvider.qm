@@ -40,7 +40,7 @@
 module DiscordDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     domains = "PROCESS_CONTROL";
-    version = "2.1";
+    version = "2.2";
     desc = "user module providing a data provider API for Discord messaging services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -154,9 +154,11 @@ module DiscordDataProvider {
 
     @section Discorddataprovider_relnotes Release Notes
 
-    @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
+    @subsection Discorddataprovider_v2_2 DiscordDataProvider v2.2
     - @ref DiscordDataProvider::DiscordMessageSend provides outbound rich embed and mention policy types and validates
       channel and webhook message limits (<a href="https://github.com/qoretechnologies/qore/issues/6881">issue 6881</a>)
+
+    @subsection Discorddataprovider_v2_1 DiscordDataProvider v2.1
     - \c DiscordDataProvider::registerChild() cannot be called by sandboxed code: its registry is process-wide
       (\c SANDBOX-REGISTRATION-ERROR; see @ref sandbox_process_wide_registries)
       (<a href="https://github.com/qoretechnologies/qore/issues/6743">issue 6743</a>)
