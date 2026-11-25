@@ -72,6 +72,15 @@ module BflDataProvider {
                 "**Billing:** generation and transformations consume credits. Check **Get Credit Balance** and "
                 "[current pricing](https://docs.bfl.ai/quick_start/pricing) first. Usage reporting affects licensing charges.",
             "scheme": "bfl",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "bfl.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://docs.bfl.ai/quick_start/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::BflLogoText,
             "logo_file_name": "bfl-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -86,10 +95,17 @@ module BflDataProvider {
         DataProviderActionCatalog::registerLazyAppActions(BflDataProvider::AppName, sub () {
             foreach hash<DataProviderActionInfo> action in (BflApi::getActionSet()
                     .getActionInfoList(BflDataProvider::AppName)) {
+                if (inlist(action.metadata.kind, ("image", "video"))) {
+                    action.billing = <DataProviderBillingInfo>{"unit": "credit"};
+                } else if (BflApi::getActionSet().getOperationEx(action.action).getMethod().upr() == "GET") {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
                 DataProviderActionCatalog::registerAction(action);
             }
             foreach hash<auto> helper in (BflJobDataProvider::Helpers.pairIterator()) {
                 DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "billing": helper.key == "generate-video" ? <DataProviderBillingInfo>{"unit": "credit"}
+                        : <DataProviderBillingInfo>{"model": "included"},
                     "app": BflDataProvider::AppName, "action": helper.key, "path": "/" + helper.key,
                     "display_name": helper.value[0], "short_desc": helper.value[1],
                     "desc": helper.value[1] + (helper.key == "generate-video"
@@ -105,6 +121,7 @@ module BflDataProvider {
                 "app": BflDataProvider::AppName,
                 "path": "/generate-image",
                 "action": "generate-image",
+                "billing": <DataProviderBillingInfo>{"unit": "credit"},
                 "display_name": "Generate Image",
                 "short_desc": "Generate an image from a text prompt (async)",
                 "desc": "Generates an image with the selected model, waits for completion, and downloads verified media. "
