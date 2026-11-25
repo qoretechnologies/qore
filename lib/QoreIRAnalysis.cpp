@@ -9647,6 +9647,8 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         !QORE_ENV_IS_SET("QORE_DISABLE_IR_BORROWED_STRING_LOAD");
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
+    // the loads of each candidate local, for has_live_other_load()
+    std::unordered_map<LocalVar*, std::vector<const QoreIRInstruction*>> candidate_loads;
     using InstructionPosition = std::pair<size_t, size_t>;
     std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
@@ -9675,10 +9677,50 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                         // a handler that runs out of line can give a local that it references any value (#5951)
                         && !func.handler_ir_locals.count(reinterpret_cast<const void*>(local_inst->local))) {
                     candidate_locals.insert(local_inst->local);
+                    if (inst->opcode == QoreIROpcode::LoadLocal && inst->result.isValid()) {
+                        candidate_loads[local_inst->local].push_back(inst.get());
+                    }
                 }
             }
         }
     }
+
+    // true if a value that another load of the local gave is used at or after the append: native code borrows the
+    // local's string for such a load, so an append in place would change the value under it (as in (s, s += "c");
+    // qore#7627).  A load in another block that is used outside its block is counted, as its order is not known here
+    auto has_live_other_load = [&](const QoreIRInstruction& append, const QoreIRInstruction* own_load,
+            LocalVar* local) {
+        auto loads = candidate_loads.find(local);
+        if (loads == candidate_loads.end()) {
+            return false;
+        }
+        const InstructionPosition append_pos = positions.at(&append);
+        for (const QoreIRInstruction* load : loads->second) {
+            if (load == own_load) {
+                continue;
+            }
+            const InstructionPosition load_pos = positions.at(load);
+            auto use_it = uses.find(load->result.id);
+            if (use_it == uses.end()) {
+                continue;
+            }
+            const bool before_in_block = load_pos.first == append_pos.first && load_pos.second < append_pos.second;
+            for (const auto& use : use_it->second) {
+                auto use_pos = positions.find(use.inst);
+                if (use_pos == positions.end()) {
+                    return true;
+                }
+                if (before_in_block) {
+                    if (use_pos->second.first != append_pos.first || use_pos->second.second > append_pos.second) {
+                        return true;
+                    }
+                } else if (load_pos.first != append_pos.first && use_pos->second.first != load_pos.first) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
 
     // true if an instruction of the block in [begin, end) other than the append accesses the local
     auto accesses_local = [&](const QoreIRBasicBlock* block, size_t begin, size_t end,
@@ -9733,13 +9775,15 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 return false;
             }
             return !accesses_local(block, load_pos->second.second + 1, block->instructions.size(), append, local)
-                && !accesses_local(cfg.blocks[store_block_id], 0, store_pos->second.second, append, local);
+                && !accesses_local(cfg.blocks[store_block_id], 0, store_pos->second.second, append, local)
+                && !has_live_other_load(append, load_def->second, local);
         }
         if (append_pos->second.first != store_pos->second.first
                 || append_pos->second.second >= store_pos->second.second) {
             return false;
         }
-        return !accesses_local(block, load_pos->second.second + 1, store_pos->second.second, append, local);
+        return !accesses_local(block, load_pos->second.second + 1, store_pos->second.second, append, local)
+            && !has_live_other_load(append, load_def->second, local);
     };
     // true for a local copy-on-write string append: the binary op, or the invoke made for it in a try block
     auto is_string_append = [](const QoreIRInstruction& inst) {
