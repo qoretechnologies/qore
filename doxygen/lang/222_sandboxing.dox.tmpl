@@ -356,7 +356,9 @@ authenticate();
     code that parses it trusts its code (a host's function that parses the source that a tenant hands it, for
     example).  A Program that is sandboxed without a manager (one that sandboxed code marked sandboxed, which no
     manager governs) is restricted for this rule, as for
-    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()".  Code
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"; this includes a
+    Program without a manager of its own into which code that any sandbox governs parsed code that failed, as no
+    sandbox was attached for that code.  Code
     that a sandbox restricts cannot relax the policy of the manager that governs it, and a class keeps the access that
     it was committed with when the policy is changed later.  A class that a Program parsed before a sandbox manager
     was set for it keeps the private access that it had, so a host sets the manager and its policy before it parses
