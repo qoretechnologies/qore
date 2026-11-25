@@ -93,6 +93,8 @@ auto sub call(auto v) { return call_function(\"dbg_shared_target\", v); }', 'chi
         assertEq(2, p.callFunction("call", "x"), "the parent's variant");
         assertThrows("RUNTIME-OVERLOAD-ERROR", \c1.callFunction(), ("call", "x"), "a child created before");
         object c2 = p.callFunction("child");
+        # a child created after the add shares the parent's function with the variant
+        assertEq(2, c2.callFunction("call", "x"), "a child created after inherits the variant");
         c2.callFunction("add", 1);
         assertEq(3, c2.callFunction("call", ()), "the child's variant");
         assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("call", ()), "the parent");

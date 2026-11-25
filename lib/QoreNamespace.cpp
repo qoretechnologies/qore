@@ -1112,8 +1112,9 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
     // variant with the signature of one that the function has, which the function frees, gets no copy
     bool owned = ownedByProgram();
     if (fe && owned && fe->sharesFunction() && !function_has_signature(*fe->getFunction(), *v)) {
-        // the copy takes every variant of the function; replaceFunction() does not throw
-        fe->replaceFunction(new QoreFunction(*fe->getFunction(), QoreParseOptions(), true));
+        // the copy takes every variant of the function and keeps it injected if it is; replaceFunction() does not throw
+        QoreFunction* f = fe->getFunction();
+        fe->replaceFunction(new QoreFunction(*f, QoreParseOptions(), true, f->injected()));
     }
 
     // a variant added to a namespace that a Program owns references the mortal declarations that it names, also those
