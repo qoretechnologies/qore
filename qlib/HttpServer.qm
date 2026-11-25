@@ -188,27 +188,44 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     connection only.
 
     The requests of an HTTP/1.x connection come one after the other on its socket, which the server keeps.  The
-    handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by sandboxed
-    code, which needs nothing more, or when the handler asked for it with
+    handler of an HTTP/1.x request gets a socket of its request when the handler object is declared by restricted
+    code (code that a sandbox governs that refuses uncontrolled APIs: see
+    @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), which needs nothing more, or when the
+    handler asked for it with
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" before it was
-    registered, or when it runs the code of objects of classes of a sandboxed Program
+    registered, or when it runs the code of objects of classes of a restricted Program
     (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()", decided for each
     request); another handler gets the connection's socket.  A @ref RestHandler::RestHandler "RestHandler" object
-    gets a socket of its request when one of its REST classes is of a class of a sandboxed Program, whoever made the
-    handler and whenever the class was added, when it is declared by sandboxed code, or when it asked for it, and
+    gets a socket of its request when one of its REST classes is of a class of a restricted Program, whoever made the
+    handler and whenever the class was added, when it is declared by restricted code, or when it asked for it, and
     gives that socket to its REST classes and their stream handlers (\c cx.socketobject).  A
     @ref RestHandler::RestHandler "RestHandler" that has the connection's socket refuses a request (\c 500, and the
-    connection is closed) whose dispatch path has a REST class or a stream handler of a sandboxed Program that its
+    connection is closed) whose dispatch path has a REST class or a stream handler of a restricted Program that its
     top-level classes did not show when the request started (one below a trusted class, one that a trusted class's
     \c subClassImpl() returns, or one added since); a trusted @ref RestHandler::RestHandler "RestHandler" whose REST
     classes are trusted but run code that is not trusted (a closure of a tenant, for example) must ask for it.
 
-    @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
-    code of a tenant) <b>must</b> call
-    @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()": without it, that
-    code gets the connection's socket, with which it can read the next request on the connection (with its
-    \c Authorization header) and write responses to other requests
+    The connection's socket, which the server gives the other handlers, is the server's
+    (@ref Qore::Socket::setServerOwned() "Socket::setServerOwned()"): restricted code may not call its methods that
+    read, write, change or poll the connection, nor close it or shut it down (\c SOCKET-SERVER-OWNED-ERROR), also
+    when a trusted handler passes it on, so such code cannot read the next request on the connection or answer
+    another one; its methods that only give information, such as @ref Qore::Socket::getPeerInfo() "getPeerInfo()",
+    are not refused.  A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted
+    calls @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()" so that the
+    code can use the request's own part of the connection
     (<a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>).
+
+    Code that a sandbox governs only for its resource limits, interrupts or I/O policy, and that may use uncontrolled
+    APIs, is trusted: a handler of such code gets the connection's socket and can use it, as any trusted handler
+    (<a href="https://github.com/qoretechnologies/qore/issues/7577">issue 7577</a>).
+
+    A request that is served for sandboxed code, such as a request of a server that sandboxed code runs, or of a
+    listener that trusted code added on behalf of sandboxed code, gets a socket of its own for any handler, as the
+    connection's socket is refused to the code that runs for it; a socket handler of such a request takes a WebSocket
+    connection or an event stream with a method for the socket of its request, as
+    @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "WebSocketHandler::startAsyncWebSocketForRequest()"
+    and @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnectionForRequest()
+    "ServerSentEventHandler::setupAsyncSseConnectionForRequest()" do.
 
     The socket of an HTTP/1.x request:
     - sends the request's own response, once and framed: a complete response with
@@ -244,7 +261,14 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
     A WebSocket handler takes over the connection of its HTTP/1.1 request, which must ask for the protocol upgrade (an
     \c Upgrade field and the \c upgrade token in its \c Connection field; a \c 101 response to another request is
     answered with \c 500), after the server sent the \c 101 response; the connection then serves no other request,
-    and is closed when the WebSocket connection ends.  The handler of an HTTP/1.1 event stream gets the connection's
+    and is closed when the WebSocket connection ends.  A WebSocket handler that gets the socket of its request does
+    not get the connection's socket: the server makes the connection's poll operation from the connection's socket
+    and keeps it, and sets up the connection with
+    @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()", which
+    gives the handler and its connection object the socket of the request; the request of a socket handler that does
+    not implement it, or of a server without asynchronous I/O, is answered with \c 500 instead of the \c 101 (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>).  The handler of an HTTP/1.1 event
+    stream gets the connection's
     socket for the stream, unless it gets the socket of its request: then the request must accept an event stream
     (\c text/event-stream in its \c Accept field; otherwise it is answered with \c 406), the server sends the
     stream's header, with <tt>Connection: close</tt>, makes the stream's poll operation from the connection's socket
@@ -360,7 +384,8 @@ log("started listener on %s", lh.desc);
     - an HTTP/1.x request whose framing is ambiguous is answered with 400 (Bad Request), or 501 (Not Implemented)
       for a transfer coding other than chunked, and the connection is closed: a request with both
       \c Transfer-Encoding and \c Content-Length, a \c Transfer-Encoding that does not end with the chunked coding
-      alone, more than one \c Host, or a header line that ends with a bare LF; a chunked body that cannot be framed,
+      alone, more than one \c Host, a header line that ends with a bare LF, or a header field line with a control
+      character other than tab; a chunked body that cannot be framed,
       such as one whose trailer section has a line that ends with a bare LF or an empty line before its end, is
       answered with 400 instead of 500; the chunked coding is recognized without regard to case and whitespace
     - an HTTP/2 or HTTP/3 request body that the server collects for a handler and whose memory cannot be allocated
@@ -5239,14 +5264,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (request_helper.h1_view) {
             request_helper.endHandlerSocket();
         }
+        # the socket of the request acts on the connection through its alias, which sandboxed code may use (qore#7338)
+        Socket real = http_connection_alias(s);
         if (request_helper.hs_state) {
-            request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state,
-                request_helper.hs_state.h1Reset(s, head, http10, handler_socket_max_timeout),
+            request_helper.handler_sock = new Http1HandlerSocket(real, request_helper.hs_state,
+                request_helper.hs_state.h1Reset(real, head, http10, handler_socket_max_timeout),
                 handler_socket_max_timeout);
         } else {
             # a new state, started for the request: its first generation
-            request_helper.hs_state = new HandlerSocketState(s, head, http10, handler_socket_max_timeout);
-            request_helper.handler_sock = new Http1HandlerSocket(s, request_helper.hs_state, 1,
+            request_helper.hs_state = new HandlerSocketState(real, head, http10, handler_socket_max_timeout);
+            request_helper.handler_sock = new Http1HandlerSocket(real, request_helper.hs_state, 1,
                 handler_socket_max_timeout);
         }
         request_helper.h1_state = 0;
@@ -5453,9 +5480,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # runs the code of other objects (such as the REST classes of a RestHandler) can get objects of classes of
             # a sandboxed Program at any time: decided again for each request, which costs a native call, and a call
             # of the handler for one that runs the code of other objects
+            # a request that is served for sandboxed code (of a server that sandboxed code runs, or of a listener
+            # that was added for it) gets a socket of its own as well: the connection's socket is refused to code
+            # that runs for sandboxed code (qore#7338)
+            # restricted code only: code that a sandbox governs only for its resource limits, interrupts or I/O policy,
+            # and that may use uncontrolled APIs, is trusted and gets the connection's socket (qore#7577)
             if (!handler_socket_view && handler && !is_multiplexed) {
-                handler_socket_view = SandboxManager::isFromSandboxedProgram(handler)
-                    || (hosts_code && handler.hostsSandboxedCode());
+                handler_socket_view = SandboxManager::isFromRestrictedProgram(handler)
+                    || (hosts_code && handler.hostsSandboxedCode())
+                    || SandboxManager::isRestricted();
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
                 startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
@@ -5471,9 +5504,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
             }
 
+            # the methods of a handler of restricted code get the request without its credentials (qore#7303)
+            bool restricted_handler = handler && handler.handlerCodeIsRestricted();
+            request_helper.restricted_handler = restricted_handler;
+            # the helper of a persistent connection serves each of its requests: no earlier request's changes are
+            # kept (qore#7303)
+            remove request_helper.platform_changes;
+
             if (handler && http_get_field(hdr, "expect")) {
                 if (http_get_field(hdr, "expect") == "100-continue") {
-                    hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
+                    hash<HttpResponseInfo> resp = restricted_handler
+                        ? handler.handleExpectHeader(handler.withholdCredentialsForDispatch(cx, hdr).cx,
+                            handler.withholdCredentialsForDispatch(cx, hdr).hdr)
+                        : handler.handleExpectHeader(cx, hdr);
                     # 100-continue is an intermediate response that must be sent directly on the
                     # socket before the client sends the body.  Do NOT route through sendReply()
                     # or doResponse() because those capture to async_response_out, which would
@@ -5517,7 +5560,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # Check if handler wants body streaming (bidi) for HTTP/2 or HTTP/3
             bool want_streaming = cx."header-info".body_streaming
                 && handler
-                && handler.wantsBodyStreaming(cx, hdr);
+                && http_handler_wants_body_streaming(handler, restricted_handler, cx, hdr);
 
             # an HTTP/1.x body with a Content-Length that a stream handler wants as a stream (qore#7308): decided
             # here, on the handler thread, also for a body that the server read before the request was dispatched,
@@ -5529,7 +5572,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler.stream
                 && !http_get_field(hdr, "transfer-encoding")
                 && http_parse_content_length(http_get_field(hdr, "content-length")) > 0
-                && handler.wantsBodyStreaming(cx, hdr);
+                && http_handler_wants_body_streaming(handler, restricted_handler, cx, hdr);
 
             # the request body, read in a method of its own so that its locals and early returns are not part of the
             # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
@@ -5575,12 +5618,26 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # stream that it is sent on, the socket given to an SSE or WebSocket connection) depend only on the
                 # server's own values, also if the handler keeps the reference (qore#6953)
                 hash<auto> handler_cx = cx;
+                # what the handler's trusted authenticator added to the context and the handler's code does not get
+                # (qore#7303)
+                *hash<auto> platform_changes;
 
                 # preform any pre-processing on the request that can aid in authentication and has to be performed to
                 # handle the request anyway
                 *hash<HttpResponseInfo> ah;
                 try {
-                    ah = handler.preprocessRequest(hview, \hdr, \handler_cx);
+                    if (restricted_handler) {
+                        # a copy without the credentials of the request, whose changes are taken over
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(handler_cx,
+                            hdr);
+                        hash<auto> fhdr = filtered.hdr;
+                        hash<auto> fcx = filtered.cx;
+                        ah = handler.preprocessRequest(hview, \fhdr, \fcx);
+                        hdr = http_merge_handler_changes(hdr, filtered.hdr, fhdr);
+                        handler_cx = http_merge_handler_changes(handler_cx, filtered.cx, fcx);
+                    } else {
+                        ah = handler.preprocessRequest(hview, \hdr, \handler_cx);
+                    }
                 } catch (hash<ExceptionInfo> ex) {
                     # log the error
                     string desc = sprintf("Handler %y preprocessing error from %s: ", cx.handler_name,
@@ -5598,7 +5655,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        ah = handler.authenticateRequest(hview, hdr, \handler_cx);
+                        if (restricted_handler && handler.handlerClassIsRestricted()) {
+                            # the handler's trusted authenticator consumes the credentials of the raw request; the
+                            # code of the handler gets the request without them (qore#7303); a handler of a trusted
+                            # class that serves a request for restricted code authenticates it itself, as before
+                            ah = handler.authenticateRestrictedRequest(hview, hdr, \handler_cx, \platform_changes);
+                            request_helper.platform_changes = platform_changes;
+                        } else {
+                            ah = handler.authenticateRequest(hview, hdr, \handler_cx);
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         # log the error
                         string desc = sprintf("Handler %y authentication error from %s: ", cx.handler_name,
@@ -5655,7 +5720,23 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # the socket that the handler gets (qore#6953); that of an HTTP/1.1 request ends when the
                     # handler's code returns, before the server sends the response and reads the next request on the
                     # connection (qore#7305)
-                    hash<auto!> hrv = handler.handleRequest(hview, request_helper.handler_sock ?? s, cx, hdr, body);
+                    # a handler whose class is of a restricted Program, which trusted code serves the request to, gets
+                    # the request without its credentials (fails closed); the rest of its context is its own, as
+                    # before.  The code of the handler's base class filters what it dispatches to restricted code in
+                    # the other cases: a trusted handler that asks for it, and a request that is served for restricted
+                    # code (of a server that restricted code runs, or of a listener that was added for it), which is
+                    # that code's own (qore#7303)
+                    hash<auto!> hrv;
+                    if (restricted_handler) {
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                            platform_changes);
+                        hrv = handler.handleRequest(hview,
+                            request_helper.handler_sock ?? http_handler_connection_socket(s), filtered.cx,
+                            filtered.hdr, body);
+                    } else {
+                        hrv = handler.handleRequest(hview,
+                            request_helper.handler_sock ?? http_handler_connection_socket(s), cx, hdr, body);
+                    }
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }
@@ -6367,14 +6448,27 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             }
                         }
 
-                        hash<auto> sock_cx = cx + {"listener": listener.getHandlerView(), "id": sock_id};
+                        # the code that a handler of restricted code starts gets the request without its credentials
+                        # (qore#7303)
+                        hash<auto> sock_hdr = hdr;
+                        hash<auto> sock_cx;
+                        if (request_helper.restricted_handler) {
+                            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                                request_helper.platform_changes);
+                            sock_cx = filtered.cx;
+                            sock_hdr = filtered.hdr;
+                        } else {
+                            sock_cx = cx;
+                        }
+                        sock_cx += {"listener": listener.getHandlerView(), "id": sock_id};
                         hash<auto> ends = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id, cx.handler_name,
                             pend);
                         sock_cx."header-info".ws_end = ends.end;
                         sock_cx."header-info".ws_end_hold = ends.hold;
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                         sock_cx."header-info".ws_submit = getHandlerPoolSubmitter();
-                        if (sockhandler.start(listener.getID(), sock_cx, hdr, request_helper.handler_sock ?? s)) {
+                        if (sockhandler.start(listener.getID(), sock_cx, sock_hdr,
+                                request_helper.handler_sock ?? http_handler_connection_socket(s))) {
                             request_helper.setDedicatedExternal();
                         }
                     } catch (hash<ExceptionInfo> ex) {
@@ -6435,6 +6529,23 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 logViaHandlerIfPossible(handler, cx.id, err);
                 throw "WEBSOCKET-HANDLER-ERROR", err;
             } else {
+                # a handler that gets the socket of its request (see AbstractHttpRequestHandler::needsHandlerSocketView(),
+                # as for a handler declared by sandboxed code) does not get the connection's socket for the WebSocket
+                # connection: the server makes the connection's poll operation and keeps it, and the handler sets up
+                # the connection with startAsyncWebSocketForRequest() (WebSocketHandler) and the socket of the request;
+                # a handler that cannot gets no connection, and the request is answered with an error before the 101
+                # (qore#7476)
+                bool socket_view = exists request_helper.handler_sock && !cx."header-info".http2
+                    && !cx."header-info".http3;
+                if (socket_view && (!asyncIo || !handler.hasCallableMethod("startAsyncWebSocketForRequest"))) {
+                    string err = sprintf("101 Switching Protocols returned from handler %y (class %y), which gets the "
+                        "socket of its request, but the WebSocket connection cannot be set up without the connection's "
+                        "socket: this needs the server's asynchronous I/O and a handler that implements "
+                        "startAsyncWebSocketForRequest() (WebSocketHandler)", cx.handler_name, handler.className());
+                    listener.logError("cid %d: %s", cx.id, err);
+                    logViaHandlerIfPossible(handler, cx.id, err);
+                    throw "WEBSOCKET-HANDLER-ERROR", err;
+                }
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
                     # True if the handler manages the connection after start() returns (an asynchronous HTTP/1.1
                     # WebSocket connection): the server's end of the connection (ws_end below) then runs when the
@@ -6491,11 +6602,30 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     }
 
                     # Pass poll_op and async I/O context to handler via header-info
-                    hash<auto> ws_cx = cx + {"listener": listener.getHandlerView()};
+                    # the code that a handler of restricted code starts gets the request without its credentials
+                    # (qore#7303)
+                    hash<auto> ws_hdr = hdr;
+                    hash<auto> ws_cx;
+                    if (request_helper.restricted_handler) {
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                            request_helper.platform_changes);
+                        ws_cx = filtered.cx;
+                        ws_hdr = filtered.hdr;
+                    } else {
+                        ws_cx = cx;
+                    }
+                    ws_cx += {"listener": listener.getHandlerView()};
                     # reports the end of the connection to the request's async target if the handler takes it over
                     *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
-                        ws_cx."header-info".ws_poll_op = ws_poll_op;
+                        # the poll operation of a handler that gets the socket of its request is given to
+                        # startAsyncWebSocketForRequest() only, never in the context (qore#7476)
+                        # the context has a handle of it, which gives no access to its socket, the server's alias
+                        # of the connection's socket (qore#7338)
+                        if (!socket_view) {
+                            ws_cx."header-info".ws_poll_op = new HttpServer::HttpWebSocketPollOperationHandle(
+                                ws_poll_op);
+                        }
                         # the server's end of a connection that the handler manages externally, which the handler
                         # runs when the connection ends; it holds the request helper, so the listener's count of
                         # dedicated connections (dThreads, which a stop of the listener waits for) includes the
@@ -6544,10 +6674,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # handler runs ws_end when it ends; no thread of the handler pool waits for it
                         # the WebSocket handler takes over the connection of an HTTP/1.1 request, whose own
                         # socket ended with the request (qore#7305)
-                        externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr,
-                                (cx."header-info".http2 || cx."header-info".http3)
-                                    ? (request_helper.handler_sock ?? s)
-                                    : s)
+                        externally_managed = (socket_view
+                                # the connection gets the socket of the request, whose methods give the connection's
+                                # information only (qore#7476)
+                                # the method is found by name, so it gets a handle that gives neither the poll
+                                # operation nor the connection's socket: a method of another class with the same
+                                # name gets nothing more (qore#7476)
+                                ? call_object_method(handler, "startAsyncWebSocketForRequest", listener.getID(), ws_cx,
+                                    ws_hdr, request_helper.handler_sock,
+                                    new HttpServer::HttpWebSocketPollOperationHandle(ws_poll_op))
+                                : sockhandler.start(listener.getID(), ws_cx, ws_hdr,
+                                    (cx."header-info".http2 || cx."header-info".http3)
+                                        ? (request_helper.handler_sock ?? http_handler_connection_socket(s))
+                                        : http_handler_connection_socket(s)))
                             && holder.isAccepted();
                         if (externally_managed) {
                             # the connection stays open after the request returns
@@ -6769,6 +6908,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             bool handler_close, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # the run of the response's event source, if any
         *Priv::SseEventSourceRun sse_run = rv.sse_source;
+        # the bound of the data held for the client, which a socket handler's setup applies before it registers the
+        # connection (unless it has its own); applied below to a stream that its setup left without one.  It is set
+        # before the request context of the handler's setup is copied from the context, so that the setup gets it
+        cx.sse_max_buffer_size = listener.getSseMaxBufferSize();
+        # the setup of the connection of a handler of restricted code gets the request without its credentials
+        # (qore#7303)
+        hash<auto> h_cx = cx;
+        hash<auto> h_hdr = hdr;
+        if (request_helper.restricted_handler && handler) {
+            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                request_helper.platform_changes);
+            h_cx = filtered.cx;
+            h_hdr = filtered.hdr;
+        }
         # SSE response — set up async SSE connection via the I/O controller.
         # The write path depends on the HTTP version:
         # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
@@ -6780,9 +6933,6 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         #   submitQuicStreamData()
         bool sse_is_http2 = cx."header-info".http2 ?? False;
         bool sse_is_http3 = cx."header-info".http3 ?? False;
-        # the bound of the data held for the client, which a socket handler's setup applies before it registers the
-        # connection (unless it has its own); applied below to a stream that its setup left without one
-        cx.sse_max_buffer_size = listener.getSseMaxBufferSize();
         # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
         # by the connection close anyway
         if (handler_close) {
@@ -6834,7 +6984,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
-                            handler_sock, cx, hdr, cid, session_id, stream_id, wake_cb);
+                            handler_sock, h_cx, h_hdr, cid, session_id, stream_id, wake_cb);
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http3SseStream(handler_sock, session_id, stream_id,
                             wake_cb, True);
@@ -6852,7 +7002,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
-                            handler_sock, cx, hdr, cid, stream_id, wake_cb);
+                            handler_sock, h_cx, h_hdr, cid, stream_id, wake_cb);
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http2SseStream(handler_sock, stream_id, wake_cb, True);
                     }
@@ -6991,11 +7141,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                         setup_called = True;
                         call_object_method(handler, "setupAsyncSseConnectionForRequest", request_helper.handler_sock,
-                            cx, hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
+                            h_cx, h_hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
                     }
                 } else {
                     poll_op = sock_handler
-                        ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
+                        ? call_object_method(handler, "setupAsyncSseConnection", http_handler_connection_socket(s),
+                            h_cx, h_hdr, cid)
                         # a handler that is not a socket handler gets the stream from the server, for its event
                         # source
                         : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
@@ -7836,7 +7987,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     hash<HttpServerAsyncIo::HttpRequestResultInfo> processInlineRequest(Socket sock, hash<auto> cx,
             hash<auto> hdr, AbstractHttpRequestHandler handler, hash<auto> header_info) {
         try {
-            hash<HttpResponseInfo> resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            # a handler of restricted code gets the request without its credentials (qore#7303)
+            hash<HttpResponseInfo> resp;
+            if (handler.handlerCodeIsRestricted()) {
+                hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr);
+                resp = handler.handleInlineRequest(filtered.cx, filtered.hdr, NOTHING);
+            } else {
+                resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            }
             # the handler released the last reference to the server, whose stop closed the connections: the request
             # has no response to give (qore#6508)
             if (!serv) {
@@ -8367,7 +8525,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) [dom=PROCESS_CONTROL] {
         SandboxManager::checkProcessWideRegistration("set the stopping hook of HTTP listeners");
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set the stopping hook of HTTP listeners from a context with restricted "
                 "process control";
         }
@@ -9906,8 +10065,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Send a 200 OK response and exit the loop; the on_exit
                 # block will call phi.clear() → persistentClosed() →
                 # release any handler-held context.
+                # a handler of restricted code gets the header fields of the request without its credentials, as
+                # its other methods do (qore#7303)
                 if (phi.handler
-                        && phi.handler.isPersistentSessionEndRequest(req_hdr)) {
+                        && phi.handler.isPersistentSessionEndRequest(phi.handler.handlerCodeIsRestricted()
+                            ? phi.handler.withholdCredentialsForDispatch({}, req_hdr).hdr
+                            : req_hdr)) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;
@@ -10433,6 +10596,65 @@ class HttpListenerHandlerView inherits HttpServer::HttpListenerInterface {
     }
 }
 
+#! Returns the alias of a connection's socket for the sockets of requests, or the socket if it is not the server's
+/** The server marks the sockets of the connections that it accepts (Socket::setServerOwned()) and does its own I/O on
+    them through their aliases; the sockets of the requests of handlers, which sandboxed code may use, act on the
+    connection through the alias, which the server keeps in their private state only (qore#7338)
+*/
+Socket sub http_connection_alias(Socket s) {
+    return s.isServerOwned() ? s.getServerAlias() : s;
+}
+
+#! Returns the handler's wantsBodyStreaming(), with the request without its credentials for a handler of restricted
+#! code (qore#7303)
+bool sub http_handler_wants_body_streaming(AbstractHttpRequestHandler handler, bool restricted, hash<auto> cx,
+        hash<auto> hdr) {
+    if (restricted) {
+        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr);
+        return handler.wantsBodyStreaming(filtered.cx, filtered.hdr);
+    }
+    return handler.wantsBodyStreaming(cx, hdr);
+}
+
+#! Returns the raw value with the changes that a handler made to its copy without the credentials of the request
+/** A key whose value the handler did not change keeps its raw value (with the credentials), a key that the handler
+    changed or added gets the handler's value, a key that the handler removed is removed, and a key that the copy
+    did not have (a credential that was withheld) keeps its raw value (qore#7303)
+
+    @param raw the raw value
+    @param filtered the copy that the handler got
+    @param changed the copy after the handler's code
+*/
+hash<auto> sub http_merge_handler_changes(hash<auto> raw, hash<auto> filtered, hash<auto> changed) {
+    hash<auto> rv = {};
+    foreach string key in (keys changed) {
+        rv{key} = (filtered.hasKey(key) && changed{key} === filtered{key}) ? raw{key} : changed{key};
+    }
+    foreach string key in (keys raw) {
+        if (!filtered.hasKey(key)) {
+            rv{key} = raw{key};
+        }
+    }
+    return rv;
+}
+
+#! Returns the socket of a connection that handler code gets: the connection socket for the server's alias of it
+/** The server does its own I/O on a connection through the alias of its socket (Socket::getServerAlias()); handler
+    code gets the connection socket, which sandboxed code may not use (qore#7338)
+
+    @throw SOCKET-CLOSED the connection socket was deleted
+*/
+Socket sub http_handler_connection_socket(Socket s) {
+    if (!s.isServerAlias()) {
+        return s;
+    }
+    *Socket conn = s.getServerSocket();
+    if (!conn) {
+        throw "SOCKET-CLOSED", "the connection's socket was deleted";
+    }
+    return conn;
+}
+
 #! Returns the socket of a request as the code of its handler gets it (qore#6953)
 /** Decided by the transport: for a QUIC socket, the listener's, shared by all its HTTP/3 sessions, an
     Http3HandlerSocket for the request's own session and stream; for an HTTP/2 connection's socket, shared by all its
@@ -10462,7 +10684,8 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper
             throw "HTTP3-HANDLER-SOCKET-ERROR", "the socket of an HTTP/3 request is given to its handler only for "
                 "its own session and stream";
         }
-        return new Http3HandlerSocket(s, header_info.session_id, header_info.stream_id, st);
+        return new Http3HandlerSocket(http_connection_alias(s), header_info.session_id,
+            header_info.stream_id, st);
     }
     # an HTTP/2 connection's requests share its socket (qore#7214); decided by the server's own header information of
     # the request, made by the connection's HTTP/2 transport: Socket::isHttp2() queries the connection's TLS state,
@@ -10472,9 +10695,9 @@ Socket sub http_handler_socket(Socket s, *hash<auto> header_info, *RequestHelper
             throw "HTTP2-HANDLER-SOCKET-ERROR", "the socket of an HTTP/2 request is given to its handler only for "
                 "its own stream";
         }
-        return new Http2HandlerSocket(s, header_info.stream_id, st);
+        return new Http2HandlerSocket(http_connection_alias(s), header_info.stream_id, st);
     }
-    return s;
+    return http_handler_connection_socket(s);
 }
 
 #! The socket of an HTTP/3 request as the code of its handler sees it (qore#6953)
@@ -11484,16 +11707,17 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     #! Aborts the connection: the client sees it closed, without the rest of the response, and the server drops it
-    /** For code that is not sandboxed only, as when a server ends a response midway to tell the client that it is
+    /** For code that is not restricted only, as when a server ends a response midway to tell the client that it is
         truncated; the server's response, if any, is then not sent, and the connection serves no other request.  A
-        connection that the client already closed is not an error.
+        connection that the client already closed is not an error.  Code that a sandbox governs only for its resource
+        limits, interrupts or I/O policy, and that may use uncontrolled APIs, is trusted and can call it (qore#7577).
 
-        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is sandboxed (see
-        @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), or the request ended
+        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is restricted (see
+        @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), or the request ended
     */
     nothing abortConnection() {
-        # a sandboxed caller cannot end the connection, also when it calls through code that is not sandboxed
-        if (SandboxManager::isSandboxed()) {
+        # a restricted caller cannot end the connection, also when it calls through code that is not restricted
+        if (SandboxManager::isRestricted()) {
             throw "HTTP-HANDLER-SOCKET-ERROR", "Socket::abortConnection() cannot be called by sandboxed code on the "
                 "socket of an HTTP/1.x request";
         }
@@ -12669,7 +12893,10 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         }
         HttpListener listener = cast<HttpListener>(info.listener);
         *AbstractHttpRequestHandler handler = listener.findHandlerForInlineCheck(info.hdr);
-        if (!handler || !handler.canHandleInline(info.cx, info.hdr)) {
+        if (!handler || !(handler.handlerCodeIsRestricted()
+                ? handler.canHandleInline(handler.withholdCredentialsForDispatch(info.cx, info.hdr).cx,
+                    handler.withholdCredentialsForDispatch(info.cx, info.hdr).hdr)
+                : handler.canHandleInline(info.cx, info.hdr))) {
             return NOTHING;
         }
         return listener.processInlineRequest(info.sock, info.cx, info.hdr, handler, info.header_info);
@@ -13360,6 +13587,18 @@ thread_local *RequestHelper current_request;
 */
 class RequestHelper {
     public {
+        #! True if the request's handler is of restricted code (AbstractHttpRequestHandler::handlerCodeIsRestricted())
+        /** Its methods get the request without its credentials, also the code that a socket handoff of its response
+            starts (qore#7303)
+        */
+        bool restricted_handler;
+
+        #! What the trusted authenticator of a handler of restricted code added to the request context (qore#7303)
+        /** As AbstractHttpRequestHandler::authenticateRestrictedRequest() returns it, for
+            AbstractHttpRequestHandler::withholdCredentialsForDispatch()
+        */
+        *hash<auto> platform_changes;
+
         #! if True, the request's INFO messages are logged
         /** decided once when the request starts, as the check costs a call to the logger for each message; a change
             of the log level applies from the next request

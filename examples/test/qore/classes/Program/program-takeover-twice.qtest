@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramTakeoverTwiceTest
+
+#! Tests a second take-over of a Program object that a call took over already
+/** The calls that take over a Program object (as the container of a user module, or the object they are called on)
+    delete the object; a second take-over of the same object, or a take-over of an object deleted with \c delete, must
+    raise OBJECT-ALREADY-DELETED and must not use the private data of the deleted object, which the deletion freed
+    (qore#7528).
+*/
+class ProgramTakeoverTwiceTest inherits QUnit::Test {
+    public {
+        #! the module that the calls load: it does not exist, but each call takes over its Program object first
+        const NoModule = "program-takeover-twice-no-such-module";
+
+        #! the calls that take over a Program object
+        const TakeForms = (
+            "load_user_module_with_program",
+            "loadUserModuleWithProgram",
+            "loadUserModuleWithProgramWarn",
+            "loadApplyToUserModule",
+            "loadApplyToUserModuleWarn",
+            "loadApplyToPrivateUserModule",
+            "loadApplyToPrivateUserModuleWarn",
+        );
+    }
+
+    constructor() : QUnit::Test("program takeover twice", "1.0", \ARGV) {
+        addTestCase("takeover twice", \takeoverTwiceTest());
+        addTestCase("takeover of a deleted object", \takeoverDeletedTest());
+        set_return_value(main());
+    }
+
+    #! takes over the Program object with the given call; returns "ok" or the exception code
+    static string take(string form, Program p) {
+        try {
+            switch (form) {
+                case "load_user_module_with_program":
+                    load_user_module_with_program(NoModule, p);
+                    break;
+                case "loadUserModuleWithProgram": {
+                    Program t();
+                    t.loadUserModuleWithProgram(NoModule, p);
+                    break;
+                }
+                case "loadUserModuleWithProgramWarn": {
+                    Program t();
+                    t.loadUserModuleWithProgramWarn(NoModule, p);
+                    break;
+                }
+                case "loadApplyToUserModule":
+                    p.loadApplyToUserModule(NoModule);
+                    break;
+                case "loadApplyToUserModuleWarn":
+                    p.loadApplyToUserModuleWarn(NoModule);
+                    break;
+                case "loadApplyToPrivateUserModule":
+                    p.loadApplyToPrivateUserModule(NoModule);
+                    break;
+                case "loadApplyToPrivateUserModuleWarn":
+                    p.loadApplyToPrivateUserModuleWarn(NoModule);
+                    break;
+                default:
+                    throw "UNKNOWN-FORM", form;
+            }
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns "ok" or the exception code of a call on the Program object
+    static string use(Program p) {
+        try {
+            p.getProgramId();
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    takeoverTwiceTest() {
+        foreach string first in (TakeForms) {
+            foreach string second in (TakeForms) {
+                string label = sprintf("%s then %s", first, second);
+                Program p();
+                # the first call takes the object over and deletes it; the module does not exist
+                assertEq("LOAD-MODULE-ERROR", take(first, p), label + ": first call");
+                assertEq("OBJECT-ALREADY-DELETED", use(p), label + ": object deleted");
+                # the second call finds the object deleted
+                assertEq("OBJECT-ALREADY-DELETED", take(second, p), label + ": second call");
+                assertEq("OBJECT-ALREADY-DELETED", use(p), label + ": object still deleted");
+            }
+        }
+    }
+
+    takeoverDeletedTest() {
+        foreach string form in (TakeForms) {
+            Program p();
+            # the other reference keeps the deleted object
+            Program q = p;
+            delete p;
+            assertEq("OBJECT-ALREADY-DELETED", take(form, q), form);
+        }
+    }
+}

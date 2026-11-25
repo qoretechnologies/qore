@@ -96,6 +96,7 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
         addTestCase("data that ends before the end of the body", \endOfDataTest());
         addTestCase("a chunk larger than the limit or the memory", \largeChunkTest());
         addTestCase("closing the socket", \closeTest());
+        addTestCase("an accept that waits for the connection", \acceptWaitsTest());
         set_return_value(main());
     }
 
@@ -311,6 +312,62 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
         assertFalse(conn.unfinishedHttpChunkedBody());
     }
 
+    #! the accept is made first and waits for the connection, which the listener's readiness then wakes it for
+    /** The other cases accept a connection whose client has connected (normally already in the listener's backlog).
+        Here the client connects only once the accept has made its first step, which found no connection, and the
+        listener's descriptor is registered, so that the accept is woken by the readiness of the listener whatever the
+        scheduling of the threads (qore#7480)
+    */
+    acceptWaitsTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_socket_wait_controller_op() requires a debug build");
+        }
+        Counter go(1);
+        # the client connects only after go is decremented; it is decremented on every exit path, so that the
+        # client thread and the accept thread end
+        on_exit if (go.getCount()) {
+            go.dec();
+        }
+        hash<auto> client = startClient(Reader::String, (Body + NextRequest,), NOTHING, NOTHING, go);
+        on_exit client.done.dec();
+        Socket server = client.server;
+
+        Queue accepted();
+        background sub () {
+            try {
+                # the limit only guards against a hang
+                accepted.push(server.accept(60s));
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(ex);
+            }
+        }();
+
+        # the accept's operation is in the cache of its I/O thread
+        assertTrue(call_function("dbg_socket_wait_controller_op", server, 60s), "the accept waits on the controller");
+        # the iteration that took the operation into its cache has taken its first step (waitForProcessing() returns
+        # once the iteration has queued the step) and registered the listener's descriptor: the controller processes
+        # a getInfo() round trip only after that iteration
+        assertTrue(AsyncIoController::waitForProcessing(60s), "the controller processes the accept");
+        AsyncIoController::getInfo();
+
+        # the client connects now: the listener's readiness wakes the accept
+        go.dec();
+        auto result = accepted.get(60s);
+        if (result.typeCode() == NT_HASH) {
+            hash<ExceptionInfo> ex = result;
+            throw ex.err, ex.desc, ex.arg;
+        }
+        assertEq(Type::Object, result.type(), "the accept returns the connection");
+        Socket conn = result;
+        on_exit conn.close();
+        *hash<ExceptionInfo> ex = readBody(conn, Reader::String, 5s);
+        assertNothing(ex);
+        assertFalse(conn.unfinishedHttpChunkedBody());
+        hash<auto> hdr = conn.readHTTPHeader(5s);
+        assertEq("GET", hdr.method);
+        assertEq("/next", hdr.path);
+    }
+
     #! checks that no header is read on the socket, without waiting for data
     private checkRefused(Socket conn, string label) {
         if (!conn.isOpen()) {
@@ -375,11 +432,13 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
     /** @param parts the parts to send; each part after the first is sent once \a wait is zero
         @param wait a counter that the parts after the first wait for
         @param close if True, the client closes the connection after the parts
+        @param go if given, the client connects once it is zero, and the call returns at once; otherwise the call
+        returns once the client has connected
 
         @return a hash with the listening socket in \c server and a Counter in \c done that the caller decrements
         when it has finished reading
     */
-    private hash<auto> startClient(Reader reader, list<string> parts, *Counter wait, *bool close) {
+    private hash<auto> startClient(Reader reader, list<string> parts, *Counter wait, *bool close, *Counter go) {
         if (reader == Reader::Pipeline) {
             parts[0] = PipelineHeader + parts[0];
         }
@@ -389,10 +448,25 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
         hash<auto> info = server.getSocketInfo(False);
 
         Counter done(1);
+        # the client reports its connection (or the error of its connection attempt): the server accepts it only
+        # then, so that the accept normally finds the connection in the listener's backlog whatever the scheduling
+        # of the client's thread; the return of the connect does not strictly guarantee that the server's side has
+        # queued it, and an accept that does not find it waits and is woken by the listener's readiness (qore#7480)
+        Queue connected();
         background sub () {
             try {
+                if (go) {
+                    # the limit only guards against a hang
+                    go.waitForZero(60s);
+                }
                 Socket client();
-                client.connectINET(info.address, info.port, 10s, info.family);
+                try {
+                    client.connectINET(info.address, info.port, 10s, info.family);
+                } catch (hash<ExceptionInfo> ex) {
+                    connected.push(ex);
+                    rethrow;
+                }
+                connected.push(True);
                 foreach string part in (parts) {
                     if ($# && wait) {
                         wait.waitForZero(10s);
@@ -408,6 +482,15 @@ class SocketUnfinishedChunkedBodyTest inherits QUnit::Test {
                 printf("client error: %s\n", get_exception_string(ex));
             }
         }();
+        if (go) {
+            return {"server": server, "done": done};
+        }
+        # the limit only guards against a hang
+        auto connect_result = connected.get(60s);
+        if (connect_result.typeCode() == NT_HASH) {
+            hash<ExceptionInfo> ex = connect_result;
+            throw ex.err, ex.desc, ex.arg;
+        }
         return {"server": server, "done": done};
     }
 }

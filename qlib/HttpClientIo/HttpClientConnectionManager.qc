@@ -468,6 +468,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             for its borrower
         */
         *HttpClientCreatorProof lent_proof;
+
+        #! The ID of the Program whose code owns the manager, if known (qore#7544)
+        /** The creator of the manager, or the code that took the proof that it was created with: the code of that
+            Program takes the sockets of the manager's connections, which other code that the manager is lent to and
+            that a sandbox restricts does not (see @ref HttpClientIo::HttpClientConnection::getSocket()
+            "HttpClientConnection::getSocket()")
+        */
+        *int owner_pgm_id;
     }
 
     #! Creates a new connection manager with the given options
@@ -478,6 +486,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         HttpClientConnectionManager::checkCreator(opts);
+        owner_pgm_id = SandboxManager::getCallerProgramId();
         initManager(opts);
     }
 
@@ -518,6 +527,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # the manager is the creator's: its creator is not bound, but a restricted borrower of the client is
             lent_proof = proof;
         }
+        # the manager is the code's that took the proof: the client's creator (qore#7544)
+        owner_pgm_id = proof.getOwnerProgramId();
         initManager(opts);
     }
 
@@ -678,11 +689,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         \c FILESYSTEM and CA certificate locations are given
     */
     private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
                 "certificate locations, as it is restricted from the FILESYSTEM functional domain";
         }
@@ -713,7 +724,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     "locations";
             }
         }
-        return new HttpClientCallerExemption();
+        # the connection is the owner's of the manager (qore#7544)
+        return new HttpClientCallerExemption(owner_pgm_id);
     }
 
     #! Destructor - closes all connections
@@ -826,18 +838,52 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         session-scoped (not per request) so it works no matter which thread issues a request.  This
         manager is per remote connection, so the pin only affects that connection's own traffic.
 
+        The pin carries every request of the manager, so code that a sandbox restricts and whose %Program does not
+        own the manager cannot set it, and a connection that restricted code took out of the pool is never pinned
+        (qore#7544).
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager, or
+        restricted code took the connection
+
         @since HttpClientIo 1.0
     */
     pinConnection(HttpClientConnection conn) {
+        checkPinCaller();
+        if (conn.isTaken()) {
+            throw "PERMISSION-DENIED", "a connection that code that a sandbox restricts took out of the pool cannot be "
+                "pinned";
+        }
         AutoLock al(pin_lock);
         pinned_conn = conn;
     }
 
     #! Clears the persistent-session connection pin
-    /** @since HttpClientIo 1.0 */
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7544)
+
+        @since HttpClientIo 1.0
+    */
     unpinConnection() {
+        checkPinCaller();
         AutoLock al(pin_lock);
         remove pinned_conn;
+    }
+
+    #! Raises an exception if restricted code that does not own the manager changes its pin (qore#7544)
+    private:internal checkPinCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot change the pinned connection of a "
+                "connection manager that it does not own";
+        }
     }
 
     #! Returns the pinned persistent-session connection, or @ref nothing
@@ -1045,6 +1091,26 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
         stale connections transparently.
+        @note An HTTP/1.1 request that asks for a protocol upgrade with an \c Upgrade header and is answered with a
+        \c 101 response ends with it: @ref HttpClientStreamHandle::readData() "readData()" returns the \c 101 response
+        header and then the end of the stream at once (since HttpClientIo 1.0, qore#7487), as the response has no
+        content.  The connection, whose data is no longer HTTP, then belongs to the caller: the manager never gives it
+        to another request, and the caller takes its socket over with \c getConnection().getSocket() (see
+        @ref HttpClientStreamHandle::getConnection() and @ref HttpClientConnection::getSocket()) to use the new
+        protocol, as the WebSocketClient module does, and ends it with \c getConnection().close() (see
+        @ref HttpClientConnection::close()), which closes the socket.  A stream handle that is released before its
+        caller took the socket over closes the connection, which the manager then removes from its pool (since
+        HttpClientIo 1.0, qore#7500), as does one released before the response to a request that asked for an
+        upgrade has arrived.  A request body streamed with \a body_streaming
+        that is not complete when the \c 101 response arrives must still be completed (RFC 9110 section 7.8), with
+        @ref HttpClientStreamHandle::sendData() "sendData()": the data given before the response is sent before the
+        end of the stream is delivered, and @ref HttpClientStreamHandle::sendData() "sendData()" writes the rest of
+        the body, also after the end of the stream, to the socket in the calling thread (since HttpClientIo 1.0,
+        qore#7503); the caller completes the body before it sends any data of the new protocol on the socket it takes
+        over.  @ref HttpClientStreamHandle::sendData() "sendData()" raises \c HTTPCLIENT-STATE-ERROR for data given
+        after the end of the body, as it does after a \c 101 response with which the body was complete or could not
+        be completed.  The requests that return the response instead of the
+        stream (@ref request(), @ref requestAsync(), @ref openStream()) close the connection after a \c 101 response.
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
@@ -1576,6 +1642,26 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 logRedirect(rf, resp.status_code, resp.headers);
                 rf.follow(resp.status_code, resp.status_message, resp.headers);
                 continue;
+            }
+            # a 101 response, to a request that asked for a protocol upgrade, has no content: the end of the stream,
+            # which follows it at once, is read, and the connection, which is no longer HTTP, is closed, as the
+            # response stream gives no way to use it (qore#7487)
+            if (resp.status_code == 101) {
+                while (!ended) {
+                    auto d = sh.readData(wait > 0 ? wait : NOTHING);
+                    if (!exists d) {
+                        throw "HTTPCLIENT-TIMEOUT", sprintf("the end of the 101 response from %y was not received "
+                            "within %d ms", request_url, wait);
+                    }
+                    if (d.typeCode() == NT_HASH && (d.end_stream || d.error)) {
+                        ended = True;
+                    }
+                }
+                try {
+                    sh.getConnection().cancelRequest(sh.getStreamId());
+                } catch (hash<ExceptionInfo> ex) {
+                    # the connection is already closed
+                }
             }
             keep = True;
             return new HttpClientResponseStream(sh, resp, request_url,
@@ -2595,7 +2681,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Applies the connection's credential policy to a REST client copy sharing this transport
     nothing checkTlsCredentialCopy(string url) {
-        if (origin_tls_credentials.file_backed && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if (origin_tls_credentials.file_backed && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "ILLEGAL-FILESYSTEM-ACCESS", "copying a REST client with TLS credential paths requires filesystem access";
         }
         HttpClientConnectionManager::checkTlsCredentialOrigin(url);
@@ -2674,7 +2760,9 @@ printf("%d connection(s) migrated\n", migrated);
         if (bound_proof) {
             return bound_proof;
         }
-        return lent_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
+        # the borrower counts also when it calls through the method of a lent object, whose capability frame lends
+        # nothing here (qore#7052): a restricted borrower is always bound to the proof (fail closed)
+        return lent_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
@@ -3349,7 +3437,7 @@ printf("%d connection(s) migrated\n", migrated);
         # directly to setUserTimeout(int).
         if (opts.tcp_user_timeout > 0) {
             try {
-                conn.getSocket().setUserTimeout(opts.tcp_user_timeout);
+                (HttpClientIoSocketAccess::socketOf(conn.getPollOperation())).setUserTimeout(opts.tcp_user_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG,
                     "TCP_USER_TIMEOUT could not be applied: %s: %s",
@@ -4808,7 +4896,9 @@ printf("%d connection(s) migrated\n", migrated);
     private submitConnectionToController(string key, HttpClientConnection conn,
             bool initial = True) {
         HttpClientPollOperation op = conn.getPollOperation();
-        Socket sock = conn.getSocket();
+        # the socket of the poll operation, the object that HttpClientConnection::getSocket() returns as well, which
+        # a caller takes over with it after a 101 response (qore#7500)
+        Socket sock = HttpClientIoSocketAccess::socketOf(conn.getPollOperation());
         string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
@@ -5529,7 +5619,9 @@ printf("%d connection(s) migrated\n", migrated);
         if (conn.getConnectionState() == HttpClientConnectionState::Connecting) {
             return True;
         }
-        if (!conn.getSocket().isOpen()) {
+        # the socket of the poll operation: HttpClientConnection::getSocket() takes the socket of a connection whose
+        # protocol is switched over from its stream (qore#7500)
+        if (!HttpClientIoSocketAccess::socketOf(conn.getPollOperation()).isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
                 conn.getConnectionId());
             return False;

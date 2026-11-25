@@ -1325,7 +1325,7 @@ bool QoreHashNode::getKeyAsBool(const char* key, bool &found) const {
 }
 
 void QoreHashNode::deleteKey(const QoreString* key, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     QoreHashKeyHelper tmp(*key, xsink);
     if (*xsink) {
         return;
@@ -1344,12 +1344,12 @@ QoreValue qore_hash_private::takeRemovedKey(const char* key, ExceptionSink* xsin
 }
 
 QoreValue QoreHashNode::takeKeyValue(const char* key) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     return priv->takeKeyValueIntern(key);
 }
 
 void QoreHashNode::removeKey(const QoreString* key, ExceptionSink* xsink) {
-   assert(reference_count() == 1);
+   assert(reference_count() == 1 || priv->weakChangeAllowed());
    QoreHashKeyHelper tmp(*key, xsink);
    if (*xsink)
       return;
@@ -1358,7 +1358,7 @@ void QoreHashNode::removeKey(const QoreString* key, ExceptionSink* xsink) {
 }
 
 int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
     if (!priv->valid) {
         if (xsink) {
@@ -1374,7 +1374,7 @@ int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* x
 }
 
 int qore_hash_private::setKeyValueCanonical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink) {
-    assert(hash.reference_count() == 1);
+    assert(hash.reference_count() == 1 || hash.priv->weakChangeAllowed());
     // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
     if (!hash.priv->valid) {
         if (xsink) {
@@ -1391,7 +1391,7 @@ int qore_hash_private::setKeyValueCanonical(QoreHashNode& hash, const char* key,
 
 int qore_hash_private::setKeyValueLexical(QoreHashNode& hash, const char* key, QoreValue value, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) {
-    assert(hash.reference_count() == 1);
+    assert(hash.reference_count() == 1 || hash.priv->weakChangeAllowed());
     // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
     if (!hash.priv->valid) {
         if (xsink) {
@@ -1419,7 +1419,7 @@ int QoreHashNode::setKeyValue(const QoreString& key, QoreValue value, ExceptionS
 }
 
 QoreValue& QoreHashNode::getKeyValueReference(const char* key) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     return priv->getValueRef(key);
 }
 
@@ -1548,12 +1548,12 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
 }
 
 void QoreHashNode::deleteKey(const char* key, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     priv->deleteKey(key, xsink);
 }
 
 void QoreHashNode::removeKey(const char* key, ExceptionSink* xsink) {
-    assert(reference_count() == 1);
+    assert(reference_count() == 1 || priv->weakChangeAllowed());
     return priv->removeKey(key, xsink);
 }
 

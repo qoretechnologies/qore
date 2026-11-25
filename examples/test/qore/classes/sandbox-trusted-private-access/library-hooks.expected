@@ -1,0 +1,9 @@
+rest-other-private: parse: PARSE-EXCEPTION: illegal access to private method 'errorResponseHeaders' of class 'RestHandler' in class 'R': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+rest-other-private-base-call: parse: PARSE-EXCEPTION: illegal access to private method 'errorResponseHeaders' of class 'RestHandler' in class 'R': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+processor-other-private: parse: PARSE-EXCEPTION: illegal access to private method 'supportsBulkApiImpl' of class 'AbstractDataProcessor' in class 'P': a class declared by sandboxed code cannot use the private declarations of a class declared by trusted code, which are private:internal for it
+processor private overrides: OK [2, 3, 4, "flushed"]
+processor public override: OK [10, 20, 30]
+processor public override called: OK [40]
+schema hooks: OK ["tenant-schema", "1.0", ["t1"]]
+rest override and base call: OK {code: 409, tenant: "yes"}
+rest other private: METHOD-DOES-NOT-EXIST: no method R::errorResponseHeaders() has been defined and no pseudo-method <object>::errorResponseHeaders() is available (class lang: Qore)

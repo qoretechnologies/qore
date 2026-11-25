@@ -34,6 +34,11 @@ class DataStackGuardBase inherits StackGuardCaseTest {
         #! code that builds nested values iteratively, so that building them does not recurse
         const Builders = "# the nesting of the values: far beyond what the small thread stack holds when recursing
 const Depth = 100000;
+# the nesting of the YAML documents: libyaml 0.2.7 rejects a document nested more than 1000 levels deep
+# (YAML-PARSER-ERROR: \"exceeded maximum nesting depth\"), and its scanner reads up to 1024 characters ahead, so that
+# a deeper document fails before the parser recurses at all; the document is nested as deeply as libyaml allows, and
+# the thread runs with a stack too small for that (YamlStackSize)
+const YamlDepth = 1000;
 
 list sub deep_list(int n) {
     list l = ();
@@ -68,6 +73,12 @@ Link sub deep_object(int n) {
     return head;
 }
 ";
+
+        #! the stack size of the thread that parses YAML: the limit of the stack guard is 48 KiB above the start of
+        #! the stack (the guard reserves 80 KiB), which the YamlDepth levels of the document exceed when parsing takes
+        #! more than 48 bytes of stack per level; it takes about 190 bytes in a debug build and 270 bytes in a release
+        #! build on x86_64 Linux, which reach the limit at about 220 and 160 levels
+        const YamlStackSize = 128 * 1024;
 
         #! the cases that format nested values (part 1)
         const FormattingCases = ("list %y", "list %N", "list %n", "hash %y", "hash %N", "object %y", "object %N");
@@ -197,8 +208,9 @@ string sub write_yaml(auto v) {
             },
             "parse_yaml()": <StackCase>{
                 "requires": ("yaml",),
-                "setup": "string v = strmul(\"[\", Depth) + strmul(\"]\", Depth);",
+                "setup": "string v = strmul(\"[\", YamlDepth) + strmul(\"]\", YamlDepth);",
                 "op": "parse_yaml(v)",
+                "stack_size": YamlStackSize,
             },
             "MongoCollection::insertOne()": <StackCase>{
                 # the document is converted to BSON before the client connects; no server is needed
@@ -210,13 +222,14 @@ our MongoCollection collection = client.getDatabase(\"test\").getCollection(\"te
             },
             "YamlDocumentIterator::getValue()": <StackCase>{
                 "requires": ("yaml",),
-                "setup": "string v = strmul(\"[\", Depth) + strmul(\"]\", Depth);
+                "setup": "string v = strmul(\"[\", YamlDepth) + strmul(\"]\", YamlDepth);
 auto sub iterate_yaml(string v) {
     YamlDocumentIterator i(v);
     i.next();
     return i.getValue();
 }",
                 "op": "iterate_yaml(v)",
+                "stack_size": YamlStackSize,
             },
         };
     }

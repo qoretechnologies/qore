@@ -488,21 +488,19 @@ hash<string, string> sub probe(object o) {
         const TenantSocketSource = "%modern
 %requires HttpServer
 %requires HttpServerUtil
+%requires WebSocketHandler
 
-class TenantSocketHandler inherits AbstractHttpSocketHandler {
+#! a socket handler of a sandboxed Program gets a 101 connection only as a WebSocketHandler, which sets it up without
+#! the connection's socket (qore#7476); its startImpl() takes the connection over instead
+class TenantSocketHandler inherits WebSocketHandler {
     private {
         Queue to_host;
         Queue from_host;
     }
 
-    constructor(Queue to_host, Queue from_host) {
+    constructor(Queue to_host, Queue from_host) : WebSocketHandler() {
         self.to_host = to_host;
         self.from_host = from_host;
-    }
-
-    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
-            *data body) {
-        return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"test6921\", \"Connection\": \"Upgrade\"}};
     }
 
     private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
@@ -743,7 +741,8 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         Socket s();
         s.connect("127.0.0.1:" + port);
         on_exit s.close();
-        s.send("GET /s HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: test6921\r\n\r\n");
+        s.send("GET /s HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n"
+            "Sec-WebSocket-Key: " + get_random_string(16).toBase64() + "\r\nSec-WebSocket-Version: 13\r\n\r\n");
         hash<auto> resp = s.readHTTPHeader(HangGuard);
         assertEq(101, resp.status_code);
 
@@ -751,8 +750,10 @@ AbstractHttpSocketHandler sub get_handler(Queue to_host, Queue from_host) {
         assertEq("ok", step.other);
         assertTrue(server.last.hasDedicated(step.cid), "another handler does not remove the connection");
         from_host.push(True);
-        # the handler ends its own connection through setExternallyManaged() (no false refusal)
-        assertEq("ok", to_host.get(HangGuard));
+        # the handler ends its own connection through setExternallyManaged() (no false refusal): the closure removes
+        # it, and the socket of the request that the handler got refuses to shut the connection down, which the
+        # server closes (qore#7476)
+        assertEq("HTTP-HANDLER-SOCKET-ERROR", to_host.get(HangGuard));
         assertFalse(server.last.hasDedicated(step.cid), "the handler removed its own connection");
     }
 

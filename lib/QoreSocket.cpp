@@ -33,6 +33,9 @@
 
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
+#ifdef __APPLE__
+#include <dlfcn.h>
+#endif
 #include <cerrno>
 #include <cctype>
 #include <climits>
@@ -4170,6 +4173,8 @@ QoreSocket* qore_socket_ops::createAcceptedSocketImpl(QoreSocket* b, int descrip
     s->priv->ssl_ca_file = b->priv->ssl_ca_file;
     s->priv->ssl_ca_path = b->priv->ssl_ca_path;
     s->priv->setSslTrustStore(b->priv->ssl_trust_store);
+    s->priv->setSslCaTrustStore(b->priv->ssl_ca_trust_store, b->priv->ssl_ca_file_read.c_str(),
+        b->priv->ssl_ca_path_read.c_str());
     // the placement of the fields of the HTTP messages read (qore#6761)
     s->priv->http_fields_at_top_level.store(b->priv->http_fields_at_top_level.load(std::memory_order_relaxed),
         std::memory_order_relaxed);
@@ -5204,8 +5209,11 @@ static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, i
 
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw->stringRefSelf();
@@ -6002,6 +6010,9 @@ std::shared_ptr<void> qore_socket_private::holdGenerationWake(std::function<void
     if (sock != QORE_INVALID_SOCKET) {
         return nullptr;
     }
+#ifdef DEBUG
+    dbgCheckWakeAllocation(WakeAllocation::SocketList);
+#endif
     generation_wakes.push_back(hold->wake);
     return hold;
 }
@@ -6199,7 +6210,7 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     // set verification mode
     if (qs.ssl_verify_mode != SSL_VERIFY_NONE
             && setVerifyMode(qs.ssl_verify_mode, qs.ssl_accept_all_certs, qs.client_target)) {
-        sslError(xsink, mname, qs.ssl_trust_store ? "SSL_set1_verify_cert_store" : "SSL_CTX_load_verify_locations", true,
+        sslError(xsink, mname, qs.getEffectiveTrustStore() ? "SSL_set1_verify_cert_store" : "SSL_CTX_load_verify_locations", true,
             SslCall::Setup);
         assert(*xsink);
         return -1;
@@ -6999,10 +7010,11 @@ int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::s
         (int)accept_all_certs, target.c_str());
     int rc = 0;
     if (!accept_all_certs) {
-        if (qs.ssl_trust_store) {
+        if (QoreSSLTrustStore* ts = qs.getEffectiveTrustStore()) {
             // an in-memory trust store: the connection takes a reference of its own on the shared, immutable store;
-            // no file is read and the environment is not consulted (qoretechnologies/qore#7248)
-            if (qs.ssl_trust_store->applyTo(ssl)) {
+            // no file is read and the environment is not consulted (qoretechnologies/qore#7248); that of the CA
+            // locations read under a sandbox policy otherwise (qore#7518)
+            if (ts->applyTo(ssl)) {
                 rc = -1;
             }
         } else if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {
@@ -10316,6 +10328,11 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     if (qore_socket_check_unix_sandbox(*smh, name, false, xsink)) {
         return;
     }
+    // the socket file checked is the one connected to (qore#7518)
+    conn_addr = addr;
+    if (*smh && qore_socket_pin_unix_path(**smh, name, false, conn_addr, upin, xsink)) {
+        return;
+    }
 
     int fd = create_nonblocking_socket(AF_UNIX, sock_type, protocol);
     if (fd == QORE_SOCKET_ERROR) {
@@ -10436,9 +10453,28 @@ int SocketConnectUnixPollState::doConnect(ExceptionSink* xsink) {
     }
     int rc = 0;
     while (true) {
-        if (!::connect(fd, (const sockaddr*)&addr, sizeof(struct sockaddr_un))) {
+#if defined(__FreeBSD__)
+        if (upin.at ? !::connectat(upin.fd, fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un))
+                : !::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un))) {
             break;
         }
+#elif defined(__APPLE__)
+        int crc;
+        if (upin.thread_cwd) {
+            // a name relative to the directory held is connected to with the thread's working directory set to it
+            QoreThreadCwdHelper cwd(upin.fchdir_np, upin.fd);
+            crc = cwd ? ::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un)) : -1;
+        } else {
+            crc = ::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un));
+        }
+        if (!crc) {
+            break;
+        }
+#else
+        if (!::connect(fd, (const sockaddr*)&conn_addr, sizeof(struct sockaddr_un))) {
+            break;
+        }
+#endif
 
         // try again if we were interrupted by a signal
         if (errno == EINTR) {
@@ -10501,7 +10537,7 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
     // held, only if the socket was not closed since the connection gave it its descriptor; otherwise the connection
     // fails as closed (qore#7156)
     std::shared_ptr<QoreConnectionDestinations> d = std::make_shared<QoreConnectionDestinations>();
-    d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX);
+    d->add(name.c_str(), reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), QSEC_NET_UNIX, upin.canon);
     if (!sock->setUnixConnectedIfGeneration(sock_gen, addr.sun_path, std::move(d))) {
         qore_socket_raise_canceled("connect", xsink);
         return -1;
@@ -11379,6 +11415,22 @@ int SocketRecvUntilBytesPollState::continuePollIntern(ExceptionSink* xsink) {
             bin = new QoreStringNode;
             return -1;
         }
+        if (http_header_end) {
+            // the end of a header section: an LF that ends an empty line, which a CR can precede; matched is 1 after
+            // an LF and 2 after an LF and a CR (qore#7491)
+            if (c == '\n') {
+                if (matched) {
+                    matched = size;
+                    break;
+                }
+                matched = 1;
+            } else if (c == '\r' && matched == 1) {
+                matched = 2;
+            } else {
+                matched = 0;
+            }
+            continue;
+        }
         if (c == bytes[matched]) {
             ++matched;
             if (matched == size) {
@@ -11769,6 +11821,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         QoreObject* poll_obj = nullptr;
         // first see if the object inherits AbstractPollableIoObjectBase
         TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink);
+        // the connection socket of a server is refused to sandboxed code (qore#7338)
+        if (*io && qore_pollable_server_guard(obj, *io, xsink)) {
+            return nullptr;
+        }
         if (*xsink) {
             return nullptr;
         }
@@ -14674,7 +14730,7 @@ int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink
     @return 0 if allowed, -1 if denied (an exception is raised)
 */
 int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, const char* canon) {
     if (qore_socket_check_unix_path(path, bind ? "SOCKET-BIND-ERROR" : "SOCKET-CONNECT-ERROR", xsink)) {
         return -1;
     }
@@ -14686,10 +14742,174 @@ int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* pat
             : !sm.checkNetworkAccess(path, sa, sizeof(addr), QSEC_NET_UNIX, xsink)) {
         return -1;
     }
-    if (!sm.checkFilesystemAccess(path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), xsink)) {
+    int mode = bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE);
+    if (canon ? !QoreSandboxComposition::checkCanonicalFilesystemAccess(sm, canon, path, mode, xsink)
+            : !sm.checkFilesystemAccess(path, mode, xsink)) {
         return -1;
     }
     return 0;
+}
+
+#ifdef __APPLE__
+#ifdef DEBUG
+//! debug builds: true if the per-thread working directory is not used, so that the fallback is tested (qore#7518)
+std::atomic<bool> qore_dbg_unix_pin_no_thread_cwd{false};
+#endif
+
+int (*qore_pthread_fchdir_np())(int) {
+    // a private function of libSystem (macOS 10.12+), resolved once at run time: not linked, so that a system without
+    // it uses the fallback
+    static int (*fchdir_np)(int) = reinterpret_cast<int (*)(int)>(dlsym(RTLD_DEFAULT, "pthread_fchdir_np"));
+#ifdef DEBUG
+    if (qore_dbg_unix_pin_no_thread_cwd.load(std::memory_order_relaxed)) {
+        return nullptr;
+    }
+#endif
+    return fchdir_np;
+}
+#endif
+
+int qore_socket_pin_unix_path(QoreSandboxManager& sm, const char* path, bool bind, struct sockaddr_un& addr,
+        QoreUnixSocketPin& upin, ExceptionSink* xsink) {
+    assert(upin.fd < 0);
+    const char* err = bind ? "SOCKET-BIND-ERROR" : "SOCKET-CONNECT-ERROR";
+    // a bind creates the entry of the socket file, and does not follow a link as its last component; a connection
+    // reaches the socket file that the name reaches
+    QoreSandboxPinnedPath pin;
+    int rc = q_sandbox_pin_path(sm, path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), bind, pin,
+        xsink);
+    if (rc == -1) {
+        // a denial (the only exception that pinning raises)
+        qore_socket_set_sandbox_denied_error();
+        return -1;
+    }
+    if (rc) {
+        // the error of the operation, as without a policy
+        sock_set_raw_error(errno);
+        xsink->raiseErrnoException(err, errno, "error %s UNIX socket '%s'", bind ? "binding" : "connecting to", path);
+        return -1;
+    }
+    if (pin.alias) {
+        qore_socket_set_sandbox_denied_error();
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: a descriptor alias is not a UNIX "
+            "socket path", path);
+        return -1;
+    }
+    addr = {};
+    addr.sun_family = AF_UNIX;
+    upin.canon = pin.canon;
+#if defined(__linux__)
+    // the socket file is reached through the procfs link of the descriptor held, which reaches the object held;
+    // /proc/thread-self is preferred, as /proc/self cannot be reached once the leader of the thread group has ended
+    const char* procfd = !faccessat(AT_FDCWD, "/proc/thread-self/fd", X_OK, 0) ? "/proc/thread-self/fd"
+        : "/proc/self/fd";
+    if (faccessat(AT_FDCWD, procfd, X_OK, 0)) {
+        qore_socket_set_sandbox_denied_error();
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path cannot be pinned without "
+            "procfs", path);
+        return -1;
+    }
+    int n;
+    if (bind) {
+        upin.leaf = pin.leaf;
+        upin.fd = pin.dirfd;
+        pin.dirfd = -1;
+        n = snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d/%s", procfd, upin.fd, upin.leaf.c_str());
+        // a name that does not fit with /proc/thread-self may fit with /proc/self
+        if ((n < 0 || (size_t)n >= sizeof(addr.sun_path)) && strcmp(procfd, "/proc/self/fd")
+                && !faccessat(AT_FDCWD, "/proc/self/fd", X_OK, 0)) {
+            n = snprintf(addr.sun_path, sizeof(addr.sun_path), "/proc/self/fd/%d/%s", upin.fd, upin.leaf.c_str());
+        }
+    } else {
+        // the socket file is opened without following a link (O_PATH opens no file)
+        int fd;
+        do {
+            fd = openat(pin.dirfd, pin.leaf.c_str(), O_PATH | O_NOFOLLOW | O_CLOEXEC);
+        } while (fd < 0 && errno == EINTR);
+        if (fd < 0) {
+            int e = errno;
+            if (e == ELOOP) {
+                qore_socket_set_sandbox_denied_error();
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it "
+                    "was checked", path);
+                return -1;
+            }
+            sock_set_raw_error(e);
+            xsink->raiseErrnoException(err, e, "error connecting to UNIX socket '%s'", path);
+            return -1;
+        }
+        upin.fd = fd;
+        struct stat sbuf;
+        if (!fstat(fd, &sbuf) && S_ISLNK(sbuf.st_mode)) {
+            qore_socket_set_sandbox_denied_error();
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
+                "checked", path);
+            return -1;
+        }
+        n = snprintf(addr.sun_path, sizeof(addr.sun_path), "%s/%d", procfd, upin.fd);
+    }
+    if (n < 0 || (size_t)n >= sizeof(addr.sun_path)) {
+        sock_set_raw_error(ENAMETOOLONG);
+        xsink->raiseException(err, "the UNIX socket path '%s' cannot be reached through its pinned directory: the "
+            "name of the socket file is too long", path);
+        return -1;
+    }
+    return 0;
+#elif defined(__APPLE__) || defined(__FreeBSD__)
+#ifdef __FreeBSD__
+    // the address is relative to the directory held (bindat(), connectat())
+    if (pin.leaf.size() >= sizeof(addr.sun_path)) {
+#else
+    // macOS binds and connects relative to the directory held through the working directory of the thread
+    // (pthread_fchdir_np(), when available); otherwise, the canonical path checked is used, whose components were
+    // opened without following a link; the directory held removes the socket file on close
+    int (*fchdir_np)(int) = qore_pthread_fchdir_np();
+    bool thread_cwd = fchdir_np;
+    if ((thread_cwd ? pin.leaf.size() : pin.canon.size()) >= sizeof(addr.sun_path)) {
+#endif
+        sock_set_raw_error(ENAMETOOLONG);
+#ifdef __FreeBSD__
+        xsink->raiseException(err, "UNIX socket name '%s' is too long", pin.leaf.c_str());
+#else
+        if (thread_cwd) {
+            xsink->raiseException(err, "UNIX socket name '%s' is too long", pin.leaf.c_str());
+        } else {
+            xsink->raiseException(err, "the canonical path of UNIX socket '%s' is too long: '%s'", path,
+                pin.canon.c_str());
+        }
+#endif
+        return -1;
+    }
+    if (!bind) {
+        // connectat() follows a link: the socket file is checked not to be one
+        struct stat sbuf;
+        if (!fstatat(pin.dirfd, pin.leaf.c_str(), &sbuf, AT_SYMLINK_NOFOLLOW) && S_ISLNK(sbuf.st_mode)) {
+            qore_socket_set_sandbox_denied_error();
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
+                "checked", path);
+            return -1;
+        }
+    }
+    upin.leaf = pin.leaf;
+    upin.fd = pin.dirfd;
+    pin.dirfd = -1;
+#ifdef __FreeBSD__
+    upin.at = true;
+    strncpy(addr.sun_path, upin.leaf.c_str(), sizeof(addr.sun_path) - 1);
+#else
+    upin.thread_cwd = thread_cwd;
+    upin.fchdir_np = fchdir_np;
+    strncpy(addr.sun_path, thread_cwd ? upin.leaf.c_str() : pin.canon.c_str(), sizeof(addr.sun_path) - 1);
+#endif
+    return 0;
+#else
+    // a system that can reach a socket file neither through procfs nor relative to a directory: the path is denied
+    // rather than raced
+    qore_socket_set_sandbox_denied_error();
+    xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: UNIX socket paths cannot be pinned on "
+        "this system", path);
+    return -1;
+#endif
 }
 #endif
 
@@ -14706,7 +14926,7 @@ static int qore_socket_check_unix_sandbox(QoreSandboxManager* sm, const char* pa
     if (!sm) {
         return 0;
     }
-    if (qore_socket_check_unix_sandbox_rules(*sm, path, bind, xsink)) {
+    if (qore_socket_check_unix_sandbox_rules(*sm, path, bind, xsink, nullptr)) {
         qore_socket_set_sandbox_denied_error();
         return -1;
     }
@@ -14714,12 +14934,14 @@ static int qore_socket_check_unix_sandbox(QoreSandboxManager* sm, const char* pa
 #endif
 }
 
-void QoreConnectionDestinations::add(const char* host, const struct sockaddr* addr, socklen_t addrlen, int proto) {
+void QoreConnectionDestinations::add(const char* host, const struct sockaddr* addr, socklen_t addrlen, int proto,
+        const std::string& canon) {
     assert(addr);
     assert(addrlen > 0 && static_cast<size_t>(addrlen) <= sizeof(struct sockaddr_storage));
     Destination d;
     d.host = host ? host : "";
     d.proto = proto;
+    d.canon = canon;
     // an address that cannot be stored is recorded as unresolved, which no sandbox can decide on
     if (addr && addrlen > 0 && static_cast<size_t>(addrlen) <= sizeof(struct sockaddr_storage)) {
         memcpy(&d.addr, addr, addrlen);
@@ -14750,7 +14972,9 @@ int QoreConnectionDestinations::check(QoreSandboxManager& sm, ExceptionSink* xsi
         }
 #ifndef _Q_WINDOWS
         if (d.proto == QSEC_NET_UNIX) {
-            if (qore_socket_check_unix_sandbox_rules(sm, d.host.c_str(), false, xsink)) {
+            // the socket file connected to is checked by the canonical path pinned, if any (qore#7518)
+            if (qore_socket_check_unix_sandbox_rules(sm, d.host.c_str(), false, xsink,
+                    d.canon.empty() ? nullptr : d.canon.c_str())) {
                 return -1;
             }
             continue;
@@ -14771,6 +14995,17 @@ static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int soc
     if (qore_socket_check_unix_sandbox(sandbox_manager, name, true, xsink)) {
         return -1;
     }
+#ifndef _Q_WINDOWS
+    // the socket file is created in the directory checked (qore#7518)
+    if (sandbox_manager) {
+        QoreUnixSocketPin upin;
+        struct sockaddr_un addr;
+        if (qore_socket_pin_unix_path(*sandbox_manager, name, true, addr, upin, xsink)) {
+            return -1;
+        }
+        return priv->bindUNIX(xsink, name, socktype, protocol, &addr, &upin);
+    }
+#endif
     return priv->bindUNIX(xsink, name, socktype, protocol);
 }
 
@@ -16261,6 +16496,18 @@ int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const str
 
     family = q_get_af(family);
     sock_type = q_get_sock_type(sock_type);
+
+#ifndef _Q_WINDOWS
+    // a UNIX socket address with a path names a file, which the file-system policy checks and pins (qore#7518); an
+    // abstract address (Linux: the path starts with a NUL byte) names no file
+    if (sandbox_manager && addr && addr->sa_family == AF_UNIX && size > (int)offsetof(struct sockaddr_un, sun_path)
+            && reinterpret_cast<const struct sockaddr_un*>(addr)->sun_path[0]) {
+        const struct sockaddr_un* sun = reinterpret_cast<const struct sockaddr_un*>(addr);
+        size_t max = std::min((size_t)size - offsetof(struct sockaddr_un, sun_path), sizeof(sun->sun_path));
+        std::string path(sun->sun_path, strnlen(sun->sun_path, max));
+        return qore_socket_bind_unix_direct(s, path.c_str(), sock_type, protocol, sandbox_manager, xsink);
+    }
+#endif
 
     if (qore_socket_bind_check_sandbox(sandbox_manager, addr, size, sock_type, xsink)) {
         return -1;
@@ -20467,8 +20714,11 @@ QoreHashNode* SocketReadHttpHeaderPollOperation::continuePoll(ExceptionSink* xsi
     assert(data->getType() == NT_STRING);
     // note: safe; the header data read from the socket is a string node made here
     SimpleRefHolder<QoreStringNode> hdrstr(reinterpret_cast<QoreStringNode*>(data.release()));
+    // the header of a response read by an HTTP client must start with a valid status line, whatever it starts with
+    // (qore#7485); the subclass that reads it is its mark, as the layout of this public class cannot change
+    bool expect_response = dynamic_cast<const SocketReadHttpResponseHeaderPollOperation*>(this) != nullptr;
     ReferenceHolder<QoreHashNode> hdr(sock->priv->socket->priv->processHttpHeaderString(xsink, hdrstr, *info,
-        QORE_SOURCE_SOCKET), xsink);
+        QORE_SOURCE_SOCKET, "headers-raw", expect_response), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -21508,6 +21758,31 @@ void SocketReadHttpBodyPollOperation::deref(ExceptionSink* xsink) {
 
 // SocketSendAndReadHeaderPollOperation implementation
 
+//! Adds the time left to an idle deadline to the poll info of an operation that waits for the next request (qore#7488)
+/** The event loop then wakes the operation when the deadline passes, so that a connection that stays idle is closed at
+    its TTL, not only when a request comes or when the whole operation times out (as
+    HttpKeepAlivePollOperationBase::continueIdlePoll() does).
+
+    @param info the poll info, returned (nullptr with an exception)
+    @param idle_deadline_ms the idle deadline on the monotonic clock in milliseconds; 0 for none
+*/
+static QoreHashNode* qore_add_idle_deadline_poll_timeout(QoreHashNode* info, int64 idle_deadline_ms,
+        ExceptionSink* xsink) {
+    if (info && idle_deadline_ms > 0) {
+        // the idle phase closes the connection once the monotonic clock is past the deadline: the wake-up comes 1 ms
+        // after it, so that the check at the wake-up sees it passed
+        int64 left_ms = idle_deadline_ms - q_get_monotonic_us() / 1000 + 1;
+        // a wake-up before the deadline polls again with the time then left: the controller takes an int
+        if (left_ms > INT_MAX) {
+            left_ms = INT_MAX;
+        } else if (left_ms < 1) {
+            left_ms = 1;
+        }
+        info->setKeyValue("poll_timeout_ms", left_ms, xsink);
+    }
+    return info;
+}
+
 SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink,
         BinaryNode* response_data, QoreSocketObject* sock, int64 idle_timeout_ms)
         : SocketPollSocketOperationBase(sock), send_data(response_data),
@@ -21636,7 +21911,8 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                     set_non_block = false;
                     return nullptr;
                 }
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), idle_timeout_ms,
+                    xsink);
             }
             // Data is available — transition to header reading; the rest of a chunked body that was not read to its
             // end would be taken for the header (issue 7417)
@@ -21932,7 +22208,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsi
             return nullptr;
         }
     }
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), idle_timeout_ms, xsink);
 }
 
 QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
@@ -22031,7 +22307,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSin
             return nullptr;
         }
     }
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), idle_timeout_ms, xsink);
 }
 
 QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(ExceptionSink* xsink) {
@@ -22306,7 +22582,8 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                         set_non_block = false;
                         return nullptr;
                     }
-                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    return qore_add_idle_deadline_poll_timeout(getSocketPollInfoHash(xsink, SOCK_POLLIN),
+                        idle_timeout_ms, xsink);
                 }
                 // Data is available — transition to header reading; the rest of a chunked body that was not read to its
                 // end would be taken for the header (issue 7417)
@@ -22407,6 +22684,7 @@ QoreValue SocketSendStreamAndReadHeaderPollOperation::getOutput() const {
 #include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/intern/QoreIoClassesOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock) {

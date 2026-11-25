@@ -3,6 +3,11 @@
 This document clarifies how Qore user modules are structured in this repository.
 Follow these rules to avoid load and documentation issues.
 
+Build standalone AOT modules as the build-tree owner with `cmake --build build` before installing them.
+Their generated install target installs the existing artifacts, so installing under another account leaves
+the compiler stamp and module builds to their owner. An external project that wants its install target to
+build first can configure with `-DCMAKE_SKIP_INSTALL_ALL_DEPENDENCY=OFF`.
+
 External module documentation uses the SDK's `share/qore/qore.tag` language index,
 installed when Qore's documentation has been built before installation. This index
 does not require the complete language HTML documentation. The exported CMake helpers
@@ -116,6 +121,13 @@ In the Qore build, both bundled binary module and user module documentation depe
 This initial pass writes the core tag file before any module reads it; `docs-lang-final` then imports
 completed module tags. These dependencies apply to individual module documentation targets as well as
 full builds, so parallel generation cannot read a stale or partially rewritten core tag file.
+
+A user module imports the transitive tag files it needs to resolve inherited members, signature types,
+and documentation-only references. After Doxygen renders its pages, the Python documentation helper
+removes search results from sibling modules with no links in its content pages or diagrams
+(#6376). Generated listings such as the namespace index can include every imported namespace and do not
+contribute links to this selection. The module's own symbols, language symbols, and all symbols from linked
+modules remain searchable.
 
 Qdx retains parameter declarations when an abstract method is represented by the tree-sitter grammar
 as a member declaration with constructor arguments. The CST translator normalizes these arguments to

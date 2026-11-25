@@ -119,6 +119,14 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_
 typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
 
+//! called by the Program methods that take over their own object (Program::loadApplyToUserModule() and the related
+//! methods) at \a phase 0, after the call setup and before the private data is removed from the object, and at
+//! \a phase 1, once it is removed and before the module is loaded, and by qore_take_module_container() at \a phase 2,
+//! after the binding of the arguments and before the private data is taken from the object; called with no lock
+//! held; set by dbg_hold_program_take_over()
+typedef void (*qore_dbg_program_take_over_hook_t)(QoreObject& obj, int phase);
+DLLLOCAL extern std::atomic<qore_dbg_program_take_over_hook_t> qore_dbg_program_take_over_hook;
+
 //! called by QoreListNode::derefImpl() and QoreHashNode::derefImpl() when the free of a list or hash that has weak
 //! holders starts, before its entries are freed; called with no lock held; \a type_name is "list" or "hash"; set by
 //! dbg_hold_container_free() (qore#7198)
@@ -183,6 +191,12 @@ DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
 //! session has no stream ID left (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE; qore#7443)
 DLLLOCAL extern std::atomic<bool> qore_dbg_h2_fail_next_submit;
 
+//! armed by dbg_fs_swap_on_open(): replaces a symbolic link before the next open of it that the sandbox filesystem
+//! policy checked, between the check of its name and the open (qore#7498)
+/** @param fn the name being opened; the link is replaced only if it is the name given to dbg_fs_swap_on_open()
+*/
+DLLLOCAL void qore_dbg_fs_swap_on_open(const char* fn);
+
 //! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
 //! see dbg_quic_stateless_reset_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;
@@ -226,6 +240,15 @@ DLLLOCAL bool qore_dbg_io_uring_completions_deferred();
 
 //! Returns True if dbg_http2_hold_stream_data() holds the buffered data of this HTTP/2 stream back
 DLLLOCAL bool qore_dbg_h2_stream_data_held(int32_t stream_id);
+
+//! Returns True if dbg_http2_hold_stream_reset() holds the RST_STREAM of this HTTP/2 stream back (qore#7532)
+DLLLOCAL bool qore_dbg_h2_stream_reset_held(int32_t stream_id);
+
+//! Ends the hold of dbg_http2_hold_stream_reset() on this HTTP/2 stream; returns True if it held the stream
+/** Called when the application reads the stream's progress count (Socket::getHttp2StreamTakenBytes()), after it is
+    read; the caller then wakes the socket's I/O thread, which sends the RST_STREAM
+*/
+DLLLOCAL bool qore_dbg_h2_stream_reset_release(int32_t stream_id);
 
 //! Returns the number of objects in the async I/O controller's registry of submitted poll operations without a C++
 //! poll operation (those implemented in Qore)

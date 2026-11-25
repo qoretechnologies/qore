@@ -48,6 +48,10 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
+#ifdef __linux__
+#include <sys/vfs.h>
+#endif
 #include <map>
 #include <memory>
 #include <mutex>
@@ -93,6 +97,11 @@ struct QoreSandboxMembers {
     }
 };
 
+#ifdef __linux__
+//! the f_type of a procfs file system (PROC_SUPER_MAGIC of <linux/magic.h>)
+static constexpr unsigned long QORE_PROC_SUPER_MAGIC = 0x9fa0;
+#endif
+
 struct qore_fs_security_private {
     std::shared_ptr<const QoreSandboxMembers> composition;
     //! the uncontrolled-API policy of the QoreSandboxManager (see QoreSandboxManager::setUncontrolledApiPolicy());
@@ -120,6 +129,18 @@ struct qore_fs_security_private {
         assert(pos != std::string::npos);
         leaf = path.substr(pos + 1);
         parent = pos ? path.substr(0, pos) : "/";
+    }
+
+    //! Returns true if the directory holding the given path is on a procfs file system, wherever it is mounted
+    static bool is_in_proc(const std::string& path) {
+#ifdef __linux__
+        std::string parent, leaf;
+        splitPath(path, parent, leaf);
+        struct statfs sfs;
+        return !statfs(parent.c_str(), &sfs) && static_cast<unsigned long>(sfs.f_type) == QORE_PROC_SUPER_MAGIC;
+#else
+        return false;
+#endif
     }
 
     //! Resolves a path to an absolute, symlink-free canonical path for security checks
@@ -184,8 +205,10 @@ struct qore_fs_security_private {
             // save errno before any other system call can overwrite it
             int err = errno;
             if (err != ENOENT && err != ENOTDIR) {
-                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
-                    "'%s': %s", path, probe.c_str(), strerror(err));
+                // the message names the path as given only, never a link target or a directory reached while
+                // resolving it (qore#7498)
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
+                    strerror(err));
                 return "";
             }
 
@@ -195,19 +218,29 @@ struct qore_fs_security_private {
             struct stat sb;
             if (!lstat(probe.c_str(), &sb) && S_ISLNK(sb.st_mode)) {
                 if (++links > qore_sandbox_max_symlinks) {
-                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
-                        "'%s': %s", path, probe.c_str(), strerror(ELOOP));
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
+                        strerror(ELOOP));
                     return "";
                 }
                 char buf[QORE_PATH_MAX + 1];
                 ssize_t len = readlink(probe.c_str(), buf, QORE_PATH_MAX);
                 if (len < 0) {
-                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
-                        "readlink('%s') failed: %s", path, probe.c_str(), strerror(errno));
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a link cannot be "
+                        "read: %s", path, strerror(errno));
                     return "";
                 }
                 assert(len <= QORE_PATH_MAX);
                 buf[len] = '\0';
+                // a link in procfs that does not resolve is a link to an object without a path (ex: /proc/self/fd/N,
+                // also reached as /dev/fd/N, to "pipe:[1234]" or "anon_inode:..."), to a removed file ("/path
+                // (deleted)") or to a memfd ("/memfd:name (deleted)"): its target names no file, and it is not
+                // resolved as a link, which would name another file (qore#7498)
+                if (is_in_proc(probe)) {
+                    xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a "
+                        "descriptor whose file cannot be identified by a path, so the security policy cannot be "
+                        "applied to it", path);
+                    return "";
+                }
                 if (*buf == '/') {
                     probe = buf;
                 } else {
@@ -257,8 +290,8 @@ struct qore_fs_security_private {
             std::string up = base + "/..";
             std::unique_ptr<char, decltype(&free)> real(realpath(up.c_str(), nullptr), &free);
             if (!real) {
-                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': the "
-                    "parent of '%s' cannot be resolved: %s", path, base.c_str(), strerror(errno));
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a parent "
+                    "directory cannot be resolved: %s", path, strerror(errno));
                 return "";
             }
             base = real.get();
@@ -313,6 +346,48 @@ struct qore_fs_security_private {
     bool isInSandboxRoot(const std::string& canon_path) const {
         if (sandbox_root.empty()) return true;
         return pathStartsWith(canon_path, sandbox_root);
+    }
+
+    //! applies the rules of the policy to a canonical path; errors name the path as given (\a path)
+    bool checkRules(const std::string& canon, const char* path, int mode, ExceptionSink* xsink) const {
+        // Check denied paths first (they always take precedence)
+        if (isDenied(canon)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                "Access to '%s' denied by security policy (path is in denied list)", path);
+            return false;
+        }
+
+        // Check sandbox root containment
+        if (!isInSandboxRoot(canon)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                "Access to '%s' denied: path is outside sandbox root '%s'",
+                path, sandbox_root.c_str());
+            return false;
+        }
+
+        // Check allowed paths
+        if (isAllowed(canon, mode)) {
+            return true;
+        }
+
+        // Fall back to default policy
+        if (default_allow) {
+            return true;
+        }
+
+        // Build mode string for error message
+        std::string mode_str;
+        if (mode & QSEC_READ) mode_str += "read,";
+        if (mode & QSEC_WRITE) mode_str += "write,";
+        if (mode & QSEC_EXECUTE) mode_str += "execute,";
+        if (mode & QSEC_DELETE) mode_str += "delete,";
+        if (mode & QSEC_CREATE) mode_str += "create,";
+        if (!mode_str.empty()) mode_str.pop_back();  // Remove trailing comma
+
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+            "Access to '%s' denied: %s access not permitted by security policy",
+            path, mode_str.c_str());
+        return false;
     }
 };
 
@@ -413,6 +488,45 @@ bool QoreFilesystemSecurityManager::isRestricting() const {
         || !priv->sandbox_root.empty();
 }
 
+//! returns true if a canonical path is a descriptor alias
+/** /dev/fd/N reaches the file of descriptor N of the process; where /dev/fd is not a symbolic link (macOS, the BSDs),
+    realpath() does not resolve it, and the path remains in /dev/fd, whatever file it reaches
+*/
+static bool is_descriptor_alias(const std::string& canon) {
+    return !canon.compare(0, 8, "/dev/fd/");
+}
+
+//! gets the canonical path of the file that a descriptor alias reaches
+/** @return 0 for OK, -1 if it reaches no file with a path (a pipe, a socket, a removed file, a closed descriptor) or
+    the path cannot be determined
+*/
+static int resolve_descriptor_alias(const char* path, std::string& target) {
+#ifdef _Q_WINDOWS
+    return -1;
+#else
+    // opening a descriptor alias duplicates the descriptor: it opens no file, and it changes neither the file nor
+    // the status flags of the descriptor; it fails with EACCES if the descriptor is not open for that access
+    int fd;
+    for (int flags : {O_RDONLY, O_WRONLY}) {
+        do {
+            fd = open(path, flags | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+        } while (fd < 0 && errno == EINTR);
+        if (fd >= 0 || errno != EACCES) {
+            break;
+        }
+    }
+    if (fd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        return -1;
+    }
+    return q_get_open_file_path(fd, sbuf, nullptr, target);
+#endif
+}
+
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
     if (priv->composition) {
         unsigned checked = 0;
@@ -433,44 +547,68 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
         return false;
     }
 
-    // Check denied paths first (they always take precedence)
-    if (priv->isDenied(canon)) {
-        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-            "Access to '%s' denied by security policy (path is in denied list)", path);
-        return false;
+    // a descriptor alias is checked as the file that it reaches
+    if (is_descriptor_alias(canon)) {
+        std::string target;
+        // the name as given is opened: realpath() of a descriptor alias on macOS does not keep the descriptor number
+        // (it gives "/dev/fd/<name of the file>"), and the file is identified by the descriptor that the open gives
+        if (resolve_descriptor_alias(path, target)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor "
+                "whose file cannot be identified by a path, so the security policy cannot be applied to it", path);
+            return false;
+        }
+        // errors name the path as given, not the file reached
+        ExceptionSink xsink2;
+        canon = priv->canonicalize(target.c_str(), &xsink2);
+        if (xsink2 || is_descriptor_alias(canon)) {
+            xsink2.clear();
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
+                "cannot be resolved", path);
+            return false;
+        }
     }
 
-    // Check sandbox root containment
-    if (!priv->isInSandboxRoot(canon)) {
-        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-            "Access to '%s' denied: path is outside sandbox root '%s'",
-            path, priv->sandbox_root.c_str());
-        return false;
+#ifdef O_PATH
+    // the object that the name reaches must be the one at its canonical path: a name through a procfs link (ex:
+    // /proc/self/fd/N) reaches the object of the link, whatever a file at the path that the link shows is (ex: a file
+    // named "/x (deleted)" made for the link of a removed file "/x"); O_PATH opens the object without opening the file
+    // (no side effect), and a name that reaches nothing is not checked here (qore#7498)
+    {
+        int pfd;
+        do {
+            pfd = open(path, O_PATH | O_CLOEXEC);
+        } while (pfd < 0 && errno == EINTR);
+        if (pfd >= 0) {
+            ON_BLOCK_EXIT(close, pfd);
+            struct stat obuf, cbuf;
+            if (fstat(pfd, &obuf) || stat(canon.c_str(), &cbuf) || obuf.st_dev != cbuf.st_dev
+                    || obuf.st_ino != cbuf.st_ino) {
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
+                    "cannot be identified by a path, so the security policy cannot be applied to it", path);
+                return false;
+            }
+        }
     }
+#endif
 
-    // Check allowed paths
-    if (priv->isAllowed(canon, mode)) {
+    return priv->checkRules(canon, path, mode, xsink);
+}
+
+bool QoreSandboxComposition::checkCanonicalAccess(QoreFilesystemSecurityManager& fs, const char* canon,
+        const char* path, int mode, ExceptionSink* xsink) {
+    if (fs.priv->composition) {
+        unsigned checked = 0;
+        for (auto* manager : fs.priv->composition->managers) {
+            if (!(checked++ % 100) && qore_check_cancel(xsink, "sandbox policy intersection")) {
+                return false;
+            }
+            if (!checkCanonicalAccess(manager->filesystem(), canon, path, mode, xsink)) {
+                return false;
+            }
+        }
         return true;
     }
-
-    // Fall back to default policy
-    if (priv->default_allow) {
-        return true;
-    }
-
-    // Build mode string for error message
-    std::string mode_str;
-    if (mode & QSEC_READ) mode_str += "read,";
-    if (mode & QSEC_WRITE) mode_str += "write,";
-    if (mode & QSEC_EXECUTE) mode_str += "execute,";
-    if (mode & QSEC_DELETE) mode_str += "delete,";
-    if (mode & QSEC_CREATE) mode_str += "create,";
-    if (!mode_str.empty()) mode_str.pop_back();  // Remove trailing comma
-
-    xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-        "Access to '%s' denied: %s access not permitted by security policy",
-        path, mode_str.c_str());
-    return false;
+    return fs.priv->checkRules(canon, path, mode, xsink);
 }
 
 QoreHashNode* QoreFilesystemSecurityManager::getConfiguration(ExceptionSink* xsink) const {
@@ -1917,6 +2055,14 @@ static bool is_module_initialization_resource_read(const char* path, int mode) {
     return target.size() == root.size() || root.back() == '/' || target[root.size()] == '/';
 }
 
+bool QoreSandboxComposition::checkCanonicalFilesystemAccess(QoreSandboxManager& sm, const char* canon,
+        const char* path, int mode, ExceptionSink* xsink) {
+    if (is_module_initialization_resource_read(canon, mode)) {
+        return true;
+    }
+    return checkCanonicalAccess(sm.fs_mgr, canon, path, mode, xsink);
+}
+
 bool QoreSandboxManager::checkFilesystemAccess(const char* path, int mode, ExceptionSink* xsink) {
     if (is_module_initialization_resource_read(path, mode)) {
         return true;
@@ -2095,6 +2241,44 @@ bool qore_object_program_is_sandboxed(const QoreObject* obj) {
     }
     ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
     return static_cast<bool>(sm);
+}
+
+bool qore_object_program_is_restricted(const QoreObject* obj) {
+    return qore_program_is_restricted(obj->getProgram());
+}
+
+bool qore_program_is_restricted(const QoreProgram* pgm) {
+    if (!pgm) {
+        return false;
+    }
+    try {
+        // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
+        // its code only if every member does
+        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*const_cast<QoreProgram*>(pgm))
+            ->getSandboxManagerRef(), nullptr);
+        if (!sm) {
+            // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
+            // sandboxed without a manager) cannot be told trusted: fails closed
+            return qore_program_is_sandboxed(pgm);
+        }
+        return !sm->trustsUncontrolledApis();
+    } catch (std::bad_alloc&) {
+        // the composition of the Program's sandboxes could not be made: fails closed
+        return true;
+    }
+}
+
+bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+    if (!sm) {
+        return false;
+    }
+    id = qore_program_private::get(*pgm)->getProgramId();
+    return true;
 }
 
 QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
@@ -2509,4 +2693,437 @@ QoreSandboxPolicyBarrierHelper::~QoreSandboxPolicyBarrierHelper() {
     if (active) {
         qore_pop_sandbox_policy_barrier();
     }
+}
+
+//------------------------------------------------------------------------------
+// Pinned paths for name-based operations (qore#7518)
+//------------------------------------------------------------------------------
+
+#ifndef _Q_WINDOWS
+//! opens a directory by an absolute path without following any link in it
+/** Each component is opened relative to the one before it with O_NOFOLLOW, so that a component that is or has become
+    a link is refused (ELOOP), as is one that is no longer a directory (ENOTDIR)
+
+    @return the descriptor, or -1 with errno set
+*/
+static int open_dir_nofollow(const std::string& dir) {
+#if defined(O_PATH)
+    const int dflags = O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#elif defined(O_SEARCH)
+    const int dflags = O_SEARCH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#else
+    const int dflags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#endif
+    assert(!dir.empty() && dir[0] == '/');
+    int fd;
+    do {
+        fd = open("/", dflags & ~O_NOFOLLOW);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return -1;
+    }
+    size_t pos = 1;
+    while (pos < dir.size()) {
+        size_t end = dir.find('/', pos);
+        if (end == std::string::npos) {
+            end = dir.size();
+        }
+        if (end > pos) {
+            std::string comp = dir.substr(pos, end - pos);
+            int nfd;
+            do {
+                nfd = openat(fd, comp.c_str(), dflags);
+            } while (nfd < 0 && errno == EINTR);
+            int err = errno;
+            // a link is refused as ENOTDIR by some systems with O_DIRECTORY (ex: Linux with O_PATH): it is reported as
+            // a link
+            if (nfd < 0 && err == ENOTDIR) {
+                struct stat lbuf;
+                if (!fstatat(fd, comp.c_str(), &lbuf, AT_SYMLINK_NOFOLLOW) && S_ISLNK(lbuf.st_mode)) {
+                    err = ELOOP;
+                }
+            }
+            close(fd);
+            if (nfd < 0) {
+                errno = err;
+                return -1;
+            }
+            fd = nfd;
+        }
+        pos = end + 1;
+    }
+    return fd;
+}
+#endif
+
+QoreSandboxPinnedPath::~QoreSandboxPinnedPath() {
+#ifndef _Q_WINDOWS
+    if (dirfd >= 0) {
+        // the error of the operation is kept for the caller
+        int err = errno;
+        close(dirfd);
+        errno = err;
+    }
+#endif
+}
+
+#ifndef _Q_WINDOWS
+// true if the name ends with '/' or names a directory by its last component ('.' or '..'); the name reaches a
+// directory if it reaches anything
+static bool q_name_requires_dir(const char* name) {
+    size_t len = strlen(name);
+    if (len > 1 && name[len - 1] == '/') {
+        return true;
+    }
+    const char* leaf = strrchr(name, '/');
+    leaf = leaf ? leaf + 1 : name;
+    return !strcmp(leaf, ".") || !strcmp(leaf, "..");
+}
+#endif
+
+#ifndef _Q_WINDOWS
+// true if the name is a descriptor alias as such: /dev/fd/<digits>, with any number of '/' between its components
+static bool q_is_literal_descriptor_alias(const char* name) {
+    const char* p = name;
+    for (const char* comp : {"dev", "fd"}) {
+        if (*p != '/') {
+            return false;
+        }
+        while (*p == '/') {
+            ++p;
+        }
+        size_t len = strlen(comp);
+        if (strncmp(p, comp, len)) {
+            return false;
+        }
+        p += len;
+    }
+    if (*p != '/') {
+        return false;
+    }
+    while (*p == '/') {
+        ++p;
+    }
+    if (!isdigit((unsigned char)*p)) {
+        return false;
+    }
+    while (isdigit((unsigned char)*p)) {
+        ++p;
+    }
+    return !*p;
+}
+
+// pins a descriptor alias for reading its status: the descriptor is duplicated, and the policy is checked for the
+// file of the duplicate, which the operation then uses (pin.dirfd, with an empty leaf)
+static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mode, bool query,
+        QoreSandboxPinnedPath& pin, ExceptionSink* xsink) {
+    if ((!query && (mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE))) || !q_is_literal_descriptor_alias(name)) {
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: a descriptor alias cannot be "
+            "changed under a security policy", name);
+        return -1;
+    }
+    int fd;
+    for (int flags : {O_RDONLY, O_WRONLY}) {
+        do {
+            fd = open(name, flags | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+        } while (fd < 0 && errno == EINTR);
+        if (fd >= 0 || errno != EACCES) {
+            break;
+        }
+    }
+    if (fd < 0) {
+        return -2;
+    }
+    pin.dirfd = fd;
+    pin.leaf.clear();
+    pin.alias = true;
+    struct stat sbuf;
+    std::string target;
+    if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, nullptr, target)) {
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor whose "
+            "file cannot be identified by a path, so the security policy cannot be applied to it", name);
+        return -1;
+    }
+    ExceptionSink xsink2;
+    std::string canon;
+    {
+        qore_fs_security_private resolver;
+        canon = resolver.canonicalize(target.c_str(), &xsink2);
+    }
+    if (xsink2 || is_descriptor_alias(canon)) {
+        xsink2.clear();
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to cannot be "
+            "resolved", name);
+        return -1;
+    }
+    pin.canon = canon;
+    if (!QoreSandboxComposition::checkCanonicalFilesystemAccess(sm, pin.canon.c_str(), name, mode, xsink)) {
+        return -1;
+    }
+    q_dbg_fs_swap_point(name);
+    return 0;
+}
+#endif
+
+int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool entry, QoreSandboxPinnedPath& pin,
+        ExceptionSink* xsink, bool lookup) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -2;
+#else
+    assert(pin.dirfd < 0);
+    // an operation that only queries the object (QSEC_PIN_QUERY) can query a descriptor alias
+    bool query = mode & QSEC_PIN_QUERY;
+    mode &= ~QSEC_PIN_QUERY;
+    // a lookup of an entry (lstat()) reaches the object when the name ends with '/' or with '.' or '..', or is '/'
+    if (entry && lookup && (q_name_requires_dir(name) || !strcmp(name, "/"))) {
+        entry = false;
+    }
+    std::string canon_parent;
+    {
+        qore_fs_security_private resolver;
+        if (entry) {
+            // the entry itself: the directory holding it is resolved, its last component is not
+            std::string n(name);
+            while (n.size() > 1 && n.back() == '/') {
+                n.pop_back();
+                pin.dir_required = true;
+            }
+            size_t sep = n.rfind('/');
+            std::string dir = sep == std::string::npos ? std::string(".") : (sep ? n.substr(0, sep) : std::string("/"));
+            pin.leaf = sep == std::string::npos ? n : n.substr(sep + 1);
+            if (pin.leaf.empty() || pin.leaf == "." || pin.leaf == "..") {
+                errno = EINVAL;
+                return -2;
+            }
+            canon_parent = resolver.canonicalize(dir.c_str(), xsink);
+        } else {
+            // the object that the name reaches: every component is resolved; a name that requires a directory is
+            // checked to reach one, and its trailing '/' is not given to the operation, as it would make the operation
+            // follow a link that replaced the directory afterwards
+            pin.dir_required = q_name_requires_dir(name);
+            std::string canon = resolver.canonicalize(name, xsink);
+            if (!*xsink) {
+                if (canon == "/") {
+                    canon_parent = "/";
+                    pin.leaf = ".";
+                } else {
+                    size_t sep = canon.rfind('/');
+                    canon_parent = sep ? canon.substr(0, sep) : std::string("/");
+                    pin.leaf = canon.substr(sep + 1);
+                }
+            }
+        }
+        if (*xsink) {
+            return -1;
+        }
+    }
+    if (pin.leaf == ".") {
+        pin.canon = canon_parent;
+    } else {
+        pin.canon = canon_parent == "/" ? "/" + pin.leaf : canon_parent + "/" + pin.leaf;
+    }
+
+    // a descriptor alias (/dev/fd/N where /dev/fd is not a link: macOS, the BSDs) reaches the file of the descriptor,
+    // whatever its path, so it cannot be pinned by its path; only the status of a descriptor named as such is given,
+    // through a duplicate of the descriptor whose file the policy is checked for; any other operation in /dev/fd is
+    // denied
+    if (is_descriptor_alias(pin.canon) || is_descriptor_alias(canon_parent + "/")) {
+        return pin_descriptor_alias(sm, name, mode, query, pin, xsink);
+    }
+
+    // the directory is pinned: the operation acts in it, whatever its path reaches afterwards
+    pin.dirfd = open_dir_nofollow(canon_parent);
+    if (pin.dirfd < 0) {
+        // a component that is a link (it became one after the path was resolved) denies the operation; one that is
+        // not a directory (ENOTDIR) is the error of the operation, as without a policy
+        if (errno == ELOOP) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
+                "checked", name);
+            return -1;
+        }
+        return -2;
+    }
+
+    // the policy is checked for the canonical path pinned, without resolving it again: the directory was opened along
+    // it without following a link, so the decision applies to the directory pinned; the error names the path as given
+    if (!QoreSandboxComposition::checkCanonicalFilesystemAccess(sm, pin.canon.c_str(), name, mode, xsink)) {
+        return -1;
+    }
+    if (pin.dir_required) {
+        if (entry) {
+            // a name ending with '/' keeps it for an operation on an entry (that does not follow a link with it), to
+            // which the operating system applies its rules
+            pin.leaf += '/';
+        } else if (pin.leaf != ".") {
+            struct stat sbuf;
+            if (fstatat(pin.dirfd, pin.leaf.c_str(), &sbuf, AT_SYMLINK_NOFOLLOW)) {
+                return -2;
+            }
+            if (!S_ISDIR(sbuf.st_mode)) {
+                errno = ENOTDIR;
+                return -2;
+            }
+        }
+    }
+
+    // test hook: a concurrent change of the file system after the path was pinned
+    q_dbg_fs_swap_point(name);
+    return 0;
+#endif
+}
+
+int q_fchmodat_nofollow(int dirfd, const char* leaf, int mode) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -1;
+#else
+    // a change of mode that does not follow a link: supported on macOS and by Linux with fchmodat2()
+    if (!fchmodat(dirfd, leaf, mode, AT_SYMLINK_NOFOLLOW)) {
+        return 0;
+    }
+    if (errno != ENOTSUP && errno != EOPNOTSUPP && errno != ENOSYS && errno != EINVAL) {
+        return -1;
+    }
+#if defined(O_PATH) && defined(__linux__)
+    // the object is opened without following a link, and its mode is changed through the descriptor's procfs link,
+    // which reaches the object itself
+    int fd;
+    do {
+        fd = openat(dirfd, leaf, O_PATH | O_NOFOLLOW | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        return -1;
+    }
+    // the mode of a link is not changed (as with AT_SYMLINK_NOFOLLOW, which Linux does not support for links)
+    if (S_ISLNK(sbuf.st_mode)) {
+        errno = ELOOP;
+        return -1;
+    }
+    char proc_path[64];
+    snprintf(proc_path, sizeof proc_path, "/proc/self/fd/%d", fd);
+    return chmod(proc_path, mode);
+#else
+    // without a change of mode that does not follow a link, the operation is refused rather than raced
+    errno = ENOTSUP;
+    return -1;
+#endif
+#endif
+}
+
+int q_sandbox_pinned_stat(QoreSandboxManager& sm, const char* name, bool follow, struct stat& sbuf,
+        ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -1;
+#else
+    QoreSandboxPinnedPath pin;
+    if (q_sandbox_pin_path(sm, name, QSEC_READ, !follow, pin, xsink, true)) {
+        return -1;
+    }
+    if (pin.alias) {
+        return fstat(pin.dirfd, &sbuf) ? -1 : 0;
+    }
+    return fstatat(pin.dirfd, pin.leaf.c_str(), &sbuf, AT_SYMLINK_NOFOLLOW) ? -1 : 0;
+#endif
+}
+
+#ifdef Q_HAVE_STATVFS
+int q_sandbox_pinned_statvfs(QoreSandboxManager& sm, const char* name, struct statvfs& vfs, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -1;
+#else
+    QoreSandboxPinnedPath pin;
+    if (q_sandbox_pin_path(sm, name, QSEC_READ, false, pin, xsink)) {
+        return -1;
+    }
+    if (pin.alias) {
+        return fstatvfs(pin.dirfd, &vfs) ? -1 : 0;
+    }
+#ifdef O_PATH
+    // the object is reached without following a link and without opening it
+    int fd = openat(pin.dirfd, pin.leaf.c_str(), O_PATH | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0) {
+        return -1;
+    }
+    int rc = fstatvfs(fd, &vfs);
+    int err = errno;
+    close(fd);
+    errno = err;
+    return rc ? -1 : 0;
+#else
+    // an object on the file system of the directory pinned has that file system; another one is a directory on which
+    // a file system is mounted, which is opened as a directory without following a link
+    struct stat lsb, dsb;
+    if (fstatat(pin.dirfd, pin.leaf.c_str(), &lsb, AT_SYMLINK_NOFOLLOW) || fstat(pin.dirfd, &dsb)) {
+        return -1;
+    }
+    if (S_ISLNK(lsb.st_mode)) {
+        // the object was replaced by a link after it was checked
+        errno = ELOOP;
+        return -1;
+    }
+    if (lsb.st_dev == dsb.st_dev) {
+        return fstatvfs(pin.dirfd, &vfs) ? -1 : 0;
+    }
+    int fd = openat(pin.dirfd, pin.leaf.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY
+        | O_CLOEXEC);
+    if (fd < 0) {
+        return -1;
+    }
+    int rc = fstatvfs(fd, &vfs);
+    int err = errno;
+    close(fd);
+    errno = err;
+    return rc ? -1 : 0;
+#endif
+#endif
+}
+#endif
+
+int q_sandbox_pinned_access(QoreSandboxManager& sm, const char* name, int mode, int amode, ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -1;
+#else
+    QoreSandboxPinnedPath pin;
+    if (q_sandbox_pin_path(sm, name, mode | QSEC_PIN_QUERY, false, pin, xsink)) {
+        return -1;
+    }
+    if (pin.alias) {
+        // a descriptor alias can be opened for the access of the descriptor
+        int acc = fcntl(pin.dirfd, F_GETFL);
+        if (acc < 0) {
+            return -1;
+        }
+        acc &= O_ACCMODE;
+        if (((amode & R_OK) && acc == O_WRONLY) || ((amode & W_OK) && acc == O_RDONLY)) {
+            errno = EACCES;
+            return -1;
+        }
+        return 0;
+    }
+    // the access of the object is checked without opening it (which has side effects on devices and FIFOs)
+    if (!faccessat(pin.dirfd, pin.leaf.c_str(), amode, AT_EACCESS | AT_SYMLINK_NOFOLLOW)) {
+        return 0;
+    }
+    if (errno != EINVAL && errno != ENOSYS && errno != ENOTSUP && errno != EOPNOTSUPP) {
+        return -1;
+    }
+    // without a check of access that does not follow a link, the object is opened for the access without following a
+    // link, blocking or making a terminal the controlling terminal
+    int fd = openat(pin.dirfd, pin.leaf.c_str(), ((amode & W_OK) ? ((amode & R_OK) ? O_RDWR : O_WRONLY) : O_RDONLY)
+        | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    if (fd < 0) {
+        return -1;
+    }
+    close(fd);
+    return 0;
+#endif
 }

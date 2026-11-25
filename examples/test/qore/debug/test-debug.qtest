@@ -877,6 +877,16 @@ class DebugTest inherits QUnit::Test {
         h = pp.getSourceFileNames();
         testAssertionValue(name+'getSourceFileNames()', h, ('/usr/lib/my-source.q': ('label-f1': 10, 'label-sleep': 100), 'main.q': hash()));
 
+        # Two files with the same suffix are listed in insertion order; a suffix lookup selects the first.
+        Program paths();
+        paths.parsePending("int sub first() { return 1; }", "first", NOTHING, "/z/shared.q", 0, False);
+        paths.parsePending("int sub second() { return 2; }", "second", NOTHING, "/a/shared.q", 0, False);
+        paths.parseCommit();
+        ProgramControl files = paths.getProgram();
+        assertEq(("/z/shared.q", "/a/shared.q"), keys files.getSourceFileNames());
+        assertEq(files.findStatementId("/z/shared.q", 1), files.findStatementId("shared.q", 1));
+        assertTrue(files.findStatementId("/a/shared.q", 1) != files.findStatementId("shared.q", 1));
+
         assertThrows('PROGRAM-STATEMENT-ERROR', \pp.findStatementId(), ("main.q", 10), name+'findStatementId("main.q", 10) line beyond');
         assertThrows('PROGRAM-STATEMENT-ERROR', \pp.findStatementId(), ("non-exist.q", 1), name+'findStatementId("no-exist.q", 1) non exist');
 

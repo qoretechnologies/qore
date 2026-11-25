@@ -1,0 +1,42 @@
+before freezing:
+list: changed
+union: changed
+hash: changed
+field: changed
+field of the hash: changed
+list element type: changed
+field of the list element type: changed
+union alternative 1: changed
+field of the union alternative 1: changed
+union alternative 2: changed
+field of the union alternative 2: changed
+hash default other field type: changed
+field of the hash default other field type: changed
+type of the field: changed
+field of the type of the field: changed
+after freezing:
+list: SANDBOX-REGISTRATION-ERROR
+union: SANDBOX-REGISTRATION-ERROR
+hash: SANDBOX-REGISTRATION-ERROR
+field: SANDBOX-REGISTRATION-ERROR
+field of the hash: SANDBOX-REGISTRATION-ERROR
+list element type: SANDBOX-REGISTRATION-ERROR
+field of the list element type: SANDBOX-REGISTRATION-ERROR
+union alternative 1: SANDBOX-REGISTRATION-ERROR
+field of the union alternative 1: SANDBOX-REGISTRATION-ERROR
+union alternative 2: SANDBOX-REGISTRATION-ERROR
+field of the union alternative 2: SANDBOX-REGISTRATION-ERROR
+hash default other field type: SANDBOX-REGISTRATION-ERROR
+field of the hash default other field type: SANDBOX-REGISTRATION-ERROR
+type of the field: SANDBOX-REGISTRATION-ERROR
+field of the type of the field: SANDBOX-REGISTRATION-ERROR
+copies of the frozen types:
+copy of the list: changed
+element type of the copy of the list: SANDBOX-REGISTRATION-ERROR
+copy of the union: changed
+alternative of the copy of the union: SANDBOX-REGISTRATION-ERROR
+copy of the hash: changed
+default other field type of the copy of the hash: SANDBOX-REGISTRATION-ERROR
+frozen paths: [null, null, null, null, null]
+frozen field attributes: null
+frozen hash fields: ["outer_field"]

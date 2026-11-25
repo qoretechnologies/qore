@@ -18,6 +18,66 @@ CMAKE = os.environ.get("CMAKE_EXECUTABLE", "cmake")
 
 
 class UserModuleResourcesTest(unittest.TestCase):
+    def test_docs_fast_from_out_of_tree_build(self):
+        doxygen = shutil.which("doxygen")
+        qore = shutil.which(os.environ.get("QORE_BINARY", "qore"))
+        if not doxygen or not qore:
+            self.skipTest("Rendering a module requires Doxygen and Qore with the qdx modules")
+        with tempfile.TemporaryDirectory(prefix="qore-doc-assets-") as directory:
+            root = Path(directory)
+            source, build = root / "source tree", root / "separate build"
+            assets = source / "doxygen"
+            (assets / "qlib").mkdir(parents=True)
+            template = Path("qlib/Doxyfile.cmake.tmpl")
+            shutil.copyfile(ROOT / "doxygen" / template, assets / template)
+            for name in ("header_template.html", "footer_template.html", "dox_qore.css", "Qore-Q.ico",
+                         "qore-logo-55x151-white.png"):
+                shutil.copyfile(ROOT / "doxygen" / name, assets / name)
+            module = source / "qlib/DocFixture"
+            module.mkdir(parents=True)
+            (module / "DocFixture.qm").write_text('''module DocFixture {
+    version = "1.0";
+    desc = "Module documentation fixture";
+    author = "Qore";
+    url = "https://qore.org";
+    license = "MIT";
+}
+/** @mainpage Out-of-tree module documentation */
+''')
+            (module / "extra file.txt").write_text("module asset\n")
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(DocAssets NONE)
+set(QORE_GENERATE_JAVA_BINDINGS OFF)
+set(QORE_BUILD_AOT_MODULES OFF)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE "{Path(doxygen).as_posix()}")
+set(QORE_QDX_COMMAND "{Path(qore).resolve().as_posix()}" "{ROOT.as_posix()}/doxygen/qdx")
+set(QORE_USER_MODULES_DIR share/qore-modules)
+foreach(target qore docs docs-lang docs-lib)
+    add_custom_target(${{target}})
+endforeach()
+qore_user_module("qlib/DocFixture" "extra file.txt")
+''')
+            env = os.environ.copy()
+            build_dir = Path(env.get("QORE_TEST_BUILD_DIR", Path(qore).resolve().parent))
+            module_dirs = [ROOT / "qlib", *sorted((build_dir / "modules").glob("*/"))]
+            if env.get("QORE_MODULE_DIR"):
+                module_dirs.extend(env["QORE_MODULE_DIR"].split(os.pathsep))
+            env["QORE_MODULE_DIR"] = os.pathsep.join(map(str, module_dirs))
+            for command in ([CMAKE, "-S", source, "-B", build],
+                            [CMAKE, "--build", build, "--target", "docs-fast-DocFixture"]):
+                result = subprocess.run(command, capture_output=True, text=True, timeout=90, env=env)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            html = build / "docs/modules/DocFixture/html"
+            page = (html / "index.html").read_text()
+            self.assertIn("Out-of-tree module documentation", page)
+            self.assertIn("custom footer", page)
+            self.assertIn("Qore-Q.ico", page)
+            for name in ("dox_qore.css", "Qore-Q.ico"):
+                self.assertEqual((assets / name).read_bytes(), (html / name).read_bytes())
+            self.assertEqual("module asset\n", (html / "extra file.txt").read_text())
+
     def test_build_time_configuration_and_reciprocal_links(self):
         doxygen = shutil.which("doxygen")
         if not doxygen:
@@ -31,6 +91,14 @@ class UserModuleResourcesTest(unittest.TestCase):
                 (source / f"{name}.dox").write_text(
                     f'/** @mainpage {name}\n@section {name.lower()}intro Introduction\n'
                     f'@ref {peer.lower()}intro "{peer}"\n*/\n')
+            # Both doc passes import Unused. Only the final pass links to
+            # Reference. Searching App should still find every Reference symbol.
+            (source / "qlib/App.qm").write_text("%modern\n%requires Unused\n")
+            (source / "qlib/Unused.qm").write_text("%modern\n")
+            (source / "Unused.dox").write_text("/** @mainpage Unused */\n")
+            for name in ("App", "Reference", "Unused"):
+                (source / f"{name}.h").write_text(
+                    f"/** A searchable class. */ class {name}Symbol {{}};\n")
             # Model qdx's build-time regeneration of the base Doxyfile. Phase
             # settings must survive both the initial build and a repeated build.
             (source / "qdx.py").write_text(r'''import sys
@@ -41,8 +109,12 @@ if any(arg.endswith("Doxyfile.cmake.tmpl") for arg in sys.argv):
     name = config.name.removeprefix("Doxyfile.")
     build = config.parent.parent
     source = Path(__file__).parent
+    tags = " ".join(arg[2:] for arg in sys.argv if arg.startswith("-t"))
     config.write_text(f"""PROJECT_NAME = {name}
-INPUT = "{source / (name + '.dox')}"
+INPUT = "{source / (name + '.dox')}" "{source / (name + '.h')}"
+TAGFILES = {tags}
+EXTERNAL_PAGES = NO
+EXTERNAL_GROUPS = NO
 OUTPUT_DIRECTORY = "{build / 'docs/modules' / name}"
 GENERATE_TAGFILE = "{build / (name + '.tag')}"
 GENERATE_LATEX = NO
@@ -65,6 +137,8 @@ foreach(target qore docs docs-lang docs-lib)
 endforeach()
 set(QORE_DOC_EXTRA_MODULES_App Reference)
 set(QORE_DOC_EXTRA_MODULES_Reference App)
+set(QORE_DOC_PRUNE_SEARCH "{sys.executable}" -I "{ROOT.as_posix()}/doxygen/prune-module-search.py")
+qore_user_module("qlib/Unused.qm")
 qore_user_module("qlib/App.qm")
 qore_user_module("qlib/Reference.qm")
 QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
@@ -87,6 +161,23 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
                                             cwd=build, capture_output=True, text=True, timeout=30)
                     self.assertEqual(0, result.returncode, result.stdout + result.stderr)
                     self.assertEqual(timestamp, tag.stat().st_mtime_ns)
+                # The manual Doxygen invocation above restored the complete
+                # search index. Check this positive control before rebuilding.
+                search = build / "docs/modules/App/html/search"
+
+                def index():
+                    return "".join(shard.read_text() for shard in search.glob("all_*.js"))
+
+                self.assertIn("UnusedSymbol", index())
+                for target in ("docs-fast-App", "docs-App", "docs-App-final"):
+                    result = subprocess.run([CMAKE, "--build", str(build), "--target", target],
+                                            capture_output=True, text=True, timeout=60)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    symbols = index()
+                    self.assertIn("AppSymbol", symbols)
+                    self.assertNotIn("UnusedSymbol", symbols)
+                    if target.endswith("-final"):
+                        self.assertIn("ReferenceSymbol", symbols)
             # Final rendering must still reject genuinely broken references.
             with (source / "App.dox").open("a") as output:
                 output.write("/** @page broken Broken\n@ref nonexistentintro\n*/\n")

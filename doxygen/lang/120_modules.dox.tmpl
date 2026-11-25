@@ -1378,8 +1378,11 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       when parsing modules
 
     When parsing module code, the default warning mask is set to @ref Qore::WARN_MODULES "WARN_MODULES", and any
-    warnings are treated as errors.   Furthermore, any restrictions that the importing @ref Qore::Program "Program"
-    object has will be added to the module's @ref Qore::Program "Program" object, including the extended parse
+    warnings are treated as errors (@ref Qore::load_module_warn() "load_module_warn()" returns them instead).  This
+    applies to every file of a @ref separated_modules "separated module" as to a module in a single file, including
+    the warnings that are found only when the module's code is committed, such as \c INVALID-OPERATION.  Furthermore,
+    any restrictions that the importing @ref Qore::Program "Program" object has will be added to the module's
+    @ref Qore::Program "Program" object, including the extended parse
     options (for example \c no-class-defs, \c no-new or \c no-module-path-directives), as will its permissions
     (for example @ref allow-weak-references "%allow-weak-references" or
     @ref allow-opaque-references "%allow-opaque-references").  Options that only select language behavior (the
@@ -1456,6 +1459,16 @@ qcc of this Qore installation
     generated code keeps the identity, so existing compiled modules keep loading.  Ordinary binary modules written
     in C/C++ are not affected.
 
+    Executables compiled with \c qcc, and the script objects (\c "*.qo") linked into them, record the identity as
+    well and are refused the same way when they are run with a %Qore library of another identity, before any of
+    their code runs; an executable then exits with status 2, for example:
+
+    @verbatim
+AOT-RUNTIME-MISMATCH: the AOT-compiled program (/home/user/app/app.qr) was compiled for AOT runtime identity '...',
+but this Qore runtime (libqore 3.0.0) has AOT runtime identity '...'; its native code was generated for a
+different Qore library and cannot be run with this one; rebuild it with the qcc of this Qore installation
+    @endverbatim
+
     Modules built outside of the %Qore source tree with the %Qore CMake support (\c qore_user_modules() and
     \c qore_external_user_module()) recompile their AOT modules whenever \c qcc, the %Qore library or the installed
     qcc format fingerprint changes, so rebuilding such a module after installing a new %Qore library is enough.
@@ -1527,6 +1540,20 @@ qcc of this Qore installation
     install dependency files), and a module compiled by hand with <tt>qcc --compile-module</tt> without
     <tt>--depfile</tt>, which is loaded even if its source has changed since it was compiled.  Rebuild such a module
     after changing its source, or compile it with <tt>--depfile</tt>.
+
+    @anchor aot_module_builtin_api_identity
+    Any AOT-compiled module, installed or in a build tree, is also out of date when the builtin API of the %Qore
+    library has changed since it was compiled: the functional domains, code flags or signatures of its builtin
+    classes, methods and functions, or its builtin constants, which a module's code can have built in (for example
+    the functional domains that a class of the module inherits from a builtin base class).
+    \c qcc records the <em>builtin API identity</em> of its %Qore library, a digest of that API, in every module it
+    compiles (<tt>qcc --version</tt> and <tt>qcc --dump-info</tt> show it), and a %Qore library with another identity
+    raises \c AOT-MODULE-STALE for the module and loads its source module instead, with a
+    \c BINARY-MODULE-SOURCE-FALLBACK warning; without a source module, the module cannot be loaded until it is
+    rebuilt.  A change to the documentation or to the implementation of the library does not change the identity:
+    such a change requires the modules to be rebuilt only when it also changes the contract between compiled code and
+    the library (its AOT runtime identity, which \c qcc <tt>--version</tt> also shows).
+    The %Qore CMake support compiles the modules of a build again when the identity of the library changes.
 
     @subsection aot_module_code_signing AOT Module Metadata, Stripping and Code Signing
 

@@ -75,7 +75,7 @@ class AzureActionsTest inherits QUnit::Test {
         assertEq(100, expected.size());
         foreach int pass in (0..1) {
             if (pass) {
-                foreach hash<DataProviderActionInfo> action in (actionInfoList("AzureOpenAI")) {
+                foreach hash<DataProviderActionInfo> action in (AzureOpenAiSchema::getActionInfoList("AzureOpenAI")) {
                     DataProviderActionCatalog::registerAction(action);
                 }
             }
@@ -103,7 +103,7 @@ class AzureActionsTest inherits QUnit::Test {
         app.dynamic = True;
         DataProviderActionCatalog::registerPendingApp(alias, sub () {
             DataProviderActionCatalog::registerApp(app);
-            foreach hash<DataProviderActionInfo> action in (actionInfoList(alias)) {
+            foreach hash<DataProviderActionInfo> action in (AzureOpenAiSchema::getActionInfoList(alias)) {
                 hash<DataProviderActionInfo> deferred = action;
                 DataProviderActionCatalog::registerPendingAppAction(alias, action.action, sub () {
                     DataProviderActionCatalog::registerAction(deferred);
@@ -122,14 +122,6 @@ class AzureActionsTest inherits QUnit::Test {
         DataProviderQualifiedDiscovery result = DataProviderActionCatalog::sealDiscovery(session);
         assertTrue(result.getReport().complete);
         assertEq((), result.getReport().failures);
-    }
-
-    private static list<hash<DataProviderActionInfo>> actionInfoList(string app) {
-        list<hash<DataProviderActionInfo>> result = ();
-        foreach RestSchemaActionSet set in (AzureOpenAiSchema::getActionSets()) {
-            result += set.getActionInfoList(app);
-        }
-        return result;
     }
 
     private driftTest() {

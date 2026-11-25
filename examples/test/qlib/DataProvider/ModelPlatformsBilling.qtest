@@ -1,0 +1,34 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class ModelPlatformsBillingTest
+
+class ModelPlatformsBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("ModelPlatforms provider billing") {
+        addVendor("Bedrock", "AWSBedrock", "amazonaws.com", "metered",
+            "https://aws.amazon.com/bedrock/pricing/", {
+                "embed": "token", "get-foundation-model": "included",
+                "list-foundation-models": "included",
+            });
+        addVendor("AzureOpenAi", "AzureOpenAI", "azure.com", "metered",
+            "https://azure.microsoft.com/en-us/pricing/details/azure-openai/", {
+                "list-models": "included", "get-model": "included",
+                "chat-completion": "metered",
+            });
+        addVendor("VertexAi", "VertexAI", "googleapis.com", "metered",
+            "https://cloud.google.com/vertex-ai/generative-ai/pricing");
+        addVendor("HuggingFace", "HuggingFace", "huggingface.co", "unknown",
+            "https://huggingface.co/pricing", {
+                "get-model": "included", "get-dataset": "included", "list-spaces": "included",
+                "chat-completions": "metered",
+            }, {"chat-completions": "https://huggingface.co/docs/inference-providers/pricing"});
+        set_return_value(main());
+    }
+}

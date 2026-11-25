@@ -256,6 +256,18 @@ public:
     */
     DLLEXPORT void pushSendData(const QoreStringNode* data, ExceptionSink* xsink);
 
+    //! Sets the time to wait for a write of the request body after a 101 response
+    /** After a 101 response that the server sent before the request body was complete, the rest of the body is
+        written in the thread that pushes it (qore#7503); this bounds each of these writes.
+
+        @param timeout_ms the time to wait in milliseconds; <= 0 means no limit
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setSwitchedSendTimeout(int timeout_ms) {
+        switched_send_timeout_ms.store(timeout_ms > 0 ? timeout_ms : -1, std::memory_order_relaxed);
+    }
+
     //! Sets HTTP trailers for a streaming send request
     /** Must be called before pushSendData(nullptr).
         @param trailers hash of trailer key-value pairs
@@ -332,6 +344,9 @@ protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
+    //! The time to wait for a write of the request body after a 101 response; -1 means no limit (qore#7503)
+    std::atomic<int> switched_send_timeout_ms{-1};
+
     //! @name Transport ownership
     /** A manager-created connection owns the two wrapper objects. A Qore-created connection transfers
         them to the Http1Connection internal members and retains references only to their private data.

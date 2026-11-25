@@ -1932,10 +1932,11 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
 
     qore_hash_private* ph = qore_hash_private::get(*h);
 
+    // the paths of the module are external information
     if (with_filename) {
         ph->setKeyValueIntern("filename", new QoreStringNode(filename));
+        ph->setKeyValueIntern("path", new QoreStringNode(path));
     }
-    ph->setKeyValueIntern("path", new QoreStringNode(path));
     ph->setKeyValueIntern("name", new QoreStringNode(name));
     ph->setKeyValueIntern("desc", new QoreStringNode(desc));
     ph->setKeyValueIntern("version", new QoreStringNode(*version_list));
@@ -3359,6 +3360,16 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     const std::string feature_str(mod_info.name.c_str(), mod_info.name.size());
     const char* feature = feature_str.c_str();
 
+    // a module compiled against other builtin API metadata is out of date, as when it is loaded from a file (see
+    // loadBinaryModuleFromPath()); a statically registered module has no source to load instead (qore#7183)
+    if (aot_info.builtin_api_identity != qore_builtin_api_identity) {
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT static module '%s' for feature "
+            "'%s' was compiled against other builtin API metadata (builtin API identity '%s') than this Qore library "
+            "has ('%s'); rebuild the program with the qcc of this Qore installation", path, feature,
+            aot_info.builtin_api_identity.c_str(), qore_builtin_api_identity);
+        return -1;
+    }
+
     // lock-free fast path: module already committed to this program?
     if (qore_program_private::get(*tpgm)->hasCommittedFeature(feature)) {
         return 0;
@@ -3673,9 +3684,10 @@ public:
     @param desc the error description to append to
     @param search_paths the module directories that the feature was looked up in
     @param name the feature name
+    @param file_name_only name each file without its directory, for code restricted from external information
 */
 static void qore_append_unsupported_api_modules(QoreString& desc, const std::vector<const std::string*>& search_paths,
-        const char* name) {
+        const char* name, bool file_name_only = false) {
     std::string prefix = std::string(name) + "-api-";
     for (const std::string* dir : search_paths) {
         // the flat and split module forms, as searched by the loader
@@ -3728,8 +3740,8 @@ static void qore_append_unsupported_api_modules(QoreString& desc, const std::vec
                 if (supported) {
                     continue;
                 }
-                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d", path, major,
-                    minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
+                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d",
+                    file_name_only ? base : path, major, minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
             }
         }
     }
@@ -4558,6 +4570,14 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         *not_found = true;
     }
 
+    // the directories of the module path are external information: code restricted from it is not given them
+    if (ctx_pgm && (ctx_pgm->getParseOptions64() & PO_NO_EXTERNAL_INFO)) {
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module "
+            "with this name could be found in the module path", name));
+        qore_append_unsupported_api_modules(**desc, search_paths, name, true);
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc.release());
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module with "
         "this name could be found in the module path: ", name));
     if (!ctx_prepended.empty()) {
@@ -5254,9 +5274,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // the module's own code is parsed under the mask in this block
         QoreModuleMaskAddedClearHelper mask_added_clear(userModule->getProgram());
 
-        // issue #3212: warning sink
+        // issue #3212: warning sink; the warnings go to the caller's warning sink, as those of a single-file module
+        // do (see loadUserModuleFromPath()), so that a module is accepted or refused the same in either form (#7324)
         qore_program_private::get(*userModule->getProgram())->parsePending(moduleCode, modulePath.c_str(), &xsink,
-            &xsink, warning_mask);
+            &wsink, warning_mask);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
             return nullptr;
@@ -5282,14 +5303,17 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             fileOpenPath += file->c_str();
 
             std::string fileCode = QoreDir::get_file_content(fileOpenPath);
-            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink, &xsink,
-                file_warning_mask);
+            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink,
+                &wsink, file_warning_mask);
             if (xsink) {
                 xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
                 return nullptr;
             }
         }
-        userModule->getProgram()->parseCommit(&xsink);
+        // the warnings found when the module is committed are reported as well, under the warning mask that the .qm
+        // file left, as a single-file module's are under the mask that its file left: most of the QP_WARN_MODULES
+        // warnings are found only then (#7324)
+        userModule->getProgram()->parseCommit(&xsink, &wsink, file_warning_mask);
     }
     if (xsink) {
         xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
@@ -5421,21 +5445,11 @@ bool QoreModuleManager::checkAvailableOptionalModule(ExceptionSink& xsink, const
 }
 
 //! The checks of the loader for the optional modules of a module of a build tree (see qore_aot_check_module_sources())
-/** @param deps the files of the module's dependency file
+/** @param info the module's metadata record
+    @param deps the files of the module's dependency file
 */
-static QoreAOTModuleCheck qore_aot_check_module_optional_modules(const char* qmod, const std::set<std::string>& deps,
-        std::string& reason, std::string& dependency, std::string& error) {
-    QoreAOTModuleFileInfo info;
-    switch (qoreAOTReadModuleInfo(qmod, info, error)) {
-        case QoreAOTModuleInfoStatus::NONE:
-            // a module without metadata records no failed %try-module directive
-            return QoreAOTModuleCheck::CURRENT;
-        case QoreAOTModuleInfoStatus::INVALID:
-            error = "cannot read its module metadata: " + error;
-            return QoreAOTModuleCheck::ERROR;
-        case QoreAOTModuleInfoStatus::FOUND:
-            break;
-    }
+static QoreAOTModuleCheck qore_aot_check_module_optional_modules(const QoreAOTModuleFileInfo& info,
+        const std::set<std::string>& deps, std::string& reason, std::string& dependency, std::string& error) {
     if (info.unavailable_optional_modules.empty()) {
         return QoreAOTModuleCheck::CURRENT;
     }
@@ -5495,6 +5509,25 @@ QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& 
         return QoreAOTModuleCheck::ERROR;
     }
     const int64 qmod_mtime = qore_module_stat_mtime_ns(sb);
+
+    // a module compiled against other builtin API metadata than that of this libqore, which the loader loads the
+    // source of instead (see loadBinaryModuleFromPath(), qore#7183)
+    QoreAOTModuleFileInfo info;
+    std::string info_error;
+    QoreAOTModuleInfoStatus info_status = qoreAOTReadModuleInfo(qmod, info, info_error);
+    if (info_status == QoreAOTModuleInfoStatus::INVALID) {
+        // the loader refuses a module whose record it cannot read, such as one of another record version (written by
+        // another qcc), and loads its source instead: the module is compiled again
+        reason = "its module metadata cannot be read: " + info_error;
+        dependency = qmod;
+        return QoreAOTModuleCheck::STALE;
+    }
+    if (info_status == QoreAOTModuleInfoStatus::FOUND && info.builtin_api_identity != qore_builtin_api_identity) {
+        reason = "it was compiled against other builtin API metadata (builtin API identity '"
+            + info.builtin_api_identity + "') than the Qore library has ('" + qore_builtin_api_identity + "')";
+        dependency = qmod;
+        return QoreAOTModuleCheck::STALE;
+    }
 
     std::string depfile = std::string(qmod) + ".d";
     std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
@@ -5578,8 +5611,12 @@ QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& 
     if (stat(optional.c_str(), &osb) || !osb.st_size) {
         return QoreAOTModuleCheck::CURRENT;
     }
+    // a module without metadata records no failed %try-module directive
+    if (info_status == QoreAOTModuleInfoStatus::NONE) {
+        return QoreAOTModuleCheck::CURRENT;
+    }
     std::set<std::string> dep_set(deps.begin(), deps.end());
-    return qore_aot_check_module_optional_modules(qmod, dep_set, reason, dependency, error);
+    return qore_aot_check_module_optional_modules(info, dep_set, reason, dependency, error);
 #endif
 }
 
@@ -6933,6 +6970,18 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         return nullptr;
     }
     bool have_aot_info = aot_info_status == QoreAOTModuleInfoStatus::FOUND;
+
+    // an AOT module compiled against other builtin API metadata (a builtin class, function or constant whose
+    // functional domains, flags or signature have changed since) can have the old metadata built into its code, so it
+    // is out of date: the caller loads its source instead, or it is not loaded (qore#7183)
+    if (have_aot_info && aot_info.builtin_api_identity != qore_builtin_api_identity) {
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was compiled against "
+            "other builtin API metadata (builtin API identity '%s') than this Qore library has ('%s'): the functional "
+            "domains, flags or signature of a builtin class, function or constant that it may use have changed since "
+            "it was compiled; rebuild the AOT module", path, aot_info.builtin_api_identity.c_str(),
+            qore_builtin_api_identity);
+        return nullptr;
+    }
 
     // until the module is mapped, its dependencies are found as its initialization finds them, and as a source
     // module finds them: with its own %prepend-module-path and %append-module-path directories (written by qcc in

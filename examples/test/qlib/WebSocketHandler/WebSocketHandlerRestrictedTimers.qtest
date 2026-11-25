@@ -37,7 +37,15 @@ Program p(PO_NEW_STYLE | PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL);
 p.setSandboxManager(new SandboxManager());
 try {
     p.parse(ReadOnlyFile::readTextFile(ARGV[0]), \"service\");
-    map printf(\"%s\\n\", $1), p.callFunction(\"test\");
+    # The server accepts the connection and passes its socket to the restricted service.
+    Socket listener();
+    listener.bind(\"127.0.0.1:0\");
+    listener.listen();
+    Socket client();
+    client.connect(\"127.0.0.1:\" + listener.getSocketInfo().port, 5s);
+    Socket peer = listener.accept(5s);
+    listener.close();
+    map printf(\"%s\\n\", $1), p.callFunction(\"test\", peer);
 } catch (hash<ExceptionInfo> ex) {
     printf(\"%s: %s: %s\\n\", get_ex_pos(ex), ex.err, ex.desc);
 }

@@ -231,6 +231,13 @@ DLLLOCAL void qore_object_mark_process_constant(QoreValue v);
 */
 DLLLOCAL bool qore_removed_object_needs_scan(RObject* o, RObject* root);
 
+//! Returns true if the calling code may mark objects as shared by every Program of the process
+/** Code that no sandbox governs may, and so may the code of a class of a shared object in an update scope for it
+    (see SandboxManager::updateSharedObject()) as long as it does not run for sandboxed code that the scope's code
+    called; fails closed as qore_caller_is_sandboxed()
+*/
+DLLLOCAL bool qore_caller_may_share_objects();
+
 class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
@@ -248,6 +255,11 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! true if the object is a capability (qore#7052): an object of module code that the host's code created without
+    //! restrictions; a call of one of its methods that enters the Program of its code marks the context that it
+    //! enters as a grant (see ProgramThreadCountContextHelper::set() and ThreadData::CapabilityFrame); read only when
+    //! a call enters another Program, never by calls within one
+    bool capability_origin = false;
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection
@@ -283,6 +295,17 @@ public:
     //! set when the object's destruction has started; read without the object's locks as status is
     std::atomic<bool> in_destructor;
     bool recursive_ref_found;
+    //! Set when trusted code marks the object as shared by every Program of the process; never cleared (qore#6843)
+    /** Code that a sandbox governs cannot then change the object's members or delete it, except for the code of a
+        class of the object that runs in an update scope for it (see SandboxManager::updateSharedObject()); see
+        checkSharedChange().  Set before the object is published to other Programs, and read with relaxed ordering on
+        every member write.  Declared with the other flags, in the padding before the next pointer, so that it does
+        not make the object larger: every Qore object has one, and 8 more bytes take it to the next size class of the
+        allocator (16 more bytes for each object; sizeof(qore_object_private) is 520 in an x86_64 Linux release
+        build, with or without this flag).  The flags around it are plain members, not bit-fields, so it is a memory
+        location of its own.
+    */
+    std::atomic<bool> shared_object{false};
 
     QoreObject* obj;
 
@@ -290,8 +313,8 @@ public:
     //! The weak references that the dereferences taking the count to zero may release
     /** The object's base weak reference, plus one for each reference taken when the count was zero (a destructor
         making its object reachable again, or the deletion's own reference when others released the count to zero
-        first; see takeDeleteReference()).  Each dereference that takes the count to zero once the object is being
-        destroyed releases one of them, and they must never run out: a release beyond them frees the object while
+        first; see takeCollectDeleteReference()).  Each dereference that takes the count to zero once the object is
+        being destroyed releases one of them, and they must never run out: a release beyond them frees the object while
         other weak references (the self reference of a poll operation's private data, for one) still use it.
     */
     std::atomic<int> dbg_zero_count_weak_refs{1};
@@ -312,6 +335,68 @@ public:
     //! addresses. Deferred to keep the constructor cheap (the SHA1+sprintf
     //! chain consumes stack that can push deep recursion past the stack guard).
     mutable std::atomic<QoreStringNode*> unique_hash{nullptr};
+
+
+    //! Marks the object as shared by every Program of the process; see shared_object
+    DLLLOCAL void setShared() {
+        shared_object.store(true, std::memory_order_release);
+    }
+
+    //! Returns true if the object is marked as shared by every Program of the process; see shared_object
+    DLLLOCAL bool isShared() const {
+        return shared_object.load(std::memory_order_relaxed);
+    }
+
+    //! Returns true if the calling thread is running the destructor of the object
+    DLLLOCAL bool inDestructorOfThisThread() const {
+        return status.load(std::memory_order_acquire) == q_gettid();
+    }
+
+    //! Returns 0 if the running code can change (or delete) the object, or raises SHARED-OBJECT-ERROR and returns -1
+    /** Code that a sandbox governs, or that acts for sandboxed code, cannot change an object that trusted code marked
+        as shared, unless the change is made in an update scope for the object (see
+        SandboxManager::updateSharedObject()) by the code of the Program that opened it.  The decision depends on the
+        running code only, never on a class context that a caller gives (Reflection gives the class that declares a
+        member).
+
+        @param mem the member to change, or nullptr if the whole object is deleted or its members are changed together
+        @param xsink for the exception
+        @param del true if the object is deleted
+    */
+    DLLLOCAL int checkSharedChange(const char* mem, ExceptionSink* xsink, bool del = false) const {
+        if (!shared_object.load(std::memory_order_relaxed)) [[likely]] {
+            return 0;
+        }
+        return checkSharedChangeIntern(mem, xsink, del);
+    }
+
+    //! checkSharedChange() for an object marked as shared
+    DLLLOCAL QORE_INTERN_NOINLINE int checkSharedChangeIntern(const char* mem, ExceptionSink* xsink, bool del) const;
+
+    //! Runs \a update with the object writable for the code of the Program that calls it; see
+    //! SandboxManager::updateSharedObject()
+    /** @return the value that \a update returns, or no value with an exception raised
+    */
+    DLLLOCAL QoreValue runSharedUpdate(const ResolvedCallReferenceNode* update, ExceptionSink* xsink);
+
+    //! Returns 0 if \a callback may run on behalf of the calling code while the object is changed, or raises
+    //! SHARED-OBJECT-ERROR and returns -1; see SandboxManager::checkSharedObjectCallback()
+    DLLLOCAL int checkSharedCallback(const ResolvedCallReferenceNode* callback, const char* what,
+            ExceptionSink* xsink) const;
+
+    //! Returns 0 if the calling code can change the object in a method, or raises SHARED-OBJECT-ERROR and returns -1
+    /** For SandboxManager::checkSharedObjectChange(): code that a sandbox governs cannot change a shared object, also
+        through the methods of its class
+
+        @param what what is changed, for the exception
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkSharedMethodChange(const char* what, ExceptionSink* xsink) const;
+
+    //! Marks the object as shared if the calling code may share objects, or raises SHARED-OBJECT-ERROR and returns -1
+    /** see qore_caller_may_share_objects() and SandboxManager::shareObject()
+    */
+    DLLLOCAL int shareChecked(ExceptionSink* xsink);
 
     DLLLOCAL qore_object_private(QoreObject* n_obj, const QoreClass *oc, QoreProgram* p, QoreHashNode* n_data,
             const QoreTypeInfo* n_instantiated_type = nullptr);
@@ -511,8 +596,9 @@ public:
         }
 
         // all the members only in the object's class: another class context sees the members that it can use (issue
-        // #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
+        // #6760); not if sandboxed code declared the class and it inherits private members of a class that trusted
+        // code declared, which it cannot use (qore#6843)
+        if (class_ctx == qore_class_private::get(*theclass) && !class_ctx->sandbox_private_members) {
             const char* str = data->getFirstKey();
             //printd(5, "qore_object_private::firstKey() got %p (%s)\n", str, str ? str : "<null>");
             return !str ? nullptr : new QoreStringNode(str);
@@ -544,8 +630,8 @@ public:
             return nullptr;
         }
 
-        // all the members only in the object's class (issue #6760)
-        if (class_ctx == qore_class_private::get(*theclass)) {
+        // all the members only in the object's class (issue #6760), as in firstKey() (qore#6843)
+        if (class_ctx == qore_class_private::get(*theclass) && !class_ctx->sandbox_private_members) {
             const char* str = data->getLastKey();
             return !str ? nullptr : new QoreStringNode(str);
         }
@@ -759,8 +845,8 @@ public:
     /** Lock not held on entry.
 
         @param ref_taken true if the reference that the deletion holds while the destructor runs has been taken
-        already (takeDeleteReference(), when a dereference decided to delete the object), false to take it here (an
-        explicit deletion, whose caller holds a reference of its own)
+        already (takeLastDeleteReference() or takeCollectDeleteReference(), when a dereference decided to delete the
+        object), false to take it here (an explicit deletion, whose caller holds a reference of its own)
     */
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink, bool ref_taken = false);
 
@@ -783,17 +869,71 @@ public:
 
         @param refs_remained true if references remained when the dereference decided to delete the object
     */
-    DLLLOCAL void takeDeleteReference(bool refs_remained) {
-        // no rlck: the count is atomic, as in customRefIntern(); the object's lock is held exclusively
-        if (!references.fetch_add(1, std::memory_order_acq_rel) && refs_remained) {
+    //! takes the deletion's reference for a dereference that released the last reference, unless another thread
+    //! has taken one since
+    /** @return true if the reference was taken; false if another thread has taken a reference (through a weak
+        reference) since the count reached zero: the deletion is abandoned, as that thread's last release decides
+        again (qore#7509)
+
+        No lock: a reference taken since is held while the count is above zero, which the compare-and-swap sees; one
+        taken and released since leaves the count at zero, and its release decides as well (it finds the object
+        being destroyed, or decides itself if this dereference abandons).  The object's lock is held exclusively.
+    */
+    DLLLOCAL bool takeLastDeleteReference() {
+        int refs = 0;
+        return references.compare_exchange_strong(refs, 1, std::memory_order_acq_rel, std::memory_order_acquire);
+    }
+
+    //! takes the deletion's reference for a dereference that decided to collect the object as part of a recursive
+    //! set, unless another thread has taken a reference since the decision; lowers collect_pending
+    /** @param decided the count with which the collection was decided (RSet::canDelete())
+        @param releases RObject::locked_releases, read with that count
+
+        @return true if the reference was taken; false if another thread has taken a reference (through a weak
+        reference) since the decision: the collection is abandoned, as that thread's last release decides again
+        (qore#7509).  The count alone cannot tell: references counted at the decision can be released since, by
+        threads that reached the object through other weak references, while one is taken; but every release made
+        since is made in the locking path, which counts it (collect_pending), so the count plus the releases since the
+        decision is above \a decided exactly when a reference has been taken since.
+
+        rlck orders this with the releases of the locking path; increments take no lock, and are seen by the
+        compare-and-swap.  The object's lock is held exclusively.
+    */
+    DLLLOCAL bool takeCollectDeleteReference(int decided, unsigned releases) {
+        AutoLocker al(rlck);
+        collect_pending.fetch_sub(1, std::memory_order_relaxed);
+        int since = static_cast<int>(locked_releases - releases);
+        int refs = references.load(std::memory_order_acquire);
+        do {
+            if (refs + since > decided) {
+                return false;
+            }
+        } while (!references.compare_exchange_weak(refs, refs + 1, std::memory_order_acq_rel,
+            std::memory_order_acquire));
+        if (!refs) {
+            // the references that remained were released first: see dbg_zero_count_weak_refs
             tRef();
 #ifdef DEBUG
             ++dbg_zero_count_weak_refs;
 #endif
         }
+        return true;
     }
 
-    DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
+    //! frees the private data, members and class-specific members that were detached from a deleted object
+    /** Called without the object's lock, once the object is marked deleted and the storage is detached from it with the
+        lock held
+    */
+    DLLLOCAL void cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm);
+
+#ifdef DEBUG
+    //! Test hook run by cleanup() once the private data of a deleted object is freed, before its members are released
+    /** Tests hold the cleanup of a deleted object here to make a call that another thread makes with the object
+        deterministic; see dbg_hold_object_cleanup().
+    */
+    typedef void (*dbg_cleanup_t)(QoreObject& obj);
+    DLLLOCAL static std::atomic<dbg_cleanup_t> dbg_cleanup_hook;
+#endif
 
     //! Invalidate an incomplete object while its owner keeps its reference alive.
     /** Clears member and native storage without calling user destructors or
@@ -827,12 +967,13 @@ public:
     }
 
     DLLLOCAL void doPrivateException(const char* mem, ExceptionSink* xsink) const {
-        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem, theclass->getName());
+        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem,
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL void doPublicException(const char* mem, ExceptionSink* xsink) const {
         xsink->raiseException("INVALID-MEMBER", "'%s' is not a registered member of class '%s'", mem,
-            theclass->getName());
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -925,8 +1066,15 @@ public:
     // add virtual IDs for private data to class list
     DLLLOCAL void addVirtualPrivateData(qore_classid_t key, AbstractPrivateData* apd);
 
+    //! removes the private data of the given class from the object and returns it; the caller owns it
+    /** Raises OBJECT-ALREADY-DELETED and returns nullptr if the object is deleted, also while its private data is freed
+    */
     DLLLOCAL AbstractPrivateData* getAndRemovePrivateData(qore_classid_t key, ExceptionSink* xsink) {
         QoreSafeVarRWWriteLocker sl(rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return nullptr;
+        }
         return privateData ? privateData->getAndRemovePtr(key) : nullptr;
     }
 
@@ -968,9 +1116,11 @@ public:
     /** private members are excluded if called outside the class, caller owns the QoreHashNode reference returned
 
         @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param class_ctx class scope of the code requesting the members
         @return member data of the object
     */
-    DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink) const;
+    DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink,
+        const qore_class_private* class_ctx = runtime_get_class()) const;
 
     //! returns the names of the members that the calling code can see, as the keys of getRuntimeMemberHash() (#7048)
     /** raises an exception and returns nullptr if the object has been deleted
@@ -1044,7 +1194,7 @@ public:
     //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
         // only a dereference that decided to delete the object defers or makes its deletion, and it has taken the
-        // deletion's reference (takeDeleteReference())
+        // deletion's reference (takeLastDeleteReference(), takeCollectDeleteReference())
         doDeleteIntern(xsink, true);
     }
 

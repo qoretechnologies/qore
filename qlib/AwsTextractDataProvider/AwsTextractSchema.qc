@@ -13,15 +13,17 @@ public namespace AwsTextractDataProvider {
 */
 public class AwsTextractSchema {
     private {
-        static *OpenApi3::OpenApi3Schema schema;
-        static hash<string, AbstractDataProviderType> types = {};
-        static hash<string, HashDataType> legacy_types = {};
+        #! The ID of the lazy value of the imported types (qore#6843); see getType()
+        static int types_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \AwsTextractSchema::buildTypesValue());
+        #! The ID of the lazy value of the compatible document action types (qore#6843); see getLegacyRequestType()
+        static int legacy_types_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \AwsTextractSchema::buildLegacyTypesValue());
     }
 
-    private:internal {
-        static Mutex lck();
-
-        static Mutex legacy_lck();
+    public {
+        #! The original document action IDs, which have compatible request types; see getLegacyRequestType()
+        const LegacyActions = ("analyze-document", "detect-document-text");
     }
 
     #! Returns the compatible document action form with complete nested query and adapter types
@@ -29,8 +31,22 @@ public class AwsTextractSchema {
         @return typed fields retaining the original option identities
     */
     static HashDataType getLegacyRequestType(string action) {
-        AutoLock al(legacy_lck);
-        if (!legacy_types{action}) {
+        *HashDataType type = DataProvider::DataProviderActionCatalog::getLazyValue(legacy_types_value_id){action};
+        if (!type) {
+            throw "AWS-TEXTRACT-SCHEMA-ERROR", sprintf("unknown document action %y", action);
+        }
+        return type;
+    }
+
+    #! Builds the compatible document action types from the module's vendored data only, with no input from the
+    #! caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the types that every Program
+        shares are not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static hash<string, HashDataType> buildLegacyTypesValue() {
+        hash<string, HashDataType> legacy_types = {};
+        foreach string action in (LegacyActions) {
             HashDataType type("AwsTextract-" + action);
             type.addQoreFields(action == "analyze-document" ? AwsTextractAnalyzeDocumentRequestDataType::Fields
                 : AwsTextractDetectDocumentTextRequestDataType::Fields);
@@ -43,7 +59,7 @@ public class AwsTextractSchema {
             }
             legacy_types{action} = type;
         }
-        return legacy_types{action};
+        return legacy_types;
     }
 
     #! Returns a complete reusable type from the pinned model
@@ -52,8 +68,21 @@ public class AwsTextractSchema {
         @throw AWS-TEXTRACT-SCHEMA-ERROR unsupported import boundary
     */
     static AbstractDataProviderType getType(string name) {
-        AutoLock al(lck);
-        if (!schema) {
+        hash<string, AbstractDataProviderType> types = DataProvider::DataProviderActionCatalog::getLazyValue(
+            types_value_id);
+        if (!types.hasKey(name)) {
+            throw "AWS-TEXTRACT-SCHEMA-ERROR", "unknown imported shape " + name;
+        }
+        return types{name};
+    }
+
+    #! Builds the imported types from the module's vendored model only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the types that every Program
+        shares are not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static hash<string, AbstractDataProviderType> buildTypesValue() {
+        {
             if (Priv::TextractTypes."x-qore-textract-boundary".version != 1) {
                 throw "AWS-TEXTRACT-SCHEMA-ERROR", "unsupported Textract type boundary";
             }
@@ -66,13 +95,8 @@ public class AwsTextractSchema {
                 decorate(entry.key, entry.value);
             }
             # Publish only after decoration is complete: readers never see schema mutation.
-            types = complete;
-            schema = parsed;
+            return complete;
         }
-        if (!types.hasKey(name)) {
-            throw "AWS-TEXTRACT-SCHEMA-ERROR", "unknown imported shape " + name;
-        }
-        return types{name};
     }
 
     # Native list enums need field-level choices as well as a schema-backed element type.

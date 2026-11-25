@@ -18,7 +18,9 @@ added to the list with the category that says why every caller may read it:
     child-map    the map of the classes of the child providers of a data provider
     module-data  data of the module itself, the same for every caller: schemas, API definitions and data types that
                  the module loads from its own sources or from a public source, and the objects built from them
-    scalar       a flag, a counter or a scalar cache that holds no data of a caller
+    scalar       a flag, a counter or a scalar cache that holds no data of a caller, such as the ID of a lazy value
+                 of the module (DataProviderActionCatalog::registerLazyValue()), whose value its class gives every
+                 caller through a public method
     callbacks    a registry of callbacks that qore#6743 covers
     factories    a registry of factories that qore#6744 covers
 

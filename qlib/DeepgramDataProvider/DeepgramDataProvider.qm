@@ -58,6 +58,15 @@ module DeepgramDataProvider {
                 "- **Conversational AI**: pair Deepgram TTS with any LLM to "
                 "build end-to-end voice conversation pipelines",
             "scheme": "deepgram",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "deepgram.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://deepgram.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": DeepgramLogo,
             "logo_file_name": "deepgram-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -71,6 +80,7 @@ module DeepgramDataProvider {
             "app": DeepgramDataProvider::AppName,
             "path": "/transcribe-file",
             "action": "transcribe-file",
+            "billing": <DataProviderBillingInfo>{"unit": "second"},
             "display_name": "Transcribe File",
             "short_desc": "Transcribe an audio file by URL or upload via Deepgram ASR",
             "desc": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the "
@@ -103,6 +113,7 @@ module DeepgramDataProvider {
             "app": DeepgramDataProvider::AppName,
             "path": "/synthesize-speech",
             "action": "synthesize-speech",
+            "billing": <DataProviderBillingInfo>{"unit": "character"},
             "display_name": "Synthesize Speech",
             "short_desc": "Synthesize speech from text via Deepgram TTS (Aura models)",
             "desc": "Posts text to Deepgram's `/v1/speak` endpoint and returns the "

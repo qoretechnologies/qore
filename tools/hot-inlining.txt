@@ -38,3 +38,7 @@ QoreLogicalEqualsOperatorNode::bigIntSoftEqual QoreStatementTempScope::holdRecei
 QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::LValueHelper
 QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::preIncrementBigInt
 QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::preIncrementBigIntInline
+# the unqualified call of a method of self in the IR interpreter, on the path of a recursion of a method that calls
+# itself: an out-of-line call puts its frame on the stack at each level (qore#7336: the growth of the unit made GCC
+# call it out of line, about 105 bytes per level of recursion-frame-budget.qtest's ir method recursion)
+QoreIRInterpreter::execute qore_rt_try_self_call_fast_object
