@@ -54,6 +54,27 @@ public:
 
     //! Marks the manager as governing code: its isolation domain is fixed from then on (qore#6536)
     DLLLOCAL static void setGoverns(QoreSandboxManager* sm);
+
+    //! Checks the file system access to a canonical path without resolving it again (qore#7518)
+    /** For a path that was resolved and then pinned (opened without following a link along it): the rules apply to
+        the path as given, which is not resolved again, so that the decision applies to the object pinned; a composite
+        manager checks it with each of its members
+
+        @param sm the manager
+        @param canon the canonical path, absolute and without a link
+        @param path the path as the caller gave it, for errors
+        @param mode the QSEC_* access
+        @param xsink for the exception of a denial
+
+        @return true if the access is allowed
+    */
+    DLLLOCAL static bool checkCanonicalFilesystemAccess(QoreSandboxManager& sm, const char* canon, const char* path,
+            int mode, ExceptionSink* xsink);
+
+private:
+    //! Checks the access of a file system policy to a canonical path (see checkCanonicalFilesystemAccess())
+    DLLLOCAL static bool checkCanonicalAccess(QoreFilesystemSecurityManager& fs, const char* canon, const char* path,
+            int mode, ExceptionSink* xsink);
 };
 
 class QoreProgram;

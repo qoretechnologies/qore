@@ -1432,7 +1432,23 @@ bool Dir::removeFile(string filename) [flags=NAMED_ARGS] {
    }
 
    errno = 0; // clear errno flag
-   if (unlink(path.c_str()) && errno != ENOENT)
+   int rc;
+#ifndef _Q_WINDOWS
+   // the file is removed from the directory that the policy checked, pinned against a concurrent change (qore#7518)
+   if (smh) {
+      QoreSandboxPinnedPath pin;
+      rc = q_sandbox_pin_path(*smh.get(), path.c_str(), QSEC_DELETE, true, pin, xsink);
+      if (*xsink) {
+         return QoreValue();
+      }
+      if (!rc) {
+         errno = 0;
+         rc = unlinkat(pin.dirfd, pin.leaf.c_str(), 0);
+      }
+   } else
+#endif
+   rc = unlink(path.c_str());
+   if (rc && errno != ENOENT)
       return xsink->raiseErrnoException("DIR-REMOVEFILE-FAILURE", errno, "error removing file '%s'", filename->getBuffer());
 
    // if an errno was set it must be ENOENT at this point.
