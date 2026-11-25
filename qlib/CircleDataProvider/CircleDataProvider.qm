@@ -53,6 +53,16 @@ module CircleDataProvider {
                 "spaces, events, and messaging.\n\n"
                 "This integration supports creating and managing community content, "
                 "member management, space membership, tagging, and direct messaging.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "circle.so",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "unit": "request",
+                "source": "https://circle.so/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "circlerest",
             "logo": CircleLogo,
             "logo_file_name": "circle-logo.svg",
