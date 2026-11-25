@@ -287,18 +287,25 @@ int QoreGetOpt::processShortArg(const char* arg, QoreListNode* l, class QoreHash
     return !j;
 }
 
-QoreHashNode* QoreGetOpt::parse(QoreListNode* l, bool modify, ExceptionSink *xsink) {
+QoreHashNode* QoreGetOpt::parse(QoreListNode* l, bool modify, ExceptionSink* xsink, bool leading_only) {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
     for (unsigned i = 0; i < l->size(); ++i) {
         //printf("QoreGetOpt::parse() %d/%d\n", i, l->size());
         QoreValue n = l->retrieveEntry(i);
-        if (n.getType() != NT_STRING)
+        if (n.getType() != NT_STRING) {
+            if (leading_only) {
+                break;
+            }
             continue;
+        }
 
         QoreStringValueHelper str(n);
         const char* arg = str->c_str();
 
+        if (leading_only && (arg[0] != '-' || !arg[1])) {
+            break;
+        }
         if (arg[0] == '-') {
             if (!arg[1])
                 continue;

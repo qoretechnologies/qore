@@ -134,6 +134,22 @@ static AbstractQoreNode* GETOPT_parse2_intern(ReferenceHolder<QoreHashNode>& rv,
     return xsink->raiseException("GETOPT-ERROR", err.getReferencedValue());
 }
 
+static QoreValue GETOPT_parse2_ref(GetOpt* g, const ReferenceNode* arguments, ExceptionSink* xsink, bool leading_only) {
+    QoreTypeSafeReferenceHelper ref(arguments, xsink);
+    if (!ref)
+        return QoreValue();
+
+    if (ref.getType() != NT_LIST)
+        return new QoreHashNode(autoTypeInfo);
+
+    QoreListNode* l = reinterpret_cast<QoreListNode*>(ref.getUnique());
+    if (*xsink)
+        return QoreValue();
+
+    ReferenceHolder<QoreHashNode> rv(g->parse(l, true, xsink, leading_only), xsink);
+    return *xsink ? QoreValue() : GETOPT_parse2_intern(rv, xsink);
+}
+
 static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv, ExceptionSink* xsink) {
     assert(rv);
 
@@ -376,19 +392,7 @@ try {
     @see GetOpt::parse() for a similar method that puts error information in the \c "_ERRORS_" key of the hash value returned instead of throwing an exception
  */
 hash<auto> GetOpt::parse2(reference<list<string>> arguments) [flags=NAMED_ARGS] {
-    QoreTypeSafeReferenceHelper ref(arguments, xsink);
-    if (!ref)
-        return QoreValue();
-
-    if (ref.getType() != NT_LIST)
-        return new QoreHashNode(autoTypeInfo);
-
-    QoreListNode* l = reinterpret_cast<QoreListNode*>(ref.getUnique());
-    if (*xsink)
-        return QoreValue();
-
-    ReferenceHolder<QoreHashNode> rv(g->parse(l, true, xsink), xsink);
-    return *xsink ? QoreValue() : GETOPT_parse2_intern(rv, xsink);
+    return GETOPT_parse2_ref(g, arguments, xsink, false);
 }
 
 //! Parses the parameter list according to the option hash passed to the constructor
@@ -676,4 +680,27 @@ static hash<auto> GetOpt::parseExit(hash<auto> options, reference<list<string>> 
 
     ReferenceHolder<QoreHashNode> rv(g->parse(l, true, xsink), xsink);
     return *xsink ? QoreValue() : GETOPT_parse3_intern(rv, xsink);
+}
+
+
+//! Parses only the leading options of a wrapper command
+/** @param arguments a reference to the command-line arguments. Parsed options and their values are removed.
+    Parsing stops at the first positional argument, including a single dash or an empty string. A double dash
+    also stops parsing and remains in the list, as in parse2(). All remaining arguments retain their original order.
+
+    @return the parsed options, keyed by the names supplied to the constructor
+    @throw GETOPT-ERROR an option before the stopping point is invalid or lacks a required value
+
+    @par Example
+    @code{.py}
+    GetOpt wrapper({"verbose": "v,verbose", "output": "o,out=s"});
+    list<string> args = ("-v", "-o", "log", "program", "--version");
+    hash<auto> opts = wrapper.parseLeading(\args);
+    # args is now ("program", "--version")
+    @endcode
+
+    @since %Qore 3.0
+*/
+hash<auto> GetOpt::parseLeading(reference<list<string>> arguments) [flags=NAMED_ARGS] {
+    return GETOPT_parse2_ref(g, arguments, xsink, true);
 }
