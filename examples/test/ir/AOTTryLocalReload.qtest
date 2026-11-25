@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%exec-class TryLocalReloadTest
+
+#! Tests the locals of try statements in functions with and without on_exit/on_error handlers
+/** A try statement's scope exit and landing pad call the runtime helper that runs the handlers registered in its
+    scope and, in a function with handlers, reload every local after it.  A function without handlers registers
+    none, so the helper runs no code and nothing is reloaded there; the locals that a throwing callee changed
+    through a reference must still be seen by the catch block, and handlers must still see and assign the current
+    values.  Every mode and compiled executable must match the interpreter.
+*/
+class TryLocalReloadTest inherits QUnit::Test {
+    private {
+        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
+        string qcc = ENV.QCC ?? libdir + "/qcc";
+    }
+
+    constructor() : Test("try local reload", "1.0", \ARGV) {
+        addTestCase("try statements with and without handlers", \check());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string run(list<string> args, string prefix = "") {
+        int status;
+        string output = backquote(prefix + "LD_LIBRARY_PATH=" + quote(libdir)
+            + " DYLD_LIBRARY_PATH=" + quote(libdir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1", \status);
+        assertEq(0, status, output);
+        return output;
+    }
+
+    private check() {
+        string source = get_script_dir() + "/AOTTryLocalReload.qr";
+        string expected = run((qore, "--exec-mode=ast", source));
+        assertRegex("aot-try-local-reload: ok\n$", expected);
+        # the catch blocks see the values assigned by the throwing callees; the handlers' assignments are kept
+        assertRegex('^results: \[5, "new", 5, ', expected);
+        assertRegex('"caught new"', expected);
+        assertRegex('"outer exit 21"', expected);
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run((qore, "--exec-mode=" + mode, source),
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 "), mode);
+        }
+        TmpDir dir("qore-try-local-reload-");
+        foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+            foreach string level in (("-O0", "-O3")) {
+                string executable = dir.path + "/fixture";
+                run((qcc, level, "--strip-source", "-o", executable, source), prefix);
+                assertEq(expected, run((executable,)), prefix + level);
+            }
+        }
+    }
+}

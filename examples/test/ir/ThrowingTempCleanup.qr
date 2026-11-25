@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+%allow-debugger
+
+thread_local int fused_deleted = 0;
+thread_local bool fused_throw_on_delete = False;
+thread_local bool fused_in_destructor = False;
+
+class FusedReloadDelta {
+    destructor() {
+        ++fused_deleted;
+        if (fused_in_destructor) {
+            return;
+        }
+        fused_in_destructor = True;
+        on_exit fused_in_destructor = False;
+        # The consumed RHS must finish destruction before the root is reloaded.
+        set_local_var_value(1, "values", (991, 992));
+        if (fused_throw_on_delete) {
+            throw "FUSED-RHS-DELETE", "RHS destruction after indexed update";
+        }
+    }
+}
+
+auto sub fusedDelta(int kind) {
+    switch (kind) {
+        case 0: return 1;
+        case 1: return 140737488355328;
+        case 2: return "3";
+        case 3: return 2.5;
+        default: return new FusedReloadDelta();
+    }
+}
+
+string sub fusedUnused(int old, int kind, int index, bool shared) {
+    list<int> values = (old, old + 1);
+    list<int> alias;
+    if (shared) {
+        alias = values;
+    }
+    string error = "ok";
+    try {
+        for (int i = 0; i < 3; ++i) {
+            values[index] += fusedDelta(kind);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        error = ex.err;
+    }
+    return sprintf("%s:%y:%y", error, values, alias);
+}
+
+fused_throw_on_delete = True;
+string result = call_function("fusedUnused", 7, 5, 0, False);
+if (result != "FUSED-RHS-DELETE:[991, 992]:null" || fused_deleted != 1) {
+    throw "TEMP-CLEANUP-TEST", sprintf("result=%s destroyed=%d", result, fused_deleted);
+}
+printf("throwing-temp-cleanup: ok\n");

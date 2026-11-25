@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTSiblingNameCollisionTest
+
+#! Tests that sibling objects defining a function with the same name do not lend each other its native body
+/** The incremental compiler (`qcc -c -L <dir>`) imports the fast-entry metadata of the functions that the
+    objects in the library directory define, looked up by Qore path.  Two defects let one sibling's metadata
+    stand for another function with the same name:
+
+    - a function defined by the source being compiled took a sibling's record whenever it had no fast entry of
+      its own, so the object named the sibling's native symbol, source and body dependencies for it;
+    - a path defined by two siblings was treated as ambiguous only when both carried a fast entry, so a
+      sibling defining it with an ordinary body left the other sibling's fast entry looking unique.
+
+    Either way the link failed with "qo-link unresolved body contract", or would have called the other
+    function.  The target's function here has no fast entry because its program allows the debugger.
+*/
+class AOTSiblingNameCollisionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTSiblingNameCollisionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a target function does not take a same-named sibling's fast entry", \testTargetFunction());
+        addTestCase("a path defined by two siblings is ambiguous whatever their entry ABIs",
+            \testAmbiguousSiblings());
+
+        set_return_value(main());
+    }
+
+    testTargetFunction() {
+        checkQcc();
+        TmpDir tmp("qore-aot-sibling-name-");
+        compile(tmp.path, "other");
+        compile(tmp.path, "target");
+        hash<auto> rv = run(sprintf("%s %s --dump-symbols %s", env, qcc_bin, path(tmp.path, "target", "qo")));
+        assertEq(0, rv.rc, rv.err);
+        assertEq(-1, rv.out.find("other.qr"), "the target object names nothing from the other sibling");
+        assertRegex("native +run\\(\\) .*abi=qore_body ", rv.out, "the target's run() keeps its own body");
+    }
+
+    testAmbiguousSiblings() {
+        checkQcc();
+        TmpDir tmp("qore-aot-sibling-name-");
+        compile(tmp.path, "other");
+        compile(tmp.path, "target");
+        compile(tmp.path, "main");
+        hash<auto> rv = run(sprintf("%s %s --dump-symbols %s", env, qcc_bin, path(tmp.path, "main", "qo")));
+        assertEq(0, rv.rc, rv.err);
+        assertEq((), (select rv.out.split("\n"), $1 =~ /function +run\(\) .*abi=qore_body_contract_import_v1/),
+            "the entry object imports no body contract for the ambiguous run()");
+        foreach list<string> order in ((("target", "main"), ("main", "target"))) {
+            string exe = path(tmp.path, "exe", "");
+            rv = run(sprintf("%s %s -o %s %s %s", env, qcc_bin, exe, path(tmp.path, order[0], "qo"),
+                path(tmp.path, order[1], "qo")));
+            assertEq(0, rv.rc, order.join(" ") + ": " + rv.err);
+            rv = run(sprintf("%s %s", env, exe));
+            assertEq(0, rv.rc, rv.err);
+            assertEq("target\n", rv.out, order.join(" "));
+            unlink(exe);
+        }
+    }
+
+    private compile(string dir, string name) {
+        writeFile(path(dir, name, "qr"), Sources{name});
+        hash<auto> rv = run(sprintf("%s %s -c -L %s -o %s %s", env, qcc_bin, dir, path(dir, name, "qo"),
+            path(dir, name, "qr")));
+        assertEq(0, rv.rc, name + ": " + rv.err);
+    }
+
+    private checkQcc() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+    }
+
+    private static string path(string dir, string name, string ext) {
+        return dir + DirSep + name + (ext ? "." + ext : "");
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        f.close();
+    }
+
+    #! runs a shell command; returns its exit code and its standard output and error, merged
+    private static hash<auto> run(string cmd) {
+        int rc;
+        string out = backquote(cmd + " 2>&1", \rc);
+        return {"rc": rc, "out": out, "err": out};
+    }
+
+    public {
+        #! the sources compiled to sibling objects in one library directory
+        const Sources = {
+            # an ordinary function with a native fast entry
+            "other": "%modern\nsub run() {\n    printf(\"other\\n\");\n}\n",
+            # a function with the same name and no fast entry: the debugger can read its frame
+            "target": "%modern\n%allow-debugger\nsub run() {\n    printf(\"target\\n\");\n}\n",
+            "main": "%modern\nint sub main() {\n    run();\n    return 0;\n}\n",
+        };
+    }
+}
