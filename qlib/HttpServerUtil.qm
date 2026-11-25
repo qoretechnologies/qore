@@ -3136,6 +3136,8 @@ class HttpServerDispatchCapability {
         *string path;
         #! True once the path was checked against the record of the loaded HttpServer module
         bool checked;
+        #! True if the check failed: the capability makes no request current (fails closed for stream requests only)
+        bool unusable;
         #! a lock for the check
         Mutex lck();
         #! resolves the file of the loaded HttpServer module with the system policy (see check())
@@ -3172,7 +3174,10 @@ class HttpServerDispatchCapability {
         serving a filtered request of it gets are those that its trusted options keep
         (AbstractHttpRequestHandler::setRequestCredentialHeaders()); without a handler, none
 
-        @return the object that keeps the raw request current
+        @return the object that keeps the raw request current; nothing if the capability of the server does not
+        belong to the loaded HttpServer module (see claimServerDispatch()), or this cannot be decided: no raw request
+        is current then, so the stream requests of the dispatch are refused (fails closed) while its other requests
+        are served
 
         The capability of a host (claimHostDispatch()) refuses sandboxed callers, so that a host capability that
         trusted code exposes by mistake makes no request current for sandboxed code.  The capability of the HTTP
@@ -3182,16 +3187,18 @@ class HttpServerDispatchCapability {
         AbstractHttpRequestHandler::getRawRequest() refuses restricted callers.
 
         @throw HTTP-SERVER-ERROR the capability of a host is used by sandboxed code (fails closed: also if this cannot
-        be decided), the capability of the server does not belong to the loaded HttpServer module, or too many
-        requests are dispatched in the dispatch of others on the thread
+        be decided), or too many requests are dispatched in the dispatch of others on the thread
     */
-    object enter(hash<auto> cx, hash<auto> hdr, *Socket s, *AbstractHttpRequestHandler handler) {
+    *object enter(hash<auto> cx, hash<auto> hdr, *Socket s, *AbstractHttpRequestHandler handler) {
         # a host's capability that trusted code exposes by mistake still makes no request current for sandboxed code
         if (!path && HttpRawRequestScope::callerIsSandboxed()) {
             throw "HTTP-SERVER-ERROR", "sandboxed code cannot make a raw request current";
         }
         if (!checked) {
             check();
+        }
+        if (unusable) {
+            return;
         }
         # the credential trailer fields of a filtered request: from the trusted options of the dispatched handler,
         # never from the header fields that the code creating a stream request gives it (fails closed: none)
@@ -3206,25 +3213,30 @@ class HttpServerDispatchCapability {
     }
 
     #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
+    /** A capability that fails the check, or whose check fails, is unusable: it makes no request current, so that the
+        stream requests of its dispatch are refused (fails closed) while its other requests are served
+    */
     private:internal check() {
         AutoLock al(lck);
         if (checked) {
             return;
         }
-        # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
-        # checked against the record of the HttpServer module loaded in the process, if any
-        *hash<auto> rec = get_module_hash().HttpServer;
-        *string rp;
-        if (rec.filename) {
-            try {
-                rp = resolve();
-            } catch (hash<ExceptionInfo> ex) {
+        bool ok = False;
+        try {
+            # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
+            # checked against the record of the HttpServer module loaded in the process, if any
+            *hash<auto> rec = get_module_hash().HttpServer;
+            *string rp;
+            if (rec.filename) {
+                try {
+                    rp = resolve();
+                } catch (hash<ExceptionInfo> ex) {
+                }
             }
+            ok = !rec || rp == path;
+        } catch (hash<ExceptionInfo> ex) {
         }
-        if (rec && rp != path) {
-            throw "HTTP-SERVER-ERROR", "the dispatch capability of the HTTP server was claimed by the initialization of "
-                "a module that is not the loaded HttpServer module";
-        }
+        unusable = !ok;
         checked = True;
     }
 }

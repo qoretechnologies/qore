@@ -374,6 +374,8 @@ class HttpServerDispatchCapabilityTest inherits QUnit::Test {
         addTestCase("the scopes of the raw requests of a host", \testScopes());
         addTestCase("the code that serves a stream request cannot mark the body that the server reads",
             \testDeserializedFlag());
+        addTestCase("a capability of a module that is not the loaded HttpServer module makes no request current",
+            \testUnusableCapability());
 
         rest.addClass(new ProbeRestClass());
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -569,6 +571,25 @@ public class Holder {
         assertEq("refused (module path)\nHttpServer loaded: False\n", runByPath(path, NOTHING));
         # and refused by its claim with a module path that has no module named HttpServer
         assertEq("refused (claim)\nHttpServer loaded: False\n", runByPath(path, modulePathWithoutHttpServer(tmp.path)));
+    }
+
+    testUnusableCapability() {
+        # the capability of the server is checked against the record of the loaded HttpServer module when it is first
+        # used; a capability that fails the check (here the file of the module, loaded from a copy, is removed before
+        # the first request) makes no request current, so that the server's stream requests are refused, and does not
+        # fail, so that its other requests are served; in a process of its own, with a module path whose only module
+        # named HttpServer is the copy
+        TmpDir tmp("qore-dispatch-capability-copy-");
+        string dir = tmp.path + DirSep + "copy";
+        mkdir(dir);
+        copy_file(normalize_dir(get_script_dir() + "/../../../../qlib/HttpServer.qm"), dir + DirSep + "HttpServer.qm");
+        string cmd = sprintf("QORE_MODULE_DIR_ONLY=1 QORE_MODULE_DIR=%s:%s %s -b %s/HttpServerDispatchCapability/"
+            "unusable-capability.q", dir, modulePathWithoutHttpServer(tmp.path), TestInterpreter::qore_interpreter(),
+            get_script_dir());
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, out);
+        assertEq("plain: 200, stream: 500, plain again: 200\n", out);
     }
 
     #! runs by-path-before-load.q in a process of its own, with the given module path, if any
