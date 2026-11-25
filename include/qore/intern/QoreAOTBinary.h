@@ -714,6 +714,9 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!      - statement-location table entries and the source locations of debug-step instructions carry the start
 //!        and exclusive end column (two u16 values, 0xffff for unknown), for source-level stepping (qore#7490)
 //!      - native date literals use the checked zone constructor; recompile earlier native code (qore#7496)
+//!      - IR can encode CopyCallArg (opcode 444, Base group), which takes an argument's own reference and copies a list
+//!        or hash that a weak reference designates, and ReleaseCallArgSource (opcode 445, Base group), which releases
+//!        the owned source of CopyCallArg (qore#7426); the maximum opcode in the AOT header is 445
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
