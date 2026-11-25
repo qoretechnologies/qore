@@ -235,6 +235,18 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
+HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
+    assert(m->val.isNothing());
+    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
+    // only the key map can fail to take the member (when its buckets grow); the member is deleted then
+    std::unique_ptr<HashMember> holder(m);
+    hm.insert(m);
+    holder.release();
+    member_list.push_back(m);
+    sbAdd(m);
+    return m;
+}
+
 // the insert limit, which also tells a hardened map, takes the half of the old 64-bit mask, so that a hash is as large
 // as before qore#7557: a larger private part of a hash takes another allocation size, which changes the cost of the
 // allocations of hashes

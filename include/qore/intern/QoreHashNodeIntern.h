@@ -910,32 +910,25 @@ public:
         calls no function per member but to allocate it
     */
     QORE_HASH_ALWAYS_INLINE DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old, bool copy_layout) {
-        return addMemberKnownAbsent(new HashMember(old.key, old.hash), copy_layout);
-    }
-
-    //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
-    /** @param m the new member
-        @param copy_layout true if \a m is a copy of a member of a hash whose key map is of the same kind and has no
-        more buckets than the key map of this hash (see reserveForCopy()), so that the chains of its buckets need no
-        check (qore#7557); the hash of \a m is then the hash of its key in this hash, else its member hash (or any
-        hash that a debug function gives)
-    */
-    QORE_HASH_ALWAYS_INLINE DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m, bool copy_layout = false) {
-        assert(m->val.isNothing());
+        if (!copy_layout) [[unlikely]] {
+            // the key map of this hash has fewer buckets than that of the other hash: the insert checks the chain;
+            // the maps are of the same kind (reserveForCopy()), so the hash is the member hash that insert() takes
+            return addMemberKnownAbsent(new HashMember(old.key, old.hash));
+        }
+        HashMember* m = new HashMember(old.key, old.hash);
+        assert(m->hash == hm.hashOf(m->key.data(), m->key.size()));
         assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
-        assert(!copy_layout || m->hash == hm.hashOf(m->key.data(), m->key.size()));
         // only the key map can fail to take the member (when its buckets grow); the member is deleted then
         std::unique_ptr<HashMember> holder(m);
-        if (copy_layout) {
-            hm.insertCopy(m);
-        } else {
-            hm.insert(m);
-        }
+        hm.insertCopy(m);
         holder.release();
         member_list.push_back(m);
         sbAdd(m);
         return m;
     }
+
+    //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
+    DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m);
 
     //! sets the value of a new member \a om, which has no value, without type checks; takes over the reference of \a v
     DLLLOCAL void setNewMemberValue(HashMember* om, QoreValue v) {
