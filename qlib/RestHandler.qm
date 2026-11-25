@@ -247,23 +247,31 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
 
     @section rest_request_credentials The Credentials of a Request
 
-    The REST classes that a sandbox governs (the calling code is sandboxed, or the REST class or the handler is of a
-    sandboxed Program), and every REST class of a handler that asks for it with
+    The REST classes of restricted code (the calling code is restricted, or the REST class or the handler is of a
+    restricted Program: a sandbox that does not trust its code governs it, see
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"), and every REST
+    class of a handler that asks for it with
     @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()", get the request context
     without the objects of the server and the credentials of the request, as the code that serves a stream request
-    does (see @ref httpserverutil_request_credentials); the other REST classes get the request context as before.
+    does (see @ref httpserverutil_request_credentials); the other REST classes, also those of trusted code that a
+    sandbox governs only to interrupt or limit it, get the request context as before.
     The filtered request context has the keys of
-    @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys", the keys that the REST
-    handler adds (@ref RestHandler::RestHandlerContextKeys "RestHandlerContextKeys"), and the keys that trusted code
-    names with @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"; the \c hdr
-    key has no
+    @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys", the keys of the
+    platform's authorization context that the handler's authenticator declares
+    (@ref HttpServer::AbstractAuthenticator::getPlatformContextKeys() "AbstractAuthenticator::getPlatformContextKeys()"),
+    the keys that the REST handler adds (@ref RestHandler::RestHandlerContextKeys "RestHandlerContextKeys"), and the
+    keys that trusted code names with @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"
+    (never the server's objects: @ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys" and
+    values that are objects); the \c hdr key has no
     \c Proxy-Authorization field and no cookies, and no \c Authorization field unless the handler authenticates its
     own endpoint and opts in to receive it
     (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()").
     The keys that the REST classes get besides those are set with
     @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"; only trusted code can
-    call either setter: they refuse sandboxed callers.
-    A stream request that a REST class creates is handed the raw request, which only its own code reads.
+    call either setter: they refuse restricted callers.
+    A stream request that a REST class creates is handed the raw request, which only its own code reads.  The filter
+    applies to the REST classes that the base class dispatches; a handler class of restricted code that overrides
+    @ref RestHandler::RestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.
 */
 /** @page resthierarchy Implementing Object Hierarchies
 
@@ -447,13 +455,14 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
-    - the REST classes that a sandbox governs, and all of them with the handler's
+    - the REST classes of restricted code, and all of them with the handler's
       @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()", get the request without
       the objects of the server and the credentials of the request: the
       \c Authorization field only if the handler authenticates its own endpoint and opts in to receive it, never the
-      \c Proxy-Authorization field or the cookies; trusted code that adds keys to the request context for the REST
-      classes names them with @ref RestHandler::RestHandler::setRestContextKeys() "setRestContextKeys()" (see
-      @ref rest_request_credentials; issue #6843)
+      \c Proxy-Authorization field or the cookies; the platform's authorization context that the authenticator
+      declares is kept, and trusted code that adds keys to the request context for the REST classes names them with
+      @ref RestHandler::RestHandler::setRestContextKeys() "setRestContextKeys()" (see @ref rest_request_credentials;
+      issue #6843)
     - the handler gets the socket of an HTTP/1.x request when one of its REST classes is of a class of a sandboxed
       Program, and refuses a request (\c 500, closing the connection) that would hand the connection's socket to a REST
       class or a stream handler of a sandboxed Program on its dispatch path (see @ref httpserver_handler_socket;
@@ -1950,7 +1959,7 @@ public namespace RestHandler {
 
             try {
                 checkAccess(cx);
-                # the REST classes that a sandbox governs get the request without the server's objects and the
+                # the REST classes of restricted code get the request without the server's objects and the
                 # credentials of the request, with the keys that this handler adds (qore#6843; see
                 # @ref rest_request_credentials), and so do all of them if the handler asks for it; a stream
                 # request that a REST class creates is handed the raw request
@@ -2101,8 +2110,15 @@ public namespace RestHandler {
         final hash<auto> getRestClassContext(hash<auto> cx) {
             hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, cx.hdr ?? {});
             hash<auto> rcx = filtered.cx;
-            foreach string key in (RestHandlerContextKeys + ("arg_path",) + (rest_context_keys ?? ())) {
+            foreach string key in (RestHandlerContextKeys + ("arg_path",)) {
                 if (cx.hasKey(key)) {
+                    rcx{key} = cx{key};
+                }
+            }
+            # the keys that the handler names: data only, never the server's objects
+            foreach string key in (rest_context_keys) {
+                if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, AbstractStreamRequest::ServerContextKeys)
+                        && !AbstractStreamRequest::holdsObject(cx{key})) {
                     rcx{key} = cx{key};
                 }
             }
@@ -2115,25 +2131,29 @@ public namespace RestHandler {
             @ref rest_request_credentials): the keys of
             @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys" and of
             @ref RestHandlerContextKeys; trusted code that adds keys to the request context for the REST classes
-            before they are dispatched names them here.  Only trusted code can set them: sandboxed callers are
-            refused.
+            before they are dispatched names them here; the server's objects
+            (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys") and values that are
+            objects or hold one at any depth are not given in any case.  The keys must hold plain data and no
+            credentials: the REST classes of restricted code get them.  Only trusted code can set them: restricted
+            callers are refused.
 
             @param names the names of more keys of the request context that the REST classes get
 
-            @throw REST-ERROR the calling code is sandboxed
+            @throw REST-ERROR the calling code is restricted
+            (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()")
 
             @since RestHandler 1.6.8
         */
         setRestContextKeys(*softlist<string> names) {
-            bool sandboxed;
+            bool restricted;
             try {
-                sandboxed = SandboxManager::isSandboxed();
+                restricted = SandboxManager::isRestricted();
             } catch (hash<ExceptionInfo> ex) {
                 # fails closed
-                sandboxed = True;
+                restricted = True;
             }
-            if (sandboxed) {
-                throw "REST-ERROR", "sandboxed code cannot set the keys of the request context of the REST classes";
+            if (restricted) {
+                throw "REST-ERROR", "restricted code cannot set the keys of the request context of the REST classes";
             }
             rest_context_keys = names;
         }
