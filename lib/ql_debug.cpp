@@ -27216,6 +27216,28 @@ static QoreValue f_dbg_get_flag_violations(const QoreListNode* params, RuntimeCo
     return qore_get_flag_violations();
 }
 
+//! Debug-only: adds a namespace with a builtin class with static variables that have values to the current Program
+//! at run time, as a binary module can (qore#7541)
+/** The namespace \a name has the class \c DbgSvClass, whose static variables are \c sv (\c int, with the value
+    \a value), \c ssv (\c string, with the value \c "str") and \c nsv (\c *int, without a value).
+*/
+static QoreValue f_dbg_add_runtime_static_var_class(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // a short string value is inline: read through the helper
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    int64 value = HARD_QORE_VALUE_INT(params, 1);
+    std::unique_ptr<QoreNamespace> ns(new QoreNamespace(name->c_str()));
+    std::string path = std::string("::") + name->c_str() + "::DbgSvClass";
+    QoreClass* qc = new QoreClass("DbgSvClass", path.c_str());
+    qc->addBuiltinStaticVar("sv", value, Public, bigIntTypeInfo);
+    qc->addBuiltinStaticVar("ssv", new QoreStringNode("str"), Public, stringTypeInfo);
+    qc->addBuiltinStaticVar("nsv", QoreValue(), Public, bigIntOrNothingTypeInfo);
+    // the namespace takes the class (its destructor is not public)
+    ns->addSystemClass(qc);
+    getProgram()->getRootNS()->addNamespace(ns.release());
+    return QoreValue();
+}
+
 static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* xsink) {
     QoreHashNode* result = new QoreHashNode(autoTypeInfo);
     result->setKeyValue("test_count", c.test_count, xsink);
@@ -37907,6 +37929,9 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "mode");
     qns.addBuiltinVariant("dbg_get_flag_violations", f_dbg_get_flag_violations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_add_runtime_static_var_class", f_dbg_add_runtime_static_var_class, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "value");
 }
 
 #undef QDOM_DEBUG_HOOK

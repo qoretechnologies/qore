@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeBuiltinStaticVarTest
+
+#! The static variables of a builtin class keep the values that the class was given
+/** A binary module can add a namespace with a builtin class to a Program at run time (QoreNamespace::addNamespace());
+    the values of the static variables of the class are assigned when it is added, and the first reference to a
+    variable in parsed code must not reset them (qore#7541).  The namespace is added with the debug function
+    dbg_add_runtime_static_var_class(), so the test needs a library with debugging.
+*/
+public class RuntimeBuiltinStaticVarTest inherits QUnit::Test {
+    public {
+        #! the code of the Program that adds the namespace
+        const AddSource = "sub add(string name, int value) { dbg_add_runtime_static_var_class(name, value); }
+object sub child() {
+    Program c(PO_NEW_STYLE);
+    c.parse('int sub sv() { return DbgSvNs::DbgSvClass::sv; }
+string sub ssv() { return DbgSvNs::DbgSvClass::ssv; }
+*int sub nsv() { return DbgSvNs::DbgSvClass::nsv; }
+sub setsv(int v) { DbgSvNs::DbgSvClass::sv = v; }', 'child');
+    return c;
+}
+sub imp(Program q) { q.importClass(\"DbgSvNs::DbgSvClass\"); }";
+
+        #! the code of a Program that the class is imported into
+        const ImportSource = "int sub sv() { return DbgSvNs::DbgSvClass::sv; }
+string sub ssv() { return DbgSvNs::DbgSvClass::ssv; }";
+    }
+
+    constructor() : QUnit::Test("runtime builtin static var", "1.0") {
+        addTestCase("the variables read their values in the first code that references them", \firstReferenceTest());
+        addTestCase("a later parse does not reset a variable", \laterParseTest());
+        addTestCase("an imported copy and the original keep the values", \importTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_static_var_class")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! returns a Program that has added the namespace with the class
+    private static Program getSource(int value) {
+        Program p(PO_NEW_STYLE);
+        p.parse(AddSource, "add");
+        p.callFunction("add", "DbgSvNs", value);
+        return p;
+    }
+
+    firstReferenceTest() {
+        skipIfNoDebugging();
+        Program p = getSource(7);
+        object c = p.callFunction("child");
+        assertEq(7, c.callFunction("sv"), "int");
+        assertEq("str", c.callFunction("ssv"), "string");
+        assertNothing(c.callFunction("nsv"), "a variable without a value");
+    }
+
+    laterParseTest() {
+        skipIfNoDebugging();
+        Program p = getSource(7);
+        object c1 = p.callFunction("child");
+        assertEq(7, c1.callFunction("sv"), "first child");
+        c1.callFunction("setsv", 9);
+        # the code of the second child references the variables again
+        object c2 = p.callFunction("child");
+        assertEq(9, c2.callFunction("sv"), "second child: the assigned value");
+        assertEq(9, c1.callFunction("sv"), "first child: the assigned value");
+    }
+
+    importTest() {
+        skipIfNoDebugging();
+        Program p = getSource(5);
+        Program q(PO_NEW_STYLE);
+        # imported before any code references the variables
+        p.callFunction("imp", q);
+        q.parse(ImportSource, "import");
+        assertEq(5, q.callFunction("sv"), "imported copy: int");
+        assertEq("str", q.callFunction("ssv"), "imported copy: string");
+        object c = p.callFunction("child");
+        assertEq(5, c.callFunction("sv"), "original: int");
+        assertEq("str", c.callFunction("ssv"), "original: string");
+        # imported after the value was assigned: the copy has the value, and the original keeps it
+        c.callFunction("setsv", 11);
+        Program r(PO_NEW_STYLE);
+        p.callFunction("imp", r);
+        r.parse(ImportSource, "import2");
+        assertEq(11, r.callFunction("sv"), "copy imported after an assignment");
+        assertEq(11, c.callFunction("sv"), "original after a later import");
+    }
+}
