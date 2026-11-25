@@ -28,6 +28,8 @@ public namespace DeepSeekDataProvider {
 public hashdecl DeepSeekActionInfo {
     #! Action name shown to users
     string display_name;
+    #! Billing for this specific operation
+    *hash<DataProviderBillingInfo> billing;
     #! Plain summary
     string short_desc;
     #! Markdown description
@@ -55,6 +57,7 @@ public class DeepSeekActions {
         #! Immutable operation definitions
         const hash<string, hash<DeepSeekActionInfo>> Operations = {
             "list-models": <DeepSeekActionInfo>{
+                "billing": <DataProviderBillingInfo>{"model": "included"},
                 "display_name": "List Models",
                 "short_desc": "Find available models for your workflows",
                 "desc": "Find available models for your workflows.",
@@ -67,6 +70,7 @@ public class DeepSeekActions {
                 },
             },
             "get-balance": <DeepSeekActionInfo>{
+                "billing": <DataProviderBillingInfo>{"model": "included"},
                 "display_name": "Get Balance",
                 "short_desc": "Check available credit before running AI workflows",
                 "desc": "Check available credit before running AI workflows.\n\nReturns credit availability and balances without generating tokens.",
@@ -79,6 +83,7 @@ public class DeepSeekActions {
                 },
             },
             "fim-completion": <DeepSeekActionInfo>{
+                "billing": <DataProviderBillingInfo>{"unit": "token"},
                 "display_name": "Fill in the Middle",
                 "short_desc": "Complete text or code between a prompt and suffix",
                 "desc": "Complete text or code between a prompt and suffix.\n\nUses `/beta/completions`. Select a model that supports Fill-in-the-Middle, currently `deepseek-v4-pro`.",
@@ -90,6 +95,7 @@ public class DeepSeekActions {
                 "fields": DeepSeekFimRequestDataType::Fields,
             },
             "create-response": <DeepSeekActionInfo>{
+                "billing": <DataProviderBillingInfo>{"unit": "token"},
                 "display_name": "Create Response",
                 "short_desc": "Generate a response with tools, images, or structured output",
                 "desc": "Generate a response with tools, images, or structured output.\n\nSupports function calls, server-side web search, vision, and JSON Schema output. **Stateless:** send the full conversation history in `input` for each turn.",
@@ -161,6 +167,7 @@ public class DeepSeekActions {
                 options.order.preselected = True;
             }
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "billing": op.billing,
                 "app": AppName, "action": action, "path": "/" + action,
                 "display_name": op.display_name, "short_desc": op.short_desc, "desc": op.desc,
                 "groups": (op.group,), "action_code": DPAT_API,
