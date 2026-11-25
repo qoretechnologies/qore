@@ -103,6 +103,16 @@ struct QoreSandboxMembers {
 static constexpr unsigned long QORE_PROC_SUPER_MAGIC = 0x9fa0;
 #endif
 
+//! true if the messages of a file-system policy are for code that is not given the paths of the policy's configuration
+/** The sandbox root is a directory of the host that the host configured: it is named neither to code restricted from
+    external information (qore#7507) nor to sandboxed code, the code whose access the policy decides, also where the
+    library checks for it on the async I/O thread (qore_code_origin_sandboxed(), which fails closed as
+    qore_caller_is_sandboxed()); the unrestricted host, which configured it, gets it for its diagnostics
+*/
+static bool qore_fs_policy_msg_restricted() {
+    return qore_msg_restricted() || qore_caller_no_external_info() || qore_code_origin_sandboxed(nullptr);
+}
+
 struct qore_fs_security_private {
     std::shared_ptr<const QoreSandboxMembers> composition;
     //! the uncontrolled-API policy of the QoreSandboxManager (see QoreSandboxManager::setUncontrolledApiPolicy());
@@ -368,9 +378,13 @@ struct qore_fs_security_private {
 
         // Check sandbox root containment
         if (!isInSandboxRoot(canon)) {
-            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-                "Access to '%s' denied: path is outside sandbox root '%s'",
-                qore_msg_path(path).c_str(), qore_msg_path(sandbox_root.c_str()).c_str());
+            if (qore_fs_policy_msg_restricted()) {
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                    "Access to '%s' denied: path is outside the sandbox root", qore_msg_path(path).c_str());
+            } else {
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                    "Access to '%s' denied: path is outside sandbox root '%s'", path, sandbox_root.c_str());
+            }
             return false;
         }
 
@@ -418,9 +432,15 @@ int QoreFilesystemSecurityManager::addAllowedPath(const char* path, int mode, Ex
 
     // If sandbox root is set, verify path is within it
     if (!priv->sandbox_root.empty() && !priv->isInSandboxRoot(canon)) {
-        xsink->raiseException("SANDBOX-CONFIG-ERROR",
-            "Allowed path '%s' is outside sandbox root '%s'",
-            canon.c_str(), priv->sandbox_root.c_str());
+        // the canonical form of the path can name directories of the host (the current directory of a relative path,
+        // the targets of links), so restricted code gets the path as it gave it
+        if (qore_fs_policy_msg_restricted()) {
+            xsink->raiseException("SANDBOX-CONFIG-ERROR", "Allowed path '%s' is outside the sandbox root",
+                qore_msg_path(path).c_str());
+        } else {
+            xsink->raiseException("SANDBOX-CONFIG-ERROR", "Allowed path '%s' is outside sandbox root '%s'",
+                canon.c_str(), priv->sandbox_root.c_str());
+        }
         return -1;
     }
 
