@@ -489,11 +489,15 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         # to avoid circular dependencies, this object loads the HttpClientDataProvider module and creates the data
         # provider object dynamically
+        # for restricted code that was lent the connection: its creator's file path options, and no data provider
+        # options that name files (qore#7327)
+        AbstractConnection src = getLentDataProviderSource(constructor_options);
         load_module("HttpClientDataProvider");
-        hash<auto> req_opts = (map {$1: opts{$1}}, DataProviderRequestOptions, exists opts{$1}) ?? {};
-        if (opts.username.val() && opts.password.val() && (!urlh.username.val() || !urlh.password.val())) {
-            req_opts.username = opts.username;
-            req_opts.password = opts.password;
+        hash<auto> req_opts = (map {$1: src.opts{$1}}, DataProviderRequestOptions, exists src.opts{$1}) ?? {};
+        if (src.opts.username.val() && src.opts.password.val()
+                && (!src.urlh.username.val() || !src.urlh.password.val())) {
+            req_opts.username = src.opts.username;
+            req_opts.password = src.opts.password;
         }
         if (constructor_options.headers) {
             req_opts.headers = (req_opts.headers ?? {}) + constructor_options.headers;

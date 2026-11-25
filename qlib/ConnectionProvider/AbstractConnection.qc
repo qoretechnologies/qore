@@ -1433,7 +1433,47 @@ conn.checkSandboxAccess(True);
         target by a rule of their own (see hasCreatorBoundClients(); qore#7327)
     */
     final private:internal bool isLentTargetConfined() {
-        return SandboxManager::isLentToRestricted(getConnectionDomainsImpl()) && !hasCreatorBoundClients();
+        return !hasCreatorBoundClients() && SandboxManager::isLentToRestricted(getLentDomains());
+    }
+
+    #! Returns @ref True if the connection's file and location options are confined to its creator's for the caller
+    /** That is if the clients of the connection are bound to its creator's target by a rule of their own (see
+        hasCreatorBoundClients()), and the calling code was lent the connection and is restricted from the
+        \c FILESYSTEM or \c NETWORK domain: all of FilePathOptions are confined, whether the connection's scheme
+        declares them or not, as its clients take any of them from its options
+    */
+    final private:internal bool isLentFilePathConfined() {
+        # a location option can also name a remote location, which the connection's module code reads apart from its
+        # bound clients, so they are confined for code restricted from the NETWORK domain as well
+        return hasCreatorBoundClients() && SandboxManager::isLentToRestricted(DOM_FILESYSTEM | DOM_NETWORK);
+    }
+
+    #! Returns the functional domains that the code that is lent the connection is confined for
+    /** The domains that its clients use (see getConnectionDomainsImpl()), and \c FILESYSTEM if its members can name
+        files that its module code reads (see getFilePathOptions() and canUseFilePathsImpl())
+    */
+    final private:internal int getLentDomains() {
+        return getConnectionDomainsImpl() | ((canUseFilePathsImpl() || getFilePathOptions()) ? DOM_FILESYSTEM : 0);
+    }
+
+    #! Returns the connection's options that name files that its module code reads
+    /** The options of FilePathOptions that the connection's scheme declares
+    */
+    final private:internal *list<string> getFilePathOptions() {
+        *hash<auto> o = getConnectionSchemeInfoImpl().options;
+        return o ? keys o{FilePathOptions} : NOTHING;
+    }
+
+    #! Returns @ref True if the connection's members can name files that its module code reads otherwise
+    /** For example in options of its URL; the options that name files (see FilePathOptions) need not be given.  This
+        implementation returns @ref False; a connection class whose URL can name such files overrides it to return
+        @ref True, so that code restricted from the \c FILESYSTEM domain that is lent a connection of the class uses it
+        only with the members that its creator set
+
+        @since %ConnectionProvider 3.1
+    */
+    private bool canUseFilePathsImpl() {
+        return False;
     }
 
     #! Refuses code that was lent the connection and is restricted from its domains a client for another target
@@ -1454,9 +1494,53 @@ conn.checkSandboxAccess(True);
         @since %ConnectionProvider 3.1
     */
     final private checkLentTarget() {
+        if (!SandboxManager::isLentToRestricted(getConnectionDomainsImpl() | DOM_FILESYSTEM)) {
+            return;
+        }
         if (isLentTargetConfined()) {
             checkLentTargetIntern();
+        } else if (isLentFilePathConfined()) {
+            checkLentFilePaths(FilePathOptions);
         }
+    }
+
+    #! Refuses a lent connection whose file path options were changed, or options for its clients that name files
+    private:internal checkLentFilePaths(list<string> fpo, *hash<auto> options, *string what) {
+        *hash<auto> creator = creator_target.opts{fpo};
+        foreach string m in (getLentOptionMembers()) {
+            if (!creator_target || (self{m}{fpo} ?? {}) !== (creator ?? {})) {
+                throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the %s "
+                    "functional domain and may use a connection that unrestricted code created and lent to it only "
+                    "with the files and locations that its creator gave it", name, getLentFileDomainNames());
+            }
+        }
+        if (options && (*hash<auto> named = options{fpo})) {
+            throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the %s functional "
+                "domain and may not give a connection that unrestricted code created and lent to it the %s %y, which "
+                "name files or locations", name, getLentFileDomainNames(), what, keys named);
+        }
+    }
+
+    #! Returns the names of the members that hold the options of the connection's clients
+    private:internal list<string> getLentOptionMembers() {
+        list<string> rv = ("opts",);
+        foreach string m in (getLentOptionMembersImpl()) {
+            if (self{m}.typeCode() == NT_HASH) {
+                push rv, m;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the names of the domains that file and location options are confined for that the caller lacks
+    private:internal string getLentFileDomainNames() {
+        int dom = 0;
+        foreach int d in ((DOM_FILESYSTEM, DOM_NETWORK)) {
+            if (SandboxManager::isLentToRestricted(d)) {
+                dom |= d;
+            }
+        }
+        return getDomainNames(dom);
     }
 
     #! Refuses a lent connection whose members were changed (qore#7327)
@@ -1480,8 +1564,9 @@ conn.checkSandboxAccess(True);
     #! Returns the names of the domains of the connection's clients that the calling code is restricted from
     private:internal string getLentRestrictedDomainNames() {
         int dom = 0;
+        int lent = getLentDomains();
         foreach int d in ((DOM_NETWORK, DOM_FILESYSTEM, DOM_DATABASE)) {
-            if ((getConnectionDomainsImpl() & d) && SandboxManager::isLentToRestricted(d)) {
+            if ((lent & d) && SandboxManager::isLentToRestricted(d)) {
                 dom |= d;
             }
         }
@@ -1506,6 +1591,18 @@ conn.checkSandboxAccess(True);
         return self{"url", "safe_url", "real_url", "urlh", "orig_opts", "opts"};
     }
 
+    #! Returns the names of the other public members that hold the options that the connection's clients use
+    /** Members of a connection class that hold a copy of its options that its clients are created from (as the
+        \c real_opts of an HTTP-based connection): for code restricted from the \c FILESYSTEM or \c NETWORK domain
+        that is lent the connection, their file and location options (see FilePathOptions) are checked against and
+        reset to the options that the connection's creator gave, as \c opts are.  This implementation returns
+        @ref nothing
+
+        @since %ConnectionProvider 3.1
+    */
+    private *list<string> getLentOptionMembersImpl() {
+    }
+
     #! Sets the members that the connection's clients are created from; only on a private copy (qore#7327)
     private:internal setLentTarget(hash<auto> target) {
         self += target;
@@ -1523,6 +1620,12 @@ conn.checkSandboxAccess(True);
         the object that this method returns, or for a data provider, with getLentDataProviderSource() (the base
         class's entry points do so themselves); see @ref sandbox_lent_connections.
 
+        For code restricted from the \c FILESYSTEM or \c NETWORK domain that is lent an HTTP-based connection, the
+        object returned is a private copy whose file and location options (see FilePathOptions) are those that the
+        connection's creator gave (qore#7499).  The methods that create the client (getImpl() and getAsyncImpl())
+        then run on the copy: a connection class keeps any state that they record in an object that the copy shares,
+        not in a member of its own.
+
         @param rtopts the runtime options of the client, which may hold only options that do not change its target for
         such restricted code (see LentRuntimeOptions)
 
@@ -1535,12 +1638,11 @@ conn.checkSandboxAccess(True);
         @since %ConnectionProvider 3.1
     */
     final private AbstractConnection getLentTargetSource(*hash<auto> rtopts) {
-        if (!isLentTargetConfined()) {
+        # the common path is one call: only code restricted from a domain that the connection can use is checked
+        if (!SandboxManager::isLentToRestricted(getConnectionDomainsImpl() | DOM_FILESYSTEM)) {
             return self;
         }
-        checkLentTargetIntern();
-        checkLentOptions(rtopts, "runtime option(s)");
-        return getLentCopy();
+        return getLentSource(rtopts, "runtime option(s)");
     }
 
     #! Returns the object that a data provider of the connection is created from for the calling code (qore#7327)
@@ -1558,12 +1660,42 @@ conn.checkSandboxAccess(True);
         @since %ConnectionProvider 3.1
     */
     final private AbstractConnection getLentDataProviderSource(*hash<auto> constructor_options) {
-        if (!isLentTargetConfined()) {
+        if (!SandboxManager::isLentToRestricted(getConnectionDomainsImpl() | DOM_FILESYSTEM)) {
             return self;
         }
-        checkLentTargetIntern();
-        checkLentOptions(constructor_options, "data provider option(s)");
-        return getLentCopy();
+        return getLentSource(constructor_options, "data provider option(s)");
+    }
+
+    #! Returns the object that a client or data provider is created from for code restricted from a domain
+    private:internal AbstractConnection getLentSource(*hash<auto> options, string what) {
+        if (isLentTargetConfined()) {
+            checkLentTargetIntern();
+            checkLentOptions(options, what);
+            return getLentCopy();
+        }
+        if (isLentFilePathConfined()) {
+            checkLentFilePaths(FilePathOptions, options, what);
+            return getLentFilePathCopy(FilePathOptions);
+        }
+        return self;
+    }
+
+    #! Returns a private copy of the connection with the file path options that its creator set
+    private:internal AbstractConnection getLentFilePathCopy(list<string> fpo) {
+        # test hook (a debug build of the library only; see dbgSetLentTargetHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_lent_target_hook) {
+            dbg_lent_target_hook(self);
+        }
+        AbstractConnection c = copy();
+        c.setLentFilePathOptions(fpo, creator_target);
+        return c;
+    }
+
+    #! Sets the file path options of the connection; only on a private copy
+    private:internal setLentFilePathOptions(list<string> fpo, hash<auto> target) {
+        foreach string m in (getLentOptionMembers()) {
+            self{m} = (self{m} - fpo) + target.opts{fpo};
+        }
     }
 
     #! Returns a private copy of the connection with the members that its creator set (qore#7327)
@@ -1583,6 +1715,15 @@ conn.checkSandboxAccess(True);
     */
     const LentRuntimeOptions = ("log", "dbglog", "logger", "yield", "start_thread", "reconnect", "connect_timeout",
         "timeout", "async_io");
+
+    #! The connection options that name files that the module code of a connection reads
+    /** Code restricted from the \c FILESYSTEM domain that is lent a connection whose scheme declares any of them uses
+        it only with the files that its creator gave (see getLentTargetSource())
+    */
+    const FilePathOptions = ("ssl_cert_path", "ssl_key_path", "ssl_ca_file", "ssl_ca_path", "negotiate_keytab",
+        "negotiate_credential_cache", "gcp_sa_json_path",
+        # the locations of schemas, which can be files
+        "swagger", "openapi3", "asyncapi");
 
 %ifdef QoreDebug
     #! @cond nodoc

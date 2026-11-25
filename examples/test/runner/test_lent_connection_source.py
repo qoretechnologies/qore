@@ -9,7 +9,8 @@ that it returns (qore#7327).  The check finds the calls of getImpl() and getAsyn
 on the object that getLentTargetSource() returned: getImpl() and getAsyncImpl() themselves, and the implementation
 methods that the base class calls on it (getDataProviderImpl() and the file location methods).  A connection class
 whose clients are bound to its creator's target by a rule of their own (its creator proof: the HTTP-based connection
-classes) is not checked.  ``self.getImpl(...)`` counts as a call on the connection itself, and every getDataProvider()
+classes) is not checked for its data providers; its calls of getImpl() and getAsyncImpl() are, as its file and
+location options are confined by the same source (qore#7499).  ``self.getImpl(...)`` counts as a call on the connection itself, and every getDataProvider()
 of a checked class must create the data provider with getLentDataProviderSource(), which also checks its constructor
 options.  Clients created directly from the connection's members (without getImpl()) are not detected; the qtest
 lent-nonhttp-connection-target.qtest covers the classes that do so.
@@ -43,6 +44,12 @@ CONFINED_METHODS = {
 CLASS_RE = re.compile(r"\bclass\s+([A-Za-z_]\w*)(?:\s+inherits\s+([^{]*))?$", re.S)
 METHOD_RE = re.compile(r"([A-Za-z_]\w*)\s*\([^{]*$", re.S)
 CALL_RE = re.compile(r"(getImpl|getAsyncImpl)\s*\(")
+# a call of getConnectionOptions() or getRealOptions() on the connection itself (also scoped, as
+# RestConnection::getConnectionOptions())
+OWN_OPTIONS_RE = re.compile(r"(?<![.\w])(?:[A-Za-z_]\w*::)?(getConnectionOptions|getRealOptions)\s*\(")
+# a statement that creates an object: new, create_object() or a declaration with constructor arguments
+# (LlamaParseRestClientIo probe(...))
+CREATE_RE = re.compile(r"\bnew\s+[A-Za-z_]|\bcreate_object\s*\(|^\s*[A-Z][\w:]*(<[^>;]*>)?\s+[a-z_]\w*\s*\(", re.M)
 
 
 def strip_code(src):
@@ -163,15 +170,32 @@ class LentConnectionSourceTest(unittest.TestCase):
                      "ConnectConnection", "WebSocketConnectionObject", "ServerSentEventConnection",
                      "DatasourceConnection"):
             self.assertIn(name, checked, name)
-        # and does not check the HTTP-based ones
+        # the HTTP-based ones are known too; their file and location options are confined by the same source
+        # (qore#7499), so their calls are checked as well
         self.assertIn("RestConnection", all_conns)
         self.assertNotIn("RestConnection", checked)
         found = []
         for path in files:
             for cls, method, line, call in scan(path)[1]:
-                if cls in checked and method not in CONFINED_METHODS:
+                if cls in all_conns and method not in CONFINED_METHODS:
                     found.append(f"{path.relative_to(ROOT)}:{line}: {cls}::{method}() calls {call}() on itself")
         self.assertEqual([], found, "create the client from the object that getLentTargetSource() returns")
+
+    def test_no_client_from_own_options(self):
+        # a statement that creates a client (new or create_object()) from the options of the connection itself, outside
+        # the methods that run on the object that getLentTargetSource() returned (qore#7499)
+        files = qlib_sources()
+        all_conns = connection_classes(files)[1]
+        found = []
+        for path in files:
+            for cls, method, line, body in scan(path)[2]:
+                if cls not in all_conns or method in CONFINED_METHODS | {"getConnectionOptions", "getRealOptions"}:
+                    continue
+                for stmt in body.split(";"):
+                    if OWN_OPTIONS_RE.search(stmt) and CREATE_RE.search(stmt):
+                        found.append(f"{path.relative_to(ROOT)}:{line}: {cls}::{method}()")
+                        break
+        self.assertEqual([], found, "create the client from getLentTargetSource().getConnectionOptions()")
 
     def test_data_providers_confined(self):
         files = qlib_sources()

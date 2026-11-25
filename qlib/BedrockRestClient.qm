@@ -568,8 +568,9 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
         checkConfiguration(getConnectionOptions());
 
         AbstractRestClient runtime = cast<AbstractRestClient>(getAsync());
+        # for restricted code that was lent the connection, from its creator's file and location options (qore#7499)
         AbstractRestClient control = new AwsRestClient::AwsRestClientIo(
-            getConnectionOptions() + {
+            getLentTargetSource().getConnectionOptions() + {
                 "url": BedrockRestConnection::getControlPlaneUrl(runtime.getUrl()),
             });
         try {
