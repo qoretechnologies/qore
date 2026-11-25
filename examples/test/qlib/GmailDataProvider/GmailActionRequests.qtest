@@ -294,6 +294,21 @@ public class GmailActionRequestsTest inherits QUnit::Test {
         prov.doRequest({"to": "someone@example.com", "subject": "hello", "body": "hi"});
         assertEq(("raw",), keys rest.requests[0].body);
         assertNothing(getHeader(getMime(rest.requests[0].body), "In-Reply-To"));
+
+        hash<auto> registered = DataProviderActionCatalog::getAppActionEx("Gmail", "send-message");
+        ProviderIndexUtil::addAppToCache(DataProviderActionCatalog::getAppEx("Gmail"));
+        ProviderIndexUtil::addActionToCache(registered);
+        hash<auto> indexed = ProviderIndexUtil::tryGetActionMetadata("Gmail", "send-message");
+        hash<auto> form = DataProviderMessageFormat::selectForm(indexed, "default", "html");
+        assertEq("text/html", form.form.selector_value);
+        assertFalse(form.form.plain_alternative);
+        rest.requests = ();
+        prov.doRequest(DataProviderMessageFormat::bindForm(indexed, "default", form,
+            {"to": "reader@example.org"}, {"subject": "Delivery", "content": "<p>Hello</p>"}));
+        assertEq(1, rest.requests.size());
+        string html_message = getMime(rest.requests[0].body);
+        assertRegex("text/html", getHeader(html_message, "Content-Type"));
+        assertRegex("reader@example.org", getHeader(html_message, "To"));
     }
 
     #! create-draft must post the same message wrapped in a draft, without sending anything

@@ -588,6 +588,19 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
                 sprintf("action '%s' should have DPAT_API code", action.action));
         }
 
+        # job-check only reads the status of a job (POST job/check); every other action can run as a background
+        # job that calls a webhook (async + callback), or sends or stores something, so they keep the default
+        # (qore#7454)
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            if (action.action == "job-check") {
+                assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+                assertFalse(action.mutates_state);
+                assertFalse(DataProviderActionCatalog::actionMutatesState(action));
+            } else {
+                assertTrue(DataProviderActionCatalog::actionMutatesState(action), action.action);
+            }
+        }
+
         # Verify all actions have output_type (resolved from get_output_type)
         foreach hash<DataProviderActionInfo> action in (actions) {
             assertTrue(action.output_type instanceof AbstractDataProviderType,

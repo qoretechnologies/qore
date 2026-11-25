@@ -383,8 +383,10 @@ sub run_t() {
             assertEq(dir + mods.throw + ".qm", result.chained.next.file, label + ": chained file");
             assertEq(dir + mods.throw + ".qm", result.cs[0].file, label + ": call stack file");
             assertEq(dir + mods.throw + ".qm", result.pcl.file, label + ": caller location file");
-            assertTrue((map $1.file, result.own_cs).contains(get_module_hash().QUnit.filename),
-                label + ": the host's frames in full");
+            # the frames of QUnit name its source with its directory, also when it is loaded from its AOT module,
+            # whose file is then the module's filename
+            assertTrue((map $1.file, result.own_cs).contains(dirname(get_module_hash().QUnit.filename) + DirSep
+                + "QUnit.qm"), label + ": the host's frames in full");
             hash<auto> child = result.mh{mods.try_r}."child-modules"{mods.child_r};
             assertContains("from path \"" + dir + mods.child_r + ".qm\"", child.desc, label + ": child desc");
             child = result.mh{mods.try_host}."child-modules"{mods.child_host};
@@ -491,6 +493,16 @@ sub run_t() {
             shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin),
             shellQuote(aot_dir + DirSep + "MpAotId.qmod"), shellQuote(src_dir + DirSep + "MpAotId.qm")));
         assertTrue(is_file(aot_dir + DirSep + "MpAotId.qmod"), "compiled the foreign-identity AOT module: " + out);
+        # an AOT module compiled against other builtin API metadata, which is refused without its source
+        f.open2(src_dir + DirSep + "MpAotApi.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(Header + "public namespace %s {\n}\n", "MpAotApi", "MpAotApi"));
+        f.close();
+        out = backquote(sprintf("QORE_AOT_TEST_BUILTIN_API_IDENTITY=%s QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b "
+            "--compile-module --output %s %s 2>&1", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin),
+            shellQuote(aot_dir + DirSep + "MpAotApi.qmod"), shellQuote(src_dir + DirSep + "MpAotApi.qm")));
+        assertTrue(is_file(aot_dir + DirSep + "MpAotApi.qmod"), "compiled the foreign-builtin-API AOT module: "
+            + out);
 
         # AOT modules made stale by a rebuild of the AOT module of their dependency: one without its source (the
         # error is raised to the caller) and, for each kind of loader, one with its source beside it (the source is
@@ -581,6 +593,11 @@ try {
     result.aot_id = ex;
 }
 try {
+    load_module(\"MpAotApi\");
+} catch (hash<ExceptionInfo> ex) {
+    result.aot_api = ex;
+}
+try {
     load_module(%y);
 } catch (hash<ExceptionInfo> ex) {
     result.shadow = ex;
@@ -618,6 +635,10 @@ try {
             assertEq("LOAD-MODULE-ERROR", result.aot_id.err, label + ": AOT runtime identity");
             assertContains("AOT module 'MpAotId.qmod': feature 'MpAotId': the module was compiled for AOT runtime "
                 "identity", result.aot_id.desc, label + ": AOT runtime identity desc");
+            assertEq("AOT-MODULE-STALE", result.aot_api.err, label + ": builtin API identity");
+            assertContains("AOT module 'MpAotApi.qmod' was compiled against other builtin API metadata",
+                result.aot_api.desc, label + ": builtin API identity desc");
+            assertEq("MpAotApi.qmod", result.aot_api.arg, label + ": builtin API identity arg");
             assertEq("LOAD-MODULE-ERROR", result.shadow.err, label + ": shadowing load");
             assertContains("from path '" + shadowed + ".qm'", result.shadow.desc, label + ": shadowing load desc");
             assertRegex("under the name of module '" + shadowed + "\\.qm(od)?' in the module path",
@@ -653,6 +674,9 @@ try {
             hash<auto> result = p.getGlobalVariable("result");
             assertContains("AOT module '" + aot_dir + DirSep + "MpAotId.qmod': feature 'MpAotId'", result.aot_id.desc,
                 label + ": AOT runtime identity desc");
+            assertContains("AOT module '" + aot_dir + DirSep + "MpAotApi.qmod' was compiled against other builtin API "
+                "metadata", result.aot_api.desc, label + ": builtin API identity desc");
+            assertEq(aot_dir + DirSep + "MpAotApi.qmod", result.aot_api.arg, label + ": builtin API identity arg");
             assertContains("from path '" + shadow_dir + DirSep + shadowed + ".qm'", result.shadow.desc,
                 label + ": shadowing load desc");
             assertRegex("under the name of module '/[^']+/" + shadowed + "\\.qm(od)?' in the module path",

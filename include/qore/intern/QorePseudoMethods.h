@@ -92,16 +92,20 @@ DLLLOCAL inline const T* qore_pseudo_receiver(const QoreValue& v, qore_type_t t,
     return nullptr;
 }
 
+//! The receiver of a pseudo-method of the <char> class that is not a character (see qore_pseudo_char_receiver())
+static constexpr unsigned QORE_PSEUDO_CHAR_REFUSED = 0xffffffffu;
+
 //! Returns the character that a pseudo-method of the <char> class is called on (qore#7363)
-/** For a value of another type, the exception is raised and the character 0 is returned, whose result the call does
-    not give (the value's bits are never taken for a character)
+/** For a value of another type, the exception is raised and QORE_PSEUDO_CHAR_REFUSED, which is no code point, is
+    returned; the method then returns with no value (the "argcheck" attribute of the class in qpp), and the value's bits
+    are never taken for a character
 */
 DLLLOCAL inline unsigned qore_pseudo_char_receiver(const QoreValue& v, ExceptionSink* xsink) {
     if (v.isChar()) [[likely]] {
         return v.getChar();
     }
     qore_raise_pseudo_receiver_type_error(v, "<char>", xsink);
-    return 0;
+    return QORE_PSEUDO_CHAR_REFUSED;
 }
 
 //! Returns the call reference that a pseudo-method of the <callref> class (\a closure_only false) or of the <closure>

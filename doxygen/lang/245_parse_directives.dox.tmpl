@@ -1323,6 +1323,11 @@ i+ =4;
     Without this directive, both \c @@assert and \c @@debug statements are completely skipped at parse time,
     providing zero runtime overhead when debugging is disabled.
 
+    For an AOT-compiled module, @ref qcc_tool "qcc" makes this choice when it parses the module source.
+    Pass <tt>--parse-option=enable-debug</tt> to <tt>qcc -m</tt> to include debug statements. The CMake
+    user-module rules pass this option for the Debug configuration. A qmod retains its compile-time choice
+    for every invocation, including when the loading process uses <tt>--enable-debug</tt>.
+
     @par Syntax:
     @code{.py}
     @assert(condition);

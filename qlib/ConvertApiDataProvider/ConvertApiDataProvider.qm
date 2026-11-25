@@ -142,6 +142,7 @@ module ConvertApiDataProvider {
                 "Use it to find the parameter names and allowed values for the `parameters` field of the "
                 "`convert-file` action.",
             "action_code": DPAT_API,
+            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ConvertApiGetConverterInfoRequestDataType::Fields),

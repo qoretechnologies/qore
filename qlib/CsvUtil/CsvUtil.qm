@@ -124,6 +124,7 @@ module CsvUtil {
                 "Sample values are redacted to their shape by default (`redact`), so a profile can be shared "
                 "without the data itself.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "cls": "CsvUtil::CsvProfileDataProvider",
             "output_type": TabularWorkbookProfileDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -168,6 +169,8 @@ module CsvUtil {
                 "The data is written as RFC 4180 CSV data by default, in the encoding of the `encoding` option "
                 "(UTF-8 by default), with a header row from `headers` unless `write_headers` is `false`.",
             "action_code": DPAT_CREATE,
+            # the data is generated in memory and returned; the path and stream options are not offered (qore#7454)
+            "mutates_state": False,
             "output_data_type": DPAD_CREATE_OUTPUT,
             "output_type": GeneratedDataOutputDataType,
             "cls": "CsvUtil::CsvWriteDataProvider",

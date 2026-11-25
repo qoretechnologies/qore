@@ -143,7 +143,7 @@ class WebSocketDataFrameRsvTest inherits QUnit::Test {
                 opts += {"url": sprintf("ws://127.0.0.1:%d%s", port, path), "http_version": "1.1"};
                 break;
             case "2.0":
-                opts += {"url": sprintf("wss://localhost:%d%s", tls_port, path), "http_version": "2.0"};
+                opts += {"url": sprintf("wss://127.0.0.1:%d%s", tls_port, path), "http_version": "2.0"};
                 break;
             case "3":
                 opts += {"url": sprintf("wss://127.0.0.1:%d%s", tls_port, path), "http3_mode": "required"};

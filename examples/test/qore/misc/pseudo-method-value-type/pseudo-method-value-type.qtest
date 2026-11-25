@@ -23,8 +23,8 @@
     - the cases that compiled code can make without the dispatch of the call, for a receiver of their parse type, give
       the results in PseudoMethodValueTypeFast.expected with the AST interpreter; in the other modes each of them gives
       the same result or the one that its fast path gives for a value of its parse type (the method of the parse type
-      for the value's conversion, or for its empty value: FastPathResults), which qore#6813 makes the result of the
-      method of the value's type there too.
+      for the value's conversion, or for its empty value: FastPathResults) for a value of another type than the
+      receiver's parse type, which qore#6813 makes the result of the method of the value's type there too.
     PseudoMethodValueTypeWeak.q calls pseudo-methods on weak references to lists, hashes and objects, which give their
     targets to the methods; PseudoMethodValueTypeReflection.q calls pseudo-methods through the reflection API, which
     takes values of their class's type and refuses those of another type.  PseudoMethodValueTypeAccessors.q gives
@@ -36,8 +36,17 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
         #! the optimization levels of the AOT compiles
         const OptLevels = (0, 3);
 
+        #! the value of the parse type of the receiver of each kind of case (the prefix of its name) in
+        #! PseudoMethodValueTypeCases.ql: firstKey() is declared *string, keys() list<string>, size() int
+        const FastPathParseTypeValues = {
+            "fk": "string",
+            "k": "list",
+            "s": "int",
+        };
+
         #! the results that the fast paths of compiled code give for a receiver of another type than their parse
-        #! type, besides the result of the method of the value's type (see check())
+        #! type, besides the result of the method of the value's type (see fastPathResultError()); never for a value of
+        #! the parse type (FastPathParseTypeValues), whose result is the AST's
         const FastPathResults = {
             "fk_size": ("0",),
             "k_size": ("0",),
@@ -106,6 +115,7 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
                 addTestCase(sprintf("%s qcc -O%d", fixture, opt), \aotTest(), (fixture, opt));
             }
         }
+        addTestCase("fast path results", \fastPathResultsTest());
         set_return_value(main());
     }
 
@@ -151,19 +161,63 @@ class PseudoMethodValueTypeTest inherits QUnit::Test {
                 assertEq(exp_lines[$#], line, label + ": line " + $#);
                 continue;
             }
-            string result = m[4];
-            if (result == ast_results{m[0]}) {
-                continue;
-            }
-            # the result of a fast path for a receiver of its parse type: the result of the method of the parse type
-            # for the value's conversion, or for its empty value
-            list<string> allowed = FastPathResults{m[3]} ?? ();
-            if (m[3] == "fk_substr") {
-                allowed += ast_results{sprintf("%s %s fk_to_string", m[1], m[2])};
-            }
-            assertTrue(allowed.contains(result), sprintf("%s: %s: %y is the AST result %y or one of %y", label,
-                m[0], result, ast_results{m[0]}, allowed));
+            *string err = fastPathResultError(ast_results, m[1], m[2], m[3], m[4]);
+            assertTrue(!err, sprintf("%s: %s", label, err ?? ""));
         }
+    }
+
+    #! returns NOTHING if \a result is a result that compiled code can give for the case \a c of the value \a value in
+    #! round \a round, or a description of the error
+    /** a result is the AST's (in \a ast_results by "<round> <value> <case>"), or for a value that is not of the
+        receiver's parse type, the result that the case's fast path gives for a receiver of its parse type: the result
+        of the method of the parse type for the value's conversion, or for its empty value (FastPathResults)
+    */
+    static *string fastPathResultError(hash<string, string> ast_results, string round, string value, string c,
+            string result) {
+        string key = sprintf("%s %s %s", round, value, c);
+        if (result == ast_results{key}) {
+            return;
+        }
+        list<string> allowed = ();
+        # a value of the parse type takes the fast path as such: its result is the AST's
+        if (value != FastPathParseTypeValues{(c =~ x/^([a-z]+)_/)[0]}) {
+            allowed = FastPathResults{c} ?? ();
+            if (c == "fk_substr") {
+                allowed += ast_results{sprintf("%s %s fk_to_string", round, value)};
+            }
+        }
+        if (allowed.contains(result)) {
+            return;
+        }
+        return sprintf("%s: %y is neither the AST result %y nor one of %y", key, result, ast_results{key}, allowed);
+    }
+
+    #! the check of the results of compiled code takes the results of a fast path only for a value of another type
+    #! than the receiver's parse type
+    fastPathResultsTest() {
+        hash<string, string> ast = {
+            "0 list k_size": "2",
+            "0 buffer k_size": "3",
+            "0 string fk_size": "5",
+            "0 binary fk_size": "3",
+            "0 int s_to_string": "\"12345\"",
+            "0 binary s_to_string": "\"ABC\"",
+            "0 int fk_to_string": "\"12345\"",
+            "0 int fk_substr": "PSEUDO-METHOD-DOES-NOT-EXIST",
+        };
+        # the AST result is always taken
+        assertEq(NOTHING, fastPathResultError(ast, "0", "list", "k_size", "2"));
+        # the result of a fast path for a value of another type than the parse type
+        assertEq(NOTHING, fastPathResultError(ast, "0", "buffer", "k_size", "0"));
+        assertEq(NOTHING, fastPathResultError(ast, "0", "binary", "fk_size", "0"));
+        assertEq(NOTHING, fastPathResultError(ast, "0", "binary", "s_to_string", "\"\""));
+        assertEq(NOTHING, fastPathResultError(ast, "0", "int", "fk_substr", "\"12345\""));
+        # never for a value of the parse type: a wrong result there is a failure
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "list", "k_size", "0"));
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "string", "fk_size", "0"));
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "int", "s_to_string", "\"\""));
+        # nor another result for a value of another type
+        assertNeq(NOTHING, fastPathResultError(ast, "0", "buffer", "k_size", "7"));
     }
 
     private hash<ExecModeHarness::ModeRunResult> runMode(string command, *string env) {

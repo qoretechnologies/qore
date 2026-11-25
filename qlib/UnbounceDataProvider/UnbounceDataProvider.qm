@@ -57,6 +57,15 @@ module UnbounceDataProvider {
                 "page groups, leads, and users, as well as creating and deleting leads, "
                 "managing lead deletion requests, and watching for new leads via polling.",
             "scheme": "unbouncerest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "unbounce.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://unbounce.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": UnbounceLogo,
             "logo_file_name": "unbounce-logo.svg",
             "logo_mime_type": MimeTypeSvg,

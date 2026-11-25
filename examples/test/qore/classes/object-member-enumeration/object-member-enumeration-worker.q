@@ -12,6 +12,33 @@ sub fmt(string label, list<auto> k, int s, bool e, bool v, int el, list<auto> ko
         v, el, ko, k == ko && s == ko.size() && el == s && e == !s);
 }
 
+#! Compares the snapshots constructed in the calling scope with its keys and member values.
+sub checkSnapshots(list<auto> names, hash<auto> members, AbstractIterator values, AbstractIterator keys_it,
+        AbstractIterator pairs, AbstractIterator backwards, AbstractIterator reverse_keys, AbstractIterator reverse_pairs,
+        AbstractIterator expected_pairs) {
+    list<auto> seen = ();
+    while (expected_pairs.next()) {
+        hash<auto> pair = expected_pairs.getValue();
+        if (!values.next() || !keys_it.next() || !pairs.next() || !members.hasKey(pair.key)
+                || members{pair.key} !== pair.value || values.getValue() !== pair.value
+                || keys_it.getValue() !== pair.key || pairs.getValue() !== pair) {
+            throw "SNAPSHOT-ERROR", sprintf("expected %y in %y", pair, members);
+        }
+        seen += (pair.key,);
+    }
+    if (seen != names || (keys members) != names || values.next() || keys_it.next() || pairs.next()) {
+        throw "SNAPSHOT-ERROR", sprintf("expected keys %y in %y", names, members);
+    }
+    for (int i = names.size() - 1; i >= 0; --i) {
+        if (!backwards.next() || backwards.getValue() !== members{names[i]} || !reverse_keys.next()
+                || reverse_keys.getValue() !== names[i] || !reverse_pairs.next()
+                || reverse_pairs.getValue() !== {"key": names[i], "value": members{names[i]}}) {
+            throw "SNAPSHOT-ERROR", "unexpected reverse iterator value";
+        }
+    }
+    if (backwards.next() || reverse_keys.next() || reverse_pairs.next()) { throw "SNAPSHOT-ERROR", "extra reverse iterator value"; }
+}
+
 class Base {
     public {
         int pub_base = 1;
@@ -24,6 +51,9 @@ class Base {
     }
 
     inside() {
+        checkSnapshots(keys self, hash(self), new ObjectIterator(self), new ObjectKeyIterator(self),
+            new ObjectPairIterator(self), new ObjectReverseIterator(self), new ObjectKeyReverseIterator(self),
+            new ObjectPairReverseIterator(self), self.pairIterator());
         fmt("Base method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
@@ -37,6 +67,9 @@ class Child inherits Base {
     }
 
     insideChild() {
+        checkSnapshots(keys self, hash(self), new ObjectIterator(self), new ObjectKeyIterator(self),
+            new ObjectPairIterator(self), new ObjectReverseIterator(self), new ObjectKeyReverseIterator(self),
+            new ObjectPairReverseIterator(self), self.pairIterator());
         fmt("Child method", self.keys(), self.size(), self.empty(), self.val(), elements self, keys self);
     }
 }
@@ -220,6 +253,9 @@ class InternalOnParent inherits PublicParent {
         PublicParent p();
         object o = p;
         o.x = 2;
+        checkSnapshots(keys o, hash(o), new ObjectIterator(o), new ObjectKeyIterator(o),
+            new ObjectPairIterator(o), new ObjectReverseIterator(o), new ObjectKeyReverseIterator(o),
+            new ObjectPairReverseIterator(o), o.pairIterator());
         fmt("child method on a parent object with its internal member", o.keys(), o.size(), o.empty(), o.val(),
             elements o, keys o);
         outside(o, "a parent object with a child's internal member");
@@ -266,6 +302,9 @@ class Unrelated {
 }
 
 sub outside(object o, string label) {
+    checkSnapshots(keys o, hash(o), new ObjectIterator(o), new ObjectKeyIterator(o),
+        new ObjectPairIterator(o), new ObjectReverseIterator(o), new ObjectKeyReverseIterator(o),
+        new ObjectPairReverseIterator(o), o.pairIterator());
     fmt("outside on " + label, o.keys(), o.size(), o.empty(), o.val(), elements o, keys o);
 }
 

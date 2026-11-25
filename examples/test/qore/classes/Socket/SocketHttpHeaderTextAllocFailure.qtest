@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A header read whose text cannot be stored fails with an exception that the caller can handle, and the process
+    goes on: the operations that send a response and read the next request header, which the server uses on a
+    connection that is kept open.
+    The allocation is made to fail by dbg_fail_http_header_text_alloc() (debug builds of the library only).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class SocketHttpHeaderTextAllocFailureTest
+
+#! a handler that answers every request
+class AllocFailureHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "served " + hdr.path, {"Content-Type": "text/plain"});
+    }
+}
+
+class SocketHttpHeaderTextAllocFailureTest inherits QUnit::Test {
+    private {
+        const Request = "GET /next HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    }
+
+    constructor() : Test("SocketHttpHeaderTextAllocFailureTest", "1.0") {
+        addTestCase("a response sent and the next header read", \sendAndReadHeaderTest());
+        addTestCase("a streamed response sent and the next header read", \sendStreamAndReadHeaderTest());
+        addTestCase("a server connection", \serverTest());
+        set_return_value(main());
+    }
+
+    sendAndReadHeaderTest() {
+        checkDebug();
+        hash<auto> client = startClient(Request);
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        on_exit conn.close();
+        call_function("dbg_fail_http_header_text_alloc", "send-and-read-header");
+        on_exit call_function("dbg_http_header_text_alloc_failed");
+        assertThrows("SOCKET-RECV-ERROR", \runPoll(), conn.startPollSendHttpResponseAndReadHeader(200, "OK", "1.1",
+            {"Content-Type": "text/plain"}, "ok", 5s));
+        assertTrue(call_function("dbg_http_header_text_alloc_failed"));
+    }
+
+    sendStreamAndReadHeaderTest() {
+        checkDebug();
+        hash<auto> client = startClient(Request);
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        on_exit conn.close();
+        call_function("dbg_fail_http_header_text_alloc", "send-stream-and-read-header");
+        on_exit call_function("dbg_http_header_text_alloc_failed");
+        assertThrows("SOCKET-RECV-ERROR", \runPoll(), conn.startPollSendHttpChunkedResponseAndReadHeader(200, "OK",
+            "1.1", {"Content-Type": "text/plain"}, new BinaryInputStream(binary("ok")), 5s));
+        assertTrue(call_function("dbg_http_header_text_alloc_failed"));
+    }
+
+    serverTest() {
+        checkDebug();
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelFatal()),
+        });
+        on_exit delete server;
+        server.setDefaultHandler("alloc", new AllocFailureHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        server.waitForAsyncIo();
+
+        # the header of the request after the first one cannot be stored: the connection is closed
+        {
+            Socket c();
+            c.connect("127.0.0.1:" + port, 10s);
+            on_exit c.close();
+            call_function("dbg_fail_http_header_text_alloc", "send-and-read-header");
+            on_exit call_function("dbg_http_header_text_alloc_failed");
+            c.send("GET /first HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            assertEq("served first", readResponse(c).body);
+            c.send("GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            *hash<auto> next;
+            try {
+                next = readResponse(c);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            assertNothing(next);
+            assertTrue(call_function("dbg_http_header_text_alloc_failed"));
+        }
+        # the server serves other connections
+        Socket c();
+        c.connect("127.0.0.1:" + port, 10s);
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("served other", readResponse(c).body);
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_fail_http_header_text_alloc() is only in debug builds of the library");
+        }
+    }
+
+    #! drives a poll operation to its end
+    private static runPoll(AbstractPollOperation op) {
+        while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+            if (!Socket::poll((pi,), 5s)) {
+                throw "SOCKET-TIMEOUT", "the poll operation timed out";
+            }
+        }
+    }
+
+    #! reads a response with a Content-Length body
+    private static hash<auto> readResponse(Socket c) {
+        hash<auto> resp = c.readHTTPHeader(5s);
+        int len = resp."content-length".toInt();
+        resp.body = len ? c.recv(len, 5s) : "";
+        return resp;
+    }
+
+    #! starts a client that sends the data, reads what it is sent and keeps the connection open until done
+    private hash<auto> startClient(string data) {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                client.send(data, 5s);
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("client error: %s\n", get_exception_string(ex));
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+}

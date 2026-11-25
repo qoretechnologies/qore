@@ -61,3 +61,5 @@ after: l [[1, 2], [3]] src [[1], [2]]
 remove -5: NEGATIVE-LIST-INDEX
 delete -5: NEGATIVE-LIST-INDEX
 remove -1: 2 l [1, null]
+shared hash root: 17 0
+shared list root: 23 0

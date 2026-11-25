@@ -51,6 +51,12 @@ public class StabilityAiApi {
     }
 
     private {
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiApi::buildSchemaValue());
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \StabilityAiApi::buildActionSetValue());
         static *OpenApi3::OpenApi3Schema schema;
         static *RestSchemaActionSet actions;
     }
@@ -64,6 +70,15 @@ public class StabilityAiApi {
         @throw OPENAPI3-ERROR the installed contract is invalid
     */
     static OpenApi3::OpenApi3Schema getSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(schema_value_id);
+    }
+
+    #! Builds the value of getSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3::OpenApi3Schema buildSchemaValue() {
         AutoLock lock(mutex);
         return getSchemaIntern();
     }
@@ -78,6 +93,15 @@ public class StabilityAiApi {
         @throw REST-SCHEMA-ACTION-ERROR the pinned contract and manifest disagree
     */
     static RestSchemaActionSet getActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(action_set_value_id);
+    }
+
+    #! Builds the value of getActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActionSet buildActionSetValue() {
         AutoLock lock(mutex);
         if (!actions) {
             list<hash<RestSchemaActionInfo>> manifest = ();

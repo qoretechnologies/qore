@@ -35,4 +35,10 @@ public namespace TsoAStatic {
             printf("%s released; live: %d\n", name, live.size());
         }
     }
+    #! Creates the reverse edge at runtime. TsoZHolder statically requires this module.
+    public sub loadHolder() {
+        load_module("TsoZHolder");
+        call_function("TsoZHolder::touch");
+    }
+
 }

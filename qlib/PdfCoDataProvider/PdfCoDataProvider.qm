@@ -791,6 +791,7 @@ module PdfCoDataProvider {
                 "Returns the job status (`working`, `success`, or `failed`) and the "
                 "result URL when complete.",
             "action_code": DPAT_API,
+            "mutates_state": False,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 PdfCoJobCheckRequestDataType::Fields{"jobId",}, {

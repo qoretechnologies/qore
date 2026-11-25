@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - EventNotifier polling of the async I/O controller and the order in which its I/O thread serves operations
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+
+%exec-class SseObservableFairnessTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The number of events queued before the stream is activated: eight batches of the 64 events that SseObservable delivers per run
+const QueuedEvents = 512;
+
+#! Counts the events of the stream and signals the other operation's notifier with the first one
+class CountingObserver inherits DataProvider::Observer {
+    public {
+        Counter all(QueuedEvents);
+    }
+
+    private {
+        Mutex m();
+        int count = 0;
+        EventNotifier other;
+    }
+
+    constructor(EventNotifier other) {
+        self.other = other;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id != HttpClientStreamingIo::EVENT_SSE_DATA) {
+            return;
+        }
+        int n;
+        {
+            AutoLock al(m);
+            n = ++count;
+        }
+        if (n == 1) {
+            # the other operation is ready from now on
+            other.notify();
+        }
+        all.dec();
+    }
+
+    int getCount() {
+        AutoLock al(m);
+        return count;
+    }
+}
+
+#! An operation of the controller that records the number of events delivered when it runs
+class OtherOperation inherits Qore::AbstractPollOperation<auto> {
+    public {
+        Counter ran(1);
+        *int events_seen;
+    }
+
+    private {
+        EventNotifier notifier;
+        CountingObserver observer;
+        bool started;
+    }
+
+    constructor(EventNotifier notifier, CountingObserver observer) {
+        self.notifier = notifier;
+        self.observer = observer;
+    }
+
+    string getGoal() {
+        return "ran";
+    }
+
+    string getState() {
+        return exists events_seen ? "ran" : "waiting";
+    }
+
+    bool goalReached() {
+        return exists events_seen;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (!started) {
+            started = True;
+            return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+        }
+        events_seen = observer.getCount();
+        ran.dec();
+        return NOTHING;
+    }
+}
+
+#! The async I/O controller thread serves its other operations while a stream's queued events are delivered (#7510)
+/** SseObservable delivered the queued events of a stream in a loop that ended only when the queue was empty, so a
+    stream whose events were queued faster than they were delivered kept its controller thread, and the thread's other
+    operations waited.  The controller has one I/O thread here, and the events are queued before the stream is
+    activated: the other operation, which becomes ready with the first event, must run between two batches, before the
+    last event is delivered; before the fix, it ran only once all events were delivered.
+*/
+class SseObservableFairnessTest inherits QUnit::Test {
+    constructor() : Test("SseObservableFairnessTest", "1.0") {
+        addTestCase("the controller thread serves other operations between batches of events", \fairnessTest());
+        # all operations of this process share one I/O thread; set before the controller is first used
+        AsyncIoController::setMaxIoThreads(1);
+        set_return_value(main());
+    }
+
+    fairnessTest() {
+        EventNotifier other_notifier();
+        CountingObserver observer(other_notifier);
+        OtherOperation other(other_notifier, observer);
+        AsyncIoController::submit(operation_info: <SocketPollOperationInfo>{
+            "sock": other_notifier,
+            "spop": other,
+            "owner": "SseObservableFairnessTest",
+            "to": -1s,
+        });
+
+        HttpClientConnectionManager mgr();
+        SseObservable obs(mgr, "http://127.0.0.1:1", "GET", "/", NOTHING, NOTHING, {"idle_timeout": 0});
+        obs.registerObserver(observer);
+        Queue events();
+        for (int i = 0; i < QueuedEvents; ++i) {
+            events.push(<SseMessageInfo>{"event": "message", "data": sprintf("%d", i)});
+        }
+        EventNotifier stream_notifier();
+        # a stream handle that is never used for I/O: the events are already queued
+        Http1ClientStreamHandle handle(new Http1ClientConnection(parse_url("http://127.0.0.1:1"), 1s));
+        obs.activateStartedStream(handle, events, stream_notifier);
+        on_exit obs.stopEvents();
+
+        assertEq(0, observer.all.waitForZero(HangGuard), "all events are delivered");
+        assertEq(0, other.ran.waitForZero(HangGuard), "the other operation runs");
+        # the other operation is ready from the first event on; the controller runs it between two batches (the
+        # continuePoll() calls of the controller's Qore operations run one at a time, under a lock that does not
+        # guarantee the order of its waiters, so it is not asserted to run after the first batch)
+        assertLt(QueuedEvents, other.events_seen, "the other operation runs before the last event is delivered");
+    }
+}

@@ -105,6 +105,12 @@ public class GitHubSchema {
     }
 
     private {
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \GitHubSchema::buildSchemaValue());
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \GitHubSchema::buildActionSetValue());
         #! The parsed schema
         static *OpenApi3Schema schema;
 
@@ -119,6 +125,15 @@ public class GitHubSchema {
 
     #! Returns the parsed vendored schema, parsing it on first use
     static OpenApi3Schema getSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(schema_value_id);
+    }
+
+    #! Builds the value of getSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3Schema buildSchemaValue() {
         AutoLock al(lck);
         return GitHubSchema::getSchemaIntern();
     }
@@ -128,6 +143,15 @@ public class GitHubSchema {
         schema declares, so there is no wire type to correct.
     */
     static RestSchemaActionSet getActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(action_set_value_id);
+    }
+
+    #! Builds the value of getActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActionSet buildActionSetValue() {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActionSet(GitHubSchema::getSchemaIntern(),

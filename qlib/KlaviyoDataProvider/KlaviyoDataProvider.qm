@@ -76,6 +76,15 @@ module KlaviyoDataProvider {
                 "Klaviyo's developer portal, or a private API key for an integration serving one "
                 "account.\n\n"
                 "Klaviyo is a trademark of Klaviyo, Inc.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "klaviyo.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.klaviyo.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "klaviyo",
             "logo": Priv::KlaviyoLogo,
             "logo_file_name": "klaviyo-logo.svg",
@@ -88,7 +97,12 @@ module KlaviyoDataProvider {
         DataProviderActionCatalog::registerLazyAppActions(KlaviyoDataProvider::AppName, sub () {
             # register every action in the manifest
             RestSchemaActionSet action_set = KlaviyoSchema::getActionSet();
-            action_set.registerActions(KlaviyoDataProvider::AppName);
+            foreach hash<DataProviderActionInfo> action in (action_set.getActionInfoList(KlaviyoDataProvider::AppName)) {
+                if (action.action == "send_campaign") {
+                    action.billing = <DataProviderBillingInfo>{"model": "metered"};
+                }
+                DataProviderActionCatalog::registerAction(action);
+            }
 
             # register the record-based table actions; declaring the tables is only half of it, and a table no
             # action reaches is offered to nobody

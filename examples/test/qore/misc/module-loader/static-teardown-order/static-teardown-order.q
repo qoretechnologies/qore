@@ -7,7 +7,10 @@
 
 %modern
 
-if (ARGV[0] == "runtime") {
+if (ARGV[0] == "runtime-cycle") {
+    load_module("TsoAStatic");
+    call_function("TsoAStatic::loadHolder");
+} else if (ARGV[0] == "runtime") {
     load_module("TsoZRtHolder");
     call_function("TsoZRtHolder::init");
 } else {

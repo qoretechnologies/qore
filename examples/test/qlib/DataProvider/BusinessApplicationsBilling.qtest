@@ -1,0 +1,30 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class BusinessApplicationsBillingTest
+
+class BusinessApplicationsBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("BusinessApplications provider billing") {
+        addVendor("CdsRest", "Dynamics", "dynamics.com", "subscription",
+            "https://www.microsoft.com/en-us/dynamics-365/products/sales/pricing");
+        addVendor("CdsRest", "BusinessCentral", "dynamics.com", "subscription",
+            "https://www.microsoft.com/en-us/dynamics-365/products/business-central/pricing");
+        addVendor("GoogleCloudStorage", "GoogleCloudStorage", "googleapis.com", "metered",
+            "https://cloud.google.com/storage/pricing", {
+                "list-buckets": "request", "get-object-metadata": "request",
+                "update-object-metadata": "request", "upload-object": "metered",
+            });
+        addVendor("Pinecone", "PineconeAdmin", "pinecone.io", "unknown",
+            "https://www.pinecone.io/pricing/");
+        addVendor("Pinecone", "Pinecone", "pinecone.io", "metered",
+            "https://www.pinecone.io/pricing/");
+        set_return_value(main());
+    }
+}

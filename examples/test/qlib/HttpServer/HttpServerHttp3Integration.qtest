@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - testRestClientAltSvcViaLocalhostFastPath() checks HTTP/3 through the name localhost, which resolves to ::1 first, to a server whose TCP and QUIC listeners are on the dual-stack wildcard address "::" (both loopback addresses); "https://localhost:1" only sets HTTPClient options; its other servers listen on 127.0.0.1 and their clients connect to 127.0.0.1
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
