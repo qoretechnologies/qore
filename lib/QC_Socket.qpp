@@ -2443,24 +2443,26 @@ const SOCK_RAW = SOCK_RAW;
 
 // the check of a guarded method of the connection socket of a server (see Socket::setServerOwned(); qore#7338)
 int qore_socket_server_guard_check(int kind, ExceptionSink* xsink) {
+    // restricted code only: code that a sandbox governs only for its resource limits, interrupts or I/O policy, and
+    // that may use uncontrolled APIs, is trusted, as SandboxManager::isRestricted() decides (qore#7577); the server
+    // gives it the connection's socket
     if (kind == 1) {
-        // close() and shutdown*(): refused to code that a sandbox's policy governs; a policy barrier lifts it
-        QoreSandboxManagerHelper policy(QoreSandboxManagerHelper::Policy);
-        if (!policy) {
+        // close() and shutdown*(): refused to code that a restricting sandbox's policy governs; a policy barrier
+        // lifts it
+        if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Policy)) {
             return 0;
         }
         xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the connection socket of a server cannot be closed or "
-            "shut down by code that a sandbox's policy governs");
+            "shut down by restricted code that a sandbox's policy governs");
         return -1;
     }
-    // the methods that read, write, change or poll the connection: refused to sandboxed code, also through a policy
+    // the methods that read, write, change or poll the connection: refused to restricted code, also through a policy
     // barrier
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    if (!governing) {
+    if (qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::All)) {
         return 0;
     }
     xsink->raiseException("SOCKET-SERVER-OWNED-ERROR", "the connection socket of a server cannot be used by "
-        "sandboxed code; the server gives sandboxed handlers a socket of their own request");
+        "restricted sandboxed code; the server gives restricted handlers a socket of their own request");
     return -1;
 }
 
@@ -2617,11 +2619,14 @@ Socket::destructor() {
 }
 
 //! Marks the socket as the connection socket of a server (one way)
-/** A server marks the socket of each connection that it accepts: sandboxed code may not call its methods that read,
-    write, change or poll the connection (SOCKET-SERVER-OWNED-ERROR), and code that a sandbox's policy governs may not
-    call close() or its shutdown methods (a policy barrier, @ref Qore::SandboxManager::callWithSystemPolicy()
+/** A server marks the socket of each connection that it accepts: restricted code (code that a sandbox governs that
+    refuses uncontrolled APIs, see @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()") may not
+    call its methods that read, write, change or poll the connection (SOCKET-SERVER-OWNED-ERROR), and restricted code
+    that a sandbox's policy governs may not call close() or its shutdown methods (a policy barrier, @ref Qore::SandboxManager::callWithSystemPolicy()
     "SandboxManager::callWithSystemPolicy()", lifts it, so that trusted infrastructure can close it on behalf of a
     tenant).  Its methods that only give information about the connection, such as getPeerInfo(), are not refused.
+    Code that a sandbox governs only for its resource limits, interrupts or I/O policy, and that may use uncontrolled
+    APIs, is trusted and is not refused (qore#7577).
     The server does its own I/O on the connection and gives the sockets of the requests of sandboxed handlers access
     to it with an alias (see getServerAlias()), which is not guarded.
 

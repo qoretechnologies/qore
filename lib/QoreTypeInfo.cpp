@@ -1986,10 +1986,10 @@ namespace {
 */
 class QoreModuleTypeOwnerCollector {
 public:
-    DLLLOCAL QoreModuleTypeOwnerCollector(std::vector<QoreTypeOwner*>& names) : names(names) {
+    QoreModuleTypeOwnerCollector(std::vector<QoreTypeOwner*>& names) : names(names) {
     }
 
-    DLLLOCAL void add(const QoreTypeInfo* ti) {
+    void add(const QoreTypeInfo* ti) {
         // every type is walked once: a type can be reached by several paths
         if (!ti || !visited.insert(ti).second) {
             return;
@@ -2042,13 +2042,13 @@ private:
     std::vector<QoreTypeOwner*>& names;
     std::set<const QoreTypeInfo*> visited;
 
-    DLLLOCAL void addOwner(QoreTypeOwner* o) {
+    void addOwner(QoreTypeOwner* o) {
         if (o->isTypeOwnerModule() && std::find(names.begin(), names.end(), o) == names.end()) {
             names.push_back(o);
         }
     }
 
-    DLLLOCAL void addClass(const QoreClass* qc) {
+    void addClass(const QoreClass* qc) {
         if (!qc) {
             return;
         }
@@ -2058,7 +2058,7 @@ private:
         }
     }
 
-    DLLLOCAL void addSpec(const QoreTypeSpec& spec) {
+    void addSpec(const QoreTypeSpec& spec) {
         switch (spec.getTypeSpec()) {
             case QTS_CLASS:
                 addClass(spec.getClass());
