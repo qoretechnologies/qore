@@ -1431,12 +1431,20 @@ string sql = db.getSqlIdentifier("Order Date");
 
         private *AbstractSequence getSequenceImpl(string name) {
             # the starting value and the increment are kept from Firebird 3 on
-            *hash<auto> row = ds.selectRow("select rdb$generator_name as \"sequence\", "
-                "rdb$initial_value as \"start\", rdb$generator_increment as \"increment\" from rdb$generators where "
-                "rdb$system_flag = 0 and rdb$generator_name = %v", firebird_get_catalog_name(name));
-            return row.sequence
-                ? new XdbcFirebirdSequence(row.sequence.lwr(), row.start ?? 1, row.increment ?? 1)
-                : NOTHING;
+            *hash<auto> row = ds.selectRow("select trim(g.rdb$generator_name) as \"sequence\", "
+                "g.rdb$initial_value as \"start\", g.rdb$generator_increment as \"increment\", "
+                "trim(f.rdb$relation_name) as \"owner_table\", trim(f.rdb$field_name) as \"owner_column\" "
+                "from rdb$generators g left join rdb$relation_fields f on f.rdb$generator_name = g.rdb$generator_name "
+                "and f.rdb$identity_type is not null where (g.rdb$system_flag = 0 or f.rdb$field_name is not null) "
+                "and g.rdb$generator_name = %v", firebird_get_catalog_name(name));
+            if (!row) {
+                return;
+            }
+            XdbcFirebirdSequence seq(row.sequence.lwr(), row.start ?? 1, row.increment ?? 1);
+            seq.ownership = row.owner_column.val()
+                ? <SqlSequenceOwnershipInfo>{"kind": "identity", "table": row.owner_table, "column": row.owner_column}
+                : <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+            return seq;
         }
 
         #! returns the view of the given name with its source, or no value if there is no such view

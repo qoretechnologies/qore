@@ -2201,6 +2201,23 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         const OracleMaxPrecision = 38;
     }
 
+    private {
+        *bool has_identity_sequence_name;
+    }
+
+    # ALL_TAB_IDENTITY_COLS.SEQUENCE_NAME was added in 12.1.0.2. Read the server version once per database.
+    private bool hasIdentitySequenceName() {
+        if (!exists has_identity_sequence_name) {
+            auto v = ds.getServerVersion();
+            string release = v.typeCode() == NT_HASH ? v.version : v;
+            int major = v.typeCode() == NT_HASH ? v.major_version.toInt() : (release =~ x/([0-9]+)/)[0].toInt();
+            *list<string> parts = (release =~ x/12\.([0-9]+)\.[0-9]+\.([0-9]+)/);
+            has_identity_sequence_name = major > 12 || (major == 12 && (parts[0].toInt() > 1
+                || (parts[0].toInt() == 1 && parts[1].toInt() >= 2)));
+        }
+        return has_identity_sequence_name;
+    }
+
     #! creates the object from the arguments given
     constructor(AbstractDatasource nds, *hash opts) : AbstractDatabase(nds, opts) {
     }
@@ -2267,7 +2284,15 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         string schema;
         getSchemaName(\name, \schema);
 
-        *hash<auto> row = ds.selectRow("select * from all_sequences where sequence_owner = %v and sequence_name = %v", schema.upr(), name.upr());
+        bool identity_cols = hasIdentitySequenceName();
+        string fields = identity_cols ? ", i.table_name owner_table, i.column_name owner_column" : "";
+        string identity_join = identity_cols
+            ? "left join all_tab_identity_cols i on i.owner = s.sequence_owner and i.sequence_name = s.sequence_name "
+            : "";
+        *hash<auto> row = ds.selectRow("select s.*, o.generated" + fields + " from all_sequences s "
+            "left join all_objects o on o.owner = s.sequence_owner and o.object_name = s.sequence_name "
+            "and o.object_type = 'SEQUENCE' " + identity_join + "where s.sequence_owner = %v and s.sequence_name = %v",
+            schema.upr(), name.upr());
         if (!row)
             return;
         bool ascending = row.increment_by > 0;
@@ -2284,7 +2309,15 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         }
         # Oracle does not keep the starting value of a sequence; the first value in its direction is given
         number start = ascending ? row.min_value : row.max_value;
-        return new OracleSequence(name, start, row.increment_by, max, min, row.cycle_flag == "Y", row.cache_size);
+        OracleSequence seq(name, start, row.increment_by, max, min, row.cycle_flag == "Y", row.cache_size);
+        if (row.owner_column.val()) {
+            seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "identity", "schema": row.sequence_owner, "table": row.owner_table,
+                "column": row.owner_column};
+        } else if (row.generated == "N") {
+            # A generated sequence whose owning table is hidden from this account has unknown ownership.
+            seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+        }
+        return seq;
     }
 
     private *AbstractView getViewImpl(string name) {

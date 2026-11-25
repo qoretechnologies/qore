@@ -193,6 +193,8 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports column ownership and the native
+      sequence type where the database supplies them (issue #7587)
     - serialized objects keep no credentials of their datasource: the default serializer keeps its masked
       configuration, and a datasource is restored with a registered deserializer or the new
       @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()"; data of
@@ -11236,6 +11238,18 @@ string sql = constraint.getDeferrabilitySql();
         }
     }
 
+    #! The ownership of a database sequence as reported by its catalog
+    public hashdecl SqlSequenceOwnershipInfo {
+        #! \c standalone, \c identity (generated for an identity column), or \c owned (bound to a column)
+        string kind;
+        #! The catalog spelling of the owning schema, if the database has schemas and there is an owner
+        *string schema;
+        #! The catalog spelling of the owning table, if any
+        *string table;
+        #! The catalog spelling of the owning column, if any
+        *string column;
+    }
+
     #! base class for sequences
     public class AbstractSequence inherits Qore::Serializable {
         public {
@@ -11250,6 +11264,16 @@ string sql = constraint.getDeferrabilitySql();
 
             #! the ending number
             *number max;
+
+            #! Column ownership returned by getSequence(), or @ref nothing when the driver cannot determine it
+            /** A standalone sequence can supply a column default. Ownership means the catalog associates the
+                sequence's lifetime with a particular column. A sequence constructed from a description has no
+                catalog ownership information.
+            */
+            *hash<SqlSequenceOwnershipInfo> ownership;
+
+            #! Native SQL sequence type returned by getSequence(), or @ref nothing when there is no declared type
+            *string data_type;
         }
 
         #! creates the object from the arguments
