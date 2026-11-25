@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../../TestInterpreter.qm
 
 %exec-class StdioSandboxChangeTest
 
@@ -54,7 +55,7 @@ class StdioSandboxChangeTest inherits QUnit::Test {
         string out = dir.path + "/result.txt";
         # the child's own output and errors are of no interest; it ends by itself
         string cmd = sprintf("'%s' -b --exec-mode=%s '%s/stdio-sandbox-change-child.q' '%s' %s >/dev/null 2>&1",
-            QORE_ARGV[0], mode, get_script_dir(), out, kind);
+            TestInterpreter::qore_interpreter(), mode, get_script_dir(), out, kind);
         assertEq(0, system(cmd), sprintf("the %s child in mode %s ended", kind, mode));
         hash<string, string> rv;
         if (is_file(out)) {

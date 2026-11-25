@@ -361,6 +361,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - aot-cross-module-caller-mask (#7101): its checks run in child processes that set their own --exec-mode
         # - foreign-call-at-exit (#6904): its checks run in child processes that set their own --exec-mode and as qcc
         #   executables, as the end of the process is checked
+        # - stdio-sandbox-change (#7670): its checks run in child interpreters that set their own --exec-mode, as the
+        #   calls can close or redirect the standard streams of the process that makes them
         # - short-string-native-access (#7038): its probes run in child processes that set their own --exec-mode and
         #   as qcc executables
         # - short-string-access of the dataframe, i18n, logger_bin and tokenizer modules (#7062): their probes run in
@@ -420,6 +422,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/closure-default-self-ref.qtest",
                                  "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
                                  "examples/test/qore/security/method-call-program-context.qtest",
+                                 "examples/test/qore/security/stdio-sandbox-change.qtest",
                                  "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
                                  "examples/test/qore/classes/Datasource/value-encoding/value-encoding.qtest",
                                  "examples/test/qore/functions/user-functional-domains/library-registry-origin.qtest",
