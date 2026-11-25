@@ -32,7 +32,12 @@ class ModuleHostInfoTest inherits QUnit::Test {
         #! the execution modes of the worker's Programs
         const Modes = 4;
         #! the checks of each Program
-        const Cases = 64;
+        const Cases = 66;
+        #! the kinds of Programs that a sandbox governs
+        const SandboxedKinds = 2;
+        #! the checks of the subclasses of the modules' classes, which the sandboxed Programs do not declare
+        #! (qore#6843)
+        const SubclassCases = 7;
     }
 
     private {
@@ -93,7 +98,8 @@ class ModuleHostInfoTest inherits QUnit::Test {
         list<string> lines = select out.split("\n"), $1.val();
         list<string> failed = select lines, $1 !~ /=ok$/;
         assertEq((), failed, label + ": failed checks");
-        assertEq(Kinds * Modes * Cases, lines.size(), label + ": number of checks");
+        assertEq(Kinds * Modes * Cases - SandboxedKinds * Modes * SubclassCases, lines.size(),
+            label + ": number of checks");
     }
 
     testInterpreter() {

@@ -58,6 +58,12 @@ const Kinds = {
 #! the execution modes of the Programs
 const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 
+#! the results that the host's provider modules give: only to code that may receive the host's secrets
+const HostSecretKeys = ("conns", "conn", "conn_hash", "ds_hash", "ds_string", "conn_unknown", "ds_unknown");
+
+#! the results of the subclasses of the modules' classes, which sandboxed code does not declare (qore#6843)
+const SubclassKeys = ("es_host", "os_host", "telnet_env", "telnet_term", "telnet_display", "mcp_pid", "a2a_pid");
+
 list<string> results = ();
 
 sub check(string key, auto expected, auto actual) {
@@ -127,6 +133,9 @@ string url_wild_host = http_get_url_from_bind("0.0.0.0:8080");
 string url_wild6_host = http_get_url_from_bind("[::]:8080");
 string ds = "pgsql:host-user/host-secret@hostdb";
 
+# live-provider-optin: a fake value that the test sets for the checks, not a credential
+string q7586_secret = ENV.Q7586_SECRET;
+
 #! what code that may read external information gets
 hash<auto> may_read = {
     "tmp": tmp_host,
@@ -153,7 +162,7 @@ hash<auto> may_read = {
     "url_wild6": url_wild6_host,
     "url_host": "http://localhost:8080",
     "errpage": True,
-    "layout": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
+    "layout": sprintf("%s|%s|%s", hostname, pid, q7586_secret),
     "es_host": {"name": hostname},
     "os_host": {"name": hostname},
     "smtp": "connected",
@@ -163,6 +172,7 @@ hash<auto> may_read = {
     "telnet_display": ENV.DISPLAY,
     "qunit_env": ENV.QUNIT_Q7586,
     "edifact": ENV.QORE_EDIFACT_DIRCACHE,
+    # live-provider-optin: the path that the cache root names, which is not read
     "edifact_tilde": getenv("HOME") + "/q7586",
     "edifact_explicit": "/q7586/edifact",
     "conns": ("q7586",),
@@ -177,16 +187,16 @@ hash<auto> may_read = {
     "repl_pwd": cwd,
     "repl_cd": "Changed to: " + cwd,
     "lent_errpage": True,
-    "lent_layout": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
-    "lent_layout_set": sprintf("%s|%s|%s", ENV.Q7586_SECRET, hostname, pid),
+    "lent_layout": sprintf("%s|%s|%s", hostname, pid, q7586_secret),
+    "lent_layout_set": sprintf("%s|%s|%s", q7586_secret, hostname, pid),
     # an appender of the host keeps its fields whatever code logs through it
-    "lent_logger_line": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
+    "lent_logger_line": sprintf("%s|%s|%s", hostname, pid, q7586_secret),
     "smtp_async": "connected",
-    "own_appender": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
+    "own_appender": sprintf("%s|%s|%s", hostname, pid, q7586_secret),
     "vcwd_big": True,
     "vcwd_up": "../../../etc/passwd",
     "smtp_async_ehlo": "EHLO " + hostname,
-    "qls_expand": ENV.Q7586_SECRET + "/" + ENV.Q7586_SECRET + "/d",
+    "qls_expand": q7586_secret + "/" + q7586_secret + "/d",
     "qls_moddirs": QLS::DocumentLinks::getEnvModuleDirs(),
     "dp_failures": ("q7586-no-such-data-provider-module",),
     "onnx_python": ENV.QORE_ONNX_PYTHON,
@@ -233,7 +243,8 @@ hash<auto> may_not_read = may_read + {
     "conns": (),
     "conn": "CONNECTION-ERROR",
     "conn_hash": (),
-    "ds_hash": NOTHING,
+    # the provider module is loaded but not used: no datasources
+    "ds_hash": {},
     "ds_string": "DATASOURCE-ERROR",
     # Q7586Providers does not resolve names for the calling code: it is not used for such code, whose errors do not
     # name it (qore#6844)
@@ -314,6 +325,8 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
             sm.setNetworkDefaultPolicy(True);
             sm.setFilesystemDefaultPolicy(True);
             p.setSandboxManager(sm);
+            # its code declares no subclass that uses the private declarations of the modules' classes (qore#6843)
+            p.define("Q7586_SANDBOXED", True);
         }
         if (kind.value.requires) {
             p.parse(requires + child_source, "module-host-info-child");
@@ -359,6 +372,13 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
         r.smtp_ehlo = r.smtp == "connected" ? smtp.lines.get(30s) : NOTHING;
         r.smtp_async_ehlo = r.smtp_async == "connected" ? smtp.lines.get(30s) : NOTHING;
         hash<auto> expected = kind.value.restricted ? may_not_read : may_read;
+        if (kind.value.sandboxed) {
+            # sandboxed code may not receive the host's secrets: it gets no connection or datasource of the host's
+            # provider modules, as code restricted from external information does (qore#6844)
+            expected += may_not_read{HostSecretKeys};
+            # it declares no subclass that reaches the protected methods of the modules' classes
+            expected -= SubclassKeys;
+        }
         foreach string k in (keys expected) {
             check(key + "/" + k, expected{k}, r{k});
         }

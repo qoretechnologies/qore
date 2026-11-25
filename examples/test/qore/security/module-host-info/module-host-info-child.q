@@ -17,7 +17,10 @@ our *string q_reldir;
 our *string q_vtoken;
 our hash<auto> q_r;
 
-# subclasses that reach the protected methods of the modules' classes
+# subclasses that reach the protected methods of the modules' classes; a class declared by sandboxed code cannot use
+# the private declarations of a class declared by trusted code (qore#6843), so the worker defines Q7586_SANDBOXED for
+# the sandboxed Programs, which declare no such subclass
+%ifndef Q7586_SANDBOXED
 class Q7586Telnet inherits TelnetClient::TelnetClient {
     constructor() : TelnetClient("localhost:1") {
     }
@@ -34,7 +37,9 @@ class Q7586Telnet inherits TelnetClient::TelnetClient {
         return getDisplay();
     }
 }
+%endif
 
+%ifndef Q7586_SANDBOXED
 class Q7586Es inherits ElasticSearchLoggerAppender::ElasticSearchLoggerAppender {
     constructor() : ElasticSearchLoggerAppender("es", new Logger::LoggerLayoutPattern(),
             {"url": "http://127.0.0.1:1", "index": "q7586"}) {
@@ -44,7 +49,9 @@ class Q7586Es inherits ElasticSearchLoggerAppender::ElasticSearchLoggerAppender 
         return createDocument(ev);
     }
 }
+%endif
 
+%ifndef Q7586_SANDBOXED
 class Q7586Os inherits OpenSearchLoggerAppender::OpenSearchLoggerAppender {
     constructor() : OpenSearchLoggerAppender("os", new Logger::LoggerLayoutPattern(),
             {"url": "http://127.0.0.1:1", "index": "q7586"}) {
@@ -54,6 +61,7 @@ class Q7586Os inherits OpenSearchLoggerAppender::OpenSearchLoggerAppender {
         return createDocument(ev);
     }
 }
+%endif
 
 # an appender of the code's own that takes a layout of the host
 class Q7586OwnAppender inherits Logger::LoggerAppenderWithLayout {
@@ -72,6 +80,7 @@ class Q7586OwnAppender inherits Logger::LoggerAppenderWithLayout {
     }
 }
 
+%ifndef Q7586_SANDBOXED
 class Q7586Mcp inherits McpServerHandler::McpServerHandler {
     constructor() : McpServerHandler(new HttpServer::PermissiveAuthenticator()) {
     }
@@ -80,7 +89,9 @@ class Q7586Mcp inherits McpServerHandler::McpServerHandler {
         return generateTaskId();
     }
 }
+%endif
 
+%ifndef Q7586_SANDBOXED
 class Q7586A2a inherits A2aServerHandler::A2aServerHandler {
     constructor() : A2aServerHandler(new Logger::Logger("a2a"), {"name": "q7586"}) {
     }
@@ -89,6 +100,7 @@ class Q7586A2a inherits A2aServerHandler::A2aServerHandler {
         return generateTaskId();
     }
 }
+%endif
 
 # Util
 try { q_r.tmp = Util::tmp_location(); } catch (hash<ExceptionInfo> ex) { q_r.tmp = ex.err; }
@@ -130,18 +142,22 @@ try {
 } catch (hash<ExceptionInfo> ex) {
     q_r.layout = ex.err;
 }
+%ifndef Q7586_SANDBOXED
 try {
     q_r.es_host = (new Q7586Es()).doc(new Logger::LoggerEvent("q7586", "q7586", Logger::LoggerLevel::getLevelInfo(),
         "m")).host;
 } catch (hash<ExceptionInfo> ex) {
     q_r.es_host = ex.err;
 }
+%endif
+%ifndef Q7586_SANDBOXED
 try {
     q_r.os_host = (new Q7586Os()).doc(new Logger::LoggerEvent("q7586", "q7586", Logger::LoggerLevel::getLevelInfo(),
         "m")).host;
 } catch (hash<ExceptionInfo> ex) {
     q_r.os_host = ex.err;
 }
+%endif
 
 # SmtpClient: the worker's server records the EHLO command
 try {
@@ -154,6 +170,7 @@ try {
 }
 
 # TelnetClient
+%ifndef Q7586_SANDBOXED
 try {
     Q7586Telnet telnet();
     q_r.telnet_env = telnet.env();
@@ -162,28 +179,36 @@ try {
 } catch (hash<ExceptionInfo> ex) {
     q_r.telnet_env = ex.err;
 }
+%endif
 
 # QUnit
 try { q_r.qunit_env = (new QUnit::Test("q7586", "1.0", ())).getEnv("Q7586"); } catch (hash<ExceptionInfo> ex) { q_r.qunit_env = ex.err; }
 
 # EdifactUtil
 try { q_r.edifact = (new EdifactUtil::EdifactDirectoryCache()).getCacheRoot(); } catch (hash<ExceptionInfo> ex) { q_r.edifact = ex.err; }
+# live-provider-optin: the cache root is only named, not read
 try { q_r.edifact_tilde = (new EdifactUtil::EdifactDirectoryCache("~/q7586")).getCacheRoot(); } catch (hash<ExceptionInfo> ex) { q_r.edifact_tilde = ex.err; }
 try { q_r.edifact_explicit = (new EdifactUtil::EdifactDirectoryCache("/q7586/edifact")).getCacheRoot(); } catch (hash<ExceptionInfo> ex) { q_r.edifact_explicit = ex.err; }
 
 # ConnectionProvider and DatasourceProvider
+# live-provider-optin: the test's own provider module (Q7586Providers.qm) with fake connections
 try { q_r.conns = keys ConnectionProvider::get_connections(); } catch (hash<ExceptionInfo> ex) { q_r.conns = ex.err; }
+# live-provider-optin: the test's own provider module (Q7586Providers.qm) with fake connections
 try { q_r.conn = ConnectionProvider::get_connection("q7586").url; } catch (hash<ExceptionInfo> ex) { q_r.conn = ex.err; }
+# live-provider-optin: the test's own provider module (Q7586Providers.qm) with fake connections
 try { q_r.conn_hash = keys ConnectionProvider::get_connection_hash(); } catch (hash<ExceptionInfo> ex) { q_r.conn_hash = ex.err; }
 try { q_r.ds_hash = DatasourceProvider::get_ds_hash(); } catch (hash<ExceptionInfo> ex) { q_r.ds_hash = ex.err; }
 try { q_r.ds_string = DatasourceProvider::get_ds_string("q7586"); } catch (hash<ExceptionInfo> ex) { q_r.ds_string = ex.err; }
 # the error for an unknown name names the host's provider modules only for code that may receive the host's secrets
+# live-provider-optin: the test's own provider module (Q7586Providers.qm) with fake connections
 try { ConnectionProvider::get_connection("q7586-unknown"); q_r.conn_unknown = "found"; } catch (hash<ExceptionInfo> ex) { q_r.conn_unknown = ex.err + (ex.desc =~ /Q7586Providers/ ? ": names the module" : ""); }
 try { DatasourceProvider::get_ds_string("q7586-unknown"); q_r.ds_unknown = "found"; } catch (hash<ExceptionInfo> ex) { q_r.ds_unknown = ex.err + (ex.desc =~ /Q7586Providers/ ? ": names the module" : ""); }
 
 # the task IDs of the MCP and A2A server handlers
+%ifndef Q7586_SANDBOXED
 try { q_r.mcp_id = (new Q7586Mcp()).id(); } catch (hash<ExceptionInfo> ex) { q_r.mcp_id = ex.err + ": " + ex.desc; }
 try { q_r.a2a_id = (new Q7586A2a()).id(); } catch (hash<ExceptionInfo> ex) { q_r.a2a_id = ex.err; }
+%endif
 
 # QoreRepl
 try {
