@@ -257,6 +257,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c indexes: (@ref index_desc_hash "index description hashes") a hash<auto> describing the indexes on the table
             - \c triggers: a hash of trigger information keyed by trigger name; the values are the trigger source code; since triggers are driver-dependent, a driver-independent table description would include trigger hashes under the \c drivers key and the driver key name under that
             - \c foreign_constraints: (@ref fk_desc_hash "foreign constraint hashes") a hash<auto> describing the foreign constraints on the table
+            - \c check_constraints: on PostgreSQL and Oracle, check expressions keyed by constraint name (see @ref table_desc_hash)
             - \c unique_constraints: (@ref uk_desc_hash "unique constraint hashes") a hash<auto> describing the unique constraints on the table
             - \c comment: (@ref string_type) the comment of the table, on databases whose driver supports table
               comments (see @ref SqlUtil::AbstractTable::supportsTableComments() "supportsTableComments()"); it is
@@ -278,7 +279,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "unique_constraints": Type::Hash,
             "partition_strategy": Type::Hash,
             "partitions": Type::Hash,
-            #"check_constraints": Type::Hash,
+            "check_constraints": Type::Hash,
             "table_cache": "Tables",
             "comment": Type::String,
         };
@@ -686,6 +687,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         bool inDb = False;
         #! manual edits
         bool manual = False;
+
+        # The template explicitly manages named checks, including an empty set.
+        bool has_check_description = False;
 
         #! True if the object stands for the common table expression of a recursive query
         /** Its SQL name is its name as an identifier, without a schema (see @ref select_option_recursive)
@@ -1768,6 +1772,11 @@ list<auto> changes = source_table.getAlignSql(target);
         # check description
         validateOptionsIntern("DESCRIPTION-ERROR", getTableDescriptionHashOptions(), \desc);
 
+        if (desc.hasKey("check_constraints") && !supportsCheckDescriptionsImpl()) {
+            throw "DESCRIPTION-ERROR", sprintf("%s: check_constraints is not supported by the %y driver",
+                getDesc(), ds.getDriverName());
+        }
+
         # check options
         hash copt = getColumnOptions();
         hash tcopt = getTableCreationOptions() + copt;
@@ -1997,6 +2006,21 @@ list<auto> changes = source_table.getAlignSql(target);
                     ch.target_columns, fk_opt, NOTHING, False), fk_opt);
             } catch (hash<ExceptionInfo> ex) {
                 rethrow ex.err, sprintf("error setting up %s: %s", getDesc(), ex.desc), ex.arg;
+            }
+        }
+
+        if (desc.hasKey("check_constraints")) {
+            has_check_description = True;
+            foreach hash<auto> item in (desc.check_constraints.pairIterator()) {
+                if (item.value.typeCode() != NT_STRING || !trim(item.value).val()) {
+                    throw "DESCRIPTION-ERROR", sprintf("check constraint %y requires a nonempty SQL expression",
+                        item.key);
+                }
+                checkUniqueConstraintName("DESCRIPTION-ERROR", item.key);
+                if (!constraints) {
+                    constraints @= new Constraints();
+                }
+                constraints.add(item.key, addCheckConstraintImpl(item.key, item.value, NOTHING));
             }
         }
 
@@ -9964,6 +9988,7 @@ table.clear();
         l.lock();
         on_exit l.unlock();
 
+        has_check_description = False;
         delete columns;
         delete primaryKey;
         delete foreignConstraints;
@@ -11496,9 +11521,23 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
                 rv.indexes{i.key} = ix;
             }
         }
+        if (has_check_description) {
+            rv.check_constraints = {};
+        }
         # add unique constraints
         if (constraints) {
             foreach AbstractConstraint c in (constraints.iterator()) {
+                if (c instanceof AbstractCheckConstraint && supportsCheckDescriptionsImpl()) {
+                    # An empty set opts back in when the catalog has only checks with special attributes.
+                    if (!exists rv.check_constraints) {
+                        rv.check_constraints = {};
+                    }
+                    AbstractCheckConstraint ck = cast<AbstractCheckConstraint>(c);
+                    if (!ck.preserve_reason) {
+                        rv.check_constraints{ck.getName()} = ck.getDescriptionExpression();
+                    }
+                    continue;
+                }
                 if (!(c instanceof AbstractUniqueConstraint)) {
                     continue;
                 }
@@ -13046,6 +13085,34 @@ list<auto> l = table.getAlignSql(table2);
     private list<auto> getAlignSqlUnlocked(AbstractTable t, *hash<auto> opt) {
         list<auto> l = ();
 
+        hash<string, bool> preserved_checks;
+        if (t.has_check_description) {
+            foreach AbstractConstraint c in (constraints.iterator()) {
+                if (!(c instanceof AbstractCheckConstraint)) {
+                    continue;
+                }
+                AbstractCheckConstraint ck = cast<AbstractCheckConstraint>(c);
+                if (ck.preserve_reason) {
+                    string cname = ck.getName();
+                    if ((!t.primaryKey.empty() && t.primaryKey.getName() == cname)
+                            || t.foreignConstraints.hasKey(cname)
+                            || (t.constraints.hasKey(cname) && !(t.constraints{cname} instanceof AbstractCheckConstraint))) {
+                        throw "ALIGN-TABLE-ERROR", sprintf("constraint name %y belongs to a preserved check (%s)",
+                            cname, ck.preserve_reason);
+                    }
+                    preserved_checks{cname} = True;
+                    AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_Unchanged, "check constraint",
+                        cname, name, "preserved: " + ck.preserve_reason);
+                    foreach string col in (ck.catalog_columns) {
+                        if (!t.columns.hasKey(opt.column_map{col} ?? col)) {
+                            throw "ALIGN-TABLE-ERROR", sprintf("cannot drop column %y used by preserved check %y (%s)",
+                                col, ck.getName(), ck.preserve_reason);
+                        }
+                    }
+                }
+            }
+        }
+
         # check name
         if (name != t.name) {
             # the comment of the table is read under its name before the rename: it is compared below, after the
@@ -13246,6 +13313,9 @@ list<auto> l = table.getAlignSql(table2);
         while (i.next()) {
             string key = i.getKey();
             string value = i.getValue();
+            if (preserved_checks{key} || preserved_checks{value}) {
+                continue;
+            }
             *AbstractConstraint c;
             if (foreignConstraints.hasKey(key)) {
                 c = foreignConstraints{key};
@@ -13318,7 +13388,7 @@ list<auto> l = table.getAlignSql(table2);
 
         # check for other constraints not in the template and drop them
         foreach AbstractConstraint c in (constraints.iterator()) {
-            if (!t.constraints.hasKey(c.getName())) {
+            if (!preserved_checks{c.getName()} && !t.constraints.hasKey(c.getName())) {
                 if (c instanceof AbstractUniqueConstraint) {
                     l += getDropReferencingForeignConstraintsSqlUnlocked(cast<AbstractUniqueConstraint>(c).keys(),
                         opt);
@@ -13477,6 +13547,9 @@ list<auto> l = table.getAlignSql(table2);
 
         # check for other constraints in the template that are not present or different in the current table
         foreach AbstractConstraint c in (t.constraints.iterator()) {
+            if (preserved_checks{c.getName()}) {
+                continue;
+            }
             # a unique constraint that a unique index of the template creates is added, recreated and dropped with
             # the index above
             if (uixc && t.isUniqueIndexConstraintUnlocked(c)) {
@@ -13486,7 +13559,7 @@ list<auto> l = table.getAlignSql(table2);
                 # add constraint to table
                 l += AbstractDatabase::doCallback(opt, c.getCreateSql(getSqlName(), opt), AbstractDatabase::AC_Add,
                     "constraint", c.getName(), name);
-            } else if (!c.equal(constraints{c.getName()})) {
+            } else if (!constraintsEqualForAlignment(c, constraints{c.getName()}, t.has_check_description)) {
                 if (constraints{c.getName()} instanceof AbstractUniqueConstraint) {
                     l += getDropReferencingForeignConstraintsSqlUnlocked(
                         cast<AbstractUniqueConstraint>(constraints{c.getName()}).keys(), opt);
@@ -13494,8 +13567,8 @@ list<auto> l = table.getAlignSql(table2);
                 # drop current constraint
                 l += AbstractDatabase::doCallback(opt, constraints{c.getName()}.getDropSql(getSqlName()),
                     AbstractDatabase::AC_Drop, "constraint", c.getName(), name);
-                if (constraints{c.getName()} instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl()
-                    && indexes.hasKey(c.getName()))
+                if (c instanceof AbstractUniqueConstraint && constraints{c.getName()} instanceof AbstractUniqueConstraint
+                    && constraintsLinkedToIndexesImpl() && indexes.hasKey(c.getName()))
                     cast<AbstractUniqueConstraint>(c).clearIndex();
 
                 # add new constraint to table
@@ -14449,6 +14522,20 @@ string sql = table.getAlignSqlString(table2);
     */
     private hash<auto> getAlignTableOptions() {
         return AlignTableOptions;
+    }
+
+    # PostgreSQL exposes the full CHECK clause in a catalog constraint's src, but a table description
+    # supplies only the predicate. Keep the existing comparison for constraints supplied through other APIs.
+    private bool constraintsEqualForAlignment(AbstractConstraint desired, AbstractConstraint live, bool checks) {
+        if (checks && desired instanceof AbstractCheckConstraint && live instanceof AbstractCheckConstraint) {
+            return cast<AbstractCheckConstraint>(desired).getDescriptionExpression()
+                == cast<AbstractCheckConstraint>(live).getDescriptionExpression();
+        }
+        return desired.equal(live);
+    }
+
+    private bool supportsCheckDescriptionsImpl() {
+        return False;
     }
 
     #! returns the table description hash<auto> options for this driver
