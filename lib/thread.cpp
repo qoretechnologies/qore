@@ -5405,8 +5405,10 @@ static QORE_INTERN_NOINLINE bool qore_set_method_call_program_context_other(Thre
     if (referenced) {
         referenced_class_pgm = pgm;
     }
-    if (!pgm && obj) {
-        pgm = obj->getProgram();
+    if (!pgm) {
+        // the Program of the object, or for code without a class or an object (a closure created outside a class),
+        // the Program it runs in, which the call has entered (qore#7394)
+        pgm = obj ? obj->getProgram() : (c ? nullptr : td->current_pgm);
     }
     return qore_switch_method_call_program_context(td, pgm, old_call_pgm);
 }
@@ -5689,8 +5691,13 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     init(code, obj, c, ref_obj, &spgm_info);
 }
 
+CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+        ExceptionSink* xsink, bool ref_obj, bool user_code) : xsink(xsink) {
+    init(code, obj, c, ref_obj, nullptr, user_code);
+}
+
 QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, QoreObject* obj,
-        const qore_class_private* c, bool ref_obj, QoreClassSourceProgramInfo* spgm_info) {
+        const qore_class_private* c, bool ref_obj, QoreClassSourceProgramInfo* spgm_info, bool user_code) {
     ThreadData* td  = thread_data.get();
     old_code = td->current_code;
     td->current_code = code;
@@ -5746,6 +5753,11 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
         call_program_context = class_spgm;
     } else if (obj) {
         call_program_context = obj->getProgram();
+    } else if (user_code && td->current_pgm != td->call_program_context) {
+        // the body of user code without a class or an object (a plain function, a closure created outside a class)
+        // runs with the call Program context of the Program it runs in, which the call has entered: the calls that it
+        // makes are made by its Program (qore#7394)
+        call_program_context = td->current_pgm;
     } else {
         call_program_context = nullptr;
     }
@@ -5756,6 +5768,24 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     } else {
         do_program_context = false;
     }
+}
+
+bool qore_set_function_call_program_context(void*& thread_data_ptr, QoreProgram*& old) {
+    if (!thread_data_ptr) {
+        thread_data_ptr = thread_data.get();
+    }
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    if (!td->current_pgm || td->current_pgm == td->call_program_context) {
+        return false;
+    }
+    old = td->call_program_context;
+    td->call_program_context = td->current_pgm;
+    return true;
+}
+
+void qore_restore_function_call_program_context(void* thread_data_ptr, QoreProgram* old) {
+    assert(thread_data_ptr && thread_data_ptr == thread_data.get());
+    static_cast<ThreadData*>(thread_data_ptr)->call_program_context = old;
 }
 
 CodeContextHelperBase::~CodeContextHelperBase() {
@@ -8656,6 +8686,14 @@ static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
         return td->call_program_context;
     }
     return nullptr;
+}
+
+QoreProgram* qore_get_calling_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
 }
 
 bool qore_caller_restricts_terminal_io() {
@@ -13474,8 +13512,33 @@ QoreListNode* qore_get_thread_call_stack() {
     return thread_list.getCallStack(td->current_stack_location.load(std::memory_order_relaxed));
 }
 
+bool qore_get_caller_program_id(size_t offset, uint64_t& id) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the entry at the offset from the innermost one, as get_thread_call_stack() lists them; nothing is allocated
+    for (const QoreStackLocation* w = td->current_stack_location.load(std::memory_order_relaxed); w;
+            w = w->getNext()) {
+        if (!offset) {
+            QoreProgram* pgm = w->getProgram();
+            if (!pgm) {
+                return false;
+            }
+            id = pgm->getProgramId();
+            return true;
+        }
+        --offset;
+    }
+    return false;
+}
+
 QoreHashNode* qore_get_parent_caller_location(size_t offset) {
     ThreadData* td = thread_data.get();
+    // a thread that is not registered with Qore (module code in a thread of its own) has no call stack (qore#7594)
+    if (!td) {
+        return nullptr;
+    }
     return thread_list.getParentCallerLocation(td->current_stack_location.load(std::memory_order_relaxed), offset);
 }
 

@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class SocialBillingTest
+
+class SocialBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Social provider billing") {
+        addVendor("LinkedIn", "LinkedIn", "linkedin.com", "included",
+            "https://developer.linkedin.com/legal/api-terms-of-use");
+        addVendor("LinkedInOrganizations", "LinkedInOrganizations", "linkedin.com", "included",
+            "https://developer.linkedin.com/legal/api-terms-of-use");
+        addVendor("Discord", "Discord", "discord.com", "unknown",
+            "https://discord.com/developers/docs/policies-and-agreements/developer-terms-of-service");
+        addVendor("GoHighLevel", "GoHighLevel", "leadconnectorhq.com", "subscription",
+            "https://www.gohighlevel.com/pricing");
+        addVendor("Circle", "Circle", "circle.so", "metered",
+            "https://circle.so/pricing", NOTHING, NOTHING, "request");
+        set_return_value(main());
+    }
+}

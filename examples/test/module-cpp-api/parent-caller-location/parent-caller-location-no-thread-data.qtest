@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - thread-local Qore thread data of a native thread that is not registered with Qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ParentCallerLocationNoThreadDataTest
+
+#! Tests qore_get_parent_caller_location() in a thread that has no %Qore thread data
+/** C++ code of a binary module can run in a thread that is not registered with %Qore (a thread of a library that the
+    module uses); qore_get_parent_caller_location() returns nullptr there, as a thread without thread data has no
+    call stack (qore#7594).  cpp_api_parent_caller_location_without_thread_data() calls it in such a thread with
+    offsets 0, 1 and the largest offset, and with offset 0 in the calling thread as a reference.
+*/
+class ParentCallerLocationNoThreadDataTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ParentCallerLocationNoThreadDataTest", "1.0", \ARGV) {
+        addTestCase("a thread without Qore thread data", \testNoThreadData());
+        addTestCase("repeated calls in threads without Qore thread data", \testRepeated());
+        set_return_value(main());
+    }
+
+    testNoThreadData() {
+        hash<auto> h = cpp_api_parent_caller_location_without_thread_data();
+        assertFalse(h.other_thread_registered, "the other thread has no Qore thread data");
+        assertEq((0, 1, -1), h.other_thread_null_offsets, "no location at any offset in the other thread");
+
+        # the calling thread has thread data: offset 0 is the location of the call of the C++ function
+        hash<auto> loc = h.this_thread;
+        assertEq("builtin", loc.type);
+        assertEq("cpp_api_parent_caller_location_without_thread_data", loc.function);
+        assertEq(get_script_path(), loc.file);
+    }
+
+    testRepeated() {
+        # each call starts a new thread without thread data
+        for (int i = 0; i < 10; ++i) {
+            hash<auto> h = cpp_api_parent_caller_location_without_thread_data();
+            assertFalse(h.other_thread_registered, sprintf("call %d: no Qore thread data", i));
+            assertEq((0, 1, -1), h.other_thread_null_offsets, sprintf("call %d: no location", i));
+            assertEq("cpp_api_parent_caller_location_without_thread_data", h.this_thread.function,
+                sprintf("call %d: the location in the calling thread", i));
+        }
+    }
+}

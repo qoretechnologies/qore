@@ -70,6 +70,15 @@ module BaseLinkerDataProvider {
                 "**Rate limit:** 100 requests per minute per token. The module retries "
                 "rate-limited calls with exponential backoff (up to 3 attempts).",
             "scheme": "baselinkerrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "baselinker.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://base.com/en-US/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": BaseLinkerDataProvider::BaseLinkerLogo,
             "logo_file_name": "baselinker-logo.svg",
             "logo_mime_type": MimeTypeSvg,

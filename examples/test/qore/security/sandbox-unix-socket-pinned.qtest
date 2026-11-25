@@ -50,6 +50,10 @@ Socket sub bind(string path) {
         addTestCase("a socket path through a link that is not a directory is not followed", \connectLinkTest());
         addTestCase("the error of a bind names the path as given", \bindErrorTest());
         addTestCase("the bind of a UNIX socket address (C++ API)", \sockaddrBindTest());
+        addTestCase("the paths are pinned with and without the per-thread working directory (macOS)",
+            \threadCwdTest());
+        addTestCase("a directory of the path replaced after the check does not redirect a connection",
+            \dirSwapTest());
         set_return_value(main());
     }
 
@@ -163,6 +167,48 @@ Socket sub bind(string path) {
             assertRegex(path, ex.desc, "the error names the path as given");
             assertNRegex("/proc/", ex.desc, "the error does not name the address of the path pinned");
         }
+    }
+
+    threadCwdTest() {
+        # macOS reaches the directory held through the working directory of the thread when pthread_fchdir_np() is
+        # available, and otherwise through the canonical path; both are checked
+        bool thread_cwd = call_function("dbg_unix_socket_pin_thread_cwd", True);
+        if (PlatformOS == "Darwin") {
+            assertTrue(thread_cwd, "macOS has pthread_fchdir_np()");
+        }
+        foreach bool use in ((True, False)) {
+            call_function("dbg_unix_socket_pin_thread_cwd", use);
+            on_exit call_function("dbg_unix_socket_pin_thread_cwd", True);
+            unlink(link);
+            symlink(real, link);
+            connectTest();
+            unlink(link);
+            symlink(real, link);
+            bindTest();
+        }
+    }
+
+    dirSwapTest() {
+        # a real directory of the path (not a link) is moved aside and replaced by a link to the directory outside
+        # after the check: the connection reaches the socket checked, in the directory held
+        string rd = allowed + DirSep + "rd";
+        mkdir(rd);
+        Socket inside();
+        inside.bindUNIX(rd + DirSep + "s");
+        inside.listen();
+        Socket out();
+        out.bindUNIX(outside + DirSep + "s");
+        out.listen();
+        on_exit {
+            inside.close();
+            out.close();
+        }
+        call_function("dbg_fs_swap_on_open", rd + DirSep + "*", outside);
+        Socket client = sandbox.callFunction("connect", rd + DirSep + "s");
+        assertEq("SYMBOLIC-LINK", hlstat(rd).type, "the directory was replaced after the check");
+        on_exit client.close();
+        assertTrue(inside.isDataAvailable(0), "the socket checked has the connection");
+        assertFalse(out.isDataAvailable(0), "the socket outside gets no connection");
     }
 
     sockaddrBindTest() {

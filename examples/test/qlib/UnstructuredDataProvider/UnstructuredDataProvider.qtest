@@ -115,6 +115,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("unstructured", "UNSTRUCTURED_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("effective processing and billing of each action", \processingBillingTest());
         addTestCase("provider hierarchy", \providerHierarchyTest());
         addTestCase("constructor requires an API key", \constructorOptionsTest());
         addTestCase("request and response types", \providerTypesTest());
@@ -149,6 +150,40 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
             "set the Unstructured connection name; without it (and without the "
             "UNSTRUCTURED_CONNECTION environment variable) the live tests are skipped",
             OptionColumn);
+    }
+
+    private processingBillingTest() {
+        string name = UnstructuredDataProvider::AppName;
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(name);
+        hash<DataProviderProcessingInfo> external = <DataProviderProcessingInfo>{
+            "locality": "external", "external_recipient": "unstructured.io",
+        };
+        hash<DataProviderBillingInfo> metered = <DataProviderBillingInfo>{
+            "model": "metered", "source": "https://unstructured.io/pricing", "effective_date": 2026-11-25,
+        };
+        assertEq(external, app.processing);
+        assertEq(metered, app.billing);
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(name)) {
+            hash<DataProviderProcessingInfo> processing = external;
+            hash<DataProviderBillingInfo> billing = metered;
+            switch (action.action) {
+                case "partition-file":
+                case "partition-text":
+                    billing.unit = "page";
+                    break;
+                case "run-workflow":
+                case AbstractDataProvider::GenericApiCallActionName:
+                    break;
+                case "get-connector-fields":
+                    processing = <DataProviderProcessingInfo>{"locality": "local"};
+                    billing.model = "included";
+                    break;
+                default:
+                    billing.model = "included";
+            }
+            assertEq(processing, DataProviderActionCatalog::getActionProcessing(name, action.action), action.action);
+            assertEq(billing, DataProviderActionCatalog::getActionBilling(name, action.action), action.action);
+        }
     }
 
     private registrationTest() {

@@ -52,6 +52,15 @@ module GroqDataProvider {
                 "- Host externally trained LoRA adapters with enterprise access\n"
                 "- Discover available models and inspect their capabilities",
             "scheme": "groq",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "groq.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://console.groq.com/docs/models",
+                "effective_date": 2026-11-25,
+            },
             "logo": GroqLogo,
             "logo_file_name": "groq-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -64,6 +73,7 @@ module GroqDataProvider {
             "app": GroqDataProvider::AppName,
             "path": "/chat-completion",
             "action": "chat-completion",
+            "billing": <DataProviderBillingInfo>{"unit": "token"},
             "display_name": "Chat Completion",
             "short_desc": "Generate a chat completion from a Groq-hosted open-weight model",
             "desc": "Sends a list of chat messages to a Groq-hosted model using the "
@@ -100,6 +110,7 @@ module GroqDataProvider {
             "app": GroqDataProvider::AppName,
             "path": "/list-models",
             "action": "list-models",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Models",
             "short_desc": "List the models currently available on the Groq API",
             "desc": "Returns the list of models currently served by the Groq API using the "

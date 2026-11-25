@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class ShippingBillingTest
+
+class ShippingBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Shipping provider billing") {
+        addVendor("Aftership", "Aftership", "aftership.com", "metered",
+            "https://www.aftership.com/pricing/tracking", {
+                "create-tracking": "metered", "list-couriers": "included",
+                "get-tracking": "included",
+            });
+        addVendor("EasyPost", "EasyPost", "easypost.com", "metered",
+            "https://www.easypost.com/pricing/", {
+                "buy-shipment": "metered", "create-tracker": "metered",
+                "get-shipment": "included",
+            });
+        addVendor("SendCloud", "SendCloud", "sendcloud.com", "subscription",
+            "https://www.sendcloud.com/pricing/", {
+                "create-parcel": "metered", "create-return": "metered",
+                "list-parcels": "subscription",
+            });
+        addVendor("Shippo", "Shippo", "goshippo.com", "metered",
+            "https://goshippo.com/pricing", {
+                "create-label-by-rate": "metered", "get-shipping-label": "included",
+                "validate-address": "metered",
+            });
+        addVendor("ShipStation", "ShipStation", "shipstation.com", "subscription",
+            "https://www.shipstation.com/pricing/");
+        set_return_value(main());
+    }
+}

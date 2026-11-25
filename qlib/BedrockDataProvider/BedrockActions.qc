@@ -36,7 +36,12 @@ public class BedrockActions {
         list<hash<DataProviderActionInfo>> result = ();
         foreach RestSchemaActionSet actions in (BedrockSchema::getActionSets()) {
             # the POST operations that only query or infer are marked read-only in the manifests (qore#7454)
-            result += actions.getActionInfoList(app);
+            foreach hash<DataProviderActionInfo> action in (actions.getActionInfoList(app)) {
+                if (inlist(action.action, ("get-foundation-model", "list-foundation-models"))) {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
+                push result, action;
+            }
         }
         result += getEmbedActionInfo(app);
         return result;
@@ -54,6 +59,7 @@ public class BedrockActions {
             "app": app,
             "path": "/embed",
             "action": "embed",
+            "billing": <DataProviderBillingInfo>{"unit": "token"},
             "display_name": "Embed Text",
             "short_desc": "Generate text embeddings via a Bedrock embedding model",
             "desc": "Generate dense vector embeddings for text using a Bedrock "

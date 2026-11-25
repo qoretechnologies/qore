@@ -87,6 +87,15 @@ module XeroDataProvider {
 "
                 "Xero is a trademark of Xero Limited.",
             "scheme": "xero",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "xero.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://developer.xero.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::XeroLogo,
             "logo_file_name": "xero-logo.svg",
             "logo_mime_type": MimeTypeSvg,
