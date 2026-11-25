@@ -96,12 +96,18 @@ class CallbackConnection inherits HttpConnection {
     private {
         Program cb;
     }
-    constructor(Program cb, string url) : HttpConnection("cb", "cb", url) {
+    constructor(Program cb, string url, *hash<auto> opts) : HttpConnection("cb", "cb", url, {}, opts) {
         self.cb = cb;
+    }
+    #! the window of the grant of get(): the restricted code tries to take it
+    private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        taken = cb.callFunction("take", url);
+        return HttpConnection::getImpl(connect, rtopts);
     }
     private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         # one attempt per call, so that an attempt that takes the grant does not hide what the others would get
         switch (attempt) {
+            case "throw": throw "TEST-ERROR", "an exception in the window of the grant";
             case "take": taken = cb.callFunction("take", url); break;
             case "own": own = cb.callFunction("own_client", url); break;
             case "ref": {
@@ -510,6 +516,26 @@ string sub mgr_request(object conn, string url) {
         return why(ex);
     }
 }
+string sub use_http_conn_sync(object conn) {
+    try {
+        conn.get(False);
+        return \"OK\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub use_http_conn_thread(object conn) {
+    Queue q();
+    background sub () {
+        try {
+            conn.getAsync(False);
+            q.push(\"OK\");
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+    return q.get();
+}
 string sub use_http_conn(object conn) {
     try {
         conn.getAsync(False);
@@ -622,6 +648,8 @@ object sub lookalike() {
         addTestCase("a lent connection keeps its proxy, " + m, sub () { testProxyRemoved(m); });
         addTestCase("redirects of a lent connection, " + m, sub () { testRedirects(m); });
         addTestCase("restricted callback code takes no grant, " + m, sub () { testCallback(m); });
+        addTestCase("restricted code in other windows of a grant takes none, " + m,
+            sub () { testCallbackWindows(m); });
         addTestCase("restricted callback code of a REST connection takes no grant, " + m,
             sub () { testRestCallback(m); });
         addTestCase("a lent REST connection's async client, " + m, sub () { testLentRest(m); });
@@ -871,6 +899,29 @@ object sub lookalike() {
         assertEq("PERMISSION-DENIED", c.own, "a client of restricted code inside a restricted caller's call, " + mode);
         assertEq(False, c.taken_ref, "a call reference of restricted code inside a restricted caller's call, "
             + mode);
+    }
+
+    #! restricted code that runs in the window of the grant of a lent connection's get() takes no grant; neither does
+    #! restricted code that runs in it when the borrower uses the connection in a thread that it started, while the
+    #! connection's own client still takes it there; an exception in the window does not leave the grant behind
+    #! (qore#7302)
+    testCallbackWindows(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("http://127.0.0.1:%d/", closed_port);
+        CallbackConnection c(p, url, {"proxy": "http://127.0.0.1:3128"});
+        # the synchronous client of the connection's own target, after the window ran
+        assertEq("OK", p.callFunction("use_http_conn_sync", c), "get(), " + mode);
+        assertEq(False, c.taken, "restricted code in the window of get(), " + mode);
+        c.taken = NOTHING;
+        assertEq("OK", p.callFunction("use_http_conn_thread", c), "the connection's client in a thread, " + mode);
+        assertEq(False, c.taken, "restricted code in the window in a thread, " + mode);
+        c.attempt = "throw";
+        assertEq("TEST-ERROR", p.callFunction("use_http_conn", c), "an exception in the window, " + mode);
+        # a grant left behind would be taken by this trusted code: its own proof has no proxy
+        *HttpClientCreatorProof pr = HttpClientCreatorProof::forClient(url);
+        assertTrue(exists pr, "trusted code's own proof, " + mode);
+        assertFalse(pr.allowsProxy({"host": "127.0.0.1", "port": 3128, "ssl": False}),
+            "no grant left behind by the exception, " + mode);
     }
 
     #! restricted code that runs while a restricted caller calls getAsync() on a lent REST connection takes no grant,

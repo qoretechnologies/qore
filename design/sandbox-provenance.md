@@ -327,8 +327,16 @@ manager: code reached through it was chosen by restricted code; or the context o
 restrictions include a domain that a host grant lends (`QORE_GRANT_LENT_DOMAINS`): an object runs its class's code, but
 one whose creator lacked a lent domain was created outside any grant (the objects that a lent method creates for its
 borrower are lent and lack none of them, and a sandbox manager alone does not taint, as the objects created for a
-sandboxed borrower have one). A recorded frame that is not on the thread's chain of provenance frames taints every
-frame from there (fail closed).
+sandboxed borrower have one; the grant of a lent connection is unaffected, as `AbstractConnection` grants only when
+`isLentToRestricted(DOM_NETWORK)`, which only parse-option and origin restrictions make true).
+`QoreSandboxProvenanceHelper::apply()` does not apply the context of the innermost provenance frame again, unless that
+frame was applied before the thread's latest Program switch (`ThreadData::latestSwitchProvenance()`): an object or
+callback re-entered through other code after a switch (the object's method calls module code, also of its own
+module, that calls the object's method again) is applied again, so that it counts for the frame of the code that calls
+it again. A method of the object calling one of its methods (`td->current_obj` is the object; a function that the
+method calls has none) is the object's own code and is not applied again, so self-calls cost what they did. The extra
+tests run only when the context is the innermost one. A recorded frame that is not on the thread's chain of
+provenance frames taints every frame from there (fail closed).
 
 The immediate caller is restricted if its Program's code is (`qore_immediate_caller_pgm_restricted()`: a library
 module's code is trusted; any other Program, also a module loaded by its path, is restricted if
@@ -338,7 +346,8 @@ tainted frame of its caller does not make it restricted (its code is still its o
 directly). `trusted_frame` is the number of the outermost frame of the unbroken run of untainted trusted frames that
 ends with an unrestricted immediate caller. The walk stops, and the caller is unknown, at the start of the thread, at
 the innermost module initialization barrier (also a lifted one: the module whose initialization runs is visible, its
-loader is not), at a `QoreCallerProgramScope` and on `std::bad_alloc`. The module name is
+loader is not; a `QoreProgramContextHelper` switch made before the barrier while the barrier's context was current is
+below it, `ModuleInitBarrier::pch_count`), at a `QoreCallerProgramScope` and on `std::bad_alloc`. The module name is
 `qore_program_private::module_name`, set once with `module_name_set` when the module is first registered
 (`QoreModuleManager::addModule()`: the name of the first registration, which a reinjected or private module keeps
 when it is renamed and registered again); a module that is

@@ -853,7 +853,10 @@ authenticate();
       code) makes the code reached through it restricted, so that a callback that restricted code chose is never
       taken for the module code that called it; an object runs its class's code, but an object that code restricted
       from the file system, the network or external information created makes the code that calls its methods
-      restricted as well
+      restricted as well, each time it calls one of them (also when the object's own code is on the stack below); an
+      object of code that only a sandbox governs (without such a restriction) does not, as the objects that a lent
+      method creates for a sandboxed borrower have the borrower's sandbox too; this leaves the grant of a lent
+      connection unaffected, as the connection grants its proof only to a borrower restricted from the network
     - the provenance of a call reference or object counts for the code that calls it: library code that restricted code
       reaches through a call reference is still that library's code (as when restricted code calls it directly), but
       the run of trusted code ends at the code that called the reference

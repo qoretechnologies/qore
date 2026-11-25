@@ -157,9 +157,10 @@ hashdecl ImmediateCallerInfo {
     bool library;
     //! @ref True "True" if the immediate caller is restricted code
     /** The code of a %Program that is not a module's and has a restriction or a sandbox, of code compiled in such a
-        %Program, or of a module that is not library code (loaded by its path) whose %Program has one; or any code if a
-        closure or call reference that restricted or sandboxed code created was called while it or the running code
-        ran
+        %Program, or of a module that is not library code (loaded by its path) whose %Program has one; or any code if,
+        while it or the running code ran, a closure or call reference that restricted or sandboxed code created was
+        called, or a method of an object that code restricted from the file system, the network or external
+        information created (an object of code that only a sandbox governs does not count)
     */
     bool restricted;
     //! the number of the immediate caller's frame
@@ -1909,8 +1910,12 @@ static *hash<ImmediateCallerInfo> SandboxManager::getImmediateCaller() [flags=RE
 //! Returns @ref True if the immediate caller of the running code is the unrestricted code of the given library module
 /** See getImmediateCaller() for the immediate caller.  Library code uses it to hand a capability only to the code of
     a given module: it returns @ref True only if the immediate caller is known, is the code of the library module
-    (a module loaded from a trusted module directory) registered with the given name, and is not restricted (it was
-    not reached through a closure or call reference that restricted code created).
+    (a module loaded from a trusted module directory) registered with the given name, and is not restricted (see
+    @ref ImmediateCallerInfo::restricted "ImmediateCallerInfo::restricted": its code did not call a closure or call
+    reference of restricted code, or a method of an object of code restricted from a lent domain, for the running
+    code).  The code that called the module's code is not considered: the module's code that restricted code
+    reaches, directly or through a call reference that it created, is the module's code (getImmediateCaller() tells
+    with \c trusted_frame whether the module's code was reached from trusted code only).
 
     It reveals only what is on the current thread's call stack, so it is not restricted itself.
 

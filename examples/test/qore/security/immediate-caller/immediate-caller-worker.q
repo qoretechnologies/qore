@@ -13,6 +13,7 @@
 %requires ImmOther
 %requires ImmInit
 %requires Logger
+%requires HttpClientIo
 %requires ./ImmPath.qm
 
 #! the code of each tenant
@@ -33,6 +34,7 @@ auto sub t_module_calls_closure() { return ImmOther::call(*hash<auto> sub () { r
 auto sub t_module_calls_ref() { return ImmOther::call(\\ImmAsk::ask()); }
 auto sub t_module_calls_ref_via() { return ImmAsk::call(\\ImmOther::ask_via()); }
 object sub t_thing() { return new ImmOther::Thing(); }
+auto sub t_reentry() { ImmOther::Thing t(); return t.outer(); }
 sub t_listen() { ImmAsk::add_listener(*hash<auto> sub () { return ImmAsk::ask(); }); }
 class Appender inherits LoggerAppenderWithLayout {
     public {
@@ -131,6 +133,13 @@ check_caller("init", {"library": True, "restricted": False, "trusted": True},
 # a thread that module code started: the caller is unknown
 check("module-thread", NOTHING, ImmAsk::ask_in_background().caller);
 
+# a grant of the real HttpClientCreatorProof: the positive controls with the host's own object of a library class
+string url = "http://127.0.0.1:1/";
+HttpClientIo::HttpClientCreatorProof proof = ImmOther::proof(url);
+check("grant-host-object", True, ImmOther::window(proof, new ImmOther::Thing(), url));
+check("grant-host-object-reentry", True, (new ImmOther::Thing()).outer_take(proof, url));
+check("grant-not-taken-after-window", False, HttpClientIo::HttpClientCreatorProof::forClient(url) === proof);
+
 foreach list<auto> t in (("restricted", PO_NO_NETWORK, False), ("sandboxed", 0, True)) {
     string tn = t[0];
     # objects of library classes that restricted code created taint the code that calls their methods only if their
@@ -182,6 +191,16 @@ foreach list<auto> t in (("restricted", PO_NO_NETWORK, False), ("sandboxed", 0, 
     *hash<auto> oh = p.callFunction("t_thing").ask();
     check_caller(tn + "-object-called-by-host", {"module": "ImmOther", "restricted": False, "trusted": True}, oh);
     check(tn + "-object-called-by-host-run", obj_taints, oh.frame == oh.trusted_frame);
+    # the object of restricted code re-entered through module code: the module code that calls its method again is
+    # restricted as well (the object's frame is applied again after the switch into the module's code)
+    check_caller(tn + "-object-reentry-host", {"module": "ImmOther", "restricted": obj_taints,
+        "trusted": !obj_taints}, p.callFunction("t_thing").outer());
+    check_caller(tn + "-object-reentry-own", {"module": "ImmOther", "restricted": obj_taints,
+        "trusted": !obj_taints}, p.callFunction("t_reentry"));
+    # a grant of the real HttpClientCreatorProof in the window of module code that calls the object of restricted code
+    # directly and through a re-entry: taken only if the object does not taint
+    check(tn + "-grant-object", !obj_taints, ImmOther::window(proof, p.callFunction("t_thing"), url));
+    check(tn + "-grant-object-reentry", !obj_taints, p.callFunction("t_thing").outer_take(proof, url));
     # a listener of restricted code that module code calls back
     ImmAsk::clear_listeners();
     p.callFunction("t_listen");

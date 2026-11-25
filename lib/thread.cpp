@@ -1078,6 +1078,9 @@ public:
         //! the order in which it was set among the grants (GrantSnapshot::seq): a capability frame set after it lends
         //! what is created above it, one set before it does not (qore#7052)
         uint64_t seq = 0;
+        //! the number of active QoreProgramContextHelper switches when it was set: those made before it while \a ctx
+        //! was current are below it (see qore_get_immediate_caller(); qore#7302)
+        size_t pch_count = 0;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
     // the module initialization barriers of library code (and of trusted builds) that could not be recorded for lack
@@ -1933,6 +1936,22 @@ public:
         }
         assert(pch_saved_count);
         tlpd = pch_saved[--pch_saved_count].tlpd;
+    }
+
+    //! returns the innermost sandbox provenance frame when the thread last switched between the code of different
+    //! Programs (a program context helper or a QoreProgramContextHelper), or nullptr if there was no switch (qore#7302)
+    /** A provenance frame that is the innermost one and is not this one was applied after the switch, by the code that
+        runs now
+    */
+    DLLLOCAL const QoreSandboxProvenanceHelper* latestSwitchProvenance() const {
+        size_t n = programContextSaveCount();
+        if (n) {
+            const ProgramContextSave& s = programContextSave(n - 1);
+            if (s.ctx == current_pgm_ctx) {
+                return s.provenance;
+            }
+        }
+        return current_pgm_ctx ? current_pgm_ctx->getOldProvenance() : nullptr;
     }
 
     //! returns the number of active QoreProgramContextHelper switches
@@ -6958,7 +6977,8 @@ void ProgramThreadCountContextHelper::markCapability(const QoreObject* obj) {
     // innermost apart from the object's own) runs for that code
     const QoreSandboxProvenanceHelper* frame = td->sandbox_provenance;
     const QoreSandboxContext* own = qore_object_private::get(*obj)->sandbox_provenance;
-    if (frame && own && frame->getContext() == own) {
+    // (the object's own frame can be applied more than once: again after a switch between Programs, qore#7302)
+    while (frame && own && frame->getContext() == own) {
         frame = frame->getPrevious();
     }
     if (frame) {
@@ -8750,6 +8770,11 @@ int qore_get_immediate_caller(QoreImmediateCallerInfo& info) {
         for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ; ch = ch->getOldContext()) {
             // the switches of QoreProgramContextHelper made while the helper was current are more inner than its own
             while (save && td->programContextSave(save - 1).ctx == ch) {
+                // a switch made before the barrier was set while its context was current is below the barrier: the
+                // Program that it replaced is not known as the caller of the code above it (it is still counted)
+                if (visible == static_cast<size_t>(-1) && mib && ch == mib->ctx && save <= mib->pch_count) {
+                    visible = sw.size();
+                }
                 const auto& pcs = td->programContextSave(--save);
                 sw.push_back({pcs.pgm, pcs.provenance});
             }
@@ -9183,6 +9208,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const Qor
             td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID, true,
             nullptr, tag.creator});
         td->module_init_barriers.back().seq = ++td->grant_seq;
+        td->module_init_barriers.back().pch_count = td->programContextSaveCount();
         pushed = true;
     } catch (std::bad_alloc&) {
         // fail closed: no application Program is found for module code while it is active
@@ -9216,6 +9242,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
                 untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr, nullptr,
                 qore_caller_may_load_native_code(), policy.operator->()});
             td->module_init_barriers.back().seq = ++td->grant_seq;
+            td->module_init_barriers.back().pch_count = td->programContextSaveCount();
             owner.release();
             policy.release();
             pushed = true;
@@ -9246,6 +9273,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
             td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id, false, nullptr, nullptr,
             top.caller_may_select_native_file});
         td->module_init_barriers.back().seq = ++td->grant_seq;
+        td->module_init_barriers.back().pch_count = td->programContextSaveCount();
         pushed = true;
     } catch (std::bad_alloc&) {
         if (sm) {
@@ -9688,6 +9716,45 @@ QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm,
     return ctx;
 }
 
+//! returns true if a provenance context is not applied again because the innermost frame applies it already
+/** The same context as the innermost frame is not applied again, unless that frame is hidden: by a trusted policy
+    boundary, or by a module initialization barrier (or a trusted build's construction barrier) set after it, below
+    which the walk does not look (see visit_thread_provenance()), so that the provenance of an object or callback used
+    under the barrier still governs it.
+
+    Nor unless the frame was applied before the thread's latest switch between the code of different Programs: the
+    code of another Program runs now, and the frame is applied again, so that it counts for that code's frame, as the
+    caller walk of qore_get_immediate_caller() attributes provenance frames to the code that applied them (qore#7302);
+    except for a call of an object's method by a method of the same object: the object's own code, whose frame the
+    object's provenance was applied for already (the code that calls runs in a method of an object whose provenance is
+    the context: each object has a context of its own, so it is the same object; a function that the method calls runs
+    with no object)
+
+    @param td the current thread's data
+    @param previous the innermost provenance frame
+    @param captured the context to apply
+*/
+static QORE_INTERN_NOINLINE bool qore_provenance_already_applied_slow(ThreadData* td,
+        const QoreSandboxProvenanceHelper* previous, const QoreSandboxContext* captured);
+
+static inline bool qore_provenance_already_applied(ThreadData* td, const QoreSandboxProvenanceHelper* previous,
+        const QoreSandboxContext* captured) {
+    // the usual case, a context other than the innermost one, decides at once; the rest is out of line
+    return previous && previous->getContext() == captured
+        && qore_provenance_already_applied_slow(td, previous, captured);
+}
+
+static bool qore_provenance_already_applied_slow(ThreadData* td, const QoreSandboxProvenanceHelper* previous,
+        const QoreSandboxContext* captured) {
+    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
+        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    if ((td->trusted_policy_depth && previous == td->trusted_policy_boundary) || (mib && previous == mib->provenance)) {
+        return false;
+    }
+    return previous != td->latestSwitchProvenance()
+        || (td->current_obj && qore_object_private::get(*td->current_obj)->sandbox_provenance == captured);
+}
+
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
     assert(!context);
     if (!captured) {
@@ -9700,15 +9767,7 @@ void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
     }
     context = captured;
     previous = td->sandbox_provenance;
-    // the same context as the innermost frame is not applied again, unless that frame is hidden: by a trusted policy
-    // boundary, or by a module initialization barrier (or a trusted build's construction barrier) set after it, below
-    // which the walk does not look (see visit_thread_provenance()), so that the provenance of an object or callback
-    // used under the barrier still governs it
-    const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
-        || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
-    if (previous && previous->getContext() == captured
-            && !(td->trusted_policy_depth && previous == td->trusted_policy_boundary)
-            && !(mib && previous == mib->provenance)) {
+    if (qore_provenance_already_applied(td, previous, captured)) {
         context = nullptr;
         captured->deref();
         return;

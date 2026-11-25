@@ -28,7 +28,8 @@ class ImmediateCallerTest inherits QUnit::Test {
         const HostCases = (
             "host", "host-frames", "nested", "method", "other-module", "other-module-program", "other-module-frame",
             "other-module-trusted-frame", "is-module-other", "is-module-other-name", "is-module-host", "called-back",
-            "path-module", "is-module-path", "init", "module-thread",
+            "path-module", "is-module-path", "init", "module-thread", "grant-host-object",
+            "grant-host-object-reentry", "grant-not-taken-after-window",
         );
 
         #! the cases of the worker for each restricted tenant
@@ -37,7 +38,8 @@ class ImmediateCallerTest inherits QUnit::Test {
             "closure-called-by-module-own", "closure-called-by-host", "closure-via-other", "closure-via-other-run",
             "ref-called-by-module", "ref-called-by-module-own", "ref-called-by-host", "ref-is-module",
             "ref-via-other", "ref-via-other-run", "object-called-by-module", "object-called-by-host",
-            "object-called-by-host-run", "listener-count", "listener", "appender-count", "appender",
+            "object-called-by-host-run", "object-reentry-host", "object-reentry-own", "grant-object",
+            "grant-object-reentry", "listener-count", "listener", "appender-count", "appender",
         );
 
         #! the cases of the worker for the unrestricted tenant

@@ -5,6 +5,7 @@
 %modern
 
 %requires Logger
+%requires HttpClientIo
 %requires ImmAsk
 
 module ImmOther {
@@ -41,6 +42,33 @@ public class Thing {
     public *hash<ImmediateCallerInfo> ask() {
         return ImmAsk::ask();
     }
+
+    #! module code that calls this object's ask() again (a re-entry of the object through module code)
+    public *hash<ImmediateCallerInfo> outer() {
+        return ImmOther::call_method(self);
+    }
+
+    #! returns True if a client created here would take the proof that is granted
+    public bool take(HttpClientIo::HttpClientCreatorProof p, string url) {
+        return HttpClientIo::HttpClientCreatorProof::forClient(url) === p;
+    }
+
+    #! module code that grants the proof and calls this object's take() again
+    public bool outer_take(HttpClientIo::HttpClientCreatorProof p, string url) {
+        return ImmOther::window(p, self, url);
+    }
+}
+
+#! grants a proof to the next client of its target, as a connection object's get() does, and calls the object's
+#! take() in the window of the grant
+public bool sub window(HttpClientIo::HttpClientCreatorProof p, Thing t, string url) {
+    HttpClientIo::HttpClientCreatorProofGrant g = p.grantNext();
+    return t.take(p, url);
+}
+
+#! returns a proof of the calling code for the given target
+public HttpClientIo::HttpClientCreatorProof sub proof(string url) {
+    return HttpClientIo::HttpClientCreatorProof::get(url);
 }
 
 #! module code that calls a method of an object that it is given
