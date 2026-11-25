@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - sandbox root and allowed-path canonicalization through /tmp -> /private/tmp, UNIX sockets
+# test-loopback: localhost - it tests the network policy of host names and loopback binds with the name localhost; its localhost client connects to a listener on all interfaces (dual-stack), and its 127.0.0.1 binds check the bind policy and have no clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -10,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
+%requires ../../TestSocketDir.qm
 %requires FsUtil
 %requires Util
 
@@ -608,47 +610,40 @@ sub doWhileLoop() {
 
         p.parse("
 %modern
-our int counter = 0;
-sub runLoop() {
-    while (True) {
-        counter++;
+sub runLoop(Counter started) {
+    for (bool first = True; True; first = False) {
+        if (first) {
+            started.dec();
+        }
     }
-}
-int sub getCounter() {
-    return counter;
 }
         ", "thread_interrupt");
 
+        Counter started(1);
         Counter done(1);
         bool caught = False;
         string exErr;
 
         # Start the loop in a background thread
         background sub() {
+            on_exit done.dec();
             try {
-                p.callFunction("runLoop");
+                p.callFunction("runLoop", started);
             } catch (hash<ExceptionInfo> ex) {
                 caught = True;
                 exErr = ex.err;
             }
-            done.dec();
         }();
 
-        # Give the loop time to start running
-        usleep(50000);  # 50ms
-
-        # Request interrupt from main thread
+        # Interrupt after the worker enters the loop, even if scheduling delays its start.
+        int startStatus = started.waitForZero(5s);
         sm.requestInterrupt();
+        int doneStatus = done.waitForZero(5s);
 
-        # Wait for the background thread to finish
-        done.waitForZero(5s);
-
+        assertEq(0, startStatus, "Loop entered its first iteration before the interrupt");
+        assertEq(0, doneStatus, "Worker finished after the interrupt");
         assertEq(True, caught, "Loop was interrupted from another thread");
         assertEq("PROGRAM-INTERRUPTED", exErr, "Correct exception from thread interrupt");
-
-        # Verify the counter was incremented (loop was actually running)
-        int finalCounter = p.callFunction("getCounter");
-        assertEq(True, finalCounter > 0, "Loop was running before interrupt (counter: " + finalCounter + ")");
     }
 
     testSleepInterrupt() {
@@ -1791,6 +1786,8 @@ public namespace %s {
     private Program makeModuleClient(string dir, string modname, *SandboxManager sm) {
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         if (sm) {
+            # the module file is read with the policy of the sandbox, which must allow it (qore#7518)
+            sm.addFilesystemAllowedPath(dir + DirSep + modname + ".qm", QSEC_READ);
             p.setSandboxManager(sm);
         }
         p.parse(sprintf("%%new-style
@@ -1885,6 +1882,8 @@ public namespace %s {
 ", modname, modname));
 
         SandboxManager sm = SandboxManager::createLockdown();
+        # the module directory is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(module_dir, QSEC_READ);
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         p.parse(sprintf("%%modern
@@ -1898,14 +1897,43 @@ string sub readLogoAtRuntime() { return %s::readLogoAtRuntime(); }
             "module initialization can materialize its own read-only resource");
 
         bool caught = False;
+        # the resources of a module that sandboxed code loads from outside of the module path are read with the
+        # policy of that code (qore#7518): also after the initialization, as the policy allows the module directory
+        assertEq("<svg>module resource</svg>", p.callFunction("readLogoAtRuntime"),
+            "module resource read after initialization uses the caller's policy");
+
+        # a policy that allows only the module file does not let the initialization read the resources beside it (a
+        # module of its own: a module that one sandbox loaded from outside the module path is not given to another)
+        string modname2 = modname + "B";
+        string module_dir2 = td.path + DirSep + modname2;
+        mkdir(module_dir2);
+        writeModuleResource(module_dir2 + DirSep + "logo.svg", "<svg>module resource</svg>");
+        writeModuleSource(module_dir2 + DirSep + modname2 + ".qm", sprintf("%%modern
+module %s {
+    version = \"1.0\";
+    desc = \"sandboxed module resource test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public const string Logo = File::readTextFile(get_script_dir() + \"/logo.svg\");
+}
+", modname2, modname2));
+        SandboxManager sm2 = SandboxManager::createLockdown();
+        sm2.addFilesystemAllowedPath(module_dir2 + DirSep + modname2 + ".qm", QSEC_READ);
+        Program p2(PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.setSandboxManager(sm2);
         try {
-            p.callFunction("readLogoAtRuntime");
+            p2.parse(sprintf("%%modern
+%%append-module-path %y
+%%requires %s
+", module_dir2, modname2), modname2 + "Client");
         } catch (hash<ExceptionInfo> ex) {
             caught = True;
-            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
-                "module resource read after initialization inherits caller sandbox");
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "module initialization reads its resources with the policy");
+            assertRegex("logo\\.svg", ex.desc, "the resource is denied");
         }
-        assertTrue(caught, "module resource capability ends after initialization");
+        assertTrue(caught, "module initialization cannot read a resource that the policy denies");
     }
 
     testModuleInitializationResourceEscape() {
@@ -1927,6 +1955,9 @@ public namespace %s {
 ", modname, modname));
 
         SandboxManager sm = SandboxManager::createLockdown();
+        # the module directory is read with the policy of the sandbox, which allows it, so that the escape is what
+        # is denied (qore#7518)
+        sm.addFilesystemAllowedPath(module_dir, QSEC_READ);
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         bool caught = False;
@@ -1941,6 +1972,7 @@ string sub getSecret() { return %s::Secret; }
             caught = True;
             assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
                 "module initialization cannot escape its resource directory");
+            assertRegex("secret", ex.desc, "the escape is denied");
         }
         assertTrue(caught, "parent-directory module resource read is denied");
     }
@@ -1964,6 +1996,8 @@ public namespace %s {
 ", modname, modname));
 
         SandboxManager sm = SandboxManager::createLockdown();
+        # the module directory is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(module_dir, QSEC_READ);
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         p.parse(sprintf("%%modern
@@ -2001,6 +2035,9 @@ public namespace %s {
 ", modname, modname));
 
         SandboxManager sm = SandboxManager::createLockdown();
+        # the module directory is read with the policy of the sandbox, which allows it, so that the escape is what
+        # is denied (qore#7518)
+        sm.addFilesystemAllowedPath(module_dir, QSEC_READ);
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         bool caught = False;
@@ -2015,6 +2052,7 @@ string sub getLogo() { return %s::Logo; }
             caught = True;
             assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
                 "module initialization cannot follow a resource symlink outside its directory");
+            assertRegex("logo\\.svg|secret", ex.desc, "the escape is denied");
         }
         assertTrue(caught, "external module resource symlink is denied");
     }
@@ -2039,6 +2077,8 @@ module %s {
 ", modname));
 
         SandboxManager sm = SandboxManager::createLockdown();
+        # the module directory is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(module_dir, QSEC_READ);
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(sm);
         bool caught = False;
@@ -2147,8 +2187,9 @@ string sub outerGo(Program pInner, string path) {
         # sanity: the outer sandbox really would deny this file when it is the nearest sandbox; with a module of its
         # own, since a module that one sandbox loaded from outside the module path is not given to another one
         string modname_outer = modname + "Outer";
-        writeIoModule(td.path, modname_outer);
-        Program pOuterDirect = makeModuleClient(td.path, modname_outer, smOuter);
+        # (in the outer sandbox root, where the outer sandbox can read it; qore#7518)
+        writeIoModule(tdOuter.path, modname_outer);
+        Program pOuterDirect = makeModuleClient(tdOuter.path, modname_outer, smOuter);
         bool caught = False;
         try {
             pOuterDirect.callFunction("doRead", testFile);
@@ -2352,19 +2393,26 @@ nothing sub probeSymlink(string target, string link_path) {
         sm.setFilesystemSandboxRoot(inside);
         Program p = makeFsProbeProgram(sm);
 
-        # a link created by the sandboxed code itself, pointing at a file outside the root that
-        # does not exist yet
-        p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
-        assertTrue(is_link(inside + "/escape"), "the sandboxed program created the link");
+        # the sandboxed code cannot create a link to a file outside the root that does not exist yet, nor one through
+        # such a link: the target of a link is checked as the link reaches it (qore#7498)
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
+        }, NOTHING, "the sandboxed program cannot create a dangling link to outside the root");
+        assertFalse(is_link(inside + "/escape"), "no link was created");
 
+        # a dangling link to outside the root that the sandbox did not create (here the host's)
+        symlink(outside + "/created.txt", inside + "/escape");
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
             p.callFunction("probeWrite", inside + "/escape", "PWNED");
         }, NOTHING, "writing through a dangling link to outside the root is denied");
         assertFalse(is_file(outside + "/created.txt"), "nothing was created outside the root");
 
-        # the same through a chain of dangling links
-        p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
-        p.callFunction("probeSymlink", inside + "/escape2", inside + "/escape3");
+        # the same through a chain of dangling links, which the sandboxed code cannot extend either
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
+        }, NOTHING, "the sandboxed program cannot create a link through a dangling link to outside the root");
+        symlink(inside + "/escape", inside + "/escape2");
+        symlink(inside + "/escape2", inside + "/escape3");
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
             p.callFunction("probeWrite", inside + "/escape3", "PWNED");
         }, NOTHING, "writing through a chain of dangling links to outside the root is denied");
@@ -2696,7 +2744,7 @@ code<nothing()> sub make_bind_task(Queue q, string addr) {
         if (PlatformOS == "Windows") {
             testSkip("UNIX domain sockets are not available on Windows");
         }
-        TmpDir tmp("qore-sandbox-unix-");
+        TestSocketDir tmp();
         string path = tmp.path + "/service.sock";
         Socket service();
         service.bindUNIX(path);

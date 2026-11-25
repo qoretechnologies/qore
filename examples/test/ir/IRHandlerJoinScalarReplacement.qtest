@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRHandlerJoinScalarReplacementTest
+
+#! Regression coverage for qore#7356: the members of a fixed hash or list built after a statement with a handler
+/** The IR optimizer replaces a local hash or list with a fixed layout by one scalar per member and forwards a member
+    value with a native representation from the statement that builds the aggregate to the statements that read the
+    member.  The interpreter keeps such a value in a slot that owns it, as a negative NaN, a double whose bits collide
+    with a value tag and an integer outside the inline range are boxed nodes there, and it takes the representation
+    from the final facts of the value.  The replacement took the representation from the facts of a local load before
+    they were refined; after a try statement the refinement found the load only possibly assigned, the value became a
+    temp of its statement, and the members read as NOTHING in the IR tier (an integer member made the optimized IR
+    fail verification).  The scenario runs in every tier, in the IR tier alone and as a compiled executable, and must
+    print what the AST tier prints.
+*/
+class IRHandlerJoinScalarReplacementTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! lines of the AST output, computed independently of Qore
+        const AstLines = (
+            "tryCaught.f: .nan",
+            "tryCaught.i: 1152921504606846979",
+            "tryCaught.f: -4e+307",
+            "tryCaught.i: -2305843009213693957",
+            "tryRead: [.nan, 1152921504606846979]",
+            "tryRethrow.f: .nan",
+            "inCatch.f: .nan",
+            "inLoop.f: .nan",
+            "inSwitch.f: .nan",
+            "inBlock.f: .nan",
+            "onExit.f: .nan",
+            "onError.f: .nan",
+            "onSuccess.f: .nan",
+            "onSuccess.i: 1152921504606846979",
+            "typedHash.f: .nan",
+            "floatList: .nan",
+            "intList: 1152921504606846979",
+            "hashDecl.f: .nan",
+            "hashDecl.i: 1152921504606846979",
+            "constantLocals.neg_nan: .nan",
+            "constantLocals.tag_float: -4e+307",
+            "constantLocals.big: 1152921504606846979",
+            "constantLocals.small: 7",
+            "constantLocals.ih.big: 1152921504606846979",
+            "constantLocals.sh.str: \"str-const\"",
+            "constantLocals.l: 1152921504606846979",
+            "otherTypes.s: \"str-value\"",
+            "otherTypes.b: !!binary AQL/",
+            "otherTypes.d: 2026-11-23 10:20:30.123456 +00:00",
+            "otherTypes.flag: True",
+            "otherTypes.n: 1.25",
+        );
+    }
+
+    constructor() : QUnit::Test("IRHandlerJoinScalarReplacementTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        fixture = get_script_dir() + "/IRHandlerJoinScalarReplacementScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("ir tier", \testIrTier());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        string output = astOutput();
+        list<string> lines = output.split("\n");
+        foreach string line in (AstLines) {
+            assertTrue(inlist(line, lines), "AST output has: " + line);
+        }
+        assertFalse(output =~ /: null$/m, "no member reads as NOTHING: " + output);
+        # every scenario call runs three times
+        assertEq(0, lines.size() % 3, "line count: " + output);
+    }
+
+    testIrTier() {
+        string command = sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=tiered %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(fixture));
+        assertEq(astOutput(), ExecModeHarness::run_ir_tier(command), "IR tier output matches AST");
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-handler-join-scalar-replacement-");
+        foreach int level in ((0, 3)) {
+            string exe = sprintf("%s/scenario-O%d", tmp.path, level);
+            string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O%d -o %s %s 2>&1",
+                shellQuote(libqore_dir), shellQuote(qcc_bin), level, shellQuote(exe), shellQuote(fixture)));
+            assertTrue(is_file(exe), sprintf("AOT -O%d compile produced an executable: %s", level, compile_out));
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(exe))), sprintf("AOT -O%d output matches AST", level));
+        }
+    }
+
+    private string run(string mode) {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s",
+            shellQuote(libqore_dir), shellQuote(qore_bin), mode, shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

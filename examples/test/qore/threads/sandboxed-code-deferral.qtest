@@ -23,6 +23,17 @@
 
 %exec-class SandboxedCodeDeferralTest
 
+#! a watch provider of trusted code that the sandboxed Programs subclass: its public saveCheckpoint() persists a
+#! checkpoint for its subclass, which cannot call the private persistCheckpoint() of the library class (qore#6843)
+class TrustedWatch inherits DataProvider::AbstractWatchDataProviderBase {
+    constructor() : AbstractWatchDataProviderBase(3600) {
+    }
+
+    saveCheckpoint() {
+        persistCheckpoint({"a": 1});
+    }
+}
+
 class SandboxedCodeDeferralTest inherits QUnit::Test {
     public {
         #! a limit for every wait of the test; never reached unless a case fails
@@ -32,13 +43,8 @@ class SandboxedCodeDeferralTest inherits QUnit::Test {
         const Source = "%modern
 %requires DataProvider
 
-class W inherits DataProvider::AbstractWatchDataProviderBase {
-    constructor() : AbstractWatchDataProviderBase(3600) {
-    }
+class W inherits TrustedWatch {
     private pollOnce() {
-    }
-    saveCheckpoint() {
-        persistCheckpoint({'a': 1});
     }
     string getName() {
         return 'sandboxed-watch';
@@ -133,6 +139,7 @@ sub resource(Counter entered, Queue result) {
     #! returns a sandboxed Program
     private Program sandboxed(SandboxManager sm, bool thread_control = False) {
         Program p(PO_NEW_STYLE | (thread_control ? 0 : PO_NO_THREAD_CONTROL));
+        p.importClass("TrustedWatch");
         p.setSandboxManager(sm);
         p.parse(thread_control ? ThreadControlSource : Source, "sandboxed");
         return p;

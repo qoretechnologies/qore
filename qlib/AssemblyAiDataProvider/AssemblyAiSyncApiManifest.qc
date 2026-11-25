@@ -36,6 +36,7 @@ public class AssemblyAiSyncApiManifest {
             <RestSchemaActionInfo>{
                 "action": "transcribe-short-audio",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/transcribe",
                 "operation_id": "transcribeSync",
                 "display_name": "Transcribe Short Audio",
@@ -54,6 +55,7 @@ public class AssemblyAiSyncApiManifest {
             <RestSchemaActionInfo>{
                 "action": "transcribe-live-upload",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/transcribe/live",
                 "operation_id": "transcribeLiveSync",
                 "display_name": "Transcribe Audio Upload",

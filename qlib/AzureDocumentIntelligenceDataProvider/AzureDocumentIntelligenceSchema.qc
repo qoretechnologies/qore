@@ -18,6 +18,9 @@ public namespace AzureDocumentIntelligenceDataProvider {
 */
 public class AzureDocumentIntelligenceSchema {
     private {
+        #! The ID of the lazy value of getActionSets() (qore#6843)
+        static int action_sets_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \AzureDocumentIntelligenceSchema::buildActionSetsValue());
         static list<RestSchemaActionSet> sets = ();
     }
 
@@ -30,6 +33,15 @@ public class AzureDocumentIntelligenceSchema {
         @throw REST-SCHEMA-ACTION-ERROR a reviewed operation no longer matches its schema
     */
     static list<RestSchemaActionSet> getActionSets() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(action_sets_value_id);
+    }
+
+    #! Builds the value of getActionSets() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static list<RestSchemaActionSet> buildActionSetsValue() {
         AutoLock al(lck);
         if (!sets) {
             foreach string text in (Priv::AzureDocumentIntelligenceSchemaText, Priv::AzureDocumentIntelligenceStreamsText) {

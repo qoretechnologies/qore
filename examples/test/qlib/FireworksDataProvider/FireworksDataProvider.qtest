@@ -105,6 +105,7 @@ public class FireworksDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("fireworks", "FIREWORKS_CONNECTION", m_options.conn);
 
         addTestCase("factory and complete action catalog registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("root resolves all action paths",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
@@ -137,6 +138,25 @@ public class FireworksDataProviderTest inherits QUnit::Test {
         printOption("--live", "run live tests using FIREWORKSAI_APIKEY; includes three small paid calls", OptionColumn);
     }
 
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("query-usage-costs", "preview-evaluation", "validate-assertions", "preview-evaluator", "estimate-supervised-fine-tuning-job-cost", "create-message", "create-embeddings",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("FireworksAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change; the chat and
+        # text completions take metadata that the server stores with the request (tracing, distillation)
+        foreach string name in (("create-response", "validate-dataset-upload", "validate-evaluator-upload", "get-dataset-upload-endpoint", "chat-completion", "text-completion",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("FireworksAi", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+    }
+
     private registrationTest() {
         DataProvider::AbstractDataProviderFactory f =
             DataProvider::DataProvider::getFactory("fireworks");
@@ -157,6 +177,14 @@ public class FireworksDataProviderTest inherits QUnit::Test {
             $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(132, actions.size());
         assertTrue(inlist("rerank", map $1.action, actions));
+        # POST /rerank scores the documents and stores nothing (qore#7454)
+        foreach string name in ("rerank",) {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("FireworksAi"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, info.mutates_state.typeCode(), name);
+            assertFalse(info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
     }
 
     private rootProviderTest() {

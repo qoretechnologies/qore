@@ -1,0 +1,274 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 flow control of a streamed request body over TLS and QUIC connections
+
+/*  HttpClientStreamedSendBackpressure.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7465: an HTTPClient request whose body is sent as a stream (sendWithSendCallback()) over HTTP/2 failed with
+    HTTP2-FLOW-CONTROL ("buffer full: data dropped") once more than the stream's send buffer (1 MiB) waited to be sent,
+    and over HTTP/3 the data of a full buffer was dropped without an error, so that the server received a part of the
+    body and answered it.  A send now waits for the peer's flow-control windows to let the data go out and the buffer
+    to drain (RFC 9113 section 5.2), and the wait ends when the stream ends or the thread is cancelled.
+
+    The server reads slowly: its handler takes none of the body until the client waits for its send buffer to drain
+    (the "send-drain-wait" point of dbg_http_hold_at(), debug builds), and the server grants flow-control credit only
+    for the data that the handler takes, so the client's buffer fills whatever the speed of the machine; the order of
+    the events is set by waiting for them, with no clock involved.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../../TestCertificates.qm
+
+%exec-class HttpClientStreamedSendBackpressureTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The size of the stream's send buffer of the client (MAX_STREAM_BUFFER in lib/Http2Session.cpp)
+const SendBuffer = 1024 * 1024;
+
+#! Takes the request body only once it is released, and records what it took
+class SlowReader inherits AbstractHttpRequestHandler {
+    public {
+        #! a request arrived
+        Queue reached();
+        #! releases the request: "read" reads the body, "answer" answers the request without reading it
+        Queue release();
+        #! the body that the handler read
+        Queue received();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # HTTP/2: a bounded Queue receives the body, and the stream is credited only for the data taken from it
+        Queue body_queue(2);
+        if (!cx."header-info".http3) {
+            cx."header-info".register_body_queue(body_queue);
+        }
+        reached.push(True);
+        string what = release.get(HangGuard);
+        if (what == "answer") {
+            return makeResponse(413, "not read", {"Content-Type": MimeTypeText});
+        }
+        binary body_read = binary();
+        if (cx."header-info".http3) {
+            # HTTP/3: the stream is credited as the handler reads it
+            Socket sock = cx."header-info".sock;
+            while (True) {
+                *binary chunk = sock.readQuicStreamDataBlock(cx."header-info".session_id,
+                    cx."header-info".stream_id, HangGuard);
+                if (!exists chunk) {
+                    break;
+                }
+                body_read += chunk;
+            }
+        } else {
+            while (True) {
+                auto chunk = body_queue.get(HangGuard);
+                if (!(chunk instanceof binary)) {
+                    # NOTHING: the end of the stream
+                    break;
+                }
+                body_read += chunk;
+            }
+        }
+        received.push(body_read);
+        return makeResponse(200, string(body_read.size()), {"Content-Type": MimeTypeText});
+    }
+}
+
+class HttpClientStreamedSendBackpressureTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientStreamedSendBackpressureTest", "1.0") {
+        foreach string proto in (("h2", "h3")) {
+            addTestCase(sprintf("%s: a body of parts larger than the send buffer reaches a slow server whole", proto),
+                \sendTest(), (proto, 2 * SendBuffer, 8 * SendBuffer));
+            addTestCase(sprintf("%s: a body of parts smaller than the send buffer reaches a slow server whole", proto),
+                \sendTest(), (proto, 16 * 1024, 8 * SendBuffer));
+            addTestCase(sprintf("%s: cancelling the thread ends the wait for the send buffer", proto),
+                \cancelTest(), (proto,));
+            addTestCase(sprintf("%s: a server that answers without reading the body ends the wait for the send buffer",
+                proto), \answerTest(), (proto,));
+        }
+        set_return_value(main());
+    }
+
+    #! starts a server with the handler; returns it and its port
+    private list<auto> startServer(SlowReader handler, string proto) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("slow", handler);
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": proto == "h3",
+        }).port;
+        server.waitForAsyncIo();
+        return (server, port);
+    }
+
+    #! a client of the protocol
+    private HTTPClient client(string proto, int port) {
+        return new HTTPClient({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "http_version": proto == "h3" ? "3.0" : "2.0",
+        });
+    }
+
+    #! the part of the body with the given index: every part differs, so that a lost or reordered part is seen
+    private binary part(int i, int part_size) {
+        string pattern = sprintf("<%07d>", i);
+        return binary(strmul(pattern, part_size / pattern.size()) + strmul("+", part_size % pattern.size()));
+    }
+
+    #! skips without the hold point of debug builds
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the send's wait for its buffer is reported only by dbg_http_hold_at() (debug builds)");
+        }
+    }
+
+    #! sends the body in parts with the callback in a thread; returns the thread's result Queue and its ID
+    private list<auto> sendInBackground(HTTPClient hc, int part_size, int total) {
+        Queue result();
+        int tid = background sub () {
+            int i = 0;
+            code send_cb = auto sub () {
+                if (i * part_size >= total) {
+                    return NOTHING;
+                }
+                return part(i++, part_size);
+            };
+            try {
+                hash<auto> resp = hc.sendWithSendCallback(send_cb, "POST", "/upload",
+                    {"Content-Type": MimeTypeOctetStream});
+                result.push(resp);
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        return (result, tid);
+    }
+
+    #! a body much larger than the send buffer, in parts of the given size, reaches a server that reads slowly
+    sendTest(string proto, int part_size, int total) {
+        checkDebug();
+        SlowReader handler();
+        HttpServer server;
+        int port;
+        (server, port) = startServer(handler, proto);
+        on_exit server.stop();
+        # a held request is released however the test ends
+        on_exit handler.release.push("read");
+        HTTPClient hc = client(proto, port);
+        on_exit hc.disconnect();
+
+        Counter waiting(1);
+        call_function("dbg_http_hold_at", "send-drain-wait", waiting, new Counter(0));
+        on_exit call_function("dbg_http_hold_clear");
+        Queue result;
+        int tid;
+        (result, tid) = sendInBackground(hc, part_size, total);
+        assertTrue(handler.reached.get(HangGuard), "the server received the request");
+        # the send buffer filled while the server read nothing: the send waits for it to drain instead of dropping
+        # the data
+        assertEq(0, waiting.waitForZero(HangGuard), "the send waits for its buffer to drain");
+        handler.release.push("read");
+
+        auto rv = result.get(HangGuard);
+        if (rv.typeCode() == NT_HASH && rv.err) {
+            fail(sprintf("the send failed: %s: %s", rv.err, rv.desc));
+        }
+        assertEq(200, rv.status_code, "the server answered the request");
+        binary expected = binary();
+        for (int i = 0; i * part_size < total; ++i) {
+            expected += part(i, part_size);
+        }
+        binary body_read = handler.received.get(HangGuard);
+        assertEq(expected.size(), body_read.size(), "the server received every byte");
+        assertEq(SHA256(expected), SHA256(body_read), "the server received the body as it was sent");
+        assertEq(string(total), rv.body, "the server counted every byte");
+    }
+
+    #! a send that waits for its buffer ends at once when its thread is cancelled
+    cancelTest(string proto) {
+        checkDebug();
+        SlowReader handler();
+        HttpServer server;
+        int port;
+        (server, port) = startServer(handler, proto);
+        on_exit server.stop();
+        on_exit handler.release.push("answer");
+        HTTPClient hc = client(proto, port);
+        on_exit hc.disconnect();
+
+        Counter waiting(1);
+        call_function("dbg_http_hold_at", "send-drain-wait", waiting, new Counter(0));
+        on_exit call_function("dbg_http_hold_clear");
+        Queue result;
+        int tid;
+        (result, tid) = sendInBackground(hc, SendBuffer, 64 * SendBuffer);
+        assertTrue(handler.reached.get(HangGuard), "the server received the request");
+        assertEq(0, waiting.waitForZero(HangGuard), "the send waits for its buffer to drain");
+        cancel_thread(tid);
+        hash<auto> ex = result.get(HangGuard);
+        assertEq("THREAD-CANCELLED", ex.err, "the cancellation ended the wait");
+    }
+
+    #! a send that waits for its buffer ends at once when the server answers the request without reading its body
+    answerTest(string proto) {
+        checkDebug();
+        SlowReader handler();
+        HttpServer server;
+        int port;
+        (server, port) = startServer(handler, proto);
+        on_exit server.stop();
+        HTTPClient hc = client(proto, port);
+        on_exit hc.disconnect();
+
+        Counter waiting(1);
+        call_function("dbg_http_hold_at", "send-drain-wait", waiting, new Counter(0));
+        on_exit call_function("dbg_http_hold_clear");
+        Queue result;
+        int tid;
+        (result, tid) = sendInBackground(hc, SendBuffer, 64 * SendBuffer);
+        assertTrue(handler.reached.get(HangGuard), "the server received the request");
+        assertEq(0, waiting.waitForZero(HangGuard), "the send waits for its buffer to drain");
+        handler.release.push("answer");
+        # the server ends the stream: the send cannot go on, and reports the closed stream instead of waiting for the
+        # request timeout
+        hash<auto> ex = result.get(HangGuard);
+        assertRegex("STREAM-CLOSED", ex.err, "the end of the stream ended the wait");
+    }
+}

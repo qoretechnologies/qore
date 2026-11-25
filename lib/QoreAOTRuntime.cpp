@@ -2274,12 +2274,23 @@ static const QoreClass* resolveAOTBareClassRefByNamespacePriority(QoreProgram* p
 }
 
 static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
-        const char* class_path, bool pseudo) {
+        const AOTClassRef& ref, bool pseudo) {
+    const char* class_path = ref.path;
     if (!pgm || !class_path || !*class_path) {
         return nullptr;
     }
 
     qore_program_private* pp = qore_program_private::get(*pgm);
+    // A module-tagged reference carries the declaration path. A single component denotes its root
+    // namespace, even when unqualified source lookup would select a builtin with the same name (#7422).
+    if (ref.module && *ref.module && !pseudo) {
+        const char* path = !strncmp(class_path, "::", 2) ? class_path + 2 : class_path;
+        if (*path && !strstr(path, "::")) {
+            const auto* root = qore_root_ns_private::get(*pp->RootNS);
+            qore_root_ns_private::RuntimeNamespaceReadLocker lock(root);
+            return root->classList.find(path);
+        }
+    }
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
         *pp->RootNS, class_path, found_ns, LexicalSemanticPolicy{});
@@ -2354,7 +2365,7 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
     }
 
     AOTClassRef ref = decodeAOTClassRef(class_ref);
-    const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref.path, pseudo);
+    const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref, pseudo);
     if (ref.module && *ref.module) {
         const char* owner = qc ? qc->getModuleName() : nullptr;
         if (!owner || ref.module_storage != owner) {
@@ -2367,7 +2378,7 @@ const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
             // that the module's Program has is the module's class whatever its
             // tag (issue #6971)
             if (QoreAbstractModule* module = QMM.findModule(ref.module)) {
-                const QoreClass* module_qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref.path,
+                const QoreClass* module_qc = resolveAOTClassRefInProgram(module->getModuleProgram(), ref,
                     pseudo);
                 if (module_qc && module_qc != qc
                         && (!module_qc->getModuleName() || ref.module_storage != module_qc->getModuleName())) {
@@ -3603,6 +3614,20 @@ QoreAOTTypeParamOwnerHelper::QoreAOTTypeParamOwnerHelper(const UserSignature* ow
 
 QoreAOTTypeParamOwnerHelper::~QoreAOTTypeParamOwnerHelper() {
     qore_aot_type_param_owner = old_owner;
+}
+
+//! Test hook: the pattern of a regex switch case that cannot be compiled when its function is loaded
+/** Set with \c QORE_AOT_TEST_FAIL_REGEX_CASE; a case whose pattern is the given text is compiled with an unmatched
+    \c ")" appended, as a PCRE2 library that refuses a pattern that the compiling one accepted would do.  The
+    regression test of the load of regex cases (#7642) uses it, as no pattern compiles at qcc time and fails at load
+    time with the same library.
+*/
+static const char* aotTestFailRegexCase() {
+    static constinit QoreLazyValue<QoreEnvironmentValue> pattern_setting([]() -> QoreEnvironmentValue {
+        return QoreEnvironmentValue("QORE_AOT_TEST_FAIL_REGEX_CASE");
+    });
+    const char* pattern = pattern_setting.get().c_str();
+    return pattern && *pattern ? pattern : nullptr;
 }
 
 static QoreAOTContext* buildContextFromSlotMap(
@@ -6192,7 +6217,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         QoreAOTValueLocalsHelper value_locals(ctx->locals, ctx->num_locals, ctx->globals,
                             ctx->num_globals, local_owner_pgm);
                         std::string val_error;
-                        defaults[p] = reader.readValue(ptr, end, val_error);
+                        defaults[p] = reader.readValue(ptr, end, val_error, pgm);
                         if (!val_error.empty()) {
                             // a closure without the default would run with another value: the function is not
                             // registered; the record is not read further, as the read pointer can be at the end of
@@ -6582,7 +6607,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 QoreValue value;
                 {
                     QoreProgramContextHelper value_pch(pgm);
-                    value = reader.readValue(ptr, end, value_error);
+                    value = reader.readValue(ptr, end, value_error, pgm);
                 }
                 if (!value_error.empty() && (ptr >= end || (entry_end && ptr >= entry_end))) {
                     // a malformed value: the read pointer is at the end of the data, and the rest of the entry
@@ -6931,14 +6956,34 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Deserialize regex cases
     if (num_regex_cases > 0) {
-        ExceptionSink xsink;
         for (int i = 0; i < num_regex_cases; ++i) {
             const char* pattern = reader.readStringRef(ptr);
             int64_t options = QoreAOTBinaryReader::readI64(ptr);
             bool is_negated = QoreAOTBinaryReader::readU8(ptr) != 0;
+            std::string test_pattern;
+            if (const char* fail_pattern = aotTestFailRegexCase(); fail_pattern && pattern
+                    && !strcmp(pattern, fail_pattern)) {
+                test_pattern = std::string(pattern) + ")";
+                pattern = test_pattern.c_str();
+            }
+            // each case has a sink of its own, whose exception is the cause reported for the function: left in a
+            // shared sink, it was printed as an unhandled exception each time the context was built, and the error
+            // named no cause
+            ExceptionSink xsink;
             QoreRegex* re = new QoreRegex(pattern, options, &xsink);
             if (xsink) {
                 delete re;
+                // only the first failure is reported; before it, a recorded detail is stale
+                if (!has_unsupported) {
+                    aot_slot_resolve_error = "regex case slot " + std::to_string(i);
+                    for (const QoreValue& v : {xsink.getExceptionErr(), xsink.getExceptionDesc()}) {
+                        if (v.getType() == NT_STRING) {
+                            aot_slot_resolve_error += ": ";
+                            aot_slot_resolve_error += v.get<const QoreStringNode>()->c_str();
+                        }
+                    }
+                }
+                xsink.clear();
                 has_unsupported = true;
                 continue;
             }
@@ -7047,6 +7092,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 step.slot_id = QoreAOTBinaryReader::readU32(ptr);
                 const char* sname = reader.readStringRef(ptr);
                 step.name = sname ? sname : "";
+                // a constant hash key of an image is in UTF-8; the code uses it in the process encoding (qore#6840)
+                if (step.kind == LVPathStepKind::HashKeyConst) {
+                    qore_aot_key_to_process_encoding(step.name);
+                }
                 step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
                 // Slice steps carry an SSA id vector (HashKeySlice /
                 // ListIndexSlice / ListRangeSlice) — matches writer's wire format.
@@ -7172,12 +7221,22 @@ static QoreAOTContext* buildContextFromSlotMap(
         const bool eager_stmt_locs = eager_stmt_locs_env.get();
         bool materialize_stmt_locs = pgm
             && (eager_stmt_locs || (pgm->getParseOptions() & PO_ALLOW_DEBUGGER));
+        // Two lines, two columns, a source offset and two string-pool references per v53 entry.
+        constexpr size_t entry_size = 4 * sizeof(uint32_t) + 2 * sizeof(uint16_t) + sizeof(int64_t);
+        if (num_stmt_locs > static_cast<size_t>(loc_boundary - ptr) / entry_size) {
+            setBuildError("statement locations exceed the slot map entry");
+            delete ctx;
+            ptr = loc_boundary;
+            return nullptr;
+        }
         if (num_stmt_locs > 0 && materialize_stmt_locs) {
             qore_program_private* pp = qore_program_private::get(*pgm);
             AutoLocker al(&pp->plock);
-            for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
+            for (uint32_t i = 0; i < num_stmt_locs; ++i) {
                 int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                 int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+                int start_column = QoreAOTBinaryReader::readU16(ptr);
+                int end_column = QoreAOTBinaryReader::readU16(ptr);
                 int offset = qore_aot_valid_source_offset(QoreAOTBinaryReader::readI64(ptr));
                 const char* loc_file = reader.readStringRef(ptr);
                 const char* loc_source = reader.readStringRef(ptr);
@@ -7190,25 +7249,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* interned_file = pp->addRuntimeString(loc_file);
                 const char* interned_source = loc_source && *loc_source
                     ? pp->addRuntimeString(loc_source) : nullptr;
-                if (pp->findIndexedStatementForLocation(interned_file, interned_source,
-                        start_line, offset)) {
+                QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, offset);
+                tmp.start_column = QoreProgramLineLocation::normalizeColumn(start_column);
+                tmp.end_column = QoreProgramLineLocation::normalizeColumn(end_column);
+                if (pp->findIndexedStatementForLocation(tmp)) {
                     continue;
                 }
-                QoreProgramLocation tmp(interned_file, start_line, end_line,
-                    interned_source, offset);
                 const QoreProgramLocation* loc = pp->getRuntimeLocation(tmp, start_line, end_line);
                 StatementBlock* stmt = new StatementBlock(pp, loc);
                 qore_program_private::registerStatement(pgm, stmt, true);
                 ctx->owned_debug_statements.push_back(stmt);
             }
         } else {
-            for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
-                (void)qore_aot_read_line(reader, ptr);
-                (void)qore_aot_read_line(reader, ptr);
-                (void)QoreAOTBinaryReader::readI64(ptr);
-                (void)reader.readStringRef(ptr);
-                (void)reader.readStringRef(ptr);
-            }
+            ptr += num_stmt_locs * entry_size;
         }
     }
 
@@ -7460,7 +7513,9 @@ static bool qore_aot_read_stmt_loc(const QoreAOTBinaryReader& reader, const uint
             const bool inst_file_same = inst_loc && file == inst_file;
             // deserializeIRFunction() reads every instruction for the function that owns its locations
             assert(owner_func);
-            if (inst_file_same && inst_loc->start_line == start_line && inst_loc->end_line == end_line) {
+            // Only the lines are recorded here. A debug step on the same line can have a different source span.
+            if (inst_file_same && inst_loc->start_column < 0 && inst_loc->end_column < 0
+                    && inst_loc->start_line == start_line && inst_loc->end_line == end_line) {
                 loc = inst_loc;
             } else {
                 // the file is interned in the Program, as the instruction's own (see deserializeIRInstruction())
@@ -7646,11 +7701,21 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     const char* loc_file = reader.readStringRef(ptr);
+    int start_column = -1, end_column = -1;
+    if (group_byte == static_cast<uint8_t>(QoreIRInstGroup::DebugStatement)) {
+        if (!need(2 * sizeof(uint16_t), "debug statement columns")) {
+            return nullptr;
+        }
+        start_column = QoreAOTBinaryReader::readU16(ptr);
+        end_column = QoreAOTBinaryReader::readU16(ptr);
+    }
     if (start_line > 0 && owner_func) {
         const char* interned_file = (loc_file && pgm)
             ? qore_program_private::get(*pgm)->addRuntimeString(loc_file)
             : (loc_file ? loc_file : "");
         auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
+        loc->start_column = QoreProgramLineLocation::normalizeColumn(start_column);
+        loc->end_column = QoreProgramLineLocation::normalizeColumn(end_column);
         owner_func->owned_locations.push_back(loc);
         inst->loc = loc;
     }
@@ -7908,10 +7973,28 @@ bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, Qore
     for (const auto& block : func.blocks) {
         total += block->instructions.size();
     }
+    // every read is checked against the end of the data, as the reader of the function checks its other fields: a
+    // table cut short is refused before it is read (qore#7379)
+    auto need = [&ptr, end, &error](size_t bytes, const char* what, const char* field) -> bool {
+        size_t remaining = end >= ptr ? static_cast<size_t>(end - ptr) : 0;
+        if (remaining < bytes) {
+            error = std::string("truncated IR function while reading the ") + what + " table " + field + ": need "
+                + std::to_string(bytes) + " byte(s), have " + std::to_string(remaining);
+            return false;
+        }
+        return true;
+    };
     auto readTable = [&](std::unordered_map<const QoreIRInstruction*, uint32_t>& table, const char* what) -> bool {
+        if (!need(4, what, "count")) {
+            return false;
+        }
         uint32_t count = QoreAOTBinaryReader::readU32(ptr);
         if (count > total) {
             error = std::string("the ") + what + " table has more entries than the function has instructions";
+            return false;
+        }
+        // each entry is a u16 block, a u16 instruction and a u32 value
+        if (!need(static_cast<size_t>(count) * 8, what, "entries")) {
             return false;
         }
         for (uint32_t i = 0; i < count; ++i) {
@@ -7929,8 +8012,54 @@ bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, Qore
         }
         return true;
     };
-    return readTable(func.catch_exit_depths, "catch-exit depth")
-        && readTable(func.catch_cleanup_results, "catch-cleanup result");
+    if (!readTable(func.catch_exit_depths, "catch-exit depth")
+            || !readTable(func.catch_cleanup_results, "catch-cleanup result")) {
+        return false;
+    }
+    // the implicit contexts that the frame's exit on an exception restores (see QORE_AOT_EXIT_RESTORE_VERSION,
+    // qore#7379): only an instruction that sets one, and the restoration after the handlers only for the element of a
+    // foreach statement
+    std::unordered_map<const QoreIRInstruction*, uint32_t> exit_restores;
+    if (!readTable(exit_restores, "exit restoration")) {
+        return false;
+    }
+    for (const auto& block : func.blocks) {
+        for (auto& inst : block->instructions) {
+            auto i = exit_restores.find(inst.get());
+            if (i == exit_restores.end()) {
+                continue;
+            }
+            bool sets_context = false;
+            switch (inst->opcode) {
+                case QoreIROpcode::PushImplicitArg:
+                case QoreIROpcode::SetImplicitArgv:
+                case QoreIROpcode::PushImplicitElement:
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorCreateReverse:
+                case QoreIROpcode::IteratorCreateIterate:
+                case QoreIROpcode::IteratorCreateSelectors:
+                case QoreIROpcode::IteratorCreateSource:
+                    sets_context = true;
+                    break;
+                default:
+                    break;
+            }
+            if (!sets_context) {
+                error = "an entry of the exit restoration table is an instruction that sets no implicit context";
+                return false;
+            }
+            if (i->second == static_cast<uint32_t>(QoreIRExceptionExitRestore::BeforeHandlers)) {
+                inst->restore_on_exception_exit = QoreIRExceptionExitRestore::BeforeHandlers;
+            } else if (i->second == static_cast<uint32_t>(QoreIRExceptionExitRestore::AfterHandlers)
+                    && inst->opcode == QoreIROpcode::PushImplicitElement) {
+                inst->restore_on_exception_exit = QoreIRExceptionExitRestore::AfterHandlers;
+            } else {
+                error = "an entry of the exit restoration table has an invalid kind";
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 //! Sets the runtime locations of the instructions of IR deserialized from an image of a format before
@@ -10029,203 +10158,40 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
     }
 }
 
-extern "C" DLLEXPORT int qore_aot_run(
-    int argc, char** argv,
-    const char* source, int source_len,
-    const char* label,
-    int64_t parse_options,
-    const QoreAOTFunc* functions, int num_functions
-) {
-    // Parse AOT runtime flags before passing remaining args to the program
-    bool init_signals = true;
-    int first_arg = 1;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-b") == 0) {
-            init_signals = false;
-            first_arg = i + 1;
-        } else if (strcmp(argv[i], "-d") == 0) {
-            ++debug;
-            first_arg = i + 1;
-        } else if (strcmp(argv[i], "--enable-debug") == 0 || strcmp(argv[i], "-G") == 0) {
-            parse_options |= PO_ENABLE_DEBUG;
-            first_arg = i + 1;
-        } else {
-            break;
-        }
+//! Checks the AOT runtime identity that a qcc-compiled executable or script object was compiled for
+/** The native code of an image calls the runtime with the contract of the libqore that compiled it (its AOT runtime
+    identity, see design/aot-object-files-and-module-artifacts.md "AOT Module Runtime Identity"); run with another
+    libqore, it can crash, so it is refused before anything of it runs, as an AOT module is
+    (QoreModuleManager::loadBinaryModuleFromDesc()).  Called before the runtime is initialized: the error is written
+    to stderr.
+
+    @param identity the identity the image was compiled for, or nullptr for an image compiled before its kind recorded
+    one
+    @param kind the kind of image for the error message
+    @param label the source label of the image for the error message
+
+    @return true if the image was compiled for this runtime, false if it was refused
+*/
+static bool qore_aot_check_image_runtime_identity(const char* identity, const char* kind, const char* label) {
+    if (identity && !strcmp(identity, qore_aot_runtime_identity)) {
+        return true;
     }
+    fprintf(stderr, "AOT-RUNTIME-MISMATCH: the AOT-compiled %s (%s) was compiled for AOT runtime identity '%s', but "
+        "this Qore runtime (libqore %s) has AOT runtime identity '%s'; its native code was generated for a different "
+        "Qore library and cannot be run with this one; rebuild it with the qcc of this Qore installation\n", kind,
+        (label && *label) ? label : "<unknown path>",
+        identity ? identity : "<none: compiled by a qcc that predates the runtime identity check of its kind>",
+        qore_version_string, qore_aot_runtime_identity);
+    return false;
+}
 
-    // Set up ARGV from command-line arguments before qore_init (matches normal qore binary order)
-    qore_setup_argv(first_arg, argc, argv);
 
-    // Initialize the Qore runtime with MIT license
-    qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
-
-    int rc = 0;
-    // the number of unhandled exceptions reported in this thread before the teardown
-    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
-    // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
-    // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
-    // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
-    do {
-        ExceptionSink xsink;
-        ExceptionSink wsink;
-
-        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
-        // allow
-        {
-            std::string po_error;
-            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
-                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
-                rc = 2;
-                break;
-            }
-        }
-        QoreProgramHelper qpgm(parse_options, xsink);
-        if (xsink.isException()) {
-            xsink.handleExceptions();
-            rc = 2;
-            break;
-        }
-
-        // Set JIT execution mode so functions without pre-compiled code will JIT on demand
-        qpgm->setExecMode(QEM_JIT);
-
-        // Set script path from the label so %requires with relative paths resolve
-        // correctly (label is the absolute path to the original source file)
-        if (label) {
-            qpgm->setScriptPath(label);
-        }
-
-        // Parse the embedded source
-        qore_program_private::get(**qpgm)->parse(std::string_view(source, source_len), label, &xsink, &wsink,
-            QP_WARN_DEFAULT);
-
-        // Display any warnings
-        if (wsink.isException()) {
-            wsink.handleWarnings();
-        }
-
-        if (xsink.isException()) {
-            xsink.handleExceptions();
-            rc = 2;
-        } else {
-            // Register pre-compiled function pointers with AOT context tables
-            if (num_functions > 0 && functions) {
-                // Build lookup map: name → QoreAOTFunc*
-                std::unordered_map<std::string, const QoreAOTFunc*> func_map;
-                const QoreAOTFunc* toplevel_func = nullptr;
-                for (int i = 0; i < num_functions; ++i) {
-                    if (functions[i].name && functions[i].fn_ptr) {
-                        if (strcmp(functions[i].name, "_toplevel") == 0) {
-                            toplevel_func = &functions[i];
-                        } else {
-                            func_map[functions[i].name] = &functions[i];
-                        }
-                    }
-                }
-
-                // Walk namespace tree and register with context building
-                qore_program_private* pp = qore_program_private::get(**qpgm);
-                int registered = 0;
-                qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-                registerAOTFunctionsInNamespace(root_ns, *qpgm, func_map, registered);
-
-                // Register the _toplevel function with context
-                if (toplevel_func) {
-                    TopLevelStatementBlock& sb = pp->sb;
-
-                    // Re-lower top-level code to IR to build context
-                    QoreIRFunction* ir_func = new QoreIRFunction("_toplevel");
-
-                    // Collect nested body locals as pre-instantiated.  Root
-                    // top-level locals are owned by QoreProgram.
-                    collectAllStatementLocals(&sb, ir_func->all_body_locals);
-                    removeBlockLocalsFromBodyLocals(&sb, ir_func->all_body_locals);
-                    for (LocalVar* lv : ir_func->all_body_locals) {
-                        ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
-                    }
-                    if (const LVList* top_lvars = sb.getLVList()) {
-                        for (unsigned i = 0; i < top_lvars->size(); ++i) {
-                            ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
-                        }
-                    }
-
-                    QoreIRBuilder builder(ir_func);
-                    auto* entry = ir_func->createBlock("entry");
-                    builder.setBlock(entry);
-
-                    QoreParseContext parse_context(*qpgm);
-                    QoreIRLowering lowering(builder, &parse_context);
-                    std::string lower_error;
-                    bool ctx_ok = false;
-                    if (lowering.lowerStatementBlock(&sb, lower_error)) {
-                        // Ensure terminator
-                        auto& last_block = ir_func->blocks.back();
-                        if (last_block->instructions.empty() ||
-                                (last_block->instructions.back()->opcode != QoreIROpcode::Return &&
-                                 last_block->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
-                                 last_block->instructions.back()->opcode != QoreIROpcode::Br &&
-                                 last_block->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
-                            builder.createReturnNothing();
-                        }
-                        std::string verify_error;
-                        if (QoreIRVerifier::verify(*ir_func, verify_error)) {
-                            QoreAOTContext* ctx = buildAOTContext(*ir_func,
-                                toplevel_func->num_locals, toplevel_func->num_globals,
-                                toplevel_func->num_exprs, toplevel_func->num_stmts,
-                                qore_aot_func_num_regex_cases(*toplevel_func));
-                            if (ctx) {
-                                sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
-                                ++registered;
-                                ctx_ok = true;
-                                if (ctx->num_lv_path_insts > 0) {
-                                    ctx->lv_path_ir_func.reset(ir_func);
-                                    ir_func = nullptr;
-                                }
-                                printd(2, "AOT: registered pre-compiled _toplevel with context "
-                                    "(locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
-                                    toplevel_func->num_locals, toplevel_func->num_globals,
-                                    toplevel_func->num_exprs, toplevel_func->num_stmts);
-                            }
-                        } else {
-                            printd(1, "AOT: _toplevel re-verification failed: %s\n", verify_error.c_str());
-                        }
-                    } else {
-                        printd(1, "AOT: _toplevel re-lowering failed: %s\n", lower_error.c_str());
-                    }
-                    delete ir_func;
-
-                    if (!ctx_ok) {
-                        printd(1, "AOT: failed to build context for _toplevel\n");
-                    }
-                }
-
-                printd(1, "AOT: registered %d/%d pre-compiled functions\n", registered, num_functions);
-            }
-
-            // Run the program
-            QoreValue rv = qpgm->run(&xsink);
-            rc = rv.getAsBigInt();
-            rv.discard(&xsink);
-
-            if (xsink.isException()) {
-                rc = 3;
-            }
-        }
-
-        xsink.handleExceptions();
-        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
-        // run when the Program or the modules are deleted
-        teardown_exception_count = qore_get_thread_unhandled_exception_count();
-    } while (false);
-
-    qore_cleanup();
-    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
-    rc = qore_teardown_exit_status(rc, teardown_exception_count);
-    // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
-    // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
-    qore_fork_child_quick_exit(rc);
-    return rc;
+extern "C" DLLEXPORT int qore_aot_run(int /* argc */, char** /* argv */, const char* /* source */,
+        int /* source_len */, const char* label, int64_t /* parse_options */, const QoreAOTFunc* /* functions */,
+        int /* num_functions */) {
+    // an executable compiled before the AOT runtime identity check of executables (issue #6898)
+    qore_aot_check_image_runtime_identity(nullptr, "program", label);
+    return 2;
 }
 
 // ---- Source-Stripped AOT Runtime (V2) ----
@@ -10616,409 +10582,12 @@ static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
     return result;
 }
 
-extern "C" DLLEXPORT int qore_aot_run_v2(
-    int argc, char** argv,
-    const uint8_t* metadata, int metadata_len,
-    const char* label,
-    int64_t parse_options,
-    const QoreAOTFunc* functions, int num_functions
-) {
-    // Parse AOT runtime flags before passing remaining args to the program
-    bool init_signals = true;
-    int first_arg = 1;
-    for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "-b") == 0) {
-            init_signals = false;
-            first_arg = i + 1;
-        } else if (strcmp(argv[i], "-d") == 0) {
-            ++debug;
-            first_arg = i + 1;
-        } else if (strcmp(argv[i], "--enable-debug") == 0 || strcmp(argv[i], "-G") == 0) {
-            parse_options |= PO_ENABLE_DEBUG;
-            first_arg = i + 1;
-        } else {
-            break;
-        }
-    }
-
-    // Set up ARGV from command-line arguments
-    qore_setup_argv(first_arg, argc, argv);
-
-    // Initialize the Qore runtime
-    qore_init(QL_MIT, nullptr, false, init_signals ? QLO_NONE : QLO_DISABLE_SIGNAL_HANDLING);
-
-    int rc = 0;
-    // the number of unhandled exceptions reported in this thread before the teardown
-    uint64_t teardown_exception_count = qore_get_thread_unhandled_exception_count();
-    // Use do-while(false) to ensure ~QoreProgramHelper() runs before qore_cleanup().
-    // ~QoreProgramHelper creates a QoreForeignThreadHelper which accesses Qore TLS;
-    // if qore_cleanup() is called first, TLS is gone and the destructor crashes.
-    do {
-        ExceptionSink xsink;
-
-        // an executable compiled before issue #5682 can store %modern with a compatibility option that it does not
-        // allow
-        {
-            std::string po_error;
-            if (!qore_check_modern_parse_options(QoreParseOptions(parse_options), po_error)) {
-                fprintf(stderr, "%s; rebuild the program with this version of Qore\n", po_error.c_str());
-                rc = 2;
-                break;
-            }
-        }
-        QoreProgramHelper qpgm(parse_options, xsink);
-        if (xsink.isException()) {
-            xsink.handleExceptions();
-            rc = 2;
-            break;
-        }
-
-        // Set JIT execution mode
-        qpgm->setExecMode(QEM_JIT);
-
-        if (label) {
-            qpgm->setScriptPath(label);
-        }
-
-        printd(2, "AOT v2: parse_options=0x%llx, PO_MODERN=0x%llx, has_modern=%d\n",
-            (long long)parse_options, (long long)PO_MODERN,
-            (int)((parse_options & PO_MODERN) == PO_MODERN));
-
-        // Apply %prepend-module-path / %append-module-path lists before loading deps
-        {
-            std::vector<std::string> prepended, appended;
-            std::string mp_error;
-            if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
-                    prepended, appended, mp_error)) {
-                applyModulePathListsToProgram(*qpgm, prepended, appended);
-            }
-        }
-
-        {
-            std::string cmd_error;
-            if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
-                    static_cast<uint32_t>(metadata_len), label, cmd_error)) {
-                printd(0, "AOT v2: %s\n", cmd_error.c_str());
-                rc = 2;
-                break;
-            }
-        }
-
-        // Load module dependencies before deserialization so that module classes,
-        // functions, etc. are available when resolving base classes and types
-        bool dep_unavailable = false;
-        {
-            std::vector<std::string> deps;
-            std::string dep_error;
-            if (readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {
-                printd(2, "AOT v2: loading %d dependencies\n", (int)deps.size());
-                for (const std::string& dep : deps) {
-                    printd(2, "AOT v2: loading dependency '%s'\n", dep.c_str());
-                    int dep_rc = MM.runTimeLoadModule(&xsink, dep.c_str(), *qpgm);
-                    if (dep_rc < 0 || xsink.isException()) {
-                        printd(2, "AOT v2: dependency '%s' load error (rc=%d)\n",
-                            dep.c_str(), dep_rc);
-                        if (aotRequiredDepFailure(dep.c_str()) == AOTDepLoadFailure::INIT_FAILED) {
-                            // the initialization of the module failed: its exception is reported and the
-                            // program fails, as in the interpreter (qore#6217)
-                            if (!xsink.isException()) {
-                                xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
-                                    "the AOT-compiled program (%s) requires, failed", dep.c_str(),
-                                    (label && *label) ? label : "<unknown path>");
-                            }
-                            xsink.handleExceptions();
-                            // the other dependencies are loaded, and their initialization runs, before the program
-                            // fails, as in the interpreter, which loads the other modules of the program
-                            dep_unavailable = true;
-                            continue;
-                        }
-                        if (aotRequiredDepUnavailable(dep.c_str())) {
-                            // the dependency's own load exception is reported with the error (qore#6217)
-                            xsink.raiseException("AOT-ERROR",
-                                "the AOT-compiled program (%s) requires module '%s', which could not "
-                                "be loaded; the program was AOT-compiled against '%s' (its compiled "
-                                "code references that module's symbols) and cannot be loaded without it",
-                                (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
-                            xsink.handleExceptions();
-                            // the other dependencies are loaded, and their initialization runs, before the program
-                            // fails, as in the interpreter, which loads the other modules of the program
-                            dep_unavailable = true;
-                            continue;
-                        }
-                        xsink.clear();
-                    }
-                }
-            }
-        }
-        if (dep_unavailable) {
-            rc = 2;
-            break;
-        }
-
-        // Deserialize namespace tree from metadata (replaces source parsing)
-        // Must set the parse context so UserVariantBase constructor can
-        // call parse_get_parse_options() which reads thread-local current_pgm
-        QoreAOTBinaryDeserializer deserializer;
-        std::string deser_error;
-        bool deser_ok = false;
-        {
-            ProgramRuntimeParseContextHelper pch(&xsink, *qpgm);
-            // the variants resolved while loading are checked against the loaded code's own parse options, as the
-            // parser checks them for the same source, not against those of the code that triggered the load (#5556)
-            LoadTimeParseOptionsHelper load_poh((*qpgm)->getParseOptions());
-            if (xsink.isException()) {
-                xsink.handleExceptions();
-                rc = 2;
-                break;
-            }
-            if (!deserializer.deserializeIntoProgram(*qpgm,
-                    metadata, static_cast<uint32_t>(metadata_len), deser_error)) {
-                printd(0, "AOT: metadata deserialization failed: %s\n", deser_error.c_str());
-                rc = 2;
-                break;
-            }
-            deser_ok = true;
-        }
-        if (!deser_ok) {
-            break;
-        }
-
-        // Register pre-compiled function pointers
-        if (num_functions > 0 && functions) {
-            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
-            const QoreAOTFunc* toplevel_func = nullptr;
-            for (int i = 0; i < num_functions; ++i) {
-                if (functions[i].name && functions[i].fn_ptr) {
-                    if (strcmp(functions[i].name, "_toplevel") == 0) {
-                        toplevel_func = &functions[i];
-                    } else {
-                        func_map[functions[i].name] = &functions[i];
-                    }
-                }
-            }
-
-            // Register non-toplevel functions using slot maps (no IR re-lowering)
-            qore_program_private* pp = qore_program_private::get(**qpgm);
-            int registered = 0;
-            qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-            bool toplevel_registered = false;
-            std::vector<std::string> registration_errors;
-            AOTClosureRuntimeBindingMap native_closure_bindings;
-            auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-                metadata, metadata_len, getAOTMetadataStorage(metadata, metadata_len, functions));
-
-            // Register _toplevel first so setLVarsFromAOTContext() populates
-            // the program LVList before method/function contexts deserialize
-            // closures that capture top-level locals.
-            if (toplevel_func) {
-                const QoreAOTSectionHeader* sm_sec = deserializer.getReader().findSection(
-                    QoreAOTSectionType::SLOT_MAPS);
-                if (sm_sec) {
-                    const uint8_t* sm_base = deserializer.getReader().getSectionData(*sm_sec);
-                    if (sm_base) {
-                        const uint8_t* sm_ptr = sm_base;
-                        const uint8_t* sm_end = sm_ptr + sm_sec->size;
-                        // every read of the scan is checked against the end of the section (qore#6265)
-                        uint32_t sm_count = sm_sec->size >= 4 ? QoreAOTBinaryReader::readU32(sm_ptr) : 0;
-                        for (uint32_t fi = 0; fi < sm_count && static_cast<size_t>(sm_end - sm_ptr) >= 8; ++fi) {
-                            const uint8_t* entry_start = sm_ptr;
-                            uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);
-                            // an entry starts with the reference of its name and ends in the section
-                            if (entry_size < 4 || entry_size > static_cast<size_t>(sm_end - sm_ptr)) {
-                                break;
-                            }
-                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);
-                            const uint8_t* entry_end = entry_start + 4 + entry_size;
-                            sm_ptr = entry_start + 4;
-
-                            if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
-                                std::string build_error;
-                                QoreAOTContext* ctx = buildContextFromSlotMap(
-                                    deserializer.getReader(), sm_ptr, sm_end,
-                                    nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end,
-                                    nullptr, &build_error, debug_metadata, sm_base,
-                                    nullptr, nullptr, &native_closure_bindings);
-                                if (ctx) {
-                                    pp->sb.registerPrecompiledAOTTopLevel(
-                                        toplevel_func->fn_ptr, ctx);
-                                    pp->sb.setLVarsFromAOTContext(ctx);
-                                    {
-                                        // the default arguments that read a top-level local (qore#5868)
-                                        std::string top_default_error;
-                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
-                                            registration_errors.push_back(std::move(top_default_error));
-                                        }
-                                    }
-                                    ++registered;
-                                    toplevel_registered = true;
-                                    printd(2, "AOT v3: registered _toplevel from slot map\n");
-                                } else if (!build_error.empty()) {
-                                    registration_errors.push_back(std::move(build_error));
-                                }
-                                break;
-                            }
-                            sm_ptr = entry_start;
-                            skipSlotMapEntry(deserializer.getReader(), sm_ptr, sm_end);
-                        }
-                    }
-                }
-            }
-
-            // Use slot maps from the binary metadata to build contexts
-            // Collect init functions for execution after slot map registration
-            std::vector<AOTInitFuncExecInfo> init_func_contexts;
-            printd(2, "AOT v2: calling registerAOTFunctionsFromSlotMaps with %d func_map entries, "
-                "toplevel=%p\n", (int)func_map.size(), (void*)toplevel_func);
-            registerAOTFunctionsFromSlotMaps(
-                deserializer.getReader(), root_ns, *qpgm, func_map, registered,
-                &init_func_contexts, deserializer.getTypeResolver(), &registration_errors,
-                debug_metadata, false, nullptr, &native_closure_bindings, &deserializer);
-            printd(2, "AOT v2: after slot map registration: %d registered, %d remaining, "
-                "%d init functions\n",
-                registered, (int)func_map.size(), (int)init_func_contexts.size());
-
-            if (!registration_errors.empty()) {
-                std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions,
-                    &func_map, &registration_errors);
-                xsink.raiseException("AOT-ERROR", "%s", msg.c_str());
-                xsink.handleExceptions();
-                rc = 2;
-                break;
-            }
-
-            // Execute init functions (constant and static var initialization)
-            // Requires program context for closure creation (thread_get_all_closure_vars)
-            if (!init_func_contexts.empty()) {
-                std::vector<AOTInitFuncDescriptor> init_descriptors;
-                std::string init_error;
-                readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
-                    init_descriptors, init_error);
-                if (!init_descriptors.empty()) {
-                    ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
-                    if (!xsink.isException()) {
-                        // the initializers are the program's own code: they run with its parse options, as when
-                        // the program is parsed, not with those in effect when it is loaded (qore#6189)
-                        LoadTimeParseOptionsHelper init_poh((*qpgm)->getParseOptions());
-                        // the init closure of a module of the executable that raises an exception fails the
-                        // executable, as the interpreter fails the program (qore#6217)
-                        executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label, nullptr, nullptr,
-                            /*write_shadow=*/true, /*failure_sink=*/&xsink, /*script_load=*/true);
-                    }
-                    if (xsink.isException()) {
-                        xsink.handleExceptions();
-                        rc = 2;
-                        break;
-                    }
-                }
-            }
-            preInitStaticVarsInProgram(*qpgm);
-
-            // Source fallback is intentionally not available. Legacy
-            // FUNC_SOURCES records with fallback function names are rejected during
-            // metadata deserialization; any registration gap below is a hard error.
-            assert(!deserializer.hasLegacyFallbackFunctions());
-
-            // Register the _toplevel function from slot maps
-            if (toplevel_func) {
-                // Find _toplevel in SLOT_MAPS section
-                const QoreAOTSectionHeader* sm_sec = deserializer.getReader().findSection(
-                    QoreAOTSectionType::SLOT_MAPS);
-
-                if (!toplevel_registered && sm_sec) {
-                    const uint8_t* sm_base = deserializer.getReader().getSectionData(*sm_sec);
-                    if (sm_base) {
-                        const uint8_t* sm_ptr = sm_base;
-                        const uint8_t* sm_end = sm_ptr + sm_sec->size;
-                        // every read of the scan is checked against the end of the section (qore#6265)
-                        uint32_t sm_count = sm_sec->size >= 4 ? QoreAOTBinaryReader::readU32(sm_ptr) : 0;
-                        for (uint32_t fi = 0; fi < sm_count && static_cast<size_t>(sm_end - sm_ptr) >= 8; ++fi) {
-                            const uint8_t* entry_start = sm_ptr;
-                            uint32_t entry_size = QoreAOTBinaryReader::readU32(sm_ptr);  // consume size prefix
-                            // an entry starts with the reference of its name and ends in the section
-                            if (entry_size < 4 || entry_size > static_cast<size_t>(sm_end - sm_ptr)) {
-                                break;
-                            }
-                            const char* entry_name = deserializer.getReader().readStringRef(sm_ptr);  // peek at name
-                            const uint8_t* entry_end = entry_start + 4 + entry_size;
-                            sm_ptr = entry_start + 4;  // reset: after size prefix, before name
-
-                            if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
-                                std::string build_error;
-                                QoreAOTContext* ctx = buildContextFromSlotMap(
-                                    deserializer.getReader(), sm_ptr, sm_end,
-                                    nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end,
-                                    nullptr, &build_error, debug_metadata, sm_base,
-                                    nullptr, nullptr, &native_closure_bindings);
-                                if (ctx) {
-                                    pp->sb.registerPrecompiledAOTTopLevel(
-                                        toplevel_func->fn_ptr, ctx);
-                                    // Set LVList so doTopLevelInstantiation() can instantiate the locals
-                                    pp->sb.setLVarsFromAOTContext(ctx);
-                                    {
-                                        // the default arguments that read a top-level local (qore#5868)
-                                        std::string top_default_error;
-                                        if (!deserializer.resolveTopLevelNativeExprDefaults(top_default_error)) {
-                                            registration_errors.push_back(std::move(top_default_error));
-                                        }
-                                    }
-                                    ++registered;
-                                    toplevel_registered = true;
-                                    printd(2, "AOT v2: registered _toplevel from slot map\n");
-                                } else if (!build_error.empty()) {
-                                    registration_errors.push_back(std::move(build_error));
-                                }
-                                break;
-                            } else {
-                                // Skip this entry
-                                sm_ptr = entry_start;  // reset: before size prefix for skipSlotMapEntry
-                                skipSlotMapEntry(deserializer.getReader(), sm_ptr, sm_end);
-                            }
-                        }
-                    }
-                }
-
-                if (!toplevel_registered) {
-                    printd(0, "AOT v2: _toplevel not registered from serialized slot maps\n");
-                }
-
-            }
-
-            printd(2, "AOT v2: registered %d/%d pre-compiled functions\n", registered, num_functions);
-
-            if (registered < num_functions) {
-                std::string msg = makeAOTRegistrationFailureMessage(label, registered, num_functions,
-                    &func_map, &registration_errors);
-                xsink.raiseException("AOT-ERROR", "%s", msg.c_str());
-                xsink.handleExceptions();
-                rc = 2;
-                break;
-            }
-        }
-
-        // Run the v2 program
-        QoreValue rv = qpgm->run(&xsink);
-        rc = rv.getAsBigInt();
-        rv.discard(&xsink);
-
-        if (xsink.isException()) {
-            rc = 3;
-        }
-
-        xsink.handleExceptions();
-        // an unhandled exception reported in this thread from here on is raised by the teardown: by the destructors
-        // run when the Program or the modules are deleted
-        teardown_exception_count = qore_get_thread_unhandled_exception_count();
-
-    } while (false);
-
-    qore_cleanup();
-    // an unhandled exception in the teardown makes the exit status non-zero, as one in the program does
-    rc = qore_teardown_exit_status(rc, teardown_exception_count);
-    // a child process created with fork() whose modules requested it ends without running exit-time handlers, as
-    // when the main program of qore and qr ends (see qore_fork_child_exit_quickly())
-    qore_fork_child_quick_exit(rc);
-    return rc;
+extern "C" DLLEXPORT int qore_aot_run_v2(int /* argc */, char** /* argv */, const uint8_t* /* metadata */,
+        int /* metadata_len */, const char* label, int64_t /* parse_options */, const QoreAOTFunc* /* functions */,
+        int /* num_functions */) {
+    // an executable compiled before the AOT runtime identity check of executables (issue #6898)
+    qore_aot_check_image_runtime_identity(nullptr, "program", label);
+    return 2;
 }
 
 // ---- AOT Module Runtime Functions ----
@@ -12515,9 +12084,9 @@ static std::string stripRequiresDirectives(const char* source, int source_len, Q
     return result;
 }
 
-//! C ABI entry point for AOT binaries (v3 - full 128-bit parse options)
-//! Wrapper around qore_aot_run_v2, accepting parse_options as two int64_t values
-extern "C" DLLEXPORT int qore_aot_run_v3(
+//! Runs the program of a qcc-compiled executable whose AOT runtime identity qore_aot_run_v4() checked
+//! (full 128-bit parse options as two int64_t values)
+static int qore_aot_run_program(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
     const char* label,
@@ -12684,7 +12253,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                             if (!xsink.isException()) {
                                 xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
                                     "the AOT-compiled program (%s) requires, failed", dep.c_str(),
-                                    (label && *label) ? label : "<unknown path>");
+                                    label && *label ? qore_caller_msg_path(label).c_str() : "<unknown path>");
                             }
                             xsink.handleExceptions();
                             // the other dependencies are loaded, and their initialization runs, before the program
@@ -12698,7 +12267,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 "the AOT-compiled program (%s) requires module '%s', which could not "
                                 "be loaded; the program was AOT-compiled against '%s' (its compiled "
                                 "code references that module's symbols) and cannot be loaded without it",
-                                (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                                label && *label ? qore_caller_msg_path(label).c_str() : "<unknown path>",
+                                dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
                             // the other dependencies are loaded, and their initialization runs, before the program
                             // fails, as in the interpreter, which loads the other modules of the program
@@ -12994,6 +12564,30 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
     return rc;
 }
 
+//! The entry point of the main() of a qcc-compiled executable before the executable check of the AOT runtime identity
+/** An executable that calls it was compiled by a qcc that predates the check (issue #6898); its image therefore
+    records a different AOT runtime identity than this runtime, whose sources include this entry point, so it is
+    refused before anything of it runs
+*/
+extern "C" DLLEXPORT int qore_aot_run_v3(int /* argc */, char** /* argv */, const uint8_t* /* metadata */,
+        int /* metadata_len */, const char* label, int64_t /* parse_options_lo */, int64_t /* parse_options_hi */,
+        const QoreAOTFunc* /* functions */, int /* num_functions */) {
+    qore_aot_check_image_runtime_identity(nullptr, "program", label);
+    return 2;
+}
+
+extern "C" DLLEXPORT int qore_aot_run_v4(int argc, char** argv, const char* identity, const uint8_t* metadata,
+        int metadata_len, const char* label, int64_t parse_options_lo, int64_t parse_options_hi,
+        const QoreAOTFunc* functions, int num_functions) {
+    // the generated code of the executable can only run with the runtime it was compiled for: checked before the
+    // runtime is initialized and before anything of the image is read (issue #6898)
+    if (!qore_aot_check_image_runtime_identity(identity, "program", label)) {
+        return 2;
+    }
+    return qore_aot_run_program(argc, argv, metadata, metadata_len, label, parse_options_lo, parse_options_hi,
+        functions, num_functions);
+}
+
 extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     const char* source, int source_len,
     const char* label,
@@ -13074,7 +12668,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                 if (!dep_err) {
                     dep_err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', "
                         "whose initialization failed (%s)", mod_name ? mod_name : "<unknown>",
-                        (label && *label) ? label : "<unknown path>", dep.c_str(),
+                        label && *label ? qore_msg_path(label).c_str() : "<unknown path>", dep.c_str(),
                         init_error.empty() ? "its initialization failed" : init_error.c_str());
                 }
                 continue;
@@ -13090,7 +12684,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                         "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                         "and cannot be loaded without it",
                         mod_name ? mod_name : "<unknown>",
-                        (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
+                        label && *label ? qore_msg_path(label).c_str() : "<unknown path>", dep.c_str(), dep.c_str());
                     missing_dep = dep;
                 }
                 continue;
@@ -13748,46 +13342,29 @@ DLLLOCAL void qore_aot_run_all_module_del_closures() {
         std::reverse(dels.begin(), dels.end());
     }
     // the closure of a module that requires another module, directly or through other modules, runs before that of
-    // the module it requires, which it can use; a cycle (not possible for loaded modules) runs the rest in any order
-    // the modules that a module requires, directly or through other modules (also user modules loaded from source and
-    // native binary modules), found once for each module
-    std::unordered_map<std::string, std::unordered_set<std::string>> requires_map;
-    auto requires_module = [&requires_map](const std::string& from, const std::string& target) {
-        auto ri = requires_map.find(from);
-        if (ri == requires_map.end()) {
-            std::unordered_set<std::string> all;
-            std::vector<std::string> todo{from};
-            while (!todo.empty()) {
-                std::string name = std::move(todo.back());
-                todo.pop_back();
-                std::set<std::string> deps;
-                QMM.getModuleDependencies(name.c_str(), deps);
-                for (const std::string& d : deps) {
-                    if (all.insert(d).second) {
-                        todo.push_back(d);
-                    }
-                }
-            }
-            ri = requires_map.emplace(from, std::move(all)).first;
+    // the module it requires, which it can use: in the order of the teardown of the data of the module Programs
+    // (QoreModuleManager::orderModulesDependentsFirst(), qore#7432), with the requirements recorded at run time (an
+    // AOT module that loaded another one from its code requires it), and with a cycle (which run-time loads can make)
+    // broken at one of its own modules, never at a module that it requires (qore#7445).  The order is computed before
+    // any closure runs, as a closure can load modules
+    std::vector<std::string> order;
+    order.reserve(dels.size());
+    for (const DelInfo& d : dels) {
+        order.push_back(d.name);
+    }
+    QMM.orderModulesDependentsFirst(order);
+    std::unordered_map<std::string, size_t> index;
+    for (size_t i = 0, e = dels.size(); i < e; ++i) {
+        index.emplace(dels[i].name, i);
+    }
+    for (const std::string& name : order) {
+        auto ii = index.find(name);
+        // the names ordered are those of the closures
+        assert(ii != index.end());
+        if (ii == index.end()) {
+            continue;
         }
-        return ri->second.find(target) != ri->second.end();
-    };
-    while (!dels.empty()) {
-        size_t pick = 0;
-        for (size_t i = 0; i < dels.size(); ++i) {
-            bool required = false;
-            for (size_t j = 0; j < dels.size() && !required; ++j) {
-                if (i != j) {
-                    required = requires_module(dels[j].name, dels[i].name);
-                }
-            }
-            if (!required) {
-                pick = i;
-                break;
-            }
-        }
-        DelInfo d = std::move(dels[pick]);
-        dels.erase(dels.begin() + pick);
+        DelInfo& d = dels[ii->second];
         runAOTModuleDelClosure(d.name, d.path, d.pgm, d.ctx.release(), d.fn);
     }
 }
@@ -13922,8 +13499,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
-                (label && *label) ? label : "<unknown path>",
-                cmd_error.c_str());
+                label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
+                qore_msg_detail(cmd_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -13938,8 +13515,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (label && *label) ? label : "<unknown path>",
-            dep_error.c_str());
+            label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -13950,7 +13527,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module import dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (label && *label) ? label : "<unknown path>", dep_error.c_str());
+            label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -13972,17 +13550,18 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             err = aotThreadStackInitError(load_result.stack_error, mod_name);
         } else if (load_result.cancelled) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
-                mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>");
+                mod_name ? mod_name : "<unknown>", label && *label ? qore_msg_path(label).c_str() : "<unknown path>");
         } else if (!load_result.init_error.empty()) {
             err = new QoreStringNodeMaker("AOT module '%s' (%s) requires module '%s', whose initialization "
-                "failed (%s)", mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
-                load_result.dependency.c_str(), load_result.init_error.c_str());
+                "failed (%s)", mod_name ? mod_name : "<unknown>",
+                label && *label ? qore_msg_path(label).c_str() : "<unknown path>", load_result.dependency.c_str(),
+                load_result.init_error.c_str());
         } else {
             err = aotMissingDependencyInitError(new QoreStringNodeMaker(
                 "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
                 "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
                 "and cannot be loaded without it",
-                mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
+                mod_name ? mod_name : "<unknown>", label && *label ? qore_msg_path(label).c_str() : "<unknown path>",
                 load_result.dependency.c_str(), load_result.dependency.c_str()), load_result.dependency);
         }
         local_pgm->waitForTerminationAndDeref(nullptr);
@@ -15426,14 +15005,21 @@ static int executeInitFunctions(
                     if (!var || var->isAOTInitDone()) {
                         return;
                     }
-                    LValueHelper lvh(&xsink);
-                    if (var->getLValue(lvh, false)) {
-                        return;
-                    }
-                    lvh.assign(result.refSelf(), "<AOT global variable initializer>");
-                    if (!xsink) {
-                        var->setAOTInitDone();
-                    }
+                    // a store whose check records reference elements is made again after they have been bound with
+                    // no lvalue lock held (qore#7391)
+                    qore_store_with_bind_retry_lazy(&xsink, false, [&]() -> QoreValue { return result.refSelf(); },
+                        [var](LValueHelper& lvh) -> int {
+                            return var->getLValue(lvh, false);
+                        },
+                        [var, &xsink](LValueHelper& lvh, QoreValue v) -> int {
+                            if (lvh.assign(v, "<AOT global variable initializer>")) {
+                                return -1;
+                            }
+                            if (!xsink) {
+                                var->setAOTInitDone();
+                            }
+                            return 0;
+                        });
                 };
 
                 assign_global(target_var);
@@ -15476,13 +15062,21 @@ static int executeInitFunctions(
                 }
                 if (write_shadow && shadow_var && (!target_var
                         || target_var->parseGetVar() != shadow_var->parseGetVar())) {
-                    LValueHelper lvh(&xsink);
-                    if (!shadow_var->getLValue(lvh, false)) {
-                        lvh.assign(result.refSelf(), "<AOT global variable constructor initializer>");
-                        if (!xsink) {
-                            shadow_var->setAOTInitDone();
-                        }
-                    }
+                    // a store whose check records reference elements is made again after they have been bound with
+                    // no lvalue lock held (qore#7391)
+                    qore_store_with_bind_retry_lazy(&xsink, false, [&]() -> QoreValue { return result.refSelf(); },
+                        [shadow_var](LValueHelper& lvh) -> int {
+                            return shadow_var->getLValue(lvh, false);
+                        },
+                        [shadow_var, &xsink](LValueHelper& lvh, QoreValue v) -> int {
+                            if (lvh.assign(v, "<AOT global variable constructor initializer>")) {
+                                return -1;
+                            }
+                            if (!xsink) {
+                                shadow_var->setAOTInitDone();
+                            }
+                            return 0;
+                        });
                 }
                 result.discard(&xsink);
                 if (xsink) {
@@ -15819,11 +15413,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     std::string runtime_module_path = std::move(aot_module_init_context_path);
     aot_module_init_context_path.clear();
     const char* module_context_path = runtime_module_path.empty() ? label : runtime_module_path.c_str();
-    std::string module_context_desc =
-        (module_context_path && *module_context_path) ? module_context_path : "<unknown module path>";
+    // the messages of the initialization are built for the code that loads the module: they name files without their
+    // directories for code restricted from external information (qore#7507)
+    QoreRestrictedMessageScopeHelper msg_scope(qore_caller_no_external_info(aot_module_init_loader_pgm));
+    std::string module_context_desc = (module_context_path && *module_context_path)
+        ? qore_msg_path(module_context_path) : std::string("<unknown module path>");
     if (label && *label && (!module_context_path || strcmp(label, module_context_path))) {
         module_context_desc += "; source label: ";
-        module_context_desc += label;
+        module_context_desc += qore_msg_path(label);
     }
 
     // Phase 1.5 load-time profiling (temporary): QORE_AOT_LOAD_TRACE=1
@@ -15941,8 +15538,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module metadata read error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
-                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-                reader_error.c_str());
+                module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+                qore_msg_detail(reader_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -15955,7 +15553,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         std::string dom_error;
         if (!readModuleDomains(metadata_reader, own_dom, dom_error)) {
             QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
-                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                qore_msg_detail(dom_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -15991,7 +15590,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         std::string dom_error;
         if (!readFunctionalDomain(metadata_reader, used_dom, dom_error)) {
             QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): %s",
-                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                qore_msg_detail(dom_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -16030,8 +15630,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             QoreStringNode* err = new QoreStringNodeMaker(
                 "AOT module-command replay error for module '%s' (%s): %s",
                 mod_name ? mod_name : "<unknown>",
-                (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-                cmd_error.c_str());
+                module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+                qore_msg_detail(cmd_error.c_str()));
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
@@ -16046,8 +15647,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-            dep_error.c_str());
+            module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -16057,8 +15659,9 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         QoreStringNode* err = new QoreStringNodeMaker(
             "AOT module import dependency read error for module '%s' (%s): %s",
             mod_name ? mod_name : "<unknown>",
-            (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
-            dep_error.c_str());
+            module_context_path && *module_context_path ? qore_msg_path(module_context_path).c_str()
+                : "<unknown path>",
+            qore_msg_detail(dep_error.c_str()));
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
@@ -16408,8 +16011,9 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
     std::string error;
     if (!record || qoreAOTDecodeModuleInfo(record, static_cast<size_t>(record_len), info, error)
             != QoreAOTModuleInfoStatus::FOUND) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "the AOT module metadata linked "
-            "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(qore_caller_msg_path(path, tpgm)),
+            "the AOT module metadata linked with a statically registered module is invalid: %s",
+            record ? qore_msg_detail(error.c_str()) : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
             info);
@@ -16469,6 +16073,8 @@ class AotScriptBatchState : public AbstractQoreProgramExternalData {
 public:
     QoreAOTBinaryMultiDeserializer mdes;
     std::vector<AotScriptDeferredBlob> deferred;
+    //! true if a script object of the batch was refused for its AOT runtime identity: the batch fails
+    bool refused = false;
 
     explicit AotScriptBatchState(QoreProgram* pgm) : mdes(pgm) {
     }
@@ -16614,7 +16220,7 @@ static int qore_aot_script_register_native_impl(QoreProgram* tpgm,
 // @param num_functions entries in @p functions
 // @return 0 on success; non-zero on deserialization or registration
 //         failure.  Errors are printed to stderr via ExceptionSink.
-extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
+static int qore_aot_script_register_intern(QoreProgram* tpgm,
         const uint8_t* metadata, int metadata_len,
         const char* label,
         const QoreAOTFunc* functions, int num_functions) {
@@ -16712,7 +16318,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                         if (!xsink.isException()) {
                             xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which the "
                                 "AOT-compiled script (%s) requires, failed", dep.c_str(),
-                                label ? label : "<script>");
+                                label ? qore_caller_msg_path(label).c_str() : "<script>");
                         }
                         xsink.handleExceptions();
                         dep_failed = true;
@@ -16725,7 +16331,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             "the AOT-compiled script (%s) requires module '%s', which could not be "
                             "loaded; the script was AOT-compiled against '%s' (its compiled code "
                             "references that module's symbols) and cannot be loaded without it",
-                            label ? label : "<script>", dep.c_str(), dep.c_str());
+                            label ? qore_caller_msg_path(label).c_str() : "<script>", dep.c_str(),
+                            dep.c_str());
                         xsink.handleExceptions();
                         dep_failed = true;
                         ++dep_cancel_i;
@@ -16866,7 +16473,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     return 0;
 }
 
-extern "C" DLLEXPORT int qore_aot_script_register_native(QoreProgram* tpgm,
+static int qore_aot_script_register_native_intern(QoreProgram* tpgm,
         const uint8_t* metadata, int metadata_len,
         const char* label,
         const QoreAOTFunc* functions, int num_functions) {
@@ -16893,6 +16500,96 @@ extern "C" DLLEXPORT int qore_aot_script_register_native(QoreProgram* tpgm,
 
     return qore_aot_script_register_native_impl(tpgm, metadata, metadata_len,
         label, functions, num_functions);
+}
+
+//! Refuses a script object whose AOT runtime identity is not the one of this runtime
+/** Nothing of the object is registered; an active batch of the Program fails in qore_aot_script_end_batch() before
+    anything of it runs (issue #6898).
+
+    @return the error code of the registration functions for a refused object (14)
+*/
+static int qore_aot_script_refuse(QoreProgram* tpgm, const char* identity, const char* label) {
+    qore_aot_check_image_runtime_identity(identity, "script object", label);
+    if (tpgm) {
+        AbstractQoreProgramExternalData* ext = tpgm->getExternalData(kAotScriptBatchKey);
+        if (ext) {
+            static_cast<AotScriptBatchState*>(ext)->refused = true;
+        }
+    }
+    return 14;
+}
+
+extern "C" DLLEXPORT int qore_aot_script_register_v2(const char* identity, QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len, const char* label, const QoreAOTFunc* functions,
+        int num_functions) {
+    if (!identity || strcmp(identity, qore_aot_runtime_identity)) {
+        return qore_aot_script_refuse(tpgm, identity, label);
+    }
+    return qore_aot_script_register_intern(tpgm, metadata, metadata_len, label, functions, num_functions);
+}
+
+extern "C" DLLEXPORT int qore_aot_script_register_native_v2(const char* identity, QoreProgram* tpgm,
+        const uint8_t* metadata, int metadata_len, const char* label, const QoreAOTFunc* functions,
+        int num_functions) {
+    if (!identity || strcmp(identity, qore_aot_runtime_identity)) {
+        return qore_aot_script_refuse(tpgm, identity, label);
+    }
+    return qore_aot_script_register_native_intern(tpgm, metadata, metadata_len, label, functions, num_functions);
+}
+
+//! Returns the AOT runtime identity that the build information of a script object's image records
+/** @return the identity, an empty string if the image records none, or a description in angle brackets of why it
+    cannot be read
+*/
+static std::string qore_aot_script_image_identity(const uint8_t* metadata, int metadata_len) {
+    std::vector<std::pair<std::string, std::string>> info;
+    std::string error;
+    if (!metadata || metadata_len <= 0) {
+        return "<unknown: no image>";
+    }
+    if (!readBuildInfo(metadata, static_cast<uint32_t>(metadata_len), info, error)) {
+        return "<unknown: the image cannot be read: " + error + ">";
+    }
+    for (const auto& [key, value] : info) {
+        if (key == "aot-runtime-identity") {
+            return value;
+        }
+    }
+    return std::string();
+}
+
+//! The host API registering a script object, and the registration of script objects compiled before the AOT runtime
+//! identity check of script objects
+/** The identity is the one that the build information of the image records (the native code of a script object
+    calls qore_aot_script_register_v2() with its identity instead); an object compiled before the check records
+    another identity than this runtime, whose sources include this function, so it is refused (issue #6898)
+*/
+extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm, const uint8_t* metadata, int metadata_len,
+        const char* label, const QoreAOTFunc* functions, int num_functions) {
+    std::string identity;
+    try {
+        identity = qore_aot_script_image_identity(metadata, metadata_len);
+    } catch (const std::bad_alloc&) {
+        // no exception leaves the C function: the object is refused
+        return qore_aot_script_refuse(tpgm, "<unknown: out of memory reading the image>", label);
+    }
+    return qore_aot_script_register_v2(identity.empty() ? nullptr : identity.c_str(), tpgm, metadata, metadata_len,
+        label, functions, num_functions);
+}
+
+//! The native registration of a script object compiled before the AOT runtime identity check of script objects
+/** see qore_aot_script_register() */
+extern "C" DLLEXPORT int qore_aot_script_register_native(QoreProgram* tpgm, const uint8_t* metadata,
+        int metadata_len, const char* label, const QoreAOTFunc* functions, int num_functions) {
+    std::string identity;
+    try {
+        identity = qore_aot_script_image_identity(metadata, metadata_len);
+    } catch (const std::bad_alloc&) {
+        // no exception leaves the C function: the object is refused
+        return qore_aot_script_refuse(tpgm, "<unknown: out of memory reading the image>", label);
+    }
+    return qore_aot_script_register_native_v2(identity.empty() ? nullptr : identity.c_str(), tpgm, metadata,
+        metadata_len, label, functions, num_functions);
 }
 
 // Phase 4 slice 10g: begin a batch of deferred script registrations.
@@ -16944,6 +16641,10 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
     }
     std::unique_ptr<AotScriptBatchState> batch(
         static_cast<AotScriptBatchState*>(ext));
+    // a script object of the batch was compiled for another runtime: nothing of the batch runs (issue #6898)
+    if (batch->refused) {
+        return 14;
+    }
 
     ExceptionSink xsink;
     int rc = 0;
@@ -17065,7 +16766,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                             if (!xsink.isException()) {
                                 xsink.raiseException("AOT-ERROR", "the initialization of module '%s', which "
                                     "the AOT-compiled script (%s) requires, failed", dep.c_str(),
-                                    d.label.c_str());
+                                    qore_caller_msg_path(d.label.c_str()).c_str());
                             }
                             xsink.handleExceptions();
                             dep_failed = true;
@@ -17078,7 +16779,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                                 "the AOT-compiled script (%s) requires module '%s', which could not be "
                                 "loaded; the script was AOT-compiled against '%s' (its compiled code "
                                 "references that module's symbols) and cannot be loaded without it",
-                                d.label.c_str(), dep.c_str(), dep.c_str());
+                                qore_caller_msg_path(d.label.c_str()).c_str(), dep.c_str(), dep.c_str());
                             xsink.handleExceptions();
                             dep_failed = true;
                             ++dep_load_i;

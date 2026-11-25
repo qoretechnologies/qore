@@ -610,8 +610,6 @@ private:
     QoreIRValue lowerStreamingFused(const QoreStreamingOperatorNode* op, const QoreValue& base_source,
         const std::vector<LazyPipelineStage>& source_stages, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
-    bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
-    bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     QoreIRValue tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
@@ -761,15 +759,17 @@ private:
     QoreIRValue emitListKeyCompoundOp(const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    //! the store fast paths of an assignment; with \a needs_result, the store gives the value stored as its result,
+    //! which is returned as the value of the assignment (qore#7589); otherwise \a value is returned
     QoreIRValue emitHashKeyDirectStore(const VarRefNode* container_var, const std::string& key_name,
         const QoreValue& key_expr, const QoreIRValue& value,
-        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue emitHashKeyDynamicStore(const VarRefNode* container_var, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue emitListIndexDirectStore(const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error);
+        const QoreProgramLocation* loc, std::string& error, bool needs_result);
     QoreIRValue lowerConditionValue(const QoreValue& cond, std::string& error);
     bool tryEmitFusedBranchIfLtLocalInt(const QoreValue& cond,
         QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target);
@@ -958,14 +958,52 @@ private:
     /** The request becomes that of the block, as with the AST interpreter (StatementBlock::execIntern()): its path is
         the code of a return statement without a value or of a break or a continue statement placed after the block,
         whose handlers have run: the cleanups of the entries below the scope's and the jump.  The paths are lowered
-        once for each scope (scope_exit_flow_paths).  Only for code with step events, and not in the code of a handler
-        lowered inline.
+        once for each scope (scope_exit_flow_paths).  Only for code with step events.  A scope in the body of a
+        handler lowered inline (the code of a debugger's request there runs the handlers of the blocks of the body out
+        of line) takes the paths of a request made after the block in that body: those of a loop or switch statement
+        of the body, or the end of the handler (getScopeFlowPaths() with the handler, qore#7008).
     */
     bool setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error);
+    //! Gives the ScopeExit \a se past the inline cap in the code of a debugger's request, whose handlers can hand a
+    //! value over (its result), the paths of setScopeExitFlowTargets(): a request in its handlers replaces the value
+    //! that one of them handed over before it, which the entry of each path releases (qore#7008)
+    bool setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
+            const QoreProgramLocation* loc, std::string& error);
+    //! Gives the ScopeExit \a se past the inline cap whose handlers' values replace the value of a return (its
+    //! operands, QoreIRScopeExitInstruction::hand_over_return), or one in the cleanups of a return statement that
+    //! replaces the value of the return (replacesPendingReturn()) that runs the handlers of the scope of a handler
+    //! whose body has the return (the protected scope of emitBlockCleanups()), the paths of the request that the last
+    //! handler it runs ends with (qore#7531), in code with the paths of the requests
+    /** A request that goes on with the return (a return request, or a break or a continue that ends the function,
+        qore#6949) goes on after the ScopeExit as the code does: in the cleanups of a return statement (\a
+        handed_over_return nullptr), the return takes what the handlers handed over or its own value; elsewhere, the
+        return of the value handed over (\a handed_over_return, see lowerHandedOverReturn()) if one was, else the path
+        of a request made after the block (setScopeExitFlowTargets()).  Another request abandons the return: the entry
+        of its path releases what the handlers handed over and, in the cleanups of a return statement, the return's
+        own value (pending_return), as a request abandons the return of a handler lowered inline (qore#7022), before the
+        path of a request made after the block, which goes on with the return that the replaced one resumes.  Leaves
+        the builder in the code after the ScopeExit.
+    */
+    bool setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
+            QoreIRBasicBlock* handed_over_return, const QoreProgramLocation* loc, std::string& error);
     //! Returns the shared paths of the requests after the handlers of the scope whose entry is
     //! cleanup_stack[\a scope_entry] (scope_exit_flow_paths), lowering them the first time; nullptr with \a error
     //! set on failure
-    const DebugFlowSegment* getScopeFlowPaths(size_t scope_entry, std::string& error);
+    /** @param hf_index SIZE_MAX, or the index in inline_handler_flow_stack of the handler lowered inline whose body
+        has the scope: the paths are those of a request made after the block in that body
+        (lowerInlineHandlerRequestPaths(), inline_scope_exit_flow_paths, qore#7008)
+    */
+    const DebugFlowSegment* getScopeFlowPaths(size_t scope_entry, std::string& error, size_t hf_index = SIZE_MAX);
+    //! Lowers the paths of a debugger's requests at the current lowering position in the body of the handler at
+    //! \a hf_index of inline_handler_flow_stack (see setInlineHandlerFlowTargets()) into \a paths (return, break,
+    //! continue); false with \a error set on failure
+    /** @param own_segment the cache of the paths, or nullptr for the segment of the handler's entry
+        (InlineHandlerFlow::segment)
+        @param max_cleanup_depth only a loop or switch statement pushed at this cleanup depth or below takes a break
+        or a continue (see findLoopJumpTarget())
+    */
+    bool lowerInlineHandlerRequestPaths(size_t hf_index, DebugFlowSegment* own_segment, size_t max_cleanup_depth,
+            const QoreProgramLocation* loc, QoreIRBasicBlock* (&paths)[3], std::string& error);
     //! Gives the step event \a dbg of a statement of the body of a handler lowered inline the paths of a debugger's
     //! requests: those of the loops and switch statements of the body, or the end of the handler
     //! (InlineHandlerFlow)
@@ -973,6 +1011,10 @@ private:
             std::string& error);
     //! the paths of the ScopeExit instructions of each scope (setScopeExitFlowTargets())
     std::unordered_map<uint32_t, DebugFlowSegment> scope_exit_flow_paths;
+    //! the paths of the ScopeExit instructions of each scope in the body of a handler lowered inline, which go on in
+    //! that handler (getScopeFlowPaths() with a handler, qore#7008); the paths of the same scope in
+    //! scope_exit_flow_paths are those of the scope's last handler lowered inline (getInlineHandlerFlowEndAt())
+    std::unordered_map<uint32_t, DebugFlowSegment> inline_scope_exit_flow_paths;
     //! The end of the body of a handler being lowered inline in the code of an exit, where a debugger's request at a
     //! step event of the body that no loop or switch statement of the body takes goes (#6201)
     /** The request ends the handler, as with the AST interpreter, where the block of the handler returns it to the
@@ -1002,6 +1044,10 @@ private:
         //! handler around it below this one, ends that try statement, whose return value (none) replaces the value of
         //! the return that runs the handler, as in the AST interpreter (TryStatement::execImpl(), qore#6949)
         int try_depth = 0;
+        //! the exception target of the handler's code (lowerHandlerAtExit()): an exception raised on the code of a request
+        //! that ends the body (the release of a return that the request abandons, qore#7022) goes there before the code
+        //! after the handler drops the handlers still registered (ScopeTrim), so that they run with it (bug 380)
+        QoreIRBasicBlock* exception_target = nullptr;
         //! try_depth at the handler's scope: try_depth less the try statements that the exit running the handler left
         //! (an exit from a try statement in the scope's block); a request that goes on in the handler around it passes
         //! a try statement of that handler's body only if this differs from that handler's try_depth (qore#6949)
@@ -1378,12 +1424,13 @@ private:
     */
     DLLLOCAL bool expressionReadsReleasedObjectLocal(const QoreValue& expr) const;
 
-    //! Returns true if the cleanups of a return statement release the local and then release or run something else
-    //! that can see when the local's object is destroyed
-    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves; what
-        is released after it is a local declared before it in its block that can be or hold an object, or a cleanup of
-        an enclosing block (an object local, a catch variable, a handler, a foreach).  A temporary of the statement
-        that keeps the local's object is observable only then.
+    //! Returns true if the cleanups of a return statement release the local, which can be or hold an object whose
+    //! destructor sees when and where the object is destroyed
+    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves.  A
+        temporary of the statement that keeps the local's object (the value that a method call is made on) makes the
+        destructor run after the local is released, at the return statement, so the object is destroyed after the
+        locals declared before it (qore#6309) and in the location of the return instead of the one of the cleanup of
+        the local's block, as the AST interpreter, which releases the temporaries first, destroys it (qore#7481).
     */
     DLLLOCAL bool localReleaseObservedByReturn(const LocalVar* lv) const;
 
@@ -1412,6 +1459,17 @@ private:
         lowered; \a next is set to the exception target that the block continues to.
     */
     DLLLOCAL QoreIRBasicBlock* beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error);
+
+    //! Pushes the cleanup entry of a value foreach statement that restores the enclosing element (\a old_element,
+    //! the result of the PushImplicitElement before the loop; none if the loop does not set it) on a return from its
+    //! body (BlockCleanupEntry::ForeachElement; qore#7379)
+    /** The entry is pushed before the loop's other entries, so that a return restores the element after their
+        releases, and with the exception stack outside the loop's element exception blocks (\a exception_depth, whose
+        top is \a outer_target), so that the code that the return lowers after the restoration does not restore it
+        again (see BlockCleanupEntry::exception_depth)
+    */
+    DLLLOCAL void pushForeachElementCleanup(QoreIRValue old_element, size_t exception_depth,
+            QoreIRBasicBlock* outer_target, const QoreProgramLocation* loc);
 
     //! Emits the block of beginForeachElementExceptionRestore(): it restores the implicit element that the loop set
     //! (\a old_element, the result of its PushImplicitElement) and continues to \a next with the exception, so that

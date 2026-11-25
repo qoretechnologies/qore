@@ -215,11 +215,50 @@ same address (qore#5631). A raw pointer is therefore never a cache key on its ow
   their base class, so they are covered as well. The caller and object Programs are
   keyed by their never-reused `QoreProgram::getProgramId()`, as a Program can be
   destroyed without destroying a class.
+- Its entries are read without a lock. A writer (under the cache's `write_mutex`) that
+  fills an empty slot adds the entry to `owned_entries`; one that replaces a stale entry
+  puts the new entry in the replaced one's place in `owned_entries`, so `owned_entries`
+  holds exactly the entries in the slots, and after releasing `write_mutex` retires the
+  replaced entry to an epoch-based reclamation domain (`QoreEpochReclaimer`,
+  `include/qore/intern/QoreEpochReclaimer.h`), which frees it once no reader can hold it.
+  A lookup announces its read section in its thread's record, and only the method and
+  variant of a matching entry leave it. Before (qore#7459), every replaced entry was kept
+  until the process ended: because entries are keyed by Program IDs and any class
+  destruction makes them stale, a process that kept creating and destroying Programs grew
+  by an entry per call target reached on each cycle.
+- The reader records are allocated on the heap, never freed, reused, and published with
+  a lock-free push, so a lookup takes no lock. A Qore thread's record is kept in its
+  thread data: `qore_get_aot_dispatch_thread_context()` (lib/thread.cpp) gives the
+  dispatch its class context, Program, run-time parse options and record from one
+  lookup of the thread data, and the record is released when the thread data is deleted.
+  With `membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED)` available (Linux; the flag that
+  the call stack's pops and walks use), a lookup's read section has only a compiler
+  barrier and a writer issues the process-wide barrier after its fence, as a call stack
+  walk does; elsewhere both sides use seq_cst fences. A failed process-wide barrier ends
+  the process, as the readers cannot switch to a fence. A retirement only stamps and
+  queues the entry; the fence, the barrier and the scan of the records run once 32
+  entries are pending (or on an explicit `reclaim()`), so a burst of replacements after a
+  class is destroyed interrupts the other threads once per batch, and at most a batch
+  waits while no reader holds it. A thread's record is acquired on its first cacheable
+  dispatch, a failed allocation is not retried (its lookups miss), and the record is
+  cleared when released, so code that still runs with the thread data never uses a
+  record another thread has claimed. A cached by-name dispatch so costs fewer
+  instructions than before the change (callgrind, AOT modes: 38 fewer per call). The domain's
+  lock is held across `fork()`; the child clears every other thread's announcement,
+  releases the records found through the thread-local pointer (threads that are not
+  Qore threads) and leaves those of thread data in use, as a thread data deleted in the
+  child releases its own. A writer retires after releasing `write_mutex`, which has no
+  fork handler, so that no thread holds it while waiting for the domain's lock that a
+  `fork()` holds.
 
 `examples/test/ir/InlineMethodCacheClassLifetime.qtest` runs persistent call sites over
 destroyed Programs and, with a debug build, the C++ unit tests
 (`dbg_run_method_cache_lifetime_tests()`), which model the reused address
 deterministically by giving a published entry the serial of an earlier class.
+`examples/test/ir/AOTDispatchCacheReclaim.qtest` runs an AOT-compiled call site over
+destroyed Programs and checks, with a debug build, that every replaced entry is freed
+(`dbg_aot_dispatch_reclaim_stats()`), and that lookups in reader threads stay correct
+while a writer replaces and retires the entries (`dbg_aot_dispatch_reclaim_stress()`).
 
 ## AOT Compiler
 

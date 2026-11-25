@@ -28,6 +28,10 @@
     reads the data before it reports the end of the connection (issue #6315).  The read is held by a debug hook right
     after SSL_read() found no record, until the peer has written its answer and reset the connection, so the
     interleaving is forced and no timing is involved.
+
+    The hold blocks the I/O thread of the client's socket, which can also serve the peer's socket (always with one
+    I/O thread), so the peer answers and resets with dbg_tls_answer_and_reset(), which uses no I/O thread, and the
+    hold ends at the test's timeout if the connection does not end, so a failure cannot hang the test (issue #7523).
 */
 
 %modern
@@ -80,9 +84,10 @@ class TlsReadAfterPeerResetTest inherits QUnit::Test {
         auto conn = accepted.get(Timeout);
         assertEq(NT_OBJECT, conn.typeCode(), sprintf("the peer accepted the connection: %y", conn));
 
-        # the client's header read is held once SSL_read() has found no record, until the connection is reset
+        # the client's header read is held once SSL_read() has found no record, until the connection is reset; the
+        # hold blocks the client's I/O thread, which may be the peer's too
         Counter reached(1);
-        call_function("dbg_hold_tls_read_until_hangup", port, reached);
+        call_function("dbg_hold_tls_read_until_hangup", port, reached, Timeout);
         Queue result();
         Counter done(1);
         background sub () {
@@ -96,10 +101,9 @@ class TlsReadAfterPeerResetTest inherits QUnit::Test {
         on_exit done.waitForZero(Timeout);
         assertEq(0, reached.waitForZero(Timeout), "the read is held after SSL_read() found no record");
 
-        # the peer answers and resets the connection: the answer and the reset are both in the client's receive
-        # buffer when the read continues
-        conn.send(Answer, Timeout);
-        call_function("dbg_reset_socket", conn);
+        # the peer answers and resets the connection without an I/O thread: the answer and the reset are both in the
+        # client's receive buffer when the read continues
+        call_function("dbg_tls_answer_and_reset", conn, Answer, Timeout);
 
         auto rv = result.get(Timeout);
         assertEq(NT_HASH, rv.typeCode(), sprintf("the answer is read, not the end of the connection: %y", rv));

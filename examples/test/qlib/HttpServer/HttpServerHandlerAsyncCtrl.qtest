@@ -133,26 +133,16 @@ class TenantWsHandler inherits WebSocketHandler {
     }
 }
 
-#! a socket handler that answers with 101 and walks the context of its connection in startImpl()
-class TenantUpgradeHandler inherits AbstractHttpSocketHandler {
+#! a WebSocket handler whose startImpl() walks the context of its 101 connection instead of setting it up; a socket
+#! handler of a sandboxed Program that does not implement startAsyncWebSocketForRequest() gets no 101 connection
+#! (qore#7476)
+class TenantUpgradeHandler inherits WebSocketHandler {
     private {
         Queue to_host;
     }
 
-    constructor(Queue to_host) {
+    constructor(Queue to_host) : WebSocketHandler() {
         self.to_host = to_host;
-    }
-
-    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
-            *data body) {
-        return <HttpResponseInfo>{
-            \"code\": 101,
-            \"hdr\": {
-                \"Upgrade\": \"websocket\",
-                \"Connection\": \"Upgrade\",
-                \"Sec-WebSocket-Accept\": ws_get_response_key(hdr.\"sec-websocket-key\"),
-            },
-        };
     }
 
     private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
@@ -246,7 +236,8 @@ AbstractHttpSocketHandler sub get_ws_handler(Queue to_host) {
         checkFound(to_host.get(HangGuard));
     }
 
-    #! The context of a socket handler's 101 connection gives no async I/O controller of the server
+    #! The context of a socket handler's 101 connection, as its startImpl() gets it, gives no async I/O controller of the
+    #! server
     upgradeTest() {
         Queue to_host();
         Program tenant = getTenantProgram();

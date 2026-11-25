@@ -108,7 +108,9 @@ public class ChargebeeGetInvoiceLinkDataProvider inherits ChargebeeDataProviderB
         string id = req.id;
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: getting PDF link for invoice %s", id));
 
-        hash<auto> response = doGet("/invoices/" + id + "/pdf");
+        # Chargebee documents the operation as POST /invoices/{invoice-id}/pdf; the returned link expires after 60
+        # minutes (qore#7505)
+        hash<auto> response = doPost("/invoices/" + id + "/pdf");
         return response.download;
     }
 

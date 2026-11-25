@@ -1,0 +1,8 @@
+premature strong: collected early False name "peer"
+premature strong: collected after True
+premature weak: collected early False name "peer"
+premature weak: collected after True
+premature weak-list: collected early False name "peer"
+premature weak-list: collected after True
+cycle one: collected True
+cycle both: collected True

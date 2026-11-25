@@ -252,7 +252,8 @@ public string sub ensureTextractUrl(string url, *hash<auto> options) {
     if (url.val()) {
         return url;
     }
-    *string region = options.aws_region ?? getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION") ?? "us-east-1";
+    # the region of the environment only for a caller that may read it (qore#6844)
+    *string region = options.aws_region ?? AwsRestClient::AwsRestClientBase::getEnvRegion() ?? "us-east-1";
     if (!region.val() || region !~ /^[a-z]{2}(-[a-z]+)+-[0-9]+$/) {
         throw "AWS-TEXTRACT-CONFIG-ERROR", "aws_region must be a nonempty AWS region identifier";
     }
@@ -296,7 +297,7 @@ public hash<auto> sub applyTextractDefaults(hash<auto> opts) {
     rv.url = ensureTextractUrl(rv.url ?? "", rv);
     if (!rv.aws_region.val()) {
         *list<string> match = rv.url =~ x/textract\.([a-z0-9-]+)\.amazonaws\.com/;
-        rv.aws_region = match[0] ?? getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION");
+        rv.aws_region = match[0] ?? AwsRestClient::AwsRestClientBase::getEnvRegion();
     }
     rv.headers = (rv.headers ?? {}) + {"Content-Type": "application/x-amz-json-1.1", "Accept": "application/x-amz-json-1.1"};
     return rv;

@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 request and response headers read from local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A header ends where every reader ends it: the readers read a header up to its first empty line, where a line ends
+    with LF, which a CR can precede (qore#7491), so that the text after it, which can be another message, is never
+    lost.  A line of a request header must end with CRLF; a line of a response header can end with LF, which a
+    recipient may accept (RFC 9112 section 2.2), and a response header that ends with an empty line with LF is read,
+    with the message after it.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketHttpHeaderLineEndsTest
+
+#! the header readers
+enum Reader {
+    Header = "header",
+    Poll = "poll",
+    Pipeline = "pipeline",
+}
+
+class SocketHttpHeaderLineEndsTest inherits QUnit::Test {
+    private {
+        const Readers = (Reader::Header, Reader::Poll, Reader::Pipeline);
+
+        #! request headers that are refused, followed by a request that a reader that ended the header early would
+        #! lose
+        const InvalidRequests = {
+            "a field line with a bare LF": "GET /first HTTP/1.1\r\nHost: localhost\r\nX: a\n\r\n",
+            "two bare LF": "GET /first HTTP/1.1\r\nHost: localhost\r\nX: a\n\n",
+            "a bare LF after a CRLF": "GET /first HTTP/1.1\r\nHost: localhost\r\nX: a\r\n\n",
+            "a request line with a bare LF": "GET /first HTTP/1.1\nHost: localhost\r\n\r\n",
+            "a field line with a bare LF in the header": "GET /first HTTP/1.1\r\nX: a\nHost: localhost\r\n\r\n",
+        };
+
+        #! a request that a reader that ended a header early would lose
+        const LostRequest = "GET /lost HTTP/1.1\r\nHost: localhost\r\n\r\n";
+    }
+
+    constructor() : Test("SocketHttpHeaderLineEndsTest", "1.0") {
+        addTestCase("valid request headers", \validRequestTest());
+        addTestCase("request headers that are refused", \invalidRequestTest());
+        addTestCase("response headers", \responseTest());
+        set_return_value(main());
+    }
+
+    validRequestTest() {
+        foreach Reader reader in (Readers) {
+            hash<auto> client = startClient("GET /first HTTP/1.1\r\nHost: localhost\r\nX: a\r\n\r\n" + LostRequest);
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            hash<auto> hdr = readHeader(conn, reader);
+            assertEq("/first", hdr.path, reader);
+            assertEq("a", hdr.headers.x, reader);
+            assertEq("/lost", readHeader(conn, reader).path, reader);
+        }
+    }
+
+    invalidRequestTest() {
+        foreach hash<auto> i in (InvalidRequests.pairIterator()) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %s", reader, i.key);
+                hash<auto> client = startClient(i.value + LostRequest);
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                assertThrows("SOCKET-HTTP-ERROR", \readHeader(), (conn, reader), label);
+            }
+        }
+    }
+
+    responseTest() {
+        # a response header with LF line ends that ends with CRLF CRLF is accepted
+        foreach Reader reader in (Readers) {
+            hash<auto> client = startClient("HTTP/1.1 200 OK\nContent-Length: 2\nX: a\r\n\r\nok");
+            on_exit client.done.dec();
+            Socket conn = client.server.accept(5s);
+            on_exit conn.close();
+            hash<auto> hdr = readHeader(conn, reader);
+            assertEq(200, hdr.status_code, reader);
+            assertEq("2", hdr.headers."content-length", reader);
+            assertEq("a", hdr.headers.x, reader);
+        }
+        # a response header ends at its first empty line, whatever its line ends, and the response after it is read
+        # next (qore#7491)
+        foreach string resp in (("HTTP/1.1 200 OK\nContent-Length: 0\n\n",
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\n", "HTTP/1.1 200 OK\r\nContent-Length: 0\n\r\n")) {
+            foreach Reader reader in (Readers) {
+                string label = sprintf("%s: %y", reader, resp);
+                hash<auto> client = startClient(resp + "HTTP/1.1 204 No Content\r\nX: b\r\n\r\n");
+                on_exit client.done.dec();
+                Socket conn = client.server.accept(5s);
+                on_exit conn.close();
+                hash<auto> hdr = readHeader(conn, reader);
+                assertEq(200, hdr.status_code, label);
+                assertEq("0", hdr.headers."content-length", label);
+                hdr = readHeader(conn, reader);
+                assertEq(204, hdr.status_code, label);
+                assertEq("b", hdr.headers.x, label);
+            }
+        }
+    }
+
+    #! reads a header with the given reader
+    private hash<auto> readHeader(Socket conn, Reader reader) {
+        switch (reader) {
+            case Reader::Header:
+                return conn.readHTTPHeader(5s);
+            case Reader::Poll: {
+                AbstractPollOperation op = conn.startPollReadHttpHeader();
+                runPoll(op);
+                return op.getOutput().hdr;
+            }
+            case Reader::Pipeline: {
+                PollPipeline p(conn);
+                p.addReadHttpHeader();
+                runPoll(p);
+                return p.getOutput().hdr ?? p.getOutput();
+            }
+        }
+    }
+
+    #! drives a poll operation to its end
+    private runPoll(AbstractPollOperation op) {
+        while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+            if (!Socket::poll((pi,), 5s)) {
+                throw "SOCKET-TIMEOUT", "the poll operation timed out";
+            }
+        }
+    }
+
+    #! starts a client that sends the data and keeps the connection open until done
+    private hash<auto> startClient(string data) {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                client.send(data, 5s);
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("client error: %s\n", get_exception_string(ex));
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+}

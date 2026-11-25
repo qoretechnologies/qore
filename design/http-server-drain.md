@@ -185,15 +185,14 @@ So the drain counts with deterministic objects instead:
   so its requests are answered on this path.
 - Idle connections: the socket's drain flag has two levels (Socket::drainHttpConnection(bool idle)):
   - 1, set on every connection written while draining and on one with a request in progress: a keep-alive
-    operation closes the connection after its response unless a request has arrived; the first request of a new
-    connection (a fast-route listener's fused operation, or after a TLS handshake that ended during the drain) is
-    served;
-  - 2, set by startDrain() on connections that wait for a request when the drain starts: in addition, an operation
-    that waits for a request ends at once if none has arrived (a read-header operation that has received no byte
-    ends, and the controller closes the connection).
-  Trade-off: a connection written during the drain (accepted just before the listening socket closed, or whose TLS
-  handshake ended during the drain) that never sends a request holds the drain until its read times out or the drain
-  timeout ends it; the price of serving its first request.
+    operation closes the connection after its response unless a request has arrived;
+  - 2, set by startDrain() on connections that wait for a request when the drain starts, and on an HTTP/1.x
+    connection registered after the drain took its snapshot (accepted just before the listening socket closed, or
+    whose TLS handshake ended during the drain; drainNewH1Connection(), qore#7438): in addition, an operation that
+    waits for a request ends at once if none has arrived (a read-header operation that has received no byte ends,
+    and the controller closes the connection); a request whose bytes have arrived is read and served.
+  A new connection is drained whether it was in the snapshot or not: one that never sends a request does not hold the
+  drain until its read times out.
 - The end of a dispatch is called on each exit of the dispatch functions (an on_exit block cost every request
   ~146k instructions in the AOT module, qore#5927).
 - HttpServer refuses, with 503 and `Connection: close`, a protocol upgrade, a CONNECT (tunnel or extended CONNECT)

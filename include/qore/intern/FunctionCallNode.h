@@ -37,12 +37,75 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/QoreCallTargetCheckCache.h"
+#include "qore/intern/ParseWarnOptions.h"
+
+#include <memory>
+
+#include <atomic>
 
 //! returns the interned list of the names of the arguments of a named call resolved at run time by parameter name
 /** each distinct list is kept once for the life of the library (it is part of the code that uses it, as the names
     of the parameters are); thread-safe
 */
 DLLLOCAL const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names);
+
+//! the arguments of a call initialized by FunctionCallBase::parseInitCallArgs() for
+//! FunctionCallBase::parseFindCallVariant(), which can be called later: a call whose method is bound once the abstract
+//! methods of the classes are resolved (qore#7411)
+struct QoreParseCallArgs {
+    //! the analysis of the arguments
+    QoreParseAnalysis arg_analysis;
+    //! the types of the arguments
+    type_vec_t arg_type_info;
+    //! for each argument, true if it always has a value of its type
+    arg_value_vec_t args_with_value;
+    //! the names of the arguments in source order of a named call ("" for a positional argument)
+    name_vec_t arg_names;
+    //! true if the call has named arguments
+    bool named_args = false;
+};
+
+//! the parse context of a call whose method is bound once the abstract methods of the classes are resolved
+//! (qore_root_ns_private::parseDeferMethodBind()), which QoreDeferredMethodBindScope sets for the bind (qore#7411)
+class QoreDeferredMethodBindContext {
+public:
+    //! saves the parse context of the call
+    DLLLOCAL explicit QoreDeferredMethodBindContext(const QoreParseContext& parse_context);
+
+private:
+    friend class QoreDeferredMethodBindScope;
+    //! the class and namespace context of the call
+    const qore_class_private* cls;
+    qore_ns_private* ns;
+    //! the parse context of the call
+    QoreProgram* pgm;
+    LocalVar* oflag;
+    const QoreTypeInfo* expected_type_info;
+    int pflag;
+    //! the parse options and warnings in effect at the call
+    ParseWarnOptions pwo;
+};
+
+class ParseWarnHelper;
+
+//! sets the parse context of a call saved in a QoreDeferredMethodBindContext while it is in scope (qore#7411)
+class QoreDeferredMethodBindScope {
+public:
+    DLLLOCAL explicit QoreDeferredMethodBindScope(const QoreDeferredMethodBindContext& ctx);
+    DLLLOCAL ~QoreDeferredMethodBindScope();
+
+    QoreDeferredMethodBindScope(const QoreDeferredMethodBindScope&) = delete;
+    QoreDeferredMethodBindScope& operator=(const QoreDeferredMethodBindScope&) = delete;
+
+    //! the parse context of the bind: that of the call
+    QoreParseContext parse_context;
+
+private:
+    const qore_class_private* old_cls;
+    qore_ns_private* old_ns;
+    //! the parse options and warnings of the call while the bind is made
+    std::unique_ptr<ParseWarnHelper> pwh;
+};
 
 class FunctionCallBase {
 protected:
@@ -179,6 +242,16 @@ public:
     //! sets the positions of the parameters of the arguments of a named call bound at parse time (AOT
     //! deserialization); the arguments must be set
     DLLLOCAL void setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size);
+
+    //! initializes the arguments of the call, which are then in the call's argument list, with their types in
+    //! getParsedArgTypeInfo(); parseFindCallVariant() finds the variant of the call
+    DLLLOCAL int parseInitCallArgs(QoreParseContext& parse_context, QoreParseCallArgs& call_args);
+
+    //! finds the variant of the call of \a func for the arguments that parseInitCallArgs() initialized, and sets the
+    //! type of the call in \a parse_context; ns can be nullptr if the function is a method
+    DLLLOCAL int parseFindCallVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
+            QoreFunction* func, qore_ns_private* ns, QoreParseCallArgs& call_args,
+            bool infer_class_receiver_from_args = false, const char* receiver_inference_call_desc = nullptr);
 
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,
@@ -355,13 +428,25 @@ public:
             bool infer_class_receiver_from_args = false, const char* receiver_inference_call_desc = nullptr) {
         int err = parseArgsVariant(loc, parse_context, func, ns, infer_class_receiver_from_args,
             receiver_inference_call_desc);
-        // clear "effect" flag if possible, only if QCF_CONSTANT is set on the variant or function
+        parseDoCallFlags(func);
+        return err;
+    }
+
+    //! finds the variant of a call whose arguments parseInitCallArgs() initialized, as parseArgs() does (qore#7411)
+    DLLLOCAL int parseArgsFindVariant(QoreParseContext& parse_context, QoreFunction* func, qore_ns_private* ns,
+            QoreParseCallArgs& call_args) {
+        int err = parseFindCallVariant(loc, parse_context, func, ns, call_args);
+        parseDoCallFlags(func);
+        return err;
+    }
+
+    //! clears the "effect" flag if possible, only if QCF_CONSTANT is set on the variant or function
+    DLLLOCAL void parseDoCallFlags(QoreFunction* func) {
         if (variant) {
             doFlags(variant->getFlags());
         } else if (func) {
             doFlags(func->parseGetUniqueFlags());
         }
-        return err;
     }
 
    DLLLOCAL virtual const char* getName() const = 0;
@@ -868,12 +953,15 @@ public:
     template <bool Lexical>
     DLLLOCAL QoreValue execImpl(LexicalSemanticPolicy policy, QoreObject* o, ExceptionSink* xsink) const;
 
-    DLLLOCAL QoreValue execPseudo(const QoreValue n, ExceptionSink* xsink) const;
+    //! \a t is the type of \a n
+    DLLLOCAL QoreValue execPseudo(const QoreValue n, qore_type_t t, ExceptionSink* xsink) const;
 
-    DLLLOCAL QoreValue execPseudo(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execPseudo(LexicalSemanticPolicy policy, const QoreValue n, qore_type_t t,
+            ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL QoreValue execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, qore_type_t t,
+            ExceptionSink* xsink) const;
     //! evaluates a named call resolved at run time by parameter name on a value that is not an object: the call of
     //! a method of an object whose receiver has no value or another value at run time (see
     //! QoreDotEvalOperatorNode::evalWithBase())
@@ -937,6 +1025,15 @@ public:
         return pseudoTypeInfo;
     }
 
+    //! Returns true if the pseudo-method that the parse-time resolution bound can be called on a value of type \a t
+    /** It can if the pseudo-class of the type is its class or inherits it; the value of a builtin whose declared type
+        is wrong can be of another type, whose pseudo-class then finds the method by name (qore#6813).  The last type
+        that was accepted is kept, so the check of a value of that type is a comparison
+    */
+    DLLLOCAL bool pseudoAcceptsType(qore_type_t t) const {
+        return t == pseudo_accepted_type.load(std::memory_order_relaxed) || pseudoAcceptsTypeSlow(t);
+    }
+
     //! Sets the source type info (type of object the method is called on)
     /** Used for iterator element type inference in map operators
     */
@@ -954,7 +1051,12 @@ protected:
     char* c_str;
     const QoreTypeInfo* pseudoTypeInfo = nullptr;
     const QoreTypeInfo* sourceTypeInfo = nullptr;  //!< type of object the method is called on
+    //! the last type of a value that the pseudo-method was accepted for (see pseudoAcceptsType()); -1 if none
+    mutable std::atomic<qore_type_t> pseudo_accepted_type{-1};
     bool pseudo = false;
+
+    //! the part of pseudoAcceptsType() for a type that was not the last one accepted
+    DLLLOCAL QORE_INTERN_NOINLINE bool pseudoAcceptsTypeSlow(qore_type_t t) const;
 
     using AbstractFunctionCallNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -1006,6 +1108,15 @@ public:
 
     DLLLOCAL virtual ~SelfFunctionCallNode() {
     }
+
+private:
+    //! the checks and the resolution of the method made once the variant of the call is found
+    DLLLOCAL int parseInitCallResolved(QoreParseContext& parse_context, int err);
+
+    //! binds the method of a call deferred by parseInitCall() once the abstract methods are resolved (qore#7411)
+    DLLLOCAL int parseDeferredMethodBind(QoreParseContext& parse_context, QoreParseCallArgs& call_args);
+
+public:
 
     DLLLOCAL virtual const char* getTypeName() const {
         return "in-object method call";
@@ -1235,20 +1346,6 @@ public:
         return rv;
     }
 };
-
-//! Returns the node as a MethodCallNode if it is one, otherwise nullptr
-/** The same result as dynamic_cast<const MethodCallNode*>(), from the node type: only MethodCallNode's constructors
-    give NT_METHOD_CALL, and the lexical variants made by qore_make_function_call() keep the type of their base class.
-    A dynamic_cast searches the class hierarchy with string comparisons of the type names, which is too slow for the
-    per-call paths.
-*/
-DLLLOCAL inline const MethodCallNode* qore_get_method_call_node(const AbstractQoreNode* n) {
-    const MethodCallNode* rv = (n && n->getType() == NT_METHOD_CALL)
-        ? static_cast<const MethodCallNode*>(n)
-        : nullptr;
-    assert(rv == dynamic_cast<const MethodCallNode*>(n));
-    return rv;
-}
 
 //! Returns the node as a SelfFunctionCallNode if it is one, otherwise nullptr
 /** The same result as dynamic_cast<const SelfFunctionCallNode*>(), from the node type: only SelfFunctionCallNode's

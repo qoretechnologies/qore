@@ -1,0 +1,454 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC datagram sends that fail with ENOBUFS or EAGAIN, and the I/O controller's timer-only waits
+
+/*  QuicSendRetry.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7414: the QUIC send paths treated only EAGAIN as "try again later".  A send that failed with ENOBUFS (which
+    macOS returns for UDP when the interface queue is full) raised QUIC-SEND-ERROR, and the server's timer flush
+    dropped the datagrams that a send did not send, also after EAGAIN, while ngtcp2 had counted them as sent: each
+    such datagram was lost to the connection, which recovered it only with its loss recovery (PTO), with exponential
+    backoff.  The datagrams that a send does not send are now kept and sent again: when the socket is writable after
+    EAGAIN, and after a backoff delay after ENOBUFS, as no event reports that the interface queue drained.
+
+    The send errors are injected with dbg_quic_fail_sends(), which fails chosen datagrams of the sockets of a port
+    (a debug build only); dbg_quic_server_session_packets() reports the packets that the server's connections sent
+    and declared lost.  On loopback, where no datagram is lost, a kept datagram is sent before any written after it,
+    so the connection declares none lost.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+
+%exec-class QuicSendRetryTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The size of the upload of the client case: about 220 datagrams
+const UploadSize = 256 * 1024;
+
+#! The size of each download of the server cases: about 55 datagrams, which a connection's initial congestion window
+#! sends in several batches
+const DownloadSize = 64 * 1024;
+
+#! The size of each chunk written to the stream of the flush case: several datagrams
+const FlushChunkSize = 8192;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Answers a POST with the size of its body, and a GET with a body of the size in its X-Size header
+class SizeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "POST") {
+            return makeResponse(200, sprintf("%d", body.size()), {"Content-Type": "text/plain"});
+        }
+        int size = hdr."x-size".toInt();
+        return makeResponse(200, get_random_bytes(size), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+#! Hands the test each HTTP/3 response stream that the server sets up, so that the test writes to it directly
+class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! receives {sock, session_id, stream_id, wake} for each stream
+        Queue streams();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http3SseStream setupAsyncSseConnectionHttp3(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int session_id, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http3SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp3(sock, cx, hdr,
+            cid, session_id, stream_id, wake_callback);
+        streams.push({"sock": sock, "session_id": session_id, "stream_id": stream_id, "wake": wake_callback});
+        return rv;
+    }
+}
+
+#! Reads a stream to its end on a thread of its own
+class BodyReader {
+    public {
+        int bytes = 0;
+        *hash<ExceptionInfo> err;
+        Counter done(1);
+        #! receives the size of the data received so far after each read
+        Queue progress();
+    }
+
+    constructor(HttpClientIo::HttpClientStreamHandle stream) {
+        background sub () {
+            on_exit done.dec();
+            try {
+                while (True) {
+                    auto v = stream.readData(HangGuard);
+                    if (!exists v) {
+                        throw "TEST-ERROR", "no data within the hang guard";
+                    }
+                    if (v.typeCode() == NT_HASH) {
+                        if (v.end_stream) {
+                            break;
+                        }
+                        if (v.error) {
+                            throw "TEST-ERROR", sprintf("stream error: %y", v);
+                        }
+                        continue;
+                    }
+                    bytes += v.size();
+                    progress.push(bytes);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+        }();
+    }
+
+    #! Waits until the stream has delivered at least the given number of bytes
+    waitFor(int size) {
+        while (bytes < size) {
+            if (!exists progress.get(HangGuard)) {
+                throw "TEST-ERROR", sprintf("only %d of %d bytes received within the hang guard", bytes, size);
+            }
+        }
+    }
+
+    int wait() {
+        return done.waitForZero(HangGuard);
+    }
+}
+
+class QuicSendRetryTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PushHandler push_handler();
+        #! the TCP port of the listener, and the UDP port of its QUIC listener
+        int port;
+    }
+
+    constructor() : Test("QuicSendRetryTest", "1.0") {
+        addTestCase("client: datagrams whose send fails with ENOBUFS are sent again", \testClientNoBufs());
+        addTestCase("server: datagrams whose send fails with ENOBUFS are sent again", \testServerNoBufs());
+        addTestCase("server: a full socket keeps the datagrams of each connection", \testServerFullSocket());
+        addTestCase("flush: datagrams whose send fails with ENOBUFS are sent again", \testFlushNoBufs());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        Logger logger("quic-send-retry", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setHandler("size", "^/?size", NOTHING, new SizeHandler());
+        server.setDefaultHandler("push", push_handler);
+        server.waitForAsyncIo();
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            # a failed case leaves no send failing
+            call_function("dbg_quic_fail_sends_end");
+        }
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    private bool skipRelease() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the send errors are injected with debug hooks, which only a debug build has");
+            return True;
+        }
+        return False;
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getMgr() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+    }
+
+    private string getUrl() {
+        return sprintf("https://127.0.0.1:%d/", port);
+    }
+
+    #! Makes the listed datagrams fail with the given error
+    /** @param by_peer True for the client's datagrams (its socket is connected to the port), False for the
+        server's (its socket is bound to the port)
+    */
+    private failSends(bool by_peer, list<int> datagrams, int err, bool flush_only = False) {
+        call_function("dbg_quic_fail_sends", port, by_peer, datagrams, err, flush_only);
+    }
+
+    #! Ends the failures; returns the datagrams counted and failed
+    private hash<auto> endFailures() {
+        return call_function("dbg_quic_fail_sends_end");
+    }
+
+    #! Checks that no open connection of the server declared a packet lost
+    private checkNoServerLoss(string label) {
+        hash<auto> sessions = call_function("dbg_quic_server_session_packets");
+        assertGt(0, sessions.size(), label + ": the server has a connection");
+        foreach hash<auto> i in (sessions.pairIterator()) {
+            assertGt(0, i.value.sent, sprintf("%s: connection %s sent packets", label, i.key));
+            assertEq(0, i.value.lost, sprintf("%s: connection %s declared no packet lost", label, i.key));
+        }
+    }
+
+    #! The client's sends: the first datagram (the Initial) and others fail with ENOBUFS
+    /** Before qore#7414, the failure of a send's first datagram raised QUIC-SEND-ERROR
+    */
+    testClientNoBufs() {
+        if (skipRelease()) {
+            return;
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        failSends(True, (1, 12, 13, 40, 41, 42), Qore::Err::ENOBUFS);
+        hash<auto> r;
+        {
+            on_exit r = endFailures();
+            hash<auto> resp = mgr.request(getUrl(), "POST", "/size", {"Content-Type": "application/octet-stream"},
+                get_random_bytes(UploadSize), HangGuard);
+            assertEq(200, resp.status_code);
+            assertEq(UploadSize.toString(), resp.body, "the server received the whole body");
+        }
+        assertEq(6, r.failed, "each datagram that was to fail failed");
+        assertGt(42, r.datagrams, "the client sent the datagrams after those that failed");
+        checkNoServerLoss("client ENOBUFS");
+    }
+
+    #! The server's sends: datagrams of its responses fail with ENOBUFS
+    /** Before qore#7414, the failure of a send's first datagram raised QUIC-SEND-ERROR, which ended the listener's
+        poll operation, and the datagrams after the first of a send were dropped
+    */
+    testServerNoBufs() {
+        if (skipRelease()) {
+            return;
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        # the handshake is done first, so that the datagrams that fail are those of the responses
+        assertEq(DownloadSize, mgr.request(getUrl(), "GET", "/size", {"X-Size": DownloadSize}, NOTHING,
+            HangGuard).body.size(), "a response is received before sends fail");
+        failSends(False, (2, 10, 11, 25, 26, 27, 60), Qore::Err::ENOBUFS);
+        hash<auto> r;
+        {
+            on_exit r = endFailures();
+            for (int i = 0; i < 3; ++i) {
+                hash<auto> resp = mgr.request(getUrl(), "GET", "/size", {"X-Size": DownloadSize}, NOTHING,
+                    HangGuard);
+                assertEq(200, resp.status_code);
+                assertEq(DownloadSize, resp.body.size(), sprintf("response %d is received whole", i));
+            }
+        }
+        assertEq(7, r.failed, "each datagram that was to fail failed");
+        checkNoServerLoss("server ENOBUFS");
+    }
+
+    #! The server's sends of two connections at once: datagrams fail with EAGAIN, as when the socket is full
+    /** All connections share the listener's socket.  Before qore#7414, the batch of a connection whose send failed,
+        with EAGAIN as with any error, was dropped: by the next connection's write, or at the next pass
+    */
+    testServerFullSocket() {
+        if (skipRelease()) {
+            return;
+        }
+        # the element type takes NOTHING, so that the cleanup can delete each element
+        list<*HttpClientIo::HttpClientConnectionManager> mgrs = (getMgr(), getMgr());
+        on_exit {
+            for (int i = 0; i < mgrs.size(); ++i) {
+                delete mgrs[i];
+            }
+        }
+        # each connection is set up first, so that the datagrams that fail are those of the responses
+        foreach HttpClientIo::HttpClientConnectionManager mgr in (mgrs) {
+            assertEq(DownloadSize, mgr.request(getUrl(), "GET", "/size", {"X-Size": DownloadSize}, NOTHING,
+                HangGuard).body.size(), "a response is received before sends fail");
+        }
+        failSends(False, (3, 4, 15, 30, 31, 32, 45, 70, 90), Qore::Err::EAGAIN);
+        hash<auto> r;
+        {
+            on_exit r = endFailures();
+            Counter done(mgrs.size());
+            list<auto> results = ();
+            Mutex m();
+            foreach HttpClientIo::HttpClientConnectionManager mgr in (mgrs) {
+                background sub () {
+                    on_exit done.dec();
+                    auto result;
+                    try {
+                        list<int> sizes = ();
+                        for (int i = 0; i < 3; ++i) {
+                            sizes += mgr.request(getUrl(), "GET", "/size", {"X-Size": DownloadSize}, NOTHING,
+                                HangGuard).body.size();
+                        }
+                        result = sizes;
+                    } catch (hash<ExceptionInfo> ex) {
+                        result = ex;
+                    }
+                    m.lock();
+                    on_exit m.unlock();
+                    push results, result;
+                }();
+            }
+            assertEq(0, done.waitForZero(HangGuard), "both connections are done");
+            foreach auto result in (results) {
+                assertEq((DownloadSize, DownloadSize, DownloadSize), result, "each response is received whole");
+            }
+        }
+        assertEq(9, r.failed, "each datagram that was to fail failed");
+        checkNoServerLoss("server EAGAIN");
+    }
+
+    #! The sends of Socket::flushQuicPendingData() fail with ENOBUFS
+    /** Before qore#7414, the failure raised QUIC-SEND-ERROR from flushQuicPendingData(), and the datagrams after the
+        first of a send were dropped.  The data is held back from the transport until the flush releases it on the
+        I/O thread of the socket, which all its poll operations run on, so the flush writes it, and not the server's
+        poll operation; the session is idle first, so that no acknowledgement of earlier data is due.  The datagrams
+        that the flush does not send are kept by the session, so they are sent in order whichever operation sends
+        them
+    */
+    testFlushNoBufs() {
+        if (skipRelease()) {
+            return;
+        }
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(getUrl(), "GET", "/",
+            {"Accept": "text/event-stream"});
+        hash<auto> st = push_handler.streams.get(HangGuard);
+        assertEq(Type::Hash, st.type(), "the server set up the stream");
+        BodyReader reader(stream);
+        on_exit {
+            # the stream ends, also when the case fails
+            st.sock.submitQuicStreamData(st.session_id, st.stream_id, "", True);
+            if (st.wake) {
+                st.wake();
+            }
+        }
+
+        # data before the flush sets up the stream's flow
+        binary chunk = binary(strmul("f", FlushChunkSize));
+        assertEq(0, st.sock.submitQuicStreamData(st.session_id, st.stream_id, chunk, False));
+        if (st.wake) {
+            st.wake();
+        }
+        reader.waitFor(FlushChunkSize);
+
+        # the data that the flush writes
+        call_function("dbg_quic_hold_stream_data", st.session_id, st.stream_id, True);
+        on_exit call_function("dbg_quic_release_stream_data");
+        assertEq(0, st.sock.submitQuicStreamData(st.session_id, st.stream_id, chunk, False),
+            "the stream takes the data");
+        assertTrue(call_function("dbg_quic_wait_idle", st.session_id, HangGuard), "the session is idle");
+
+        # the first datagram of the flush fails: the session keeps it and those after it, which the flush, or the
+        # server's poll operation if it writes for the session first, sends after the backoff delay
+        failSends(False, (1,), Qore::Err::ENOBUFS, True);
+        hash<auto> r;
+        {
+            on_exit r = endFailures();
+            # does not raise QUIC-SEND-ERROR
+            st.sock.flushQuicPendingData(st.session_id);
+        }
+        assertEq(1, r.failed, "the first datagram of the flush failed");
+        reader.waitFor(2 * FlushChunkSize);
+        assertEq(2 * FlushChunkSize, reader.bytes, "the client received all the data written");
+        checkNoServerLoss("flush ENOBUFS");
+    }
+}

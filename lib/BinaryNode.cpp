@@ -30,8 +30,12 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/LexicalSemanticPolicy.h"
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#ifdef DEBUG
+#include "qore/intern/ql_debug.h"
+#endif
 
 #include <cstdint>
 #include <cstdlib>
@@ -138,6 +142,12 @@ int qore_binary_node_private::reserve(BinaryNode& b, size_t new_len) {
     if (new_len <= old_cap) {
         return 0;
     }
+#ifdef DEBUG
+    // test hook: the memory cannot be allocated (dbg_fail_binary_reserve_over())
+    if (qore_dbg_binary_reserve_must_fail(new_len)) {
+        return -1;
+    }
+#endif
     // the first data of an empty value is allocated with its exact size (a value made with one append does not keep
     // unused memory); a value that grows again grows geometrically by factors of 1.14 to 1.25, so a series of appends
     // reallocates the buffer a logarithmic number of times (issue #6312: an allocator whose realloc() copies made it
@@ -208,9 +218,15 @@ BinaryNode* BinaryNode::copy() const {
     if (!len)
         return new BinaryNode();
 
-    void* np = malloc(len);
+    // memory that cannot be allocated fails with std::bad_alloc (qore#7466)
+    void* np = qore_malloc_or_throw(len);
     memcpy(np, ptr, len);
-    return new BinaryNode(np, len);
+    try {
+        return new BinaryNode(np, len);
+    } catch (...) {
+        free(np);
+        throw;
+    }
 }
 
 //! the data of an empty binary value: a valid address with no bytes after it

@@ -400,11 +400,16 @@ int QoreExternalStaticMember::setValue(const QoreValue val, const QoreProgram* w
 }
 
 int QoreExternalStaticMember::setValue(const QoreValue val, ExceptionSink* xsink) const {
-    LValueHelper lvh(xsink);
-    if (const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this))->getLValue(lvh)) {
-        return -1;
-    }
-    lvh.assign(val.refSelf(), "<set static class member value>");
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    QoreVarInfo* vi = const_cast<QoreVarInfo*>(reinterpret_cast<const QoreVarInfo*>(this));
+    qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
+        [vi](LValueHelper& lvh) -> int {
+            return vi->getLValue(lvh);
+        },
+        [](LValueHelper& lvh, QoreValue v) -> int {
+            return lvh.assign(v, "<set static class member value>");
+        });
     return *xsink ? -1 : 0;
 }
 
@@ -434,6 +439,10 @@ bool QoreExternalConstant::isBuiltin() const {
 
 const QoreTypeInfo* QoreExternalConstant::getTypeInfo() const {
     return reinterpret_cast<const ConstantEntry*>(this)->getParseTypeInfo();
+}
+
+int64 QoreExternalConstant::getDomain() const {
+    return reinterpret_cast<const ConstantEntry*>(this)->getDomain();
 }
 
 QoreValue QoreExternalConstant::getReferencedValue() const {
@@ -736,12 +745,16 @@ int QoreExternalGlobalVar::setValue(const QoreValue val, const QoreProgram* writ
 }
 
 int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) const {
-    LValueHelper lvh(xsink);
-    if (const_cast<Var*>(reinterpret_cast<const Var*>(this))->getLValue(lvh, false)) {
-        return -1;
-    }
-
-    lvh.assign(val.refSelf(), "<value arugment to GlobalVar::setValue()>");
+    // a store whose check records reference elements is made again after they have been bound with no lvalue lock
+    // held (qore#7391)
+    Var* var = const_cast<Var*>(reinterpret_cast<const Var*>(this));
+    qore_store_with_bind_retry_lazy(xsink, false, [&]() -> QoreValue { return val.refSelf(); },
+        [var](LValueHelper& lvh) -> int {
+            return var->getLValue(lvh, false);
+        },
+        [](LValueHelper& lvh, QoreValue v) -> int {
+            return lvh.assign(v, "<value arugment to GlobalVar::setValue()>");
+        });
     return *xsink ? -1 : 0;
 }
 
@@ -920,7 +933,10 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
             allowed = caller_class == qc;
             break;
         case Private:
-            allowed = qc->runtimeCheckPrivateClassAccess(caller_class);
+            // a class that sandboxed code declared cannot use the private declarations of a class that trusted code
+            // declared (qore#6843)
+            allowed = qc->runtimeCheckPrivateClassAccess(caller_class)
+                && !qore_class_private::sandboxDeniesPrivateAccess(qc, caller_class);
             break;
         default:
             allowed = false;

@@ -347,7 +347,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::SetImplicitArgv, "SetImplicitArgv"               , false, false, false,  1, "SetImplicitArgv", false, true , "ParseNode", true , false, false, false, false }, // 275
     { QoreIROpcode::PopImplicitArg, "PopImplicitArg"                , false, false, false,  1, "PopImplicitArg", false, true , "ParseNode", false, false, false, false, false }, // 276
     { QoreIROpcode::PushImplicitElement, "PushImplicitElement"           , false, false, false,  1, "PushImplicitElement", false, true , "ParseNode", true , false, false, false, false }, // 277
-    { QoreIROpcode::PopImplicitElement, "PopImplicitElement"            , false, false, false,  1, "PopImplicitElement", false, true , "ParseNode", false, false, false, false, false }, // 278
+    { QoreIROpcode::PopImplicitElement, "PopImplicitElement"            , false, false, false, OPCODE_MIN_OPERANDS(1), "PopImplicitElement", false, true , "ParseNode", false, false, false, false, false }, // 278
     { QoreIROpcode::HashKeyAccess, "HashKeyAccess"                 , true , false, false,  1, "HashKeyAccess", false, true , "ParseNode", true , false, true , false, false }, // 279
     { QoreIROpcode::HashKeyAccessInt, "HashKeyAccessInt"              , true , false, false,  1, "HashKeyAccessInt", false, true , "ParseNode", true , false, true , false, false }, // 280
     { QoreIROpcode::LoadSelfMember, "LoadSelfMember"                , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 281
@@ -402,9 +402,9 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::SubNumber, "SubNumber"                     , false, false, false,  2, "SubNumber", false, true , "ParseNode", true , false, true , false, true  }, // 330
     { QoreIROpcode::MulNumber, "MulNumber"                     , false, false, false,  2, "MulNumber", false, true , "ParseNode", true , false, true , false, true  }, // 331
     { QoreIROpcode::DivNumber, "DivNumber"                     , false, false, false,  2, "DivNumber", false, true , "ParseNode", true , false, true , false, true  }, // 332
-    { QoreIROpcode::HashKeyStore, "HashKeyStore"                  , false, false, false,  2, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 333
+    { QoreIROpcode::HashKeyStore, "HashKeyStore"                  , false, false, false,  2, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 333
     { QoreIROpcode::ListIndexAccess, "ListIndexAccess"               , true , false, false,  2, "ListIndexAccess", false, true , "ParseNode", true , false, false, false, false }, // 334
-    { QoreIROpcode::ListIndexStore, "ListIndexStore"                , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 335
+    { QoreIROpcode::ListIndexStore, "ListIndexStore"                , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 335
     { QoreIROpcode::AddAssignLocalInt, "AddAssignLocalInt"             , false, false, false,  0, "AddAssignLocalInt", false, true , "ParseNode", true , false, false, false, false }, // 336
     { QoreIROpcode::IncrementLocalInt, "IncrementLocalInt"             , false, false, false,  0, "IncrementLocalInt", false, true , "ParseNode", true , false, false, false, false }, // 337
     { QoreIROpcode::BranchIfLtLocalInt, "BranchIfLtLocalInt"            , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false, false }, // 338
@@ -421,7 +421,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::SubTimeout, "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , false, true , false, true  }, // 349
     { QoreIROpcode::HashDerefDynamic, "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , false, true , false, true  }, // 350
     { QoreIROpcode::ListIndexDynamic, "ListIndexDynamic"              , false, false, false, OPCODE_MIN_OPERANDS(2), "ListIndexDynamic", false, true , "ParseNode", true , false, true , false, true  }, // 351
-    { QoreIROpcode::HashKeyStoreDynamic, "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 352
+    { QoreIROpcode::HashKeyStoreDynamic, "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 352
     { QoreIROpcode::LValuePathAssign, "LValuePathAssign"              , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathAssign", true , true , "AssignmentNode", true , true , false, false, false }, // 353
     { QoreIROpcode::LValuePathCompound, "LValuePathCompound"            , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathCompound", true , true , "ParseNode", true , false, false, false, false }, // 354
     { QoreIROpcode::LValuePathUnary, "LValuePathUnary"               , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathUnary", true , true , "ParseNode", true , true , false, false, false }, // 355

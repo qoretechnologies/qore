@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - AOT code generation and a qcc executable compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AotInstanceofTypeCacheTest
+
+#! Two hot type paths of AOT instanceof checks that share a set of the type cache do not evict each other (qore#7416)
+/** The type of an AOT instanceof is resolved once per thread, type path and Program and kept in a thread-local cache;
+    which paths share a set depends only on the layout of the compiled code.  A direct-mapped cache made two such
+    paths resolve their types again on every evaluation.  The probe makes every path share one set (a debug hook)
+    and counts the resolutions (dbg_aot_instanceof_resolves()), so the check does not depend on the layout or on time.
+*/
+class AotInstanceofTypeCacheTest inherits QUnit::Test {
+    private {
+        string probe = get_script_dir() + "/aot-instanceof-type-cache/probe.q";
+    }
+
+    constructor() : QUnit::Test("AOT instanceof type cache", "1.0", \ARGV) {
+        addTestCase("two type paths that share a set", \testSharedSet());
+        set_return_value(main());
+    }
+
+    testSharedSet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug hooks need a debug build");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        # the library of the interpreter, in its directory: a bare name is resolved through the PATH first
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(resolveCommand(qore_bin));
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        TmpDir tmp("qore-aot-instanceof-type-cache-");
+        string exe = tmp.path + DirSep + "probe";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string res = backquote(sprintf("%s %s 2>&1", env, exe));
+        # each of the two paths is resolved once (the first evaluation), not on every one; six paths in a cycle miss on
+        # every evaluation (the least recently used way is replaced) except the first two, whose paths (A and B) the
+        # first loop left in the set; every result is right while ways are replaced
+        assertEq("two paths: hits=2000 resolves=2\nsix paths: hits=6000 resolves=5998\n"
+            "matrix: checks=36000 mismatches=0\n", res);
+    }
+
+    #! Returns the path of \a cmd: \a cmd itself if it has a directory, else the file that the PATH names
+    private static string resolveCommand(string cmd) {
+        if (cmd =~ /\//) {
+            return cmd;
+        }
+        *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(cmd, "'", "'\\''"))));
+        return found ? found : cmd;
+    }
+}

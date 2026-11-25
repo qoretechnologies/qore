@@ -33,6 +33,7 @@
 #define _QORE_QORENAMESPACEINTERN_H
 
 #include "qore/intern/QoreClassList.h"
+#include "qore/intern/DeclSeq.h"
 #include "qore/intern/HashDeclList.h"
 #include "qore/intern/EnumList.h"
 #include "qore/intern/QoreNamespaceList.h"
@@ -78,6 +79,8 @@ struct TypedefEntry {
     //! the namespace that declares the typedef while the Program that declares it is parsed, in which its type is
     //! resolved; not copied: a copy imported into another Program has the resolved type
     qore_ns_private* parse_ns = nullptr;
+    //! Check for shadowing once the complete namespace tree is available (declaration-time opt-in).
+    bool check_shadow = false;
     //! true while the type is being resolved, so that a typedef that refers to itself is an error
     bool resolving = false;
 
@@ -145,7 +148,7 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 //! Adds a builtin constant whose value depends on the state of the running library
 /** Code referencing the constant reads it from the process it runs in, including AOT-compiled code; see
     ConstantEntry::setRuntimeDependent().  qpp generates calls to this for constants declared with a
-    <tt>qore_runtime(<value>, <value in compiled code>)</tt> value.
+    <tt>qore_runtime(<value>, <value in compiled code>)</tt> or <tt>qore_domain(<value>, <domain>)</tt> value.
 
     @param ns the namespace to add the constant to
     @param ns_path the namespace's fully-qualified path without a leading "::" (ex: "Qore::Option")
@@ -153,9 +156,13 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
     @param value the constant's value in this process; ownership is taken
     @param compiled_define the value of the constant's parse define in code compiled ahead of time, where the
     compiler cannot know the state of the library the code will run with; ownership is taken
+    @param domain the functional domain required to read the constant
 */
 DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
-        QoreValue value, QoreValue compiled_define);
+        QoreValue value, QoreValue compiled_define, int64 domain = 0);
+
+//! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
+DLLLOCAL std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m);
 
 class qore_ns_private {
 public:
@@ -163,12 +170,23 @@ public:
     std::string name;
     // the fully-justified reference including the namespace name
     std::string path;
+    //! the order in which the namespace was declared; a copy has the number of the namespace that it is a copy of
+    //! (issue #7171)
+    uint64_t decl_seq = qore_next_decl_seq();
 
     QoreNamespace* ns = nullptr;
 
     QoreClassList classList;       // class map
     HashDeclList hashDeclList;     // hashdecl map
     EnumList enumList;             // enum map
+    //! The namespaces added at run time whose declarations conflicted with those of this namespace (qore#7530)
+    /** qore_ns_private::runtimeAssimilate() leaves a declaration that conflicts in the namespace that is added, and
+        keeps that namespace here, unnamed, as the other declarations that it added can use the types of those that
+        were not added; they are released with this namespace, in each of the steps in which its own are, and copied
+        with it (the copy of a Program's namespaces for a child Program).  A namespace that is added again and again
+        with declarations that the namespace has keeps one such namespace for each addition
+    */
+    std::vector<QoreNamespace*> retained_ns;
     ConstantList constant;         // constant map
     typedef_map_t typedefMap;      // typedef map
     QoreNamespaceList nsl;         // namespace map
@@ -241,6 +259,7 @@ public:
     DLLLOCAL qore_ns_private(const char* n, const qore_ns_private& old)
         : name(n),
             path(old.path),
+            decl_seq(old.decl_seq),
             ns(new QoreNamespace(this)),
             constant(this), pub(old.pub),
             builtin(old.builtin),
@@ -256,6 +275,7 @@ public:
     DLLLOCAL qore_ns_private(const qore_ns_private& old, const QoreParseOptions& po, QoreNamespace* ns)
         : name(old.name),
             path(old.path),
+            decl_seq(old.decl_seq),
             ns(ns),
             classList(old.classList, po, this),
             hashDeclList(old.hashDeclList, po, this),
@@ -280,6 +300,15 @@ public:
                     typedefMap[i.first] = new TypedefEntry(*i.second);
                 }
             }
+        }
+        // the namespaces kept by runtimeAssimilate(), whose types the declarations copied above can use, are copied
+        // with all of their declarations (they are not visible), so that the copy holds references to those types
+        // (qore#7530)
+        for (const QoreNamespace* rns : old.retained_ns) {
+            std::unique_ptr<QoreNamespace> copy(new QoreNamespace(*rns, QoreParseOptions()));
+            copy->priv->parent = this;
+            retained_ns.push_back(copy.get());
+            copy.release();
         }
         assert(name.rfind("::") == std::string::npos);
         assert(path.rfind("::", 0) == 0);
@@ -427,6 +456,16 @@ public:
         enumList.reset();
 
         nsl.reset();
+
+        deleteRetained();
+    }
+
+    //! Deletes the namespaces that runtimeAssimilate() kept (qore#7530)
+    DLLLOCAL void deleteRetained() {
+        for (QoreNamespace* rns : retained_ns) {
+            delete rns;
+        }
+        retained_ns.clear();
     }
 
     //! Returns true iff this namespace has no content.
@@ -1621,6 +1660,37 @@ protected:
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
 
+    //! a call whose method is bound once the abstract methods of the classes are resolved (qore#7411)
+    struct deferred_method_bind_t {
+        //! takes a reference to the call, which it keeps while the bind is pending
+        DLLLOCAL deferred_method_bind_t(AbstractQoreNode* node, std::function<int()>&& bind)
+                : node(node), bind(std::move(bind)) {
+            node->ref();
+        }
+
+        DLLLOCAL deferred_method_bind_t(deferred_method_bind_t&& old) noexcept
+                : node(old.node), bind(std::move(old.bind)) {
+            old.node = nullptr;
+        }
+
+        DLLLOCAL ~deferred_method_bind_t() {
+            if (node) {
+                node->deref(nullptr);
+            }
+        }
+
+        deferred_method_bind_t(const deferred_method_bind_t&) = delete;
+        deferred_method_bind_t& operator=(const deferred_method_bind_t&) = delete;
+        deferred_method_bind_t& operator=(deferred_method_bind_t&&) = delete;
+
+        //! the call, referenced while the bind is pending
+        AbstractQoreNode* node;
+        //! binds the method of the call; returns -1 if a parse exception was raised
+        std::function<int()> bind;
+    };
+    //! the calls whose methods are bound once the abstract methods of the classes are resolved (qore#7411)
+    std::vector<deferred_method_bind_t> deferred_method_bind_vec;
+
     DLLLOCAL int addPendingVariantIntern(qore_ns_private& ns, const char* name, AbstractQoreFunctionVariant* v) {
         // try to add function variant to given namespace
         bool new_func = false;
@@ -1906,6 +1976,10 @@ protected:
     //! Checks, and raises the warning, for a hashdecl declared in \a declaring_ns
     DLLLOCAL void parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
             const qore_ns_private* declaring_ns);
+
+    //! Checks a typedef declaration for a Qore-namespace alias that unqualified lookup selects first.
+    DLLLOCAL void parseCheckTypedefShadowedByQore(const QoreProgramLocation* loc, const char* name,
+        const qore_ns_private* declaring_ns);
 
     //! Checks, and raises the warning, for a global variable declared in \a declaring_ns
     DLLLOCAL void parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
@@ -2681,6 +2755,38 @@ public:
         deferred_new_check_vec.push_back(deferred_new_check_t(qc, loc));
     }
 
+    //! binds the method of the call \a node with \a bind once the abstract methods of the classes are resolved
+    /** For a call of a method of a class whose abstract methods, once resolved, can give it a method of the name
+        (qore_class_private::parseAbstractMethodPending()); \a bind is called by parseRunDeferredMethodBinds(), in the
+        parse context of the call (see QoreDeferredMethodBindContext) (qore#7411)
+    */
+    DLLLOCAL void parseDeferMethodBind(AbstractQoreNode* node, std::function<int()>&& bind) {
+        deferred_method_bind_vec.emplace_back(node, std::move(bind));
+    }
+
+    //! binds the methods of the calls deferred by parseDeferMethodBind(), after the abstract methods of the classes
+    //! are resolved, and clears them; returns -1 if a parse exception was raised
+    /** the calls are released when the binds are done, or when an exception leaves this function
+    */
+    DLLLOCAL int parseRunDeferredMethodBinds() {
+        int err = 0;
+        // a bind can defer no other: the abstract methods are resolved
+        std::vector<deferred_method_bind_t> binds;
+        binds.swap(deferred_method_bind_vec);
+        for (deferred_method_bind_t& i : binds) {
+            if (i.bind() && !err) {
+                err = -1;
+            }
+        }
+        assert(deferred_method_bind_vec.empty());
+        return err;
+    }
+
+    //! releases the calls deferred by parseDeferMethodBind() without binding them (a parse that is rolled back)
+    DLLLOCAL void parseClearDeferredMethodBinds() {
+        deferred_method_bind_vec.clear();
+    }
+
     //! Runs the deferred checks for the instantiation of classes with abstract methods and clears them
     /** A check is deferred until every class is resolved; a parse that is not committed (an Expression) runs them
         itself after initializing its code, so that nothing is left for the Program's next commit
@@ -2782,6 +2888,9 @@ public:
 
         // delete any deferred new object checks for classes with abstract members
         deferred_new_check_vec.clear();
+
+        // release the calls whose methods were to be bound after the abstract methods are resolved (qore#7411)
+        parseClearDeferredMethodBinds();
 
         // With atomic_rollback (PO_ALLOW_REPARSE), preserve committed items and only remove pending items.
         // Without it, do a full destructive reset for backward compatibility.
@@ -3507,7 +3616,8 @@ private:
         return best;
     }
 
-    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname) {
+    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname,
+            const qore_ns_private** found_ns = nullptr) {
         const qore_ns_private* qore_ns = getQore();
         if (!qore_ns) {
             return nullptr;
@@ -3529,6 +3639,9 @@ private:
             if (!best || ns_priv->depth < best_depth) {
                 best = const_cast<TypedefEntry*>(td);
                 best_depth = ns_priv->depth;
+                if (found_ns) {
+                    *found_ns = ns_priv;
+                }
             }
         }
         return best;

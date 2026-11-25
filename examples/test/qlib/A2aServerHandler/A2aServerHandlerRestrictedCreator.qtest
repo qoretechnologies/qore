@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires Util
+%requires QUnit
+%requires HttpServer
+%requires HttpClientIo
+%requires Logger
+%requires Mime
+%requires A2aClient
+%requires A2aServerHandler
+
+%exec-class A2aServerHandlerRestrictedCreatorTest
+
+#! records the webhook requests it receives
+class RestrictedCreatorWebhook inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {"path": cx.raw_path, "body": body ? parse_json(body.typeCode() == NT_BINARY
+            ? body.toString("UTF-8") : body) : NOTHING};
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, "{}");
+    }
+}
+
+#! An A2A handler that code restricted from the NETWORK functional domain constructs (qoretechnologies/qorus#1129)
+/** Code restricted from NETWORK may not create an HttpClientIo connection manager (qore#6981).  The handler's push
+    notification manager was created in its constructor, so such code could not construct a handler at all; it is now
+    created when a client registers a push config, or set by the host on its own side.
+*/
+class A2aServerHandlerRestrictedCreatorTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        const AgentCard = {
+            "name": "RestrictedAgent",
+            "description": "an agent constructed by restricted code",
+            "url": "http://localhost",
+            "version": "1.0",
+            "capabilities": {"streaming": False, "pushNotifications": True},
+            "defaultInputModes": ("text/plain",),
+            "defaultOutputModes": ("text/plain",),
+            "skills": (),
+        };
+    }
+
+    constructor() : Test("A2aServerHandlerRestrictedCreatorTest", "1.0") {
+        addTestCase("restricted code constructs a handler; push needs the host's manager", \restrictedTest());
+        addTestCase("unrestricted code creates the push manager when a config is registered", \unrestrictedTest());
+        set_return_value(main());
+    }
+
+    restrictedTest() {
+        foreach hash<auto> mode in (Modes.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+            p.setExecMode(mode.value);
+            p.parse("%modern\n%requires Logger\n%requires A2aServerHandler\n"
+                "auto sub make(hash<auto> card) { try { return new A2aServerHandler::A2aServerHandler("
+                "new Logger::Logger(\"restricted\", Logger::LoggerLevel::getLevelInfo()), card); } "
+                "catch (hash<ExceptionInfo> ex) { "
+                "return ex.err + \": \" + ex.desc; } }", "restricted");
+            auto h = p.callFunction("make", AgentCard);
+            assertEq(Type::Object, h.type(), sprintf("%s: restricted code constructs the handler: %y", mode.key, h));
+            if (h.type() != Type::Object) {
+                continue;
+            }
+            A2aServerHandler handler = h;
+            serve(handler, sub (string base_url, string webhook_url, RestrictedCreatorWebhook webhook) {
+                A2aClient::A2aClient client(base_url);
+                # no manager: the handler's code may not create one, so a push config is refused at once
+                hash<A2aTaskInfo> task = handler.createTask();
+                hash<ExceptionInfo> ex;
+                try {
+                    client.setPushNotificationConfig(task.id, {"url": webhook_url});
+                } catch (hash<ExceptionInfo> ex1) {
+                    ex = ex1;
+                }
+                assertNeq(NOTHING, ex, mode.key + ": a push config without a manager is refused");
+                assertRegex("push notifications cannot be delivered by this agent.*PERMISSION-DENIED",
+                    sprintf("%s: %s %y", ex.err, ex.desc, ex.arg), mode.key);
+                handler.updateTaskState(task.id, A2aTaskState::Working);
+                assertEq(0, webhook.requests.size(), mode.key + ": nothing is delivered");
+
+                # the host gives the handler a manager built on its own side
+                handler.setPushConnectionManager(new HttpClientConnectionManager(
+                    A2aServerHandler::getPushConnectionManagerOptions()));
+                assertThrows("A2A-SERVER-ERROR", "already has", \handler.setPushConnectionManager(),
+                    (new HttpClientConnectionManager(),));
+                task = handler.createTask();
+                client.setPushNotificationConfig(task.id, {"url": webhook_url + "/ok"});
+                handler.updateTaskState(task.id, A2aTaskState::Working);
+                assertEq(1, webhook.requests.size(), mode.key + ": the host's manager delivers");
+                assertEq("/webhook/ok", webhook.requests[0].path, mode.key);
+                assertEq(task.id, webhook.requests[0].body.id, mode.key);
+            });
+        }
+    }
+
+    unrestrictedTest() {
+        A2aServerHandler handler(new Logger("unrestricted", LoggerLevel::getLevelInfo()), AgentCard);
+        serve(handler, sub (string base_url, string webhook_url, RestrictedCreatorWebhook webhook) {
+            A2aClient::A2aClient client(base_url);
+            hash<A2aTaskInfo> task = handler.createTask();
+            client.setPushNotificationConfig(task.id, {"url": webhook_url});
+            # the config created the manager: the host can no longer set one
+            assertThrows("A2A-SERVER-ERROR", "already has", \handler.setPushConnectionManager(),
+                (new HttpClientConnectionManager(),));
+            handler.updateTaskState(task.id, A2aTaskState::Working);
+            assertEq(1, webhook.requests.size(), "the handler's own manager delivers");
+            assertEq(task.id, webhook.requests[0].body.id);
+        });
+    }
+
+    #! serves the handler and a webhook for the call
+    private serve(A2aServerHandler handler, code call) {
+        HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("http", LoggerLevel::getLevelInfo())});
+        on_exit http.stop();
+        http.setHandler("a2a", "", MimeTypeJson, handler);
+        http.setDefaultHandler("a2a", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        RestrictedCreatorWebhook webhook();
+        HttpServer webhook_http(<HttpServerOptionInfo>{"logger": new Logger("webhook", LoggerLevel::getLevelInfo())});
+        on_exit webhook_http.stop();
+        webhook_http.setHandler("webhook", "", NOTHING, webhook);
+        webhook_http.setDefaultHandler("webhook", webhook);
+        int wport = webhook_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        call(sprintf("http://localhost:%d", port), sprintf("http://localhost:%d/webhook", wport), webhook);
+    }
+}

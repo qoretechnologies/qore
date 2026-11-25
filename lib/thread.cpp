@@ -46,6 +46,7 @@
 #endif
 
 #include "qore/intern/ThreadResourceList.h"
+#include "qore/intern/QoreAOTMethodDispatchReclaim.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
@@ -94,6 +95,7 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#include "qore/intern/ql_debug.h"
 
 #include <string.h>
 
@@ -785,11 +787,18 @@ static size_t get_stack_size() {
 static int initial_thread = -1;
 
 // this structure holds all thread-specific data
-class ThreadData {
+class DLLLOCAL ThreadData {
 public:
     //! the run-time parse options of the thread and the override that they were computed with; a struct declared in
     //! qore_thread_intern.h, so that RuntimeParseOptionsOverrideHelper restores it inline (qore#6446)
     QoreRuntimePoState runtime_po_state = QoreRuntimePoState();
+    //! the thread's record of the AOT method dispatch cache's reclamation domain, or nullptr before the first
+    //! cacheable dispatch (see qore_acquire_aot_dispatch_thread_reader()); released when the data is deleted
+    //! (qore#7459)
+    QoreAOTMethodDispatchReclaimer::Record* aot_dispatch_reader = nullptr;
+    //! true once the record has been released (the data is being deleted) or could not be allocated: no record is
+    //! acquired again, and the thread's lookups miss
+    bool aot_dispatch_reader_done = false;
     //! the functional-domain restrictions of the code that started the thread, when module code started it
     /** The calling code of module code that runs on the thread when no Program that is not a module's is on the
         thread's stack (see qore_get_caller_domain_restrictions()); set while the thread runs the code that it was
@@ -908,6 +917,8 @@ public:
 
     // issue #3024: program context for calls prior to a call
     QoreProgram* call_program_context = nullptr;
+    //! the initialization of a module's Program that the thread runs (qore#7289; see QoreModuleInitFrames)
+    QoreModuleInitFrames module_init_frames;
 
     // current program context helper
     ProgramThreadCountContextHelper* current_pgm_ctx = nullptr;
@@ -970,9 +981,33 @@ public:
             builtin call inside the grant for the same Program is a call for the code that established it
         */
         const QoreProgram* call_program_context;
+        //! the order in which the grants (policy barriers and capability frames) were established
+        uint64_t seq;
     };
     //! the snapshot of each active policy barrier, innermost last (with sandbox_policy_barrier_ctx)
     std::vector<GrantSnapshot> sandbox_policy_barrier_snapshots;
+    //! the last order number given to a grant (GrantSnapshot::seq)
+    uint64_t grant_seq = 0;
+    //! a method of an object that the host lent runs as a capability (qore#7052)
+    /** Set when a call of a method of a lent object enters the Program of the method's code (see
+        ProgramThreadCountContextHelper::set()), and removed when the context is left: while it is the innermost grant,
+        the domains that a host grant lends (QORE_GRANT_LENT_DOMAINS) of the code that called the method do not count,
+        as under the host's policy barrier: the object can do what its methods do for whoever was lent it; code entered
+        above it (the restricted code's callbacks, objects and references) is restricted as its own.  Calls within a
+        Program enter no context, so they cost nothing
+    */
+    struct CapabilityFrame {
+        //! the program context entered for the method: the walk stops there, so the caller's Program is not counted
+        const ProgramThreadCountContextHelper* ctx;
+        //! the innermost provenance frame when it was set: the frames below it do not count
+        const QoreSandboxProvenanceHelper* provenance;
+        //! the state of the sources of the calling code's restrictions that are not on the stack
+        GrantSnapshot snapshot;
+        //! the Program of the lent method's code: only objects of its classes that the method creates are lent
+        const QoreProgram* code_pgm;
+    };
+    //! the active capability frames, innermost last
+    std::vector<CapabilityFrame> capability_frames;
     //! the last generation given to a source of the calling code's restrictions (see GrantSnapshot)
     uint64_t restriction_gen = 0;
     //! the ID of the Program whose application the work of a SandboxManager::callGoverned() call belongs to, or 0
@@ -990,7 +1025,12 @@ public:
         uint64_t gen;
         //! the nesting depth of the helper that saved them (capture_depth)
         size_t depth;
+        //! the lent-to restrictions in effect before (thread_lent_to_restrictions)
+        QoreParseOptions lent_to;
     };
+    //! the lent-to restrictions of the code that submitted the work that an active QoreSandboxCaptureHelper runs, with
+    //! the generation of thread_caller_restrictions (see QoreSandboxContext::lent_to_restrictions; qore#6844)
+    QoreParseOptions thread_lent_to_restrictions;
     std::vector<CaptureSavedRestrictions> capture_saved_caller_restrictions;
     //! the number of active QoreSandboxCaptureHelper objects on the thread; a helper whose entry could not be saved
     //! (std::bad_alloc) has none at its depth: it added the capture's restrictions to those in effect instead of
@@ -1044,6 +1084,9 @@ public:
         bool caller_may_select_native_file = true;
         //! Governing managers at entry; their permission to use uncontrolled APIs can be revoked during the load.
         QoreSandboxManager* native_file_policy = nullptr;
+        //! the order in which it was set among the grants (GrantSnapshot::seq): a capability frame set after it lends
+        //! what is created above it, one set before it does not (qore#7052)
+        uint64_t seq = 0;
     };
     std::vector<ModuleInitBarrier> module_init_barriers;
     // the module initialization barriers of library code (and of trusted builds) that could not be recorded for lack
@@ -1258,7 +1301,15 @@ public:
             the code that clears the other data of the task (thread resources, the thread-local data of the Programs)
             can assign them, and the next release takes those values
         */
-        tlv_clearing : 1;
+        tlv_clearing : 1,
+        //! true during the last pass of the release of the thread-local data of the Programs between the tasks of a
+        //! pool worker: save_thread_data() saves nothing then (qore#7398)
+        /** see ThreadProgramData::clearAllProgramThreadData(): a destructor run by the release of one family's data
+            can save data in the data of a family that was cleared before; the release repeats until no data is
+            left, and refuses new data in its last pass, so that it always ends, as that of thread_local variables
+            does (tlv_clearing)
+        */
+        tld_save_refused : 1;
 
     //! the generation of the work that the thread runs: its own, unique in the process (unlike its TID, which is
     //! reused), or that of the work item of other code that it runs (see runtime_get_thread_generation(), qore#7010)
@@ -1273,7 +1324,8 @@ public:
             foreign(n_foreign),
             try_reexport(false),
             finalizing(false),
-            tlv_clearing(false) {
+            tlv_clearing(false),
+            tld_save_refused(false) {
         if (p) {
             // the thread runs the Program's code from its start
             qore_publish_type_epoch(type_epoch);
@@ -1437,6 +1489,13 @@ public:
         // after this body run none either, so no QoreThreadLocalObject is first used after the cleanups above; one
         // that were would register a release that never runs
         assert(exit_cleanups.empty());
+        // last: the cleanups above can run code that AOT code dispatches by name
+        if (aot_dispatch_reader) {
+            QoreAOTMethodDispatchReclaimer::release(aot_dispatch_reader);
+            // another thread can claim it now: code that still runs with this data must not use it
+            aot_dispatch_reader = nullptr;
+        }
+        aot_dispatch_reader_done = true;
     }
 
     //! runs the exit cleanups of the thread's QoreThreadLocalObject objects, last registered first
@@ -1951,6 +2010,10 @@ bool qore_thread_has_no_type_epoch() {
 //! signals the entries of threads into the builtin waits (see dbg_type_wait_entered())
 static std::mutex qore_type_wait_entry_lock;
 static std::condition_variable qore_type_wait_entry_cond;
+//! a process-wide lock: a thread that enters a quiescent wait at the moment of fork() holds it, and the child's first
+//! quiescent wait waited forever for it (qore#7549; see design/fork-handlers.md)
+static QoreForkStdMutex qore_type_wait_entry_fork_handler{qore_type_wait_entry_lock, QFLR_TYPE_WAIT_ENTRY,
+    "type_wait_entry", QFLM_ACQUIRE, {&qore_type_wait_entry_cond}};
 
 //! returns the waits that a thread entered, or -1 if there is no such thread; qore_type_wait_entry_lock is held
 static int64 qore_type_dbg_wait_entries_locked(int tid) {
@@ -2037,12 +2100,18 @@ struct QoreTypeEpochHoldRegistry {
     std::mutex m;
     std::map<uint64_t, uint64_t> holds;
     uint64_t next_id = 0;
+    //! a leaf lock, taken with the JIT's background queue lock held; a child of fork() gets it free (qore#7549)
+    QoreForkStdMutex fork_handler{m, QFLR_TYPE_EPOCH_HOLDS, "type_epoch_holds"};
 };
 
 QoreTypeEpochHoldRegistry& type_epoch_hold_registry() {
     static QoreTypeEpochHoldRegistry* r = new QoreTypeEpochHoldRegistry;
     return *r;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] QoreTypeEpochHoldRegistry& type_epoch_hold_registry_init = type_epoch_hold_registry();
 }
 
 void QoreTypeEpochHold::arm() {
@@ -2081,6 +2150,16 @@ void QoreTypeEpochHold::release() {
     id = 0;
 }
 
+void QoreTypeEpochHold::abandonAfterFork() noexcept {
+    if (!id) {
+        return;
+    }
+    // only the forking thread exists in the child, and the fork handler of the registry, which has a higher rank, has
+    // released its lock already: the lock is not taken (see QoreForkHandler); erasing an element cannot throw
+    type_epoch_hold_registry().holds.erase(id);
+    id = 0;
+}
+
 uint64_t qore_type_epoch_hold_min() {
     QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
     std::lock_guard<std::mutex> lock(r.m);
@@ -2092,6 +2171,24 @@ uint64_t qore_type_epoch_hold_min() {
     }
     return rv;
 }
+
+#ifdef DEBUG
+std::mutex* qore_thread_type_dbg_fork_lock(const char* name) {
+    if (!strcmp(name, "type_wait_entry")) {
+        return &qore_type_wait_entry_lock;
+    }
+    if (!strcmp(name, "type_epoch_holds")) {
+        return &type_epoch_hold_registry().m;
+    }
+    return nullptr;
+}
+
+size_t qore_type_epoch_hold_count() {
+    QoreTypeEpochHoldRegistry& r = type_epoch_hold_registry();
+    std::lock_guard<std::mutex> lock(r.m);
+    return r.holds.size();
+}
+#endif
 
 uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads) {
     // the holds of work handed to threads without an epoch count as threads (see QoreTypeEpochHold)
@@ -3319,6 +3416,12 @@ int check_stack(ExceptionSink* xsink) {
     return check_stack_intern(xsink, td);
 }
 
+int check_stack(void* thread_data_ptr, ExceptionSink* xsink) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
+    return check_stack_intern(xsink, td);
+}
+
 // the stack check of check_stack_intern() for a frame that is not allocated yet (qore#6414); a function of its own, so
 // that the check of every call is not changed
 int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
@@ -3482,6 +3585,11 @@ void inc_active_exceptions(int diff) {
     // its exceptions to another thread without ExceptionSink::markExternallyManaged() would do
     assert(diff == 1 || td->active_exceptions >= static_cast<unsigned>(-diff));
     td->active_exceptions += diff;
+}
+
+bool thread_data_saves_refused() {
+    ThreadData* td = thread_data.get();
+    return td && td->tld_save_refused;
 }
 
 bool thread_local_vars_finalizing() {
@@ -4330,6 +4438,22 @@ bool is_valid_qore_thread() {
    return (bool)thread_data.get();
 }
 
+bool rc_set_current_from_thread(RuntimeConfig& rc) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // as getProgram(), get_thread_local_program_data(), runtime_get_object_and_class(), get_runtime_stack_location()
+    // and getReturnTypeInfo() return them
+    rc.setProgram(td->current_pgm);
+    rc.setThreadLocalProgramData(td->tlpd);
+    rc.setObject(td->current_obj);
+    rc.setClass(td->current_class);
+    rc.setStackLocation(td->current_stack_location.load(std::memory_order_relaxed));
+    rc.setReturnTypeInfo(td->returnTypeInfo);
+    return true;
+}
+
 int q_gettid() noexcept {
     // when destroying objects in the static namespace, this function is called after thread data is destroyed
     // to grab locks; therefore in such cases we return TID 0
@@ -4360,6 +4484,11 @@ const QoreStackLocation* get_runtime_stack_location() {
 // that the mask covers, and removes the explicitly-allowed options that the mask covers and its value lacks.  It never
 // lifts a restriction of the code itself, so code of another Program that runs while it is active (a callback, a
 // closure, Program::run()) keeps its own restrictions, and a module keeps those it inherited
+//! the options that an override replaces, by QoreRuntimePoState::override_replace
+alignas(16) static const QoreParseOptions qore_override_replace_options[2] = {
+    QoreParseOptions(), QoreParseOptions(QORE_MODULE_OWN_ACCESS_OPTIONS),
+};
+
 static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
     if (!td->runtime_po_state.override_mask) {
         return po;
@@ -4370,7 +4499,10 @@ static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const Q
     QoreParseOptions restricting_mask = mask & ~QoreParseOptions::POSITIVE_OPTIONS;
     QoreParseOptions rv = (po | (value & restricting_mask)) & ~(positive_mask & ~value);
     // these options are those of the override only, so a restriction of the code that made the call does not stay
-    const QoreParseOptions& replace = td->runtime_po_state.override_replace;
+    // the flag selects all or none of the options from a table: the per-statement path of the AST interpreter inlines
+    // this function, whose operations on the options are vectorized as for options stored in the state
+    const QoreParseOptions& replace_opts = qore_override_replace_options[td->runtime_po_state.override_replace];
+    const QoreParseOptions replace = replace_opts & mask;
     return (rv & ~replace) | (value & replace);
 }
 
@@ -4386,7 +4518,7 @@ static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const Q
    Set once in init_qore_threads(), before any other thread exists, and never changed: a pop that relied on the
    walker's barrier while a walk went without one would be unsafe.
 */
-static bool stack_walk_heavy_barrier = false;
+bool stack_walk_heavy_barrier = false;
 
 // Chooses how pops are ordered against walks of the call stack; called once, before any other thread exists
 static void init_stack_walk_barrier() {
@@ -4409,10 +4541,20 @@ static void stack_walk_barrier() {
     do {
         rc = syscall(__NR_membarrier, MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
     } while (rc && errno == EINTR);
-    assert(!rc);
+    if (rc) {
+        // the threads that rely on this barrier have only a compiler barrier of their own, and cannot switch to a
+        // full fence now: continuing could free memory that they still read (qore#7459)
+        fprintf(stderr, "qore: membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED) failed: %s; aborting\n",
+            strerror(errno));
+        abort();
+    }
 #else
     assert(false);
 #endif
+}
+
+void qore_process_heavy_barrier() {
+    stack_walk_barrier();
 }
 
 // Publishes a location pushed on this thread's call stack
@@ -4473,8 +4615,48 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
     AutoLocker al(td->stack_walk_lck);
 }
 
+//! Sets the Program of the code that makes a call whose frame is pushed in the initialization of a module's Program
+//! (qore#7289; see QoreModuleInitFrames)
+/** A call made while the call context is the one that the code loading the module set is made by the code that ran
+    before the call: the Program that the call's Program context helper replaced if the call switched the thread to
+    another Program, otherwise the current one.  Out of line and cold, so that the frame push, which is inlined in the
+    call path, only tests whether a module's initialization runs.
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_module_init_frame_caller(ThreadData* td,
+        const QoreStackLocation* stack_loc, QoreProgram* frame_pgm, QoreProgram*& current_pgm) {
+    if (!frame_pgm || frame_pgm != td->module_init_frames.call_ctx) {
+        return;
+    }
+    // only the frame of a call's Program context helper (CodeEvaluationHelper) takes the call context as its Program;
+    // any other location that passes a Program, such as the frame of a call that the IR interpreter runs inline, passes
+    // the Program of the code that makes the call, which it keeps, even when it is the call context
+    const ProgramThreadCountContextHelper* ch = dynamic_cast<const ProgramThreadCountContextHelper*>(stack_loc);
+    if (!ch) {
+        return;
+    }
+    if (ch == td->current_pgm_ctx && ch->getOldProgram()) {
+        current_pgm = ch->getOldProgram();
+    } else {
+        current_pgm = td->current_pgm;
+    }
+}
+
+// The frame push is inlined in the call path (CodeEvaluationHelper) where the caller is in the same compilation unit:
+// the module initialization check (qore#7289) put it over the compiler's inlining limit, which made every call pay for
+// an out-of-line call.  The check itself costs about 4 instructions per frame push; it is made here, at the one point
+// where every frame gets its Program, rather than by each code that reads the Program of a frame.  The attribute is on the definitions only, without "inline", so that callers in other
+// compilation units (a build without a single compilation unit, or its chunks) call the external definition; GCC warns
+// that such a function "might not be inlinable", which is expected here.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#define QORE_FRAME_PUSH_INLINE __attribute__((always_inline))
+#else
+#define QORE_FRAME_PUSH_INLINE
+#endif
+
 // called when pushing a new location on the stack
-const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
+QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
 
@@ -4483,6 +4665,11 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     assert(!td->call_site_pgm);
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
+    // in the initialization of a module's Program, a call made while the call context is the one that the code
+    // loading the module set is made by the code that ran before the call (qore#7289)
+    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0)) {
+        qore_module_init_frame_caller(td, stack_loc, frame_pgm, current_pgm);
+    }
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
     td->call_site_loc = nullptr;
@@ -4490,16 +4677,29 @@ const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* st
     return publish_pushed_stack_location(td, stack_loc);
 }
 
-const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
+QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
         const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
-    ThreadData* td = thread_data.get();
+    return update_get_runtime_stack_builtin_location(thread_data.get(), stack_loc, current_stmt, current_pgm,
+        old_runtime_loc, frame_pgm);
+}
+
+QORE_FRAME_PUSH_INLINE const QoreStackLocation* update_get_runtime_stack_builtin_location(void* thread_data_ptr,
+        QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
+        const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
 
     // only the frame that AOT code pushes for a native cross-module call takes the caller's Program that the call
     // set; no other frame can be pushed while it is set (qore#7101)
     assert(!td->call_site_pgm);
     // written before the location is pushed: other threads can read it from then on
     current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
+    // in the initialization of a module's Program, a call made while the call context is the one that the code
+    // loading the module set is made by the code that ran before the call (qore#7289)
+    if (__builtin_expect(td->module_init_frames.pgm != nullptr, 0)) {
+        qore_module_init_frame_caller(td, stack_loc, frame_pgm, current_pgm);
+    }
     current_stmt = td->runtime_statement;
     // a call site is the location of the frame that took it, if any, never of a frame that the callee pushes
     td->call_site_loc = nullptr;
@@ -4508,6 +4708,11 @@ const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLoca
     td->runtime_loc = &loc_builtin;
     return publish_pushed_stack_location(td, stack_loc);
 }
+
+#undef QORE_FRAME_PUSH_INLINE
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 void* get_thread_data_for_native_calls() {
     return thread_data.get();
@@ -4595,7 +4800,13 @@ void update_runtime_stack_location(const QoreStackLocation* stack_loc) {
 }
 
 void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc) {
-    ThreadData* td = thread_data.get();
+    update_runtime_stack_location(thread_data.get(), stack_loc, runtime_loc);
+}
+
+void update_runtime_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
+        const QoreProgramLocation* runtime_loc) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     td->runtime_loc = runtime_loc;
     publish_popped_stack_location(td, stack_loc);
 }
@@ -4609,7 +4820,12 @@ const QoreProgramLocation* get_runtime_location() {
 }
 
 const QoreProgramLocation* take_runtime_call_location() {
-    ThreadData* td = thread_data.get();
+    return take_runtime_call_location(thread_data.get());
+}
+
+const QoreProgramLocation* take_runtime_call_location(void* thread_data_ptr) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     const QoreProgramLocation* loc = td->call_site_loc;
     if (loc) {
         td->call_site_loc = nullptr;
@@ -4620,7 +4836,13 @@ const QoreProgramLocation* take_runtime_call_location() {
 
 const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
         const QoreProgramLocation*& prev) {
-    ThreadData* td = thread_data.get();
+    return hide_runtime_call_site(thread_data.get(), slot, prev);
+}
+
+const QoreProgramLocation* hide_runtime_call_site(void* thread_data_ptr, const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     slot = &td->call_site_loc;
     prev = td->call_site_loc;
     td->call_site_loc = nullptr;
@@ -4820,7 +5042,12 @@ const QoreTypeInfo* getReturnTypeInfo() {
 }
 
 const QoreTypeInfo* saveReturnTypeInfo(const QoreTypeInfo* returnTypeInfo) {
-    ThreadData* td = thread_data.get();
+    return saveReturnTypeInfo(thread_data.get(), returnTypeInfo);
+}
+
+const QoreTypeInfo* saveReturnTypeInfo(void* thread_data_ptr, const QoreTypeInfo* returnTypeInfo) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     const QoreTypeInfo* rv = td->returnTypeInfo;
     td->returnTypeInfo = returnTypeInfo;
     return rv;
@@ -5191,8 +5418,10 @@ static QORE_INTERN_NOINLINE bool qore_set_method_call_program_context_other(Thre
     if (referenced) {
         referenced_class_pgm = pgm;
     }
-    if (!pgm && obj) {
-        pgm = obj->getProgram();
+    if (!pgm) {
+        // the Program of the object, or for code without a class or an object (a closure created outside a class),
+        // the Program it runs in, which the call has entered (qore#7394)
+        pgm = obj ? obj->getProgram() : (c ? nullptr : td->current_pgm);
     }
     return qore_switch_method_call_program_context(td, pgm, old_call_pgm);
 }
@@ -5349,12 +5578,11 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
-    RuntimeConfig& rc = rc_get_tls_ref();
-    old_rc_obj = rc.getObject();
-    old_rc_class = rc.getClass();
-    rc.setObject(obj);
-    rc.setClass(c);
-    do_rc_update = true;
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    rc.cls = c;
 }
 
 ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_class_private* c,
@@ -5364,16 +5592,16 @@ ObjectSubstitutionHelper::ObjectSubstitutionHelper(QoreObject* obj, const qore_c
     old_class = td->current_class;
     td->current_obj = obj;
     td->current_class = c;
-    RuntimeConfig& rc = rc_get_tls_ref();
-    old_rc_obj = rc.getObject();
-    old_rc_class = rc.getClass();
-    rc.setObject(obj);
-    rc.setClass(c);
-    do_rc_update = true;
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    old_rc_obj = rc.obj;
+    old_rc_class = rc.cls;
+    rc.obj = obj;
+    rc.cls = c;
     call_pgm_switched = qore_set_method_call_program_context(td, c, obj, old_call_pgm, referenced_class_pgm);
 }
 
 ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
+    assert(td == thread_data.get());
     // the call Program context is restored first, as the frame's helper for it was destroyed first
     if (call_pgm_switched || referenced_class_pgm) {
         qore_restore_method_call_program_context(td, call_pgm_switched, old_call_pgm, referenced_class_pgm,
@@ -5381,11 +5609,9 @@ ObjectSubstitutionHelper::~ObjectSubstitutionHelper() {
     }
     td->current_obj = old_obj;
     td->current_class = old_class;
-    if (do_rc_update) {
-        RuntimeConfig& rc = rc_get_tls_ref();
-        rc.setObject(old_rc_obj);
-        rc.setClass(old_rc_class);
-    }
+    RuntimeConfig::Impl& rc = RuntimeConfigObjectHelper::currentThreadImpl();
+    rc.obj = old_rc_obj;
+    rc.cls = old_rc_class;
 }
 
 class qore_object_context_helper : public ObjectSubstitutionHelper {
@@ -5478,8 +5704,13 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
     init(code, obj, c, ref_obj, &spgm_info);
 }
 
+CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+        ExceptionSink* xsink, bool ref_obj, bool user_code) : xsink(xsink) {
+    init(code, obj, c, ref_obj, nullptr, user_code);
+}
+
 QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, QoreObject* obj,
-        const qore_class_private* c, bool ref_obj, QoreClassSourceProgramInfo* spgm_info) {
+        const qore_class_private* c, bool ref_obj, QoreClassSourceProgramInfo* spgm_info, bool user_code) {
     ThreadData* td  = thread_data.get();
     old_code = td->current_code;
     td->current_code = code;
@@ -5535,6 +5766,11 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
         call_program_context = class_spgm;
     } else if (obj) {
         call_program_context = obj->getProgram();
+    } else if (user_code && td->current_pgm != td->call_program_context) {
+        // the body of user code without a class or an object (a plain function, a closure created outside a class)
+        // runs with the call Program context of the Program it runs in, which the call has entered: the calls that it
+        // makes are made by its Program (qore#7394)
+        call_program_context = td->current_pgm;
     } else {
         call_program_context = nullptr;
     }
@@ -5545,6 +5781,24 @@ QORE_INTERN_ALWAYS_INLINE void CodeContextHelperBase::init(const char* code, Qor
     } else {
         do_program_context = false;
     }
+}
+
+bool qore_set_function_call_program_context(void*& thread_data_ptr, QoreProgram*& old) {
+    if (!thread_data_ptr) {
+        thread_data_ptr = thread_data.get();
+    }
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    if (!td->current_pgm || td->current_pgm == td->call_program_context) {
+        return false;
+    }
+    old = td->call_program_context;
+    td->call_program_context = td->current_pgm;
+    return true;
+}
+
+void qore_restore_function_call_program_context(void* thread_data_ptr, QoreProgram* old) {
+    assert(thread_data_ptr && thread_data_ptr == thread_data.get());
+    static_cast<ThreadData*>(thread_data_ptr)->call_program_context = old;
 }
 
 CodeContextHelperBase::~CodeContextHelperBase() {
@@ -5660,7 +5914,12 @@ const QoreTypeInfo* runtime_get_receiver_type_info() {
 }
 
 const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti) {
-    ThreadData* td = thread_data.get();
+    return runtime_set_receiver_type_info(thread_data.get(), ti);
+}
+
+const QoreTypeInfo* runtime_set_receiver_type_info(void* thread_data_ptr, const QoreTypeInfo* ti) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     const QoreTypeInfo* old = td->current_receiver_type_info;
     td->current_receiver_type_info = ti;
     return old;
@@ -6016,10 +6275,6 @@ int64 qore_get_module_cleanup_handover_grace() {
 
 bool qore_module_cleanup_abandoned() {
     return module_cleanup_abandoned.load(std::memory_order_acquire);
-}
-
-bool qore_cleanup_left_library() {
-    return qore_module_cleanup_abandoned();
 }
 
 bool qore_module_cleanup_counted_work_running() {
@@ -6596,25 +6851,54 @@ ProgramThreadCountContextHelper::~ProgramThreadCountContextHelper() {
 }
 
 void ProgramThreadCountContextHelper::suspendDeferral(ThreadData* td) {
-    assert(!defer_suspended);
+    assert(!(exit_work & EXIT_DEFER_SUSPENDED));
     saved_defer = td->cancel_defer_count;
     saved_dtor_defer = td->dtor_cancel_defer_count;
     td->cancel_defer_count = 0;
     td->dtor_cancel_defer_count = 0;
-    defer_suspended = true;
+    exit_work |= EXIT_DEFER_SUSPENDED;
 }
 
-void ProgramThreadCountContextHelper::restoreDeferral() {
-    if (!defer_suspended) {
-        return;
+void ProgramThreadCountContextHelper::finishExitWork() {
+    if (exit_work & EXIT_DEFER_SUSPENDED) {
+        ThreadData* td = thread_data.get();
+        // added, not assigned: the deferral pushed for the rest of a thread's life by end_thread_cancellation() can be
+        // pushed while the context is active (the thread function returned in its Program), and stays
+        assert(!td->dtor_cancel_defer_count);
+        td->cancel_defer_count += saved_defer;
+        td->dtor_cancel_defer_count += saved_dtor_defer;
     }
-    ThreadData* td = thread_data.get();
-    // added, not assigned: the deferral pushed for the rest of a thread's life by end_thread_cancellation() can be
-    // pushed while the context is active (the thread function returned in its Program), and stays
-    assert(!td->dtor_cancel_defer_count);
-    td->cancel_defer_count += saved_defer;
-    td->dtor_cancel_defer_count += saved_dtor_defer;
-    defer_suspended = false;
+    if (exit_work & EXIT_FOREIGN_HOLD) {
+        exit_work &= ~EXIT_FOREIGN_HOLD;
+        // a deletion of the Program that the code made while it held it is completed here (see
+        // deferDerefIfRunning()); exceptions of the destructors that it runs go to the context's sink
+        qore_program_private::decThreadCount(*count_pgm, count_tid, xsink);
+    }
+    exit_work = 0;
+}
+
+int ProgramThreadCountContextHelper::holdForeignCodeProgram(QoreProgram* code_pgm, ExceptionSink* n_xsink) {
+    assert(n_xsink);
+    assert(!(exit_work & EXIT_FOREIGN_HOLD));
+    // the Program of the code was entered by the call already, so this context neither switched nor counted the
+    // thread (fails closed if it did: count_pgm is in use)
+    if (restore || thread_count_incremented || module_uncounted) {
+        assert(false);
+        n_xsink->raiseException("PROGRAM-ERROR", "the Program accessed cannot be held for code that runs in another "
+            "Program");
+        return -1;
+    }
+    int tid = q_gettid();
+    // the variant keeps the Program allocated (UserVariantBase::setProgram()); entering it is refused once its
+    // deletion has started, also by a thread that is not counted in it
+    if (qore_program_private::get(*code_pgm)->incThreadCount(tid, n_xsink)) {
+        return -1;
+    }
+    count_pgm = code_pgm;
+    count_tid = tid;
+    xsink = n_xsink;
+    exit_work |= EXIT_FOREIGN_HOLD;
+    return 0;
 }
 
 void ProgramThreadCountContextHelper::restoreContext() {
@@ -6634,6 +6918,17 @@ void ProgramThreadCountContextHelper::restoreContext() {
             td->tlpd->dbgDetach(nullptr);
         }
     }
+    // the capability frame of a method of a lent object (qore#7052)
+    if (!td->capability_frames.empty() && td->capability_frames.back().ctx == this) {
+        td->capability_frames.pop_back();
+    }
+#ifdef DEBUG
+    // contexts are left in the reverse order of their entry, so no frame of this context is left below the innermost
+    // (a frame left behind would refer to a context that no longer exists)
+    for (const ThreadData::CapabilityFrame& cf : td->capability_frames) {
+        assert(cf.ctx != this);
+    }
+#endif
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
     restoreDeferral();
@@ -6668,24 +6963,8 @@ void ProgramThreadCountContextHelper::takeModuleThreadCount(QoreReferenceProgram
     }
 }
 
-void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
-    if (!pgm) {
-        return;
-    }
-    // a call within the Program that the thread has entered, the usual case, has nothing to do (see setRethrow()),
-    // and is made without the call that converts a C++ exception
-    {
-        ThreadData* td = thread_data.get();
-        if (thread_program_entry_is_noop(td, pgm)) {
-            // the Program's code runs with the thread's local data of the Program (qore#6185, qore#6537; see
-            // setRethrow())
-            assert(td->tlpd->pgm == pgm);
-            assert(!old_pgm);
-            assert(!entry_frame.isActive());
-            ctx_td = td;
-            return;
-        }
-    }
+QORE_INTERN_ALWAYS_INLINE void ProgramThreadCountContextHelper::setSlow(ExceptionSink* xsink, QoreProgram* pgm,
+        bool runtime) {
     try {
         setRethrow(xsink, pgm, runtime);
     } catch (std::exception& e) {
@@ -6712,6 +6991,133 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         }
     }
 }
+
+void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+    if (!pgm) {
+        return;
+    }
+    // a call within the Program that the thread has entered, the usual case, has nothing to do (see setRethrow()),
+    // and is made without the call that converts a C++ exception
+    {
+        ThreadData* td = thread_data.get();
+        if (thread_program_entry_is_noop(td, pgm)) {
+            // the Program's code runs with the thread's local data of the Program (qore#6185, qore#6537; see
+            // setRethrow())
+            assert(td->tlpd->pgm == pgm);
+            assert(!old_pgm);
+            assert(!entry_frame.isActive());
+            ctx_td = td;
+            return;
+        }
+    }
+    setSlow(xsink, pgm, runtime);
+}
+
+//! returns true if a call of a method of a lent object from the given Program needs a capability frame (qore#7052)
+/** A lent object lends to the code it was handed to: only a call from the code of a Program that is not a module's
+    (the restricted code itself, the direct user of the object) is a call of the object as a capability; library code
+    that acts on an object it holds or was given (a registry of the host's connections, a helper that restricted code
+    passes the object to) is checked against its caller as before.  Such a call needs the frame only if that Program
+    can be restricted: the walk from the method stops at it, so if its options never restricted a domain and no
+    restriction of a sandboxed caller and no restricted provenance frame is on the thread, it decides as with the frame
+    (the host's own calls of the objects that it created)
+*/
+static QORE_INTERN_ALWAYS_INLINE bool qore_lent_method_call_needs_frame(ThreadData* td,
+        const QoreProgram* caller_pgm) {
+    if (!caller_pgm) {
+        return false;
+    }
+    unsigned seen = qore_program_private::get(*const_cast<QoreProgram*>(caller_pgm))->pwo.parse_options.optionsSeen();
+    // a call from module code (also from a Program that was a module's once) is not a call of the object as a
+    // capability
+    if (seen & SyncParseOptions::POS_MODULE) {
+        return false;
+    }
+    // (also code compiled in another Program, whose restrictions count for the code that it runs in, qore#7202)
+    if ((seen & SyncParseOptions::POS_DOMAIN_RESTRICTED) || td->runtime_po_state.caller_restrictions
+            || td->runtime_po_state.code_pgm) {
+        return true;
+    }
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        if (frame->getContext()->origin_restrictions) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime,
+        const QoreObject* obj) {
+    if (!pgm) {
+        return;
+    }
+    // as set() without the object: a call within the Program does nothing more
+    {
+        ThreadData* td = thread_data.get();
+        if (thread_program_entry_is_noop(td, pgm)) {
+            assert(td->tlpd->pgm == pgm);
+            assert(!old_pgm);
+            assert(!entry_frame.isActive());
+            ctx_td = td;
+            return;
+        }
+    }
+    setSlow(xsink, pgm, runtime);
+    // a call of a method of a lent object that switched to the Program of its code (qore#7052), if any code can be
+    // restricted: in a process where no Program ever had a restriction, nothing can be lent to restricted code (see
+    // qore_program_restrictions_seen)
+    // (not for the destructor, which the code that releases the last reference, or deletes the object, does not call
+    // as a capability)
+    if (restore && obj && qore_program_restrictions_seen.load(std::memory_order_relaxed)
+            && qore_object_private::get(*obj)->capability_origin
+            && qore_object_private::get(*obj)->status.load(std::memory_order_relaxed) == OS_OK
+            && qore_lent_method_call_needs_frame(ctx_td, old_pgm)) {
+        markCapability(obj);
+    }
+}
+
+static QoreParseOptions qore_restricting_domain_options();
+
+std::atomic<bool> qore_program_restrictions_seen{false};
+
+bool qore_note_program_parse_options(const QoreParseOptions& po) {
+    if (!po.hasAny(qore_restricting_domain_options())) {
+        return false;
+    }
+    if (!qore_program_restrictions_seen.load(std::memory_order_relaxed)) {
+        qore_program_restrictions_seen.store(true, std::memory_order_relaxed);
+    }
+    return true;
+}
+
+
+void ProgramThreadCountContextHelper::markCapability(const QoreObject* obj) {
+    ThreadData* td = ctx_td;
+    assert(td && td->current_pgm_ctx == this);
+    // the code of a Program that can be restricted calls the method (see qore_lent_method_call_needs_frame(), checked by
+    // set())
+    // a method of a lent object that a reference that restricted code created calls (the reference's frame is the
+    // innermost apart from the object's own) runs for that code
+    const QoreSandboxProvenanceHelper* frame = td->sandbox_provenance;
+    const QoreSandboxContext* own = qore_object_private::get(*obj)->sandbox_provenance;
+    if (frame && own && frame->getContext() == own) {
+        frame = frame->getPrevious();
+    }
+    if (frame) {
+        const QoreSandboxContext* ctx = frame->getContext();
+        if (ctx->reference && ctx->origin_restrictions) {
+            return;
+        }
+    }
+    try {
+        td->capability_frames.push_back({this, td->sandbox_provenance,
+            {td->runtime_po_state.caller_restrictions_gen, td->thread_caller_restrictions_gen,
+            td->call_program_context, ++td->grant_seq}, td->current_pgm});
+    } catch (std::bad_alloc&) {
+        // without the frame, the method runs for the code that calls it (fail closed)
+    }
+}
+
 
 void ProgramThreadCountContextHelper::setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
     if (!pgm) {
@@ -7209,6 +7615,9 @@ static bool skip_inherited_for_creator(const ThreadData* td) {
     return ctx && ((ctx == td->thread_start_sandbox_context && !ctx->capturer_sandboxed) || ctx->inherited_only);
 }
 
+static bool qore_foreign_code_counts(ThreadData* td, const ThreadData::ModuleInitBarrier* mib,
+        const ThreadData::GrantSnapshot* grant);
+
 //! Visits the sandbox managers that the Programs and contexts of the current thread contribute
 /** The resolution order is: the current Program, then the enclosing caller Programs innermost
     first, then the call-program context fallback, and finally the sandbox the thread inherited from
@@ -7242,6 +7651,26 @@ static bool visit_thread_sandbox_stack(ThreadData* td, qore_program_id_t* pgm_id
     // under a lift, resolution ignores the barriers below it
     const ThreadData::ModuleInitBarrier* mib = (td->module_init_barriers.empty()
         || td->module_init_barriers.back().lift) ? nullptr : &td->module_init_barriers.back();
+    // code compiled in another Program than the one it runs in is governed by the sandbox of the Program that compiled
+    // it, as if it ran there, in addition to the sandboxes found below; under a policy barrier only if it runs inside
+    // the barrier (qore#7202)
+    if (QoreProgram* code_pgm = const_cast<QoreProgram*>(td->runtime_po_state.code_pgm)) {
+        const ThreadData::GrantSnapshot* grant = (policy && td->sandbox_policy_barrier)
+            ? &td->sandbox_policy_barrier_snapshots.back() : nullptr;
+        if (qore_foreign_code_counts(td, mib, grant)) {
+            QoreSandboxManager* own_ptr;
+            QoreSandboxManager* creator_ptr;
+            qore_program_private::get(*code_pgm)->getSandboxManagerRefs(own_ptr, creator_ptr, policy);
+            ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+            ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+            if ((own || creator) && pgm_id && !policy && !*pgm_id) {
+                *pgm_id = code_pgm->getProgramId();
+            }
+            if ((own && !visit(*own)) || (creator && !visit(*creator))) {
+                return false;
+            }
+        }
+    }
     // the current Program and the Programs that the thread's contexts left are known to have no manager if a lookup in
     // the current context found none in the same generation: then they are not checked again (see
     // ProgramThreadCountContextHelper::sandboxChainClear()).  Not under a module initialization barrier or a policy
@@ -7634,6 +8063,32 @@ const char* thread_capability_call_refusal(const char* call_name) {
     return nullptr;
 }
 
+bool qore_builtin_caller_is_sandboxed() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the innermost frame is the builtin's own frame, whose Program is that of the code that calls it; fails closed
+    // without it
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return true;
+    }
+    return qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm);
+}
+
+QoreProgram* qore_builtin_caller_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    const QoreStackLocation* own = td->current_stack_location.load(std::memory_order_relaxed);
+    if (!own || own->getCallType() != CT_BUILTIN) {
+        return nullptr;
+    }
+    return own->getProgram();
+}
+
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
@@ -7700,30 +8155,85 @@ QoreSandboxManager* qore_caller_sandbox_ref() {
     return find_thread_sandbox_manager_ref_intern();
 }
 
-bool qore_calling_code_is_untrusted() {
-    ThreadData* td = thread_data.get();
-    if (!td || !td->current_pgm) {
+//! returns true if the code of \a pgm is untrusted: \a pgm is sandboxed or has restrictions
+bool qore_program_code_is_untrusted(const QoreProgram* pgm) {
+    if (!pgm) {
         return false;
     }
-    if (qore_program_is_sandboxed(td->current_pgm)) {
+    if (qore_program_is_sandboxed(pgm)) {
         return true;
     }
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
         & ~QoreParseOptions(QDOM_IN_MODULE);
-    return !!(td->current_pgm->getParseOptions() & restricting);
+    return !!(qore_program_private::getParseOptions(*pgm) & restricting);
 }
+
+const QoreProgram* qore_foreign_calling_code_program() {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->runtime_po_state.code_pgm) {
+        return nullptr;
+    }
+    // only while the code itself is current: module code that it calls is the module's, which answers for itself in
+    // these tests (the caller walk still counts the code through it, see qore_foreign_code_counts()); and the
+    // initialization of library module code is not a call by the code that loads it
+    if (qore_program_is_module_inline(td->current_pgm)) {
+        return nullptr;
+    }
+    return (td->module_init_barriers.empty() || td->module_init_barriers.back().lift)
+        ? td->runtime_po_state.code_pgm : nullptr;
+}
+
+bool qore_calling_code_is_untrusted() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // code compiled in another Program than the one it runs in is that Program's code (qore#7202)
+    if (const QoreProgram* code_pgm = qore_foreign_calling_code_program()) {
+        if (qore_program_code_is_untrusted(code_pgm)) {
+            return true;
+        }
+    }
+    return td->current_pgm && qore_program_code_is_untrusted(td->current_pgm);
+}
+
+#ifdef DEBUG
+//! the number of sandbox resolutions in qore_caller_sandbox_state() that fail as if no memory could be allocated
+static std::atomic<int> dbg_fail_sandbox_resolutions{0};
+
+void qore_dbg_fail_next_sandbox_resolutions(int count) {
+    dbg_fail_sandbox_resolutions.store(count > 0 ? count : 0);
+}
+
+//! Returns true if a sandbox resolution must fail (debug builds, for tests)
+static bool qore_dbg_fail_sandbox_resolution() {
+    int count = dbg_fail_sandbox_resolutions.load();
+    while (count > 0) {
+        if (dbg_fail_sandbox_resolutions.compare_exchange_weak(count, count - 1)) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
 
 bool qore_calling_code_is_sandboxed() {
     ThreadData* td = thread_data.get();
-    return td && td->current_pgm && qore_program_is_sandboxed(td->current_pgm);
+    if (!td) {
+        return false;
+    }
+    // code compiled in another Program than the one it runs in is that Program's code (qore#7202)
+    return qore_program_is_sandboxed(qore_foreign_calling_code_program())
+        || (td->current_pgm && qore_program_is_sandboxed(td->current_pgm));
 }
 
-bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
+//! qore_caller_sandbox_state(), also giving the ID of the sandboxed Program found (see qore_caller_is_sandboxed())
+static int qore_caller_sandbox_state_intern(qore_program_id_t* pgm_id) {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
     if (!td) {
-        return false;
+        return 0;
     }
     // the ID of the sandboxed Program found, for the mark of the reports of the exceptions of its code (qore#7139)
     auto found = [pgm_id] (const QoreProgram* pgm) -> bool {
@@ -7742,7 +8252,11 @@ bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
         if (pgm_id) {
             *pgm_id = td->sandboxed_caller->getSandboxedProgramId();
         }
-        return true;
+        return 1;
+    }
+    // code compiled in a sandboxed Program that runs in another Program is sandboxed code (qore#7202)
+    if (!mib && qore_program_is_sandboxed(td->runtime_po_state.code_pgm)) {
+        return found(td->runtime_po_state.code_pgm);
     }
     // the code of a sandboxed Program that has no manager of its own (one that sandboxed code created) is sandboxed
     // also where no sandbox governs it, and so is the code that it calls: the Programs on the thread's call stack
@@ -7767,20 +8281,96 @@ bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
     // a sandbox that governs the thread: through the Programs on the call stack, the provenance of the code that
     // runs and the sandbox inherited by the thread, as for interrupts and resource limits
     try {
+#ifdef DEBUG
+        if (qore_dbg_fail_sandbox_resolution()) {
+            throw std::bad_alloc();
+        }
+#endif
         qore_program_id_t sm_pgm_id = 0;
         ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(pgm_id ? &sm_pgm_id : nullptr),
             nullptr);
         if (sm && pgm_id) {
             *pgm_id = sm_pgm_id;
         }
-        return static_cast<bool>(sm);
+        return sm ? 1 : 0;
     } catch (std::bad_alloc&) {
-        // the sandbox cannot be resolved: what the code creates is not trusted
+        // the sandbox cannot be resolved: each caller fails closed in its own direction
         if (pgm_id) {
             *pgm_id = 0;
         }
+        return -1;
+    }
+}
+
+int qore_caller_sandbox_state() {
+    return qore_caller_sandbox_state_intern(nullptr);
+}
+
+bool qore_caller_is_sandboxed(qore_program_id_t* pgm_id) {
+    // fails closed: code whose governing sandbox cannot be resolved is not trusted
+    return qore_caller_sandbox_state_intern(pgm_id) != 0;
+}
+
+QoreThreadProgramMarker qore_thread_program_marker() {
+    QoreThreadProgramMarker marker;
+    ThreadData* td = thread_data.get();
+    if (td) {
+        marker.ctx = td->current_pgm_ctx;
+        marker.sandboxed_caller = td->sandboxed_caller;
+    }
+    return marker;
+}
+
+bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // a sandboxed caller that a parse or module load started since hides from the walk below
+    if (td->sandboxed_caller && td->sandboxed_caller != marker.sandboxed_caller) {
         return true;
     }
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return true;
+    }
+    // each Program context entered since the marker: the Program of each but the innermost is the Program that the
+    // next one left, and the Program of the innermost is the current Program, checked above
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch != marker.ctx; ch = ch->getOldContext()) {
+        // fails closed: the marker is not on the stack
+        if (!ch) {
+            return true;
+        }
+        if (ch->getOldContext() != marker.ctx && qore_program_is_sandboxed(ch->getOldProgram())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QoreProgram* qore_caller_cache_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    if (qore_program_is_sandboxed(td->current_pgm)) {
+        return td->current_pgm;
+    }
+    QoreProgram* outer = td->current_pgm;
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        QoreProgram* pgm = ch->getOldProgram();
+        if (!pgm) {
+            continue;
+        }
+        if (qore_program_is_sandboxed(pgm)) {
+            return pgm;
+        }
+        outer = pgm;
+    }
+    // fails closed: sandboxed code whose sandboxed Program is not on the stack has no cache
+    if (qore_caller_is_sandboxed()) {
+        return nullptr;
+    }
+    return outer;
 }
 
 namespace {
@@ -7944,6 +8534,32 @@ static QoreParseOptions qore_restricting_domain_options() {
     return restricting;
 }
 
+//! returns true if the nearest code on the stack that is not a module's was compiled in another Program than the one
+//! it runs in, and is not hidden from the walk of the calling code (qore#7202)
+/** Such code is never the code of the Program it runs in (see QoreRuntimePoState::code_pgm): it counts as
+    the code of the Program that compiled it.  Under a module initialization barrier, the code that loads the module is
+    not the calling code; under a host grant, only code that runs inside the grant is, as for the restrictions of a
+    sandboxed caller, except when the code itself is current (no module code is on the stack above it), as the current
+    Program is never hidden by a grant
+*/
+static bool qore_foreign_code_counts(ThreadData* td, const ThreadData::ModuleInitBarrier* mib,
+        const ThreadData::GrantSnapshot* grant) {
+    const QoreRuntimePoState& st = td->runtime_po_state;
+    if (!st.code_pgm || mib) {
+        return false;
+    }
+    return !grant || st.caller_restrictions_gen != grant->caller_restrictions_gen
+        || !qore_program_is_module_inline(td->current_pgm);
+}
+
+//! returns the functional-domain restrictions of the nearest code that is not a module's when it was compiled in
+//! another Program than the one it runs in (see qore_foreign_code_counts()), otherwise none (qore#7202)
+static QoreParseOptions qore_get_foreign_code_restrictions(ThreadData* td, const ThreadData::ModuleInitBarrier* mib,
+        const ThreadData::GrantSnapshot* grant) {
+    return qore_foreign_code_counts(td, mib, grant)
+        ? qore_program_authored_restrictions_po(td->runtime_po_state.code_pgm) : QoreParseOptions();
+}
+
 //! returns the functional-domain restrictions of the code that calls the module code running on the thread
 /** @param td the current thread's data
     @param mib a module initialization barrier that the walk stops at: the code that loads library module code does
@@ -7963,13 +8579,13 @@ static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
     // shared by every Program that loads it and has the options of the first one: its restrictions are added, and the
     // walk goes on to the code that called it (qore#6337)
     const QoreParseOptions restricting = qore_restricting_domain_options();
-    QoreParseOptions rv;
+    QoreParseOptions rv = qore_get_foreign_code_restrictions(td, mib, grant);
     const QoreProgram* pgm = td->current_pgm;
     // the Program current under the barrier of a trusted build is the one that created the capability, whose code
     // calls it: it is never hidden (see ThreadData::ModuleInitBarrier::build)
     if (pgm && (!mib || mib->build || td->current_pgm_ctx != mib->ctx || pgm != mib->pgm)) {
         if (!qore_program_is_module_inline(pgm)) {
-            return qore_program_private::getParseOptions(*pgm) & restricting;
+            return rv | (qore_program_private::getParseOptions(*pgm) & restricting);
         }
         if (!qore_program_is_library_module(pgm)) {
             rv |= qore_program_private::getParseOptions(*pgm) & restricting;
@@ -7985,6 +8601,8 @@ static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
             }
             return rv;
         }
+        // (for a capability frame, the context entered for the method: the caller of the lent object's method is its
+        // old Program)
         if (grant && ch == grant_ctx) {
             return rv;
         }
@@ -8050,7 +8668,8 @@ static constexpr int64 QORE_GRANT_LENT_DOMAINS = PO_NO_FILESYSTEM | PO_NO_NETWOR
 */
 static QoreParseOptions qore_get_calling_code_restrictions_intern(ThreadData* td,
         const ThreadData::ModuleInitBarrier* mib, const ThreadData::GrantSnapshot* grant,
-        const ProgramThreadCountContextHelper* grant_ctx, bool runtime) {
+        const ProgramThreadCountContextHelper* grant_ctx, bool runtime,
+        const QoreSandboxProvenanceHelper* provenance_boundary = nullptr) {
     QoreParseOptions rv;
     // the restrictions of a sandboxed caller that the module code runs with (see
     // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls; under a
@@ -8065,8 +8684,8 @@ static QoreParseOptions qore_get_calling_code_restrictions_intern(ThreadData* td
     }
     // the code of an object or call reference that restricted code created (qore#6520); a capability's boundary hides
     // the frames before it from what the grant lends
-    const QoreSandboxProvenanceHelper* boundary = grant && td->trusted_policy_depth ? td->trusted_policy_boundary
-        : nullptr;
+    const QoreSandboxProvenanceHelper* boundary = provenance_boundary ? provenance_boundary
+        : (grant && td->trusted_policy_depth ? td->trusted_policy_boundary : nullptr);
     for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
         if ((mib && frame == mib->provenance) || (boundary && frame == boundary)) {
             break;
@@ -8097,13 +8716,33 @@ static QoreParseOptions qore_get_calling_code_restrictions_intern(ThreadData* td
     @param runtime true to include the restrictions of a sandboxed caller that the module code runs with (false for
     the restrictions that a thread or callback records next to them, see QoreThreadRuntimeParseOptions::capture())
 */
+//! returns the innermost capability frame if it is the innermost grant (set after the innermost policy barrier), or
+//! nullptr (qore#7052)
+static const ThreadData::CapabilityFrame* qore_get_innermost_capability_frame(ThreadData* td) {
+    if (td->capability_frames.empty()) {
+        return nullptr;
+    }
+    const ThreadData::CapabilityFrame& cf = td->capability_frames.back();
+    if (!td->sandbox_policy_barrier_snapshots.empty()
+            && td->sandbox_policy_barrier_snapshots.back().seq > cf.snapshot.seq) {
+        return nullptr;
+    }
+    return &cf;
+}
+
 static QoreParseOptions qore_get_calling_code_restrictions(ThreadData* td, bool runtime = true) {
     const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size());
+    const QoreParseOptions lent = QoreParseOptions(QORE_GRANT_LENT_DOMAINS);
+    // the innermost grant: a capability frame (a method of a lent object) lends what a policy barrier lends (qore#7052)
+    if (const ThreadData::CapabilityFrame* cf = qore_get_innermost_capability_frame(td)) {
+        return (qore_get_calling_code_restrictions_intern(td, mib, &cf->snapshot, cf->ctx, runtime, cf->provenance)
+                & lent)
+            | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, runtime) & ~lent);
+    }
     if (td->sandbox_policy_barrier_ctx.empty()) {
         return qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, runtime);
     }
-    const QoreParseOptions lent = QoreParseOptions(QORE_GRANT_LENT_DOMAINS);
     return (qore_get_calling_code_restrictions_intern(td, mib, &td->sandbox_policy_barrier_snapshots.back(),
             td->sandbox_policy_barrier_ctx.back(), runtime) & lent)
         | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, runtime) & ~lent);
@@ -8118,6 +8757,155 @@ bool qore_caller_restricts_domain(int64 domain) {
         return false;
     }
     return qore_get_calling_code_restrictions(td).hasAny(dom);
+}
+
+//! returns the restrictions of the calling code as qore_get_calling_code_restrictions() does, except that a capability
+//! frame (a method of a lent object, qore#7052) lends nothing: the code that the object was lent to counts
+/** Fails closed: without the capability frame's boundary, the walk counts every Program and provenance frame down to
+    the host's innermost policy barrier (or to the module initialization barrier), which include the borrower's, so the
+    result is never less restricted than qore_get_calling_code_restrictions() (qore#7262)
+*/
+static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib);
+
+//! returns the lent-to restrictions of the code that submitted the work that the thread runs for it (qore#6844)
+/** Work continued on another thread (QoreSandboxCaptureHelper) runs with the calling code's restrictions of its
+    submitter, in which a lent object's method lends what it lends; for the checks that do not lend, the submitter's
+    lent-to restrictions count as well, where the submitter's restrictions count: when no code of a Program that is not
+    a module's is on the stack, and not under a host grant established inside the work
+*/
+static QoreParseOptions qore_get_captured_lent_to_restrictions(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib) {
+    if (mib || !td->thread_lent_to_restrictions.hasAny(qore_restricting_domain_options())) {
+        return QoreParseOptions();
+    }
+    if (!td->sandbox_policy_barrier_snapshots.empty()
+            && td->sandbox_policy_barrier_snapshots.back().thread_caller_restrictions_gen
+                == td->thread_caller_restrictions_gen) {
+        return QoreParseOptions();
+    }
+    if (qore_get_nearest_non_module_program(td, mib)) {
+        return QoreParseOptions();
+    }
+    return td->thread_lent_to_restrictions & qore_restricting_domain_options();
+}
+
+static QoreParseOptions qore_get_lent_to_restrictions(ThreadData* td) {
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size());
+    const QoreParseOptions captured = qore_get_captured_lent_to_restrictions(td, mib);
+    if (td->sandbox_policy_barrier_ctx.empty()) {
+        return qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true) | captured;
+    }
+    // the host's policy barrier (also of a system-policy capability) lends what it lends, as for the calling code
+    const QoreParseOptions lent = QoreParseOptions(QORE_GRANT_LENT_DOMAINS);
+    return (qore_get_calling_code_restrictions_intern(td, mib, &td->sandbox_policy_barrier_snapshots.back(),
+            td->sandbox_policy_barrier_ctx.back(), true) & lent)
+        | (qore_get_calling_code_restrictions_intern(td, mib, nullptr, nullptr, true) & ~lent) | captured;
+}
+
+bool qore_caller_lent_to_restricts_domain(int64 domain) {
+    const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!dom || !td) {
+        return false;
+    }
+    // the calling code's own restrictions count in any case, so the answer is never less restricted than theirs
+    return qore_get_calling_code_restrictions(td).hasAny(dom) || qore_get_lent_to_restrictions(td).hasAny(dom);
+}
+
+bool qore_caller_may_read_external_info() {
+    // a lent object's capability frame lends nothing: the code that it was lent to counts (fails closed)
+    return !qore_caller_lent_to_restricts_domain(QDOM_EXTERNAL_INFO);
+}
+
+//! returns true if the calling code is sandboxed, as qore_caller_is_sandboxed() resolves it, but under a host grant
+//! only the code that runs inside the innermost one counts (qore#6844)
+/** The Programs entered inside the grant, the Program of a builtin call made inside it, the provenance of the objects
+    and callbacks whose code runs (all of it under a policy barrier, the frames inside a capability's boundary) and
+    the sandbox that governs the code inside it (as the policy checks resolve it); without a grant, as
+    qore_caller_is_sandboxed(), and in addition the provenance of the objects and callbacks that sandboxed code
+    created.  Capability frames of lent objects are not looked at: they lend nothing here.  Fails closed
+*/
+static bool qore_granted_caller_is_sandboxed(ThreadData* td) {
+    assert(td);
+    assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size());
+    const bool granted = !td->sandbox_policy_barrier_ctx.empty();
+    if (!granted && qore_caller_is_sandboxed()) {
+        return true;
+    }
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    const ProgramThreadCountContextHelper* grant_ctx = granted ? td->sandbox_policy_barrier_ctx.back() : nullptr;
+    const ThreadData::GrantSnapshot* grant = granted ? &td->sandbox_policy_barrier_snapshots.back() : nullptr;
+    // code compiled in a sandboxed Program that runs in another Program, inside the grant if there is one (qore#7202)
+    if (qore_program_is_sandboxed(td->runtime_po_state.code_pgm) && qore_foreign_code_counts(td, mib, grant)) {
+        return true;
+    }
+    if (granted) {
+        // a sandboxed caller that a parse or module load in another Program hid from the walk (fails closed: it is
+        // not known whether it was set inside the grant)
+        if (td->sandboxed_caller
+                && (!mib || td->sandboxed_caller->getBarrierDepth() >= td->module_init_barriers.size())) {
+            return true;
+        }
+        if (!mib || mib->build || td->current_pgm_ctx != mib->ctx || td->current_pgm != mib->pgm) {
+            if (qore_program_is_sandboxed(td->current_pgm)) {
+                return true;
+            }
+        }
+        for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+            if (ch == grant_ctx || (mib && (ch == mib->ctx || ch->getOldContext() == mib->ctx))) {
+                break;
+            }
+            if (qore_program_is_sandboxed(ch->getOldProgram())) {
+                return true;
+            }
+        }
+        if (!mib && td->current_pgm != td->call_program_context
+                && td->call_program_context != grant->call_program_context
+                && qore_program_is_sandboxed(td->call_program_context)) {
+            return true;
+        }
+    }
+    // the objects and callbacks that sandboxed code created; a capability's boundary hides the frames before it
+    const QoreSandboxProvenanceHelper* boundary = (granted && td->trusted_policy_depth)
+        ? td->trusted_policy_boundary : nullptr;
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        if ((mib && frame == mib->provenance) || (boundary && frame == boundary)) {
+            break;
+        }
+        // under a grant, the sandboxes that govern the policy of the code (the managers for all other purposes, such
+        // as interrupts, also govern the code that trusted code runs inside the grant)
+        const QoreSandboxContext* ctx = frame->getContext();
+        if (ctx->capturer_sandboxed || ctx->policy_manager || ctx->provenance_policy_manager
+                || (!granted && (ctx->manager || ctx->provenance_manager))) {
+            return true;
+        }
+    }
+    if (!granted) {
+        return false;
+    }
+    // a sandbox that governs the code inside the grant
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(find_thread_sandbox_manager_ref_intern(nullptr, true), nullptr);
+        return static_cast<bool>(sm);
+    } catch (std::bad_alloc&) {
+        // the sandbox cannot be resolved: fail closed
+        return true;
+    }
+}
+
+bool qore_caller_may_receive_host_secrets() {
+    if (!qore_caller_may_read_external_info()) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    // before the library is initialized, only the embedding application runs
+    if (!td) {
+        return true;
+    }
+    return !qore_granted_caller_is_sandboxed(td);
 }
 
 //! returns the nearest Program on the call stack that is not a module's, as qore_get_caller_domain_restrictions()
@@ -8146,6 +8934,14 @@ static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
     return nullptr;
 }
 
+QoreProgram* qore_get_calling_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
+}
+
 bool qore_caller_restricts_terminal_io() {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
@@ -8158,7 +8954,8 @@ bool qore_caller_restricts_terminal_io() {
     // do; otherwise the caller is checked as for any domain, provenance included (qore#7140)
     const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     const QoreProgram* host = qore_get_nearest_non_module_program(td, mib);
-    if (host && !qore_program_is_sandboxed(host)
+    // code compiled in another Program than the one it runs in is never trusted host code (qore#7202)
+    if (host && !qore_foreign_code_counts(td, mib, nullptr) && !qore_program_is_sandboxed(host)
             && !qore_program_private::getParseOptions(*host).hasAny(QoreParseOptions(PO_NO_TERMINAL_IO))) {
         return qore_get_caller_domain_restrictions(td, mib).hasAny(QoreParseOptions(PO_NO_TERMINAL_IO));
     }
@@ -8245,11 +9042,20 @@ bool qore_module_init_untrusted_loader() {
 }
 
 bool qore_module_init_library() {
+    // the initialization of a compiled module whose own load is not library code is not that of library code, also
+    // when library code that loads it is initialized (qore#7361)
+    if (qore_module_load_untrusted_aot_init()) {
+        return false;
+    }
     ThreadData* td = thread_data.get();
     return td && !td->module_init_barriers.empty() && !td->module_init_barriers.back().lift;
 }
 
 void qore_module_init_set_program(const QoreProgram* pgm) {
+    // nor is its Program that of the library module whose initialization the thread is in (qore#7361)
+    if (qore_module_load_untrusted_aot_init()) {
+        return;
+    }
     ThreadData* td = thread_data.get();
     if (!td || td->module_init_barriers.empty()) {
         return;
@@ -8366,6 +9172,12 @@ QoreProgram* qore_take_module_container(const QoreObject* obj, QoreProgram* pgm,
         return nullptr;
     }
     QoreObject* o = const_cast<QoreObject*>(obj);
+#ifdef DEBUG
+    // tests hold the take-over here, after the binding of the arguments, to delete the object meanwhile
+    if (qore_dbg_program_take_over_hook_t hook = qore_dbg_program_take_over_hook.load(std::memory_order_acquire)) {
+        hook(*o, 2);
+    }
+#endif
     // the reference that the object held is the caller's now; held here until the object is deleted, so that it is
     // released if the deletion throws
     ReferenceHolder<QoreProgram> rv(reinterpret_cast<QoreProgram*>(o->getAndClearPrivateData(CID_PROGRAM, xsink)),
@@ -8392,7 +9204,12 @@ bool qore_sandbox_isolation_refused_slow() {
 }
 
 int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation) {
-    ThreadData* td = thread_data.get();
+    return qore_sandbox_check_isolation(thread_data.get(), xsink, operation);
+}
+
+int qore_sandbox_check_isolation(void* thread_data_ptr, ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     if (!td || !td->sandbox_budgets.isIsolationRefused()) {
         return 0;
     }
@@ -8463,6 +9280,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(const Qor
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
             td->sandbox_context, td->inherited_sandbox_context, false, false, nullptr, QORE_NO_PROGRAM_ID, true,
             nullptr, tag.creator});
+        td->module_init_barriers.back().seq = ++td->grant_seq;
         pushed = true;
     } catch (std::bad_alloc&) {
         // fail closed: no application Program is found for module code while it is active
@@ -8495,6 +9313,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
                 td->sandbox_context, td->inherited_sandbox_context, false, untrusted, owner.operator->(),
                 untrusted ? qore_caller_owner_program_id() : QORE_NO_PROGRAM_ID, false, nullptr, nullptr,
                 qore_caller_may_load_native_code(), policy.operator->()});
+            td->module_init_barriers.back().seq = ++td->grant_seq;
             owner.release();
             policy.release();
             pushed = true;
@@ -8524,6 +9343,7 @@ QoreModuleInitSandboxBarrierHelper::QoreModuleInitSandboxBarrierHelper(bool acti
         td->module_init_barriers.push_back({td->current_pgm_ctx, td->current_pgm, td->sandbox_provenance,
             td->sandbox_context, td->inherited_sandbox_context, true, true, sm, pgm_id, false, nullptr, nullptr,
             top.caller_may_select_native_file});
+        td->module_init_barriers.back().seq = ++td->grant_seq;
         pushed = true;
     } catch (std::bad_alloc&) {
         if (sm) {
@@ -8732,7 +9552,7 @@ int qore_push_sandbox_policy_barrier() {
     }
     try {
         td->sandbox_policy_barrier_snapshots.push_back({td->runtime_po_state.caller_restrictions_gen,
-            td->thread_caller_restrictions_gen, td->call_program_context});
+            td->thread_caller_restrictions_gen, td->call_program_context, ++td->grant_seq});
     } catch (std::bad_alloc&) {
         td->sandbox_policy_barrier_ctx.pop_back();
         return -1;
@@ -8787,6 +9607,7 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
         in_build = td->sandbox_budgets.inBuild();
         // the work that continues on another thread runs for the capturing code (qore#6844)
         caller_restrictions = qore_get_calling_code_restrictions(td);
+        lent_to_restrictions = qore_get_lent_to_restrictions(td);
         // and continues its work (qore#7010)
         work_gen = td->work_gen;
     }
@@ -8825,6 +9646,7 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, ModuleClea
         isolation->ref();
     }
     caller_restrictions = src->caller_restrictions;
+    lent_to_restrictions = src->lent_to_restrictions;
     // the steps of the operation are still raised for its submitter (qore#7232)
     origin_sandboxed = src->origin_sandboxed;
     origin_pgm_id = src->origin_pgm_id;
@@ -8887,13 +9709,75 @@ QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, bool span
     return qore_get_creation_origin_restrictions(td);
 }
 
-QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm, bool spans) {
+//! returns true if the code that creates an object now is the code of a Program that is not a module's (the host's,
+//! whose objects can be lent), or runs in a method of a lent object (a nested lending) (qore#7052)
+/** Objects that library code creates in its initialization, or for no Program (the shared state of the library), are
+    not lent by anybody: their methods are checked against their callers as before
+*/
+static bool qore_creation_by_lending_code(ThreadData* td, bool& in_lent_method, const QoreProgram*& lent_pgm) {
+    in_lent_method = false;
+    lent_pgm = nullptr;
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    // inside a method of a lent object: what it creates is lent as it is, unless a library module is initialized
+    // inside the method (its first load): the state that the initialization creates belongs to nobody
+    const ThreadData::CapabilityFrame* cf = qore_get_innermost_capability_frame(td);
+    if (cf && (!mib || cf->snapshot.seq > mib->seq)) {
+        in_lent_method = true;
+        lent_pgm = cf->code_pgm;
+        return true;
+    }
+    // the initialization of library module code creates the library's state for nobody
+    if (mib) {
+        return false;
+    }
+    if (td->current_pgm && !qore_program_is_module_inline(td->current_pgm)) {
+        return true;
+    }
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        const QoreProgram* old_pgm = ch->getOldProgram();
+        if (old_pgm && !qore_program_is_module_inline(old_pgm)) {
+            return true;
+        }
+    }
+    return td->call_program_context && !qore_program_is_module_inline(td->call_program_context);
+}
+
+QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm, bool spans, bool* capability) {
     // Check before allocating: the common unsandboxed object/callback needs no context storage.
     ReferenceHolder<QoreSandboxManager> manager(qore_find_thread_sandbox_manager_ref(), nullptr);
     // the restrictions of the code that creates an object whose code runs where that code is not on the stack: an
     // object of a builtin class runs builtin code, and the user code that it calls (a callback) has its own (qore#6520,
     // qore#6844)
     QoreParseOptions origin = code_pgm ? qore_creation_origin_for(code_pgm, spans) : QoreParseOptions();
+    // an object of module code that code without restrictions creates is a capability: its methods can do what they
+    // do for whoever it is lent to; a sandbox that governed the creating code still governs it (qore#7052)
+    // (the loading of native code is never lent: a restriction of it is recorded with the object, and does not keep
+    // it from being a capability, as it does not keep a lent object's method from lending the other domains)
+    // (only an object that the host's code, or a method of a lent object, creates is lent, see
+    // qore_creation_by_lending_code(); in a method of a lent object, the creating code's restrictions of the domains
+    // that are not lent are recorded with the object, which keeps them, so only those that are lent must be absent)
+    // outside a lent method, nothing that is created under a host grant (a policy barrier, also that of a system-policy
+    // capability, whose code runs for the host that created it) is lent: an object that trusted code creates there
+    // for restricted code would make the grant outlive itself
+    // the conditions that both cases require come first, so that the stack is looked at only for an object that can
+    // be lent: its class's code is a module's (or spans Programs), and its creator is not restricted from what is lent
+    if (capability && (!code_pgm || !(qore_program_is_module_inline(code_pgm) || spans)
+            || (origin & QoreParseOptions(QORE_GRANT_LENT_DOMAINS)))) {
+        *capability = false;
+    } else if (capability) {
+        ThreadData* td = thread_data.get();
+        bool in_lent_method;
+        const QoreProgram* lent_pgm;
+        // (in a lent method, only an object of a class of the lent method's own module (its code's Program): an
+        // object of another module's class, or of a class that the caller supplies, is not lent by a factory that the
+        // lent method calls with a class name from its caller, which would mint a capability of that class)
+        *capability = td && code_pgm && qore_creation_by_lending_code(td, in_lent_method, lent_pgm)
+            && (in_lent_method ? (code_pgm == lent_pgm && qore_program_is_module_inline(code_pgm))
+                : (qore_program_is_module_inline(code_pgm) || spans))
+            && (in_lent_method ? !(origin & QoreParseOptions(QORE_GRANT_LENT_DOMAINS))
+                : (!(origin & ~QoreParseOptions(QDOM_UNCONTROLLED_API))
+                    && td->sandbox_policy_barrier_snapshots.empty()));
+    }
     if (!manager && !origin) {
         return nullptr;
     }
@@ -9169,11 +10053,13 @@ QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& cap
         size_t depth = ++td->capture_depth;
         try {
             td->capture_saved_caller_restrictions.push_back({td->thread_caller_restrictions,
-                td->thread_caller_restrictions_gen, depth});
+                td->thread_caller_restrictions_gen, depth, td->thread_lent_to_restrictions});
             td->thread_caller_restrictions = capture.ctx->caller_restrictions;
+            td->thread_lent_to_restrictions = capture.ctx->lent_to_restrictions;
         } catch (std::bad_alloc&) {
             // not saved: the restrictions of the capture are added to those in effect (fail closed)
             td->thread_caller_restrictions |= capture.ctx->caller_restrictions;
+            td->thread_lent_to_restrictions |= capture.ctx->lent_to_restrictions;
         }
         td->thread_caller_restrictions_gen = ++td->restriction_gen;
         // an unsandboxed submitter's work runs as on a thread it started: governed by the Programs it enters only
@@ -9287,14 +10173,22 @@ QoreValue qore_sandbox_call_governed(const ResolvedCallReferenceNode* factory, Q
     return factory->execValue(args, xsink);
 }
 
-QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions) {
+QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions)
+        : QoreSubmitterRestrictionsHelper(restrictions, QoreParseOptions()) {
+}
+
+QoreSubmitterRestrictionsHelper::QoreSubmitterRestrictionsHelper(const QoreParseOptions& restrictions,
+        const QoreParseOptions& lent_to) {
     ThreadData* td = thread_data.get();
-    if (!td || !restrictions) {
+    if (!td || (!restrictions && !lent_to)) {
         return;
     }
     old_restrictions = td->thread_caller_restrictions;
+    old_lent_to = td->thread_lent_to_restrictions;
     old_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions |= restrictions;
+    // the release is never less restricted than the thread's own code, also for the checks that do not lend
+    td->thread_lent_to_restrictions |= lent_to | restrictions;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
     active = true;
 }
@@ -9303,6 +10197,7 @@ QoreSubmitterRestrictionsHelper::~QoreSubmitterRestrictionsHelper() {
     if (active) {
         ThreadData* td = thread_data.get();
         td->thread_caller_restrictions = old_restrictions;
+        td->thread_lent_to_restrictions = old_lent_to;
         td->thread_caller_restrictions_gen = old_gen;
     }
 }
@@ -9318,6 +10213,7 @@ QoreSandboxCaptureHelper::~QoreSandboxCaptureHelper() {
                 && td->capture_saved_caller_restrictions.back().depth == td->capture_depth) {
             td->thread_caller_restrictions = td->capture_saved_caller_restrictions.back().restrictions;
             td->thread_caller_restrictions_gen = td->capture_saved_caller_restrictions.back().gen;
+            td->thread_lent_to_restrictions = td->capture_saved_caller_restrictions.back().lent_to;
             td->capture_saved_caller_restrictions.pop_back();
         }
         --td->capture_depth;
@@ -9334,6 +10230,28 @@ void qore_pop_sandbox_policy_barrier() {
         assert(td->sandbox_policy_barrier_snapshots.size() == td->sandbox_policy_barrier_ctx.size() + 1);
         td->sandbox_policy_barrier_snapshots.pop_back();
     }
+}
+
+void QoreModuleInitFramesHelper::reset() {
+    if (active) {
+        thread_data.get()->module_init_frames = old;
+        active = false;
+    }
+}
+
+void QoreModuleInitFramesHelper::set(QoreProgram* pgm) {
+    assert(!active);
+    if (!qore_program_is_module_inline(pgm)) {
+        return;
+    }
+    ThreadData* td = thread_data.get();
+    // with no call context, the frames name the current Program already
+    if (!td->call_program_context) {
+        return;
+    }
+    old = td->module_init_frames;
+    td->module_init_frames = {pgm, td->call_program_context};
+    active = true;
 }
 
 ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink,
@@ -9359,7 +10277,9 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
         set_thread_current_pgm(td, pgm);
+        init_frames.set(pgm);
         auto undo = [this, td, pgm]() {
+            init_frames.reset();
             set_thread_current_pgm(td, old_pgm);
             td->tlpd = old_tlpd;
             sync_runtime_config_program(td);
@@ -9409,6 +10329,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     // the exit handler runs while the thread is still in the Program
     entry_frame.exit(xsink);
+    init_frames.reset();
     set_thread_current_pgm(td, old_pgm);
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
@@ -9445,6 +10366,7 @@ void ProgramRuntimeParseContextHelper::switchTo(QoreProgram* pgm) {
     td->tlpd = new_tlpd;
     restore = true;
     sync_runtime_config_program(td);
+    init_frames.set(pgm);
 }
 
 ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
@@ -9480,6 +10402,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
+    init_frames.reset();
     set_thread_current_pgm(td, old_pgm);
     td->tlpd = old_tlpd;
     sync_runtime_config_program(td);
@@ -9718,6 +10641,142 @@ QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po_state.po;
 }
 
+bool runtime_no_external_info() {
+    // no Program has had the restriction: no code is restricted, and the thread's data is not looked up
+    if (!qore_no_external_info_used.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the code of a Program that is not a module's, with no restrictions of a sandboxed caller and no provenance of
+    // restricted code: the rule below decides on the Program's options alone, without walking further (see
+    // qore_get_caller_domain_restrictions())
+    const QoreProgram* pgm = td->current_pgm;
+    if (pgm && !td->runtime_po_state.caller_restrictions && !td->sandbox_provenance
+            && !qore_program_is_module_inline(pgm)) {
+        return !!(qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO);
+    }
+    // the rule of every check of the caller's domains: the code runs for code with the restriction (library module
+    // code called by it, a thread or a continuation of work that it started)
+    if (qore_get_calling_code_restrictions(td).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO))) {
+        return true;
+    }
+    // the code of a module whose own Program has the restriction, which it inherited from the Program that loaded it,
+    // where no other code is the caller: under the initialization barrier of a library module, which hides the
+    // loader (the init closure, the module code that it calls), and in a thread that such code started
+    if (pgm && qore_program_is_module_inline(pgm)
+            && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return !qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td));
+    }
+    return false;
+}
+
+std::string qore_path_file_name(const char* path) {
+    const char* end = path + strlen(path);
+    // separators at the end of the path (a directory) are not part of the last component
+    while (end > path + 1 && (end[-1] == '/' || end[-1] == '\\')) {
+        --end;
+    }
+    const char* last = end;
+    while (last > path && last[-1] != '/' && last[-1] != '\\') {
+        --last;
+    }
+    return last == end ? std::string(path, end - path) : std::string(last, end - last);
+}
+
+// true while the module loader builds messages for code restricted from external information (qore#7507)
+static thread_local bool qore_msg_restricted_scope = false;
+
+QoreRestrictedMessageScopeHelper::QoreRestrictedMessageScopeHelper(bool restricted)
+        : old(qore_msg_restricted_scope) {
+    if (restricted) {
+        qore_msg_restricted_scope = true;
+    }
+}
+
+QoreRestrictedMessageScopeHelper::~QoreRestrictedMessageScopeHelper() {
+    qore_msg_restricted_scope = old;
+}
+
+bool qore_msg_restricted() {
+    return qore_msg_restricted_scope;
+}
+
+std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope || qore_caller_no_external_info(pgm) ? qore_path_file_name(path)
+        : std::string(path);
+}
+
+bool qore_caller_no_external_info(const QoreProgram* pgm) {
+    if (runtime_no_external_info()) {
+        return true;
+    }
+    if (pgm && (qore_program_private::getParseOptions(*pgm) & PO_NO_EXTERNAL_INFO)) {
+        return true;
+    }
+    const QoreProgram* cpgm = qore_thread_current_program_if_any();
+    return cpgm && (qore_program_private::getParseOptions(*cpgm) & PO_NO_EXTERNAL_INFO);
+}
+
+std::string qore_msg_path(const char* path) {
+    if (!path) {
+        return std::string();
+    }
+    return qore_msg_restricted_scope ? qore_path_file_name(path) : std::string(path);
+}
+
+QoreStringNode* qore_msg_path_node(const char* path) {
+    return new QoreStringNode(qore_msg_path(path));
+}
+
+const char* qore_msg_detail(const char* text) {
+    return qore_msg_restricted_scope ? "(the details name files of the host, which code restricted from external "
+        "information is not given)" : text;
+}
+
+void qore_get_aot_dispatch_thread_context(QoreAOTDispatchThreadContext& ctx) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        // no Qore thread: no class context, Program or record (a lookup without a record misses)
+        ctx = QoreAOTDispatchThreadContext();
+        return;
+    }
+    ctx.class_ctx = td->current_class;
+    ctx.pgm = td->current_pgm;
+    ctx.parse_options = td->runtime_po_state.po;
+    ctx.reader = td->aot_dispatch_reader;
+}
+
+QoreAOTMethodDispatchReclaimer::Record* qore_acquire_aot_dispatch_thread_reader() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->aot_dispatch_reader_done) {
+        return nullptr;
+    }
+    if (!td->aot_dispatch_reader) {
+        td->aot_dispatch_reader = QoreAOTMethodDispatchReclaimer::acquire();
+        if (!td->aot_dispatch_reader) {
+            // not retried on each call
+            td->aot_dispatch_reader_done = true;
+        }
+    }
+    return td->aot_dispatch_reader;
+}
+
+QoreProgram* runtime_get_program_with_current_options(const RuntimeConfig& rc) {
+    ThreadData* td = thread_data.get();
+    QoreProgram* pgm = td->current_pgm;
+    if (!pgm || (td->call_program_context && td->call_program_context != pgm)) {
+        return nullptr;
+    }
+    QoreParseOptions po = qore_program_private::getParseOptions(*pgm);
+    return td->runtime_po_state.po == po && rc.getParseOptions() == po ? pgm : nullptr;
+}
+
 QoreParseOptions runtime_get_effective_program_parse_options() {
     return runtime_get_effective_parse_options_for(thread_data.get()->current_pgm);
 }
@@ -9728,7 +10787,12 @@ QoreParseOptions runtime_take_call_caller_parse_options() {
 }
 
 QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm) {
-    ThreadData* td = thread_data.get();
+    return runtime_take_call_caller_parse_options(thread_data.get(), code_pgm);
+}
+
+QoreParseOptions runtime_take_call_caller_parse_options(void* thread_data_ptr, const QoreProgram*& code_pgm) {
+    ThreadData* td = static_cast<ThreadData*>(thread_data_ptr);
+    assert(td == thread_data.get());
     if (td->callback_caller_pgm && td->current_pgm == td->callback_from_pgm) {
         const QoreProgram* caller = td->callback_caller_pgm;
         // the call made on behalf of the Program is the first call only; the code it calls, and any code of the
@@ -10159,14 +11223,23 @@ void RuntimeParseOptionsOverrideHelper::set(ThreadData* td, const QoreCallParseO
     old = *state;
     state->override_mask = o.mask;
     state->override_value = o.value;
-    state->override_replace = o.replace & o.mask;
+    // the options that an override replaces are none, or those that module code takes from its own Program
+    assert(!o.replace || o.replace == QoreParseOptions(QORE_MODULE_OWN_ACCESS_OPTIONS));
+    state->override_replace = static_cast<bool>(o.replace & o.mask);
     state->caller_restrictions = o.caller_restrictions;
     // restored with the state (see GrantSnapshot); a call of module code that passes on the restrictions in effect
     // keeps their generation: trusted code inside a host grant that calls another module passes on those of the code
     // that established the grant, which are not set inside it
-    state->caller_restrictions_gen = (!new_gen && o.caller_restrictions
-            && o.caller_restrictions == old.caller_restrictions)
+    // (the restrictions of code compiled in another Program than the one it runs in count as such restrictions: module
+    // code that such code calls keeps them, qore#7202)
+    state->caller_restrictions_gen = (!new_gen && (o.caller_restrictions || o.code_pgm)
+            && o.caller_restrictions == old.caller_restrictions && o.code_pgm == old.code_pgm)
         ? old.caller_restrictions_gen : ++td->restriction_gen;
+    state->code_pgm = o.code_pgm;
+    // (a call of a lent object's method sets its override before the capability frame (CodeEvaluationHelper), so the
+    // frame's snapshot holds it; the JIT and IR fast method paths, which set the override after the Program was
+    // entered, are not taken by such calls, which enter another Program; if one were, it would fail closed: the
+    // override's new generation would only make the method refuse what the frame lends, qore#7052)
     state->module_pgm = o.module_pgm;
     state->app_pgm_id = o.app_pgm_id;
     state->sandboxed = o.sandboxed;
@@ -10189,6 +11262,9 @@ void RuntimeParseOptionsOverrideHelper::setCleared() {
 }
 
 void QoreThreadRuntimeParseOptions::refPrograms() {
+    if (override.code_pgm) {
+        const_cast<QoreProgram*>(override.code_pgm)->depRef();
+    }
     if (override.module_pgm) {
         const_cast<QoreProgram*>(override.module_pgm)->depRef();
     }
@@ -10198,6 +11274,9 @@ void QoreThreadRuntimeParseOptions::refPrograms() {
 }
 
 void QoreThreadRuntimeParseOptions::derefPrograms() {
+    if (override.code_pgm) {
+        const_cast<QoreProgram*>(override.code_pgm)->depDeref();
+    }
     if (override.module_pgm) {
         const_cast<QoreProgram*>(override.module_pgm)->depDeref();
     }
@@ -10228,6 +11307,7 @@ bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
         && !td->runtime_po_state.app_pgm_id
         && !td->runtime_po_state.sandboxed
         && !td->runtime_po_state.override_pgm
+        && !td->runtime_po_state.code_pgm
         // module code called by restricted code passes the restrictions on to the threads that it starts (qore#6337),
         // but not the initialization of library module code, and the code of an object or call reference that
         // restricted code created (qore#6520); by the rule of the checks of the caller's domains (qore#6844)
@@ -10240,18 +11320,24 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     rv.po = td->runtime_po_state.po;
     rv.override.mask = td->runtime_po_state.override_mask;
     rv.override.value = td->runtime_po_state.override_value;
-    rv.override.replace = td->runtime_po_state.override_replace;
+    rv.override.replace = td->runtime_po_state.override_replace
+        ? QoreParseOptions(QORE_MODULE_OWN_ACCESS_OPTIONS) : QoreParseOptions();
     rv.override.caller_restrictions = td->runtime_po_state.caller_restrictions;
     rv.override.module_pgm = td->runtime_po_state.module_pgm;
     rv.override.app_pgm_id = td->runtime_po_state.app_pgm_id;
     rv.override.sandboxed = td->runtime_po_state.sandboxed;
     rv.override.override_pgm = td->runtime_po_state.override_pgm;
+    // code compiled in another Program than the one it runs in starts the thread as that Program's code (qore#7202)
+    rv.override.code_pgm = td->runtime_po_state.code_pgm;
     // the restrictions of the code that starts the thread or registers the callback, by the rule of the checks of the
     // caller's domains (qore#6844): a thread that the initialization of library module code starts is not started by
     // the code that loads it; one that the code of an object or call reference that restricted code created starts
     // runs for that code (qore#6520); one that trusted code starts in a host grant does not run for the code that
     // established it in the lent domains
     rv.caller_domain_restrictions = qore_get_calling_code_restrictions(td, false);
+    // and as the checks that a lent object's method does not lend see them: a thread that such a method starts runs
+    // for the borrower there (qore#6844)
+    rv.lent_to_domain_restrictions = qore_get_lent_to_restrictions(td);
     // the work that runs with the options continues the work of the capturing code (qore#7010)
     rv.work_gen = td->work_gen;
     rv.refPrograms();
@@ -10268,6 +11354,11 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     // the work runs for the code that registered it or started the thread: its restrictions are set here, also when
     // they equal those in effect (inside a host grant, for example)
     override_helper->set(td, o->override, true);
+    // the Program that compiled the code that the options were captured for, if the code runs in another Program, is
+    // held while they are installed (qore#7202); the dependency reference of the options keeps it allocated
+    if (o->override.code_pgm && foreign_hold.hold(const_cast<QoreProgram*>(o->override.code_pgm), nullptr)) {
+        foreign_refused = true;
+    }
     // the options were computed with the override in the starting thread
     td->runtime_po_state.po = o->po;
     // the restrictions of the code that started the thread (qore#6337)
@@ -10275,6 +11366,9 @@ QoreThreadRuntimeParseOptionsHelper::QoreThreadRuntimeParseOptionsHelper(const Q
     old_caller_restrictions_gen = td->thread_caller_restrictions_gen;
     td->thread_caller_restrictions = o->caller_domain_restrictions;
     td->thread_caller_restrictions_gen = ++td->restriction_gen;
+    // and as the checks that a lent object's method does not lend see them (qore#6844)
+    old_lent_to_restrictions = td->thread_lent_to_restrictions;
+    td->thread_lent_to_restrictions = o->lent_to_domain_restrictions;
     // the generation of the work: that of the capturing code, a new one for work of its own (qore#7010)
     old_work_gen = td->work_gen;
     if (o->work_gen) {
@@ -10288,7 +11382,13 @@ void QoreThreadRuntimeParseOptionsHelper::restoreCallerRestrictions() {
     ThreadData* td = thread_data.get();
     td->thread_caller_restrictions = old_caller_restrictions;
     td->thread_caller_restrictions_gen = old_caller_restrictions_gen;
+    td->thread_lent_to_restrictions = old_lent_to_restrictions;
     td->work_gen = old_work_gen;
+}
+
+const QoreProgram* runtime_get_foreign_code_program(ThreadData* td) {
+    assert(td == thread_data.get());
+    return td->runtime_po_state.code_pgm;
 }
 
 bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm) {
@@ -10311,9 +11411,11 @@ LoadTimeParseOptionsHelper::LoadTimeParseOptionsHelper(const QoreParseOptions& p
     old_app_pgm_id = td->runtime_po_state.app_pgm_id;
     old_sandboxed = td->runtime_po_state.sandboxed;
     old_override_pgm = td->runtime_po_state.override_pgm;
+    old_code_pgm = td->runtime_po_state.code_pgm;
+    td->runtime_po_state.code_pgm = nullptr;
     td->runtime_po_state.override_mask = QoreParseOptions();
     td->runtime_po_state.override_value = QoreParseOptions();
-    td->runtime_po_state.override_replace = QoreParseOptions();
+    td->runtime_po_state.override_replace = false;
     td->runtime_po_state.caller_restrictions = QoreParseOptions();
     td->runtime_po_state.caller_restrictions_gen = ++td->restriction_gen;
     td->runtime_po_state.module_pgm = nullptr;
@@ -10334,6 +11436,7 @@ LoadTimeParseOptionsHelper::~LoadTimeParseOptionsHelper() {
     td->runtime_po_state.app_pgm_id = old_app_pgm_id;
     td->runtime_po_state.sandboxed = old_sandboxed;
     td->runtime_po_state.override_pgm = old_override_pgm;
+    td->runtime_po_state.code_pgm = old_code_pgm;
     td->runtime_po_state.po = old_po;
 }
 
@@ -11826,8 +12929,13 @@ namespace {
             // Program's thread entry handler, and then the Program's thread initialization code; if the entry handler
             // fails, the thread runs none of the Program's code
             ThreadEntryHandlerFrame entry_frame;
-            bool entered;
-            try {
+            bool entered = false;
+            // code compiled in a Program whose deletion has started, which the expression of the thread is when it
+            // runs in another Program, does not run (qore#7202)
+            if (runtime_po_helper.foreignCodeRefused()) {
+                xsink.raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and therefore "
+                    "cannot be accessed at runtime");
+            } else try {
                 entered = !entry_frame.enter(btp->pgm, &xsink);
             } catch (std::exception& e) {
                 // a C++ exception (std::bad_alloc) fails the start as a Qore exception of the entry handler does: the
@@ -12626,19 +13734,54 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
 }
 
 void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
-    std::vector<QoreHashNode*> hashes;
-    {
-        AutoLocker al(pslock);
-        hashes.reserve(tld_map.size());
-        for (auto& i : tld_map) {
-            i.second->ref();
-            hashes.push_back(i.second);
+    // a destructor run by the release of one family's data can save data in the data of a family that was cleared
+    // before, which would survive into the thread's next task (qore#7398): the release repeats until a pass finds no
+    // data; a destructor that saves data again at each pass would keep it going for ever, so after
+    // QORE_TLD_CLEAR_PASSES passes a last one refuses the data that destructors save (see ThreadData::tld_save_refused)
+    constexpr unsigned QORE_TLD_CLEAR_PASSES = 16;
+    for (unsigned pass = 0; ; ++pass) {
+        bool last = pass >= QORE_TLD_CLEAR_PASSES;
+        // the thread's save_thread_data() refuses data in the last pass only
+        struct SaveRefusal {
+            ThreadData* td;
+            bool active;
+            SaveRefusal(ThreadData* td, bool active) : td(td), active(active) {
+                if (active) {
+                    assert(!td->tld_save_refused);
+                    td->tld_save_refused = true;
+                }
+            }
+            ~SaveRefusal() {
+                if (active) {
+                    td->tld_save_refused = false;
+                }
+            }
+        } refusal(td, last);
+
+        std::vector<QoreHashNode*> hashes;
+        {
+            AutoLocker al(pslock);
+            hashes.reserve(tld_map.size());
+            for (auto& i : tld_map) {
+                i.second->ref();
+                hashes.push_back(i.second);
+            }
         }
-    }
-    // no lock is held here: clearing a hash can run destructors, which can use thread-local data and enter Programs
-    for (QoreHashNode* h : hashes) {
-        qore_hash_private::get(*h)->clear(xsink, false);
-        h->deref(xsink);
+        bool cleared = false;
+        // no lock is held here: clearing a hash can run destructors, which can use thread-local data and enter
+        // Programs
+        for (QoreHashNode* h : hashes) {
+            if (!h->empty()) {
+                cleared = true;
+                qore_hash_private::get(*h)->clear(xsink);
+            }
+            h->deref(xsink);
+        }
+        // nothing was left to clear, so no destructor ran in this pass: the data is gone; or the last pass cleared
+        // everything, and nothing could be saved in it
+        if (!cleared || last) {
+            break;
+        }
     }
 }
 
@@ -12768,8 +13911,33 @@ QoreListNode* qore_get_thread_call_stack() {
     return thread_list.getCallStack(td->current_stack_location.load(std::memory_order_relaxed));
 }
 
+bool qore_get_caller_program_id(size_t offset, uint64_t& id) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return false;
+    }
+    // the entry at the offset from the innermost one, as get_thread_call_stack() lists them; nothing is allocated
+    for (const QoreStackLocation* w = td->current_stack_location.load(std::memory_order_relaxed); w;
+            w = w->getNext()) {
+        if (!offset) {
+            QoreProgram* pgm = w->getProgram();
+            if (!pgm) {
+                return false;
+            }
+            id = pgm->getProgramId();
+            return true;
+        }
+        --offset;
+    }
+    return false;
+}
+
 QoreHashNode* qore_get_parent_caller_location(size_t offset) {
     ThreadData* td = thread_data.get();
+    // a thread that is not registered with Qore (module code in a thread of its own) has no call stack (qore#7594)
+    if (!td) {
+        return nullptr;
+    }
     return thread_list.getParentCallerLocation(td->current_stack_location.load(std::memory_order_relaxed), offset);
 }
 
@@ -12858,14 +14026,12 @@ QoreListNode* QoreThreadList::getCallStack(const QoreStackLocation* stack_locati
 }
 
 QoreHashNode* QoreThreadList::getParentCallerLocation(const QoreStackLocation* stack_location, size_t offset) const {
-    const QoreStackLocation* w = stack_location;
-    size_t i = 0;
-    if (w) {
-        if (i == offset) {
+    // the frame at the offset from the innermost one, as get_thread_call_stack() lists them (qore#7564)
+    for (const QoreStackLocation* w = stack_location; w; w = w->getNext()) {
+        if (!offset) {
             return getCallStackHash(*w);
         }
-        ++i;
-        w = w->getNext();
+        --offset;
     }
     return nullptr;
 }
