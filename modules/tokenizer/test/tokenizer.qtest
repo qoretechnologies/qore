@@ -1235,8 +1235,8 @@ class TokenizerTest inherits QUnit::Test {
         assertThrows("TOKENIZER-NORMALIZER-ERROR", \limited.encode(), "ac");
         cfg.decoder = cfg.normalizer;
         Tokenizer::HFTokenizer decoder(cfg);
-        assertThrows("TOKENIZER-DECODER-ERROR", \decoder.decode(), (1,));
-        assertThrows("TOKENIZER-DECODER-ERROR", \decoder.decodeBatch(), ((1,),));
+        assertThrows("TOKENIZER-DECODER-ERROR", sub () { decoder.decode((1,)); });
+        assertThrows("TOKENIZER-DECODER-ERROR", sub () { decoder.decodeBatch(((1,),)); });
     }
 
     decoderChain() {
