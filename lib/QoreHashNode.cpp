@@ -493,7 +493,14 @@ size_t qore_hash_member_map::maxChain() const {
 }
 
 void qore_hash_member_map::grow() {
-    rehash(buckets ? bucket_count() << 1 : MinBuckets);
+    if (!buckets) {
+        // the first buckets of a map, which has no members and is not hardened: nothing to move, and the number is
+        // below MaxBuckets
+        buckets = new HashMember*[MinBuckets]();
+        setMaskLimit(MinBuckets - 1, MinBuckets);
+        return;
+    }
+    rehash(bucket_count() << 1);
 }
 
 void qore_hash_member_map::rehash(size_t n) {
