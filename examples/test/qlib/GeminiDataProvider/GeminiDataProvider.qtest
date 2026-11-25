@@ -219,6 +219,15 @@ class GeminiDataProviderTest inherits QUnit::Test {
             simple.doRequest({"model": model, "content": "Classify this invoice"} + config);
             assertEq(expected, fake.last_request.generationConfig);
         }
+        foreach string family in (("argon", "carbon", "hydrogen", "neon")) {
+            string model = "gemini-4-" + family;
+            string highest = ("hydrogen", "neon").contains(family) ? "XHIGH" : "HIGH";
+            generate.doRequest({"model": model, "prompt": "invoice",
+                "generationConfig": {"thinkingConfig": {"thinkingLevel": "XHIGH", "thinkingBudget": 1024}}});
+            assertEq({"thinkingLevel": highest}, fake.last_request.generationConfig.thinkingConfig, model);
+            simple.doRequest({"model": model, "content": "invoice", "thinkingConfig": {"thinkingLevel": "MINIMAL"}});
+            assertEq({"thinkingLevel": "LOW"}, fake.last_request.generationConfig.thinkingConfig, model);
+        }
         AbstractDataProvider stream = dp.getChildProviderEx("stream-content");
         assertThrows("TYPE-VALUE-ERROR", \stream.doRequest(), ({
             "model": "gemini-3.5-flash", "prompt": "Classify this invoice",

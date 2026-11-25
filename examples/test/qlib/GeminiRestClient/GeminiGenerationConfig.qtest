@@ -55,6 +55,7 @@ class CaptureVertexProvider inherits VertexAiRestClient::VertexAiLlmProvider {
 
 class GeminiGenerationConfigTest inherits QUnit::Test {
     constructor() : Test("Gemini generation config", "1.0", \ARGV) {
+        addTestCase("Gemini 4 reasoning options on both providers", \gemini4Providers());
         addTestCase("model family detection", \models());
         addTestCase("sampling and budget migration preserves other fields", \normalization());
         addTestCase("snake case aliases and empty configs", \aliases());
@@ -240,7 +241,7 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             assertTrue(GeminiBodyShape::usesThinkingLevel(model), model);
         }
         foreach string model in (("", "gemini-2.5-flash", "models/gemini-2.5-pro", "gemini-30-flash",
-                "custom-gemini-3", "some-model", "gemini-4-preview")) {
+                "custom-gemini-3", "some-model", "gemini-40-argon")) {
             assertFalse(GeminiBodyShape::usesThinkingLevel(model), model);
         }
         # the lowest level that every provider accepts: Vertex AI rejects MINIMAL for Flash models
@@ -474,6 +475,41 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
         assertFalse(body.hasKey("generation_config"));
         assertEq({"thinkingConfig": {"thinkingLevel": "LOW"}}, body.generationConfig,
             "extra_body retains its existing top-level replacement semantics");
+    }
+
+    gemini4Providers() {
+        CaptureGenerationRest rest();
+        hash<QoreLlmUtils::LlmBackendConfig> config = <QoreLlmUtils::LlmBackendConfig>{
+            "model": "gemini-2.5-flash", "api_key": "test-only-key", "max_retries": 0,
+            "provider_options": {"gcp_project_id": "test-project"},
+        };
+        foreach GeminiBodyShape::AbstractGeminiModelProvider provider in ((
+                new CaptureGeminiProvider(config, rest), new CaptureVertexProvider(config, rest))) {
+            foreach string family in (("argon", "carbon", "hydrogen", "neon")) {
+                string model = "gemini-4-" + family;
+                string highest = ("hydrogen", "neon").contains(family) ? "XHIGH" : "HIGH";
+                assertTrue(GeminiBodyShape::reasoningAlwaysOn("publishers/google/models/" + model));
+                hash<auto> native = GeminiBodyShape::normalizeGenerationConfig("publishers/google/models/" + model,
+                    {"generation_config": {"thinking_config": {"thinking_level": "xhigh"}}});
+                assertEq({"thinkingConfig": {"thinkingLevel": highest}}, native.generationConfig, model);
+                foreach hash<auto> c in (({"effort": "minimal", "level": "LOW"}, {"effort": "medium", "level": "MEDIUM"},
+                        {"effort": "high", "level": "HIGH"}, {"effort": "xhigh", "level": highest},
+                        {"effort": "max", "level": highest})) {
+                    provider.complete("classify", "invoice", NOTHING,
+                        <QoreLlmUtils::LlmRequestOptions>{"model": model, "reasoning_effort": c.effort});
+                    assertEq({"thinkingLevel": c.level}, rest.body.generationConfig.thinkingConfig, model);
+                }
+                provider.complete("classify", "invoice", NOTHING,
+                    <QoreLlmUtils::LlmRequestOptions>{"model": model, "reasoning_effort": "high", "disable_reasoning": True});
+                assertEq({"thinkingLevel": "LOW"}, rest.body.generationConfig.thinkingConfig, model);
+                foreach int budget in ((0, -1, 1024)) {
+                    provider.complete("classify", "invoice", NOTHING,
+                        <QoreLlmUtils::LlmRequestOptions>{"model": model, "reasoning_token_budget": budget});
+                    assertEq(budget ? NOTHING : {"thinkingLevel": "LOW"}, rest.body.generationConfig.thinkingConfig,
+                        model);
+                }
+            }
+        }
     }
 
     providers() {
