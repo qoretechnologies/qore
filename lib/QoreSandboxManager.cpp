@@ -2191,6 +2191,23 @@ void qore_program_private::getSandboxManagerRefs(QoreSandboxManager*& own, QoreS
     }
 }
 
+void qore_program_private::getCreatorSandboxRefs(QoreSandboxManager*& creator, QoreSandboxManager*& policy) {
+    creator = nullptr;
+    policy = nullptr;
+    if (!hasSandboxManager()) {
+        return;
+    }
+    AutoLocker al(sm_lock);
+    QoreSandboxManager* sm = creator_sandbox_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        creator = sm;
+    }
+    sm = creator_policy_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        policy = sm;
+    }
+}
+
 int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool additive, bool no_replace) {
     QoreSandboxManager* old;
     {

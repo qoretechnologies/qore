@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose class uses the private member of a trusted class (see ../capability-helper-module-sandbox.qtest;
+# the test writes a copy named %%NAME%%)
+
+%modern
+%requires CapTrustedBase
+
+module %%NAME%% {
+    version = "1.0";
+    desc = "a subclass of a trusted class for capability-helper-module-sandbox.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace %%NAME%% {
+    public class Sub inherits CapTrustedBase::Base {
+        int get() {
+            return secret;
+        }
+    }
+
+    public int sub value() {
+        return (new Sub()).get();
+    }
+}
