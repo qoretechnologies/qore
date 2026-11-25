@@ -140,9 +140,9 @@
     @par Library Code Gives Restricted Code No Other Host Information
     @parblock
     For code restricted from external information, the functions listed in @ref sandbox_ambient_host_data (ex:
-    @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()", the connection and
-    datasource providers) use no environment, working directory, hostname, PID or network interface for it, with the
-    known limitations listed there (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
+    @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()") use no environment,
+    working directory, hostname, PID or network interface for it, with the known limitations listed there
+    (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
 
     \c ProviderIndexUtil gives such code no index directory, index file path or process IDs: its methods that return
     them raise \c INVALID-FUNCTION-ACCESS, and neither it nor \c DataProvider gives or lets it set its logger (see

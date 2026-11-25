@@ -2,7 +2,9 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # a connection and datasource provider module of the host for module-host-info.qtest (qore#7586): the
-# QORE_CONNECTION_PROVIDERS and QORE_DATASOURCE_PROVIDERS environment variables of the test's worker name it
+# QORE_CONNECTION_PROVIDERS and QORE_DATASOURCE_PROVIDERS environment variables of the test's worker name it; it does
+# not declare that it resolves names for the calling code (get_mod_caller_scoped()), so code that may not receive the
+# host's secrets gets nothing from it (qore#6844)
 
 %modern
 %requires ConnectionProvider

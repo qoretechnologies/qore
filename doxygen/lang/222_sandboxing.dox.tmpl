@@ -1055,6 +1055,15 @@ authenticate();
     - the proxy of the environment is given without its user name and password
       (@ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()", also for
       @ref UrlDownloader::UrlDownloader "UrlDownloader")
+    - the connection and datasource provider modules of the environment (\c QORE_CONNECTION_PROVIDERS,
+      \c QORE_DATASOURCE_PROVIDERS) are used only if they resolve names for the calling code themselves
+      (@ref ConnectionProvider::get_connection() "get_connection()",
+      @ref ConnectionProvider::get_connections() "get_connections()",
+      @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
+      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()"; see @ref connectionprovider_caller_scoped and
+      @ref datasourceprovider_caller_scoped): the other modules give the host's connections and datasources, so a
+      lookup of a name that only they know fails as for an unknown name, without naming the host's modules or giving
+      their errors, and the lists leave their connections and datasources out
 
     For code that may not read external information, the host's environment is empty, as it is in that code itself:
     - environment variables expand to empty strings: @ref Util::substitute_env_vars() "substitute_env_vars()" (also for
@@ -1065,11 +1074,6 @@ authenticate();
       its file names whatever code logs through it)
     - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
       environment; such code gives them explicitly
-    - the providers of the environment are not used: @ref ConnectionProvider::get_connection() "get_connection()",
-      @ref ConnectionProvider::get_connections() "get_connections()",
-      @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
-      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" use no modules of \c QORE_CONNECTION_PROVIDERS and
-      \c QORE_DATASOURCE_PROVIDERS, whose connections and datasources are the host's
     - @ref Util::tmp_location() "tmp_location()" takes no directory from the environment (\c TMPDIR and the others):
       it is the platform's default (\c /tmp), also for the temporary files and directories that library code creates
       without a directory (ex: @ref FsUtil::TmpDir "TmpDir"), which such code places elsewhere by giving their

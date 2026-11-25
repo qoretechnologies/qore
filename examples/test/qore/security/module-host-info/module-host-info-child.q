@@ -177,6 +177,9 @@ try { q_r.conn = ConnectionProvider::get_connection("q7586").url; } catch (hash<
 try { q_r.conn_hash = keys ConnectionProvider::get_connection_hash(); } catch (hash<ExceptionInfo> ex) { q_r.conn_hash = ex.err; }
 try { q_r.ds_hash = DatasourceProvider::get_ds_hash(); } catch (hash<ExceptionInfo> ex) { q_r.ds_hash = ex.err; }
 try { q_r.ds_string = DatasourceProvider::get_ds_string("q7586"); } catch (hash<ExceptionInfo> ex) { q_r.ds_string = ex.err; }
+# the error for an unknown name names the host's provider modules only for code that may receive the host's secrets
+try { ConnectionProvider::get_connection("q7586-unknown"); q_r.conn_unknown = "found"; } catch (hash<ExceptionInfo> ex) { q_r.conn_unknown = ex.err + (ex.desc =~ /Q7586Providers/ ? ": names the module" : ""); }
+try { DatasourceProvider::get_ds_string("q7586-unknown"); q_r.ds_unknown = "found"; } catch (hash<ExceptionInfo> ex) { q_r.ds_unknown = ex.err + (ex.desc =~ /Q7586Providers/ ? ": names the module" : ""); }
 
 # the task IDs of the MCP and A2A server handlers
 try { q_r.mcp_id = (new Q7586Mcp()).id(); } catch (hash<ExceptionInfo> ex) { q_r.mcp_id = ex.err + ": " + ex.desc; }

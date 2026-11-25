@@ -215,10 +215,6 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
-    - for code restricted from external information, the \c QORE_CONNECTION_PROVIDERS environment variable of the
-      host is empty, so @ref ConnectionProvider::get_connection() "get_connection()",
-      @ref ConnectionProvider::get_connections() "get_connections()" and the functions that call them use no
-      connection provider modules for such code (see @ref sandbox_ambient_host_data)
     - code that may not receive the host's secrets (code that a sandbox governs, or code restricted from external
       information) gets the connections of only the connection provider modules that resolve names for the calling
       code themselves (see @ref connectionprovider_caller_scoped): a lookup of a connection that it may not use
@@ -870,10 +866,6 @@ string connstr = get_connection_url(str);
 
     @note
     - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
-    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
-      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
-      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
-      whose connections are the host's (see @ref sandbox_ambient_host_data)
     - code that may not receive the host's secrets gets the URL of a connection only from a connection provider module
       that resolves names for the calling code (see @ref connectionprovider_caller_scoped); a URL string given is
       returned as it is
@@ -900,10 +892,6 @@ string connstr = get_connection(str);
 
     @note
     - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
-    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
-      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
-      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
-      whose connections are the host's (see @ref sandbox_ambient_host_data)
     - code that may not receive the host's secrets (see
       @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()") gets
       a connection only from a connection provider module that resolves names for the calling code (see
@@ -916,9 +904,9 @@ public AbstractConnection sub get_connection(string conn) {
     # decided here, where the code that calls the module is the caller (qore#6844)
     bool host = SandboxManager::callerMayReceiveHostSecrets();
     # process connection provider modules in declaration order
-    if (*string providers = Priv::priv_get_connection_providers()) {
+    if (ENV.QORE_CONNECTION_PROVIDERS) {
         list<string> el = ();
-        list<string> pl = providers.split(PathSep);
+        list<string> pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
         foreach string mod in (pl) {
             try {
                 *AbstractConnection rv = priv_try_get_connection(mod, conn, host);
@@ -961,10 +949,6 @@ public AbstractConnection sub get_connection(string conn) {
 
     @note
     - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
-    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
-      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
-      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
-      whose connections are the host's (see @ref sandbox_ambient_host_data)
     - code that may not receive the host's secrets gets only the connections of the connection provider modules that
       resolve names for the calling code (see @ref connectionprovider_caller_scoped)
 
@@ -977,8 +961,8 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
     bool host = SandboxManager::callerMayReceiveHostSecrets();
     hash<string, AbstractConnection> h();
     # process connection provider modules in declaration order
-    if (*string providers = Priv::priv_get_connection_providers()) {
-        list pl = providers.split(PathSep);
+    if (ENV.QORE_CONNECTION_PROVIDERS) {
+        list pl = ENV.QORE_CONNECTION_PROVIDERS.split(PathSep);
         foreach string mod in (pl) {
             try {
                 map h.($1.key) = $1.value, priv_try_get_connections(mod, host).pairIterator(), !exists h.($1.key);
@@ -1009,10 +993,6 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
 
     @note
     - connection provider modules are processed in the order they are declared with the \c QORE_CONNECTION_PROVIDERS environment variable; connection provider modules must be separated with @ref Qore::PathSep "PathSep" characters
-    - for code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", see
-      @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), the
-      environment is empty, as it is in that code itself: no connection provider modules are used for such code,
-      whose connections are the host's (see @ref sandbox_ambient_host_data)
     - code that may not receive the host's secrets gets only the connections of the connection provider modules that
       resolve names for the calling code, which it may read (see @ref connectionprovider_caller_scoped)
 
@@ -1029,12 +1009,6 @@ public *hash<string, hash<ConnectionInfo>> sub get_connection_hash(*bool verbose
 
 # private, non-exported namespace
 namespace Priv {
-# returns the connection provider modules of the environment, only for a caller that could read the environment
-# itself: the connections that they give are the host's (qore#7586)
-*string sub priv_get_connection_providers() {
-    return SandboxManager::callerMayReadExternalInfo() ? ENV.QORE_CONNECTION_PROVIDERS : NOTHING;
-}
-
 # returns True if the module loaded in the Program declares that it resolves names for the calling code (qore#6844)
 # fails closed: a module without the declaration, or whose declaration fails or returns anything else, does not
 bool sub priv_is_caller_scoped(Program p) {

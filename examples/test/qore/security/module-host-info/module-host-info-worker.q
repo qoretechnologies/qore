@@ -170,6 +170,8 @@ hash<auto> may_read = {
     "conn_hash": ("q7586",),
     "ds_hash": {"q7586": ds},
     "ds_string": ds,
+    "conn_unknown": "CONNECTION-ERROR: names the module",
+    "ds_unknown": "DATASOURCE-ERROR: names the module",
     "mcp_pid": True,
     "a2a_pid": True,
     "repl_pwd": cwd,
@@ -233,6 +235,10 @@ hash<auto> may_not_read = may_read + {
     "conn_hash": (),
     "ds_hash": NOTHING,
     "ds_string": "DATASOURCE-ERROR",
+    # Q7586Providers does not resolve names for the calling code: it is not used for such code, whose errors do not
+    # name it (qore#6844)
+    "conn_unknown": "CONNECTION-ERROR",
+    "ds_unknown": "DATASOURCE-ERROR",
     "mcp_pid": False,
     "a2a_pid": False,
     "repl_pwd": "REPL-ERROR",
