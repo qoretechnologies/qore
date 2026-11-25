@@ -54,6 +54,15 @@ module InsightlyDataProvider {
                 "\n\nThis integration supports full CRUD operations on core CRM objects "
                 "and polling-based triggers for new records.",
             "scheme": "insightlyrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "insightly.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://api.insightly.com/v3.1/Help",
+                "effective_date": 2026-11-25,
+            },
             "logo": InsightlyLogo,
             "logo_file_name": "insightly-logo.svg",
             "logo_mime_type": MimeTypeSvg,

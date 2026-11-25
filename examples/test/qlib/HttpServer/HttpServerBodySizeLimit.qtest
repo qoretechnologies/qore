@@ -674,10 +674,11 @@ qiurSfIBhXYMDdqWsl9GD+c=
         int port = srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
         string url = "http://localhost:" + port;
 
-        # Verify initial state: no limit
-        assertEq(0, srv.getMaxRequestBodySize(), "initial max body size should be 0");
+        # Verify initial state: no limit set; the default limits buffered bodies only
+        assertEq(DefaultMaxRequestBodySize, srv.getMaxRequestBodySize(), "initial max body size is the default");
+        assertEq(0, srv.getStreamMaxRequestBodySize(), "initial max streamed body size should be 0");
 
-        # Large body should succeed with no limit
+        # A body larger than the limit set below succeeds with the default limit
         {
             HTTPClient c({"url": url, "timeout": 5s});
             c.connect();
@@ -720,6 +721,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         # Remove limit
         srv.setMaxRequestBodySize(0);
         assertEq(0, srv.getMaxRequestBodySize(), "max body size should be 0 after reset");
+        assertEq(0, srv.getStreamMaxRequestBodySize(), "max streamed body size should be 0 after reset");
 
         # Large body should succeed again
         {

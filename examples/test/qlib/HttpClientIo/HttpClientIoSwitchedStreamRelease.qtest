@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - 101 responses to streamed HTTP/1.1 requests read from TCP sockets, socket hand-over and close
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The connection of a streamed HttpClientIo request that asked for a protocol upgrade and was answered with 101
+# belongs to the caller of the request, who takes its socket over or closes it.  When the stream handle
+# (HttpClientConnectionManager::acquireAndStartStreaming(), or HttpClientRequestPollOperation with keep_stream) is
+# released without either, the connection is closed and removed from the pool; before, it stayed in the pool with
+# an active stream, and with max_connections_per_host 1 every later request to the host failed with
+# HTTPCLIENT-CAPACITY-ERROR (qore#7500).  A handle released after the caller took the socket over leaves the socket
+# to the caller.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class HttpClientIoSwitchedStreamReleaseTest
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the request header fields that ask for a protocol upgrade
+const UpgradeHeaders = {"Upgrade": "foo", "Connection": "Upgrade"};
+
+#! An HTTP/1.1 server: answers a request with an Upgrade header with 101 and then speaks a protocol of its own on the
+#! connection (it answers "PING" with "PONG") until the client closes it; any other request with 200
+class UpgradeServer {
+    public {
+        #! the end of each connection after a 101 response: "<connection number>:closed"
+        Queue ends();
+        #! the connection number of each upgrade request received, before it is answered
+        Queue upgrades();
+        #! if set, each upgrade request is answered only once a value is read from this queue
+        *Queue hold;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    #! stops the server; the connections of the clients must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        while (True) {
+            hash<auto> h;
+            try {
+                # longer than the wait of a test for the end of a connection, so that only the client's close of the
+                # connection ends it in time
+                h = s.readHTTPHeader(Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!h.method) {
+                return;
+            }
+            if (h.upgrade) {
+                upgrades.push(n);
+                if (hold) {
+                    hold.get(Timeout);
+                }
+                try {
+                    s.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n");
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection before the 101 response
+                }
+                otherProtocol(s, n);
+                return;
+            }
+            s.send("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nplain");
+        }
+    }
+
+    #! the protocol after the 101 response: "PING" is answered with "PONG" until the client closes the connection
+    private otherProtocol(Socket s, int n) {
+        on_exit ends.push(sprintf("%d:closed", n));
+        while (True) {
+            *binary b;
+            try {
+                b = s.recvBinary(-1, Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!b) {
+                return;
+            }
+            if (b.toString() =~ /PING/) {
+                s.send("PONG");
+            }
+        }
+    }
+}
+
+class HttpClientIoSwitchedStreamReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientIoSwitchedStreamRelease", "1.0") {
+        addTestCase("acquireAndStartStreaming(): the handle released after 101 closes the connection",
+            \testRelease(), ("acquire", False));
+        addTestCase("acquireAndStartStreaming(): the handle released after the socket was taken over leaves it to the "
+            "caller", \testRelease(), ("acquire", True));
+        addTestCase("HttpClientRequestPollOperation keep_stream: the operation released after 101 closes the "
+            "connection", \testRelease(), ("keep_stream", False));
+        addTestCase("HttpClientRequestPollOperation keep_stream: the operation released after the socket was taken "
+            "over leaves it to the caller", \testRelease(), ("keep_stream", True));
+        addTestCase("acquireAndStartStreaming(): the handle released before the 101 arrives closes the connection",
+            \testReleaseBeforeResponse());
+        set_return_value(main());
+    }
+
+    #! a manager that has one connection to a host at most
+    static HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_request_retries": 0,
+            "max_connections_per_host": 1,
+            "request_timeout": Timeout,
+        });
+    }
+
+    #! the handle of a switched stream is released, after its socket was taken over or not
+    testRelease(string api, bool take_over) {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        *HttpClientConnection conn;
+        *Socket s;
+        if (api == "acquire") {
+            HttpClientStreamHandle sh = mgr.acquireAndStartStreaming(server.getUrl(), "GET", "/up", UpgradeHeaders);
+            assertEq(101, sh.readData(Timeout).status_code);
+            # the socket is taken over as soon as the 101 header is read, as WebSocketClient does
+            if (take_over) {
+                conn = sh.getConnection();
+                s = conn.getSocket();
+            }
+            assertEq({"end_stream": True}, sh.readData(Timeout));
+            # the handle is released
+            remove sh;
+        } else {
+            HttpClientRequestPollOperation op(mgr, server.getUrl() + "/up", "GET", UpgradeHeaders, NOTHING,
+                <HttpClientRequestPollOptions>{"keep_stream": True});
+            # the operation is driven in this thread, so that this thread holds its only reference, and the stream
+            # is released with it below
+            while (!op.goalReached()) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (info) {
+                    Socket::poll((info,), Timeout);
+                }
+            }
+            assertEq(101, op.getOutput().status_code);
+            if (take_over) {
+                conn = op.getStream().getConnection();
+                s = conn.getSocket();
+            }
+            # the operation, and with it the stream, is released
+            remove op;
+        }
+
+        if (take_over) {
+            # the socket is still the caller's, who speaks the new protocol on it
+            s.send("PING");
+            assertEq("PONG", s.recvBinary(4, Timeout).toString());
+            assertEq(0, server.ends.size());
+            # the caller ends the connection
+            conn.close();
+        }
+        # the connection is closed
+        assertEq("1:closed", server.ends.get(Timeout));
+        # and is no longer in the pool: the next request takes a new connection
+        assertEq("plain", mgr.request(server.getUrl(), "GET", "/plain").body);
+        assertEq(2, server.getConnectionCount());
+    }
+
+    #! the handle of a stream that asked for an upgrade is released before its response arrives
+    testReleaseBeforeResponse() {
+        UpgradeServer server();
+        on_exit server.stop();
+        server.hold = new Queue();
+
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle sh = mgr.acquireAndStartStreaming(server.getUrl(), "GET", "/up", UpgradeHeaders);
+        # the server has the request
+        assertEq(1, server.upgrades.get(Timeout));
+        # the handle is released before the 101 response
+        remove sh;
+        # the server answers with 101
+        server.hold.push(True);
+        # the connection is closed
+        assertEq("1:closed", server.ends.get(Timeout));
+        assertEq("plain", mgr.request(server.getUrl(), "GET", "/plain").body);
+        assertEq(2, server.getConnectionCount());
+    }
+}

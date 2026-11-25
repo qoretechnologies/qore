@@ -174,6 +174,28 @@ sub global_and_closure() {
     printf("closure: %y\n", keys hc);
 }
 
+#! a source of two steps from a local that holds the only reference to it, whose container a weak reference
+#! designates already: the IR and JIT code read it without the lvalue (qore#7301) and hold it weakly while the target
+#! is resolved, as the lvalue does
+sub unique_pinned_source() {
+    hash<auto!> h = mk();
+    hash<auto!> w;
+    w := h.a;
+    h.a.w := h.a;
+    h.a.k = 1;
+    printf("unique pinned path: %y\n", keys h.a.w);
+    hash<auto!> w2;
+    w2 := h.a;
+    w2.y = 3;
+    printf("unique pinned change: %y\n", keys h.a);
+
+    list<auto!> l = (mk().a,);
+    w := l[0];
+    l[0].w := l[0];
+    l[0].x = 5;
+    printf("unique pinned element: %y\n", keys l[0].w);
+}
+
 own_container();
 other_weak_references();
 shared_source();
@@ -185,3 +207,4 @@ reference_source();
 weak_object_source();
 global_and_closure();
 operator_value();
+unique_pinned_source();

@@ -33,6 +33,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreObjectIterator.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 extern QoreClass* QC_OBJECTITERATOR;
 extern QoreClass* QC_OBJECTKEYITERATOR;
@@ -43,7 +44,7 @@ extern QoreClass* QC_OBJECTPAIRITERATOR;
 //! Methods in this pseudo-class can be executed on @ref object "objects"
 /**
  */
-qclass <object> [arg=QoreObject* obj = const_cast<QoreObject*>(v.get<QoreObject>());vparent=<value>];
+qclass <object> [arg=QoreObject* obj = const_cast<QoreObject*>(qore_pseudo_receiver<QoreObject>(v, NT_OBJECT, "<object>", xsink));vparent=<value>];
 
 //! Returns Qore::NT_OBJECT
 /**

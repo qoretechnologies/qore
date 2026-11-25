@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the first module of abstract-module-parent-override.qtest, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractModuleParentA {
+    version = "1.0";
+    desc = "abstract classes and a class that implements an overload for abstract-module-parent-override.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AMA {
+public class I1 { abstract string m(int i); }
+public class I2 { abstract string m(string s); }
+public class I3 { abstract string m(bool b); }
+public class Sint { string m(int i) { return "Sint::m(int)"; } }
+# m(int) implemented by a parent class, its own abstract m(string)
+public class Q inherits I1, Sint { abstract string m(string s); }
+}

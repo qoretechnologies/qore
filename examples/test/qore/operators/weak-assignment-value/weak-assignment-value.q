@@ -127,10 +127,10 @@ sub conversions() {
     printf("global float %y %s softint %y %s\n", v3, v3.type(), v4, v4.type());
     list<auto> l = ((f := 7), (cf := 8), (gf := 9));
     printf("list %y\n", l);
-    # a container that the variable's type converts to a copy of its own: the copy is a temporary of the statement,
-    # and the value of the assignment (qore#7085); the variable given the value takes a copy of its own, as from any
-    # value that a weak reference designates, so the weak reference designates the temporary, which the statement
-    # releases (qore#7342)
+    # a container whose type the variable's type strips: the weak reference designates the container assigned, which
+    # is the value of the assignment, and which the variable reads while it exists (qore#7085, qore#7237); the variable
+    # given the value takes a copy of its own while another holder holds it, as from any value that a weak reference
+    # designates (qore#7342)
     hash<string, int> th = {"a": 1};
     hash ph;
     auto v5 = (ph := th);

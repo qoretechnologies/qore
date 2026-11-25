@@ -325,6 +325,9 @@ def ci_jobs():
 
 class CiImageDigestsTest(unittest.TestCase):
     RESOLVER = "resolve-qore-test-base-images"
+    # the jobs that run on the tag itself: the .pre jobs and the GitHub status jobs (qore#7203), none of which uses
+    # the image's Qore modules; the status jobs must run even when the resolver failed, to post the failure
+    TAG_JOBS = (RESOLVER, "tree-already-tested", "pipeline-passed", "github-status")
 
     def test_jobs_run_on_resolved_digests(self):
         text, blocks = ci_jobs()
@@ -357,8 +360,7 @@ class CiImageDigestsTest(unittest.TestCase):
         checked = 0
         for job, block in blocks.items():
             image = re.search(r"(?m)^  image: (.+)$", block)
-            if job in (self.RESOLVER, "tree-already-tested"):
-                # the .pre jobs run on the tag: they do not use the image's Qore modules
+            if job in self.TAG_JOBS:
                 self.assertRegex(image.group(1), r":develop$")
                 continue
             if not image:
@@ -379,8 +381,8 @@ class CiImageDigestsTest(unittest.TestCase):
                     self.assertIn(self.RESOLVER, needs.group(1))
         self.assertGreater(checked, 10)
         self.assertEqual(set(resolved), used, "every resolved image is used")
-        # no job image names a tag of qore-test-base besides the .pre jobs
-        self.assertEqual(2, len(re.findall(r"(?m)^  image: .*qore-test-base.*:develop", text)))
+        # no job image names a tag of qore-test-base besides those jobs
+        self.assertEqual(len(self.TAG_JOBS), len(re.findall(r"(?m)^  image: .*qore-test-base.*:develop", text)))
 
 
 if __name__ == "__main__":

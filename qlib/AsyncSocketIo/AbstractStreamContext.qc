@@ -102,6 +102,26 @@ public class AbstractStreamContext {
     */
     setSendMinRate(int min_rate, timeout window) {
         send_rate = min_rate > 0 ? new SendRateMonitor(min_rate, window) : NOTHING;
+        if (send_rate) {
+            # the transport shows a peer's progress in steps of its flow-control window; the sender wakes at least
+            # every check interval, so a longer time between updates is its own delay
+            send_rate.enableProgressSteps();
+            send_rate.setMaxWaitCharge(2 * send_rate.getCheckInterval());
+        }
+    }
+
+    #! Ends the measurement of a send that waited; a wait that used up the credit between two checks is decided here
+    /** @param taken the bytes that the peer has taken, or -1 if that is not known
+        @param end_stream @ref True if the send ended the stream, which leaves nothing more to bound
+        @param stream_desc the description of the stream for the error
+
+        @throw STREAM-SEND-TIMEOUT the peer took less than the minimum rate
+    */
+    private endRateWait(int taken, bool end_stream, string stream_desc) {
+        if (send_rate.update(taken, False) && !end_stream) {
+            throw "STREAM-SEND-TIMEOUT", sprintf("%s: the peer took less than the minimum rate of %d bytes/s",
+                stream_desc, send_rate.getMinRate());
+        }
     }
 
     #! Sends data on the stream, waiting at most the given time for a full stream send buffer to drain
@@ -249,8 +269,10 @@ public class AbstractStreamContext {
         none of the data for the send timeout (qore#7325): unlike @ref close(), which ends the stream after the data
         already queued, so that a peer that grants no flow-control credit is never told, and the stream and its send
         buffer stay until the session ends, the stream is reset at once (HTTP/2 \c RST_STREAM, HTTP/3
-        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released.  Errors are ignored, as
-        the peer or the session may have ended the stream already.
+        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released: an HTTP/2 stream's when
+        this method returns, an HTTP/3 stream's when the QUIC stream closes, once the peer has answered the reset, as
+        the HTTP/3 layer may refer to the data until then.  Errors are ignored, as the peer or the session may have
+        ended the stream already.
 
         The default implementation calls @ref close()
 

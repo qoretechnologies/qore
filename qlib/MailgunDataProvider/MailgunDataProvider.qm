@@ -61,6 +61,15 @@ module MailgunDataProvider {
                 "- Mailing list management\n"
                 "- Inbound email routing\n"
                 "- Event tracking via webhooks",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "mailgun.net",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.mailgun.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "mailgun",
             "logo": MailgunLogo,
             "logo_file_name": "mailgun-logo.svg",
@@ -75,6 +84,11 @@ module MailgunDataProvider {
             "app": MailgunDataProvider::AppName,
             "path": "/send-email",
             "action": "send-email",
+            "message_formats": {"default": {
+                "plain": {"content": "text", "subject": "subject"},
+                "html": {"content": "html", "subject": "subject", "fallback": "text", "plain_alternative": True},
+            }},
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Email",
             "display_name": "Send Email",
             "short_desc": "Send an email via Mailgun",
@@ -99,12 +113,15 @@ module MailgunDataProvider {
             "app": MailgunDataProvider::AppName,
             "path": "/validate-email",
             "action": "validate-email",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Email",
             "display_name": "Validate Email",
             "short_desc": "Validate an email address",
             "desc": "Validate an email address using Mailgun's email validation API. Returns information "
                 "about deliverability, risk assessment, and suggested corrections.",
             "action_code": DPAT_API,
+            # a GET of the validation API: billed per check, but it stores nothing (qore#7454)
+            "mutates_state": False,
             "data_provider_info": MailgunValidateEmailDataProvider::ProviderInfo,
             "output_type": new MailgunValidateEmailResponseDataType(),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -159,6 +176,7 @@ module MailgunDataProvider {
             "short_desc": "Get a member from a mailing list",
             "desc": "Retrieve a specific member from a Mailgun mailing list by their email address.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": MailgunGetMailingListMemberDataProvider::ProviderInfo,
             "output_type": new MailgunMailingListMemberDataType(),
             "options": {

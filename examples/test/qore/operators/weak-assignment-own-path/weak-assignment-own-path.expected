@@ -19,3 +19,6 @@ global: ["w", "k"]
 closure: ["w", "k"]
 value list: src [1, 2] v [9, 2]
 value hash: src {a: 1} v {a: 9}
+unique pinned path: ["b", "w", "k"]
+unique pinned change: ["b", "w", "k", "y"]
+unique pinned element: ["b", "w", "x"]

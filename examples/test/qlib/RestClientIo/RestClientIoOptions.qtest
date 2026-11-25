@@ -220,10 +220,10 @@ public class RestClientIoOptionsTest inherits QUnit::Test {
     }
 
     testEnableHttp3() {
-        RestClientIo rest({"url": "https://localhost", "enable_http3": False});
+        RestClientIo rest({"url": "https://127.0.0.1", "enable_http3": False});
         on_exit rest.close();
         assertFalse(rest.getConnectionManager().getEnableHttp3());
-        RestClientIo def({"url": "https://localhost"});
+        RestClientIo def({"url": "https://127.0.0.1"});
         on_exit def.close();
         assertTrue(def.getConnectionManager().getEnableHttp3());
         # plain HTTP uses HTTP/1.1 as always

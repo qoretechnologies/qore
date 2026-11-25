@@ -1,0 +1,14 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# a module block that the module loader refuses (qore#7315)
+
+%modern
+
+module BlockNoDesc {
+    version = "1.0"; author = "Qore";
+}
+
+public namespace BlockNoDesc {
+    public int sub value() {
+        return 1;
+    }
+}

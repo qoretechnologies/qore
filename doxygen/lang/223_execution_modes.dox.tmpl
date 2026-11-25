@@ -543,6 +543,16 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --dump-symbols|Include an nm-like symbol table in dump output
     |\c --dump-sections|Include object and AOT section tables in dump output
 
+    @subsection qcc_modules Compiling Modules
+
+    \c qcc compiles a user module as the module loader loads it from source, so that a module that \c qcc compiles
+    also loads from source, which the loader falls back to when a compiled module cannot be used: the module block
+    (\c version, \c desc, \c author, \c url, \c license, \c init, \c del, \c domains) is read by the parser, which
+    checks it as the loader does, and a module that the loader refuses because of its block (a value that is not a
+    string, an invalid or repeated key, or a missing \c version, \c desc or \c author) is refused with the
+    loader's diagnostic, in every module mode (a module file, a separated module, its per-file objects with \c -c and
+    \c --context, a module built from them with \c --from-objects, and an archive with \c -a).
+
     @subsection qcc_parallel_codegen Parallel Backend Codegen and the GNU make Jobserver
 
     \c qcc can parallelize LLVM backend codegen for a single compilation using a
@@ -577,6 +587,18 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     parallel codegen is safe to leave enabled by default even under <tt>make -j</tt>, and the
     output is the same either way. Outside a jobserver-aware make (a bare \c qcc
     invocation), \c --jobs / \c QCC_JOBS apply directly.
+
+    @subsection qcc_module_warnings The Warnings of a Compiled Module
+
+    \c qcc parses a user module as the module loader parses it from source, which the loader falls back to when a
+    compiled module cannot be used, so that a module that \c qcc compiles also loads from source: with the warning
+    mask of a module load (the @ref warnings "warnings" \c unreachable-code, \c non-existent-method-call,
+    \c invalid-operation, \c call-with-type-errors, \c return-value-ignored, \c duplicate-hash-key,
+    \c duplicate-block-vars, \c broken-logic-precedence, \c invalid-catch and \c non-exhaustive-switch, as changed by
+    the module's own warning directives, such as @ref modern "%modern"), and with its warnings raised as errors, which
+    refuse the module with the loader's diagnostics.  Every such warning refuses the module, in \c qcc as in the
+    module loader, in a module file and in the files of a @ref separated_modules "separated module", including the
+    warnings found only when the module is committed.
 
     @subsection qcc_batch_memory Memory Admission of Batch Compiles
 

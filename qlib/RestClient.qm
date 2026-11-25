@@ -1304,6 +1304,8 @@ public final class SealedOAuth2Credentials {
         - \c connect_timeout: the connect timeout of a token request (default: 30 seconds)
 
         @throw OAUTH2-SEALED-ERROR an option is missing or invalid
+        @throw ILLEGAL-FILESYSTEM-ACCESS \c ssl_ca_file or \c ssl_ca_path is given by code that is restricted from
+        the filesystem (the code that calls a lent object's method counts; see @ref sandbox_lent_objects)
     */
     constructor(hash<auto> opts) {
         foreach string k in ("client_id", "client_secret", "token_url") {
@@ -1350,6 +1352,11 @@ public final class SealedOAuth2Credentials {
                 if (exists opts{k} && (opts{k}.typeCode() != NT_STRING || !opts{k}.val())) {
                     throw "OAUTH2-SEALED-ERROR", sprintf("option %y must be a non-empty string", k);
                 }
+            }
+            # the CA locations are read here, for the code that gave them, which can be restricted (qore#7052)
+            if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
+                throw "ILLEGAL-FILESYSTEM-ACCESS", "reading the CA locations of the token endpoint requires "
+                    "filesystem access";
             }
             trust_store = opts.ssl_ca_file
                 ? SSLTrustStore::fromFile(opts.ssl_ca_file)
@@ -3079,7 +3086,7 @@ hash<auto> ans = rest.del("/orders/1");
             }
         }
         if (connection_tls_credentials || connection_tls_origin || connection_tls_paths) {
-            if (connection_tls_paths && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            if (connection_tls_paths && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
                 throw "ILLEGAL-FILESYSTEM-ACCESS",
                     "copying a REST client with TLS credential paths requires filesystem access";
             }
@@ -5935,7 +5942,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     object getPollImpl() {
         # the synchronous client is not given to code restricted from NETWORK (qore#7262; see
         # HttpBasedConnection::checkLentClientTarget())
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             checkLentClientTarget();
         }
         return getPingClient();
@@ -6390,7 +6397,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     }
 
     private:internal static *code<*data(string, string, bool)> bindTlsFile(*string location, string endpoint) {
-        if (!location.val() || SandboxManager::isCallerRestricted(DOM_FILESYSTEM) || SandboxManager::isRestricted()) {
+        if (!location.val() || SandboxManager::isLentToRestricted(DOM_FILESYSTEM) || SandboxManager::isRestricted()) {
             return;
         }
         string path = location;
@@ -6855,7 +6862,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         if ((exists rtopts.ssl_cert_path || exists rtopts.ssl_key_path
                     || (exists opts.ssl_cert_path && !exists opts.ssl_cert_data && !credentials.cert)
                     || (exists opts.ssl_key_path && !exists opts.ssl_key_data && !credentials.key))
-                && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+                && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "caller cannot select TLS credential files";
         }
         credentials.additional_origins = tls_endpoint_origins;
@@ -6916,7 +6923,8 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
         @ref RestClient::RestClient "RestClient" created by @ref get() with \a connect @ref False, it does not log in
         when it is created but before its first request; a client of a connection that awaits OAuth2 authorization
         (\c authorization_code or \c implicit grant type without a token) can therefore be created.  Invalid OAuth2
-        options raise \c OAUTH2-ERROR in both cases.
+        options raise \c OAUTH2-ERROR in both cases. The default is applied to a copy of the runtime options,
+        which may have a specific value type such as \c hash<string,string>.
 
         @since
         - %RestClient 2.5
@@ -6925,6 +6933,7 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
     object getAsync(bool connect = True, *hash<auto> rtopts) {
         if (!connect && !exists rtopts.skip_login) {
             # as get(False) creates a RestClient that does not connect (qore#6906)
+            rtopts = {} + rtopts;
             rtopts.skip_login = True;
         }
         object o = AbstractConnection::getAsync(connect, rtopts);

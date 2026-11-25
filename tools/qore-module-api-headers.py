@@ -56,13 +56,19 @@ def _git_files(root):
                              text=True)
         if top.returncode or Path(top.stdout.strip()).resolve() != root.resolve():
             return None
-        out = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", "include/qore"], capture_output=True,
+        out = subprocess.run(["git", "-C", str(root), "ls-files", "--stage", "-z", "--", "include/qore"], capture_output=True,
                              check=True)
     except FileNotFoundError:
         return None
     prefix = "include/qore/"
-    return [name[len(prefix):] for name in out.stdout.decode("utf-8", errors="surrogateescape").split("\0")
-            if name.startswith(prefix)]
+    files = set()
+    for entry in out.stdout.decode("utf-8", errors="surrogateescape").split("\0"):
+        if entry:
+            metadata, name = entry.split("\t", 1)
+            if metadata.rsplit(" ", 1)[1] != "0":
+                raise ValueError(f"unmerged header {name!r}: resolve the conflict and stage the resolution")
+            files.add(name[len(prefix):])
+    return files
 
 
 def installed_headers(root):
@@ -158,10 +164,8 @@ def write_record(root, api, digest):
         f"api {api}\nsha256 {digest}\n", encoding="utf-8")
 
 
-def check(root):
+def check_record(root, api, digest):
     """Returns an error message, or None if the record matches the headers."""
-    api = _module_api(root)
-    digest = header_hash(root)
     recorded_api, recorded_hash = read_record(root)
     if recorded_api != api:
         return (f"the module API is {api}, but {RECORD} was recorded for module API {recorded_api}: record the "
@@ -180,10 +184,15 @@ def main(argv):
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--update", action="store_true", help="record the module API and the hash of the headers")
     args = parser.parse_args(argv[1:])
-    if args.update:
-        write_record(args.root, _module_api(args.root), header_hash(args.root))
-        return 0
-    error = check(args.root)
+    try:
+        digest = header_hash(args.root)
+        api = _module_api(args.root)
+        if args.update:
+            write_record(args.root, api, digest)
+            return 0
+        error = check_record(args.root, api, digest)
+    except ValueError as exc:
+        error = str(exc)
     if error:
         print(f"{argv[0]}: {error}", file=sys.stderr)
         return 1

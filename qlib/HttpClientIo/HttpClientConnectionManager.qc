@@ -148,7 +148,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
 
-        #! How long an address family in which an HTTP/3 connection failed without reaching a server is avoided
+        #! How long an address family in which an HTTP/3 connection failed without reaching a server is tried last
         const H3FamilyFailureTtl = 5m;
 
         #! Errors of HTTP/3 connections that never reached a server, when raised before the QUIC handshake completed
@@ -335,9 +335,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Address families that HTTP/3 connections failed to reach: "host:port" -> family -> expiry time
         /** A host name can resolve to addresses of both families while the server only receives QUIC datagrams on
-            one of them; a family whose connection attempt never reached a server is not used for new HTTP/3
-            connections to the origin until the entry expires (see @ref H3FamilyFailureTtl); the expiry times are on
-            the monotonic clock in microseconds
+            one of them; each HTTP/3 connection races its attempts in both families (RFC 8305), and a family in which
+            a connection failed without reaching a server is tried last by new HTTP/3 connections to the origin until
+            the entry expires (see @ref H3FamilyFailureTtl); the expiry times are on the monotonic clock in
+            microseconds
         */
         hash<string, hash<string, int>> h3_failed_families;
 
@@ -421,6 +422,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     private:internal {
+        #! The connections closed most recently, with why: see recordClose() and getStats() (qore#7443)
+        list<hash<auto>> recent_closes = ();
+
+        #! Protects @ref recent_closes
+        Mutex recent_closes_lock();
+
+        #! The test hook called when an attempt of a request fails, before the time of the request is
+        #! checked (see dbgSetAttemptFailedHook(); qore#7475)
+        static *code<nothing(hash<ExceptionInfo>, *int)> dbg_attempt_failed_hook;
+
         #! The code called once when the first request is submitted on a connection (see setFirstConnectionCallback())
         *code<nothing()> first_connection_callback;
 
@@ -447,6 +458,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             that its trusted creator gave
         */
         *HttpClientCreatorProof bound_proof;
+
+        #! The proof that a manager that trusted code created was given, which binds it for restricted code (qore#7295)
+        /** A manager that trusted code creates with the proof of its client (a RestClientIo creates its manager when it
+            is created) is the creator's: trusted code that uses it is not bound.  Restricted code that the client is
+            lent to uses it with the exemption of its creator (see getExemption()), and is bound to what the proof is
+            bound to, as the borrower of a manager that is created for it (bound_proof): the client's target, its proxy
+            and its CA locations.  A client that is given a shared manager takes no proof, so the manager is not bound
+            for its borrower
+        */
+        *HttpClientCreatorProof lent_proof;
     }
 
     #! Creates a new connection manager with the given options
@@ -492,6 +513,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             # the manager creates connections only to the target that the proof is bound to
             bound_proof = proof;
+        }
+        if (!bound_proof) {
+            # the manager is the creator's: its creator is not bound, but a restricted borrower of the client is
+            lent_proof = proof;
         }
         initManager(opts);
     }
@@ -653,11 +678,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         \c FILESYSTEM and CA certificate locations are given
     */
     private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
                 "certificate locations, as it is restricted from the FILESYSTEM functional domain";
         }
@@ -672,15 +697,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 "caller check, so it does not create connections";
         }
         # a manager created with a proof for restricted code creates connections only with what the proof is bound
-        # to: the client's target, its proxy and its CA locations, also if they were changed since (qore#7262)
-        if (bound_proof) {
-            checkBoundOrigin(url_info);
-            if (!bound_proof.allowsProxy(proxy_info)) {
+        # to: the client's target, its proxy and its CA locations, also if they were changed since (qore#7262); so does
+        # the manager that trusted code created for a client that it lent to restricted code (qore#7295)
+        *HttpClientCreatorProof binding = getBindingProof();
+        if (binding) {
+            checkBoundOrigin(url_info, binding);
+            if (!binding.allowsProxy(proxy_info)) {
                 throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
                     "target was given by trusted code; it does not create connections through another proxy than "
                     "the client's, or without the client's proxy";
             }
-            if (!bound_proof.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
+            if (!binding.allowsCaLocations(opts.ssl_ca_file, opts.ssl_ca_path)) {
                 throw "PERMISSION-DENIED", "the HTTP client connection manager was created for a client whose "
                     "target was given by trusted code; it does not create connections with other CA certificate "
                     "locations";
@@ -779,8 +806,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 conn.getProtocol(), conn.getConnectionId());
             *string key = conn.getPoolKey();
             if (key) {
+                recordClose(conn, "the leased connection was discarded");
                 evictConnections(key, (conn,));
             } else {
+                recordClose(conn, "the leased connection was discarded");
                 try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
             }
         } else {
@@ -1008,11 +1037,34 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         attempts; no attempt starts once it has run out.
         A connection that was not established in that time is named with its target and the time waited (\c host,
         \c port and \c timeout_ms in the argument), and a timeout of a request that retried a connection error
-        gives that error (\c last_attempt_error in the argument)
+        gives that error (\c last_attempt_error in the argument).  An attempt that fails with an error that would
+        be retried when the time of the request has run out (also as it runs out) ends the request with this timeout
+        too, with the error of that attempt (\c last_attempt_error), whichever of the two the attempt saw first
+        (see throwAttemptTimeout())
 
         @note If the request times out on a pooled connection, the connection is
         evicted and the request is retried once on a fresh connection, handling
         stale connections transparently.
+        @note An HTTP/1.1 request that asks for a protocol upgrade with an \c Upgrade header and is answered with a
+        \c 101 response ends with it: @ref HttpClientStreamHandle::readData() "readData()" returns the \c 101 response
+        header and then the end of the stream at once (since HttpClientIo 1.0, qore#7487), as the response has no
+        content.  The connection, whose data is no longer HTTP, then belongs to the caller: the manager never gives it
+        to another request, and the caller takes its socket over with \c getConnection().getSocket() (see
+        @ref HttpClientStreamHandle::getConnection() and @ref HttpClientConnection::getSocket()) to use the new
+        protocol, as the WebSocketClient module does, and ends it with \c getConnection().close() (see
+        @ref HttpClientConnection::close()), which closes the socket.  A stream handle that is released before its
+        caller took the socket over closes the connection, which the manager then removes from its pool (since
+        HttpClientIo 1.0, qore#7500), as does one released before the response to a request that asked for an
+        upgrade has arrived.  A request body streamed with \a body_streaming
+        that is not complete when the \c 101 response arrives must still be completed (RFC 9110 section 7.8), with
+        @ref HttpClientStreamHandle::sendData() "sendData()": the data given before the response is sent before the
+        end of the stream is delivered, and @ref HttpClientStreamHandle::sendData() "sendData()" writes the rest of
+        the body, also after the end of the stream, to the socket in the calling thread (since HttpClientIo 1.0,
+        qore#7503); the caller completes the body before it sends any data of the new protocol on the socket it takes
+        over.  @ref HttpClientStreamHandle::sendData() "sendData()" raises \c HTTPCLIENT-STATE-ERROR for data given
+        after the end of the body, as it does after a \c 101 response with which the body was complete or could not
+        be completed.  The requests that return the response instead of the
+        stream (@ref request(), @ref requestAsync(), @ref openStream()) close the connection after a \c 101 response.
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
@@ -1058,6 +1110,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
             } catch (hash<ExceptionInfo> ex) {
+                # test hook (a debug build of the library only): the attempt failed, before the time of the request is
+                # checked (see dbgSetAttemptFailedHook())
+                if (Option::HAVE_LIBRARY_DEBUGGING && dbg_attempt_failed_hook) {
+                    callAttemptFailedHook(ex, request_deadline);
+                }
                 # no retry starts once the request's time has run out; a deadline says nothing about the protocol;
                 # the stream's flag decides, not the clock: a wait can end up to a clock tick before the deadline
                 if (stream.requestDeadlineExpired()
@@ -1065,6 +1122,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     if (retried_error && ex.err == "HTTPCLIENT-TIMEOUT") {
                         rethrow ex.err, getRetriedTimeoutDesc(ex.desc, retried_error),
                             getRetriedTimeoutArg(ex.arg, retried_error);
+                    }
+                    # an error that would be retried if the request had time left is the timeout of the request:
+                    # the time of the request ended it, also when the attempt's own connect timeout ended the wait
+                    # for the connection at the same time (qore#7475)
+                    if (wouldRetryAttempt(method, stream, ex, retries, max_retries, h3_close_retried)) {
+                        throwExpiredAttemptTimeout(url, stream, request_limit ?? 0, ex);
                     }
                     rethrow;
                 }
@@ -1143,7 +1206,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         once it has run out, and a timeout of the acquisition is not retried and causes no protocol fallback.
         A connection that was not established in that time is named with its target and the time waited (\c host,
         \c port and \c timeout_ms in the argument), and a timeout of a request that retried a connection error
-        gives that error (\c last_attempt_error in the argument)
+        gives that error (\c last_attempt_error in the argument).  An attempt that fails with an error that would
+        be retried when the time of the request has run out (also as it runs out) ends the request with this timeout
+        too, with the error of that attempt (\c last_attempt_error), whichever of the two the attempt saw first
+        (see throwAttemptTimeout())
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
 
         @throw HTTPCLIENT-REQUEST-BODY-ERROR a GET request specifies a body or enables request-body streaming
@@ -1190,6 +1256,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     "future": result.future,
                 };
             } catch (hash<ExceptionInfo> ex) {
+                # test hook (a debug build of the library only; see dbgSetAttemptFailedHook())
+                if (Option::HAVE_LIBRARY_DEBUGGING && dbg_attempt_failed_hook) {
+                    callAttemptFailedHook(ex, request_deadline);
+                }
                 # NOTE: no manual reservation release needed here — submitAsync()
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
                 # (waitForReady timeout, cancel, submitAsyncImpl exception), and
@@ -1202,6 +1272,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     if (retried_error && ex.err == "HTTPCLIENT-TIMEOUT") {
                         rethrow ex.err, getRetriedTimeoutDesc(ex.desc, retried_error),
                             getRetriedTimeoutArg(ex.arg, retried_error);
+                    }
+                    # an error of the attempt that would be retried if the request had time left (also a connection
+                    # error of the acquisition, and a connection at capacity) is the timeout of the request (qore#7475)
+                    if (wouldRetryAttempt(method, stream, ex, retries, max_retries, h3_close_retried, True)) {
+                        throwExpiredAttemptTimeout(url, stream, opts.request_timeout, ex);
                     }
                     rethrow;
                 }
@@ -1325,7 +1400,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         connection is acquired.
         A connection that was not established in that time is named with its target and the time waited (\c host,
         \c port and \c timeout_ms in the argument), and a timeout of a request that retried a connection error
-        gives that error (\c last_attempt_error in the argument)
+        gives that error (\c last_attempt_error in the argument).  An attempt that fails with an error that would
+        be retried when the time of the request has run out (also as it runs out) ends the request with this timeout
+        too, with the error of that attempt (\c last_attempt_error), whichever of the two the attempt saw first
+        (see throwAttemptTimeout())
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails due to a protocol or transport error
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host, or if it addresses a UNIX domain
         socket with TLS or with a forced HTTP/2 or HTTP/3 protocol
@@ -1518,6 +1596,26 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 logRedirect(rf, resp.status_code, resp.headers);
                 rf.follow(resp.status_code, resp.status_message, resp.headers);
                 continue;
+            }
+            # a 101 response, to a request that asked for a protocol upgrade, has no content: the end of the stream,
+            # which follows it at once, is read, and the connection, which is no longer HTTP, is closed, as the
+            # response stream gives no way to use it (qore#7487)
+            if (resp.status_code == 101) {
+                while (!ended) {
+                    auto d = sh.readData(wait > 0 ? wait : NOTHING);
+                    if (!exists d) {
+                        throw "HTTPCLIENT-TIMEOUT", sprintf("the end of the 101 response from %y was not received "
+                            "within %d ms", request_url, wait);
+                    }
+                    if (d.typeCode() == NT_HASH && (d.end_stream || d.error)) {
+                        ended = True;
+                    }
+                }
+                try {
+                    sh.getConnection().cancelRequest(sh.getStreamId());
+                } catch (hash<ExceptionInfo> ex) {
+                    # the connection is already closed
+                }
             }
             keep = True;
             return new HttpClientResponseStream(sh, resp, request_url,
@@ -1901,6 +1999,10 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
+                # test hook (a debug build of the library only; see dbgSetAttemptFailedHook())
+                if (Option::HAVE_LIBRARY_DEBUGGING && dbg_attempt_failed_hook) {
+                    callAttemptFailedHook(ex, request_deadline);
+                }
                 # A pinned persistent-session request must never retry on a fresh or evicted
                 # connection — that would break the connection-scoped transaction affinity and
                 # start a second transaction on another socket.  Surface the error so the caller
@@ -1915,6 +2017,12 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
                     if (retried_error && ex.err == "HTTPCLIENT-TIMEOUT") {
                         rethrow ex.err, getRetriedTimeoutDesc(ex.desc, retried_error),
                             getRetriedTimeoutArg(ex.arg, retried_error);
+                    }
+                    # an error of the attempt that resendRequest() would send the request again for if it had time
+                    # left is the timeout of the request (qore#7475)
+                    if (wouldRetryAttempt(method, stream, ex, resend.retries, opts.max_request_retries,
+                            resend.h3_close_retried, True, True)) {
+                        throwExpiredAttemptTimeout(url, stream, request_limit ?? 0, ex);
                     }
                     rethrow;
                 }
@@ -1985,6 +2093,8 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
           - \c active_streams (int): total active streams on those connections
           - \c draining (int): number of connections in GOAWAY/draining state
         - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
+        - \c recent_closes (list<hash<auto>>): the connections closed most recently, with why (see
+          @ref getRecentCloses(); qore#7443)
     */
     hash<auto> getStats() {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
@@ -2031,7 +2141,21 @@ HttpClientResponseStream stream = mgr.openStream("https://example.com/file.iso",
             "hosts": per_host.size(),
             "per_host": per_host,
             "protocol": opts.protocol,
+            # the connections closed most recently, with why and the streams active on them (qore#7443)
+            "recent_closes": getRecentCloses(),
         };
+    }
+
+    #! Returns the connections closed most recently, oldest first, with why (qore#7443)
+    /** @return a list of hashes with the keys \c connection_id, \c protocol, \c reason (why it was closed, see
+        @ref HttpClientConnection::setCloseReason()), \c active_streams (the streams active on it when it was closed)
+        and \c closed (when); at most the last 16 connections are kept
+
+        @since HttpClientIo 1.0
+    */
+    list<hash<auto>> getRecentCloses() {
+        AutoLock al(recent_closes_lock);
+        return recent_closes;
     }
 
     #! Returns per-connection info for currently-pooled connections, including the negotiated protocol
@@ -2201,6 +2325,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         }
         foreach string key in (keys pool_copy) {
             foreach HttpClientConnection conn in (pool_copy{key}) {
+                recordClose(conn, "the connections of the manager were closed");
                 try {
                     conn.close();
                 } catch (hash<ExceptionInfo> ex) {
@@ -2235,6 +2360,112 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     static string getRetriedTimeoutDesc(string desc, hash<ExceptionInfo> retried_error) {
         return sprintf("%s; the attempt before failed with %s: %s", desc, retried_error.err, retried_error.desc);
+    }
+
+%ifdef QoreDebug
+    #! @cond nodoc
+    #! Sets the test hook that the request loops call when an attempt fails; a debug build of the library only
+    /** For tests: the hook is process-wide (it is called for the requests of every manager in the process), so only
+        trusted code with process control can set it, and the method exists only in a debug build of the library
+
+        @param hook the hook, called with the error of the attempt and the deadline of the request (on the monotonic
+        clock, in microseconds; none if it has none) in the thread of the request, before the time of the request is
+        checked, or @ref nothing to remove it
+
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
+    */
+    static dbgSetAttemptFailedHook(*code<nothing(hash<ExceptionInfo>, *int)> hook) [dom=PROCESS_CONTROL] {
+        # the method's functional domain refuses a caller restricted from process control; restricted Programs load
+        # this module, so it does not call Program::getCallerCapabilityMask(), which is of that domain itself
+        SandboxManager::checkProcessWideRegistration("set the attempt-failed hook of HTTP client connection "
+            "managers");
+        dbg_attempt_failed_hook = hook;
+    }
+    #! @endcond
+%endif
+
+    #! Returns @ref True if the error of an attempt would be retried if the request had time left (qore#7475)
+    /** The same rules as the retries of the request loops: a connection error, or an error of a request that was not
+        sent on a pooled connection, while retries are left and the request can be retried; an HTTP/3 close error only
+        once; with \a capacity, also a connection at capacity (submitRequestAsync(), request()); with \a refused, also
+        a request that the server refused without processing it (request(), see resendRequest())
+
+        A timeout (\c HTTPCLIENT-TIMEOUT) is never such an error: the loops handle it themselves.
+    */
+    private bool wouldRetryAttempt(string method, *HttpClientStreamHandle stream, hash<ExceptionInfo> ex,
+            int retries, int max_retries, bool h3_close_retried, bool capacity = False, bool refused = False) {
+        if (ex.err == "HTTPCLIENT-TIMEOUT" || retries >= max_retries) {
+            return False;
+        }
+        if (refused && isRefusedRequestErrorStatic(ex.err)) {
+            return True;
+        }
+        if (isHttp3ConnectionCloseError(ex.err)) {
+            return !h3_close_retried && canRetryRequest(method, stream, ex);
+        }
+        return (isConnectionError(ex.err) || isUnsentOnPooledConnection(ex, stream)
+            || (capacity && isCapacityError(ex.err))) && canRetryRequest(method, stream, ex);
+    }
+
+    #! Raises the timeout of a request whose time ran out when an attempt failed with an error that is retried
+    /** See throwAttemptTimeout(); the description is that of the wait for the stream's connection if the attempt's
+        connection was not ready (see HttpClientStreamHandle::getConnectWaitTimeout()), that of the acquisition of a
+        connection if the attempt acquired none, and that of a request that its time ended otherwise (qore#7475)
+
+        @param url the URL of the request
+        @param stream the stream of the attempt, if it acquired one
+        @param waited_ms the time of the request, in milliseconds
+        @param ex the error of the attempt
+
+        @throw HTTPCLIENT-TIMEOUT always
+    */
+    private throwExpiredAttemptTimeout(string url, *HttpClientStreamHandle stream, int waited_ms,
+            hash<ExceptionInfo> ex) {
+        if (stream && !stream.isSubmitted() && (isConnectionError(ex.err) || isHttp3ConnectionCloseError(ex.err))) {
+            hash<auto> to = stream.getConnectWaitTimeout(waited_ms);
+            throwAttemptTimeout(to.desc, to.arg, ex);
+        }
+        string key = getPoolKey(parseRequestUrl(url));
+        if (!stream) {
+            throwAttemptTimeout(sprintf("no connection to %s was acquired within the request's time: the time ran out "
+                "when an attempt failed", key), NOTHING, ex);
+        }
+        # an attempt that sent the request (a refused request, a failed read of an idempotent one) is ended by the time
+        # as well
+        throwAttemptTimeout(sprintf("the request to %s was ended by its time: the time ran out when an attempt "
+            "failed", key), NOTHING, ex);
+    }
+
+    #! Calls the test hook of the failed attempts, if any (a debug build of the library only; qore#7475)
+    /** An exception of the hook is logged; it does not replace the error of the attempt
+    */
+    private callAttemptFailedHook(hash<ExceptionInfo> ex, *int request_deadline) {
+        try {
+            dbg_attempt_failed_hook(ex, request_deadline);
+        } catch (hash<ExceptionInfo> hex) {
+            log(LoggerLevel::ERROR, "the attempt-failed test hook raised an exception: %s", get_exception_string(hex));
+        }
+    }
+
+    #! Raises the timeout of a request whose time ran out when an attempt failed with an error that is retried
+    /** An attempt that fails with a connection error when the time of the request has run out, or as it runs out
+        (the attempt's connect timeout and the request's deadline can end the wait for the connection at the same
+        time), is not retried: the time of the request ended the request, which raises \c HTTPCLIENT-TIMEOUT with the
+        error of that attempt, as a timeout that ends the attempt after a retried one does, whichever of the two
+        times the attempt saw first (qore#7475)
+
+        @param desc the description of the timeout
+        @param arg the argument of the timeout
+        @param attempt_error the error of the attempt
+
+        @throw HTTPCLIENT-TIMEOUT always; the description ends with the error of the attempt (see
+        getRetriedTimeoutDesc()), and the argument has \c last_attempt_error (see getRetriedTimeoutArg())
+
+        @since HttpClientIo 1.0 (public for callers that retry connections themselves)
+    */
+    static throwAttemptTimeout(string desc, auto arg, hash<ExceptionInfo> attempt_error) {
+        throw "HTTPCLIENT-TIMEOUT", getRetriedTimeoutDesc(desc, attempt_error),
+            getRetriedTimeoutArg(arg, attempt_error);
     }
 
     #! Returns the argument of a timeout of a request that retried a connection error before it
@@ -2288,6 +2519,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                     if (!conn.isLeased() && conn.getOutstandingStreamCount() == 0
                             && (now_mono_us - conn.getLastActivityMonotonicUs()) > idle_limit_us) {
                         log(LoggerLevel::DEBUG, "closing idle connection to %s", key);
+                        recordClose(conn, "it was idle for longer than the idle timeout");
                         push to_close, conn;
                         continue;
                     }
@@ -2403,7 +2635,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Applies the connection's credential policy to a REST client copy sharing this transport
     nothing checkTlsCredentialCopy(string url) {
-        if (origin_tls_credentials.file_backed && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if (origin_tls_credentials.file_backed && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "ILLEGAL-FILESYSTEM-ACCESS", "copying a REST client with TLS credential paths requires filesystem access";
         }
         HttpClientConnectionManager::checkTlsCredentialOrigin(url);
@@ -2456,7 +2688,7 @@ printf("%d connection(s) migrated\n", migrated);
             }
             # connections take an integer port; 0 marks the UNIX domain socket target
             url_info.port = 0;
-            checkBoundOrigin(url_info);
+            checkBoundOrigin(url_info, getBindingProof());
             return url_info;
         }
         if (!url_info.protocol) {
@@ -2469,17 +2701,30 @@ printf("%d connection(s) migrated\n", migrated);
         if (!url_info.port) {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
-        checkBoundOrigin(url_info);
+        checkBoundOrigin(url_info, getBindingProof());
         return url_info;
+    }
+
+    #! Returns the proof that binds the calling code, if any (qore#7262, qore#7295)
+    /** The proof of a manager that was created for restricted code binds every caller; the proof that trusted code gave
+        the manager of its client binds only restricted callers, so trusted code that uses the manager is not
+        bound
+    */
+    private:internal *HttpClientCreatorProof getBindingProof() {
+        if (bound_proof) {
+            return bound_proof;
+        }
+        # the borrower counts also when it calls through the method of a lent object, whose capability frame lends
+        # nothing here (qore#7052): a restricted borrower is always bound to the proof (fail closed)
+        return lent_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
     /** Checked for every request, also one that a pooled connection serves (the pool is keyed by host and port), and
         again when a connection is created
     */
-    private:internal checkBoundOrigin(hash<auto> url_info) {
-        if (bound_proof && !bound_proof.allowsOrigin(url_info.protocol == "https", url_info.host ?? "",
-                url_info.port ?? 0)) {
+    private:internal checkBoundOrigin(hash<auto> url_info, *HttpClientCreatorProof binding) {
+        if (binding && !binding.allowsOrigin(url_info.protocol == "https", url_info.host ?? "", url_info.port ?? 0)) {
             throw "PERMISSION-DENIED", sprintf("the HTTP client connection manager was created for a client whose "
                 "target was given by trusted code; it does not create connections to %s://%s:%d",
                 url_info.protocol ?? "", url_info.host ?? "", url_info.port ?? 0);
@@ -2859,6 +3104,7 @@ printf("%d connection(s) migrated\n", migrated);
                 }
             }
             foreach HttpClientConnection conn in (checkout_evictions) {
+                recordClose(conn, "it was evicted at checkout (closed, failed, idle or too old)");
                 try {
                     conn.close();
                 } catch () {
@@ -2916,11 +3162,13 @@ printf("%d connection(s) migrated\n", migrated);
                     # Connection closed during probe (server rejected h2c)
                 }
                 if (!h2c_ok && deadline_bound && !conn.isClosed()) {
+                    recordClose(conn, "the HTTP/2 (h2c) probe of the server did not end in time");
                     try { conn.close(); } catch () {}
                     throwAcquireTimeout(key, "the HTTP/2 probe of the server did not end");
                 }
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
+                    recordClose(conn, "the server refused HTTP/2 (h2c probe)");
                     try { conn.close(); } catch () {}
                     {
                         AutoWriteLock al(pool_lock);
@@ -2935,6 +3183,7 @@ printf("%d connection(s) migrated\n", migrated);
             {
                 AutoWriteLock al(pool_lock);
                 if (shutdown) {
+                    recordClose(conn, "the manager is shutting down");
                     try { conn.close(); } catch () {}
                     throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
                 }
@@ -2973,24 +3222,25 @@ printf("%d connection(s) migrated\n", migrated);
     private hash<auto> prepareH3Probe(hash<auto> url_info, string key) {
         AutoWriteLock al(pool_lock);
         h3_probe_times{key} = clock_get_monotonic_us();
-        # (a manager bound to the target of a lent client keeps its port, see HttpClientCreatorProof)
-        if (!origin_tls_credentials && !bound_proof && alt_svc_port_map.hasKey(key)) {
+        # (a manager bound to the target of a lent client keeps its port for the callers that the binding governs, see
+        # HttpClientCreatorProof and getBindingProof())
+        if (!origin_tls_credentials && !getBindingProof() && alt_svc_port_map.hasKey(key)) {
             url_info.port = alt_svc_port_map{key};
         }
         return url_info;
     }
 
-    #! Internal: returns the address families to avoid for a new HTTP/3 connection to the given origin
+    #! Internal: returns the address families to try last for a new HTTP/3 connection to the given origin
     /** These are the families in which an HTTP/3 connection to the origin recently failed without reaching a server
-        (see @ref recordH3FamilyFailure()).  The connection is made to the first resolved address of the host that is
-        not in one of them, or to the first one if all of them are (see
+        (see @ref recordH3FamilyFailure()).  The connection races its attempts to the resolved addresses of the host
+        (RFC 8305), and the attempts in these families come after the others (see
         @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()"); the
         host name is resolved by the connection's poll operation, so nothing is resolved here, and a connection can
         be created on an async I/O thread.  Expired entries are removed.
 
         @param key the origin pool key
 
-        @return the address families to avoid, or @ref NOTHING if there are none
+        @return the address families to try last, or @ref NOTHING if there are none
     */
     private *list<int> getH3AvoidedFamilies(string key) {
         int now = clock_get_monotonic_us();
@@ -3049,7 +3299,7 @@ printf("%d connection(s) migrated\n", migrated);
             return;
         }
         log(LoggerLevel::DEBUG, "%s: HTTP/3 connection %d in address family %d failed without reaching a server "
-            "(%s); trying another family for new connections", key, conn.getConnectionId(), family, err);
+            "(%s); trying it last for new connections", key, conn.getConnectionId(), family, err);
         h3_failed_families{key}{family} = now + H3FamilyFailureTtl.durationMicroseconds();
     }
 
@@ -3141,7 +3391,7 @@ printf("%d connection(s) migrated\n", migrated);
         # directly to setUserTimeout(int).
         if (opts.tcp_user_timeout > 0) {
             try {
-                conn.getSocket().setUserTimeout(opts.tcp_user_timeout);
+                conn.getPollOperation().getSocket().setUserTimeout(opts.tcp_user_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG,
                     "TCP_USER_TIMEOUT could not be applied: %s: %s",
@@ -3216,6 +3466,7 @@ printf("%d connection(s) migrated\n", migrated);
         # candidate during the stagger phase, so there is no loser to close then.
         foreach *HttpClientConnection conn in ((h3conn, h2conn, h1conn)) {
             if (conn && conn !== winner) {
+                recordClose(conn, "it lost the protocol race (happy eyeballs)");
                 try { conn.close(); } catch () {}
             }
         }
@@ -3234,6 +3485,8 @@ printf("%d connection(s) migrated\n", migrated);
             *Http1ClientConnection h1conn) {
         foreach *HttpClientConnection conn in ((h3conn, h2conn, h1conn)) {
             if (conn) {
+                # a static method: the reason is the connection's own, not the manager's history
+                conn.setCloseReason("its protocol race (happy eyeballs) was abandoned");
                 try { conn.close(); } catch () {}
             }
         }
@@ -3313,6 +3566,7 @@ printf("%d connection(s) migrated\n", migrated);
             h1conn.setManagerContext(self, key);
             submitConnectionToController(key, h1conn);
         } catch (hash<ExceptionInfo> ex) {
+            recordClose(h1conn, sprintf("it could not be submitted to the I/O controller: %s: %s", ex.err, ex.desc));
             try { h1conn.close(); } catch () {}
             rethrow;
         }
@@ -4105,6 +4359,7 @@ printf("%d connection(s) migrated\n", migrated);
         {
             AutoWriteLock al(pool_lock);
             if (shutdown) {
+                recordClose(conn, "the manager is shutting down");
                 try { conn.close(); } catch () {}
                 throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
             }
@@ -4595,7 +4850,9 @@ printf("%d connection(s) migrated\n", migrated);
     private submitConnectionToController(string key, HttpClientConnection conn,
             bool initial = True) {
         HttpClientPollOperation op = conn.getPollOperation();
-        Socket sock = conn.getSocket();
+        # the socket of the poll operation, the object that HttpClientConnection::getSocket() returns as well, which
+        # a caller takes over with it after a 101 response (qore#7500)
+        Socket sock = conn.getPollOperation().getSocket();
         string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
@@ -4688,6 +4945,7 @@ printf("%d connection(s) migrated\n", migrated);
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h1");
             }
+            recordClose(conn, sprintf("its I/O operation failed: %s: %s", result.ex.err, result.ex.desc));
             try {
                 conn.close();
             } catch (hash<ExceptionInfo> ex) {
@@ -4712,6 +4970,9 @@ printf("%d connection(s) migrated\n", migrated);
                 cacheProtocol(key, "h1");
             }
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
+            recordClose(conn, op_err
+                ? sprintf("its I/O operation closed: %s: %s", op_err.err, op_err.desc)
+                : "its I/O operation closed");
             # Close the connection to notify pending streams — their
             # Promises are rejected so threads in f.get() wake up
             # instead of waiting until request_timeout
@@ -4726,6 +4987,7 @@ printf("%d connection(s) migrated\n", migrated);
                 log(LoggerLevel::DEBUG,
                     "connection %d drained after GOAWAY; removing from pool",
                     conn.getConnectionId());
+                recordClose(conn, "the server sent GOAWAY, and its streams completed");
                 try { conn.close(); } catch () {}
                 removeConnectionFromPool(key, conn);
                 return;
@@ -4740,6 +5002,7 @@ printf("%d connection(s) migrated\n", migrated);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "connection %d continueReading error: %s: %s",
                 conn.getConnectionId(), ex.err, ex.desc);
+            recordClose(conn, sprintf("its I/O operation could not go on reading: %s: %s", ex.err, ex.desc));
             try { conn.close(); } catch () {}
             removeConnectionFromPool(key, conn);
             return;
@@ -4986,7 +5249,7 @@ printf("%d connection(s) migrated\n", migrated);
     private bool isHttp3ConnectionCloseError(string err) {
         return err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella, still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
-            || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
+            || err == "HTTP3-PEER-UNRESPONSIVE"   # the peer did not acknowledge a request (qore#6930)
             || err == "HTTP3-STATELESS-RESET"     # the server has no state for the connection (qore#6931)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
@@ -5019,7 +5282,7 @@ printf("%d connection(s) migrated\n", migrated);
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella; still emitted from some sites
             || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
-            || err == "HTTP3-PEER-UNRESPONSIVE"   # no packet from the peer after a request (qore#6930)
+            || err == "HTTP3-PEER-UNRESPONSIVE"   # the peer did not acknowledge a request (qore#6930)
             || err == "HTTP3-STATELESS-RESET"     # the server has no state for the connection (qore#6931)
             || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
             || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
@@ -5310,7 +5573,9 @@ printf("%d connection(s) migrated\n", migrated);
         if (conn.getConnectionState() == HttpClientConnectionState::Connecting) {
             return True;
         }
-        if (!conn.getSocket().isOpen()) {
+        # the socket of the poll operation: HttpClientConnection::getSocket() takes the socket of a connection whose
+        # protocol is switched over from its stream (qore#7500)
+        if (!conn.getPollOperation().getSocket().isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
                 conn.getConnectionId());
             return False;
@@ -5411,12 +5676,48 @@ printf("%d connection(s) migrated\n", migrated);
             reason);
     }
 
+    #! The number of closed connections kept for getStats() (see recordClose())
+    const RecentCloseMax = 16;
+
+    #! Internal: records why a connection is closed, before it is (qore#7443)
+    /** The connection keeps the first reason recorded (see HttpClientConnection::setCloseReason()); the manager keeps
+        the connections closed most recently, with their reasons and the streams that were active on them, for
+        @ref getStats(), as a closed connection leaves the pool.  Only called where a connection is closed.
+
+        @param conn the connection that is closed
+        @param reason why it is closed
+    */
+    private recordClose(HttpClientConnection conn, string reason) {
+        conn.setCloseReason(reason);
+        hash<auto> entry = {
+            "connection_id": conn.getConnectionId(),
+            "protocol": conn.getProtocol(),
+            "reason": conn.getCloseReason(),
+            "active_streams": conn.getActiveStreamCount(),
+            "closed": now_us(),
+        };
+        log(LoggerLevel::DEBUG, "closing %s connection %d with %d active stream(s): %s", entry.protocol,
+            entry.connection_id, entry.active_streams, entry.reason);
+        AutoLock al(recent_closes_lock);
+        # a connection is recorded once
+        foreach hash<auto> e in (recent_closes) {
+            if (e.connection_id == entry.connection_id) {
+                return;
+            }
+        }
+        push recent_closes, entry;
+        if (recent_closes.size() > RecentCloseMax) {
+            splice recent_closes, 0, 1;
+        }
+    }
+
     #! Internal: closes the stale connection of a request that timed out on it, before the request is sent again
     /** Only called for a reused connection on which the request was submitted, so the connection was ready
 
         @param conn the connection of the request that timed out
     */
-    private static closeTimedOutConnection(HttpClientConnection conn) {
+    private closeTimedOutConnection(HttpClientConnection conn) {
+        recordClose(conn, "a request timed out on the reused connection");
         try {
             conn.close();
         } catch () {
@@ -5474,6 +5775,7 @@ printf("%d connection(s) migrated\n", migrated);
         foreach HttpClientConnection conn in (conns) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
+            recordClose(conn, "it was evicted as dead (closed or failed)");
             try { conn.close(); } catch () {}
         }
     }
@@ -5528,6 +5830,7 @@ printf("%d connection(s) migrated\n", migrated);
         foreach HttpClientConnection conn in (to_close) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
+            recordClose(conn, "it was evicted as dead (closed or failed)");
             try { conn.close(); } catch () {}
         }
     }

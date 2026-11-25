@@ -55,6 +55,8 @@ const SCRIPT_FILES = (
     ".qcc-generation.stamp": True,
     ".qcc-context": True,
     ".qcc-context.source-order-v2.json": True,
+    # The dependency graph that the incremental planner freezes for a build step.
+    ".qcc-context.graph-snapshot.json": True,
     "build-deps.cmake": True,
     "direct-deps.cmake": True,
     "qcc-batch.sh": True,
@@ -66,6 +68,8 @@ const SCRIPT_FILES = (
     "source-content.stamp": True,
     "source-symbols.manifest": True,
     "source-symbols.manifest.cache": True,
+    # Touched by the group's source symbol manifest command (qore#6153).
+    "source-symbols.manifest.stamp": True,
 );
 const TRANSIENT_DIR_NAMES = (
     ".qcc-batch-bootstrap.stamp.lock": True,
@@ -234,7 +238,13 @@ list<string> sub list_names(string path) {
     return dir.listNames();
 }
 
-sub validate_owned_tree(string path, reference<list<string>> unexpected) {
+#! Validates that a stale managed directory holds only helper-owned files before it is removed
+/** A file is helper-owned if its name is one that the helpers write (see is_owned_file_name()) or if the previous
+    configure registered it as an expected file (\a previous_files): the build registers every file that it writes in
+    a managed directory, so a file that the name rules do not know yet, as the stamp of a group's source symbol
+    manifest was not (qore#6153), is still recognized as the build's own when its group is removed.
+*/
+sub validate_owned_tree(string path, reference<list<string>> unexpected, hash<string, bool> previous_files) {
     foreach string name in (list_names(path)) {
         string entry_path = path + DirSep + name;
         *hash<StatInfo> info = hlstat(entry_path);
@@ -242,16 +252,17 @@ sub validate_owned_tree(string path, reference<list<string>> unexpected) {
             prune_error("cannot inspect managed path: " + entry_path);
         }
         if (info.type == "SYMBOLIC-LINK") {
-            if (!is_owned_file_name(path, name)) {
+            if (!exists previous_files{entry_path} && !is_owned_file_name(path, name)) {
                 push unexpected, entry_path;
             }
         } else if (info.type == "DIRECTORY") {
             if (name == "source-content" || name == GENERATION_DIR_NAME) {
-                validate_owned_tree(entry_path, \unexpected);
+                validate_owned_tree(entry_path, \unexpected, previous_files);
             } else if (!is_transient_dir_name(name)) {
                 push unexpected, entry_path;
             }
-        } else if (info.type != "REGULAR" || !is_owned_file_name(path, name)) {
+        } else if (info.type != "REGULAR"
+                || (!exists previous_files{entry_path} && !is_owned_file_name(path, name))) {
             push unexpected, entry_path;
         }
     }
@@ -385,6 +396,8 @@ hash<string, int> sub reconcile(string plan_path, string state_path) {
 
     hash<string, list<string>> previous = parse_manifest(state_path, False);
     hash<string, bool> previous_dirs = {};
+    # the files that the previous configure registered: the build's own, also where the name rules do not know them
+    hash<string, bool> previous_files = {};
     if (previous) {
         validate_keys(previous, state_path);
         if (one(previous, "binary_root", state_path) != binary_root
@@ -394,6 +407,9 @@ hash<string, int> sub reconcile(string plan_path, string state_path) {
         }
         foreach string path in (previous{"managed_dir"} ?? ()) {
             previous_dirs{canonical(path)} = True;
+        }
+        foreach string path in (previous{"expected_file"} ?? ()) {
+            previous_files{path} = True;
         }
     }
 
@@ -416,7 +432,7 @@ hash<string, int> sub reconcile(string plan_path, string state_path) {
                 if (exists expected_files{entry_path}) {
                     continue;
                 }
-                if (is_owned_file_name(path, name)) {
+                if (exists previous_files{entry_path} || is_owned_file_name(path, name)) {
                     stale_files{entry_path} = True;
                 } else {
                     push unexpected, entry_path;
@@ -427,14 +443,15 @@ hash<string, int> sub reconcile(string plan_path, string state_path) {
                 } else if (is_transient_dir_name(name)) {
                     stale_dirs{entry_path} = True;
                 } else if (inlist(path, roots) || exists previous_dirs{entry_path}) {
-                    validate_owned_tree(entry_path, \unexpected);
+                    validate_owned_tree(entry_path, \unexpected, previous_files);
                     stale_dirs{entry_path} = True;
                 } else {
                     push unexpected, entry_path;
                 }
             } else if (exists expected_files{entry_path}) {
                 continue;
-            } else if (info.type == "REGULAR" && is_owned_file_name(path, name)) {
+            } else if (info.type == "REGULAR"
+                    && (exists previous_files{entry_path} || is_owned_file_name(path, name))) {
                 stale_files{entry_path} = True;
             } else {
                 push unexpected, entry_path;

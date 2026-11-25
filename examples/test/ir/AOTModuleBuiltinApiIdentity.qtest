@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# test-platform: macos - qcc-compiled .qmod modules, their metadata record and dylib loading
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTModuleBuiltinApiIdentityTest
+
+#! An AOT module compiled against other builtin API metadata is out of date (qore#7183)
+/** A qmod can have the metadata of the builtin classes, functions and constants that it uses built into its code (the
+    functional domains that a class inherits from a builtin base class, the domains that its code uses, calls of
+    builtin functions folded because they are pure), so qcc records the builtin API identity of its libqore in the
+    module's metadata record, and a libqore with another identity loads the module's source instead, or refuses the
+    module; the build's check (qcc --check-module-sources) has such a module compiled again.
+
+    A module compiled with \c QORE_AOT_TEST_BUILTIN_API_IDENTITY set records that identity instead of the one of its
+    libqore, as a module compiled by a libqore whose builtin API metadata has changed since does.
+*/
+class AOTModuleBuiltinApiIdentityTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! an identity that no libqore has
+        const OtherIdentity = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        const ModuleSource = "%modern
+module AOTBuiltinApiIdentity {
+    version = \"1.0\";
+    desc = \"AOT builtin API identity test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTBuiltinApiIdentity {
+    public int sub value() {
+        return 42;
+    }
+}
+";
+
+        const Script = "%modern
+%requires AOTBuiltinApiIdentity
+
+printf(\"%d\\n\", AOTBuiltinApiIdentity::value());
+";
+    }
+
+    constructor() : QUnit::Test("AOTModuleBuiltinApiIdentityTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("a module of the same builtin API identity is loaded", \sameIdentityTest());
+        addTestCase("a module of another builtin API identity is refused without its source",
+            \otherIdentityRefusedTest());
+        addTestCase("the source of a module of another builtin API identity is loaded instead",
+            \otherIdentitySourceTest());
+        addTestCase("qcc reports the builtin API identities", \qccReportsIdentityTest());
+        addTestCase("the build's check finds a module of another builtin API identity out of date",
+            \checkModuleSourcesTest());
+        addTestCase("an invalid builtin API identity cannot be recorded", \invalidIdentityTest());
+
+        set_return_value(main());
+    }
+
+    #! A command prefix that kills what follows after \a seconds, or an empty string when there is none
+    private static string timeoutPrefix(int seconds) {
+        string cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? trim(backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        return cmd ? sprintf("%s %d ", shellQuote(cmd), seconds) : "";
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    #! The environment that runs this build's binaries
+    private string env() {
+        return sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", shellQuote(libqore_dir),
+            shellQuote(libqore_dir), shellQuote(libqore_dir));
+    }
+
+    #! The path of this build's qcc, or NOTHING if it has none
+    private *string qccBin() {
+        string qcc_bin = dirname(qore_bin) + "/qcc";
+        return is_executable(qcc_bin) ? qcc_bin : NOTHING;
+    }
+
+    #! A module directory with the module's source and the script that loads it
+    private hash<auto> makeModuleDir() {
+        string tmp_dir = make_tmp_dir();
+        string source_dir = tmp_dir + "/src";
+        string module_dir = tmp_dir + "/modules";
+        mkdir(source_dir);
+        mkdir(module_dir);
+        hash<auto> h = {
+            "tmp_dir": tmp_dir,
+            "module_dir": module_dir,
+            "qm_path": source_dir + "/AOTBuiltinApiIdentity.qm",
+            "qmod_path": module_dir + "/AOTBuiltinApiIdentity.qmod",
+            "script_path": tmp_dir + "/run.qr",
+        };
+        File f();
+        f.open2(h.qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(ModuleSource);
+        f.close();
+        f.open2(h.script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+        return h;
+    }
+
+    #! Compiles the module, recording \a identity as its builtin API identity if given; returns qore's output
+    private string compileModule(hash<auto> dirs, *string identity) {
+        return backquote(sprintf("%s%s %s %s -b --compile-module --output %s %s 2>&1",
+            identity ? "QORE_AOT_TEST_BUILTIN_API_IDENTITY=" + shellQuote(identity) + " " : "",
+            env(), timeoutPrefix(120), shellQuote(qore_bin), shellQuote(dirs.qmod_path), shellQuote(dirs.qm_path)));
+    }
+
+    #! Runs the script that loads the module, with warnings enabled; returns its output and exit code
+    private string runScript(hash<auto> dirs) {
+        return backquote(sprintf("{ %s QORE_MODULE_DIR=%s %s%s -b -W %s; echo EXIT=$?; } 2>&1",
+            env(), shellQuote(dirs.module_dir), timeoutPrefix(60), shellQuote(qore_bin),
+            shellQuote(dirs.script_path)));
+    }
+
+    #! Returns the builtin API identity that qcc reports for its libqore
+    private string libraryIdentity() {
+        *string qcc_bin = qccBin();
+        if (!qcc_bin) {
+            testSkip("this build has no qcc");
+        }
+        string out = backquote(sprintf("%s %s --version 2>&1", env(), shellQuote(qcc_bin)));
+        *list<*string> m = (out =~ x/^Builtin API identity: ([0-9a-f]{64})$/m);
+        assertEq(1, m.size(), "qcc --version reports the builtin API identity: " + out);
+        return m[0];
+    }
+
+    sameIdentityTest() {
+        hash<auto> dirs = makeModuleDir();
+        on_exit remove_tree(dirs.tmp_dir);
+
+        string compile_out = compileModule(dirs);
+        assertTrue(is_file(dirs.qmod_path), "compiled the AOT module: " + compile_out);
+        # no source beside the module: its native code runs
+        string out = runScript(dirs);
+        assertEq("42\nEXIT=0\n", out);
+    }
+
+    otherIdentityRefusedTest() {
+        hash<auto> dirs = makeModuleDir();
+        on_exit remove_tree(dirs.tmp_dir);
+
+        string compile_out = compileModule(dirs, OtherIdentity);
+        assertTrue(is_file(dirs.qmod_path), "compiled the AOT module of another identity: " + compile_out);
+
+        string out = runScript(dirs);
+        assertRegex("AOT-MODULE-STALE", out);
+        assertTrue(out.find("AOT module '" + dirs.qmod_path + "' was compiled against other builtin API metadata "
+            "(builtin API identity '" + OtherIdentity + "') than this Qore library has") != -1,
+            "the error names the module and its identity: " + out);
+        assertRegex("rebuild the AOT module", out);
+        assertFalse(out =~ /^42$/m, "the refused module's code must not run: " + out);
+        assertFalse(out =~ /EXIT=0/, "the script fails: " + out);
+        *list<*string> m = (out =~ x/than this Qore library has \('([0-9a-f]{64})'\)/);
+        assertEq(1, m.size(), "the error names the identity of the library: " + out);
+        assertNeq(OtherIdentity, m[0]);
+        if (qccBin()) {
+            assertEq(libraryIdentity(), m[0], "qcc --version reports the identity of the library");
+        }
+    }
+
+    otherIdentitySourceTest() {
+        hash<auto> dirs = makeModuleDir();
+        on_exit remove_tree(dirs.tmp_dir);
+
+        string compile_out = compileModule(dirs, OtherIdentity);
+        assertTrue(is_file(dirs.qmod_path), "compiled the AOT module of another identity: " + compile_out);
+        # with the source beside the module, the source is loaded instead, with a warning naming why
+        copy_file(dirs.qm_path, dirs.module_dir + "/AOTBuiltinApiIdentity.qm");
+        string out = runScript(dirs);
+        assertTrue(out =~ /^42$/m, "the source module is loaded instead of the out-of-date module: " + out);
+        assertRegex("EXIT=0", out);
+        assertRegex("BINARY-MODULE-SOURCE-FALLBACK", out);
+        assertRegex("other builtin API metadata", out);
+    }
+
+    qccReportsIdentityTest() {
+        *string qcc_bin = qccBin();
+        if (!qcc_bin) {
+            testSkip("this build has no qcc");
+        }
+        string identity = libraryIdentity();
+
+        hash<auto> dirs = makeModuleDir();
+        on_exit remove_tree(dirs.tmp_dir);
+
+        # the identity recorded in a module: the library's, or the one given for the test
+        string compile_out = compileModule(dirs);
+        assertTrue(is_file(dirs.qmod_path), "compiled the AOT module: " + compile_out);
+        string out = backquote(sprintf("%s %s --dump-info %s 2>&1", env(), shellQuote(qcc_bin),
+            shellQuote(dirs.qmod_path)));
+        assertRegex("builtin API identity: " + identity, out);
+        assertRegex("builtin-api-identity.*" + identity, out);
+
+        unlink(dirs.qmod_path);
+        compile_out = compileModule(dirs, OtherIdentity);
+        assertTrue(is_file(dirs.qmod_path), "compiled the AOT module of another identity: " + compile_out);
+        out = backquote(sprintf("%s %s --dump-info %s 2>&1", env(), shellQuote(qcc_bin),
+            shellQuote(dirs.qmod_path)));
+        assertRegex("builtin API identity: " + OtherIdentity, out);
+    }
+
+    checkModuleSourcesTest() {
+        *string qcc_bin = qccBin();
+        if (!qcc_bin) {
+            testSkip("this build has no qcc");
+        }
+        hash<auto> dirs = makeModuleDir();
+        on_exit remove_tree(dirs.tmp_dir);
+
+        string compile_out = compileModule(dirs, OtherIdentity);
+        assertTrue(is_file(dirs.qmod_path), "compiled the AOT module of another identity: " + compile_out);
+        string stamp = dirs.qmod_path + ".sources.stamp";
+        string out = backquote(sprintf("{ %s %s --check-module-sources %s; echo EXIT=$?; } 2>&1", env(),
+            shellQuote(qcc_bin), shellQuote(dirs.qmod_path)));
+        assertRegex("EXIT=0", out);
+        assertTrue(out.find("qcc: AOT module '" + dirs.qmod_path + "' is out of date: it was compiled against "
+            "other builtin API metadata (builtin API identity '" + OtherIdentity + "')") != -1,
+            "the check names the module and why it is out of date: " + out);
+        # the stamp, which the check makes with the time 0 when there is none, is rewritten, so the build compiles the
+        # module again
+        assertTrue(is_file(stamp));
+        assertGt(0, hstat(stamp).mtime.getEpochSeconds(), "the stamp was rewritten after the check made it");
+        assertRegex("other builtin API metadata", ReadOnlyFile::readTextFile(stamp));
+    }
+
+    invalidIdentityTest() {
+        hash<auto> dirs = makeModuleDir();
+        on_exit remove_tree(dirs.tmp_dir);
+
+        # not 64 lowercase hexadecimal digits: the module metadata record cannot be written
+        string out = compileModule(dirs, "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF");
+        assertRegex("builtin API identity '0123456789ABCDEF[0-9A-F]+' is not 64 lowercase hexadecimal digits", out);
+        assertFalse(is_file(dirs.qmod_path), "no module is written: " + out);
+    }
+}

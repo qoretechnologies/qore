@@ -284,7 +284,9 @@ string sub t() {
 
 # a WebSocket operation that the host creates and lends: its done callback runs on the handler pool and its frame
 # callback on the controller's workers, outside the sandbox of the restricted code, so a restricted callable is
-# refused for both
+# refused for both; the WebSocket operation classes are in the NETWORK domain (qore#7157), so these probes run in a
+# Program that may use the network, in which only the restriction of thread control can refuse them
+const RestrictedNetworkOk = Restricted & ~PO_NO_NETWORK;
 HttpServerAsyncIo::HttpWebSocketPollOperation lent_ws_op(new Socket());
 probe("lent WebSocket op, setDoneCallback", 'string sub t(HttpServerAsyncIo::HttpWebSocketPollOperation op) {
     try {
@@ -293,7 +295,7 @@ probe("lent WebSocket op, setDoneCallback", 'string sub t(HttpServerAsyncIo::Htt
         return ex.err;
     }
     return "set";
-}', lent_ws_op);
+}', lent_ws_op, RestrictedNetworkOk);
 probe("lent WebSocket op, setFrameCallback", 'string sub t(HttpServerAsyncIo::HttpWebSocketPollOperation op) {
     try {
         op.setFrameCallback(sub (auto frame) {});
@@ -301,7 +303,7 @@ probe("lent WebSocket op, setFrameCallback", 'string sub t(HttpServerAsyncIo::Ht
         return ex.err;
     }
     return "set";
-}', lent_ws_op);
+}', lent_ws_op, RestrictedNetworkOk);
 # an operation that restricted code creates from a socket that the host lends: its frame callback is refused
 probe("own WebSocket op, setFrameCallback", 'string sub t(Socket sock) {
     try {
@@ -311,7 +313,7 @@ probe("own WebSocket op, setFrameCallback", 'string sub t(Socket sock) {
         return ex.err;
     }
     return "set";
-}', new Socket());
+}', new Socket(), RestrictedNetworkOk);
 # a delegating operation that restricted code creates with a completion callback of its own
 probe("DelegatingPollOperation on_complete", 'string sub t(HttpServerAsyncIo::HttpWebSocketPollOperation op) {
     try {

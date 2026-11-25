@@ -148,21 +148,75 @@ RECORD = """\
     import os
     with open(os.path.join(os.environ["TREE"], "module-path"), "w") as f:
         f.write(os.environ.get("QORE_MODULE_DIR", ""))
+    with open(os.path.join(os.environ["TREE"], "include-path"), "w") as f:
+        f.write(os.environ.get("QORE_INCLUDE_DIR", "unset"))
+    with open(os.path.join(os.environ["TREE"], "module-only"), "w") as f:
+        f.write(os.environ.get("QORE_MODULE_DIR_ONLY", "unset"))
     """
 
 
 class ModulePathTest(unittest.TestCase):
     """The module path that run_tests.sh gives a test"""
 
-    def run_record(self, dirs_file=None, **variables):
+    def run_record(self, dirs_file=None, configured=False, **variables):
         with tempfile.TemporaryDirectory(prefix="qore-runner-module-dirs-") as directory:
             tree = RunnerTree(directory)
             if dirs_file is not None:
-                tree.write_dirs_file(dirs_file)
+                tree.write_dirs_file(dirs_file.replace("{root}", str(tree.root.resolve())))
+            if configured:
+                with (tree.build / "CMakeCache.txt").open("a") as cache:
+                    cache.write("QORE_EXTERNAL_MODULE_DIRS:STRING=" + dirs_file.strip().replace(":", ";") + "\n")
             tree.add_test("record.qtest", RECORD)
             result = tree.run(**variables)
             self.assertEqual(0, result.returncode, result.output)
+            expected = variables.get("QORE_MODULE_DIR_ONLY", "1" if configured else "unset")
+            self.assertEqual(expected, (tree.root / "module-only").read_text())
             return (tree.root / "module-path").read_text().split(":"), str(tree.root.resolve())
+
+    def test_ambient_search_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory, "src").resolve()
+            root.mkdir()
+            tree = RunnerTree(root)
+            inside = root / "own modules"
+            inside.mkdir()
+            outside = root.with_name("src-other")
+            outside.mkdir()
+            (root / "outside-link").symlink_to(outside)
+            path = f":{outside}:own modules:outside-link:build/../../src-other:missing::build:"
+            tree.add_test("record.qtest", RECORD)
+            for opts, modules, includes in (
+                ({}, [str(inside), str(tree.build)], os.pathsep.join(map(str, [inside, tree.build]))),
+                ({"QORE_MODULE_DIR_ONLY": "1"}, path.split(":"), os.pathsep.join(map(str, [inside, tree.build]))),
+                ({"QORE_TEST_ALLOW_EXTERNAL_INCLUDES": "1"}, [str(inside), str(tree.build)], path),
+            ):
+                with self.subTest(opts=opts):
+                    result = tree.run(QORE_MODULE_DIR=path, QORE_INCLUDE_DIR=path, **opts)
+                    self.assertEqual(0, result.returncode, result.output)
+                    self.assertEqual([str(root / "qlib"), *modules], (root / "module-path").read_text().split(":"))
+                    self.assertEqual(includes, (root / "include-path").read_text())
+
+    def test_configured_build_drops_external_include(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = RunnerTree(directory)
+            tree.write_dirs_file("/configured\n")
+            with (tree.build / "CMakeCache.txt").open("a") as cache:
+                cache.write("QORE_EXTERNAL_MODULE_DIRS:STRING=/configured\n")
+            tree.add_test("record.qtest", RECORD)
+            result = tree.run(QORE_INCLUDE_DIR=str(tree.root.parent))
+            self.assertEqual(0, result.returncode, result.output)
+            self.assertEqual("unset", (tree.root / "include-path").read_text())
+
+    def test_configured_path_replaces_ambient_and_implicit_paths(self):
+        for dirs in ("", "/selected/first:/selected/second"):
+            with self.subTest(dirs=dirs):
+                path, root = self.run_record(dirs + "\n", configured=True, QORE_MODULE_DIR="/ambient")
+                self.assertEqual([root + "/qlib"] + (dirs.split(":") if dirs else []), path)
+
+    def test_caller_can_replace_configured_external_dirs(self):
+        path, root = self.run_record("/configured\n", configured=True,
+                                     QORE_MODULE_DIR_ONLY="1", QORE_MODULE_DIR="/caller")
+        self.assertEqual([root + "/qlib", "/caller"], path)
 
     def test_external_dirs_come_last(self):
         path, root = self.run_record("/ext/one:/ext/two\n")
@@ -172,22 +226,21 @@ class ModulePathTest(unittest.TestCase):
         self.assertNotIn("", path, path)
 
     def test_external_dirs_follow_the_module_dir_of_the_environment(self):
-        path, root = self.run_record("/ext/one\n", QORE_MODULE_DIR="/user/modules")
-        self.assertEqual(["/user/modules", "/ext/one"], path[-2:], path)
-        self.assertLess(path.index(root + "/qlib"), path.index("/user/modules"), path)
+        path, root = self.run_record("/ext/one\n", QORE_MODULE_DIR="examples")
+        self.assertEqual([root + "/examples", "/ext/one"], path[-2:], path)
+        self.assertLess(path.index(root + "/qlib"), path.index(root + "/examples"), path)
 
     def test_external_dir_in_module_dir_is_not_added_again(self):
         # a directory that QORE_MODULE_DIR already holds keeps its place; the others are appended in order
-        path, _ = self.run_record("/ext/one:/user/modules:/ext/two\n", QORE_MODULE_DIR="/user/modules")
-        self.assertEqual(1, path.count("/user/modules"), path)
-        self.assertEqual(["/user/modules", "/ext/one", "/ext/two"], path[-3:], path)
+        path, root = self.run_record("/ext/one:{root}/examples:/ext/two\n", QORE_MODULE_DIR="examples")
+        self.assertEqual(1, path.count(root + "/examples"), path)
+        self.assertEqual([root + "/examples", "/ext/one", "/ext/two"], path[-3:], path)
 
     def test_external_dir_listed_twice_is_added_once(self):
         path, _ = self.run_record("/ext/one:/ext/one:/ext/two\n")
         self.assertEqual(1, path.count("/ext/one"), path)
         self.assertEqual(["/ext/one", "/ext/two"], path[-2:], path)
 
-    # the path ends with an empty entry when QORE_MODULE_DIR is not set, as it did before the external directories
     def test_empty_file_adds_nothing(self):
         path, root = self.run_record("\n")
         self.assertEqual(root + "/qlib", [entry for entry in path if entry][-1], path)

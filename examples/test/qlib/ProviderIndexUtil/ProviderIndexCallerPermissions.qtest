@@ -173,14 +173,12 @@ class ProviderIndexCallerPermissionsTest inherits QUnit::Test {
     }
 
     private static code useIndexDir(string dir) {
-        # live-provider-optin: the provider index directory, saved and restored; not a credential
         *string saved = ENV{ProviderIndexEnvVar};
         ProviderIndexUtil::setEnvironmentVariable(dir);
         return sub () {
             ProviderIndexUtil::setEnvironmentVariable(saved ?? "");
             if (!exists saved) {
                 unsetenv(ProviderIndexEnvVar);
-                # live-provider-optin: the provider index directory, saved and restored; not a credential
                 remove ENV{ProviderIndexEnvVar};
             }
         };

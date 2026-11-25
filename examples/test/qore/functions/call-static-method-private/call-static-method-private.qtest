@@ -30,7 +30,7 @@
 class CallStaticMethodPrivateTest inherits QUnit::Test {
     public {
         #! the scripts
-        const Scripts = ("call-static-method-private", "call-static-method-later-parent");
+        const Scripts = ("call-static-method-private", "call-static-method-later-parent", "static-internal-variants");
     }
 
     private {

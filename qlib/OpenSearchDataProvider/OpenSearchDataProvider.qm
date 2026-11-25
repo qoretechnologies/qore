@@ -94,6 +94,7 @@ module OpenSearchDataProvider {
                 "action for precise document lookup, log search, analytics inputs, and pagination through ordinary "
                 "search results.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OpenSearchIndexSearchRequestDataType::Fields{"index",}, {
@@ -116,6 +117,7 @@ module OpenSearchDataProvider {
                 "filters, method parameters, or radial-search thresholds when supported by the target index and "
                 "OpenSearch version.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OpenSearchKnnSearchRequestDataType::Fields{"index", "field", "vector"}, {
@@ -138,6 +140,7 @@ module OpenSearchDataProvider {
                 "when the cluster is configured with the required model, semantic field, or neural-search plugin "
                 "support.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OpenSearchNeuralSearchRequestDataType::Fields{"index", "field", "query_text"}, {
@@ -160,6 +163,7 @@ module OpenSearchDataProvider {
                 "other OpenSearch query clauses. Use a search pipeline when score normalization or rank fusion is "
                 "needed.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OpenSearchHybridSearchRequestDataType::Fields{"index", "queries"}, {
@@ -244,6 +248,8 @@ module OpenSearchDataProvider {
             "desc": "Search an OpenSearch index using the Scroll API for efficient iteration over large result sets. "
                 "Use this action when ordinary `from` and `size` pagination is not appropriate.",
             "action_code": DPAT_API,
+            # the scroll context that the search opens is ephemeral: it expires after the scroll timeout (qore#7454)
+            "mutates_state": False,
             "data_dependent_options": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OpenSearchScrollSearchRequestDataType::Fields{"index",}, {
@@ -266,6 +272,7 @@ module OpenSearchDataProvider {
                 "and metric aggregations. Use this action when the output is grouped or summarized data rather "
                 "than individual hits.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OpenSearchAggregationRequestDataType::Fields{"index",}, {

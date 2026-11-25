@@ -1,0 +1,12 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the destructor of AbAfterSend's data starts an HTTP server whose response, with an after_send callback, cannot be
+# sent completely to a client that never reads it: the cleanup cancels the connection at its deadline, and the work of
+# the canceled connection hands itself over to the thread that calls the callback; the cleanup waits for it before it
+# deletes the data of AbLater (qore#7339)
+
+%requires AbAfterSend
+%requires AbLater
+
+printf("started\n");
+flush();
