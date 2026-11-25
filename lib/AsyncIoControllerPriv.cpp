@@ -8166,7 +8166,9 @@ int64_t AsyncIoControllerPriv::addTimerIntern(int64_t deadline_us, bool monotoni
     qore_program_id_t app_pgm_id = 0;
     bool for_app = runtime_get_module_caller_app(app_pgm_id);
     // the application that the timer's code runs for (qore#7010), computed before the controller's lock is taken
-    qore_program_id_t cb_app_id = callerAppId();
+    // (a context captured with a sandbox manager means that a sandbox governs the code: no second lookup)
+    qore_program_id_t cb_app_id = callerAppId(sandbox_ctx && (sandbox_ctx->manager || sandbox_ctx->policy_manager)
+        ? 1 : -1);
     // the generation of the work that adds the timer, for the timers that sandboxed code with no application may
     // cancel (timerCancelAllowed()); none for a timer of the initialization of library code, which runs for no
     // application on the thread of the code that loads the library (a tenant's thread, for example), so that no

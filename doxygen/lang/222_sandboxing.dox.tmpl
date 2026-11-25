@@ -716,6 +716,11 @@ authenticate();
     acted for (a thread that module code starts acts for none).  The module code that the host's code calls acts for
     the same application as the host's code, also in the callback of the host's own operation.
 
+    An object or a closure that the host's code creates while it serves a tenant, or inside an elevation, is therefore
+    a capability of that tenant's application, or of the host's: the host does not give it to another tenant, whose code
+    would act for that application through it where it runs it later (as the callback of a timer or the object of an
+    operation, for example).
+
     Host code that serves sandboxed code and acts for its own %Program's application elevates explicitly:
     - with a capability of @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"
       registered during trusted startup, which acts for the host wherever it is called, also in the callback of a

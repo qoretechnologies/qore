@@ -9648,7 +9648,8 @@ QoreCallerSandboxHelper::QoreCallerSandboxHelper(const QoreProgram* target, Exce
     }
     // the application that the caller acts for, which the host's code that runs for it in the other Program acts for
     // (qore#7148): none for the work of a thread that module code started, for example
-    app_id = qore_aio_caller_app_id();
+    // (qore_caller_is_sandboxed() returned true above)
+    app_id = qore_aio_caller_app_id(1);
     previous = td->sandboxed_caller;
     td->sandboxed_caller = this;
     pushed = true;

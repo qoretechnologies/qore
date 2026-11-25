@@ -759,8 +759,9 @@ DLLLOCAL bool qore_sandbox_policy_elevated();
 //! Returns true if trusted code that is not module code acts for the application of the sandboxed code it runs for
 /** Host Program code that runs for sandboxed code acts for the application of that sandboxed code (qore#7148), set in
     \a app_id, which is, in this order:
-    - the innermost sandboxed Program entered on the thread's call stack, or the sandboxed caller that a parse or
-      module load hid: the sandboxed code that called the host code
+    - the sandboxed caller that a parse, a commit, a call reference or a module load hid (QoreCallerSandboxHelper,
+      the application that its caller acted for), as in qore_caller_is_sandboxed(), and then the innermost sandboxed
+      Program entered on the thread's call stack: the sandboxed code that called the host code
     - none (QORE_NO_PROGRAM_ID) in a thread that module code started, whose work can serve every caller of the module,
       unless it continues an operation or a task, and in work that continues a context captured for no application
       (QoreSandboxContext::app_id)
