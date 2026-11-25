@@ -96,6 +96,14 @@ void pseudo_classes_init() {
     // + 2 pseudo classes with runtime type values outside the value type range
     po_list[NODE_ARRAY_LEN] = initPseudoCallrefClass();
     po_list[NODE_ARRAY_LEN + 1] = initPseudoClosureClass();
+
+    // the pseudo-classes belong to no binary module (qore#7533)
+    for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i) {
+        qore_class_private::setNotModuleDecl(*po_list[i]);
+    }
+    qore_class_private::setNotModuleDecl(*pseudo_buffer);
+    qore_class_private::setNotModuleDecl(*pseudo_char);
+    qore_class_private::setNotModuleDecl(*QC_PSEUDOVALUE);
 }
 
 void pseudo_classes_del() {

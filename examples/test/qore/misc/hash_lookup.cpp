@@ -219,11 +219,177 @@ static void iteratorDeleteRunsCode() {
     require(!xsink, "the iterator fixture's program raised an exception");
 }
 
+// The keys that the hash has, in reverse order, joined with ","
+static std::string reverseKeyList(const QoreHashNode& hash) {
+    std::string rv;
+    ReverseConstHashIterator i(hash);
+    while (i.next()) {
+        if (!rv.empty()) {
+            rv += ",";
+        }
+        rv += i.getKey();
+    }
+    return rv;
+}
+
+static void setInt(QoreHashNode& hash, const std::string& key, int64 value, ExceptionSink& xsink) {
+    require(!hash.setKeyValue(key.c_str(), QoreValue(value), &xsink) && !xsink, "cannot set a key");
+}
+
+// An iterator stays on its member while other members are deleted and added, and iterates in the order of the hash,
+// forward and in reverse; a hash that grows while an iterator is on one of its members keeps the iterator valid
+// (qore#7272)
+static void iteratorStability() {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    for (int64 i = 0; i < 6; ++i) {
+        setInt(**hash, "k" + std::to_string(i), i, xsink);
+    }
+    require(reverseKeyList(**hash) == "k5,k4,k3,k2,k1,k0", "the reverse iteration has the wrong order");
+    require(!std::strcmp(hash->getFirstKey(), "k0") && !std::strcmp(hash->getLastKey(), "k5"),
+        "the first or last key is wrong");
+    {
+        // members before and after the iterator's member are deleted and added while it iterates: the iteration
+        // goes on from its member, and visits the members added at the end
+        std::string visited;
+        HashIterator i(**hash);
+        while (i.next()) {
+            visited += i.getKey();
+            visited += i.first() ? "^" : "";
+            visited += i.last() ? "$" : "";
+            visited += ";";
+            if (!std::strcmp(i.getKey(), "k2")) {
+                hash->deleteKey("k0", &xsink);
+                hash->deleteKey("k3", &xsink);
+                require(!xsink, "deleting keys raised an exception");
+                setInt(**hash, "a0", 100, xsink);
+                setInt(**hash, "k0", 0, xsink);
+                require(!std::strcmp(i.getKey(), "k2") && i.get().getAsBigInt() == 2,
+                    "the iterator left its member");
+            } else if (!std::strcmp(i.getKey(), "k5")) {
+                QoreValue v = hash->takeKeyValue("k4");
+                require(v.getAsBigInt() == 4, "the taken value is wrong");
+            }
+        }
+        require(visited == "k0^;k1;k2;k4;k5;a0;k0$;", "the iteration did not follow the changes of the hash");
+        require(keyList(**hash) == "k1,k2,k5,a0,k0", "the hash has the wrong keys after the changes");
+        require(reverseKeyList(**hash) == "k0,a0,k5,k2,k1", "the reverse iteration has the wrong order");
+    }
+    {
+        // a reverse iterator goes on from its member when the member it would visit next and one it visited are
+        // deleted
+        std::string visited;
+        ReverseHashIterator i(**hash);
+        while (i.next()) {
+            visited += i.getKey();
+            visited += ";";
+            if (!std::strcmp(i.getKey(), "a0")) {
+                hash->deleteKey("k5", &xsink);
+                hash->deleteKey("k0", &xsink);
+                require(!xsink, "deleting a key raised an exception");
+                require(!std::strcmp(i.getKey(), "a0") && i.first() && i.last() == false,
+                    "the reverse iterator left its member");
+            }
+        }
+        require(visited == "k0;a0;k2;k1;", "the reverse iteration did not follow the deletes");
+        require(keyList(**hash) == "k1,k2,a0", "the hash has the wrong keys after the reverse deletes");
+    }
+    {
+        // deleting the first and the last member through an iterator; the iterator then starts again from the first
+        HashIterator i(**hash);
+        require(i.next() && !std::strcmp(i.getKey(), "k1"), "the iteration does not start at the first key");
+        i.deleteKey(&xsink);
+        require(!xsink && !i.valid(), "deleting the first member left the iterator on a member");
+        require(i.next() && !std::strcmp(i.getKey(), "k2"), "the iteration does not go on with the new first key");
+        require(i.next() && !std::strcmp(i.getKey(), "a0") && i.last(), "the last key is wrong");
+        QoreValue v = i.removeKeyValue();
+        require(v.getAsBigInt() == 100 && i.valid() && !std::strcmp(i.getKey(), "k2"),
+            "removing the last member did not move the iterator back");
+        require(!i.next(), "the iteration goes on after the last member");
+        require(keyList(**hash) == "k2" && !std::strcmp(hash->getFirstKey(), "k2")
+            && !std::strcmp(hash->getLastKey(), "k2"), "the hash has the wrong keys");
+    }
+    {
+        // the hash grows past many sizes of its key map while an iterator is on its first member and a const
+        // iterator is on its last
+        HashIterator i(**hash);
+        require(i.next(), "the iterator has no member");
+        ConstHashIterator ci(**hash);
+        require(ci.next() && ci.last(), "the const iterator is not on the last member");
+        for (int64 n = 0; n < 5000; ++n) {
+            setInt(**hash, "g" + std::to_string(n), n, xsink);
+        }
+        require(!std::strcmp(i.getKey(), "k2") && !std::strcmp(ci.getKey(), "k2"),
+            "the iterators left their member when the hash grew");
+        int64 count = 1;
+        while (i.next()) {
+            require(i.get().getAsBigInt() == count - 1, "the iteration after the growth has the wrong order");
+            ++count;
+        }
+        require(count == 5001 && hash->size() == 5001, "the iteration did not visit every member added");
+        require(ci.next() && !std::strcmp(ci.getKey(), "g0"), "the const iterator does not go on in order");
+    }
+}
+
+// A large hash finds every key while it grows, after most of its keys are deleted, and when it grows again; its keys
+// stay in order (qore#7272)
+static void largeHash() {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), &xsink);
+    const int64 n = 40000;
+    for (int64 i = 0; i < n; ++i) {
+        setInt(**hash, "k" + std::to_string(i), i, xsink);
+        // the keys added before are found at each size where the key map grows
+        if (i && !(i & (i - 1))) {
+            for (int64 j = 0; j <= i; ++j) {
+                bool exists;
+                QoreValue v = hash->getKeyValueExistence(("k" + std::to_string(j)).c_str(), exists, &xsink);
+                require(!xsink && exists && v.getAsBigInt() == j, "a key is not found after the hash grew");
+            }
+            bool exists;
+            hash->getKeyValueExistence(("k" + std::to_string(i + 1)).c_str(), exists, &xsink);
+            require(!exists, "a key that the hash does not have is found");
+        }
+    }
+    require(hash->size() == static_cast<size_t>(n), "the large hash has the wrong size");
+    for (int64 i = 0; i < n; ++i) {
+        if (i % 5) {
+            hash->deleteKey(("k" + std::to_string(i)).c_str(), &xsink);
+            require(!xsink, "deleting a key of the large hash raised an exception");
+        }
+    }
+    require(hash->size() == static_cast<size_t>(n / 5), "the large hash has the wrong size after the deletes");
+    for (int64 i = 0; i < n; ++i) {
+        setInt(**hash, "m" + std::to_string(i), i, xsink);
+    }
+    {
+        ConstHashIterator i(**hash);
+        int64 expect = 0;
+        while (i.next()) {
+            std::string key = expect < n ? "k" + std::to_string(expect) : "m" + std::to_string(expect - n);
+            require(key == i.getKey(), "the large hash has the wrong order");
+            expect += expect < n ? 5 : 1;
+        }
+        require(expect == 2 * n, "the iteration of the large hash ended early");
+    }
+    ReferenceHolder<QoreHashNode> copy(hash->copy(), &xsink);
+    for (int64 i = 0; i < n; ++i) {
+        bool exists;
+        QoreValue v = copy->getKeyValueExistence(("k" + std::to_string(i)).c_str(), exists, &xsink);
+        require(!xsink && exists == !(i % 5) && (!exists || v.getAsBigInt() == i), "the copy finds the wrong keys");
+        v = copy->getKeyValueExistence(("m" + std::to_string(i)).c_str(), exists, &xsink);
+        require(!xsink && exists && v.getAsBigInt() == i, "the copy does not find a key");
+    }
+    require(keyList(**copy) == keyList(**hash), "the copy of the large hash has another order");
+}
+
 int main(int argc, char** argv) {
     if (argc > 2 || (argc == 2 && std::strcmp(argv[1], "encoded")
             && std::strcmp(argv[1], "conversion") && std::strcmp(argv[1], "declaration")
-            && std::strcmp(argv[1], "copy") && std::strcmp(argv[1], "iterator"))) {
-        std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration|copy|iterator]\n");
+            && std::strcmp(argv[1], "copy") && std::strcmp(argv[1], "iterator")
+            && std::strcmp(argv[1], "stability") && std::strcmp(argv[1], "large"))) {
+        std::fprintf(stderr, "usage: hash-lookup-test [encoded|conversion|declaration|copy|iterator|stability|"
+            "large]\n");
         return 2;
     }
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
@@ -243,6 +409,12 @@ int main(int argc, char** argv) {
         }
         if (argc == 1 || !std::strcmp(argv[1], "iterator")) {
             iteratorDeleteRunsCode();
+        }
+        if (argc == 1 || !std::strcmp(argv[1], "stability")) {
+            iteratorStability();
+        }
+        if (argc == 1 || !std::strcmp(argv[1], "large")) {
+            largeHash();
         }
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL after %u checks: %s\n", checks, error.what());

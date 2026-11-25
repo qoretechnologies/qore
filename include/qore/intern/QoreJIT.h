@@ -1101,6 +1101,12 @@ public:
     */
     bool dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func);
 
+    //! For tests: the next background compile of the function named that is accepted arms an epoch hold of type
+    //! retirement, as the compile of a specialization does (see enqueueBgCompile(); qore#7549)
+    /** @param func the name of the root function of the compile (the name of its IR function up to the \c "@")
+    */
+    void dbgForceBgCompileEpochHold(const std::string& func);
+
     //! For tests: waits until the background compile thread is stopped at the given hold point
     /** @return false if it was not stopped there within \a timeout_ms milliseconds
     */
@@ -1474,6 +1480,9 @@ private:
     std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Count)];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
     std::string dbg_bg_in_progress_func;
+    //! the function whose next accepted work arms an epoch hold, none if empty (dbgForceBgCompileEpochHold());
+    //! protected by bg_queue_mutex
+    std::string dbg_bg_force_epoch_hold;
 
     //! Stops the compile thread at \a point if a test armed a hold there; bg_queue_mutex is held
     void dbgBgHoldLocked(std::unique_lock<std::mutex>& lock, BgCompileHoldPoint point);

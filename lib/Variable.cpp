@@ -2171,8 +2171,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
         if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
-                // issue #3429 assign an untyped list if required
+            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
+                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
+                // issue #3429 assign an untyped list if required; a softlist is untyped as well, as the list that
+                // a softlist variable is initialized with is, and the IR interpreter and native code vivify (qore#7573)
                 assignNodeIntern((l = new QoreListNode));
                 // the container was created for this assignment; a rejected assignment removes it again
                 trackVivifiedContainer();
@@ -2193,7 +2195,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             // save the old value for dereferencing outside any locks that may have been acquired
             saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
+            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
+                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
             } else {
                 valueTypeInfo = autoTypeInfo;
@@ -2327,8 +2330,10 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         // create a hash of the required type if the lvalue has a complex hash type and currently has no value
         if (isNothing()) {
             // issue #2652: assign the current runtime type based on the declared complex list type
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
-                // issue #3429 assign an untyped list if required
+            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
+                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
+                // issue #3429 assign an untyped list if required; a softlist is untyped as well, as the list that
+                // a softlist variable is initialized with is, and the IR interpreter and native code vivify (qore#7573)
                 assignNodeIntern((l = new QoreListNode));
                 // the container was created for this assignment; a rejected assignment removes it again
                 trackVivifiedContainer();
@@ -2349,7 +2354,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             // save the old value for dereferencing outside any locks that may have been acquired
             saveCurrentValue();
             const QoreTypeInfo* valueTypeInfo;
-            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
+            if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo
+                    || typeInfo == softListTypeInfo || typeInfo == softListOrNothingTypeInfo) {
                 valueTypeInfo = nullptr;
             } else {
                 valueTypeInfo = autoTypeInfo;
@@ -3433,8 +3439,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     }
                     // auto-vivify: create list with appropriate type
                     if (isNothing()) {
+                        // a softlist is untyped, as in doListLValue() (qore#7573)
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
-                            || typeInfo == listOrNothingTypeInfo) {
+                            || typeInfo == listOrNothingTypeInfo || typeInfo == softListTypeInfo
+                            || typeInfo == softListOrNothingTypeInfo) {
                             assignNodeIntern((l = new QoreListNode));
                             // the container was created for this assignment; a rejected assignment removes it again
                             trackVivifiedContainer();
@@ -3453,8 +3461,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         // save the old value for dereferencing outside locks
                         saveCurrentValue();
                         const QoreTypeInfo* valueTypeInfo;
+                        // a softlist is untyped, as in doListLValue() (qore#7573)
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
-                            || typeInfo == listOrNothingTypeInfo) {
+                            || typeInfo == listOrNothingTypeInfo || typeInfo == softListTypeInfo
+                            || typeInfo == softListOrNothingTypeInfo) {
                             valueTypeInfo = nullptr;
                         } else {
                             valueTypeInfo = autoTypeInfo;
@@ -4891,6 +4901,10 @@ void LValueRemoveHelper::deleteLValue() {
                     xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
                     continue;
                 }
+                // sandboxed code cannot delete a shared object (qore#6843)
+                if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+                    continue;
+                }
                 o->doDelete(xsink);
             }
         }
@@ -4903,6 +4917,10 @@ void LValueRemoveHelper::deleteLValue() {
     QoreObject* o = v->get<QoreObject>();
     if (o->isSystemObject()) {
         xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')", o->getClassName());
+        return;
+    }
+    // sandboxed code cannot delete a shared object (qore#6843)
+    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
         return;
     }
 

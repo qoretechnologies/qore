@@ -1102,6 +1102,7 @@ public class FilePollerDataProvider inherits FilePollerDataProviderBase, DataPro
         const ProviderInfo = <DataProviderInfo>{
             "type": "FilePollerDataProvider",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
             "constructor_options": ConstructorOptions,
         };
     }
@@ -1128,6 +1129,7 @@ public class FileDelayedPollerDataProvider inherits FilePollerDataProviderBase, 
         const ProviderInfo = <DataProviderInfo>{
             "type": "FileDelayedPollerDataProvider",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
             "constructor_options": ConstructorOptions,
         };
     }

@@ -4361,6 +4361,13 @@ protected:
                             "    HARD_QORE_VALUE_OBJ_OR_NOTHING_DATA(%s, %s, args, %d, CID_%s, xsink);\n    if (*xsink)\n        return%s;\n",
                             p.name.c_str(), p.qore.c_str(), i, cid.c_str(), rv ? " 0" : "");
                 }
+                // a Socket (or any pollable I/O object) that another class's method or a function takes is guarded as
+                // the Socket's own methods are: the connection socket of a server is refused to sandboxed code
+                // (qore_pollable_server_guard() in qore/intern/QC_Socket.h; qore#7338)
+                if (p.qore == "QoreSocketObject" || p.qore == "AbstractPollableIoObjectBase") {
+                    fprintf(fp, "    if (qore_pollable_server_guard(obj_%s, %s%s, xsink))\n        return%s;\n",
+                        p.name.c_str(), p.type[0] == '!' ? "" : "*", p.name.c_str(), rv ? " 0" : "");
+                }
 
                 continue;
             }
@@ -7107,6 +7114,8 @@ protected:
     bool pseudo_ptr = false;
     //! the condition that a receiver that is not a pointer is valid (the "argcheck" attribute of the class)
     std::string pseudo_argcheck;
+    //! the guard call that the method's stub makes first, if any (qore#7338)
+    std::string guard_call;
     bool const_method;
 
     void serializeCppConstructor(FILE* fp, const char* cname) const {
@@ -7263,6 +7272,11 @@ public:
     //! sets the condition that the receiver of a pseudo-method that is not a pointer is valid (see pseudo_argcheck)
     void setPseudoArgCheck(const std::string& check) {
         pseudo_argcheck = check;
+    }
+
+    //! sets the guard call that the method's stub makes first (qore#7338)
+    void setGuard(const std::string& call) {
+        guard_call = call;
     }
 
     Method(const std::string& fn, const std::string& n_name, attr_t n_attr, const paramlist_t& n_params, const std::string& n_docs, const std::string& n_return_type, const strlist_t& n_flags, const strlist_t& n_dom, const std::string& n_code, unsigned n_line, bool n_doconly, const char* n_pseudo_arg, bool n_stub_only = false) :
@@ -7510,6 +7524,9 @@ public:
             "ExceptionSink* xsink) {\n", getReturnType(), cname, vname.c_str(), arg);
 
         serializeArgs(fp, cname);
+        if (!guard_call.empty()) {
+            fprintf(fp, "    if (%s) {\n        return QoreValue();\n    }\n", guard_call.c_str());
+        }
         if (!pseudo_arg.empty()) {
             bool found = false;
             // see if the pseudo arg is referenced
@@ -7718,6 +7735,7 @@ protected:
         doc,                       // doc string
         arg,                       // argument for non-static methods
         argcheck,                  // the condition that the receiver of a pseudo-class's method is valid
+        guard,                     // the guard function called first by every non-static method (qore#7338)
         defbase,                   // default builtin base class
         scons,                     // system constructor
         serializer,                // class serializer function
@@ -7854,6 +7872,14 @@ public:
             if (i->first == "argcheck") {
                 argcheck = i->second;
                 log(LL_DEBUG, "+ argcheck: %s\n", argcheck.c_str());
+                continue;
+            }
+
+            // the guard function that every non-static method calls first, unless the method opts out with
+            // [guard=none]: guard(self, <arg>, <kind>, xsink) returns non-zero after raising an exception (qore#7338)
+            if (i->first == "guard") {
+                guard = i->second;
+                log(LL_DEBUG, "+ guard: %s\n", guard.c_str());
                 continue;
             }
 
@@ -8051,9 +8077,28 @@ public:
 
         bool doconly = false;
         bool const_method = false;
+        // the guard kind of the method (see the class's "guard" property): 0 = normal, 1 = close, -1 = none
+        int guard_kind = 0;
         // parse flags
         for (strmap_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
             //log(LL_DEBUG, "+ method %s::%s() flag '%s': '%s'\n", name.c_str(), mname.c_str(), i->first.c_str(), i->second.c_str());
+            if (i->first == "guard") {
+                if (i->second == "none") {
+                    guard_kind = -1;
+                } else if (i->second == "close") {
+                    guard_kind = 1;
+                } else {
+                    error("invalid guard value '%s' defining method %s::%s(); use [guard=none] or [guard=close]\n",
+                        i->second.c_str(), name.c_str(), mname.c_str());
+                    return -1;
+                }
+                if (guard.empty()) {
+                    error("method %s::%s() gives a guard, but class %s has no guard property\n", name.c_str(),
+                        mname.c_str(), name.c_str());
+                    return -1;
+                }
+                continue;
+            }
             if (i->first == "dom") {
                 if (dom_get(dom, i->second))
                     return -1;
@@ -8108,6 +8153,22 @@ public:
                 is_pseudo ? arg.c_str() : 0, stub_only, const_method);
         if (is_pseudo && !argcheck.empty()) {
             m->setPseudoArgCheck(argcheck);
+        }
+        // a non-static method of a class with a guard calls it first (qore#7338)
+        if (!guard.empty() && guard_kind >= 0 && !(attr & QCA_STATIC) && mname != "constructor"
+                && mname != "destructor" && mname != "copy" && mname != "memberNotification") {
+            // the name of the private data argument: the last identifier of the class's "arg" property
+            size_t e = arg.find_last_not_of(" \t");
+            size_t b = e == std::string::npos ? std::string::npos : arg.find_last_not_of(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_", e);
+            std::string var = e == std::string::npos ? std::string() : arg.substr(b == std::string::npos ? 0 : b + 1,
+                e - (b == std::string::npos ? 0 : b + 1) + 1);
+            if (var.empty()) {
+                error("class %s has a guard but no private data argument\n", name.c_str());
+                delete m;
+                return -1;
+            }
+            m->setGuard(guard + "(self, " + var + ", " + std::to_string(guard_kind) + ", xsink)");
         }
         mmap.insert(mmap_t::value_type(mname, m));
         return !*m;

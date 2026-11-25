@@ -85,7 +85,7 @@ static QORE_INTERN_NOINLINE int64 qore_chomp_container(LValueHelper& val, qore_t
     HashIterator hi(vh);
     while (hi.next()) {
         if (hi.get().getType() == NT_STRING) {
-            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            QoreValue& v = qhi_priv::get(hi)->i->val;
             // note that no exception can happen here
             ensure_unique(v, xsink);
             assert(!*xsink);

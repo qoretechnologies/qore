@@ -2881,6 +2881,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // cause to the lifetime of the Program that created it.
         clearOpaqueTargets(xsink);
 
+        // the values that library classes keep in the per-Program cache of the Program can hold objects of its
+        // classes, given by its code (a default value of a field, for example): they are released while the
+        // Program's code can still run, as its data is (qore#6843)
+        qore_program_cache_release_values(pgm, xsink);
+
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
 

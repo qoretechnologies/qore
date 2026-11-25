@@ -3455,8 +3455,9 @@ handler.setCloseTimeout(2s);
         # gets the socket of its request, and gives it to startAsyncWebSocketForRequest() only, never in the context
         # (qore#7476)
         *HttpServer::HttpWebSocketPollOperationHandle ws_poll_op = takeRequestPollOp(cid);
+        # the server gives a handle of the poll operation, never the poll operation itself (qore#7338)
         if (!ws_poll_op && cx."header-info".ws_poll_op) {
-            ws_poll_op = new HttpServer::HttpWebSocketPollOperationHandle(cx."header-info".ws_poll_op);
+            ws_poll_op = cx."header-info".ws_poll_op;
         }
         # an HTTP/1.1 connection always has a poll operation (the server's async I/O makes one); one without it (a
         # request whose poll operation the server keeps, and that was taken or not given) gets no connection

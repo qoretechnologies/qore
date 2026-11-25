@@ -209,6 +209,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - hash-copy (#7265): its probe runs in child processes that set their own --exec-mode and in a qcc
         #   executable
         # - thread-data-clear-reentrant (#7265): its probe runs in child processes that set their own --exec-mode
+        # - hash-member-order (#7272): its probe runs in child processes that set their own --exec-mode and in a qcc
+        #   executable
         # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
         #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
@@ -371,6 +373,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
         #   modules loaded from source and compiled with qcc
+        # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
+        #   as the checks are of the exit of the process that holds the Program
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
@@ -419,8 +423,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
+                                 "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
@@ -452,6 +458,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/member-lookup-paths.qtest",
                                  "examples/test/qore/vars/hash-copy.qtest",
                                  "examples/test/qore/threads/thread-data-clear-reentrant.qtest",
+                                 "examples/test/qore/vars/hash-member-order.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",

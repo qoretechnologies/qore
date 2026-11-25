@@ -82,7 +82,7 @@ static QORE_INTERN_NOINLINE int qore_trim_container(LValueHelper& val, qore_type
     HashIterator hi(vh);
     while (hi.next()) {
         if (hi.get().getType() == NT_STRING) {
-            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            QoreValue& v = qhi_priv::get(hi)->i->val;
             ensure_unique(v, xsink);
             QoreStringNode* vs = v.get<QoreStringNode>();
             if (vs->trim(xsink)) {
