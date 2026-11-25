@@ -275,7 +275,11 @@ class TenantRequest inherits AbstractStreamRequest {
             'code': 200,
             'hdr': {'Content-Type': 'application/json'},
             'body': make_json({'size': size, 'trailers': trailers, 'seen': seen,
-                'ctx': getContext(){'group_namespace', 'sandboxed', 'user_flags', 'socket', 'uctx'}}),
+                'ctx': getContext(){'group_namespace', 'sandboxed', 'user_flags', 'socket', 'uctx'},
+                # what the accessors give: the header fields and the paths
+                'headers': getHeaders(){'x-api-key', 'authorization', 'cookie', 'path'},
+                'paths': getContext(){'orig_path', 'raw_path', 'url'},
+                'headers-raw': getContext().'header-info'.'headers-raw'}),
         };
     }
 }
@@ -522,6 +526,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("the trailer fields for trusted code", \trustedTrailerTest());
         addTestCase("a host's dispatch gives the handler the filtered request", \hostDispatchTest());
         addTestCase("the socket of the connection for trusted code only", \placeholderTest());
+        addTestCase("the accessors of a stream request give the request as the platform filtered it",
+            \platformFilterAccessorsTest());
         set_return_value(main());
     }
 
@@ -1081,6 +1087,41 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertFalse(d.last_socket == given, "a handler that runs restricted code");
         assertEq("Socket", d.last_socket.className());
         assertFalse(d.last_socket.isOpen());
+    }
+
+    platformFilterAccessorsTest() {
+        # a platform that hands a request to the code of a tenant filters it with the options of its own
+        # authentication: the header field and the query parameter that it read are withheld; the tenant's stream
+        # request, which serves the request with the raw request, gives neither from getHeaders() and getContext()
+        hash<auto> raw = rawContext(51, "hello") + {"orig_path": "/stream?token=secret"};
+        raw."header-info"."headers-raw"."X-Api-Key" = "platform-key";
+        hash<auto> hdr = header() + {"x-api-key": "platform-key"};
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, hdr, <HttpRequestFilterOptions>{
+            "platform_headers": "X-Api-Key",
+            "platform_query_params": "token",
+        });
+        assertFalse(f.hdr.hasKey("x-api-key"));
+        Program t = tenantProgram();
+        hash<auto> result = parse_json(serve(t.callFunction("stream_handler"), raw, hdr, f.cx, f.hdr).body);
+        assertEq(5, result.size, "the stream request read its body through the raw request");
+        assertFalse(result.headers.hasKey("x-api-key"), "the platform's header field");
+        assertFalse(result.headers.hasKey("authorization"));
+        assertFalse(result.headers.hasKey("cookie"));
+        assertEq("stream", result.headers.path, "the path without the platform's query parameter");
+        assertFalse(result."headers-raw".hasKey("X-Api-Key"), "the raw header fields of the context");
+        assertFalse(result.paths.orig_path =~ /token/, "the request target of the context");
+        assertFalse(result.paths.raw_path =~ /token/, "the raw path of the context");
+        assertFalse(result.paths.url.path =~ /token/, "the URL of the context");
+        assertFalse(result.paths.url.hasKey("password"), "the user information of the URL");
+        # a trusted handler that does not filter its requests: its stream request gives the request without the
+        # credentials of the request, as before
+        TestStreamHandler h(False);
+        serve(h, rawContext(52, "hello"), header());
+        assertEq(5, h.made[0].size);
+        hash<auto> th = h.made[0].getHeaders();
+        assertFalse(th.hasKey("authorization"));
+        assertFalse(th.hasKey("cookie"));
+        assertEq("stream?token=secret", th.path, "no platform options: the query parameters are kept");
     }
 
     #! the capability of the test to make the raw request of a direct call of a handler current, as a host does

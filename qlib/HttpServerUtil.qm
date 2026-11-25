@@ -3510,10 +3510,17 @@ public class AbstractStreamRequest {
     }
 
     #! Returns a copy of the request headers without the credentials of the request
-    /** @since HttpServerUtil 1.6
+    /** For subclasses, as getContext(): the header fields that the request handler filtered for the code that serves
+        the request (see @ref httpserverutil_request_credentials) are given as filterRequest() gave them, without the
+        credentials that the platform's options withheld as well (its header fields, the query parameters of its
+        paths); else the header fields of the request without its credentials (see removeCredentialHeaders())
+
+        @since HttpServerUtil 1.6
     */
     final hash<auto> getHeaders() {
-        return AbstractStreamRequest::removeCredentialHeaders(raw_hdr);
+        # filter_trailers: the request is filtered for the code that serves it, which got the header fields filtered
+        # with the options of the platform and the handler, which the raw header fields do not know
+        return filter_trailers ? hdr : AbstractStreamRequest::removeCredentialHeaders(raw_hdr);
     }
 
     #! Returns any message body received with the request
