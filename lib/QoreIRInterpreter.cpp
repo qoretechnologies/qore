@@ -17747,8 +17747,44 @@ load_local_done:
                             && local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
-                    LValueHelper helper(xsink);
-                    if (local_inst->local->getLValue(helper, false, true)) {
+                    // the helper releases the value that the store replaces when it is destroyed, which can run
+                    // a destructor that raises an exception: it is destroyed before the exception is checked, so
+                    // that the exception reaches the store's handler (qore#7629); the result is taken and evaluated
+                    // while the value is locked
+                    QoreValue res;
+                    bool lvalue_error = false;
+                    {
+                        LValueHelper helper(xsink);
+                        if (local_inst->local->getLValue(helper, false, true)) {
+                            lvalue_error = true;
+                        } else {
+                            // a store whose check records reference elements is made again out of line after
+                            // they have been bound with no lvalue lock held, in this helper (qore#7391)
+                            helper.enableBindRetry();
+                            // the store's own mode, not Weak: this branch is taken for every
+                            // non-Normal mode, and assigning as Weak here made '@=' on a local give up
+                            // the ownership that separates it from ':=', destroying a target whose only
+                            // reference was the opaque one; an element store assigns its weak reference as
+                            // a Normal store would assign it
+                            if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
+                                    && helper.isBindPending()) [[unlikely]] {
+                                qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc,
+                                    store_mode);
+                            }
+                            if (local_inst->result.isValid() && !*xsink) {
+                                // the result of a weak or opaque assignment is the value assigned, converted to the
+                                // variable's type, as the AST interpreter gives it to its consumers (qore#7084); an
+                                // element store gives the value the variable holds
+                                res = helper.getReferencedValue();
+                                // the target of a weak or opaque result is read while the helper still holds the
+                                // temporaries of the store, which can be its only references
+                                if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
+                                    evaluateOwnedWeakReferenceResult(res, xsink);
+                                }
+                            }
+                        }
+                    }
+                    if (lvalue_error) {
                         if (branchToExceptionTarget(inst)) {
                             break;
                         }
@@ -17756,23 +17792,12 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
-                    // a store whose check records reference elements is made again out of line after they have been
-                    // bound with no lvalue lock held, in this helper (qore#7391)
-                    helper.enableBindRetry();
-                    // the store's own mode, not Weak: this branch is taken for every
-                    // non-Normal mode, and assigning as Weak here made '@=' on a local give up
-                    // the ownership that separates it from ':=', destroying a target whose only
-                    // reference was the opaque one; an element store assigns its weak reference as
-                    // a Normal store would assign it
-                    if (helper.assign(val.needsRef() ? val.refSelf() : val, store_desc, true, store_mode)
-                            && helper.isBindPending()) [[unlikely]] {
-                        qore_ir_store_local_mode_bind_retry(helper, local_inst->local, store_desc, store_mode);
-                    }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
                     if (xsink && *xsink) {
+                        res.discard(xsink);
                         if (inst->exception_target) {
                             cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
                             prev_block = block;
@@ -17785,13 +17810,6 @@ load_local_done:
                         return exitAfterUnwind();
                     }
                     if (local_inst->result.isValid()) {
-                        // the result of a weak or opaque assignment is the value assigned, converted to the variable's
-                        // type, as the AST interpreter gives it to its consumers (qore#7084); an element store gives
-                        // the value the variable holds
-                        QoreValue res = helper.getReferencedValue();
-                        if (store_mode == AssignmentMode::Weak || store_mode == AssignmentMode::Opaque) {
-                            evaluateOwnedWeakReferenceResult(res, xsink);
-                        }
                         setValueSlot(values, local_inst->result.id, res, xsink);
                         if (res.needsRef()) {
                             cleanup.push_back(local_inst->result.id);
