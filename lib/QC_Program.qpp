@@ -3277,6 +3277,9 @@ auto val = pgm.deserialize(bin);
     @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
     @ref sandbox_serialization); only trusted code can call this method
 
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_DESERIALIZE parse define (see @ref conditional_parsing)
+
     @since %Qore 3.0
  */
 auto Program::deserialize(binary binary_data, *int flags) [flags=NAMED_ARGS] {
@@ -3313,6 +3316,9 @@ auto val = pgm.deserialize(str);
     @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
     @ref sandbox_serialization); only trusted code can call this method
 
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_DESERIALIZE parse define (see @ref conditional_parsing)
+
     @since %Qore 3.0
  */
 auto Program::deserialize(string string_data, *int flags) [flags=NAMED_ARGS] {
@@ -3348,6 +3354,9 @@ auto val = pgm.deserialize(h);
     reference to an unknown class or @ref hashdecl
     @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
     @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_DESERIALIZE parse define (see @ref conditional_parsing)
 
     @since %Qore 3.0
  */

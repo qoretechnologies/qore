@@ -336,6 +336,13 @@ auto sub program_deser(auto d) {
             assertTrue(SandboxManager::isFromSandboxedProgram(o));
         }
 
+        # code that also runs with older versions of Qore tests for the method with a parse define
+%ifdef QORE_HAS_PROGRAM_DESERIALIZE
+        assertTrue(True, "QORE_HAS_PROGRAM_DESERIALIZE");
+%else
+        fail("QORE_HAS_PROGRAM_DESERIALIZE is not defined");
+%endif
+
         # sandboxed code cannot call it
         assertThrows("SANDBOX-ACCESS-ERROR", \p.callFunction(), ("program_deser", h));
     }
