@@ -6203,7 +6203,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         QoreAOTValueLocalsHelper value_locals(ctx->locals, ctx->num_locals, ctx->globals,
                             ctx->num_globals, local_owner_pgm);
                         std::string val_error;
-                        defaults[p] = reader.readValue(ptr, end, val_error);
+                        defaults[p] = reader.readValue(ptr, end, val_error, pgm);
                         if (!val_error.empty()) {
                             // a closure without the default would run with another value: the function is not
                             // registered; the record is not read further, as the read pointer can be at the end of
@@ -6593,7 +6593,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 QoreValue value;
                 {
                     QoreProgramContextHelper value_pch(pgm);
-                    value = reader.readValue(ptr, end, value_error);
+                    value = reader.readValue(ptr, end, value_error, pgm);
                 }
                 if (!value_error.empty() && (ptr >= end || (entry_end && ptr >= entry_end))) {
                     // a malformed value: the read pointer is at the end of the data, and the rest of the entry
