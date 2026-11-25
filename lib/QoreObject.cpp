@@ -40,6 +40,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/QoreSandboxManager.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #ifdef QORE_HAVE_ALLOC_TRACKING
@@ -828,10 +829,15 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
     ReferenceHolder<QoreHashNode> new_data(xsink);
 
     // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+    const qore_class_private* reader_ctx = runtime_get_class();
+    const qore_class_private* class_ctx = reader_ctx;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         class_ctx = nullptr;
     }
+
+    // the public members of the source object only if the calling code may not read its non-public members as a whole
+    // (qore#7033); decided before the source object's lock is taken
+    bool src_public_only = o.mergeSourcePublicOnly(reader_ctx);
 
     // saves internal source data to merge
     ReferenceHolder<QoreHashNode> new_internal_data(xsink);
@@ -846,10 +852,21 @@ QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeImpl(qore_object_privat
         }
 
         if (!o.data->empty()) {
-            new_data = o.data->copy();
+            if (!src_public_only) [[likely]] {
+                new_data = o.data->copy();
+            } else {
+                new_data = new QoreHashNode(autoTypeInfo);
+                ConstHashIterator hi(o.data);
+                while (hi.next()) {
+                    if (!o.theclass->isPrivateMember(hi.getKey())) {
+                        // not possible for an exception to happen here
+                        qore_hash_private::get(**new_data)->setKeyValueIntern(hi.getKey(), hi.getReferenced());
+                    }
+                }
+            }
         }
 
-        if (class_ctx && o.cdmap) {
+        if (class_ctx && o.cdmap && !src_public_only) {
             cdmap_t::iterator i = o.cdmap->find(class_ctx->classID);
             if (i != o.cdmap->end()) {
                 // see if the current object supports this class's data: the class itself, by identity (qore#7036)
@@ -1880,8 +1897,15 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
 template <bool Lexical, bool Lock>
 QORE_INTERN_ALWAYS_INLINE void qore_object_private::mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
         LexicalSemanticPolicy policy) const {
-    // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+    // get the current class context for possible internal data; the public members only if the sandboxed read rule
+    // refuses the code the non-public members of the object (qore#7033): decided before the lock is taken, or, if this
+    // thread holds the lock already, failing closed (see getWholeObjectReadContextHeld())
+    const qore_class_private* class_ctx;
+    if constexpr (Lock) {
+        class_ctx = getWholeObjectReadContext(runtime_get_class());
+    } else {
+        class_ctx = getWholeObjectReadContextHeld(runtime_get_class());
+    }
     const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
         // the class context has no private access to the object's class: it still has the storage of some members
@@ -2185,6 +2209,30 @@ bool qore_object_private::sandboxedWriterDeniedIntern(const qore_class_private& 
     }
     const QoreSandboxContext* owner = getSandboxOwner();
     return !qore_sandbox_current_code_created(owner, owner);
+}
+
+bool qore_object_private::heldReaderDeniedIntern(const qore_class_private& class_ctx) const {
+    // the code of a class that trusted code declared
+    if (!class_ctx.isSandboxedCode()) {
+        return false;
+    }
+    // an object of the reading code's class or of a subclass of it, as for sandboxedWriterDeniedIntern()
+    ClassAccess access = Public;
+    if (qore_class_private::get(*theclass)->getClassIntern(class_ctx.classID, access, true)) {
+        return false;
+    }
+    // the owner is not decided with the object's lock held: fails closed
+    return true;
+}
+
+bool qore_object_private::mergeSourcePublicOnlyIntern(const qore_class_private* reader_ctx) const {
+    // the code of a class with private access to the object's class: the sandboxed read rule decides
+    if (reader_ctx && qore_class_private::runtimeCheckPrivateClassAccess(*theclass, reader_ctx)) {
+        return sandboxedWriterDeniedIntern(*reader_ctx);
+    }
+    // code without private access to the object's class, which reads its public members only as a whole: code that the
+    // owner rules apply to does so in a merge too
+    return qore_caller_tenant_isolated();
 }
 
 int qore_object_private::checkSandboxedMemberReadIntern(const char* mem, const qore_class_private* lookup_ctx,

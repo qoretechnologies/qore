@@ -39,6 +39,40 @@ public class Target inherits Serializable {
     }
 }
 
+#! a class with a public hash member that an object of the class is merged into: the merge runs with the object's
+#! lock, which the write of the member holds already
+public class HashTarget {
+    public {
+        hash<auto> h = {};
+    }
+
+    private {
+        int n = 42;
+    }
+}
+
+#! the tenants' code that merges an object into a member of the same object
+const HeldSource = "%modern
+class HSub inherits HashTarget {
+    static string heldMerge(HashTarget w) {
+        try {
+            w.h += w;
+            return (keys w.h).join(\",\");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+
+string sub held_merge(HashTarget w) {
+    return HSub::heldMerge(w);
+}
+
+HashTarget sub make_hash_target() {
+    return new HashTarget();
+}
+";
+
 #! the code of the tenants (and of a trusted Program, where it is not restricted)
 const TenantSource = "%modern
 #! the read forms
@@ -46,8 +80,13 @@ const Forms = (
     \"direct\", \"dynamic\", \"expression\", \"closure-member\", \"copy\",
     \"keys\", \"cast\", \"plus\", \"iterator\", \"slice\", \"last-key\", \"format\", \"serialize\",
     \"member-names\", \"size\", \"elements\",
+    \"plus-left\", \"plus-equals\", \"object-merge\",
     \"public\",
 );
+
+#! an object of the tenant's own class that another object is merged into; all its members are public
+class Bag {
+}
 
 class TSub inherits Target {
     #! reads the object with the given form; returns the value read or the exception code
@@ -71,6 +110,9 @@ class TSub inherits Target {
                 case \"member-names\": return w.keys().join(\",\");
                 case \"size\": return sprintf(\"%d\", w.size());
                 case \"elements\": return sprintf(\"%d\", elements w);
+                case \"plus-left\": return (keys ({} + w)).join(\",\");
+                case \"plus-equals\": { hash<auto> h = {}; h += w; return (keys h).join(\",\"); }
+                case \"object-merge\": { Bag b(); b += w; return (keys b).join(\",\"); }
                 case \"public\": return sprintf(\"%d\", w.pub);
                 default: throw \"UNKNOWN-FORM\", form;
             }
@@ -110,6 +152,13 @@ string sub format_object(Target w) {
 #! the member names and the number of members of the object outside of a class (no class context)
 string sub names_object(Target w) {
     return sprintf(\"%s|%d|%d\", w.keys().join(\",\"), w.size(), elements w);
+}
+
+#! merges the object into an object of the tenant's own class outside of a class (no class context)
+string sub merge_object(Target w) {
+    Bag b();
+    b += w;
+    return (keys b).join(\",\");
 }
 
 Target sub make_target() {
@@ -209,6 +258,9 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
             "member-names": "pub,n,s,cb",
             "size": "4",
             "elements": "4",
+            "plus-left": "pub,n,s,cb",
+            "plus-equals": "pub,n,s,cb",
+            "object-merge": "pub,n,s,cb",
             "public": "1",
         };
 
@@ -233,6 +285,10 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
             "member-names": "pub",
             "size": "1",
             "elements": "1",
+            # a merge of the object into a hash or into another object gives the public members only
+            "plus-left": "pub",
+            "plus-equals": "pub",
+            "object-merge": "pub",
             "public": "1",
         };
     }
@@ -257,6 +313,7 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         }
         foreach string mode in (keys ExecModes) {
             addTestCase("tenant reads in " + mode, getTenantTest(mode));
+            addTestCase("held merge in " + mode, getHeldTest(mode));
         }
         addTestCase("trusted code", \trustedTest());
         addTestCase("qcc-compiled host -O0", sub () { aotHostTest(0); });
@@ -267,6 +324,37 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
     #! returns the test of the given execution mode
     private code getTenantTest(string mode) {
         return sub () { tenantTest(mode); };
+    }
+
+    #! returns the held merge test of the given execution mode
+    private code getHeldTest(string mode) {
+        return sub () { heldTest(mode); };
+    }
+
+    #! an object merged into a hash member of itself, whose lock the merge holds already: the sandboxes are not looked
+    #! up then, so the code of a tenant's class gets the public members only, also of its own object (fails closed)
+    heldTest(string mode) {
+        # tiered code is promoted after many calls
+        int count = mode == "tiered" ? 1200 : 2;
+        Program a(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        a.setExecMode(ExecModes{mode});
+        a.setSandboxManager(new SandboxManager());
+        a.parse(HeldSource, "tenant");
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.setExecMode(ExecModes{mode});
+        t.parse(HeldSource, "trusted");
+        # the results of every call
+        hash<string, bool> host_r;
+        hash<string, bool> own_r;
+        hash<string, bool> trusted_r;
+        for (int i = 0; i < count; ++i) {
+            host_r{a.callFunction("held_merge", new HashTarget())} = True;
+            own_r{a.callFunction("held_merge", a.callFunction("make_hash_target"))} = True;
+            trusted_r{t.callFunction("held_merge", new HashTarget())} = True;
+        }
+        assertEq("h", (keys host_r).join("|"), mode + ": a tenant on the host's object");
+        assertEq("h", (keys own_r).join("|"), mode + ": a tenant on its own object");
+        assertEq("h,n", (keys trusted_r).join("|"), mode + ": trusted code");
     }
 
     #! creates a Program with the tenants' code
@@ -298,6 +386,7 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         assertEq(Refused, a.callFunction("run_all", b_obj, count), mode + ": A on B's object");
         assertEq("hidden", a.callFunction("format_object", host_obj), mode + ": A formats the host's object");
         assertEq("pub|1|1", a.callFunction("names_object", host_obj), mode + ": A on the host's object's names");
+        assertEq("pub", a.callFunction("merge_object", host_obj), mode + ": A merges the host's object");
         # outside of a class, the public members only, also of its own object (qore#7048)
         assertEq("pub|1|1", a.callFunction("names_object", a.callFunction("make_target")),
             mode + ": A on its own object's names");
