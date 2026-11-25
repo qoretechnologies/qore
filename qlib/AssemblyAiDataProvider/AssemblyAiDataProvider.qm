@@ -67,6 +67,15 @@ module AssemblyAiDataProvider {
                 "- Issue temporary tokens for real-time client applications\n\n"
                 "**Regions:** choose US or EU endpoints for regional services. Voice Agents uses its global endpoint.",
             "scheme": "assemblyai",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "assemblyai.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://www.assemblyai.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::AssemblyAiLogo,
             "logo_file_name": "assemblyai-logo.svg",
             "logo_mime_type": MimeTypeSvg,

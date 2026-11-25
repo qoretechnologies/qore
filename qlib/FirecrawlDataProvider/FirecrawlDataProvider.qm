@@ -59,6 +59,15 @@ module FirecrawlDataProvider {
                 "multi-page crawling, batch scraping, URL discovery, web search, "
                 "AI-powered extraction, document parsing, and autonomous agent tasks.",
             "scheme": "firecrawlrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "firecrawl.dev",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://www.firecrawl.dev/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": FirecrawlDataProvider::FirecrawlLogo,
             "logo_file_name": "firecrawl-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -74,6 +83,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/scrape",
             "action": "scrape",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Scrape a Web Page",
             "short_desc": "Scrape a single web page and return its content",
             "desc": "Scrapes a single web page at the given URL and returns its content "
@@ -110,6 +120,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/batch-scrape",
             "action": "batch-scrape",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Batch Scrape Web Pages",
             "short_desc": "Scrape multiple web pages in batch",
             "desc": "Scrapes multiple web pages in batch and returns their content. "
@@ -160,6 +171,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/get-batch-scrape-status",
             "action": "get-batch-scrape-status",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Batch Scrape Status",
             "short_desc": "Get the status and results of a batch scrape job",
             "desc": "Gets the current status and results of a batch scrape job by its ID.",
@@ -185,6 +197,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/crawl",
             "action": "crawl",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Crawl a Website",
             "short_desc": "Crawl a website and return scraped data for all pages",
             "desc": "Crawls a website starting from the given URL and returns scraped "
@@ -216,6 +229,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/get-crawl-status",
             "action": "get-crawl-status",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Crawl Status",
             "short_desc": "Get the status and results of a crawl job",
             "desc": "Gets the current status and results of a crawl job by its ID.",
@@ -261,6 +275,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/map",
             "action": "map",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Map a Website",
             "short_desc": "Discover all URLs on a website without scraping content",
             "desc": "Maps a website to discover all URLs without scraping page content. "
@@ -291,6 +306,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/search",
             "action": "search",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Search the Web",
             "short_desc": "Search the web and return scraped results",
             "desc": "Searches the web for the given query and returns scraped results "
@@ -331,6 +347,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/extract",
             "action": "extract",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Extract Structured Data",
             "short_desc": "Extract structured data from web pages using AI",
             "desc": "Extracts structured data from one or more web pages using AI.\n\n"
@@ -360,6 +377,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/get-extract-status",
             "action": "get-extract-status",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Extraction Status",
             "short_desc": "Get the status and results of an extraction job",
             "desc": "Gets the current status and results of an extraction job by its ID.",
@@ -385,6 +403,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/agent",
             "action": "agent",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Run AI Agent",
             "short_desc": "Use an AI agent to find and extract data from the web",
             "desc": "Uses an AI agent to find and extract data from the web based on a "
@@ -435,6 +454,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/get-agent-status",
             "action": "get-agent-status",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Agent Status",
             "short_desc": "Get the status and results of an agent job",
             "desc": "Gets the current status and results of an agent job by its ID.",
@@ -460,6 +480,7 @@ module FirecrawlDataProvider {
             "app": FirecrawlDataProvider::AppName,
             "path": "/parse",
             "action": "parse",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Parse a Document",
             "short_desc": "Upload a document and convert it to LLM-ready data",
             "desc": "Uploads a local or non-public document (PDF, DOCX, XLSX, HTML, etc.) "
