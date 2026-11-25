@@ -3246,8 +3246,13 @@ class HttpServerDispatchCapability {
         *string path;
         #! True once the path was checked against the record of the loaded HttpServer module
         bool checked;
-        #! True if the check failed: the capability makes no request current (fails closed for stream requests only)
+        #! True if the check found that the module that claimed the capability is not the loaded HttpServer module:
+        #! the capability makes no request current (fails closed for stream requests only)
         bool unusable;
+        #! True once a check that could not be made was reported (see takeWarning())
+        bool transient_reported;
+        #! the message about the check that the dispatch logs once (see takeWarning())
+        *string warning;
         #! a lock for the check
         Mutex lck();
         #! resolves the file of the loaded HttpServer module with the system policy (see check())
@@ -3304,10 +3309,8 @@ class HttpServerDispatchCapability {
         if (!path && HttpRawRequestScope::callerIsSandboxed()) {
             throw "HTTP-SERVER-ERROR", "sandboxed code cannot make a raw request current";
         }
-        if (!checked) {
-            check();
-        }
-        if (unusable) {
+        # a check that cannot be made now makes no request current for this request, and is made again for the next
+        if (checked ? unusable : !check()) {
             return;
         }
         # the credential trailer fields of a filtered request: from the trusted options of the dispatched handler,
@@ -3338,32 +3341,54 @@ class HttpServerDispatchCapability {
         HttpRawRequestScope::registerHostViewClass(cls);
     }
 
-    #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
-    /** A capability that fails the check, or whose check fails, is unusable: it makes no request current, so that the
-        stream requests of its dispatch are refused (fails closed) while its other requests are served
+    #! Returns the message about the check of the capability that its holder logs, once
+    /** The message of a check that found that the module that claimed the capability is not the loaded HttpServer
+        module, or of the first check that could not be made; @ref nothing if there is none, or it was returned already
     */
-    private:internal check() {
+    *string takeWarning() {
+        AutoLock al(lck);
+        return remove warning;
+    }
+
+    #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
+    /** A capability whose module is not the loaded HttpServer module is unusable: it makes no request current, so that
+        the stream requests of its dispatch are refused (fails closed) while its other requests are served.  A check
+        that cannot be made (the file of the module cannot be resolved now) makes no request current for the request
+        being dispatched, and is made again for the next one.  Each is reported once (see takeWarning()).
+
+        @return @ref True if the capability makes the request current
+    */
+    private:internal bool check() {
         AutoLock al(lck);
         if (checked) {
-            return;
+            return !unusable;
         }
-        bool ok = False;
+        # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
+        # checked against the record of the HttpServer module loaded in the process, if any
+        *hash<auto> rec;
+        *string rp;
         try {
-            # a private copy of the module (Program::loadApplyToPrivateUserModule()) has no record of its own: it is
-            # checked against the record of the HttpServer module loaded in the process, if any
-            *hash<auto> rec = get_module_hash().HttpServer;
-            *string rp;
+            rec = get_module_hash().HttpServer;
             if (rec.filename) {
-                try {
-                    rp = resolve();
-                } catch (hash<ExceptionInfo> ex) {
-                }
+                rp = resolve();
             }
-            ok = !rec || rp == path;
         } catch (hash<ExceptionInfo> ex) {
+            # not decided: the stream requests of this request are refused, and the check is made again
+            if (!transient_reported) {
+                transient_reported = True;
+                warning = sprintf("the dispatch capability of the HTTP server cannot be checked against the loaded "
+                    "HttpServer module now (%s: %s); stream requests are refused until it can", ex.err, ex.desc);
+            }
+            return False;
         }
-        unusable = !ok;
         checked = True;
+        if (rec && rp != path) {
+            unusable = True;
+            warning = sprintf("the dispatch capability of the HTTP server was claimed by the initialization of a module "
+                "(%y) that is not the loaded HttpServer module (%y): its stream requests are refused", path, rp);
+            return False;
+        }
+        return True;
     }
 }
 

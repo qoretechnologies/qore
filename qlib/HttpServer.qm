@@ -5768,6 +5768,13 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             ? dispatch_capability.enter(cx, hdr, hsock, handler)
                             : NOTHING;
                         on_exit delete raw_scope;
+                        # the capability reports once why it makes no request current
+                        if (!raw_scope && dispatch_capability) {
+                            *string warning = dispatch_capability.takeWarning();
+                            if (warning) {
+                                listener.logError("cid %d: %s", cx.id, warning);
+                            }
+                        }
                         # a handler whose class is of a restricted Program, which trusted code serves the request to,
                         # gets the request without its credentials (fails closed); the rest of its context is its
                         # own, as before.  The code of the handler's base class filters what it dispatches to

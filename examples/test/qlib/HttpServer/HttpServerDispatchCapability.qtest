@@ -612,10 +612,10 @@ public class Holder {
 
     testUnusableCapability() {
         # the capability of the server is checked against the record of the loaded HttpServer module when it is first
-        # used; a capability that fails the check (here the file of the module, loaded from a copy, is removed before
-        # the first request) makes no request current, so that the server's stream requests are refused, and does not
-        # fail, so that its other requests are served; in a process of its own, with a module path whose only module
-        # named HttpServer is the copy
+        # used; a check that cannot be made (here the file of the module, loaded from a copy, is removed before the
+        # first request) makes no request current, so that the server's stream requests are refused, and does not
+        # fail, so that its other requests are served; it is made again for the next request, and logged once; in a
+        # process of its own, with a module path whose only module named HttpServer is the copy
         TmpDir tmp("qore-dispatch-capability-copy-");
         string dir = tmp.path + DirSep + "copy";
         mkdir(dir);
@@ -626,7 +626,8 @@ public class Holder {
         int rc;
         string out = backquote(cmd, \rc);
         assertEq(0, rc, out);
-        assertEq("plain: 200, stream: 500, plain again: 200\n", out);
+        assertEq("plain: 200, stream: 500, plain again: 200\nstream after: 200, stream again: 200\n"
+            "logged: 1 (check not made)\n", out);
     }
 
     #! runs by-path-before-load.q in a process of its own, with the given module path, if any
