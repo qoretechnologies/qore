@@ -25627,7 +25627,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
             for (size_t i = 0; i < del_modules.size(); ++i) {
                 bool required = false;
                 for (size_t j = 0; j < del_modules.size() && !required; ++j) {
-                    required = i != j && requires_map[del_modules[j]].count(del_modules[i]);
+                    // a module of the same cycle (one that it requires too) does not hold it back, so that a cycle is
+                    // broken at one of its own modules, never at a module that it requires (qore#7445)
+                    required = i != j && requires_map[del_modules[j]].count(del_modules[i])
+                        && !requires_map[del_modules[i]].count(del_modules[j]);
                 }
                 if (!required) {
                     pick = i;
