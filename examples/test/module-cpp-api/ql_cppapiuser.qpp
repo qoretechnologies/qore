@@ -44,6 +44,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <poll.h>
 #include <pthread.h>
@@ -1625,6 +1626,52 @@ int cpp_api_thread_start_failure_race(int iterations) [dom=PROCESS,THREAD_CONTRO
     q_thread_set_stack_size(default_size, xsink);
     q_enforce_thread_size_on_primary_thread();
     return failed;
+}
+
+//! Calls qore_get_parent_caller_location() in a thread that has no %Qore thread data and in the calling thread
+/** The other thread is a plain std::thread that is not registered with %Qore, as a thread of a library that a binary
+    module uses; it calls qore_get_parent_caller_location() with offsets 0, 1 and the largest offset (qore#7594).
+
+    @return a hash with the following keys:
+    - \c other_thread_registered: True if the other thread had %Qore thread data (is_valid_qore_thread())
+    - \c other_thread_null_offsets: the offsets for which qore_get_parent_caller_location() returned nullptr in the
+      other thread, as signed integers (the largest offset is -1)
+    - \c this_thread: the location that qore_get_parent_caller_location() returns for offset 0 in the calling thread
+      (the location of the call of this function), or @ref nothing if it returned nullptr
+
+    @throw CPP-API-THREAD-ERROR the other thread could not be started
+*/
+hash<auto> cpp_api_parent_caller_location_without_thread_data() [dom=THREAD_CONTROL] {
+    static constexpr size_t offsets[] = {0, 1, static_cast<size_t>(-1)};
+    static constexpr size_t num_offsets = sizeof(offsets) / sizeof(offsets[0]);
+    bool registered = true;
+    bool null_result[num_offsets] = {};
+    try {
+        std::thread other([&registered, &null_result]() {
+            registered = is_valid_qore_thread();
+            for (size_t i = 0; i < num_offsets; ++i) {
+                // a location returned here (not expected) holds no objects, so it needs no exception sink
+                ReferenceHolder<QoreHashNode> loc(qore_get_parent_caller_location(offsets[i]), nullptr);
+                null_result[i] = !loc;
+            }
+        });
+        other.join();
+    } catch (const std::system_error& e) {
+        xsink->raiseException("CPP-API-THREAD-ERROR", "could not start a thread: %s", e.what());
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("other_thread_registered", registered, xsink);
+    ReferenceHolder<QoreListNode> nulls(new QoreListNode(bigIntTypeInfo), xsink);
+    for (size_t i = 0; i < num_offsets; ++i) {
+        if (null_result[i]) {
+            nulls->push(static_cast<int64>(offsets[i]), xsink);
+        }
+    }
+    rv->setKeyValue("other_thread_null_offsets", nulls.release(), xsink);
+    rv->setKeyValue("this_thread", qore_get_parent_caller_location(0), xsink);
+    return rv.release();
 }
 
 //! sets the stack limit of the primary thread as a runtime that enforces the thread's stack size does
