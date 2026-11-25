@@ -61,6 +61,15 @@ module ShippoDataProvider {
                 "- Track packages with real-time tracking updates\n"
                 "- Manage orders and their fulfillment\n"
                 "- Polling triggers for new parcels, shipments, and labels",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "goshippo.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://goshippo.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "shippo",
             "logo": ShippoLogo,
             "logo_file_name": "shippo-logo.svg",
@@ -142,6 +151,7 @@ module ShippoDataProvider {
             "app": ShippoDataProvider::AppName,
             "path": "/get-transaction",
             "action": "get-shipping-label",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "groups": "Labels",
             "display_name": "Get Shipping Label",
             "short_desc": "Get a shipping label by ID",
