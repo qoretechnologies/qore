@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the second module of abstract-module-parent-override.qtest, loaded from the source and as a qcc -m .qmod; its
+# classes inherit the classes of the first one
+
+%modern
+%requires AbstractModuleParentA
+
+module AbstractModuleParentB {
+    version = "1.0";
+    desc = "a class that implements an abstract method of a parent class for abstract-module-parent-override.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AMB {
+public class N8 inherits AMA::Q { string m(string s) { return "N8::m(string)"; } }
+# a class like U8 of users.ql, parsed with N8
+public class N9 inherits private N8, AMA::I2, AMA::I1, AMA::Sint { string m(string s) { return "N9::m(string)"; } }
+}

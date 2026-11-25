@@ -28,12 +28,23 @@ class StabilityMediaHandler inherits AbstractHttpRequestHandler {
         hash<auto> response_headers = {"Content-Type": "image/png", "Seed": "0", "Finish-Reason": "SUCCESS"};
         timeout delay = 0ms;
         *Counter entered;
+        #! if set, the job whose status requests after the first are held until held is zero
+        *string hold_job;
+        #! the counter that held status requests wait for
+        *Counter held;
+        #! the number of status requests of hold_job
+        int hold_job_requests = 0;
     }
     hash handleRequest(hash cx, hash hdr, *data body) {
+        *Counter hold;
         {
             AutoLock lock(mutex);
             push calls, {"path": cx.raw_path, "method": hdr.method, "headers": hdr, "body": body};
+            if (hold_job && cx.raw_path == "/v2beta/results/" + hold_job && ++hold_job_requests > 1) {
+                hold = held;
+            }
         }
+        if (hold) { hold.waitForZero(); }
         if (entered && cx.raw_path == "/v2beta/results/" + Job) { entered.dec(); }
         if (delay) { usleep(int(delay) * 1000); }
         return makeResponse(response_headers, status, response);
@@ -257,10 +268,43 @@ class StabilityMediaWireTest inherits QUnit::Test {
         catch (hash<ExceptionInfo> ex) {
             assertEq("STABILITYAI-JOB-TIMEOUT", ex.err);
             assertEq(Job, ex.arg.job_id);
-            assertEq("pending", ex.arg.last_status.status);
+            # the deadline can pass before any status request returns: the last status is then unknown (#7537)
+            if (exists ex.arg.last_status) {
+                assertEq("pending", ex.arg.last_status.status);
+            }
             timed_out = True;
         }
         assertTrue(timed_out);
+        # a status request that does not return within the deadline after one that did: the exception carries the
+        # status of the one that returned; the job is one that no other request of the test asks for
+        {
+            string hold_job = strmul("c", 64);
+            Counter held(1);
+            handler.response = make_json({"id": hold_job, "status": "in-progress"});
+            handler.mutex.lock();
+            handler.hold_job = hold_job;
+            handler.held = held;
+            handler.mutex.unlock();
+            on_exit {
+                held.dec();
+                handler.mutex.lock();
+                remove handler.hold_job;
+                remove handler.held;
+                handler.mutex.unlock();
+            }
+            timed_out = False;
+            try { wait.doRequest({"job_id": hold_job, "operation_timeout": 2s, "poll_interval": 10ms}); }
+            catch (hash<ExceptionInfo> ex) {
+                assertEq("STABILITYAI-JOB-TIMEOUT", ex.err);
+                assertEq(hold_job, ex.arg.job_id);
+                assertEq("pending", ex.arg.last_status.status);
+                timed_out = True;
+            }
+            assertTrue(timed_out);
+            handler.mutex.lock();
+            on_exit handler.mutex.unlock();
+            assertEq(2, handler.hold_job_requests);
+        }
         handler.status = 200;
         handler.response_headers = {"Content-Type": "image/png"};
         handler.response = Png;

@@ -1,0 +1,6 @@
+loop: t=18 acc=02715
+afterTry: n=207 last=4
+handlers: catch:7 exit:17 a=18
+numbers: True 1.25 9007199254740993 -9223372036854775807 True 1.25 9007199254740993 9007199254740995 2.5
+qualified: x=15 y=6
+hashLocal: {a: 1, b: 2} {a: 1}

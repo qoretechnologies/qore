@@ -250,6 +250,11 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! true if the object is a capability (qore#7052): an object of module code that the host's code created without
+    //! restrictions; a call of one of its methods that enters the Program of its code marks the context that it
+    //! enters as a grant (see ProgramThreadCountContextHelper::set() and ThreadData::CapabilityFrame); read only when
+    //! a call enters another Program, never by calls within one
+    bool capability_origin = false;
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection
@@ -855,12 +860,13 @@ public:
     }
 
     DLLLOCAL void doPrivateException(const char* mem, ExceptionSink* xsink) const {
-        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem, theclass->getName());
+        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem,
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL void doPublicException(const char* mem, ExceptionSink* xsink) const {
         xsink->raiseException("INVALID-MEMBER", "'%s' is not a registered member of class '%s'", mem,
-            theclass->getName());
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -996,9 +1002,11 @@ public:
     /** private members are excluded if called outside the class, caller owns the QoreHashNode reference returned
 
         @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param class_ctx class scope of the code requesting the members
         @return member data of the object
     */
-    DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink) const;
+    DLLLOCAL QoreHashNode* getRuntimeMemberHash(ExceptionSink* xsink,
+        const qore_class_private* class_ctx = runtime_get_class()) const;
 
     //! returns the names of the members that the calling code can see, as the keys of getRuntimeMemberHash() (#7048)
     /** raises an exception and returns nullptr if the object has been deleted

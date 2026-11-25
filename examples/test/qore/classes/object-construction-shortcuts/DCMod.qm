@@ -1,0 +1,56 @@
+%modern
+
+module DCMod {
+    version = "1.0";
+    desc = "classes that inherit builtin classes";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DCMod {
+class MS inherits Mutex {
+}
+
+class MSC inherits Mutex {
+    constructor() {
+    }
+}
+
+class SS inherits Socket {
+}
+
+class SSC inherits Socket {
+    constructor() {
+    }
+}
+
+public string sub mkMutexSub() {
+    MS m();
+    return "ok";
+}
+
+public string sub mkMutexSubCtor() {
+    MSC m();
+    return "ok";
+}
+
+public string sub mkSocketSub() {
+    SS s();
+    return "ok";
+}
+
+public string sub mkSocketSubCtor() {
+    SSC s();
+    return "ok";
+}
+
+public string sub mkMutex() {
+    Mutex m();
+    return "ok";
+}
+
+public object sub keepMutexSub() {
+    return new MS();
+}
+}

@@ -161,9 +161,7 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
         if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNode("initialization expression for ");
             desc->sprintf("hashdecl member '%s' returns ", name);
-            QoreTypeInfo::getThisType(argTypeInfo, *desc);
-            desc->concat(", but the member was declared as ");
-            QoreTypeInfo::getThisType(typeInfo, *desc);
+            QoreTypeInfo::describeTypeComparison(*desc, argTypeInfo, ", but the member was declared as ", typeInfo);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
         }
         if (!err) {

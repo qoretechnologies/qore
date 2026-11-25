@@ -3,6 +3,7 @@
 #
 # Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc compiles and links native executables and a module loaded by each execution mode
 
 %modern
 %no-child-restrictions
@@ -104,6 +105,8 @@ printf(\"prec-default=%d\\n\", (1n).prec());
             \testFoldedNumberEqualsRuntimeValue());
         addTestCase("every execution mode agrees on a serialized number",
             \testAllExecutionModesAgree());
+        addTestCase("module number metadata is bounded and round-trips at its original precision",
+            \testModuleNumberMetadata());
 
         set_return_value(main());
     }
@@ -131,6 +134,46 @@ printf(\"prec-default=%d\\n\", (1n).prec());
             libqore_dir, libqore_dir, qcc_bin, out, source));
         assertTrue(is_file(out), "the probe compiles to an AOT executable: " + compile);
         return run(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, out));
+    }
+
+    testModuleNumberMetadata() {
+        TmpDir tmp("qore-aot-number-metadata-");
+        string module = tmp.path + "/NumberMetadata.qm";
+        string artifact = tmp.path + "/NumberMetadata.qmod";
+        string probe = tmp.path + "/probe.q";
+        write(module, "%modern
+module NumberMetadata {
+    version = \"1.0\";
+    desc = \"AOT number metadata test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public list<number> sub values() {
+    return (4.5e30000n, -7.25e-30000n, 123n, 2n / 3n, number(\"-0\"),
+        number(\"nan\"), number(\"inf\"), number(\"-inf\"));
+}
+");
+        write(probe, "%modern
+%requires NumberMetadata
+foreach number n in (values()) {
+    printf(\"%s %d\\n\", n.toStringRoundTrip(True), n.prec());
+}
+");
+        string env = sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s", tmp.path, libqore_dir);
+        string expected = run(sprintf("%s %s -b --exec-mode=ast %s", env, qore_bin, probe));
+        assertEq(8, split("\n", trim(expected)).size(), expected);
+        string output = run(sprintf("%s %s -m --aot-metadata-compression=none -o %s %s",
+            env, qcc_bin, artifact, module));
+        assertTrue(is_file(artifact), output);
+        unlink(module);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # The code under test is the compiled module; the driver only prints its return values.
+            assertEq(expected, ExecModeHarness::run(sprintf("%s %s -b --exec-mode=%s %s",
+                env, qore_bin, mode, probe), ExecModeHarness::NativeCheck::None), mode);
+        }
+        string info = run(sprintf("%s %s --dump-info %s", env, qcc_bin, artifact));
+        list<string> size = info.regexExtract("size: ([0-9]+) bytes");
+        assertTrue(int(size[0]) > 0 && int(size[0]) < 16384, "uncompressed module metadata: " + info);
     }
 
     #! The reported failure: the folded constant compared unequal to the runtime value under AOT only.

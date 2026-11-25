@@ -9,7 +9,7 @@
 # - whitespace in a field name, as between the name and the colon, is refused (section 5.1)
 # - a line without a colon is refused (section 5)
 # - a line of a response may end with LF instead of CRLF (section 2.2); a line of a request that ends with a bare LF is
-#   refused, as the readers end a header at its first empty line with CRLF line ends
+#   refused, so that a request ends where every recipient ends it
 # Before, a bare CR was kept in the value, whitespace before the colon was kept in the field name, and an obsolete
 # line folding or a line without a colon ended the header: the field lines after it, such as Content-Length, were
 # dropped without an error.

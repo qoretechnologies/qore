@@ -137,10 +137,68 @@ every binding, with no change to the inline, direct-parameter and fast-entry cal
 - a native call that gives the callee a temporary argument (`QoreIRToLLVM::callGivesArgs()`, the test of
   `buildArgCleanupArray()`) does not call the fast entry of a callee with `param_take_over`
   (`qore_ir_fast_entry_refuses_given_args()` in the fast-entry gates): it is made by the consume path, which binds
-  from the runtime stack.  No second fast entry is compiled.
+  from the runtime stack, unless it can call the entry that takes its arguments over (below).
 
 The helpers are compiled in `lib/JITRuntimeTakeOver.cpp`, outside the single compilation unit.  A range slice and an
 `extract` give a new sequence, which a call consumes as a call's result (`qore_ir_is_sequence_temp()`).
+
+## The fast entry that takes its arguments over (issue #6105)
+
+In AOT code, a call that gives temporaries to a function or a static method whose parameter takes its argument over
+calls a copy of the callee's fast entry that takes the caller's references over instead of the consume path
+(`QoreIRToLLVM::callCanTakeOverToFastEntry()`): the call must give only the cleanup slots of temporaries (no slot of a
+read through a reference, whose value is known at run time only), at least one of them to a parameter whose fast entry
+takes a reference of its own, and the callee's fast entry must be defined in the module (not of another module or a
+sibling artifact).
+
+- The prologue of every fast entry marks the reference that it takes to a boxed argument (`qore_rt_incref` with the
+  metadata `QORE_FAST_ENTRY_ARG_REF_MD`); which parameters take one is the rule of the prologue
+  (`qore_aot_fast_entry_param_takes_ref()`: a boxed parameter that is not borrowed, `param_noescape`, or that strips
+  the complex type of its argument).
+- The call declares `<fast entry>.own.<mask>` (`ownedFastEntry()`), the mask having a `1` for each argument whose
+  reference it hands over (a temporary given to a parameter that takes a reference); before it is optimized, the
+  module defines each such declaration as a copy of the fast entry without the marked references of those arguments
+  (`QoreIRToLLVM::materializeOwnedFastEntries()`, called by `emitObjectFile()`), and fails the compilation if one is
+  missing.  Only the entries that calls use are copied.
+- The call clears the slots that it hands over right before the call (`emitAotBatchFastEntryOrFallback()`): the
+  parameter then holds the only reference, a write releases it, and the entry releases it when it returns, also when
+  it raises an exception; the caller's landing pad finds the slots empty and releases only the slots that it did not
+  hand over, which a call that gives a slot to a borrowed parameter releases when the call returns, as before.
+- An argument that a call hands over to a parameter whose prologue takes no reference (a parameter that the body
+  does not use, which has no local, or that it borrows) is released by the call when the copy returns:
+  `materializeOwnedFastEntries()` adds the release after each call of the copy, as the call of the fast entry releases
+  its argument; it marks only the arguments whose references the copy owns, each with the parameter attribute
+  `QORE_OWNED_FAST_ENTRY_ARG_ATTR`.
+- The prologue takes its references before the entry's stack check: the paths that leave the entry before its body
+  runs, the stack overflow and the debugger entry, release them (`emitFastEntryPrologueRelease()`), so that the copy
+  releases the caller's references there and the fast entry its own (which a stack overflow in a fast entry leaked
+  before).  The thunk that checks the stack for a large frame (`QoreIRFrameCheck`) releases the copy's marked
+  arguments when it does not call the copy's code.  The marks, like the one of the ExceptionSink argument that the
+  thunk raises the exception with (`QORE_FRAME_CHECK_XSINK_ATTR`), are parameter attributes and not argument
+  indexes: a copy is internal, and at `-O2`/`-O3` LLVM's dead-argument elimination removes the arguments whose values
+  it does not need (an unused parameter is stored in its local, which needs no value when every call gives the same
+  constant), which moves the arguments after them; the attributes stay on their arguments.  A function with a
+  stack check whose thunk cannot be made fails the compilation (qore#7072).  The debugger entry calls the function's
+  standard entry, whose parameters take references of their own: under a debugger, a temporary handed over is
+  released when the call returns.
+- `QORE_DUMP_LLVM_IR` prints the module before the copies are made (their declarations); `QORE_DUMP_IR_BEFORE_OPT`
+  prints them.
+- The copies are made in `lib/QoreIRToLLVMOwnedEntries.cpp`, compiled outside the single compilation unit with hidden
+  visibility, so that the LLVM templates that `llvm::CloneFunction()` instantiates are not exported from libqore.
+- Nothing is handed over before the checks of the fast path pass (the callee's context, the checks of arguments for
+  NOTHING and of date kinds); a call whose checks fail is made by the consume path, which binds the parameters from
+  the runtime stack and can raise an exception while it binds them, before anything is taken over.
+- The calls that give nothing, and the calls of callees whose parameters take nothing over, call the fast entry as
+  before. The JIT emits an owning entry in the caller's batch. If an earlier batch already installed the
+  ordinary entry, the compiler builds the owning copy from the callee's cached IR. Calls to the ordinary entry
+  still use its installed definition. Nested handlers of the copy are local to its batch.
+
+For a local AOT method that needs its declaring class or receiver, an owning call enters the method context
+before it hands over any argument. `qore_rt_try_enter_native_method_v1` verifies the selected native entry and,
+for an instance method, the receiver's exact class and validity. The method runs with its object, declaring
+class, implicit arguments and parse options. On either return or exception, `qore_rt_leave_native_method_v1`
+restores the surrounding context. A call needing dynamic dispatch, argument filtering or a Program switch uses
+the normal method binder.
 
 ## Measurements (2026-11-15)
 

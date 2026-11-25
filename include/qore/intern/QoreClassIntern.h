@@ -187,15 +187,19 @@ struct AbstractMethod {
 
     DLLLOCAL ~AbstractMethod();
 
-    // merge changes from parent class method of the same name during parse initialization
-    DLLLOCAL void parseMergeBase(AbstractMethod& m, bool committed = false);
-
-    // merge changes from parent class method of the same name during parse initialization
+    //! merges the abstract variants of the parent class's method \a m of the same name during parse initialization
+    /** A concrete variant of the class's own method \a f (if any) implements the parent class's variant with its
+        signature, whether the class has the abstract method already or not (qore#7330)
+    */
     DLLLOCAL void parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bool committed = false);
 
     DLLLOCAL void parseAdd(MethodVariantBase* v);
 
     DLLLOCAL void parseOverride(MethodVariantBase* v);
+
+    //! keys again the variants whose keys are not their current abstract signatures, making those of the class
+    //! \a qc's own variants from their resolved types (qore#7331)
+    DLLLOCAL void parseResolveSignatures(const qore_class_private& qc);
 
     // delete/purge all saved variants in the pending_save list, returns 0 if the AbstractMethod still has abstract
     // variants, -1 if not and therefore can be removed from the map
@@ -249,6 +253,14 @@ struct AbstractMethodMap : amap_t {
 
     DLLLOCAL void parseOverrideAbstractVariant(const char* name, MethodVariantBase* f);
 
+    //! makes the keys of the class \a qc's own abstract variants from their resolved types (qore#7331)
+    /** Called when the class is initialized, after its signatures have been resolved and before the abstract
+        variants of its parent classes are merged, so that a declaration has the same key as one with the same
+        signature of a class that was loaded from an AOT image, whose signatures are resolved; the variants that the
+        class was given by a parent class before the parent class made their keys again are keyed again as well
+    */
+    DLLLOCAL void parseResolveSignatures(const qore_class_private& qc);
+
     // adds a committed abstract variant if it doesn't already exist
     DLLLOCAL void addAbstractVariant(const char* name, MethodVariantBase* f);
 
@@ -272,7 +284,11 @@ struct AbstractMethodMap : amap_t {
             i.second->parseRollback();
     }
 
-    //! Returns true if concrete variants were installed on a method of the class.
+    //! installs the concrete variants of the parent classes for the class's abstract variants
+    /** Sets qore_class_private::abstract_method_created if it creates a method in the class (qore#7307).
+
+        @return true if concrete variants were installed on a method of the class, created or existing (qore#7425)
+    */
     DLLLOCAL bool parseInit(qore_class_private& qc, BCList* scl);
 
     //! drops the abstract variants inherited from the parent classes that none of them has pending any more
@@ -323,7 +339,14 @@ protected:
     bool final;                             // is the variant final or not
     bool abstract;                          // is the variant abstract or not
     bool const_method;                      // true for const-qualified instance methods
-    std::string asig;                       // abstract signature, only set for abstract method variants
+    // the abstract signature, only set for abstract method variants; the abstract variant maps keep pointers to it
+    // as their keys, so neither string is changed once it is set (qore#7331)
+    std::string asig;
+    // the abstract signature made again from the resolved types if asig was made from the parse types
+    std::string resolved_asig;
+    bool asig_set = false;                  // asig has been made
+    bool asig_resolved = false;             // the abstract signature is made from the resolved types (qore#7331)
+    bool asig_remade = false;               // resolved_asig has been made
 
 public:
     // if %broken-varargs is set, add QCF_USES_EXTRA_ARGS to abstract methods by default as derived methods could use
@@ -405,7 +428,22 @@ public:
         return qmethod->getClass();
     }
 
+    //! returns the abstract signature of the variant, the key of the abstract variants of its signature
+    /** see AbstractFunctionSignature::addAbstractSignatureKey(); the abstract variant maps (vmap_t) keep the returned
+        pointer as the key of the variant
+    */
     DLLLOCAL const char* getAbstractSignature();
+
+    //! returns true if the abstract signature was made from the parse types of a signature not yet resolved
+    DLLLOCAL bool hasParseAbstractSignature() const {
+        return asig_set && !asig_resolved;
+    }
+
+    //! resolves the signature and makes the abstract signature again from its resolved types (qore#7331)
+    /** The abstract signature made from the parse types stays valid, as the abstract variant maps of subclasses
+        initialized meanwhile can have it as a key; they are keyed again (AbstractMethod::parseResolveSignatures())
+    */
+    DLLLOCAL void parseResolveAbstractSignature();
 
     DLLLOCAL const qore_class_private* getClassPriv() const;
 
@@ -444,6 +482,9 @@ public:
 #define METHV(f) (reinterpret_cast<MethodVariant*>(f))
 #define METHV_const(f) (reinterpret_cast<const MethodVariant*>(f))
 
+class BuiltinConstructorValueVariant;
+class UserConstructorVariant;
+
 class ConstructorMethodVariant : public MethodVariantBase {
 protected:
     // evaluates base class constructors and initializes members
@@ -452,7 +493,13 @@ protected:
     DLLLOCAL int constructorPrelude(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+        return constructorPreludeImpl<Lexical>(policy, thisclass, ceh.getRuntimeConfig(), self, bcl, bceal, xsink);
+    }
+
+    //! as above, with the runtime configuration of the call
+    template <bool Lexical>
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, RuntimeConfig& rc, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL ConstructorMethodVariant(ClassAccess n_access, int64 n_flags, bool n_is_user = false) : MethodVariantBase(n_access, false, n_flags, n_is_user) {
@@ -465,6 +512,18 @@ public:
     DLLLOCAL virtual bool evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
     DLLLOCAL virtual bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
+
+    //! returns the variant if it is a builtin constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper when it is called without arguments (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const {
+        return nullptr;
+    }
+
+    //! returns the variant if it is a user constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const UserConstructorVariant* getDirectUserConstructor() const {
+        return nullptr;
+    }
 };
 
 #define CONMV(f) (reinterpret_cast<ConstructorMethodVariant*>(f))
@@ -580,6 +639,9 @@ protected:
     // base class argument list for constructors
     BCAList* bcal;
 
+    //! the cached result of getDirectUserConstructor(): -1 if not computed yet, 1 if the variant is eligible, else 0
+    mutable std::atomic<int8_t> direct_call{-1};
+
     DLLLOCAL virtual ~UserConstructorVariant();
 
 public:
@@ -612,6 +674,27 @@ public:
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
+    //! see ConstructorMethodVariant::getDirectUserConstructor()
+    /** Only a variant that the fast call paths take (UserVariantBase::isStaticallyFastCallEligible(): not
+        synchronized, no read of the implicit arguments, no declared functional domain, no type parameters, no default
+        arguments, no parameter of a no-narrow container type), without QCF_NO_DOMAIN_THROW (which a debug build's
+        CodeEvaluationHelper verifies); the arguments are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call set up by the caller (qore#7336)
+    /** Makes what UserVariantExecHelper makes (the entry of the Program the call runs in, \a exec_pgm, or the
+        variant's, the frame boundary, the parameters, which take the arguments, which need no conversion: see
+        qore_eval_direct_user_constructor()) and what evalConstructorImpl() makes
+
+        @param take_args true if \a args is a temporary list whose values the parameters take over, as
+        UserVariantBase::setupCall() takes them over from a list it can edit
+    */
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, QoreListNode* args,
+            bool take_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc, QoreProgram* exec_pgm,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
     //! Set the BCAList for AOT deserialization (takes ownership)
@@ -626,6 +709,12 @@ public:
     DLLLOCAL bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
             BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
         return evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    //! the base class constructors of the variant are invoked with its declaration's policy (evalConstructor()): it
+    //! is called through CodeEvaluationHelper (qore#7336)
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override {
+        return nullptr;
     }
 };
 
@@ -874,6 +963,20 @@ public:
 
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    //! see ConstructorMethodVariant::getDirectBuiltinConstructor()
+    /** Only a variant without parameters (so no argument conversion and no default argument), with no flag that
+        the variant search tests at run time (QCF_NOOP, QCF_RUNTIME_NOOP), without QCF_NO_DOMAIN_THROW (which a debug
+        build's CodeEvaluationHelper verifies), without the uncontrolled API domain (which
+        CodeEvaluationHelper checks against the sandbox), and public (so the access check of the variant search
+        cannot refuse it); the functional domains are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call frame set up by the caller (qore#7336)
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, BCList* bcl,
+            BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 };
 
 class BuiltinExternalConstructorValueVariant : public BuiltinConstructorVariantBase {
@@ -2941,12 +3044,14 @@ public:
 
     //! @param receiver the class whose abstract variant \a v is: the type arguments of its generic bases are
     //! substituted in \a v's signature (issue #5773)
+    //! @param access the access of the variant returned in the method of the class that has it (qore#7277)
+    //! a private:internal edge of a parent class is not followed: the class does not reach that class (qore#7316)
     DLLLOCAL MethodVariantBase* matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
-            const QoreTypeInfo* receiver = nullptr) const;
+            ClassAccess& access, const QoreTypeInfo* receiver = nullptr) const;
 
     // runtime version for dynamically-created classes (e.g., JNI classes)
     DLLLOCAL MethodVariantBase* runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
-        bool relaxed_match) const;
+        bool relaxed_match, ClassAccess& access) const;
 
     DLLLOCAL bool isBaseClass(QoreClass* qc, bool toplevel) const;
 
@@ -3221,6 +3326,8 @@ public:
     //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
     //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
     bool ns_copy = false;
+    //! false when an AOT class was reconstructed without proof that its loading Program declared it
+    bool declaration_owner_known = true;
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
@@ -3423,7 +3530,22 @@ public:
             base classes (issue #6106)
         */
         hierarchy_initialized : 1 = false,
-        //! abstract resolution installed variants in this class or an uncommitted ancestor
+        //! set when the class or one of its ancestors has created a method by resolving an abstract method
+        /** The inheritance lists of the methods of its subclasses are built again then (see
+            parseUpdateAbstractAncestors(); qore#7307).  It is kept when the class is committed, as a class created at
+            runtime checks it in its committed parent classes (runtimeUpdateAbstractAncestors()).  A variant installed in
+            an existing method does not set it: the method is in the subclasses' lists already.  See also
+            abstract_dispatch_changed.
+        */
+        abstract_method_created : 1 = false,
+        //! set when abstract resolution installed concrete variants in this class or an uncommitted ancestor
+        /** In an existing or a created method (AbstractMethodMap::parseInit()): the return types of the class's
+            hierarchy are checked again then, as the installed variant is selected before the inherited ones checked
+            when the class was initialized (parseResolveAbstract(); qore#7425).  Only a parsed hierarchy is rechecked:
+            a committed ancestor was resolved before the class was initialized, and code loaded from compiled code or
+            created at runtime is not checked.  Unlike abstract_method_created, a committed class does not propagate
+            it (parseResolveAbstract() returns false for one).
+        */
         abstract_dispatch_changed : 1 = false
         ;
 
@@ -3542,7 +3664,7 @@ public:
     //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
     mutable std::atomic<bool> spgm_module_lifetime{false};
 
-    //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
+    //! the cached result of getMemberInitState(): -1 if not computed for the current member initialization list
     mutable std::atomic<int8_t> member_init_code{-1};
 
     //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
@@ -3688,6 +3810,11 @@ public:
 
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;
+
+    //! A reconstructed source Program alone cannot establish ownership of an embedded class.
+    DLLLOCAL bool declaredBy(const QoreProgram* pgm) const {
+        return pgm && declaration_owner_known && spgm.load() == pgm;
+    }
 
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();
@@ -4253,6 +4380,18 @@ public:
 
     DLLLOCAL int parseInitConstants();
 
+    //! The receiver's name for a member diagnostic, qualified when another declaration shares its name.
+    DLLLOCAL const char* memberDiagnosticName() const;
+
+    DLLLOCAL static void raiseCastError(ExceptionSink* xsink, const QoreClass& actual, const QoreClass& expected,
+        bool private_access);
+
+    //! Keep the leading :: on a root class, where it distinguishes the path from the short name.
+    DLLLOCAL static const char* diagnosticPath(const QoreClass& cls) {
+        const char* path = cls.getPath();
+        return !strncmp(path, "::", 2) && strstr(path + 2, "::") ? path + 2 : path;
+    }
+
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
@@ -4277,17 +4416,17 @@ public:
                 qore_class_private* self = const_cast<qore_class_private*>(this);
                 if (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this)) {
                     parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
-                        "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                        "a method is called with an argument list, as in %s()", mem, memberDiagnosticName(), mem, mem);
                     rc = -1;
                 } else if (parseHasPublicMembersInHierarchy()) {
                     parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
-                        "member list (or inherited public member list)", mem, name.c_str());
+                        "member list (or inherited public member list)", mem, memberDiagnosticName());
                     rc = -1;
                 } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                     parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was " \
                         "not declared in a public or private member list, but parse options require type " \
                         "information for all declarations",
-                        mem, name.c_str());
+                        mem, memberDiagnosticName());
                     rc = -1;
                 }
             }
@@ -4309,7 +4448,7 @@ public:
                     || !parseCheckPrivateMemberAccess(qc, access)
                     || (access == Internal && omi->local() && qc == this))) {
             memberTypeInfo = nullptr;
-            parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
+            parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, memberDiagnosticName());
             return -1;
         }
         // a member that this class reaches only through a base class that one of its base classes inherits with
@@ -4318,7 +4457,7 @@ public:
         if (access == Inaccessible && !parseHasMemberGate() && parse_get_class_priv() == this) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
-                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+                "class inherited with private:internal", mem, qc->memberDiagnosticName(), memberDiagnosticName());
             return -1;
         }
         return 0;
@@ -4362,7 +4501,7 @@ public:
         // #6669; see parseResolveInternalMemberAccess())
         if (omi && access == Inaccessible) {
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
-                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+                "class inherited with private:internal", mem, qc->memberDiagnosticName(), memberDiagnosticName());
             memberTypeInfo = nullptr;
             return -1;
         }
@@ -4387,20 +4526,20 @@ public:
             if (((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !memberGate)
                     && (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this))) {
                 parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
-                    "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                    "a method is called with an argument list, as in %s()", mem, memberDiagnosticName(), mem, mem);
                 if (!rc) {
                     rc = -1;
                 }
             } else if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
-                    "list (or inherited public member list)", mem, name.c_str());
+                    "list (or inherited public member list)", mem, memberDiagnosticName());
                 if (!rc) {
                     rc = -1;
                 }
             } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                 parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
                     "declared in a public or private member list, but parse options require type information for " \
-                    "all declarations", mem, name.c_str());
+                    "all declarations", mem, memberDiagnosticName());
                 if (!rc) {
                     rc = -1;
                 }
@@ -5305,11 +5444,29 @@ public:
         Computed once the list is complete (see addLocalMembersForInit())
     */
     DLLLOCAL int8_t getMemberInitCode() const {
+        return getMemberInitState() & QCMI_CODE_MASK;
+    }
+
+    //! returns true if no member in the member initialization list has an initializer (qore#7336)
+    /** The members of an object of such a class are then created without a value, and no code runs: they need no
+        object context (see initMembers())
+    */
+    DLLLOCAL bool memberInitIsPlain() const {
+        return !(getMemberInitState() & QCMI_HAS_INITIALIZER);
+    }
+
+    //! the code level of getMemberInitCode() in the state cached in member_init_code
+    static constexpr int8_t QCMI_CODE_MASK = 3;
+    //! set in the state cached in member_init_code if any member in the member initialization list has an initializer
+    static constexpr int8_t QCMI_HAS_INITIALIZER = 4;
+
+    //! returns the cached state of the member initialization list: getMemberInitCode() and QCMI_HAS_INITIALIZER
+    DLLLOCAL int8_t getMemberInitState() const {
         int8_t rv = member_init_code.load(std::memory_order_relaxed);
         return rv < 0 ? computeMemberInitCode() : rv;
     }
 
-    //! computes and caches the result of getMemberInitCode()
+    //! computes and caches the state returned by getMemberInitState()
     DLLLOCAL int8_t computeMemberInitCode() const;
 
     //! returns true if code of this class may call another method than a private method of one of its parent classes
@@ -5925,12 +6082,37 @@ public:
     DLLLOCAL int parseCheckReturnTypeHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
-    //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
+    //! resolves the abstract methods of the class and of its parent classes
+    /** Builds the inheritance lists of the methods again if a parent class created a method by resolving an abstract
+        method (parseUpdateAbstractAncestors()), then checks the return types of the hierarchy again if variants were
+        installed here or in an uncommitted parent class (abstract_dispatch_changed; qore#7425).
+
+        @return true if resolution changed method dispatch in this uncommitted hierarchy (abstract_dispatch_changed
+        for an uncommitted class)
+    */
     DLLLOCAL bool parseResolveAbstract();
+    //! builds the inheritance lists of the class's methods again if a parent class has created a method by resolving
+    //! an abstract method since they were built (qore#7307)
+    /** Called when the abstract methods of the parent classes have been resolved, before the class's own: the lists
+        are built when the hierarchy is initialized, before abstract methods are resolved, so that the method that
+        resolving an abstract method creates in a parent class would be missing from the lists of its subclasses.
+
+        @param aot true for a class loaded from compiled code: the lists of all of its methods except the
+        constructor, destructor and copy method were built (QoreAOTBinaryDeserializer::commitClassesPrepare()),
+        otherwise those of its new methods except the special ones, as in initializeHierarchy()
+    */
+    DLLLOCAL void parseUpdateAbstractAncestors(bool aot);
+    //! runtime version of parseUpdateAbstractAncestors() for classes created dynamically (AbstractMethodMap::
+    //! runtimeInit())
+    DLLLOCAL void runtimeUpdateAbstractAncestors();
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void parseRollback();
-    DLLLOCAL int addUserMethod(const char* mname, MethodVariantBase* f, bool n_static);
+    //! adds a user method variant; a method that it creates gets the given declaration sequence number, if any
+    /** \a decl_seq is given by the loader of an AOT image: the image records the declaration order of each method,
+        as the loader creates the methods in the order of the method maps (issue #7169)
+    */
+    DLLLOCAL int addUserMethod(const char* mname, MethodVariantBase* f, bool n_static, int64_t decl_seq = -1);
     DLLLOCAL void addLocalMembersForInit();
 
     DLLLOCAL QoreValue evalPseudoMethod(const QoreValue n, const char* name, const QoreListNode* args,
@@ -6446,8 +6628,9 @@ public:
         qc.priv->resolveCopy();
     }
 
-    DLLLOCAL static int addUserMethod(QoreClass& qc, const char* mname, MethodVariantBase* f, bool n_static) {
-        return qc.priv->addUserMethod(mname, f, n_static);
+    DLLLOCAL static int addUserMethod(QoreClass& qc, const char* mname, MethodVariantBase* f, bool n_static,
+            int64_t decl_seq = -1) {
+        return qc.priv->addUserMethod(mname, f, n_static, decl_seq);
     }
 
     DLLLOCAL static void initialize(QoreClass& qc) {
@@ -6799,6 +6982,16 @@ private:
 /** Returns nullptr if the method runs in the caller's Program; the holder must be declared before the helper that
     enters the Program returned
 */
+//! Returns true if objects are created and destroyed without the shortcuts of qore#7336
+/** Set with the environment variable \c QORE_DISABLE_DIRECT_OBJECT_CALLS (testing only; read once when the library is
+    loaded); it only turns optimizations off, which do what the general path does, so that the tests can compare
+    what the shortcuts do with what the general call path does: the creation of the members of a class without
+    member initializers (qore_class_private::initMembers()), the calls of builtin constructors without arguments and of
+    builtin destructors without a CodeEvaluationHelper, and the direct calls of user constructors; see
+    design/object-construction-cost.md
+*/
+DLLLOCAL bool qore_direct_object_calls_disabled();
+
 DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm = nullptr);
 
@@ -6897,6 +7090,13 @@ public:
 
     //! returns the next declaration sequence number
     DLLLOCAL static uint64_t nextDeclSeq();
+
+    //! reserves \a n declaration sequence numbers and returns the first of them
+    /** The loader of an AOT image gives the methods that it creates the sequence numbers of their declaration order
+        from such a block (see qore_class_private::addUserMethod()), so that the methods created after them have
+        greater ones
+    */
+    DLLLOCAL static uint64_t reserveDeclSeq(uint64_t n);
 
     //! returns the declaration sequence number of the method
     DLLLOCAL static uint64_t getDeclSeq(const QoreMethod& m) {

@@ -301,7 +301,14 @@ struct qore_qf_private {
         return 0;
     }
 
-    DLLLOCAL int open_intern(const char* fn, int flags, int mode, const QoreEncoding* cs) {
+    //! opens the file
+    /** @param xsink a denial of the sandbox filesystem policy for the file actually opened is raised here; if
+        nullptr, the open fails with errno EACCES
+
+        @return 0 for OK, -1 for an error: errno is set, or an exception has been raised in xsink
+    */
+    DLLLOCAL int open_intern(const char* fn, int flags, int mode, const QoreEncoding* cs,
+            ExceptionSink* xsink = nullptr) {
         close_intern();
 
         if (!flags)
@@ -315,13 +322,7 @@ struct qore_qf_private {
 
         do_open_event_unlocked(fn, flags, mode, cs);
 
-        // a file opened by the library is never inherited by a program the process starts (with system(),
-        // backquote(), fork() and exec(), or a module)
-#ifdef O_CLOEXEC
-        fd = ::open(fn, flags | O_CLOEXEC, mode);
-#else
-        fd = ::open(fn, flags, mode);
-#endif
+        fd = openFd(fn, flags, mode, xsink);
         if (fd < 0)
             return fd;
 
@@ -340,12 +341,22 @@ struct qore_qf_private {
     */
     DLLLOCAL static int checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink);
 
-    DLLLOCAL int open(const char* fn, int flags, int mode, const QoreEncoding* cs) {
+    //! opens a file descriptor (close-on-exec) for a name that the sandbox filesystem policy, if any, allowed
+    /** With a policy, the file actually opened is checked too (q_check_opened_file_policy()), and O_TRUNC is applied
+        only once it is allowed
+
+        @param xsink a denial is raised here; if nullptr, the open fails with errno EACCES
+
+        @return the descriptor, or -1 for an error: errno is set, or an exception has been raised in xsink
+    */
+    DLLLOCAL static int openFd(const char* fn, int flags, int mode, ExceptionSink* xsink);
+
+    DLLLOCAL int open(const char* fn, int flags, int mode, const QoreEncoding* cs, ExceptionSink* xsink = nullptr) {
         if (!fn || special_file)
             return -1;
 
         AutoLocker al(m);
-        return open_intern(fn, flags, mode, cs);
+        return open_intern(fn, flags, mode, cs, xsink);
     }
 
     // returns -1 for exception

@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved at run time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractOwnOverloadTest
+
+#! a class's own concrete variant implements a parent class's abstract variant also when another parent class
+#! declares another overload of the method that a third parent class implements (qore#7330)
+/** A parent class's abstract variant was merged into an abstract method that the class already had, from an earlier
+    parent class, without checking the class's own method for a concrete variant with its signature, and the
+    resolution searches only the parent classes, so that \c class C3 inherits Sint, I1, I2 { string m(string s) }
+    could not be instantiated (ABSTRACT-CLASS-ERROR), in every execution mode, in qcc executables and in qcc -m
+    modules.  The classes can be instantiated now, with the parent classes in each order and with two or three
+    abstract parent classes; classes with an unimplemented variant stay abstract; the access of the variants is
+    unchanged (the class's own variant keeps its own access, also with private, private:hierarchy and
+    private:internal inheritance); const declarations keep their contract; subclasses inherit the resolved classes.
+    The output of every execution mode, of qcc executables (-O0, -O3) and of a module (with classes of a program that
+    inherit its classes) loaded from its source and as a qcc -m .qmod must be the expected one.
+
+    The programs and the module are in \c abstract-own-overload/.
+*/
+class AbstractOwnOverloadTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-own-overload";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractOwnOverloadTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the classes in a module and in a qcc -m .qmod", \testModule());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testModule() {
+        string expected = ReadOnlyFile::readTextFile(dir + "/module-user.expected");
+        # the module's source
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", dir, qore_bin, dir);
+        int rc;
+        string result = backquote(cmd, \rc);
+        assertEq(0, rc, sprintf("source module: exit status (output: %y)", result));
+        assertEq(expected, result, "source module");
+
+        # the module compiled by qcc -m, whose abstract methods the AOT loader merges and resolves
+        TmpDir tmp("qore-abstract-own-overload-qmod-");
+        string out = backquote(sprintf("%s -m -o %s/AbstractOwnOverload.qmod %s/AbstractOwnOverload.qm 2>&1",
+            qccBin(), tmp.path, dir), \rc);
+        if (rc || !is_file(tmp.path + "/AbstractOwnOverload.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
+        }
+        result = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", tmp.path, qore_bin, dir), \rc);
+        assertEq(0, rc, sprintf("qmod: exit status (output: %y)", result));
+        assertEq(expected, result, "qmod");
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
+        TmpDir tmp("qore-abstract-own-overload-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

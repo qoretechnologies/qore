@@ -619,6 +619,8 @@ struct BatchCalleeInfo {
     bool single_variant_function = false; //!< True when call_ref_path names exactly one function variant
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
+    bool local_method_takes_args = false; //!< A locally lowered method with a parameter that takes its argument over
+    bool guarded_method_entry = false; //!< Local owning entry that requires the declaring method context
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     //! True if the body of the JIT fast entry does not observe the object and class context it runs in, so that a
@@ -1580,5 +1582,11 @@ private:
     //! Complete a background work item: release refs, update active count, and notify waiters.
     void finishBgCompileWork(BgCompileWork& work);
 };
+
+#ifdef DEBUG
+//! builds and runs an optimization pipeline with an optimization level that was never written (a debug hook, see
+//! dbg_llvm_uninitialized_level()); returns 0, or -1 if no target machine can be created
+DLLLOCAL int qore_jit_dbg_pipeline_uninitialized_level();
+#endif
 
 #endif

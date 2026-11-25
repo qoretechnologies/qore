@@ -602,8 +602,6 @@ private:
     QoreIRValue lowerStreamingFused(const QoreStreamingOperatorNode* op, const QoreValue& base_source,
         const std::vector<LazyPipelineStage>& source_stages, std::string& error);
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
-    bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
-    bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     QoreIRValue tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op = LVCompoundOp::AddAssign,

@@ -20,9 +20,10 @@
     accepted an unknown warning name in it.  Each file is now parsed with the warning mask the .qm file left, and a
     file's own warning directives still apply only to that file.
 
-    The module loader raises parse-time warnings as exceptions and does not report the warnings found when the
-    module is committed, so its cases use an unknown warning name; qcc reports both kinds, so its cases use a
-    duplicate local variable.
+    The module loader and qcc both raise the warnings of a module as errors and refuse the module, including the
+    warnings found when it is committed (qore#7314, qore#7324).  The module loader's cases use an unknown warning
+    name, which is found when a file is parsed (the tests of the loader fix of qore#7324 test the warnings found at
+    commit time); qcc's cases use a duplicate local variable, which is found when the module is committed.
 */
 class SeparatedModuleWarningsTest inherits QUnit::Test {
     public {
@@ -110,8 +111,7 @@ class SeparatedModuleWarningsTest inherits QUnit::Test {
         string dir = makeModule(tmp.path, name, "%modern\n", {
             "A.qc": funcSource(name, "a", DuplicateLocal),
         });
-        hash<string, list<string>> warnings = compileModule(tmp.path, dir, name);
-        assertEq(("DUPLICATE-LOCAL-VARIABLE",), warnings."A.qc");
+        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, compileModuleErrors(tmp.path, dir, name));
     }
 
     qccQmDisabled() {
@@ -120,7 +120,10 @@ class SeparatedModuleWarningsTest inherits QUnit::Test {
         string dir = makeModule(tmp.path, name, "%modern\n%disable-warning duplicate-local-vars\n", {
             "A.qc": funcSource(name, "a", DuplicateLocal),
         });
-        assertEq({}, compileModule(tmp.path, dir, name));
+        string qmod = tmp.path + DirSep + name + ".qmod";
+        string out = qcc(sprintf("-m -o %s %s", qmod, dir));
+        assertTrue(is_file(qmod), "qcc compile: " + out);
+        assertEq({}, diagnosticsByFile(out, "warning"));
     }
 
     qccFileLocal() {
@@ -131,7 +134,7 @@ class SeparatedModuleWarningsTest inherits QUnit::Test {
             "A.qc": "%disable-warning duplicate-local-vars\n" + funcSource(name, "a", DuplicateLocal),
             "B.qc": funcSource(name, "b", DuplicateLocal),
         });
-        assertEq({"B.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, compileModule(tmp.path, dir, name));
+        assertEq({"B.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, compileModuleErrors(tmp.path, dir, name));
     }
 
     qccObjectModes() {
@@ -142,33 +145,46 @@ class SeparatedModuleWarningsTest inherits QUnit::Test {
         });
         string obj_dir = tmp.path + DirSep + "obj";
         mkdir(obj_dir);
-        list<string> objs;
-        # each per-file compile parses the whole module
+        # each per-file compile parses and commits the whole module
         foreach string file in ((name + ".qm", "A.qc")) {
             string obj = obj_dir + DirSep + file + ".qo";
             string out = qcc(sprintf("-c --context=%s -o %s %s", dir, obj, dir + DirSep + file));
-            assertTrue(is_file(obj), "per-file compile of " + file + ": " + out);
-            assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, warningsByFile(out), "per-file compile of " + file);
+            assertFalse(is_file(obj), "per-file compile of " + file + ": " + out);
+            assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, diagnosticsByFile(out, "error"),
+                "per-file compile of " + file);
+        }
+
+        # the module built from objects and an archive parse and commit the module's files too: the objects of the
+        # module without the duplicate local variable are given, so that only the module's files can refuse it
+        mkdir(tmp.path + DirSep + "clean");
+        string clean_dir = makeModule(tmp.path + DirSep + "clean", name, "%modern\n", {
+            "A.qc": funcSource(name, "a", "return 1;"),
+        });
+        list<string> objs;
+        foreach string file in ((name + ".qm", "A.qc")) {
+            string obj = obj_dir + DirSep + "clean-" + file + ".qo";
+            string out = qcc(sprintf("-c --context=%s -o %s %s", clean_dir, obj, clean_dir + DirSep + file));
+            assertTrue(is_file(obj), "per-file compile of the module without the warning: " + out);
             objs += obj;
         }
 
         string qmod = tmp.path + DirSep + name + ".qmod";
         string out = qcc(sprintf("-m --from-objects --context=%s -o %s %s", dir, qmod, objs.join(" ")));
-        assertTrue(is_file(qmod), "aggregate: " + out);
-        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, warningsByFile(out), "aggregate");
+        assertFalse(is_file(qmod), "aggregate: " + out);
+        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, diagnosticsByFile(out, "error"), "aggregate");
 
         string qoa = tmp.path + DirSep + name + ".qoa";
         out = qcc(sprintf("-a --context=%s -o %s %s", dir, qoa, objs.join(" ")));
-        assertTrue(is_file(qoa), "archive: " + out);
-        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, warningsByFile(out), "archive");
+        assertFalse(is_file(qoa), "archive: " + out);
+        assertEq({"A.qc": ("DUPLICATE-LOCAL-VARIABLE",)}, diagnosticsByFile(out, "error"), "archive");
     }
 
-    #! compiles the module with qcc and returns the warnings it reported, by file name
-    private hash<string, list<string>> compileModule(string tmp_dir, string dir, string name) {
+    #! compiles the module with qcc, checks that it refuses the module, and returns its errors, by file name
+    private hash<string, list<string>> compileModuleErrors(string tmp_dir, string dir, string name) {
         string qmod = tmp_dir + DirSep + name + ".qmod";
         string out = qcc(sprintf("-m -o %s %s", qmod, dir));
-        assertTrue(is_file(qmod), "qcc compile: " + out);
-        return warningsByFile(out);
+        assertFalse(is_file(qmod), "qcc compile: " + out);
+        return diagnosticsByFile(out, "error");
     }
 
     #! runs qcc with the given arguments and returns its output
@@ -177,12 +193,13 @@ class SeparatedModuleWarningsTest inherits QUnit::Test {
             qcc_bin, QccOpts, args));
     }
 
-    #! returns the warnings in qcc output, by the name of the file each one is in
-    /** qcc reports each one in a line: <file>:<line>[:<col>]: warning: <code>: <message> (issue #6555)
+    #! returns the warnings or the errors (by the given kind) in qcc output, by the name of the file each one is in
+    /** qcc reports each one in a line: <file>:<line>[:<col>]: <kind>: <code>: <message> (issue #6555)
     */
-    private static hash<string, list<string>> warningsByFile(string out) {
+    private static hash<string, list<string>> diagnosticsByFile(string out, string kind) {
         hash<string, list<string>> rv = {};
-        *list<*string> matches = (out =~ x/(?:^|\n)([^\n]+?):[0-9]+(?::[0-9]+)?: warning: ([A-Z][A-Z-]+):/g);
+        *list<*string> matches = regex_extract(out, "(?:^|\n)([^\n]+?):[0-9]+(?::[0-9]+)?: " + kind
+            + ": ([A-Z][A-Z-]+):", RE_Global);
         for (int i = 0; i < matches.size(); i += 2) {
             rv{basename(matches[i])} += (matches[i + 1],);
         }

@@ -1,0 +1,256 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of qcc executables
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class FastEntryTakeOverTest
+
+#! the fast entry that takes the temporary arguments of a call over (issue #6105)
+/** A call of qcc code that gives a temporary argument to a function or a static method whose parameter takes it over
+    (the parameter is written) calls a copy of the callee's fast entry that takes the caller's reference over, so
+    that the write of the parameter destroys the object, as in the AST interpreter, in and outside try blocks.  The
+    program (fast-entry-take-over.q) logs the destructions of temporaries given to such callees: a write, a write
+    followed by an exception, an exception before the write, two parameters with one temporary or two, a value kept
+    by the callee, recursion, a binding that raises an exception, the static methods of a final class (which have fast
+    entries) and of another class, a method and a loop, and parameters that the callee does not use, borrows, strips
+    (`any`) or writes through a closure beside parameters that it writes.  Recursions that end with a stack overflow in
+    the entry (fast-entry-take-over-overflow.q) or in the thunk that checks the stack for its large frame
+    (fast-entry-take-over-frame.q) raise the exception as in the AST interpreter and release the references that they
+    were given: weak references show that no object given to them outlives them.  Every mode and the qcc executables at
+    -O0 and -O3 must print the AST interpreter's output, and the qcc code must call the entry that takes the arguments
+    over.
+*/
+class FastEntryTakeOverTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir();
+        string src = dir + "/fast-entry-take-over.q";
+        string libdir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("FastEntryTakeOverTest", "1.0", \ARGV) {
+        libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libdir, libdir, libdir);
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("qcc code calls the entry that takes the arguments over", \testOwnedEntry());
+        addTestCase("a compiled module calls its own method with an owning argument", \testModuleCall());
+        addTestCase("a later JIT batch calls the owning entry", \testLaterJitBatch());
+        addTestCase("a stack overflow in an entry that takes its arguments over", \testStackOverflow());
+        addTestCase("the stack check of the large frame of an entry that takes its arguments over",
+            \testFrameCheck());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/fast-entry-take-over.expected");
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, src));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    private string qcc() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        return qcc_bin;
+    }
+
+    testLaterJitBatch() {
+        TmpDir tmp();
+        string dump = tmp.path + "/jit.ll";
+        int rc;
+        # Inspect the call before LLVM can inline the owning entry.
+        string out = backquote(sprintf("%s QORE_JIT_OPT_LEVEL=0 QORE_JIT_TIMING=1 QORE_JIT_SYNC_COMPILE=1 QORE_DUMP_LLVM_IR=1 %s -b "
+            "--exec-mode=jit %s/jit-cross-batch.q 2>%s", env, qore_bin, dir, dump), \rc);
+        assertEq(0, rc, out);
+        assertEq("release first\ncleared\nexit\nrelease second\ncleared\nexit\nexit\nrelease second\n"
+            "caught CONSUME-ERROR\n2 2 -1\n", out);
+        string ir = ReadOnlyFile::readTextFile(dump);
+        list<string> batches = ir.split("; ModuleID = ");
+        list<string> first = select batches, $1.startsWith("'qore_jit_batch_firstCaller@");
+        list<string> second = select batches, $1.startsWith("'qore_jit_batch_secondCaller@");
+        assertEq((1, 1), (first.size(), second.size()), "the callers were compiled in separate modules");
+        assertTrue(first[0] =~ /^define [^\n]*@"consume@/m, "the first module defines the callee");
+        assertTrue(second[0] =~ /\bcall [^@\n]*@"consume@[^"]*\.own\.10"\(/,
+            "the later caller hands its temporary to the existing callee");
+        assertTrue(ir =~ /compiled 'secondCaller@[^']+' and promoted to JIT tier/,
+            "the module containing the owning entry and its handler installed successfully");
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"));
+    }
+
+    testModes() {
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected(), run(mode), mode);
+        }
+    }
+
+    #! compiles @p prog with qcc at @p opt into @p exe; a program that qcc cannot compile fails the test
+    private compile(string qcc_bin, string opt, string exe, string prog) {
+        int rc;
+        string out = backquote(sprintf("%s %s -O%s -o %s %s 2>&1", env, qcc_bin, opt, exe, prog), \rc);
+        assertEq(0, rc, sprintf("qcc -O%s %s: %s", opt, basename(prog), out));
+        assertTrue(is_file(exe), sprintf("qcc -O%s %s made no executable: %s", opt, basename(prog), out));
+    }
+
+    testCompiled() {
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/fast-entry-take-over-O%s", tmp.path, opt);
+            compile(qcc_bin, opt, exe, src);
+            # -b must be the first argument of a compiled program
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected(), r.stdout, "-O" + opt);
+        }
+    }
+
+    #! a stack overflow in the entry of a recursion that gives it temporaries releases the references it was given
+    /** no object given to the recursion outlives it: the program checks those given at its deepest calls through weak
+        references
+    */
+    testStackOverflow() {
+        string prog = dir + "/fast-entry-take-over-overflow.q";
+        string expected_out = "r: STACK-LIMIT-EXCEEDED\nr: 0 alive\nra: STACK-LIMIT-EXCEEDED\nra: 0 alive\n";
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=ast %s", qore_bin, prog));
+        assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
+        assertEq(expected_out, r.stdout, "ast");
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-overflow-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/overflow-O%s", tmp.path, opt);
+            compile(qcc_bin, opt, exe, prog);
+            # ra() is called through the copy of its fast entry that takes over both temporaries (mask 110), one of
+            # them for a parameter to which the entry takes no reference
+            int rc;
+            string syms = backquote(sprintf("nm %s 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: nm: %s", opt, syms));
+            assertRegex("ra_any_list_auto__int_[^ \n]*_fast_[^ \n]*\\.own\\.110\n", syms,
+                sprintf("-O%s: ra() calls the copy that takes both temporaries over", opt));
+            r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected_out, r.stdout, "-O" + opt);
+        }
+    }
+
+    #! a recursion that ends when the stack has no room for the frame of an entry that takes its arguments over
+    /** the thunk that checks the stack for the large frame of the entry (QoreIRFrameCheck) releases the reference
+        that the call handed over to it: no object given to the recursion outlives it (weak references)
+    */
+    testFrameCheck() {
+        string prog = dir + "/fast-entry-take-over-frame.q";
+        string expected_out = "big: STACK-LIMIT-EXCEEDED\nbig: 0 alive\n";
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=ast %s", qore_bin, prog));
+        assertEq(0, r.rc, sprintf("ast: exit status (output: %y)", r.out));
+        assertEq(expected_out, r.stdout, "ast");
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-frame-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/frame-O%s", tmp.path, opt);
+            compile(qcc_bin, opt, exe, prog);
+            # big() is called through its copy that takes its argument over, whose code has a thunk that checks the
+            # stack for its frame (the code's symbol has the thunk's name and QoreIRFrameCheck::BodySuffix), so that
+            # the case does not pass through another stack check (r() has a large frame too)
+            int rc;
+            string syms = backquote(sprintf("nm %s 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: nm: %s", opt, syms));
+            assertRegex("big_list_auto__int_[^ \n]*_fast_[^ \n]*\\.own\\.10\\.qore\\.frame\n", syms,
+                sprintf("-O%s: the copy of big()'s fast entry has a thunk", opt));
+            r = ExecModeHarness::run_command(sprintf("%s %s -b", env, exe));
+            assertEq(0, r.rc, sprintf("-O%s: exit status (output: %y)", opt, r.out));
+            assertEq(expected_out, r.stdout, "-O" + opt);
+        }
+    }
+
+    testModuleCall() {
+        string compiler = qcc();
+        TmpDir tmp("qore-owned-method-module-");
+        string image = tmp.path + "/OwnedMethodModule.qmod";
+        string dump = tmp.path + "/module.ll";
+        int rc;
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O3 -m -o %s %s/OwnedMethodModule.qm "
+            "2>%s", env, compiler, image, dir, dump), \rc);
+        assertEq(0, rc, out);
+        string ir = ReadOnlyFile::readTextFile(dump);
+        assertTrue(ir =~ /call [^@\n]*@"?[^ ("\n]*Box__length_[^ ("]*\.own\.1"?\(/,
+            "the call in the module hands its temporary to the method");
+        list<string> bodies = ir =~ x/^define [^\n@]*@"?[^ ("\n]*FinalBox__nested_[^\n]*\n([\s\S]*?)^\}/gm;
+        assertTrue(bodies.size() > 0, "the module contains the caller");
+        foreach string body in (bodies) {
+            list<string> calls = body =~ x/\b(call [^@\n]*@"?[^ ("\n]*FinalBox__replaceArg_[^ ("]*\.own\.1"?\()/g;
+            assertEq(2, calls.size(), "the direct and invoking self calls both hand over their temporaries");
+            assertTrue(body =~ /call [^@\n]*@"?[^ ("\n]*FinalBox___static_forgetArg_[^ ("]*\.own\.1"?\(/,
+                "the static call keeps its ownership check in the try block");
+        }
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s QORE_MODULE_DIR_ONLY=1 "
+            "QORE_MODULE_DIR=%s %s -b %s/module-owner.q", env, tmp.path, qore_bin, dir));
+        assertEq(0, r.rc, r.out);
+        assertEq("released\nreplaced\nreleased\nreplaced\nreleased\n6\n", r.stdout,
+            "the compiled methods release their parameter at its assignment");
+    }
+
+    testOwnedEntry() {
+        string qcc_bin = qcc();
+        TmpDir tmp("qore-fast-entry-take-over-ir-");
+        string exe = tmp.path + "/fast-entry-take-over";
+        string ir_path = tmp.path + "/ir.ll";
+        int rc;
+        string out = backquote(sprintf("%s QORE_DUMP_IR_BEFORE_OPT=1 %s -O3 -o %s %s 2>%s", env, qcc_bin, exe, src,
+            ir_path), \rc);
+        assertEq(0, rc, "qcc -O3: " + out);
+        assertTrue(is_file(exe), "qcc -O3 made no executable: " + out);
+        string ir = ReadOnlyFile::readTextFile(ir_path);
+        # the entries of w() and F::s() that take their single argument over are defined and called
+        list<string> defined = (ir =~ x/^define [^@]*@"?([^"(]*\.own\.1)"?\(/gm) ?? ();
+        assertTrue((select defined, $1 =~ /^w_list_auto_/).size() > 0, sprintf("w(): %y", defined));
+        assertTrue((select defined, $1 =~ /^F___static_s_list_auto_/).size() > 0, sprintf("F::s(): %y", defined));
+        list<string> calls = select ir.split("\n"), $1 =~ /\bcall /;
+        foreach string name in (defined) {
+            assertTrue((select calls, $1.find("@" + name + "(") >= 0 || $1.find("@\"" + name + "\"(") >= 0).size() > 0,
+                name + " is called");
+        }
+        # w2() takes over the temporary of its written first parameter, and not that of its second, which it only
+        # reads and borrows (the call releases it when it returns), w2b() that of its written second parameter
+        assertRegex("(?m)^define [^@]*@\"?w2_list_auto__list_auto_[^ (\"]*\\.own\\.10\"?\\(", ir, "w2()");
+        assertRegex("(?m)^define [^@]*@\"?w2b_list_auto__list_auto_[^ (\"]*\\.own\\.01\"?\\(", ir, "w2b()");
+        # outside_try calls the same static method, so only inspect calls emitted for in_try.
+        list<string> bodies = ir =~ x/^define [^\n@]*@"?in_try_[^\n]*\n([\s\S]*?)^\}/gm;
+        string in_try_body = bodies.join("\n");
+        assertTrue(in_try_body.size() > 0, "the dump includes the caller");
+        assertEq((True, True), (in_try_body =~ /call [^@\n]*@"?C___static_s_list_auto_[^ ("]*\.own\.1"?\(/,
+            in_try_body =~ /call [^@\n]*@"?C__m_list_auto_[^ ("]*\.own\.1"?\(/),
+            "C::s() and c.m() inside try hand over their temporaries");
+        assertTrue(ir =~ /call [^@\n]*@"?Owner__consume_[^ ("]*\.own\.10"?\(/,
+            "the method that reads self runs with an owning parameter");
+        assertTrue(ir =~ /call [^@\n]*@"?FinalOwner__consume_[^ ("]*\.own\.1"?\(/,
+            "a method of a final class runs with the explicit receiver");
+        assertTrue(ir =~ /^declare extern_weak [^@\n]*@qore_rt_try_enter_native_method_v1\(/m
+            && ir =~ /^declare extern_weak [^@\n]*@qore_rt_leave_native_method_v1\(/m,
+            "eager loaders can reach the version check on an older runtime");
+    }
+}

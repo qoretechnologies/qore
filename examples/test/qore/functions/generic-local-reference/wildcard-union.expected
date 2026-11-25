@@ -1,0 +1,9 @@
+lower last: value
+lower first: value
+upper last: RUNTIME-TYPE-ERROR
+upper last Box: value
+class upper first: RUNTIME-TYPE-ERROR
+class upper first Box: value
+nested bound: RUNTIME-TYPE-ERROR
+only wildcard refers to T: RUNTIME-TYPE-ERROR
+integer member: value

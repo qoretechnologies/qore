@@ -53,6 +53,7 @@ class Derived inherits Base {
         addTestCase("a child of a class that lists the final method's class first", \testGrandchild());
         addTestCase("accepted hierarchies select the final method", \testAccepted());
         addTestCase("sandboxed subclasses of a trusted class", \testSandboxedSubclass());
+        addTestCase("a non-final variant inherited beside a final one is overridden", \testInheritedNonFinalVariant());
         set_return_value(main());
     }
 
@@ -266,5 +267,53 @@ object sub make() { return new Sub(); }", "sub2");
         assertEq("final", o.log("x"));
         assertEq("sub", o.log(1));
         assertEq("final", o.charge(o, <00>));
+    }
+
+    #! a class whose final variant has the name of a non-final variant that it inherits: a subclass overrides the
+    #! inherited variant (the request handler pattern of module-xml's SoapHandler, which Qorus subclasses)
+    testInheritedNonFinalVariant() {
+        Program p = parseAccepted("
+class AbstractHandler {
+    abstract string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body);
+}
+class ProtocolHandler inherits AbstractHandler {
+    final string handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return \"final\";
+    }
+    string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return handleRequest(cx, hdr, body);
+    }
+}
+class AppHandler inherits ProtocolHandler {
+    string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return \"app\";
+    }
+}
+class AppHandler2 inherits AppHandler {
+    string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return \"app2\";
+    }
+}
+list<string> sub test() {
+    ProtocolHandler h = new AppHandler();
+    ProtocolHandler h2 = new AppHandler2();
+    ProtocolHandler b = new ProtocolHandler();
+    return (h.handleRequest(h, h, {}, {}), h.handleRequest({}, {}), h2.handleRequest(h, h, {}, {}),
+        h2.handleRequest({}, {}), b.handleRequest(b, b, {}, {}));
+}", "inherited non-final variant");
+        p.run();
+        assertEq(("app", "final", "app2", "final", "final"), p.callFunction("test"));
+        # the final variant itself still cannot be replaced
+        assertRejected("class AbstractHandler {
+    abstract string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body);
+}
+class ProtocolHandler inherits AbstractHandler {
+    final string handleRequest(hash<auto> cx, hash<auto> hdr, *data body) { return \"final\"; }
+    string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body) { return \"p\"; }
+}
+class C inherits ProtocolHandler {
+    string handleRequest(hash<auto> cx, hash<auto> hdr, *data body) { return \"c\"; }
+}", "child class method C::handleRequest\\(hash<auto> cx, hash<auto> hdr, \\*data body\\) cannot override "
+            "parent class method final ProtocolHandler::handleRequest", "final variant replaced");
     }
 }

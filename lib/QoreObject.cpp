@@ -164,7 +164,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         code_pgm = oc->getProgram();
     }
     std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm,
-        code_pgm && qc->spansPrograms()));
+        code_pgm && qc->spansPrograms(), &capability_origin));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -1449,9 +1449,7 @@ void qore_object_private::getContextStorageMembers(const qore_class_private* sto
     }
 }
 
-QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink) const {
-    // get the current class context for possible internal data
-    const qore_class_private* class_ctx = runtime_get_class();
+QoreHashNode* qore_object_private::getRuntimeMemberHash(ExceptionSink* xsink, const qore_class_private* class_ctx) const {
     // a class context with no private access to the object's class still has the storage of some members (issue #7180)
     const qore_class_private* storage_ctx = nullptr;
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
@@ -3177,12 +3175,12 @@ bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreV
     if (checkMemberAccess(name.c_str(), ctx, storage_ctx)) {
         return false;
     }
-    QoreAutoVarRWReadLocker al(rml);
-    if (status != OS_OK) {
+    // Checking the reference count and taking the result reference must be exclusive: two readers could both
+    // see a single owner before either takes its reference. Let normal lvalue navigation wait and recheck on contention.
+    QoreOptionalVarRWWriteLocker al(rml);
+    if (!al || status != OS_OK) {
         return false;
     }
-    // Test ownership and acquire the result under the same lock. Replacing the member cannot
-    // make a detached value look unique between the read and the test.
     const QoreHashNode* storage = storage_ctx ? getInternalData(storage_ctx) : data;
     return storage && qore_try_ref_unique_container(storage->getKeyValue(name.c_str()), result);
 }

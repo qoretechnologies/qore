@@ -323,8 +323,8 @@ enum QoreBackgroundHelperSelf : uint8_t {
     expression is, or the object of a call of a method (which is checked as the AST interpreter checks the callee;
     qore#7087), QBH_CHECK_IN_THREAD if the expression has no such callee among the values (the new thread computes the
     code that it calls, which is checked when it is called: qore_check_background_direct_entry()), or
-    QBH_CALLEE_UNKNOWN if the starting code does not say (the code of a compiled module: every closure, call reference
-    and object of the values is checked then, qore#7056)
+    QBH_CALLEE_UNKNOWN if the starting code does not say (every closure, call reference and object of the values is
+    checked then, qore#7056)
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
@@ -414,11 +414,16 @@ DLLLOCAL void qore_request_current_thread_cancel(const char* reason, qore_progra
     calls that the called code makes.
 */
 DLLLOCAL const QoreProgramLocation* take_runtime_call_location();
+//! as take_runtime_call_location(), with the current thread's data (get_thread_data_for_native_calls()), for code
+//! that makes several of these calls (qore#7336); the same applies to the other functions with \a thread_data_ptr
+DLLLOCAL const QoreProgramLocation* take_runtime_call_location(void* thread_data_ptr);
 //! Returns the runtime location for the frame of code that no call expression calls, and hides the call site
 /** For a destructor, for example (see CodeEvaluationHelper): the call site, if any, is cleared, and the caller
     restores it through \a slot with \a prev when the code has run
 */
 DLLLOCAL const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev);
+DLLLOCAL const QoreProgramLocation* hide_runtime_call_site(void* thread_data_ptr, const QoreProgramLocation**& slot,
         const QoreProgramLocation*& prev);
 //! Sets the location of the call that the current thread makes; returns the thread's data
 /** @param loc the location of the call expression
@@ -476,8 +481,13 @@ DLLLOCAL const QoreStackLocation* update_get_runtime_stack_location(QoreStackLoc
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc,
         QoreProgram* frame_pgm = nullptr);
+DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(void* thread_data_ptr,
+        QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
+        const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm = nullptr);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc);
+DLLLOCAL void update_runtime_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
+        const QoreProgramLocation* runtime_loc);
 
 //! Returns the current thread's data, for push_native_call_stack_location() and pop_native_call_stack_location()
 /** Native code gets it once when a function is entered, so a direct call makes no thread-local lookup. */
@@ -676,6 +686,7 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
 //! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(void* thread_data_ptr, const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
@@ -984,6 +995,7 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
 //! Raises \c SANDBOX-ISOLATION-ERROR and returns -1 if the thread entered the code of another tenant in a trusted build
 //! (see QoreSandboxBudgetStack::isIsolationRefused()), else returns 0 (qore#6536)
 DLLLOCAL int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation);
+DLLLOCAL int qore_sandbox_check_isolation(void* thread_data_ptr, ExceptionSink* xsink, const char* operation);
 
 //! Returns the isolation domain of the caller of the innermost trusted build of the thread, or nullptr (qore#6536)
 DLLLOCAL const std::string* qore_sandbox_build_caller_domain();
@@ -1300,6 +1312,9 @@ public:
     QoreSandboxBudgetList budgets;
     //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
     bool in_build = false;
+    //! true for the context of a call reference (not of an object): a method of a lent object that a reference that
+    //! restricted code created calls runs for that code (qore#7052)
+    bool reference = false;
     //! the isolation of the trusted build in which the context was captured (referenced), or nullptr: it holds in the
     //! continuation as well (qore#6536)
     QoreSandboxIsolation* isolation = nullptr;
@@ -1600,6 +1615,13 @@ DLLLOCAL void parse_note_implicit_arg_use();
 
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
+
+//! returns the Program that the thread runs in if it is also the call Program context and its parse options are the
+//! thread's runtime parse options and those of \a rc, the thread's RuntimeConfig; nullptr otherwise
+/** Then code of the Program runs without entering it again: a class without a constructor whose source Program it is
+    constructs its objects without changing the thread's state (QoreImplicitConstructorProgramHelper, qore#7513)
+*/
+DLLLOCAL QoreProgram* runtime_get_program_with_current_options(const RuntimeConfig& rc);
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
@@ -2197,6 +2219,9 @@ DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! Returns true if the Program is sandboxed or its parse options restrict a functional domain
+DLLLOCAL bool qore_program_code_is_untrusted(const QoreProgram* pgm);
+
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
     Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
@@ -2331,6 +2356,15 @@ DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size
     that the host chose (its loggers, its own code called from such an object) is written
 */
 DLLLOCAL bool qore_caller_restricts_terminal_io();
+
+//! Returns true if the code that a method of a lent object was lent to is restricted from any of the given domains
+/** As qore_caller_restricts_domain(), but a method of an object that the host lent (a capability frame, qore#7052)
+    lends nothing: the code below it, which the object was lent to, counts, so library code that binds what it does
+    to the target that the object's creator gave (qore#7262) sees the restrictions of the borrower; the host's policy
+    barriers and system-policy capabilities still lend what they lend.  Without a capability frame it answers as
+    qore_caller_restricts_domain(); it never answers less restricted than that
+*/
+DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
 
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)
@@ -2861,6 +2895,7 @@ DLLLOCAL void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* retur
 DLLLOCAL void parseRestoreCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo);
 // sets the new type and returns the old
 DLLLOCAL const QoreTypeInfo* saveReturnTypeInfo(const QoreTypeInfo* returnTypeInfo);
+DLLLOCAL const QoreTypeInfo* saveReturnTypeInfo(void* thread_data_ptr, const QoreTypeInfo* returnTypeInfo);
 DLLLOCAL const QoreTypeInfo* getReturnTypeInfo();
 
 DLLLOCAL const QoreTypeInfo* parse_get_return_type_info();
@@ -3271,6 +3306,7 @@ DLLLOCAL void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_
 // to get or set the current generic receiver type for static generic method bodies
 DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
 DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti);
+DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(void* thread_data_ptr, const QoreTypeInfo* ti);
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
 
@@ -3479,7 +3515,6 @@ private:
    QoreProgram* referenced_class_pgm = nullptr;
    //! the sink for the release of \a referenced_class_pgm
    ExceptionSink* call_pgm_xsink = nullptr;
-   bool do_rc_update;
    //! true if the constructor changed the call Program context
    bool call_pgm_switched = false;
 
@@ -3785,6 +3820,11 @@ public:
             bool runtime) {
         set(xsink, pgm, runtime);
     }
+    //! enters the Program of a method of the given object, as set() with the object does
+    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime,
+            const QoreObject* obj) {
+        set(xsink, pgm, runtime, obj);
+    }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
     //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
@@ -3795,6 +3835,13 @@ public:
         #6255).
     */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program of a method of \a obj as set() does
+    /** If the call switches to the Program and the object is a capability (lent by the host, qore#7052), the context
+        entered is marked as a grant that the caller walk stops at (see ThreadData::CapabilityFrame); a call within the
+        Program, the usual case, does nothing more than set()
+    */
+    DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime, const QoreObject* obj);
 
     //! enters the Program as set() does, except that a C++ exception of the entry propagates
     /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
@@ -3926,6 +3973,12 @@ protected:
 
     //! set() raised an exception; see enterFailed()
     bool failed = false;
+
+private:
+    //! the part of set() after the check for a call within the current Program
+    DLLLOCAL void setSlow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    //! marks the context entered for a method of a lent object (qore#7052)
+    DLLLOCAL void markCapability(const QoreObject* obj);
 
 private:
     //! restores the thread's context as it was before set() switched it
@@ -4138,6 +4191,8 @@ private:
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
+//! as check_stack(), with the current thread's data (see take_runtime_call_location(void*))
+DLLLOCAL int check_stack(void* thread_data_ptr, ExceptionSink* xsink);
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
 // stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp

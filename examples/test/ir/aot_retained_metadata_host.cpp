@@ -14,11 +14,12 @@ static bool copy_input;
 static int registration_error;
 static std::vector<std::vector<unsigned char>> temporary_metadata;
 
-// Interpose the host API to exercise a caller-owned buffer without changing generated AOT code.
-extern "C" int qore_aot_script_register(QoreProgram* pgm, const unsigned char* data, int size,
-        const char* label, const QoreAOTFunc* functions, int count) {
-    using Register = decltype(&qore_aot_script_register);
-    auto real_register = reinterpret_cast<Register>(dlsym(RTLD_NEXT, "qore_aot_script_register"));
+// Interpose the registration that the generated code calls to exercise a caller-owned buffer without changing
+// generated AOT code.
+extern "C" int qore_aot_script_register_v2(const char* identity, QoreProgram* pgm, const unsigned char* data,
+        int size, const char* label, const QoreAOTFunc* functions, int count) {
+    using Register = decltype(&qore_aot_script_register_v2);
+    auto real_register = reinterpret_cast<Register>(dlsym(RTLD_NEXT, "qore_aot_script_register_v2"));
     if (!real_register) {
         return registration_error = 99;
     }
@@ -26,7 +27,7 @@ extern "C" int qore_aot_script_register(QoreProgram* pgm, const unsigned char* d
         temporary_metadata.emplace_back(data, data + size);
         data = temporary_metadata.back().data();
     }
-    int rc = real_register(pgm, data, size, label, functions, count);
+    int rc = real_register(identity, pgm, data, size, label, functions, count);
     if (rc) {
         registration_error = rc;
     }

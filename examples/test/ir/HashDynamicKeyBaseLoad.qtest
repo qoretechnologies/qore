@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class HashDynamicKeyBaseLoadTest
+
+#! Test: the IR of a hash access with a key that is not a constant loads its base variable once
+/** The IR lowering of <tt>h{k}</tt> with a key that is not a constant loaded the base variable for a not-NOTHING
+    guard and then lowered the base again, leaving the first load without a use; through a reference each load is a
+    full reference read (qore#7263).  The test dumps the IR of top-level code (<tt>--ir-dump</tt>) that reads
+    <tt>v{k}</tt> from a closure-bound local, a local holding a reference, a global and a \c thread_local variable,
+    and <tt>v.n{k}</tt> from a closure-bound local and through a reference, and requires one load of the base's
+    variable in each statement; HashDynamicKeyBase.qtest checks the results in every execution mode.
+*/
+class HashDynamicKeyBaseLoadTest inherits QUnit::Test {
+    public {
+        const Script = '%modern
+our hash<auto> g = {"a": 1};
+thread_local hash<auto> th;
+th = {"a": 2};
+hash<auto> x = {"a": 3, "n": {"a": 4}};
+string k = "a";
+auto rr = \x;
+auto v1 = x{k};
+auto v2 = rr{k};
+auto v3 = g{k};
+auto v4 = th{k};
+auto v5 = x.n{k};
+auto v6 = rr.n{k};
+printf("%y %y %y %y %y %y\n", v1, v2, v3, v4, v5, v6);
+';
+
+        #! the variable of the base of each statement assigning v<n>: the number of the statement -> its variable
+        const Bases = {
+            "v1": "@x",
+            "v2": "@rr",
+            "v3": "$g",
+            "v4": "$th",
+            "v5": "@x",
+            "v6": "@rr",
+        };
+    }
+
+    constructor() : QUnit::Test("HashDynamicKeyBaseLoad", "1.0", \ARGV) {
+        addTestCase("a dynamic-key access loads its base variable once", \testSingleLoad());
+        set_return_value(main());
+    }
+
+    testSingleLoad() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        TmpDir tmp("qore-hash-dynamic-key-base-load-");
+        string path = tmp.path + DirSep + "load.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        string dump = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --exec-mode=ir "
+            "--ir-dump %s", libqore_dir, libqore_dir, qore_bin, path));
+        assertRegex("3 3 1 2 4 4\n", dump, "the script's output");
+
+        # the instructions of each statement assigning v<n>, up to its store
+        hash<string, list<string>> statements();
+        list<string> current = ();
+        foreach string line in (dump.split("\n")) {
+            line = trim(line);
+            current += line;
+            *list<*string> m = line.regexExtract("^store\\.local @(v[0-9]) ");
+            if (m) {
+                statements{m[0]} = current;
+                current = ();
+            } else if (line =~ /^discard\.temps/) {
+                current = ();
+            }
+        }
+        foreach hash<auto> i in (Bases.pairIterator()) {
+            assertTrue(exists statements{i.key}, "the statement assigning " + i.key + " is in the dump");
+            list<string> loads = select statements{i.key} ?? (),
+                $1 =~ /^load\.(local|closure|global|threadlocal) / && $1.split(" ")[1] == i.value;
+            assertEq(1, loads.size(), sprintf("%s: the base %s is loaded once: %y", i.key, i.value,
+                statements{i.key}));
+        }
+    }
+}

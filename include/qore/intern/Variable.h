@@ -830,8 +830,9 @@ protected:
     template <bool Checked>
     DLLLOCAL int ensureUniqueImpl(const char* desc) {
         // a write-protected variable's container is only read (see setReadOnlyResolution()), as is one on the path of
-        // a reference whose value is read
-        if (read_only_resolution || read_value_only) {
+        // a reference whose value is read, and the container of the lvalue's weak reference is changed as it is,
+        // shared (see viewWeakContainer()); the flags are bits of one byte, tested at once
+        if (read_only_resolution | read_value_only | weak_target_view) {
             return 0;
         }
         member_lvalue_modified = true;
@@ -1021,8 +1022,22 @@ private:
 
     // flag if the changed value was a container before the assignment
     bool before = false;
-    //! the lvalue's storage is not changed and is not read again (see leaveUnchangedLValue())
-    bool unchanged_lvalue = false;
+#ifndef NDEBUG
+    //! the container changed through the weak reference that the lvalue holds, whose changes are allowed while it is
+    //! shared until the helper is destroyed (see viewWeakContainer())
+    QoreListNode* weak_change_list = nullptr;
+    QoreHashNode* weak_change_hash = nullptr;
+#endif
+    //! the container that the weak reference held by the lvalue designates, which the helper designates instead of
+    //! the lvalue (see viewWeakContainer()); not referenced: the helper holds it with the reference of lockWeakList()
+    /** Constructed by viewWeakContainer() only, and valid only while \a weak_target_view is set: a helper that does
+        not change a weak reference's container does not initialize it (QoreValue is trivially destructible)
+    */
+    union {
+        QoreValue weak_view;
+    };
+    static_assert(std::is_trivially_destructible_v<QoreValue>, "weak_view is never destroyed: QoreValue must be "
+        "trivially destructible");
 
     // flag to suppress the recursive-reference scan of the target RObject in the destructor; set only when the
     // caller can guarantee that the set of objects reachable from the lvalue is unchanged (see
@@ -1200,12 +1215,20 @@ private:
     bool track_write_protection = false;
     //! set with read_access when the variable read could not have been written; see isWriteProtected()
     bool write_protected = false;
+    // the following flags are bits of one byte: they are initialized together, and ensureUniqueImpl() tests three of
+    // them at once (see the #7297 follow-up)
     //! set while the containers of a write-protected variable are resolved to read an element; see
     //! setReadOnlyResolution()
-    bool read_only_resolution = false;
+    bool read_only_resolution : 1 = false;
     //! set when the value of a reference is only read (ReadAccess): the containers on the whole path, also past an
     //! object, are resolved without being changed (qore#6435)
-    bool read_value_only = false;
+    bool read_value_only : 1 = false;
+    //! the helper designates the container of the lvalue's weak reference (see viewWeakContainer())
+    bool weak_target_view : 1 = false;
+    //! the lvalue's storage is not changed and is not read again (see leaveUnchangedLValue())
+    bool unchanged_lvalue : 1 = false;
+    //! the operation on the unchanged lvalue added or removed a value that needs a scan (see changedScannedValue())
+    bool unchanged_lvalue_scan : 1 = false;
     //! set when the source of a weak assignment is resolved to make its container unique (WeakSourceAccess,
     //! setWeakSourceResolution()): an element that does not exist (also an index beyond the start of a list) is no
     //! lvalue, without an exception, as an rvalue read of it gives no value (qore#7242)
@@ -1695,15 +1718,59 @@ public:
     //! Returns the hash of the weak reference that the lvalue holds, as lockWeakList() returns a list
     DLLLOCAL __attribute__((cold)) QoreHashNode* lockWeakHash();
 
-    //! Marks the lvalue's storage as unchanged by the operation (qore#7402)
+    //! Marks the lvalue's storage as unchanged by the operation (qore#7297, qore#7402)
     /** For an operation that changes the container that the weak reference held by the lvalue designates, after
         lockWeakList() or lockWeakHash(): the lvalue keeps the weak reference, so the helper does not read the
         storage again when it is destroyed (it can be an entry of the container that the operation changes, which a
-        removal frees or moves), and its scan state is unchanged; the changes of the object counts of the containers
-        on the lvalue's path (which can hold the container changed) are still written up the path
+        change can move, such as a list that it grows, and a removal can free or move), and its scan state is
+        unchanged; the changes of the object counts of the containers on the lvalue's path (which can hold the
+        container changed) are still written up the path
     */
     DLLLOCAL void leaveUnchangedLValue() {
         unchanged_lvalue = true;
+    }
+
+    //! Makes the helper designate the container that the weak reference held by the lvalue designates (qore#7297)
+    /** For an operation that changes the list or the hash that the lvalue holds: if the lvalue holds a weak reference
+        to a list or a hash, the helper then designates the container itself, held by the helper while it is changed,
+        with its own type, and ensureUnique() leaves it shared; the lvalue keeps the weak reference (see
+        leaveUnchangedLValue()).  Has no effect on an lvalue that holds any other value.
+
+        @return 0, or -1 if the container of the weak reference was freed (LIST-ERROR or HASH-ERROR is raised)
+    */
+    DLLLOCAL int viewWeakContainer();
+
+    //! Returns true if the lvalue holds a list or a weak reference to a list
+    DLLLOCAL bool holdsList() const {
+        qore_type_t t = getType();
+        return t == NT_LIST || t == NT_WEAKREF_LIST;
+    }
+
+    //! Returns the list that an operation that changes the lvalue's list changes (qore#7297)
+    /** The lvalue's own list, made unique, or the list that the weak reference that the lvalue holds designates,
+        which the helper holds while it is changed: the lvalue's storage is then not changed and not read again (see
+        leaveUnchangedLValue()), so the caller must not read the lvalue's value after this call
+
+        @return the list, or nullptr if the list of the weak reference was freed (LIST-ERROR is raised)
+
+        @pre holdsList()
+    */
+    DLLLOCAL QoreListNode* getListForChange();
+
+    //! Returns the hash that an operation that changes the lvalue's hash changes, as getListForChange() a list
+    /** @return the hash, or nullptr if the hash of the weak reference was freed (HASH-ERROR is raised)
+
+        @pre the lvalue holds a hash or a weak reference to a hash
+    */
+    DLLLOCAL QoreHashNode* getHashForChange();
+
+    //! Notes a value that an operation on an unchanged lvalue (see leaveUnchangedLValue()) added to or removed from
+    //! the container that it changes: a value that needs a scan for recursive references starts the scan of the
+    //! lvalue's object when the helper is destroyed, as a change of the lvalue's value does (qore#7297)
+    DLLLOCAL void changedScannedValue(const QoreValue& v) {
+        if (unchanged_lvalue && needs_scan(v)) {
+            unchanged_lvalue_scan = true;
+        }
     }
 
     //! Saves the value that the lvalue holds, which the caller then overwrites, for release after the locks
@@ -1722,6 +1789,16 @@ public:
     }
 
     DLLLOCAL void saveTempRef(QoreValue& n);
+
+    //! Keeps the container that a weak assignment assigned in place of a copy that the lvalue's type made of it
+    /** @param weak_source the container assigned, with a reference that this function takes
+        @param n the value converted to the lvalue's type: the container assigned, if the type only strips its type
+        @param desc the description of the lvalue in the exception raised
+
+        @return 0, or -1 if the type converts the container to another one (an exception is raised then), as a weak
+        reference would designate a copy that only it holds (qore#7237)
+    */
+    DLLLOCAL int keepWeakAssignmentContainer(QoreValue& weak_source, QoreValue& n, const char* desc);
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
 
@@ -2058,7 +2135,9 @@ public:
 
     DLLLOCAL int assignNative(QoreValue val, const char* desc);
 
-    template <bool Lexical, bool Native = false>
+    //! the assignment; \a Weak is true for a weak assignment (AssignmentMode::Weak), whose handling (qore#7237) is
+    //! then compiled in, and false for the other modes, which it does not cost anything
+    template <bool Lexical, bool Native = false, bool Weak = false>
     DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
             LexicalSemanticPolicy policy);
 
@@ -2616,6 +2695,20 @@ struct lvinfo {
     taken its own reference
 */
 DLLLOCAL bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
+
+//! Decides what a weak assignment of the list or hash \a source designates after the lvalue's type converted it to
+//! \a converted (qore#7237)
+/** @param source the container assigned, or a weak reference to it
+    @param converted the value that the lvalue's type converted it to
+    @param desc the description of the lvalue in the exception raised
+    @param xsink the exception sink, which must not be null
+
+    @return 0 if the type kept the value, 1 if it only stripped the container's type (the weak reference designates
+    the container assigned, in place of the copy), or -1 if it converted it to another value, which only the weak
+    reference would hold (an exception is raised)
+*/
+DLLLOCAL int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, const char* desc,
+        ExceptionSink* xsink);
 
 //! returns true if the value is a weak or opaque reference to an object, hash or list
 /** These are the representations that hold their target indirectly, so that a store which built

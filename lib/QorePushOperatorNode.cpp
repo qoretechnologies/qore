@@ -88,17 +88,19 @@ QORE_INTERN_ALWAYS_INLINE int QorePushOperatorNode::pushOn(LValueHelper& val, Qo
     }
 
     // value is not a list, so throw exception
-    if (val.getType() != NT_LIST) {
+    if (!val.holdsList()) {
         if (runtime_check_parse_option(PO_STRICT_ARGS))
             xsink->raiseException("PUSH-ERROR", "the lvalue argument to push is type \"%s\"; expecting \"list\"",
                 val.getTypeName());
         return -1;
     }
 
-    // no exception can occur here
-    val.ensureUnique();
-
-    QoreListNode* l = val.getValue().get<QoreListNode>();
+    // a weak reference to a list: its list is changed, and the lvalue keeps the weak reference (qore#7297)
+    QoreListNode* l = val.getListForChange();
+    if (!l) {
+        return QoreValue();
+    }
+    val.changedScannedValue(*res);
 
     if constexpr (Lexical) {
         qore_list_private::push(*l, res.getReferencedValue(), xsink, getSemanticPolicy());

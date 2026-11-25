@@ -163,14 +163,28 @@ QORE_INTERN_ALWAYS_INLINE int QoreExtractOperatorNode::extractOn(LValueHelper& v
         }
     }
 
-    if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+    if (vt != NT_LIST && vt != NT_WEAKREF_LIST && vt != NT_STRING && vt != NT_BINARY) {
         xsink->raiseException(*loc, "EXTRACT-ERROR", QoreValue(), "first (lvalue) argument to the extract "
             "operator is not a list, string, or binary object");
         return -1;
     }
 
-    // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
-    if (val.ensureUnique("<extract operator>")) {
+    // the list changed: the lvalue's own list, or that of its weak reference, which the lvalue keeps (qore#7297)
+    QoreListNode* vl = nullptr;
+    if (vt == NT_LIST || vt == NT_WEAKREF_LIST) {
+        vl = val.getListForChange();
+        if (!vl) {
+            return -1;
+        }
+        // through a weak reference: a value removed or inserted that needs a scan starts the scan of the lvalue's
+        // object (see LValueHelper::changedScannedValue())
+        val.changedScannedValue(QoreValue(vl));
+        if (new_exp) {
+            val.changedScannedValue(*exp);
+        }
+        vt = NT_LIST;
+    } else if (val.ensureUnique("<extract operator>")) {
+        // a string enum lvalue refuses the plain string that the operation leaves (qore#6195)
         return -1;
     }
 
@@ -183,7 +197,6 @@ QORE_INTERN_ALWAYS_INLINE int QoreExtractOperatorNode::extractOn(LValueHelper& v
 
 #ifdef DEBUG
     if (vt == NT_LIST) {
-        QoreListNode *vl = val.getValue().get<QoreListNode>();
         printd(5, "op_extract() val: %p (size: " QLLD ") offset: " QLLD "\n", vl, (int64)(vl->size()),
             (int64)offset);
     }
@@ -197,7 +210,6 @@ QORE_INTERN_ALWAYS_INLINE int QoreExtractOperatorNode::extractOn(LValueHelper& v
     ReferenceHolder<AbstractQoreNode> rv(xsink);
 
     if (vt == NT_LIST) {
-        QoreListNode *vl = val.getValue().get<QoreListNode>();
         if (!length_exp && !new_exp)
             rv = vl->extract(offset);
         else {

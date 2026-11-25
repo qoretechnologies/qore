@@ -68,6 +68,8 @@ const char usage_str[] = "usage: %s [options] <input file(s)...>\n"
     " -h, --help             this help text\n"
     " -j, --javadoc=arg      javadoc output directory name\n"
     " -m, --metadata=arg     JSON metadata output file name\n"
+    "     --api-metadata=arg JSON metadata output file name without documentation and source path: the\n"
+    "                        builtin API metadata hashed into the builtin API identity (qore#7183)\n"
     "     --file-prefix-map=OLD=NEW  remap emitted source paths (repeatable)\n"
     " -o, --output=arg       cpp output file name\n"
     " -s, --stub-output=arg  Qore-syntax compile-time stub (.stub.qc) output file name\n"
@@ -84,6 +86,7 @@ static const option pgm_opts[] = {
     {"javadoc", required_argument, nullptr, 'j'},
     {"metadata", required_argument, nullptr, 'm'},
     {"file-prefix-map", required_argument, nullptr, 256},
+    {"api-metadata", required_argument, nullptr, 257},
     {"output", required_argument, nullptr, 'o'},
     {"stub-output", required_argument, nullptr, 's'},
     {"table", required_argument, nullptr, 't'},
@@ -106,6 +109,7 @@ static struct qpp_opts {
     std::string dox_fn;
     std::string javadoc_fn;
     std::string metadata_fn;
+    std::string api_metadata_fn;
     std::string unit_test_fn;
     std::string stub_fn;
     std::string table_fn;
@@ -403,6 +407,20 @@ static std::string json_escape_string(const std::string& s) {
         }
     }
     return result;
+}
+
+//! true while the API metadata is written (--api-metadata): the metadata without documentation and source path
+/** The builtin API identity of libqore is a digest of the API metadata of its qpp files
+    (cmake/QoreWriteBuiltinApiIdentity.cmake): only what compiled modules depend on (names, parents, domains, flags,
+    signatures, ...), so that a change to documentation or to the code of a method does not change it (qore#7183)
+*/
+static bool metadata_api_only = false;
+
+//! Writes the description field of a metadata object, except in the API metadata
+static void serialize_metadata_description(FILE* fp, const std::string& doc) {
+    if (!metadata_api_only) {
+        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+    }
 }
 
 //! Escape a mapped source label for an emitted C++ string literal.
@@ -4240,7 +4258,7 @@ public:
         if (!ns_path.empty()) {
             fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns_path).c_str());
         }
-        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+        serialize_metadata_description(fp, doc);
         if (!value.empty()) {
             std::string qv;
             if (!get_dox_value(value, qv)) {
@@ -5124,7 +5142,7 @@ public:
         fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
         fprintf(fp, ",\"return_type\":\"%s\"",
             json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
-        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
+        serialize_metadata_description(fp, docs);
         fputs(",\"params\":", fp);
         serializeMetadataParamsJson(fp);
         serializeMetadataNamedArgsJson(fp);
@@ -6532,7 +6550,7 @@ public:
                 fputc('}', fp);
             }
         }
-        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
+        serialize_metadata_description(fp, comment);
         if (!parent_name.empty()) {
             fprintf(fp, ",\"parent_name\":\"%s\"", json_escape_string(parent_name).c_str());
         }
@@ -6543,10 +6561,10 @@ public:
                 fputc(',', fp);
             }
             first_member = false;
-            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\",\"description\":\"%s\"",
+            fprintf(fp, "{\"name\":\"%s\",\"type_name\":\"%s\"",
                 json_escape_string(i.first).c_str(),
-                json_escape_string(i.second.type).c_str(),
-                json_escape_string(i.second.comment).c_str());
+                json_escape_string(i.second.type).c_str());
+            serialize_metadata_description(fp, i.second.comment);
             if (!i.second.value.empty()) {
                 fprintf(fp, ",\"default_value\":\"%s\"", json_escape_string(i.second.value).c_str());
             }
@@ -6933,7 +6951,7 @@ public:
         if (!ns.empty()) {
             fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
         }
-        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
+        serialize_metadata_description(fp, comment);
         fprintf(fp, ",\"base_type\":\"%s\"", json_escape_string(baseType).c_str());
         fputs(",\"values\":[", fp);
         bool first_val = true;
@@ -6947,7 +6965,7 @@ public:
                 fprintf(fp, ",\"value\":\"%s\"", json_escape_string(m.second.computed_value).c_str());
             }
             if (!m.second.comment.empty()) {
-                fprintf(fp, ",\"description\":\"%s\"", json_escape_string(m.second.comment).c_str());
+                serialize_metadata_description(fp, m.second.comment);
             }
             fputc('}', fp);
         }
@@ -7418,7 +7436,7 @@ public:
         fprintf(fp, ",\"signature\":\"%s\"", json_escape_string(sig).c_str());
         fprintf(fp, ",\"return_type\":\"%s\"",
             json_escape_string(return_type.empty() ? "nothing" : return_type).c_str());
-        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
+        serialize_metadata_description(fp, docs);
         fputs(",\"params\":", fp);
         serializeMetadataParamsJson(fp);
         serializeMetadataNamedArgsJson(fp);
@@ -8556,7 +8574,7 @@ public:
         if (!ns.empty()) {
             fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
         }
-        fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+        serialize_metadata_description(fp, doc);
         if (!type_params.empty()) {
             fputs(",\"type_parameters\":[", fp);
             for (unsigned i = 0; i < type_params.size(); ++i) {
@@ -9466,18 +9484,41 @@ public:
         return rc;
     }
 
+    //! Writes the metadata file and the API metadata file, each if its option names one
     int serializeMetadata() {
-        if (opts.metadata_fn.empty()) {
+        if (serializeMetadata(opts.metadata_fn, false)) {
+            return -1;
+        }
+        return serializeMetadata(opts.api_metadata_fn, true);
+    }
+
+    //! Writes a metadata file: the API metadata has no documentation and no source path (qore#7183)
+    int serializeMetadata(const std::string& fn, bool api_only) {
+        if (fn.empty()) {
             return 0;
         }
-        OutputFile fp(opts.metadata_fn, "w");
+        OutputFile fp(fn, "w");
         if (!fp) {
             return -1;
         }
-        log(LL_INFO, "creating metadata file %s -> %s\n", fileName, opts.metadata_fn.c_str());
+        log(LL_INFO, "creating %smetadata file %s -> %s\n", api_only ? "API " : "", fileName, fn.c_str());
 
-        fprintf(fp.get(), "{\"schema_version\":\"1.1\",\"source_file\":\"%s\"",
-            json_escape_string(mapped_source_path(fileName)).c_str());
+        // the flag is reset however this function returns
+        struct ApiOnlyScope {
+            ApiOnlyScope(bool api_only) {
+                metadata_api_only = api_only;
+            }
+            ~ApiOnlyScope() {
+                metadata_api_only = false;
+            }
+        } api_only_scope(api_only);
+
+        if (api_only) {
+            fputs("{\"schema_version\":\"1.1\"", fp.get());
+        } else {
+            fprintf(fp.get(), "{\"schema_version\":\"1.1\",\"source_file\":\"%s\"",
+                json_escape_string(mapped_source_path(fileName)).c_str());
+        }
 
         // classes
         fputs(",\"classes\":[", fp.get());
@@ -9840,6 +9881,10 @@ void process_command_line(int& argc, char**& argv) {
 
             case 'm':
                 opts.metadata_fn = optarg;
+                break;
+
+            case 257:
+                opts.api_metadata_fn = optarg;
                 break;
 
             case 256: {

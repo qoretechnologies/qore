@@ -119,13 +119,15 @@ QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
         const QoreTypeInfo* expected, const QoreTypeInfo* actual, bool narrowed, const char* base_id,
         const char* operation) {
     QoreDiagnosticMetadata metadata(narrowed ? "NARROWED-CONTAINER-TYPE-MISMATCH" : base_id);
-    metadata.addFact("expectedType", get_type_name(expected));
-    metadata.addFact("actualType", get_type_name(actual));
+    bool qualify = QoreTypeInfo::diagnosticNamesCollide(expected, actual);
+    std::string expected_name = qualify ? QoreTypeInfo::diagnosticTypePath(expected) : get_type_name(expected);
+    metadata.addFact("expectedType", expected_name.c_str());
+    metadata.addFact("actualType", qualify ? QoreTypeInfo::diagnosticTypePath(actual).c_str() : get_type_name(actual));
     metadata.addFact("operation", operation);
 
     if (!narrowed) {
         QoreStringMaker hint("use a value compatible with '%s' or change the explicitly declared type",
-            get_type_name(expected));
+            expected_name.c_str());
         metadata.hint = hint.c_str();
         return metadata;
     }
@@ -640,9 +642,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         QoreStringNode* edesc = new QoreStringNodeMaker("lvalue for %sassignment operator '%s' expects ",
             mode == AssignmentMode::Weak ? "weak " : (mode == AssignmentMode::Opaque ? "opaque " : ""),
             op_name);
-        QoreTypeInfo::getThisType(error_ti, *edesc);
-        edesc->concat(", but right-hand side is ");
-        QoreTypeInfo::getThisType(error_rhs_ti, *edesc);
+        QoreTypeInfo::describeTypeComparison(*edesc, error_ti, ", but right-hand side is ", error_rhs_ti);
 
         // Add context about type narrowing if applicable
         if (has_narrowed_type && !is_direct_auto_assignment) {
@@ -963,11 +963,12 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_weak_assign_bind_retry(LVa
 }
 
 //! Makes a weak assignment of the value of \a new_value to \a left and returns the value of the assignment
-/** The value assigned, if it is a temporary, and a container that the type of the lvalue converts to a copy of its
-    own (ex: a hash<string, int> assigned to a hash variable), a temporary of the statement that only the weak reference
-    designates, live until the end of the statement (qore#7085); the copy is held after the lvalue is unlocked, as
-    releasing a value that the statement held before can run a destructor.  Out of line, so that the other assignments
-    keep their code.
+/** The value assigned, if it is a temporary, and a container that the type of the lvalue makes of it (ex: the list
+    that a softlist variable makes of a value that is not a list), a temporary of the statement that only the weak
+    reference designates, live until the end of the statement (qore#7085); the container is held after the lvalue is
+    unlocked, as releasing a value that the statement held before can run a destructor.  A list or hash assigned is
+    never replaced by a copy: the weak reference designates it (qore#7237).  Out of line, so that the other
+    assignments keep their code.
 
     A store whose check records reference elements is made again out of line after they have been bound with no lvalue
     lock held (qore#7391).

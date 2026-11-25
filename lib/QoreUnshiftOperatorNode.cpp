@@ -167,17 +167,19 @@ QORE_INTERN_ALWAYS_INLINE int QoreUnshiftOperatorNode::unshiftOn(LValueHelper& v
     }
 
     // value is not a list, so throw exception
-    if (val.getType() != NT_LIST) {
+    if (!val.holdsList()) {
         // no need to check for PO_STRICT_ARGS; this exception was always thrown
         xsink->raiseException(*loc, "UNSHIFT-ERROR", QoreValue(), "the lvalue argument to unshift is type "
             "\"%s\"; expecting \"list\"", val.getTypeName());
         return -1;
     }
 
-    // no exception can occur here
-    val.ensureUnique();
-
-    QoreListNode* l = val.getValue().get<QoreListNode>();
+    // a weak reference to a list: its list is changed, and the lvalue keeps the weak reference (qore#7297)
+    QoreListNode* l = val.getListForChange();
+    if (!l) {
+        return QoreValue();
+    }
+    val.changedScannedValue(*res);
 
     // the value is taken by the operation, also when it refuses it
     if constexpr (Lexical) {

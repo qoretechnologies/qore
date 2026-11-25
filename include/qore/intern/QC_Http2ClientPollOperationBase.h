@@ -717,9 +717,18 @@ private:
     //! Timestamp of last PING sent (epoch us); 0 = none sent
     int64_t last_ping_sent_us = 0;
 
+    //! Number of interim (1xx other than 101) responses of the proxy to CONNECT received; I/O thread only
+    /** @since %Qore 3.0
+    */
+    int proxy_interim_response_count = 0;
+
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr int H2C_PROBE_MAX_EMPTY_READS = 5;
+    //! Maximum number of interim responses of the proxy accepted before its final response to CONNECT
+    /** The same limit as that of the HTTP/1.x client; each one is read with the size limit of a response header.
+    */
+    static constexpr int MAX_PROXY_INTERIM_RESPONSES = 16;
 
     // --- Internal methods (I/O thread only) ---
 

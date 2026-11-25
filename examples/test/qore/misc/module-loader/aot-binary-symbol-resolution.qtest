@@ -67,7 +67,7 @@ extern \"C\" void qore_missing_lazy_symbol_for_aot_loader_test();
 // defined in libqore; not part of the public API
 extern \"C\" const char* qore_aot_runtime_identity;
 
-" + moduleInfoSection("LazyAotResolveFail") + "
+" + moduleInfoSection("LazyAotResolveFail", builtinApiIdentity()) + "
 extern \"C\" DLLEXPORT void LazyAotResolveFail_call_missing() {
     qore_missing_lazy_symbol_for_aot_loader_test();
 }
@@ -152,7 +152,8 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
         setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);
         on_exit unsetenv("QORE_AOT_LOAD_COUNTER_FILE");
 
-        writeFile(cpp_path, singleMapSource(moduleInfoSection("WrongAotName")));
+        string identity = builtinApiIdentity();
+        writeFile(cpp_path, singleMapSource(moduleInfoSection("WrongAotName", identity)));
         string build_out = backquote(build_cmd);
         assertTrue(is_file(qmod_path), "compiled single-map qmod: " + build_out);
         assertThrows("LOAD-MODULE-ERROR", "AOT module metadata of module .*identifies feature 'WrongAotName', "
@@ -164,7 +165,7 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
         assertFalse(is_file(counter_path), "mismatched metadata is rejected before mapping the qmod");
 
         # the metadata that lets the loader resolve eagerly in a single mapping
-        writeFile(cpp_path, singleMapSource(moduleInfoSection("AotSingleMap")));
+        writeFile(cpp_path, singleMapSource(moduleInfoSection("AotSingleMap", identity)));
         build_out = backquote(build_cmd);
         assertTrue(is_file(qmod_path), "recompiled single-map qmod: " + build_out);
 
@@ -231,7 +232,7 @@ extern \"C\" const char* qore_aot_runtime_identity;
 
 struct AotLoadCounter {
     AotLoadCounter() {
-        const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\"); // # live-provider-optin: the counter file that the test sets
+        const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
         if (!path) {
             return;
         }
@@ -246,7 +247,7 @@ struct AotLoadCounter {
 static AotLoadCounter load_counter;
 
 static void aotSingleMapInit(QoreModuleInitContext&, ExceptionSink&) {
-    const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\"); // # live-provider-optin: the counter file that the test sets
+    const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
     if (!path) {
         return;
     }
@@ -284,18 +285,37 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
 ";
     }
 
+    #! returns the builtin API identity of the library, which only qcc reports; skips the test without qcc
+    /** The loader takes an AOT module recorded with another identity for out of date (qore#7183), so a module that
+        must be loaded records the identity of the library (see moduleInfoSection())
+    */
+    private string builtinApiIdentity() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("no qcc found to report the builtin API identity of the Qore library");
+        }
+        string out = backquote(sprintf("QORE_LIBDIR=%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --version 2>&1",
+            shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qcc)));
+        *list<*string> m = (out =~ x/^Builtin API identity: ([0-9a-f]{64})$/m);
+        if (!m) {
+            testSkip("qcc does not report the builtin API identity of the Qore library: " + out);
+        }
+        return m[0];
+    }
+
     #! returns the C++ declaration of the AOT module metadata section of a module with the given name
     /** qcc stores the metadata of an AOT module in a section of its image, which the loader reads before mapping the
-        module: a record of the magic number 'QAMI', the format version 4, the payload size and the payload (the
+        module: a record of the magic number 'QAMI', the format version 5, the payload size and the payload (the
         module name and the counts of dependencies, of unavailable optional modules, of the modules it was compiled
         with, of its own prepended and appended module path directories and of the options that its directives gave
         its dependencies, here none, the functional domains it declares, a u64, here none, the count of the
-        dependencies it requires only after its header, here none, and the functional domains its code restricts, a
-        u64, here none).  On macOS the record is the Mach-O section __TEXT,__qore_modinfo; elsewhere it is the
+        dependencies it requires only after its header, here none, the functional domains its code restricts, a
+        u64, here none, and the builtin API identity of the library that compiled it, here that of the library that
+        loads it).  On macOS the record is the Mach-O section __TEXT,__qore_modinfo; elsewhere it is the
         description of a note with the owner "Qore" and the record's magic number as its type in the ELF note section
         .note.qore.modinfo.
     */
-    private static string moduleInfoSection(string module_name) {
+    private static string moduleInfoSection(string module_name, string builtin_api_identity) {
         BinaryOutputStream payload_out();
         StreamWriter payload(payload_out);
         payload.writei4LSB(module_name.size());
@@ -315,12 +335,15 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
         # the restricted domains (version 4)
         payload.writei4LSB(0);
         payload.writei4LSB(0);
+        # the builtin API identity (version 5, qore#7183)
+        payload.writei4LSB(builtin_api_identity.size());
+        payload.write(builtin_api_identity);
         binary payload_data = payload_out.getData();
 
         BinaryOutputStream record_out();
         StreamWriter record(record_out);
         record.writei4LSB(0x494d4151);
-        record.writei4LSB(4);
+        record.writei4LSB(5);
         record.writei4LSB(payload_data.size());
         record.write(payload_data);
         binary record_data = record_out.getData();

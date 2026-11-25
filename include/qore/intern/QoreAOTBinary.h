@@ -34,6 +34,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -66,6 +67,7 @@ class QoreTypeInfo;
 class qore_class_private;
 class qore_ns_private;
 class QoreIRFunction;
+class QoreNumberNode;
 class LocalVar;
 class Var;
 class UserVariantBase;
@@ -652,6 +654,25 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - no format change, but the code that a v50 compiler wrote differs (an image must be rebuilt): string literals
 //!        that an earlier compiler folded with the encoding of the source tagged as the default encoding are
 //!        materialized as UTF-8 CONST_STRING values, as the source is decoded as UTF-8 (qore#6816, qore#6815)
+//! v52 (the AOT-identity batch; the reader refuses v51 and older images, also those that a qcc executable embeds):
+//!      - wildcard bounds in type paths record the declaring type parameter owner and index recursively;
+//!        older readers cannot safely restore these bounds (qore#7184)
+//!      - METHODS records carry the position of each method in the declaration order of the user methods of its map
+//!        (instance or static) after the static flag, as a u32; the records keep the order of the method maps, so
+//!        the loader builds the maps as the parser did, and restores the declaration order that reflection
+//!        enumerates (qore#7169)
+//!      - a serialized background instruction of the helper kind (group 62) has an i32 after the helper's self mode:
+//!        the callee of its expression as the lowering classified it (QoreIRBackgroundInstruction::helper_callee:
+//!        the index of the parameter that holds the callee, QBH_CHECK_IN_THREAD or QBH_CALLEE_UNKNOWN; qore#7087)
+//!      - the class flags of a CLASSES record have QORE_AOT_CLASS_DECLARED_BY_PROGRAM (qore#7049)
+//!      - the module-info record is version 5 (QORE_AOT_MODULE_INFO_VERSION): it carries the builtin API identity of
+//!        the libqore that compiled the module (qore#7183)
+//!      - no other format change, but the code that a v51 compiler wrote calls other runtime entry points: a qcc
+//!        executable or script object calls qore_aot_run_v4(), qore_aot_script_register_v2() and
+//!        qore_aot_script_register_native_v2() and checks the AOT runtime identity, and the earlier entry points refuse
+//!        (qore#6898)
+//! The shared format version for the changes of the AOT-identity batch (see v52 above).
+constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //! The shared format version for the changes in batch AL (see v48 above).
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
@@ -660,6 +681,10 @@ constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
 constexpr uint16_t QORE_AOT_BATCH_AN_VERSION = 50;
 //! The shared format version for the changes in batch AO (see v51 above).
 constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
+//! First format version that resolves owner-qualified type parameters inside wildcard bounds (see v52 above, qore#7184).
+constexpr uint16_t QORE_AOT_WILDCARD_BOUND_VERSION = 52;
+//! First format version whose METHODS records carry the declaration index of their method (see v52 above, qore#7169).
+constexpr uint16_t QORE_AOT_METHOD_DECL_INDEX_VERSION = 52;
 //! First format version whose static method call references record the class that declares their method (see v49
 //! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
 //! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
@@ -668,10 +693,19 @@ constexpr uint16_t QORE_AOT_BATCH_AO_VERSION = 51;
 constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
 static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
     "the format changes of batch AM share one format version (v49)");
-//! Old compiled artifacts must be rebuilt (see v51 above): the reader refuses older images, the program image of a qcc
-//! executable included (qore_aot_run_v3() reads it before anything else); the reader of a v51 image always has the temp
-//! scopes of its IR (qore#6742) and the local unwind locations of its IR functions (qore#6672)
-constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AO_VERSION;
+//! First format version whose serialized background helpers record the callee of their expression (see v52 above,
+//! qore#7087)
+constexpr uint16_t QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION = 52;
+static_assert(QORE_AOT_WILDCARD_BOUND_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION
+    && QORE_AOT_METHOD_DECL_INDEX_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION
+    && QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION,
+    "the format changes of the AOT-identity batch share one format version (v52)");
+//! Old compiled artifacts must be rebuilt (see v52 above): the reader refuses older images, the program image of a qcc
+//! executable included (qore_aot_run_v4() reads it before anything else), before it reads any record; the reader of a
+//! v52 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
+//! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
+//! METHODS record (qore#7169) and the callee of each background helper (qore#7087)
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
 //! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
@@ -755,6 +789,15 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
     record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
 */
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! First format version whose modules have the module metadata record with the builtin API identity (see v52 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION, 5 from this format) gives
+    its readers its layout; the format version of the artifacts that carry it changes with it, so that the format that
+    a module reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has; a
+    record of an earlier version is refused, asking for the module to be rebuilt (qore#7183)
+*/
+constexpr uint16_t QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION = 52;
+static_assert(QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VERSION,
+    "the format changes of the AOT-identity batch share one format version (v52)");
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
 //! The format version of the format changes of batch AK (see v47 above)
@@ -811,7 +854,7 @@ static_assert(QORE_AOT_TEMP_SCOPES_VERSION == QORE_AOT_BATCH_AN_VERSION,
 constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AO_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY_VERSION;
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {
@@ -830,6 +873,8 @@ constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
 constexpr uint8_t QORE_AOT_CLASS_FLAG_PUBLIC_MEMDECL = 0x01;
+//! The declaring Program is the one serialized in this CLASSES record (16-bit class flags).
+constexpr uint16_t QORE_AOT_CLASS_DECLARED_BY_PROGRAM = 0x0040;
 //! First format version whose function records have no location table (see v21 above).
 constexpr uint16_t QORE_AOT_NO_LOCATION_TABLE_VERSION = 21;
 //! First format version in which a serialized background instruction can be of the helper kind.
@@ -1509,6 +1554,9 @@ public:
 //! Binary format writer for AOT metadata
 struct AOTIRLocalBindingSource;
 
+//! Formats a decimal value for AOT metadata; the writer records the number's precision separately.
+DLLLOCAL bool qore_aot_format_number(const QoreNumberNode& number, QoreString& str);
+
 class QoreAOTBinaryWriter {
 public:
     struct PluginImportRecord {
@@ -2183,7 +2231,7 @@ public:
         Keep the inline readers local to the binary that establishes the section bounds: libqore and its tools
         each have their own qore_aot_read_bounds.
     */
-    DLLLOCAL static bool readFits(const uint8_t*& ptr, size_t n) {
+    DLLLOCAL __attribute__((always_inline)) static bool readFits(const uint8_t*& ptr, size_t n) {
         const uint8_t* end = qore_aot_read_bounds.end;
         // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
         assert(!end || ptr >= qore_aot_read_bounds.start);
@@ -2215,7 +2263,10 @@ public:
     }
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
-    DLLLOCAL static uint32_t readU32(const uint8_t*& ptr) {
+    /** Always inlined: the record readers read most of their fields with it, and a call per field is a large part of
+        the cost of reading a record
+    */
+    DLLLOCAL __attribute__((always_inline)) static uint32_t readU32(const uint8_t*& ptr) {
         if (!readFits(ptr, 4)) {
             return 0;
         }
@@ -3398,6 +3449,13 @@ struct AOTRegexCaseSlotId {
     bool is_negated = false; //!< true for CaseNodeNegRegex (~! match)
 };
 
+//! Converts a constant hash key of an AOT image to the default encoding of the process (qore#6840)
+/** qcc compiles in UTF-8, while the code of an image runs in the default encoding of its process, in which the keys of
+    the hashes that it makes at run time are stored: a key that is not ASCII is converted; one that is not valid UTF-8,
+    or that the process encoding cannot represent, is kept as it is, and names no key of a hash in that encoding
+*/
+DLLLOCAL void qore_aot_key_to_process_encoding(std::string& key);
+
 //! Identity for a single step in an LValuePath instruction
 struct AOTLVPathStepId {
     uint8_t kind;              //!< LVPathStepKind
@@ -3578,7 +3636,19 @@ struct QoreAOTModuleFileInfo {
     /** QDOM_ALL if an entry of dependency_restrictions has QMDR_INEXACT (qore#6386)
     */
     int64 restricted_domains = 0;
+    //! the builtin API identity of the libqore that compiled the module (version 5; qore#7183)
+    /** The digest of the API metadata of libqore's builtin classes, functions and constants (qore_builtin_api_identity,
+        64 lowercase hexadecimal digits): the module's code can have such metadata built in (the functional domains
+        that a class inherits from a builtin base class, those that the module's code uses, calls of builtin functions
+        folded because they are pure, ...), so the module loader takes a module that records another identity than
+        its own for out of date, as one whose sources have changed: it loads the module's source instead, or refuses
+        the module (AOT-MODULE-STALE)
+    */
+    std::string builtin_api_identity;
 };
+
+//! The length of a builtin API identity: a SHA-256 digest in lowercase hexadecimal digits (qore#7183)
+static constexpr size_t QORE_BUILTIN_API_IDENTITY_LEN = 64;
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
@@ -3588,10 +3658,10 @@ static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
     (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION); version 4 the
     functional domains that the module declares in its header, the dependencies it requires only after its header and
     the functional domains its own code restricts (qore#6351), from AOT format version 45
-    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION).  A record of another version is refused, asking for the module to be
-    rebuilt.
+    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION); version 5 the builtin API identity of the libqore that compiled the module
+    (qore#7183), from AOT format version 52 (QORE_AOT_MODULE_INFO_API_IDENTITY_VERSION).  A record of another version is refused, asking for the module to be rebuilt.
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 4u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 5u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata
@@ -3621,6 +3691,10 @@ struct QoreAOTModuleInfoLocation {
     //! the size of the record in bytes
     uint64_t size = 0;
 };
+
+//! Returns true if the string is a builtin API identity: QORE_BUILTIN_API_IDENTITY_LEN lowercase hexadecimal digits
+//! (qore#7183)
+bool qoreAOTIsBuiltinApiIdentity(const std::string& identity);
 
 //! Encodes AOT module metadata as a record
 /** @param info the metadata

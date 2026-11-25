@@ -1,0 +1,64 @@
+AIS::X m(string): "Impl::m(string)"
+AIS::X m(string) call_object_method: "Impl::m(string)"
+AIS::X m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::X m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::Y3 m(string): "Impl::m(string)"
+AIS::Y3 m(string) call_object_method: "Impl::m(string)"
+AIS::Y3 m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::Y3 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::Y0 m(string): "Impl::m(string)"
+AIS::Y0 m(string) call_object_method: "Impl::m(string)"
+AIS::Y0 m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::Y0 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::Z3 m(string): "Impl::m(string)"
+AIS::Z3 m(string) call_object_method: "Impl::m(string)"
+AIS::Z3 m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::Z3 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::XI m(string): "Impl::m(string)"
+AIS::XI m(string) call_object_method: "Impl::m(string)"
+AIS::XI m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::XI m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::YI3 m(string): "Impl::m(string)"
+AIS::YI3 m(string) call_object_method: "Impl::m(string)"
+AIS::YI3 m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::YI3 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::Xc m(string): "Xc::m(string)"
+AIS::Xc m(string) call_object_method: "Xc::m(string)"
+AIS::Xc m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::Xc m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::Yc m(string): "Xc::m(string)"
+AIS::Yc m(string) call_object_method: "Xc::m(string)"
+AIS::Yc m(integer): RUNTIME-OVERLOAD-ERROR
+AIS::Yc m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+UY3 m(string): "Impl::m(string)"
+UY3 m(string) call_object_method: "Impl::m(string)"
+UY3 m(integer): RUNTIME-OVERLOAD-ERROR
+UY3 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+UZ3 m(string): "Impl::m(string)"
+UZ3 m(string) call_object_method: "Impl::m(string)"
+UZ3 m(integer): RUNTIME-OVERLOAD-ERROR
+UZ3 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+UZ0 m(string): "Impl::m(string)"
+UZ0 m(string) call_object_method: "Impl::m(string)"
+UZ0 m(integer): "UZ0::m(float)"
+UZ0 m(integer) call_object_method: "UZ0::m(float)"
+UYI3 m(string): "Impl::m(string)"
+UYI3 m(string) call_object_method: "Impl::m(string)"
+UYI3 m(integer): RUNTIME-OVERLOAD-ERROR
+UYI3 m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+UYc m(string): "Xc::m(string)"
+UYc m(string) call_object_method: "Xc::m(string)"
+UYc m(integer): RUNTIME-OVERLOAD-ERROR
+UYc m(integer) call_object_method: RUNTIME-OVERLOAD-ERROR
+AIS::Y3 via(string): "Impl::m(string)"
+AIS::Y3 via(integer): "Impl::m(int)"
+AIS::Y3 via(bool): "Y3::m(bool)"
+AIS::Z3 via(string): "Impl::m(string)"
+AIS::Z3 via(integer): "Impl::m(int)"
+AIS::Z3 via(bool): "Y3::m(bool)"
+UY3 via(string): "Impl::m(string)"
+UY3 via(integer): "Impl::m(int)"
+UY3 via(bool): "UY3::m(bool)"
+UZ3 via(string): "Impl::m(string)"
+UZ3 via(integer): "Impl::m(int)"
+UZ3 via(bool): "Y3::m(bool)"
