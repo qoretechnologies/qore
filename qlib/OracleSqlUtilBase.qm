@@ -392,6 +392,8 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - @ref OracleSqlUtilBase::OracleDatabase::OracleDatabaseOptions "base_tables_only" limits table listings and
+      lookups to directly named base tables (<a href="https://github.com/qoretechnologies/qore/issues/1681">issue 1681</a>)
     - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" supports creating, describing, and aligning reverse-key
       indexes with the \c "reverse" method (<a href="https://github.com/qoretechnologies/qore/issues/1612">issue 1612</a>)
     - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" raises \c INDEX-OPTION-ERROR when a bitmap index is
@@ -2038,6 +2040,14 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             "force": "?",
         };
 
+        #! Oracle database constructor options
+        /** Set \c base_tables_only to @ref True "True" to omit synonyms from table listings and look up tables
+            by their own names. By default, a synonym of a table can be used in both operations.
+
+            @since OracleSqlUtilBase 1.7
+        */
+        const OracleDatabaseOptions = AbstractDatabase::DatabaseOptions + {"base_tables_only": Type::Boolean};
+
         #! oracle-specific generic creation options
         const OracleCreationOptions = AbstractDatabase::CreationOptions + (
             "compute_statistics": Type::Boolean,
@@ -2232,6 +2242,24 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
 
     #! creates the object from the arguments given
     constructor(AbstractDatasource nds, *hash opts) : AbstractDatabase(nds, opts) {
+        if (opts.driver) {
+            AbstractDatabase::checkDriverOptions(\self.opts, getDriverOptionKeys());
+        }
+    }
+
+    private hash<auto> getDatabaseOptions() {
+        return OracleDatabaseOptions;
+    }
+
+    #! Returns the named table, honoring the database's base_tables_only option
+    /** @copydetails SqlUtil::AbstractDatabase::getTable()
+    */
+    *AbstractTable getTable(string name) {
+        if (!opts.base_tables_only) {
+            return AbstractDatabase::getTable(name);
+        }
+        AbstractTable t = AbstractTable::getTable(ds, name, {"base_tables_only": True});
+        return t.checkExistence() ? t : NOTHING;
     }
 
     #! returns a name as an SQL identifier for Oracle
@@ -2581,6 +2609,10 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         list<string> l = getListIntern(ds.select("select table_name from user_tables t where "
             "nvl(t.dropped, 'NO') != 'YES' and not exists (select 1 from user_mviews m where m.mview_name = "
             "t.table_name) order by 1").table_name);
+
+        if (opts.base_tables_only) {
+            return l;
+        }
 
         # add all tables accessible with synonyms
         *list<string> tl = ds.select("select synonym_name from user_synonyms s, all_tables t where s.table_owner = "
@@ -3165,6 +3197,14 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "compute_statistics": Type::Boolean,
             "partition_scope": Type::String,
         };
+
+        #! Oracle table constructor options
+        /** With \c base_tables_only set to @ref True "True", only a base table with the given name can be
+            described. The default also allows a view, a materialized view, or a synonym to be described.
+
+            @since OracleSqlUtilBase 1.7
+        */
+        const OracleTableOptions = AbstractTable::TableOptions + {"base_tables_only": Type::Boolean};
 
         #! Oracle-specific constraint options
         /** this constant extends @ref OracleIndexOptions as returned by \c OracleSqlUtilBase::OracleTable::getConstraintOptions() with the following keys:
@@ -4150,6 +4190,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
     }
 
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
+        if (opts.driver) {
+            AbstractDatabase::checkDriverOptions(\self.opts, getDriverOptionKeys());
+        }
         # see if there is a dblink in the name
         *string dbl = (nname =~ x/@(.*)/)[0];
         if (dbl) {
@@ -4181,6 +4224,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         ora_major = oracle_get_server_major_version(nds);
 
         introspectSystemViews();
+    }
+
+    private hash<auto> getTableOptions() {
+        return OracleTableOptions;
     }
 
     private introspectSystemViews() {
@@ -4285,6 +4332,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         # a dropped table in the recycle bin (named "BIN$...") is in user_tables and dba_tables with dropped = 'YES'
         m_isDropped = (row.dropped == "YES");
+        if (opts.base_tables_only && (m_isMaterializedView || m_isDropped)) {
+            throw "TABLE-ERROR", sprintf("%s is not a base table", getMessageName());
+        }
 
         tablespace = row.tablespace_name;
         readonly = row.read_only == "YES";
@@ -4421,10 +4471,12 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         if (row)
             return row;
 
-        row = ds.selectRow("select * from " + systemView("dba_views") + (dblink ? "@" + dblink : "") + " where owner = %v and view_name = %v", schema.upr(), name.upr());
-        if (row) {
-            m_isView = True;
-            return row;
+        if (!opts.base_tables_only) {
+            row = ds.selectRow("select * from " + systemView("dba_views") + (dblink ? "@" + dblink : "") + " where owner = %v and view_name = %v", schema.upr(), name.upr());
+            if (row) {
+                m_isView = True;
+                return row;
+            }
         }
 
         throw "TABLE-ERROR", sprintf("table %s does not exist or is not accessible to this user (%s)",
@@ -4518,6 +4570,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         if (row) {
             schema = getUserSchema();
             return row;
+        }
+
+        if (opts.base_tables_only) {
+            throw "TABLE-ERROR", sprintf("base table %s does not exist or is not accessible to this user (%s)",
+                getMessageName(), getDBString());
         }
 
         row = ds.selectRow("select * from user_views where view_name = %v", name.upr());
