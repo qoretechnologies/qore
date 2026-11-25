@@ -49,8 +49,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               "create or replace" text is used when creating objects
             - \c method: (@ref string_type) the access method for the index (e.g. \c "btree", \c "hash",
               \c "gist", \c "gin", \c "brin", \c "ivfflat", \c "hnsw" on PostgreSQL; \c "btree" or \c "hash"
-              on MySQL; \c "bitmap" or an \c INDEXTYPE name on Oracle; \c "clustered", \c "nonclustered", or
-              \c "columnstore" on MSSQL); drivers that cannot express a given method will throw
+              on MySQL; \c "bitmap", \c "reverse", or an \c INDEXTYPE name on Oracle; \c "clustered",
+              \c "nonclustered", or \c "columnstore" on MSSQL); drivers that cannot express a given method will throw
               \c INDEX-OPTION-ERROR at alignment time
             - \c with: (@ref hash_type) method-specific storage options rendered as
               \c "WITH (k1 = v1, k2 = v2, ...)" on pgsql and mssql, or as a \c PARAMETERS('...') string on

@@ -392,6 +392,8 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" supports creating, describing, and aligning reverse-key
+      indexes with the \c "reverse" method (<a href="https://github.com/qoretechnologies/qore/issues/1612">issue 1612</a>)
     - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" raises \c INDEX-OPTION-ERROR when a bitmap index is
       declared unique (<a href="https://github.com/qoretechnologies/qore/issues/1611">issue 1611</a>)
     - a table of the user's own schema is named in messages, also in the \c TABLE-ERROR exceptions for a synonym or
@@ -974,13 +976,13 @@ class OraclePartitionScopeSupport inherits Qore::Serializable {
 public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSupport {
     public {
         #! the native type of the index (if supported); mirrors \c ALL_INDEXES.INDEX_TYPE (e.g.
-        #! \c "NORMAL", \c "BITMAP", \c "FUNCTION-BASED NORMAL", or a domain-index name)
+        #! \c "NORMAL", \c "NORMAL/REV", \c "BITMAP", \c "FUNCTION-BASED NORMAL", or a domain-index name)
         string native_type;
 
         #! the tablespace name of the index (if supported)
         *string tablespace;
 
-        #! the explicit access method requested via the generic \c method index option (e.g. \c "bitmap"
+        #! the explicit access method requested via the generic \c method index option (e.g. \c "bitmap", \c "reverse"
         #! or a domain-index \c INDEXTYPE name); a bitmap index must be nonunique
         *string method;
 
@@ -1004,24 +1006,40 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
         if (unique && (method.val() ? method : native_type).lwr() == "bitmap") {
             throw "INDEX-OPTION-ERROR", sprintf("Oracle bitmap index %y cannot be unique", name);
         }
+        if (n_with && (getDescriptionMethod() ?? "").lwr() == "reverse") {
+            throw "INDEX-OPTION-ERROR", sprintf("Oracle reverse-key index %y cannot have domain index parameters", name);
+        }
         with_options = n_with;
         validatePartitionScope(NOTHING, unique, columns.keys(), method, "INDEX-OPTION-ERROR", "index", name);
+    }
+
+    #! Returns the method to write in a table description or create statement
+    /** @since OracleSqlUtilBase 1.7
+    */
+    *string getDescriptionMethod() {
+        if (method.val()) {
+            return method;
+        }
+        switch (native_type.upr()) {
+            case "NORMAL/REV":
+            case "FUNCTION-BASED NORMAL/REV":
+                return "reverse";
+            case "BITMAP":
+                return "bitmap";
+        }
+        return NOTHING;
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
         string scope = validatePartitionScope(opt.partition_scope, unique, columns.keys(), method,
             "INDEX-OPTION-ERROR", "index", name);
-        # determine method: explicit overrides native_type for emission
-        *string m = method.val() ? method.lwr() : NOTHING;
-
-        # decide whether this is a bitmap prefix or an INDEXTYPE IS domain-index creation
+        string m = (getDescriptionMethod() ?? "").lwr();
         string prefix;
         *string indextype;
-        if (m == "bitmap" || (!m && native_type.lwr() == "bitmap")) {
+        if (m == "bitmap") {
             prefix = "bitmap ";
-        } else if (m.val() && m != "btree" && m != "normal") {
-            # anything other than bitmap/btree/normal is treated as a domain-index type name
+        } else if (m && !inlist(m, ("btree", "normal", "reverse"))) {
             indextype = m;
         }
 
@@ -1030,7 +1048,9 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
             unique ? "unique " : "", prefix ?? "", oracle_get_sql_identifier(name), table_name,
             (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
 
-        if (indextype.val()) {
+        if (m == "reverse") {
+            sql += " reverse";
+        } else if (indextype.val()) {
             sql += sprintf(" indextype is %s", indextype);
             if (with_options) {
                 list<string> parts = ();
@@ -1063,8 +1083,8 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
     bool equalImpl(AbstractIndex ix) {
         OracleIndex oix = cast<OracleIndex>(ix);
         # normalize method comparison: NOTHING / "normal" / "btree" are all the default B-tree
-        string m1 = (method.val() ? method.lwr() : native_type.lwr());
-        string m2 = (oix.method.val() ? oix.method.lwr() : oix.native_type.lwr());
+        string m1 = (getDescriptionMethod() ?? native_type).lwr();
+        string m2 = (oix.getDescriptionMethod() ?? oix.native_type).lwr();
         if (m1 == "btree") {
             m1 = "normal";
         }
@@ -5438,16 +5458,15 @@ group by p.index_name", schema.upr(), name.upr());
         @param iname the name of the index
         @param opt the index options
 
-        @throw INDEX-OPTION-ERROR the method is not bitmap, btree, normal or the name of a domain indextype, a domain
-        index parameter name is not a name, or its value is not a scalar value
+        @throw INDEX-OPTION-ERROR the method is not bitmap, btree, normal, reverse or the name of a domain indextype,
+        a domain index parameter name is not a name, or its value is not a scalar value
     */
     static checkIndexOptions(string iname, *hash<auto> opt) {
-        # the method (bitmap, btree, normal or the name of a domain indextype) and the parameter names are written
-        # into the DDL as they are (qore#6577)
+        # the method and the domain parameter names are written into the DDL as they are (qore#6577)
         if (exists opt.method && (opt.method.typeCode() != NT_STRING
                 || !regex(opt.method, "\\A[A-Za-z_][A-Za-z0-9_$#]*(?:\\.[A-Za-z_][A-Za-z0-9_$#]*)?\\z"))) {
-            throw "INDEX-OPTION-ERROR", sprintf("index %y: the index method %y is not bitmap, btree, normal or the "
-                "name of a domain indextype", iname, opt.method);
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the index method %y is not bitmap, btree, normal, reverse "
+                "or the name of a domain indextype", iname, opt.method);
         }
         foreach hash<auto> i in (opt.with.pairIterator()) {
             if (!regex(i.key, "\\A[A-Za-z_][A-Za-z0-9_]*\\z")) {
@@ -5567,10 +5586,9 @@ group by p.index_name", schema.upr(), name.upr());
         if (ix.compute_statistics) {
             rv.compute_statistics = True;
         }
-        if (ix.method) {
-            rv.method = ix.method;
-        } else if (ix.native_type.lwr() == "bitmap") {
-            rv.method = "bitmap";
+        *string method = ix.getDescriptionMethod();
+        if (method) {
+            rv.method = method;
         }
         if (ix.with_options) {
             rv.with = ix.with_options;
