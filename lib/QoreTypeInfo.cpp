@@ -2148,6 +2148,62 @@ void qore_type_owner_add_name(std::vector<QoreTypeOwner*>& names, const QoreType
     }
 }
 
+//! Returns the binary module declarations that a declaration of a Program names (qore#7533): its names that are
+//! module declarations, and what the module classes among them name in their own types; the caller holds ctl
+static std::vector<QoreTypeOwner*> type_owner_module_names(const std::vector<QoreTypeOwner*>& names,
+        qore_type_owner_module_names_cache_t* module_class_names) {
+    std::vector<QoreTypeOwner*> mod_names;
+    for (QoreTypeOwner* n : names) {
+        if (n->isTypeOwnerModule() && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
+            mod_names.push_back(n);
+        }
+    }
+    // a class's type is shared with its copies, so the declaration names a module's original class, whose member and
+    // signature types the code of its Program reads (qore#7533)
+    qore_type_owner_add_module_class_names(mod_names, module_class_names);
+    return mod_names;
+}
+
+//! Gives a declaration the references to the binary module declarations that it names (type_owner_module_refs);
+//! does not throw; the caller holds ctl
+static void type_owner_set_module_refs(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& mod_names) {
+    assert(o->type_owner_module_refs.empty());
+    for (QoreTypeOwner* n : mod_names) {
+        n->refTypeOwner();
+    }
+    o->type_owner_module_refs.swap(mod_names);
+    o->type_owner_module_refs_taken = true;
+}
+
+void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners) {
+    if (owners.empty() || type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(ctl);
+    qore_type_owner_module_names_cache_t module_class_names;
+    // every list is made before any reference is taken, so that a failed allocation takes none: the declarations then
+    // take them at their batch, as a declaration of a Program does
+    std::vector<std::pair<QoreTypeOwner*, std::vector<QoreTypeOwner*>>> refs;
+    try {
+        refs.reserve(owners.size());
+        std::vector<QoreTypeOwner*> names;
+        for (QoreTypeOwner* o : owners) {
+            if (o->type_owner_module_refs_taken) {
+                continue;
+            }
+            names.clear();
+            o->getTypeOwnerNames(names);
+            refs.emplace_back(o, type_owner_module_names(names, &module_class_names));
+        }
+    } catch (std::bad_alloc&) {
+        return;
+    }
+    // nothing is thrown from here on
+    for (auto& i : refs) {
+        type_owner_set_module_refs(i.first, i.second);
+    }
+}
+
 QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
     // after library cleanup, declarations are freed when their last reference is released
     if (type_owner_cleanup.load(std::memory_order_acquire)) {
@@ -2201,23 +2257,8 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             // the binary module declarations that it names are not decided with the declarations of Programs: they
             // are referenced until it is destroyed, as their module can be deleted before it; a hashdecl copy, which
             // references them itself, does not list them (qore#7533)
-            assert(o->type_owner_module_refs.empty());
-            std::vector<QoreTypeOwner*> mod_names;
-            for (QoreTypeOwner* n : names) {
-                if (n->isTypeOwnerModule()
-                        && std::find(mod_names.begin(), mod_names.end(), n) == mod_names.end()) {
-                    mod_names.push_back(n);
-                }
-            }
-            // a class's type is shared with its copies, so the declaration names a module's original class, whose
-            // member and signature types the code of its Program reads (qore#7533)
-            qore_type_owner_add_module_class_names(mod_names, &module_class_names);
-            // nothing is thrown from here on
-            for (QoreTypeOwner* n : mod_names) {
-                n->refTypeOwner();
-            }
-            o->type_owner_module_refs.swap(mod_names);
-            o->type_owner_module_refs_taken = true;
+            std::vector<QoreTypeOwner*> mod_names = type_owner_module_names(names, &module_class_names);
+            type_owner_set_module_refs(o, mod_names);
         }
     }
 }

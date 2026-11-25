@@ -183,7 +183,7 @@ public:
     //! Marks an original builtin hashdecl as owned by the Program to whose namespace it is added, with the instances of
     //! a generic hashdecl made before; returns true if it was marked now and adds the types of the hashdecls marked to
     //! \a marked_types (qore#7540)
-    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types);
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners);
 
     //! An original builtin hashdecl that is not one of the static system namespace (Qore::) or a tombstone (nor a
     //! concrete declaration of one): a binary module's (qore#7533)

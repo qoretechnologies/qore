@@ -8,6 +8,8 @@
 
 namespace {
 QoreNamespace* rtsurv_ns = nullptr;
+//! a class of the module's own namespace, which the class added at run time names in a signature (qore#7540)
+QoreClass* rtsurv_static = nullptr;
 std::atomic<int> live_data{0};
 
 class SurvData : public AbstractPrivateData {
@@ -35,6 +37,9 @@ QoreValue surv_get(QoreObject*, AbstractPrivateData*, const QoreListNode*, Runti
 QoreValue surv_f(const QoreListNode* args, RuntimeConfig&, ExceptionSink*) {
     return static_cast<int64>(num_args(args));
 }
+QoreValue surv_take(QoreObject*, AbstractPrivateData*, const QoreListNode* args, RuntimeConfig&, ExceptionSink*) {
+    return static_cast<int64>(num_args(args));
+}
 
 // adds the namespace to the calling Program
 QoreValue rtsurv_add(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xsink) {
@@ -46,6 +51,9 @@ QoreValue rtsurv_add(const QoreListNode* args, RuntimeConfig&, ExceptionSink* xs
     qc->addConstructor(surv_constructor, Public, QCF_NO_FLAGS, QDOM_DEFAULT);
     qc->setDestructor(surv_destructor);
     qc->addMethod("get", surv_get, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    // a method whose parameter names the class of the module's own namespace
+    qc->addMethod("take", surv_take, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+        rtsurv_static->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "s");
     qc->addBuiltinStaticVar("sv", new QoreStringNode("module"), Public, stringTypeInfo);
     ns->addSystemClass(qc);
     ns->addBuiltinVariant("rtsurv_f", surv_f, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
@@ -60,12 +68,14 @@ QoreValue rtsurv_live(const QoreListNode*, RuntimeConfig&, ExceptionSink*) {
 
 void init(QoreModuleInitContext&, ExceptionSink&) {
     rtsurv_ns = new QoreNamespace("RtSurv");
+    rtsurv_static = new QoreClass("RtSurvStatic", "::RtSurv::RtSurvStatic");
+    rtsurv_ns->addSystemClass(rtsurv_static);
     rtsurv_ns->addBuiltinVariant("rtsurv_add", rtsurv_add, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
         stringTypeInfo, QORE_PARAM_NO_ARG, "name");
     rtsurv_ns->addBuiltinVariant("rtsurv_live", rtsurv_live, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 0);
 }
 void ns_init(QoreNamespace*, QoreNamespace* qns, ExceptionSink&) { qns->addNamespace(rtsurv_ns->copy()); }
-void cleanup() { delete rtsurv_ns; rtsurv_ns = nullptr; }
+void cleanup() { delete rtsurv_ns; rtsurv_ns = nullptr; rtsurv_static = nullptr; }
 }
 
 extern "C" DLLEXPORT void rtsurv_qore_module_desc(QoreModuleInfo& info) {
