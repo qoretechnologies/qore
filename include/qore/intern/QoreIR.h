@@ -5686,9 +5686,9 @@ public:
         outside a loop and consumed inside it would be destroyed on the first
         iteration and read as NOTHING on every later one.  Slots marked here are
         excluded from that block-local kill and are released by the normal
-        end-of-function value cleanup instead. */
+        end-of-function value cleanup instead. A separate nonzero value identifies invoke results
+        that can move into a store in the unique normal continuation. */
     mutable std::vector<uint8_t> interpreter_cross_block_slots;
-    mutable std::unordered_set<uint32_t> interpreter_invoke_store_moves;
     //! Slots of native scalars (NativeInt or NativeFloat facts), which own their value in the interpreter.
     /** Native code keeps such values in registers, so the optimizer forwards them from one statement to the
         next and around loops; in the interpreter an integer outside the inline range or a double whose bits

@@ -4260,6 +4260,13 @@ static bool interpreterEffectSummaryStatsEnabled() {
     return enabled;
 }
 
+// Both nonzero values protect a cross-block slot during block-local cleanup. A store in the
+// sole normal continuation of an invoke can still move its result.
+enum : uint8_t {
+    CrossBlockSlot = 1,
+    MovableInvokeSlot = 2,
+};
+
 static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
     std::vector<uint32_t> value_use_counts;
     std::vector<uint8_t> dot_eval_only_bases;
@@ -4270,7 +4277,8 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     // the result is cached for every thread that runs the function: a cancellation pending in the thread that runs
     // it first must not change it
     std::vector<uint8_t> reused_call_args;
-    qore_ir_find_invoke_store_moves(func, func.interpreter_invoke_store_moves, nullptr);
+    std::unordered_set<uint32_t> invoke_store_moves;
+    qore_ir_find_invoke_store_moves(func, invoke_store_moves, nullptr);
     bool reuse_complete = qore_ir_find_reused_call_args(func, reused_call_args, nullptr);
     assert(reuse_complete);
     (void)reuse_complete;
@@ -4380,7 +4388,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
         }
         if (slot_multi_use_block[id] || slot_multi_def_block[id]
                 || slot_def_block[id] == no_block || slot_def_block[id] != slot_use_block[id]) {
-            cross_block_slots[id] = 1;
+            cross_block_slots[id] = invoke_store_moves.count(id) ? MovableInvokeSlot : CrossBlockSlot;
         }
     }
     int max_param_idx = -1;
@@ -13276,14 +13284,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Takes over the reference of the value of an operand that an lvalue operation stores (an assignment, += or a
     // push) when its slot owns it and this is its only use, in its defining block or in the single-entry normal
-    // continuation of the invoke that defined it (interpreter_invoke_store_moves), and it is
+    // continuation of the invoke that defined it (MovableInvokeSlot), and it is
     // not a borrowed weak-reference temporary, as compiled code does (see qore_rt_lv_path_assign_consume()); the
     // slot no longer holds the value afterwards.  Handing the value over keeps a dereference with no real reference
     // from happening once the value is linked into the graph, which would make a scan that its constructor deferred.
     auto consumeLValueOperand = [&](QoreIRValue operand, const QoreValue& val) -> bool {
         uint32_t id = operand.id;
         if (!val.hasNode() || id >= value_use_counts.size() || value_use_counts[id] != 1
-                || (id < cross_block_slots.size() && cross_block_slots[id] && !func.interpreter_invoke_store_moves.count(id))
+                || (id < cross_block_slots.size() && cross_block_slots[id] == CrossBlockSlot)
                 || (id < return_protected_slots.size() && return_protected_slots[id])
                 || weak_load_temp_slots.find(id) != weak_load_temp_slots.end()
                 || !removeAllCleanupEntries(cleanup, id)) {
