@@ -13865,7 +13865,12 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             // entry cleanup) is used, so that no other object can have the address of that receiver (qore#7631);
             // the entry cleanup of a local that handlers run out of line or an outlined body helper can assign is
             // released before their call and reloaded after it (see finalizeHandlerSites()), so the entry value
-            // can then be freed, and another object can be given its address
+            // can then be freed, and another object can be given its address.  The handler exclusion is a safeguard:
+            // only a local that is not a body local (a parameter) has an entry cleanup here, as AOT body locals have
+            // none, and such a local that a handler references is AST-visible (QoreIRFunction::ast_referenced_locals,
+            // see the OnBlockExit case of computeIROnlyLocals(); the IR-only handler locals, handler_ir_locals, are
+            // body locals), so the stable receiver analysis has excluded it already (isAstVisibleLocal()); the check
+            // keeps the hoist correct if that changes
             if (stable_it != stable_exact_receiver_loads.end()
                     && preinstantiated_entry_cleanup_by_local.count(stable_it->second)
                     && !(has_on_block_exit_handlers && releasesReloadStorageForHandlers(stable_it->second))
