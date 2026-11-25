@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+%modern
+%requires QUnit
+%requires DiscordDataProvider
+%exec-class DiscordMessageSendTest
+
+class DiscordMessageSendTest inherits QUnit::Test {
+    constructor() : Test("Discord outbound messages", "1.0") {
+        addTestCase("explicit and omitted mention policies", \mentions());
+        addTestCase("embed text budgets", \embeds());
+        addTestCase("destination rules", \destinations());
+        set_return_value(main());
+    }
+
+    private mentions() {
+        hash<auto> text = {"content": "<@123>"};
+        assertEq(text, DiscordMessageSend::prepare(text));
+        foreach hash<auto> policy in (({"parse": ()}, {"parse": ("everyone",)}, {"users": ("123",)},
+                {"parse": ("roles",), "users": ("123",), "replied_user": False})) {
+            hash<auto> message = text + {"allowed_mentions": policy};
+            assertEq(message, DiscordMessageSend::prepare(message));
+            assertEq(message + {"flags": DMT_SUPPRESS_NOTIFICATIONS},
+                DiscordMessageSend::prepare(message + {"suppress_notifications": True}));
+        }
+        assertEq(text + {"flags": DMT_SUPPRESS_NOTIFICATIONS}, DiscordMessageSend::prepare(
+            text + {"suppress_notifications": True}));
+        foreach hash<auto> bad in (({"parse": ("user",)}, {"parse": ("roles",), "roles": ("123",)},
+                {"users": ("x",)}, {"replied_user": "true"}, {"roles": ("18446744073709551616",)})) {
+            assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), text + {"allowed_mentions": bad});
+        }
+    }
+
+    private embeds() {
+        list<auto> valid = ({"description": strmul("a", 4096)}, {"description": strmul("b", 1904)});
+        assertEq(valid, DiscordMessageSend::prepare({"embeds": valid}).embeds);
+        valid[0].description = " " + valid[0].description + " ";
+        assertEq(valid, DiscordMessageSend::prepare({"embeds": valid}).embeds);
+        valid[1].description += "c";
+        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"embeds": valid});
+        foreach hash<auto> embed in (({"title": strmul("a", 257)}, {"description": strmul("a", 4097)},
+                {"author": {"name": strmul("a", 257)}}, {"footer": {"text": strmul("a", 2049)}},
+                {"fields": ({"name": strmul("a", 257), "value": "v"},)},
+                {"fields": ({"name": "n", "value": strmul("a", 1025)},)}, {"fields": ({"value": "v"},)},
+                {"color": 0x1000000}, {"author": {"name": "a", "url": "relative"}},
+                {"thumbnail": {}}, {"url": "https://example.org/invalid link"})) {
+            assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"embeds": (embed,)});
+        }
+        list<auto> many;
+        for (int i = 0; i < 26; ++i) {
+            many += ({"name": "n", "value": "v"},);
+        }
+        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"embeds": ({"fields": many},)});
+        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"embeds": many});
+    }
+
+    private destinations() {
+        hash<auto> stickers = {"sticker_ids": ("123",)};
+        assertEq(stickers, DiscordMessageSend::prepare(stickers));
+        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), (stickers, True));
+        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"content": strmul("a", 2001)});
+        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"allowed_mentions": {"parse": ()}});
+    }
+}
