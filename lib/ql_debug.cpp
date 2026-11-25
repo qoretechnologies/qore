@@ -8446,6 +8446,12 @@ public:
         have run, and must not get the attempt's number; then the operation must fail as closed, with neither a cancel
         nor its time limit, which cannot end it before.  The loop's removal of the registration must not fail, the
         socket must not take over the new descriptor, and nothing may close it.
+
+        The I/O thread is held before its command queue while the socket is closed (dbgHoldIoCommands()), so that it
+        runs no step of the operation before the close has woken the registration: Socket::close() shuts the
+        descriptor down before it closes it (qore_socket_private::prepareForClose()), and the shutdown is an event of
+        the attempt's descriptor, whose step could otherwise end the connection as closed and remove its registration
+        before the close, which then has no registration to wake (that order is the one of runConnectCloseInPreClose())
     */
     static void runConnectCloseRegistered(UnitTestCounters& c, bool direct) {
         const std::string when = direct ? " (registered, closed directly)" : " (registered)";
@@ -8564,6 +8570,20 @@ public:
         }
         UT_ASSERT_EQ(c, 0, (int)queue->size(),
             ("the connection is in progress when the socket is closed" + when).c_str());
+        // the I/O thread runs no step of the operation until the socket is closed: the shutdown that starts
+        // Socket::close() makes an event of the descriptor, whose step would otherwise race with the close
+        struct IoHold {
+            AsyncIoControllerPriv* ctrl;
+            ~IoHold() {
+                ctrl->dbgHoldIoCommands(false);
+            }
+        } io_hold{*ctrl};
+        ctrl->dbgHoldIoCommands(true);
+        bool held = ctrl->dbgWaitIoCommandsHeld(10000);
+        UT_ASSERT(c, held, ("the I/O thread is held while the socket is closed" + when).c_str());
+        if (!held) {
+            return;
+        }
         // another thread closes the socket while the I/O thread has the descriptor registered; another descriptor is
         // opened in the close, before the registration is woken
         reg_close_attempt_fd = attempt_fd;
@@ -8578,6 +8598,8 @@ public:
             sock->close();
         }
         qore_dbg_before_close_wakes.store(nullptr, std::memory_order_release);
+        // the operation runs for the close's wake
+        ctrl->dbgHoldIoCommands(false);
         int reuse_fd = reg_close_reuse_fd;
         if (reuse_fd >= 0) {
             fds.push_back(reuse_fd);
