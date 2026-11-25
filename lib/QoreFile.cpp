@@ -890,8 +890,10 @@ int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name,
     struct stat sbuf;
     std::string canon;
     if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, name, canon)) {
+        // the messages name the file in the form for the code that they are built for (see canonicalize() in
+        // QoreSandboxManager.cpp, qore#7507)
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file opened cannot be "
-            "identified by a path, so the security policy cannot be applied to it", name);
+            "identified by a path, so the security policy cannot be applied to it", qore_msg_path(name).c_str());
         return -1;
     }
     // the name was checked before it was opened
@@ -906,7 +908,7 @@ int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name,
         QoreString code(err_str ? err_str.c_str() : "FILESYSTEM-ACCESS-DENIED");
         xsink2.clear();
         xsink->raiseException(code.c_str(), "Access to '%s' denied: the file opened is not permitted by the security "
-            "policy", name);
+            "policy", qore_msg_path(name).c_str());
         return -1;
     }
     return 0;
@@ -1066,7 +1068,7 @@ int qore_qf_private::openPinned(QoreSandboxManager& sm, const char* fn, int ofla
         // the file became a link after it was checked
         if (xsink) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
-                "checked", fn);
+                "checked", qore_msg_path(fn).c_str());
         } else {
             errno = EACCES;
         }

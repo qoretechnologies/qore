@@ -309,6 +309,8 @@ sub run_t() {
             \aotShadowReflectionTest());
         addTestCase("the initialization of a library module loaded by restricted code gets no directories",
             \libraryInitTest());
+        addTestCase("the denials of a sandbox file-system policy give restricted code no directories",
+            \sandboxPolicyTest());
         set_return_value(main());
     }
 
@@ -762,6 +764,124 @@ try {
     }
 
     #! writes the modules of a check and returns their names
+    #! modules and files that a sandbox file-system policy denies, found by names that are resolved against the
+    #! script directory of the code, a module path directory and the directory of an including module (qore#7518):
+    #! the denials and the errors of the reads name the files without their directories for restricted code, and
+    #! with them for unrestricted code
+    sandboxPolicyTest() {
+        string sbx_dir = tmp.path + DirSep + "sbx secret dir 7518";
+        string allowed = sbx_dir + DirSep + "allowed";
+        string denied = sbx_dir + DirSep + "denied";
+        map mkdir($1), (sbx_dir, allowed, denied);
+        host_dirs += sbx_dir;
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        # a name of a source that is not a regular file: found by its name, which the policy allows, and not read
+        mkdir(allowed + DirSep + "incdir.q");
+        writeFileTo(denied + DirSep + "Secret.qc", "public namespace Secret7518 {}\n");
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            foreach bool restricted in ((True, False)) {
+                string sfx = (restricted ? "R" : "U") + m.key;
+                string label = sprintf("sandbox %s %s", restricted ? "restricted" : "unrestricted", m.key);
+                # a single-file module and a separated module that the policy denies
+                writeModuleTo(denied, "SbxRel" + sfx, sprintf(Header + "public namespace %s {}\n", "SbxRel" + sfx,
+                    "SbxRel" + sfx));
+                writeModuleTo(denied, "SbxSearch" + sfx, sprintf(Header + "public namespace %s {}\n",
+                    "SbxSearch" + sfx, "SbxSearch" + sfx));
+                string sep = denied + DirSep + "SbxSep" + sfx;
+                mkdir(sep);
+                writeModuleTo(sep, "SbxSep" + sfx, sprintf(Header, "SbxSep" + sfx));
+                # a separated module that the policy allows with a source file that links to a denied file
+                string link = allowed + DirSep + "SbxLink" + sfx;
+                mkdir(link);
+                writeModuleTo(link, "SbxLink" + sfx, sprintf(Header, "SbxLink" + sfx));
+                symlink(denied + DirSep + "Secret.qc", link + DirSep + "Code.qc");
+                # a module that the policy allows that includes a source found in its directory that is not read
+                writeModuleTo(allowed, "SbxInc" + sfx, sprintf(Header + "%%include incdir.q\n"
+                    "public namespace %s {}\n", "SbxInc" + sfx, "SbxInc" + sfx));
+
+                Program p = newProgram(restricted ? PO_NO_EXTERNAL_INFO : 0, m.value);
+                p.setScriptPath(sbx_dir + DirSep + "top-level.q");
+                p.setSandboxManager(sm);
+                # the module path directory is found as the code gives it: relative to its script directory
+                p.parse(sprintf("%%append-module-path \"denied\"
+our hash<auto> result;
+hash<auto> sub try_load(string path) {
+    try {
+        load_module(path);
+        return {};
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+result.rel = try_load(\"denied/SbxRel%s.qm\");
+result.missing = try_load(\"denied/SbxMissing%s.qm\");
+result.sep = try_load(\"denied/SbxSep%s\");
+result.link = try_load(\"allowed/SbxLink%s\");
+result.inc = try_load(\"allowed/SbxInc%s.qm\");
+result.search = try_load(\"SbxSearch%s\");
+", sfx, sfx, sfx, sfx, sfx, sfx), "top-level");
+                p.run();
+                hash<auto> result = p.getGlobalVariable("result");
+                hash<auto> parse_ex;
+                Program p2 = newProgram(restricted ? PO_NO_EXTERNAL_INFO : 0, m.value);
+                p2.setScriptPath(sbx_dir + DirSep + "top-level.q");
+                p2.setSandboxManager(sm);
+                try {
+                    p2.parse("%include allowed/incdir.q\n", "include");
+                    fail(label + ": no parse exception");
+                } catch (hash<ExceptionInfo> ex) {
+                    parse_ex = ex;
+                }
+                result.parse_inc = parse_ex;
+
+                # the files named, with the quote of the message that names them
+                hash<string, list<string>> files = {
+                    "rel": ("denied" + DirSep + "SbxRel" + sfx + ".qm", "'"),
+                    "missing": ("denied" + DirSep + "SbxMissing" + sfx + ".qm", "'"),
+                    "sep": ("denied" + DirSep + "SbxSep" + sfx, "'"),
+                    "link": ("allowed" + DirSep + "SbxLink" + sfx + DirSep + "Code.qc", "'"),
+                    # the file is found in the directory of the including module
+                    "inc": ("allowed" + DirSep + "incdir.q", "\""),
+                    # the file is found in the script directory of the Program
+                    "parse_inc": ("allowed" + DirSep + "incdir.q", "\""),
+                };
+                foreach hash<auto> i in (files.pairIterator()) {
+                    hash<auto> ex = result{i.key};
+                    assertEq(True, exists ex.err, sprintf("%s: %s raised", label, i.key));
+                    # the file is named by its file name for restricted code, and in full otherwise
+                    string full = sbx_dir + DirSep + i.value[0];
+                    string q = i.value[1];
+                    assertContains(q + (restricted ? basename(full) : full) + q, ex.desc, sprintf("%s: %s desc",
+                        label, i.key));
+                }
+                foreach string k in (("rel", "missing", "sep", "link")) {
+                    assertEq("FILESYSTEM-ACCESS-DENIED", result{k}.err, sprintf("%s: %s err", label, k));
+                }
+                # a module in a module path directory that the policy denies is not found there
+                assertEq("LOAD-MODULE-ERROR", result.search.err, label + ": search err");
+                assertEq("PARSE-EXCEPTION", result.inc.err, label + ": inc err");
+                assertEq("PARSE-EXCEPTION", result.parse_inc.err, label + ": parse_inc err");
+                if (restricted) {
+                    list<string> found = ();
+                    # the parse exception is caught by the host: its call stack is that of the host
+                    findHostPaths(result - "parse_inc" + {"parse_inc": result.parse_inc{"err", "desc", "arg",
+                        "file"}}, label, \found);
+                    assertEq((), found, label + ": no directories of the host");
+                }
+            }
+        }
+    }
+
+    #! writes a file
+    private static writeFileTo(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
     private hash<string, string> writeModules(string sfx) {
         hash<string, string> mods = {
             "bad": "MpBad" + sfx,
