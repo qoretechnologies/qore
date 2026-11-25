@@ -71,8 +71,10 @@ public class GmailListWithMetadataDataProvider inherits GmailApiDataProviderBase
     }
 
     private {
-        #! The response type; created on demand because it is built from the Discovery API document
-        static GmailListWithMetadataResponseDataType response_type;
+        #! The ID of the lazy value of the response type, which is built from the Discovery API document on first use
+        #! (qore#6843); see getResponseType()
+        static int response_type_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \GmailListWithMetadataDataProvider::buildResponseType());
 
         #! The type of each retrieved message
         AbstractDataProviderType message_type;
@@ -99,7 +101,16 @@ public class GmailListWithMetadataDataProvider inherits GmailApiDataProviderBase
         message
     */
     static AbstractDataProviderType getResponseType() {
-        return response_type ?? (response_type = new GmailListWithMetadataResponseDataType());
+        return DataProvider::DataProviderActionCatalog::getLazyValue(response_type_value_id);
+    }
+
+    #! Builds the response type from the module's vendored Discovery document only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the type that every Program shares
+        is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static AbstractDataProviderType buildResponseType() {
+        return new GmailListWithMetadataResponseDataType();
     }
 
     #! Makes a request and returns the response

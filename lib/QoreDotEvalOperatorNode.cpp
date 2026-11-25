@@ -334,6 +334,12 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 class_ctx = nullptr;
             }
             meth = qore_class_private::get(*const_cast<QoreClass*>(nqc))->parseFindAnyMethod(mname, class_ctx);
+            // a class that sandboxed code declared cannot call the private methods of a class that trusted code
+            // declared (qore#6843)
+            if (meth && strcmp(mname, "copy")
+                    && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false)) {
+                return -1;
+            }
             if (qore_class_private::parseNeedsReceiverDispatch(*nqc, meth)) {
                 return parseReceiverDispatch(parse_context, *nqc, *meth, typeInfo, readonly_receiver, err);
             }
@@ -478,6 +484,9 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     }
 
     if (qore_class_private::parseNeedsReceiverDispatch(*qc, meth)) {
+        if (!m->isPseudo() && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, parse_get_class_priv(), false)) {
+            return -1;
+        }
         return parseReceiverDispatch(parse_context, *qc, *meth, typeInfo, readonly_receiver, err);
     }
 
@@ -668,6 +677,11 @@ int QoreDotEvalOperatorNode::parseBindMethod(QoreParseContext& parse_context, co
         const QoreMethod* meth, bool readonly_receiver, QoreParseCallArgs* call_args, int err) {
     assert(meth);
     const char* mname = m->getName();
+    // a class that sandboxed code declared cannot call the private methods of a class that trusted code declared, on
+    // any object (qore#6843)
+    if (!m->isPseudo() && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, parse_get_class_priv(), false)) {
+        return -1;
+    }
 
     // a method that has concrete variants beside abstract variants that the class of the method does not implement
     // (issue #6161)

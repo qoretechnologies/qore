@@ -131,6 +131,16 @@ static bool quic_server_keep_alive_disabled_for_test() {
     const char* v = v_holder.c_str();
     return v && *v && strcmp(v, "0") != 0;
 }
+
+// Test-only switch: QORE_QUIC_TEST_DISABLE_PMTUD disables ngtcp2's path MTU discovery for the connections created
+// while it is set, whose probes are sent one after the other after the handshake, also once a connection has nothing
+// in flight; a test that stops a server once nothing is in flight (dbg_quic_wait_all_idle()) sets it, so that no probe
+// of either side follows (qore#7452)
+static bool quic_test_pmtud_disabled() {
+    QoreEnvironmentValue v_holder("QORE_QUIC_TEST_DISABLE_PMTUD");
+    const char* v = v_holder.c_str();
+    return v && *v && strcmp(v, "0") != 0;
+}
 #endif
 
 //! The number of ngtcp2 log lines a client connection keeps for the unanswered-request diagnostic
@@ -1552,8 +1562,8 @@ static std::string quic_ticket_cache_key(const char* host, uint16_t port, int ss
         key += "|f" + std::to_string(sock->ssl_ca_file.size()) + ":" + sock->ssl_ca_file
             + "|p" + std::to_string(sock->ssl_ca_path.size()) + ":" + sock->ssl_ca_path;
         // a session resumed under other trust anchors would skip their verification (qoretechnologies/qore#7248)
-        if (sock->ssl_trust_store) {
-            key += "|t" + sock->ssl_trust_store->getId();
+        if (sock->getEffectiveTrustStore()) {
+            key += "|t" + sock->getEffectiveTrustStore()->getId();
         }
     }
     // the client identity is part of the session
@@ -1586,10 +1596,10 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 
     // the trust configuration of the socket, as with a TLS connection over TCP (see SSLSocketHelper::setVerifyMode())
     bool accept_all = sock_ && sock_->ssl_accept_all_certs;
-    if (sock_ && sock_->ssl_trust_store) {
+    if (sock_ && sock_->getEffectiveTrustStore()) {
         // an in-memory trust store: the session's own SSL_CTX takes a reference on the shared, immutable store; no
         // file is read and the environment is not consulted (qoretechnologies/qore#7248)
-        SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+        SSL_CTX_set1_cert_store(ssl_ctx_, sock_->getEffectiveTrustStore()->getStore());
     } else if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
         // the configured CA certificates are trusted instead of the default CAs
         if (!SSL_CTX_load_verify_locations(ssl_ctx_,
@@ -1778,10 +1788,10 @@ int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* 
                     "(verify_mode=0x%x, accept_all_certs=true)\n", ssl_verify_mode);
             } else {
                 SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
-                if (sock_ && sock_->ssl_trust_store) {
+                if (sock_ && sock_->getEffectiveTrustStore()) {
                     // the in-memory trust store of the listener; the session's own SSL_CTX takes a reference on
                     // the shared, immutable store (qoretechnologies/qore#7248)
-                    SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+                    SSL_CTX_set1_cert_store(ssl_ctx_, sock_->getEffectiveTrustStore()->getStore());
                 } else {
                     // Load system default CA certificates for client cert validation; OpenSSL reads the
                     // SSL_CERT_FILE and SSL_CERT_DIR environment variables
@@ -1891,11 +1901,7 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     callbacks.encrypt = ngtcp2_crypto_encrypt_cb;
     callbacks.decrypt = ngtcp2_crypto_decrypt_cb;
     callbacks.hp_mask = ngtcp2_crypto_hp_mask_cb;
-#ifdef DEBUG
-    callbacks.recv_retry = recvRetryCallback;
-#else
     callbacks.recv_retry = ngtcp2_crypto_recv_retry_cb;
-#endif
     callbacks.recv_stateless_reset = recvStatelessResetCallback;
     callbacks.update_key = ngtcp2_crypto_update_key_cb;
     callbacks.delete_crypto_aead_ctx = ngtcp2_crypto_delete_crypto_aead_ctx_cb;
@@ -1949,6 +1955,9 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     settings.initial_ts = timestamp();
 #ifdef DEBUG
     settings.initial_ts += quic_test_clock_step_back_ns();
+    if (quic_test_pmtud_disabled()) {
+        settings.no_pmtud = 1;
+    }
 #endif
     if (quic_ngtcp2_log_enabled()) {
         settings.log_printf = quic_ngtcp2_log_printf;
@@ -2122,6 +2131,9 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     settings.initial_ts = timestamp();
 #ifdef DEBUG
     settings.initial_ts += quic_test_clock_step_back_ns();
+    if (quic_test_pmtud_disabled()) {
+        settings.no_pmtud = 1;
+    }
 #endif
     if (quic_ngtcp2_log_enabled()) {
         settings.log_printf = quic_ngtcp2_log_printf;
@@ -2473,9 +2485,6 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
         if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
             retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
             dropped_.store(true, std::memory_order_release);
-#ifdef DEBUG
-            qore_dbg_quic_server_initial_drops.fetch_add(1, std::memory_order_relaxed);
-#endif
             xsink->raiseException("QUIC-DROP-CONN", "the client Initial does not start the ClientHello "
                 "(%s); dropping the connection without CONNECTION_CLOSE so the client retransmits",
                 ngtcp2_strerror(rv));
@@ -2605,10 +2614,6 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
             if (is_server_ && (rv == NGTCP2_ERR_RETRY || rv == NGTCP2_ERR_DROP_CONN)) {
                 retry_requested_.store(rv == NGTCP2_ERR_RETRY, std::memory_order_release);
                 dropped_.store(true, std::memory_order_release);
-#ifdef DEBUG
-                // see readPacketLocked()
-                qore_dbg_quic_server_initial_drops.fetch_add(1, std::memory_order_relaxed);
-#endif
                 break;
             }
             // Log per-packet errors and continue (matching existing batch error handling)
@@ -2880,6 +2885,12 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
             // to avoid busy-looping on POLLOUT.
             if (stream_id < 0 && pending_datagrams_.empty()) {
                 pending_write_.store(false, std::memory_order_release);
+#ifdef DEBUG
+                // the session has nothing more to send (see dbg_quic_wait_all_idle())
+                if (qore_dbg_quic_idle_waiters.load(std::memory_order_acquire)) {
+                    qore_dbg_quic_notify_idle_waiters();
+                }
+#endif
             }
             break;
         }
@@ -4917,6 +4928,11 @@ void QuicSession::releaseStream(int64_t stream_id) {
     }
 }
 
+bool QuicSession::isBidiStreamOpen(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return open_bidi_streams_.count(stream_id) > 0;
+}
+
 uint64_t QuicSession::getBytesInFlight() const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_) {
@@ -5204,13 +5220,6 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
     }
     return CloseReason::Open;
 }
-
-#ifdef DEBUG
-int QuicSession::recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data) {
-    qore_dbg_quic_retries_received.fetch_add(1, std::memory_order_relaxed);
-    return ngtcp2_crypto_recv_retry_cb(conn, hd, user_data);
-}
-#endif
 
 int QuicSession::recvStatelessResetCallback(ngtcp2_conn* /* conn */, const ngtcp2_pkt_stateless_reset* /* sr */,
         void* user_data) {

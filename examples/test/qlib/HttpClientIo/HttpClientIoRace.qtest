@@ -13,7 +13,6 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires RestClientIo
-%requires ../../TestCertificates.qm
 
 %exec-class HttpClientIoRaceTest
 
@@ -25,7 +24,13 @@ class TestHandler inherits AbstractHttpRequestHandler {
 
 #! The race of HTTP/3 and HTTP/2 of automatic protocol selection ends early only on a success
 /** When one protocol fails, the race waits for the other one's own outcome.  The server here receives HTTP/3 only:
-    nothing accepts TCP connections on its port, so HTTP/2 fails at once.  The client's first QUIC
+    the test holds the TCP port of the same number with a socket that is bound and does not listen, so that the
+    connections of HTTP/2 are refused at once.  Ports are assigned per protocol, so another process (a test run in
+    parallel) can hold that TCP port first (qore#7461): the test does not retry; the server has a certificate of its
+    own, which the client of the case that reaches the server trusts alone, so that HTTP/2 fails also against another
+    server, at its TLS handshake, instead of reaching it, and the case whose client refuses every certificate, which
+    can tell a refusal over HTTP/3 from one over HTTP/2 only when HTTP/2 is refused at once, is skipped then.  The
+    client's first QUIC
     flight of datagrams is dropped (\c QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS, DEBUG builds only), so the HTTP/3
     handshake cannot complete before its retransmission timer fires, long after HTTP/2 has started and failed.
 */
@@ -33,12 +38,76 @@ public class HttpClientIoRaceTest inherits QUnit::Test {
     public {
         #! the client APIs tested
         const Apis = ("REST", "REST async", "HTTP", "HTTP async");
+
+        #! A certificate of the test's server that no other test uses: a server of another process cannot complete a
+        #! TLS handshake that the client verifies against it alone (qore#7461)
+        /** Self-signed (CA:TRUE), CN localhost, SAN DNS:localhost, IP 127.0.0.1 and ::1, valid from 2025 to 2125
+        */
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDOjCCAiKgAwIBAgIUatGJPG/+xMHJGu2gicX0OkUQMyUwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI1MDEwMTAwMDAwMFoYDzIxMjUw
+MTAxMDAwMDAwWjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQDI5hgn++FfmntEs+oNXrTF0pOQ3+WlMpxgVf4MgzLr
+QtxxzoWHSAQ12LP4svkqbyWcI9FRFFlvOdQjft2byZwm+6M6ZK2kh0IeOdvNZ6Q2
+B+FkiCNIBRGuZLVbzjyDPnnGEpaV/ZDBJoo6yV+Hgt19FMAS+Fi07ONndMEr679D
+HgTgE/8H9ZUvNqwicAHkxdQ2sr57LdZ2U3paCFLslcQdVMxTRswePxbI3nkpBymL
+rvFTDwobk6HBSzQPXgVRueiIuwpTLy23qdn30UpfZPyNpfbxCHrJnoYXL1kmHOKG
+CigYo8bjc/FjmRmIupFzehj1HAfNOyKYQ5NA3UaBf2ZLAgMBAAGjgYEwfzAdBgNV
+HQ4EFgQUEGZFTbJDfuoZGUMQUcCluzVGzQ4wHwYDVR0jBBgwFoAUEGZFTbJDfuoZ
+GUMQUcCluzVGzQ4wDwYDVR0TAQH/BAUwAwEB/zAsBgNVHREEJTAjgglsb2NhbGhv
+c3SHBH8AAAGHEAAAAAAAAAAAAAAAAAAAAAEwDQYJKoZIhvcNAQELBQADggEBACy+
+w0w7GnIS2mYbOvsILLQ4IGqOhd9JvEDh509Gdwbgdm4W4mvuVXdeXOAJM3jkdYJ+
+noEm87bsQnLsdSRr3osGxSjT2NZZN+cRXpILkM+KFCz2jMx2qNdf+nDOunzJehOb
+TOjXgWTgTbaiV9dXS8F08qdBWONk5+/PB3L8xDji7eTCey1RfVPuzpXzrQfBxpnB
+XqhHpsSrIGQouXGZzOX+N39F0CNwstyTuRkjSbbhgpCgCRvTpHMgxBzzVeKUy+ow
+K1AGkHu4zMGUOBo4PvfG2EroRMSH1Thx3l061oNXWmaRyioNQebltIBHxBwyo0F9
+9QsATdOZaWvHz1kbdfk=
+-----END CERTIFICATE-----
+";
+
+        #! the private key of @ref CertPem
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDI5hgn++FfmntE
+s+oNXrTF0pOQ3+WlMpxgVf4MgzLrQtxxzoWHSAQ12LP4svkqbyWcI9FRFFlvOdQj
+ft2byZwm+6M6ZK2kh0IeOdvNZ6Q2B+FkiCNIBRGuZLVbzjyDPnnGEpaV/ZDBJoo6
+yV+Hgt19FMAS+Fi07ONndMEr679DHgTgE/8H9ZUvNqwicAHkxdQ2sr57LdZ2U3pa
+CFLslcQdVMxTRswePxbI3nkpBymLrvFTDwobk6HBSzQPXgVRueiIuwpTLy23qdn3
+0UpfZPyNpfbxCHrJnoYXL1kmHOKGCigYo8bjc/FjmRmIupFzehj1HAfNOyKYQ5NA
+3UaBf2ZLAgMBAAECggEAM4kzMS6gRhIvBRTSOdPNs+GtEUEefB5blyr4HOWbLlbc
+jiVYg7epvNZ2dJoU6RnSIBfgHliGCM5g6SomV0yEzktHODeTg91ezLoy9KJdsa6b
+11pFEriaLI6RJ5fkVha0zmb+UkPV2na0hxgZdX3Qq8Gi9DrZJrCONX/x/f5f9itM
+3odcsdBH1r4rOWhOW2fZKSFnkx3pyMorzHCfdXx/eOBQ5i0/9zLghAEfRv5bW2r4
+wOPdPgaraBAs7ZDvZ/qi9Fe120TIUl5BtdvAagnzw//rKN02RNStyLnGjvnjHuIf
+e/L13IJxJImZqn6HWgXTZTDNXCGGnk72JlYTBxD0AQKBgQDmf+i00fz0aYtavsGJ
+kduTcCRLTshFy8S3RQebkFSQxmPR35S9z2k3wVVK9ZC/R8LoiyQ4ogOBBWcKs9zx
+9Unyx/RuaGhOqYzsLiG5N7Wwtsk6VCckKcJ5uaWWDVyJAu+DcxemrtLBH2zO+5f3
+WA2Gdm9Pm9aMUOQgkQMdkCX5ywKBgQDfH9iGzBjDQu2eJBmNKLuG/Rd777V2vSKz
+Y4IG/z9b0rYdAp2uARKKcazSttFwJX42ho15MGmsLHUMdcnY0FDaDhbqFCeZ0I5H
+caZ0/OQEDxYBAGZQzpe6yXmxa/IzvKTeyHjKRW+VY/yQ5k2DvsOHTXUSJCG6Znkl
+AiL8dkC1gQKBgQCePbHEcWT3Zn4FDnBPwZK85YAFM1DKmdmy9/EBG1TzDz/4FUZI
+CNxzKocjrvJwXxOwEdYMCy3cpZjYACLu+TaLNjrYkVUKq9vTSNheD6DscJA1OxCk
+AwdACfNj0Eh2x00nMRxLkjmd27UXZCIv7INcjHJedN4V9nKm6Ob6pLttgQKBgHc8
+3orS4VzgFHoRkrIUFXtDH9y0soYc90FkqSUyHNrmVTpVnoxRuGXR7+i/mFdVQgjD
+iTE9hQtkyrx46gB6+uo841P+p1cU1CQsASe9yeC9ayXn38XJUd6ZMvZ02H97jaQd
+ACggSUxNnbiVytDgDj/tTeX+9yNVBeKYLLg8PcKBAoGAXbLhZLbuT8q1EFK8fp3Y
+fqNvTNBclq6EN+npy+QUTkzhMvKv+Xacun17wY7+sT6HGKzAYCpuufJQ+XElq+Wf
+DE+3vHto2RU7a7v4xg9L0cYgrFgwfg0M23JPY1VE+QFXV43dF5B9tbOwCqJ7rQ7R
+sBTZN88mncTiHl8qqrUpfUQ=
+-----END PRIVATE KEY-----
+";
     }
 
     private {
         HttpServer server;
+        #! the server's certificate, which only this test uses (see the class description)
+        SSLCertificate cert(CertPem);
         #! a QUIC listener; nothing listens on its port for TCP
         int quic_port;
+        #! holds the TCP port of the QUIC listener's number: bound without listening, so that connections to it are
+        #! refused, and without SO_REUSEADDR, so that no other socket can be bound to it meanwhile (qore#7461)
+        Socket tcp_hold();
+        #! why the TCP port could not be held, if it could not (another process has it)
+        *string tcp_hold_error;
     }
 
     constructor() : Test("HttpClientIoRaceTest", "1.0") {
@@ -55,19 +124,26 @@ public class HttpClientIoRaceTest inherits QUnit::Test {
         server.waitForAsyncIo();
         quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
-            "cert": new SSLCertificate(TestCertificates::CertPem),
-            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "cert": cert,
+            "key": new SSLPrivateKey(KeyPem),
         }).port;
         server.waitForAsyncIo();
+        if (tcp_hold.bind(sprintf("127.0.0.1:%d", quic_port))) {
+            tcp_hold_error = sprintf("TCP port %d is held by another process: %s", quic_port, strerror());
+        }
     }
 
     globalTearDown() {
+        tcp_hold.close();
         if (server) {
             server.stop();
         }
     }
 
     #! HTTP/2 fails before the HTTP/3 handshake completes; the race waits for HTTP/3, which connects
+    /** The client trusts the server's certificate alone, so that HTTP/2 cannot reach a server of another process on
+        a TCP port of the same number (qore#7461)
+    */
     http3OnlyTest() {
         if (!dropFirstDatagram()) {
             return;
@@ -75,7 +151,9 @@ public class HttpClientIoRaceTest inherits QUnit::Test {
         on_exit unsetenv("QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS");
         string url = sprintf("https://127.0.0.1:%d", quic_port);
         foreach string api in (Apis) {
-            HttpClientIo::HttpClientConnectionManager mgr = getManager({"accept_all_certs": True});
+            HttpClientIo::HttpClientConnectionManager mgr = getManager({
+                "ssl_trust_store": new SSLTrustStore((cert,)),
+            });
             on_exit mgr.closeAll();
             hash<auto> resp = get(mgr, url, api);
             assertEq("reached", resp.body, api);
@@ -84,7 +162,14 @@ public class HttpClientIoRaceTest inherits QUnit::Test {
     }
 
     #! HTTP/2 fails before HTTP/3 refuses the certificate; the race waits for HTTP/3 and reports the refusal
+    /** A refusal of the certificate of another server over HTTP/2 would be reported first, so the case needs the TCP
+        port that the test holds (qore#7461)
+    */
     certificateRefusalTest() {
+        if (tcp_hold_error) {
+            testSkip(tcp_hold_error);
+            return;
+        }
         if (!dropFirstDatagram()) {
             return;
         }

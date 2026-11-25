@@ -259,6 +259,19 @@ public class KeapDataProviderTest inherits QUnit::Test {
         assertEq(True, found_create_contact, "create-contact action registered");
         assertEq(True, found_list_contacts, "list-contacts action registered");
         assertEq(True, found_contact_added_event, "contact-added event registered");
+
+        # get-file only reads the file (GET): it declares that it is read-only, which the catalogue reports as
+        # such; the file actions that write do not (qore#7454)
+        hash<DataProviderActionInfo> get_file = (select DataProviderActionCatalog::getActionsEx("Keap"),
+            $1.action == "get-file")[0];
+        assertEq(NT_BOOLEAN, get_file.mutates_state.typeCode());
+        assertFalse(get_file.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(get_file));
+        foreach string name in ("upload-file", "delete-file") {
+            hash<DataProviderActionInfo> action = (select DataProviderActionCatalog::getActionsEx("Keap"),
+                $1.action == name)[0];
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     #! Child provider tests

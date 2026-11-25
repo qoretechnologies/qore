@@ -157,6 +157,7 @@ public class McpServerHandlerTest inherits QUnit::Test {
     }
 
     constructor() : Test("McpServerHandlerTest", "1.0") {
+        addTestCase("default constructor registers the handler methods", \defaultConstructor());
         addTestCase("main test", \mainTest());
         addTestCase("resources test", \resourcesTest());
         addTestCase("prompts test", \promptsTest());
@@ -183,6 +184,14 @@ public class McpServerHandlerTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    defaultConstructor() {
+        McpServerHandler handler();
+        assertTrue(handler.hasMethod("help"));
+        assertTrue(handler.hasMethod("initialize"));
+        assertTrue(handler.hasMethod("tools/list"));
+        assertEq(McpServerName, handler.getServerInfo().name);
     }
 
     globalSetUp() {

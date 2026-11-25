@@ -35,8 +35,90 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_DelegatingPollOperation.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/SendRateWindow.h"
+#include "qore/intern/SocketPollEventsOps.h"
+
+#include <atomic>
+#include <limits>
+#include <mutex>
 
 /** @cond INTERNAL */
+// Kept only by a delegate configured to bound an HTTP/1 response send.
+class HttpResponseSendBound {
+public:
+    HttpResponseSendBound(int64 stall_ms, int64 min_rate, int64 window_ms)
+        : stall_ms(stall_ms), rate(makeRateWindow(min_rate, window_ms)) {
+    }
+
+    // Called only while the inner operation is pending. A fused operation no longer measures the response once
+    // it starts waiting for the next request. Time spent waiting for the body source is excluded from the rate.
+    bool check(SocketPollOperationBase& op, QoreHashNode& next, ExceptionSink* xsink) {
+        std::lock_guard<std::mutex> lock(mutex);
+        bool waiting = true;
+        int64 delivered;
+        if (auto* send = dynamic_cast<SocketSendPollOperation*>(&op)) {
+            delivered = qore_socket_poll_events_ops::getDeliveredBytes(*send);
+        } else if (auto* fused = dynamic_cast<SocketSendAndReadHeaderPollOperation*>(&op)) {
+            delivered = fused->getResponseSendProgress(waiting);
+        } else {
+            delivered = static_cast<SocketSendStreamAndReadHeaderPollOperation&>(op).getResponseSendProgress(waiting);
+        }
+        if (delivered < 0) {
+            if (last_progress >= 0) {
+                renew = true;
+                last_progress = -1;
+                rate = makeRateWindow(rate.getMinRate(), rate.getWindowMs());
+            }
+            return true;
+        }
+        int64 now = q_get_monotonic_us() / 1000;
+        if (last_progress < 0 || delivered > last_progress) {
+            renew = true;
+            last_progress = delivered;
+            since_ms = now;
+        }
+        int64 remaining = stall_ms - (now - since_ms);
+        if (remaining <= 0) {
+            xsink->raiseException("SOCKET-TIMEOUT", "HTTP response send made no progress for %lld ms",
+                static_cast<long long>(stall_ms));
+            return false;
+        }
+        if (rate.update(delivered, waiting, now)) {
+            xsink->raiseException("SOCKET-TIMEOUT", "the client took less than the minimum response rate of %lld bytes/s",
+                static_cast<long long>(rate.getMinRate()));
+            return false;
+        }
+        // TCP acknowledgements can advance while the socket is still not writable.
+        int64 wake = std::min(remaining, std::max<int64>(1, stall_ms / 2));
+        if (rate.enabled()) {
+            wake = std::min<int64>(wake, rate.getCheckIntervalMs());
+        }
+        // The controller converts this interval to microseconds for its poll deadline.
+        next.setKeyValue("poll_timeout_ms", std::min<int64>(wake, std::numeric_limits<int>::max()), xsink);
+        return !*xsink;
+    }
+
+    bool takeRenewal() {
+        return renew.exchange(false, std::memory_order_relaxed);
+    }
+
+private:
+    static SendRateWindow makeRateWindow(int64 min_rate, int64 window_ms) {
+        SendRateWindow window(min_rate, window_ms);
+        window.enableProgressSteps();
+        window.setMaxWaitCharge(2 * window.getCheckIntervalMs());
+        return window;
+    }
+
+    std::mutex mutex;
+    std::atomic<bool> renew{false};
+    const int64 stall_ms;
+    int64 last_progress = -1;
+    int64 since_ms = 0;
+    SendRateWindow rate;
+};
+
 class DelegatingPollOperationPriv : public SocketPollOperationBase {
 public:
     QoreObject* inner_obj;
@@ -53,6 +135,7 @@ public:
     /** Its state is then read with getStateImpl(), without a Qore method call; see getStateImpl()
     */
     bool inner_native_state;
+    std::unique_ptr<HttpResponseSendBound> send_bound;
 
     DLLLOCAL DelegatingPollOperationPriv(QoreObject* self, QoreObject* inner_obj,
             SocketPollOperationBase* inner_base, ResolvedCallReferenceNode* on_complete_code,
@@ -187,12 +270,18 @@ public:
 
     // the controller asks the operation that it was given: the renewal of the timeout is the inner operation's
     DLLLOCAL bool renewsTimeout() override {
-        return inner_base && inner_base->renewsTimeout();
+        bool inner_renew = inner_base && inner_base->renewsTimeout();
+        return (send_bound && send_bound->takeRenewal()) || inner_renew;
     }
 
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (inner_base) {
-            return inner_base->continuePoll(xsink);
+            QoreHashNode* next = inner_base->continuePoll(xsink);
+            if (next && send_bound && !*xsink && !send_bound->check(*inner_base, *next, xsink)) {
+                next->deref(xsink);
+                return nullptr;
+            }
+            return next;
         }
         // inner op is Qore — only called from a worker thread (needsWorkerDispatch() == true)
         ValueHolder rv(inner_obj->evalMethod("continuePoll", nullptr, xsink), xsink);
@@ -276,33 +365,9 @@ bool qore_delegating_poll_op_scan_members(AbstractPrivateData* priv_data, RObjec
     }
     return (*priv)->scanMembers(obj, rsh);
 }
-/** @endcond */
-
-//! C++ delegating poll operation that wraps any AbstractPollOperation
-/** This class delegates all poll methods to an inner operation and provides
-    completion handling via onComplete(). Unlike the Qore CompletionPollProxy,
-    this class preserves the C++ fast path (spop_base) for continuePoll(),
-    which is critical for performance-sensitive operations like HTTP/2.
-
-    Use this for C++ operations we don't control (SSL upgrade, send/recv, connect)
-    that need completion handling.
-
-    @since %Qore 3.0
-*/
-qclass DelegatingPollOperation [
-    ns=Qore;
-    arg=DelegatingPollOperationPriv* poll;
-    vparent=SocketPollOperationBase<auto>
-];
-
-//! Creates a delegating poll operation wrapping an inner operation
-/** @param operation the inner poll operation to delegate to
-    @param on_complete optional code reference called when the operation completes;
-        signature: \c code<nothing(hash<SocketPollResultInfo>)>
-    @param done_counter optional Counter to decrement when the operation completes
-*/
-DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code on_complete, *Counter done_counter)
-        [flags=NAMED_ARGS] {
+static void init_delegating_poll_operation(QoreObject* self, const QoreObject* operation,
+        const ResolvedCallReferenceNode* on_complete, const QoreObject* done_counter, ExceptionSink* xsink,
+        int64 response_stall_timeout = -1, int64 response_min_rate = 0, int64 response_rate_window = 0) {
     // the completion code, the methods of the operation and those of the counter run on a worker of the controller;
     // checked before any reference is taken (qore#7056)
     if (qore_check_thread_callable(on_complete, QDOM_THREAD_CONTROL, "DelegatingPollOperation::constructor()", xsink)
@@ -325,6 +390,17 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
         }
     }
 
+    if (response_stall_timeout > 0 && (response_min_rate < 0
+            || response_rate_window <= 0 || (!dynamic_cast<SocketSendPollOperation*>(inner_base)
+                && !dynamic_cast<SocketSendAndReadHeaderPollOperation*>(inner_base)
+                && !dynamic_cast<SocketSendStreamAndReadHeaderPollOperation*>(inner_base)))) {
+        if (inner_base) {
+            inner_base->deref(xsink);
+        }
+        xsink->raiseException("POLL-OPERATION-ERROR", "response send bounds require a native response send "
+            "operation, a positive stall timeout and rate window, and a non-negative minimum rate");
+        return;
+    }
     ResolvedCallReferenceNode* on_complete_ref = nullptr;
     if (on_complete) {
         on_complete_ref = const_cast<ResolvedCallReferenceNode*>(on_complete);
@@ -354,10 +430,14 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
     const QoreMethod* get_state_meth = inner_cls->findMethod("getState");
     bool inner_native_state = inner_base && (!get_state_meth || get_state_meth->isBuiltin());
 
-    self->setPrivate(CID_DELEGATINGPOLLOPERATION,
-        new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj,
+    auto* delegate = new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj,
             qore_delegating_poll_op_has_override(inner_cls, "abort"),
-            qore_delegating_poll_op_has_override(inner_cls, "getOutput"), inner_native_state));
+            qore_delegating_poll_op_has_override(inner_cls, "getOutput"), inner_native_state);
+    if (response_stall_timeout > 0) {
+        delegate->send_bound = std::make_unique<HttpResponseSendBound>(response_stall_timeout, response_min_rate,
+            response_rate_window);
+    }
+    self->setPrivate(CID_DELEGATINGPOLLOPERATION, delegate);
 
     // DGC custom scanner gate — the priv holds ref'd inner_obj /
     // counter_obj / on_complete_code in raw C++ pointers that the
@@ -377,6 +457,55 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
     if (counter_obj) {
         counter_obj->deref(xsink);
     }
+}
+/** @endcond */
+
+//! C++ delegating poll operation that wraps any AbstractPollOperation
+/** This class delegates all poll methods to an inner operation and provides
+    completion handling via onComplete(). Unlike the Qore CompletionPollProxy,
+    this class preserves the C++ fast path (spop_base) for continuePoll(),
+    which is critical for performance-sensitive operations like HTTP/2.
+
+    Use this for C++ operations we don't control (SSL upgrade, send/recv, connect)
+    that need completion handling.
+
+    @since %Qore 3.0
+*/
+qclass DelegatingPollOperation [
+    ns=Qore;
+    arg=DelegatingPollOperationPriv* poll;
+    vparent=SocketPollOperationBase<auto>
+];
+
+//! Creates a delegating poll operation wrapping an inner operation
+/** @param operation the inner poll operation to delegate to
+    @param on_complete optional code reference called when the operation completes;
+        signature: \c code<nothing(hash<SocketPollResultInfo>)>
+    @param done_counter optional Counter to decrement when the operation completes
+*/
+DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code on_complete, *Counter done_counter)
+        [flags=NAMED_ARGS] {
+    init_delegating_poll_operation(self, operation, on_complete, done_counter, xsink);
+}
+
+//! Wraps an HTTP/1 response send with a progress timeout and optional minimum rate
+/** @param operation the inner poll operation to delegate to
+    @param on_complete optional code reference called when the operation completes;
+        signature: \c code<nothing(hash<SocketPollResultInfo>)>
+    @param done_counter optional Counter to decrement when the operation completes
+    @param response_stall_timeout positive time without delivery allowed while sending the response
+    @param response_min_rate minimum response bytes per second while waiting for the peer, or zero to disable
+    @param response_rate_window measurement interval for the minimum rate
+*/
+DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code on_complete, *Counter done_counter,
+        timeout response_stall_timeout, int response_min_rate, timeout response_rate_window)
+        [flags=NAMED_ARGS] {
+    if (response_stall_timeout <= 0) {
+        xsink->raiseException("POLL-OPERATION-ERROR", "the response stall timeout must be positive");
+        return;
+    }
+    init_delegating_poll_operation(self, operation, on_complete, done_counter, xsink, response_stall_timeout,
+        response_min_rate, response_rate_window);
 }
 
 //! Destroys the object

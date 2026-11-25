@@ -58,6 +58,15 @@ module JotformDataProvider {
                 "**Note:** Webhook-based triggers only fire for submissions made through the JotForm UI, "
                 "not for API-created submissions.",
             "scheme": "jotform",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "jotform.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://www.jotform.com/help/406-daily-api-call-limits/",
+                "effective_date": 2026-11-25,
+            },
             "logo": JotformLogo,
             "logo_file_name": "jotform-logo.svg",
             "logo_mime_type": MimeTypeSvg,

@@ -34,14 +34,19 @@ class G9 inherits Pi, ATC::G3 {
 # overloads of a function called with the call: the type of the call before it is bound is that of the variants that
 # all the classes of the hierarchy with a method of the name select, so that the overload selected when parsing is the
 # one that the bound call needs (a parent class that gets a method of its own, and a parent class whose parent classes
-# have more than one method of the name)
+# have more than one method of the name); the variants of a call that the parent classes have return the type of the
+# variant that calls of the class select first or a wider one (qore#7425): Qb's and W3's *string are wider than the
+# string of the method that Pq gets and of Tm's, so the type of each call is known only once it is bound (see
+# program-api.q for its type), and the value shows the variant that the bound call selects
 class Pq inherits ATC::C5, ATC::G3 {}
-class Qb { int m(bool b) { return 7; } }
+class Qb { *string m(bool b) { return "Qb::m(bool)"; } }
 class Cq inherits Pq, Qb {}
 class Sm { string m(int i) { return "Sm::m(int)"; } }
-class Tm { int m(bool b) { return 7; } }
+class Tm { string m(bool b) { return "Tm::m(bool)"; } }
 class Rm inherits Sm, Tm {}
-class G10 inherits Rm, ATC::G3 {}
+class W0 { abstract *string m(bool b); abstract string m(int i); }
+class W3 inherits W0 { *string m(bool b) { return "W3::m(bool)"; } }
+class G10 inherits Rm, W3 {}
 string sub fo(int i) { return "fo(int)"; }
 string sub fo(string s) { return "fo(string)"; }
 # a variant declared private:internal in its class, which the method that a subclass gets for an abstract variant has:
@@ -136,10 +141,16 @@ t("private:internal parent untyped", auto sub () { return u9.m(True) + "; " + u9
 t("private:internal parent own code", auto sub () { return g9.own(True); });
 Cq cq();
 auto ucq = cq;
-t("overload, pending parent", auto sub () { return fo(cq.m(True)) + "; " + fo(ucq.m(True)); });
+t("overload, pending parent", auto sub () { return fo(cq.m(True)) + "; " + fo(ucq.m(True)) + "; " + cq.m(True); });
 G10 g10();
 auto ug10 = g10;
-t("overload, parent with methods in its hierarchy", auto sub () { return fo(g10.m(True)) + "; " + fo(ug10.m(True)); });
+t("overload, parent with methods in its hierarchy", auto sub () {
+    return fo(g10.m(True)) + "; " + fo(ug10.m(True)) + "; " + g10.m(True);
+});
+# the type of these calls is not known when parsing (see the comment of Cq): an assignment of them is checked when the
+# call runs (a type known when parsing would raise PARSE-TYPE-ERROR, and the probe would not run)
+t("type unknown when parsing, pending parent", auto sub () { int i = cq.m(True); return i; });
+t("type unknown when parsing, parent with methods in its hierarchy", auto sub () { int i = g10.m(True); return i; });
 t("private:internal variant", auto sub () { Cp cp(); return cp.own() + "; " + cp.dyn(); });
 t("private:internal variant, overload", auto sub () { return (new Cq2()).own(); });
 t("other order", auto sub () { return g6r.m(True) + "; " + g6r.m(1) + "; " + g6r.own(True); });

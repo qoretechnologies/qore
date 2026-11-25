@@ -1,0 +1,360 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The default maximum request body size (DefaultMaxRequestBodySize, 256 MiB) of a server that sets no
+    max_request_body_size:
+    - a body that the server reads into memory (HTTP/1.1 with a Content-Length or chunked, read with
+      getMessageBody(), and HTTP/2) at the limit is accepted, and a larger one is answered with 413 (and an HTTP/1.1
+      connection is closed)
+    - a body that a stream handler reads as a stream (HTTP/1.1 with a Content-Length or chunked, and HTTP/2) is not
+      limited by the default
+    - an explicit max_request_body_size of 0 still means no limit, and an explicit smaller limit still applies
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerDefaultBodyLimitTest
+
+#! returns the size of the body that the server read into memory
+class SizeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, sprintf("buffered %d bytes", body.size()), {"Content-Type": MimeTypeText});
+    }
+}
+
+#! counts the bytes of a body read as a stream
+class CountingRequest inherits AbstractStreamRequest {
+    private {
+        int total = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.data) {
+            total += v.data.size();
+        }
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {"code": 200, "body": sprintf("streamed %d bytes", total)};
+    }
+}
+
+#! a stream handler that reads every request body as a stream
+class StreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new CountingRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+class HttpServerDefaultBodyLimitTest inherits QUnit::Test {
+    private {
+        const Limit = DefaultMaxRequestBodySize;
+
+        #! the size of the data written to the socket at once
+        const PieceSize = 1024 * 1024;
+
+        #! a body larger than the default limit
+        const OverSize = Limit + PieceSize;
+
+        #! the limit of the server that sets a small one
+        const SmallLimit = 1024;
+
+        const Timeout = 60s;
+
+        const CertPem = TestCertificates::CertPem;
+        const KeyPem = TestCertificates::KeyPem;
+
+        Logger logger;
+
+        #! the server without a limit set
+        HttpServer default_server;
+        int default_port;
+        string default_tls_url;
+
+        #! the server with an explicit limit of 0
+        HttpServer unlimited_server;
+        int unlimited_port;
+
+        #! the server with an explicit small limit
+        HttpServer small_server;
+        int small_port;
+
+        #! the data written to the socket at once
+        binary piece = binary(strmul("x", PieceSize));
+
+        bool http2;
+    }
+
+    constructor() : Test("HttpServerDefaultBodyLimitTest", "1.0") {
+        addTestCase("default limit values", \defaultValuesTest());
+        addTestCase("HTTP/1.1 Content-Length over the default limit", \http1ContentLengthOverTest());
+        addTestCase("HTTP/1.1 chunked over the default limit", \http1ChunkedOverTest());
+        addTestCase("HTTP/1.1 Content-Length at the default limit", \http1ContentLengthAtLimitTest());
+        addTestCase("HTTP/1.1 chunked at the default limit", \http1ChunkedAtLimitTest());
+        addTestCase("HTTP/1.1 stream handler not limited by the default", \http1StreamTest());
+        addTestCase("HTTP/2 buffered body and the default limit", \http2BufferedTest());
+        addTestCase("HTTP/2 stream handler not limited by the default", \http2StreamTest());
+        addTestCase("explicit 0 means no limit", \explicitZeroTest());
+        addTestCase("explicit small limit", \explicitSmallTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("default-body-limit-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        default_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        default_port = setupServer(default_server);
+        default_tls_url = "https://localhost:" + default_server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        default_server.waitForAsyncIo();
+
+        unlimited_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "max_request_body_size": 0});
+        unlimited_port = setupServer(unlimited_server);
+        unlimited_server.waitForAsyncIo();
+
+        small_server = new HttpServer(<HttpServerOptionInfo>{"logger": logger, "max_request_body_size": SmallLimit});
+        small_port = setupServer(small_server);
+        small_server.waitForAsyncIo();
+
+        HTTPClient c({"url": default_tls_url, "ssl_verify_cert": False, "http_version": "2", "timeout": Timeout});
+        on_exit c.disconnect();
+        try {
+            c.connect();
+            http2 = c.getHttpVersion() == "HTTP/2";
+        } catch () {
+        }
+    }
+
+    globalTearDown() {
+        delete default_server;
+        delete unlimited_server;
+        delete small_server;
+    }
+
+    private static int setupServer(HttpServer srv) {
+        srv.setHandler("buf", "/buf", NOTHING, new SizeHandler());
+        srv.setHandler("stream", "/stream", NOTHING, new StreamHandler());
+        return srv.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+    }
+
+    #! sends an HTTP/1.1 request with a body of the given size over a new connection and returns the response
+    /** @param complete if False, only the header is sent for a body with a \c Content-Length, which a server that
+        refuses it answers without reading any of it, and the chunks of a chunked body are sent without the last
+        chunk, so that the server reads all the data that it is sent before it answers
+        @param size_line_only if True, only the size line of one chunk of the whole size is sent after the header
+
+        @return the response header with \c body and \c closed (True if the server closed the connection)
+    */
+    private hash<auto> sendHttp1(int port, string path, int size, bool chunked, bool complete = True,
+            bool size_line_only = False) {
+        Socket s();
+        s.connect("localhost:" + port, Timeout);
+        on_exit s.close();
+        hash<auto> hdr = {
+            "Host": "localhost:" + port,
+            "Content-Type": MimeTypeOctetStream,
+        };
+        if (chunked) {
+            hdr."Transfer-Encoding" = "chunked";
+        } else {
+            hdr."Content-Length" = string(size);
+        }
+        # the header is written as is: Socket::sendHTTPMessage() would set the Content-Length of the empty body
+        s.send(sprintf("POST %s HTTP/1.1\r\n%s\r\n", path,
+            (foldl $1 + $2, (map sprintf("%s: %s\r\n", $1.key, $1.value), hdr.pairIterator()))));
+        if (size_line_only) {
+            # the size line of one chunk of the whole size, without its data
+            s.send(sprintf("%x\r\n", size));
+        } else if (complete || chunked) {
+            int left = size;
+            while (left) {
+                int n = min(left, PieceSize);
+                binary data = n == PieceSize ? piece : binary(strmul("x", n));
+                if (chunked) {
+                    s.send(sprintf("%x\r\n", n));
+                    s.send(data);
+                    s.send("\r\n");
+                } else {
+                    s.send(data);
+                }
+                left -= n;
+            }
+            if (chunked && complete) {
+                s.send("0\r\n\r\n");
+            }
+        }
+        hash<auto> rv = s.readHTTPHeader(Timeout);
+        int len = (rv."content-length" ?? 0).toInt();
+        rv.body = len ? s.recv(len, Timeout) : "";
+        if (rv.connection == "close") {
+            # the server closes the connection after the response
+            try {
+                s.recvBinary(1, Timeout);
+                rv.closed = False;
+            } catch (hash<ExceptionInfo> ex) {
+                rv.closed = (ex.err != "SOCKET-TIMEOUT");
+            }
+        } else {
+            rv.closed = False;
+        }
+        return rv;
+    }
+
+    #! sends an HTTP/2 request with a body of the given size and returns the response
+    private hash<auto> sendHttp2(string path, int size) {
+        if (!http2) {
+            testSkip("HTTP/2 cannot be negotiated");
+        }
+        HTTPClient c({"url": default_tls_url, "ssl_verify_cert": False, "http_version": "2", "timeout": Timeout});
+        on_exit c.disconnect();
+        c.setErrorPassthru(True);
+        hash<auto> resp = c.send(binary(strmul("x", size)), "POST", path, {"Content-Type": MimeTypeOctetStream});
+        assertEq("HTTP/2", c.getHttpVersion());
+        return resp;
+    }
+
+    defaultValuesTest() {
+        assertEq(256 * 1024 * 1024, DefaultMaxRequestBodySize);
+        assertEq(Limit, default_server.getMaxRequestBodySize());
+        assertEq(0, default_server.getStreamMaxRequestBodySize());
+        assertEq(0, unlimited_server.getMaxRequestBodySize());
+        assertEq(0, unlimited_server.getStreamMaxRequestBodySize());
+        assertEq(SmallLimit, small_server.getMaxRequestBodySize());
+        assertEq(SmallLimit, small_server.getStreamMaxRequestBodySize());
+
+        # an explicit setting replaces the default, and the default is not restored by a later setting
+        HttpServer srv(<HttpServerOptionInfo>{"logger": logger});
+        on_exit delete srv;
+        srv.setMaxRequestBodySize(0);
+        assertEq(0, srv.getMaxRequestBodySize());
+        srv.setMaxRequestBodySize(4096);
+        assertEq(4096, srv.getMaxRequestBodySize());
+        assertEq(4096, srv.getStreamMaxRequestBodySize());
+    }
+
+    http1ContentLengthOverTest() {
+        # the length is refused before any of the body is read
+        hash<auto> resp = sendHttp1(default_port, "/buf", Limit + 1, False, False);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+    }
+
+    http1ChunkedOverTest() {
+        # the body read with getMessageBody() is refused after the chunk that exceeds the limit
+        hash<auto> resp = sendHttp1(default_port, "/buf", OverSize, True, False);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+        # a chunk whose size exceeds the limit is refused at its size line, before any of its data is read
+        resp = sendHttp1(default_port, "/buf", Limit + 1, True, False, True);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+    }
+
+    http1ContentLengthAtLimitTest() {
+        hash<auto> resp = sendHttp1(default_port, "/buf", Limit, False);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("buffered %d bytes", Limit), resp.body);
+    }
+
+    http1ChunkedAtLimitTest() {
+        hash<auto> resp = sendHttp1(default_port, "/buf", Limit, True);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("buffered %d bytes", Limit), resp.body);
+    }
+
+    http1StreamTest() {
+        hash<auto> resp = sendHttp1(default_port, "/stream", OverSize, False);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("streamed %d bytes", OverSize), resp.body);
+        resp = sendHttp1(default_port, "/stream", OverSize, True);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("streamed %d bytes", OverSize), resp.body);
+    }
+
+    http2BufferedTest() {
+        hash<auto> resp = sendHttp2("/buf", Limit);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("buffered %d bytes", Limit), resp.body);
+        resp = sendHttp2("/buf", Limit + 1);
+        assertEq(413, resp.status_code, resp.body);
+    }
+
+    http2StreamTest() {
+        hash<auto> resp = sendHttp2("/stream", OverSize);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("streamed %d bytes", OverSize), resp.body);
+    }
+
+    explicitZeroTest() {
+        hash<auto> resp = sendHttp1(unlimited_port, "/buf", OverSize, False);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("buffered %d bytes", OverSize), resp.body);
+    }
+
+    explicitSmallTest() {
+        hash<auto> resp = sendHttp1(small_port, "/buf", SmallLimit, False);
+        assertEq(200, resp.status_code, resp.body);
+        assertEq(sprintf("buffered %d bytes", SmallLimit), resp.body);
+        # a small body is read before the request is dispatched, so it is sent whole
+        resp = sendHttp1(small_port, "/buf", SmallLimit + 1, False);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+        resp = sendHttp1(small_port, "/buf", SmallLimit + 1, True, False);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+        # an explicit limit also applies to a body read as a stream
+        resp = sendHttp1(small_port, "/stream", SmallLimit + 1, False);
+        assertEq(413, resp.status_code, resp.body);
+        assertTrue(resp.closed);
+    }
+}

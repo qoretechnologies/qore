@@ -11,8 +11,10 @@ private own code: G3::m(bool); C5::m(int)
 private:internal parent typed: G3::m(bool); C5::m(int)
 private:internal parent untyped: G3::m(bool); C5::m(int)
 private:internal parent own code: G3::m(bool)
-overload, pending parent: fo(string); fo(string)
-overload, parent with methods in its hierarchy: fo(int); fo(int)
+overload, pending parent: fo(string); fo(string); G3::m(bool)
+overload, parent with methods in its hierarchy: fo(string); fo(string); Tm::m(bool)
+type unknown when parsing, pending parent: RUNTIME-TYPE-ERROR
+type unknown when parsing, parent with methods in its hierarchy: RUNTIME-TYPE-ERROR
 private:internal variant: Bp::m(softstring); Bp::m(softstring)
 private:internal variant, overload: fo(string)
 other order: G3::m(bool); C5::m(int); G3::m(bool)

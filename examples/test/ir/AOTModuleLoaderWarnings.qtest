@@ -13,13 +13,13 @@
 
 %exec-class AOTModuleLoaderWarningsTest
 
-#! qcc refuses a module for the warnings that the module loader refuses it for (qore#7314)
+#! qcc refuses a module for the warnings that the module loader refuses it for (qore#7314, qore#7324)
 /** The module loader parses a user module with the warning mask of a module load (\c QP_WARN_MODULES) and raises its
-    warnings as errors: every warning of a module file, and the parse-time warnings of the files of a separated module
-    (the loader reports no warning found when a separated module is committed; see qore#7324).  qcc parsed a module
-    with the default warning mask and reported its warnings as warnings, so that it compiled modules that do not load
-    from source, which the loader falls back to when a compiled module cannot be used.  It now parses a module as the
-    loader does, and refuses it with the loader's diagnostic.
+    warnings as errors, in a module file and in the files of a separated module, including the warnings found when the
+    module is committed (qore#7324).  qcc parsed a module with the default warning mask and reported its warnings as
+    warnings, so that it compiled modules that do not load from source, which the loader falls back to when a
+    compiled module cannot be used.  It now parses and commits a module as the loader does, and refuses it with the
+    loader's diagnostic.
 */
 class AOTModuleLoaderWarningsTest inherits QUnit::Test {
     private {
@@ -41,9 +41,6 @@ class AOTModuleLoaderWarningsTest inherits QUnit::Test {
             # enabled by %modern
             "DUPLICATE-LOCAL-VARIABLE": "public int sub f() { int x = 1; { int x = 2; return x; } }",
         };
-
-        #! the warnings that the loader finds when a separated module is parsed; it drops the others (qore#7324)
-        const SeparatedParseWarnings = ("DUPLICATE-HASH-KEY",);
 
         #! code without a warning
         const CleanCode = "public int sub f() { return 1; }";
@@ -119,22 +116,29 @@ class AOTModuleLoaderWarningsTest inherits QUnit::Test {
     separatedModuleTest() {
         foreach hash<auto> i in (WarningCode.pairIterator()) {
             TmpDir tmp("qore-aot-module-warnings-");
+            # the same code in a module file, which the loader refuses
+            string file_name = uniqueName("WSepFile");
+            string file_path = writeModuleFile(tmp.path, file_name, "", i.value);
+            *hash<ExceptionInfo> file_ex = loadError(file_path);
+            assertEq(i.key, file_ex.err, i.key + ": loader, module file");
+
             string name = uniqueName("WSep");
             string dir = writeSeparatedModule(tmp.path, name, i.value);
+            # the diagnostic of the module file in the separated module, whose code is on line 2 of F.qc
+            string qc_path = dir + DirSep + "F.qc";
+            hash<ExceptionInfo> sep_ex = file_ex;
+            sep_ex.file = qc_path;
+            sep_ex.line = 2;
+            sep_ex.desc = replace(replace(file_ex.desc, sprintf("%s:%d", file_path, file_ex.line), qc_path + ":2"),
+                file_name, name);
+
             *hash<ExceptionInfo> ex = loadError(dir);
-            if (inlist(i.key, SeparatedParseWarnings)) {
-                # a warning found when the module's files are parsed is an error in the loader and in qcc
-                assertEq(i.key, ex.err, i.key + ": loader");
-                checkRefused(tmp.path, name, dir, i.key, ex);
-            } else {
-                # the loader drops a warning found when a separated module is committed (qore#7324): qcc reports it
-                # and compiles the module, as the loader loads it
-                assertNothing(ex, i.key + ": loader");
-                string qmod = tmp.path + DirSep + name + ".qmod";
-                string out = qcc(sprintf("-m -o %s %s", qmod, dir));
-                assertTrue(is_file(qmod), i.key + ": qcc: " + out);
-                assertRegex(": warning: " + i.key + ":", out, i.key + ": qcc reports the warning");
-            }
+            # the loader refuses the separated module as the module file, with its diagnostic, including for the
+            # warnings found only when the module is committed (qore#7324), and qcc refuses it with the loader's
+            # diagnostic
+            assertEq(i.key, ex.err, i.key + ": loader");
+            assertEq(loaderDiag(sep_ex), loaderDiag(ex), i.key + ": the diagnostic of the module file");
+            checkRefused(tmp.path, name, dir, i.key, ex);
         }
     }
 

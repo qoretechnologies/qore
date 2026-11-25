@@ -436,6 +436,14 @@ class JsonFileDataProviderTest inherits QUnit::Test {
         assertEq("GeneratedDataOutput", info.output_type.getName());
         assertFalse(exists info.options.stream);
         assertFalse(exists info.options.path);
+        # the data is returned and nothing is written: the create action declares that it is read-only, which
+        # overrides the default of a create action (qore#7454)
+        assertEq(NT_BOOLEAN, info.mutates_state.typeCode());
+        assertFalse(info.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(info));
+        # the write action writes its output location and so changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(
+            DataProviderActionCatalog::getAppActionEx("JsonFile", "write")));
 
         hash<GeneratedDataInfo> output = runCreateAction("write-data", {"pretty_print": False},
             {"sku": ("A-1", "B-2"), "qty": (5, 7)});

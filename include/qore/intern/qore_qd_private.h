@@ -225,6 +225,12 @@ public:
         return getPathIntern(sub);
     }
 
+    //! returns the path of the directory, or an empty string if none is set
+    DLLLOCAL std::string getDirname() const {
+        AutoLocker al(m);
+        return dirname;
+    }
+
     DLLLOCAL int checkPath() const {
         AutoLocker al(m);
 

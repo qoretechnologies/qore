@@ -146,6 +146,14 @@ DLLLOCAL RuntimeConfig rc_get_parse_time();
  */
 DLLLOCAL RuntimeConfig& rc_get_current_ref();
 
+//! sets the fields of \a rc that rc_get_current_ref() takes from the current thread's data, with one lookup of it
+/** The Program, its thread-local data, the object and class context, the stack location and the return type
+    (qore#7336); defined in thread.cpp, which holds the thread's data
+
+    @return false (and \a rc unchanged) if the current thread has no Qore thread data
+*/
+DLLLOCAL bool rc_set_current_from_thread(RuntimeConfig& rc);
+
 //! returns the current Program from a RuntimeConfig that rc_get_current_ref() returned, without a call
 /** rc_get_current_ref() always sets the Program in the thread-local RuntimeConfig, so its implementation exists
 */

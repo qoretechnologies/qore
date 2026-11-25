@@ -47,6 +47,10 @@
 #include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/Passes/PassBuilder.h>
+#ifdef DEBUG
+// qore_jit_dbg_pipeline_uninitialized_level()
+#include <llvm/IR/IRBuilder.h>
+#endif
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -1094,6 +1098,61 @@ static void optimizeModule(llvm::Module& module, int opt_level, const std::atomi
 
     delete tm;
 }
+
+#ifdef DEBUG
+// builds and runs the optimization pipeline of a module of one function with the calls of optimizeModule(), with an
+// optimization level whose bytes were never written, so that valgrind reports an uninitialised value that Qore's code
+// passes to LLVM (see examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of
+// examples/test/valgrind.supp must not hide it)
+int qore_jit_dbg_pipeline_uninitialized_level() {
+    // the native target, once for the process, as the JIT sets it up (the process may not have compiled code yet)
+    qore_llvm_initialize_targets();
+    llvm::LLVMContext ctx;
+    llvm::Module module("dbg", ctx);
+    llvm::Function* f = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getInt64Ty(ctx),
+        {llvm::Type::getInt64Ty(ctx)}, false), llvm::Function::ExternalLinkage, "f", module);
+    llvm::IRBuilder<> b(llvm::BasicBlock::Create(ctx, "entry", f));
+    b.CreateRet(b.CreateAdd(f->getArg(0), b.getInt64(1)));
+    std::string triple_str = llvm::sys::getDefaultTargetTriple();
+    llvm::Triple triple(triple_str);
+    std::string target_error;
+#if LLVM_VERSION_MAJOR >= 21
+    auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+#else
+    auto* target = llvm::TargetRegistry::lookupTarget(triple_str, target_error);
+#endif
+    if (!target) {
+        return -1;
+    }
+#if LLVM_VERSION_MAJOR >= 21
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#else
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple_str, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#endif
+    if (!tm) {
+        return -1;
+    }
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+    llvm::PassBuilder PB(tm.get(), llvm::PipelineTuningOptions(), std::nullopt, nullptr);
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    // the level is copied from memory that was never written, as a bug of Qore's code could pass one
+    std::unique_ptr<unsigned char[]> raw(new unsigned char[sizeof(llvm::OptimizationLevel)]);
+    llvm::OptimizationLevel level = llvm::OptimizationLevel::O2;
+    memcpy(static_cast<void*>(&level), raw.get(), sizeof(level));
+    auto MPM = PB.buildPerModuleDefaultPipeline(level);
+    MPM.run(module, MAM);
+    return 0;
+}
+#endif
 
 //! stops the background compile thread at process exit
 /** ~QoreJIT() used to do this; the singleton is immortal now, so the stop is registered from the
@@ -3257,6 +3316,11 @@ bool QoreJIT::dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func
     return true;
 }
 
+void QoreJIT::dbgForceBgCompileEpochHold(const std::string& func) {
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    dbg_bg_force_epoch_hold = func;
+}
+
 bool QoreJIT::dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms) {
     std::unique_lock<std::mutex> lock(bg_queue_mutex);
     return bg_queue_empty_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, point]() {
@@ -3672,6 +3736,14 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         for (size_t i = 0, e = work.callees.size(); !specialized && i < e; ++i) {
             specialized = work.callees[i].ir_func && work.callees[i].ir_func->hasTypeSpecialization();
         }
+#ifdef DEBUG
+        // a test's hold, as the compile of a specialization makes
+        if (!dbg_bg_force_epoch_hold.empty() && work.ir_func
+                && !work.ir_func->name.compare(0, work.ir_func->name.find('@'), dbg_bg_force_epoch_hold)) {
+            dbg_bg_force_epoch_hold.clear();
+            specialized = true;
+        }
+#endif
         if (specialized) {
             work.type_epoch_hold.arm();
         }
@@ -4072,6 +4144,12 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     // compilation.  The work it had taken from the queue is lost with it: the function stays in the tier it is in.
     bg_thread_running.store(false, std::memory_order_relaxed);
     bg_compile_thread.abandonAfterFork();
+    // the epoch hold of the work that the thread was compiling is released: the work is never finished in the child,
+    // so the hold would keep everything retired since its epoch from being freed there (qore#7549); the work is in the
+    // copy of the thread's stack, and the hold's registry was handled before (its fork handler has a higher rank)
+    if (bg_in_progress) {
+        bg_in_progress->type_epoch_hold.abandonAfterFork();
+    }
     bg_in_progress = nullptr;
     bg_in_progress_pgms.clear();
     bg_in_progress_phase = BgCompilePhase::Lowering;
@@ -4089,6 +4167,7 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     dbg_bg_held = -1;
     dbg_bg_hold_release = false;
     dbg_bg_teardown_waits = 0;
+    dbg_bg_force_epoch_hold.clear();
 #endif
     // only the queued work is pending in the child
     bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);

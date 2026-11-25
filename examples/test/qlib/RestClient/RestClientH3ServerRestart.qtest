@@ -59,8 +59,10 @@
 #! The bound on a blocking wait: a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
-#! The connect timeout of the client, which bounds the wait for a server that does not answer a request
-const ConnectTimeout = 1s;
+#! The peer response timeout of a connection whose server does not answer any more (qore#7452: set with
+#! dbg_quic_set_client_peer_response_timeout() only then, so that it bounds no other wait; the client's connect timeout
+#! is the hang guard, which the load of the machine cannot exceed)
+const PeerResponseTimeout = 1s;
 
 const CertPem = "-----BEGIN CERTIFICATE-----
 MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
@@ -152,6 +154,9 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             \restartTest(), "POST");
         addTestCase("the response to another request does not end the wait for a request that the server did not "
             "receive", \otherResponseTest());
+        # no path MTU probe is sent once nothing is in flight (debug builds): the client's next datagram after
+        # dbg_quic_wait_all_idle() is then its next request
+        setenv("QORE_QUIC_TEST_DISABLE_PMTUD", "1");
         set_return_value(main());
     }
 
@@ -171,6 +176,36 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         return (server, p);
     }
 
+    #! starts a server that is to be restarted on its port; returns the server and its port
+    /** The port is below the range of the ports that the OS assigns to a socket bound to port 0 (ephemeral ports:
+        32768-60999 by default on Linux, read from /proc/sys/net/ipv4/ip_local_port_range when available; 49152-65535
+        on macOS), so that no socket of another process, such as a client socket of a test running beside this one,
+        can take it while the server restarts on it; a port that a socket bound explicitly is in use is skipped
+    */
+    private list<auto> startRestartableServer(AbstractHttpRequestHandler handler) {
+        int first_ephemeral = 32768;
+        if (is_file("/proc/sys/net/ipv4/ip_local_port_range")) {
+            *string first = (ReadOnlyFile::readTextFile("/proc/sys/net/ipv4/ip_local_port_range") =~ x/^\s*([0-9]+)/)[0];
+            if (first) {
+                first_ephemeral = first.toInt();
+            }
+        }
+        if (first_ephemeral <= 10000) {
+            # no range is left below the ephemeral ports
+            return startServer(0, handler);
+        }
+        for (int attempt = 0; ; ++attempt) {
+            int port = 10000 + (rand() % (first_ephemeral - 10000));
+            try {
+                return startServer(port, handler);
+            } catch (hash<ExceptionInfo> ex) {
+                if (attempt == 100 || ex.desc !~ /in use/) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     restartTest(string method) {
         if (!Option::HAVE_LIBRARY_DEBUGGING) {
             testSkip("a server is stopped as a killed one is only with dbg_quic_silent_server_close()");
@@ -178,7 +213,7 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         CountingHandler first_handler();
         HttpServer first;
         int port;
-        (first, port) = startServer(0, first_handler);
+        (first, port) = startRestartableServer(first_handler);
         on_exit if (first) {
             first.stop();
         }
@@ -186,7 +221,7 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
-            "connect_timeout": ConnectTimeout,
+            "connect_timeout": HangGuard,
             "serialization": "json",
         });
         # the first response offers HTTP/3 (Alt-Svc), which the next request takes
@@ -206,9 +241,12 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         # the new server has another key: it cannot reset the old connection (see above)
         HttpServer second = startServer(port, handler, True)[0];
         on_exit second.stop();
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", PeerResponseTimeout),
+            "the peer response timeout of the old connection was shortened");
 
-        # the request is sent on the old connection, which the new server does not know: once the server has sent
-        # nothing for the connect timeout, the connection is closed; an idempotent request is repeated on a new one
+        # the request is sent on the old connection, which the new server does not know: once the server has not
+        # acknowledged it for the peer response timeout, the connection is closed; an idempotent request is repeated
+        # on a new one
         if (method == "GET") {
             assertEq("GET", rc.get("/").body.method, "the new server answered the request");
             assertEq(1, handler.requests.getCount(), "the new server received the request once");
@@ -240,7 +278,7 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
             "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
-            "connect_timeout": ConnectTimeout,
+            "connect_timeout": HangGuard,
             "serialization": "json",
         });
         # the first response offers HTTP/3 (Alt-Svc), which the next request takes
@@ -264,6 +302,8 @@ class RestClientH3ServerRestartTest inherits QUnit::Test {
         # neither side has anything to send until the next request: the next datagram of the client is its request
         assertTrue(call_function("dbg_quic_wait_all_idle", HangGuard), "nothing is in flight");
 
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", PeerResponseTimeout),
+            "the peer response timeout of the connection was shortened");
         # from now on the server receives nothing from the client, as a server whose connection state is gone
         int requests = handler.requests.getCount();
         int dropped = call_function("dbg_quic_dropped_client_datagrams");

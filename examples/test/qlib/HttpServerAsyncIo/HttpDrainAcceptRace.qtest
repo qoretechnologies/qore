@@ -120,11 +120,14 @@ class HttpDrainAcceptRaceTest inherits QUnit::Test {
         # the drain is held after its snapshot of the connections, before it stops accepting
         Queue held();
         Queue go();
-        HttpAsyncSocketIoController::dbgSetDrainSnapshotHook(sub (HttpAsyncSocketIoController ctrl) {
-            held.push(True);
-            go.get();
-        });
-        on_exit HttpAsyncSocketIoController::dbgSetDrainSnapshotHook();
+        # the hook only exists in a debug build of the library, so it's called dynamically: a direct call would not
+        # parse in a release build, before the skip above could run
+        call_static_method("HttpAsyncSocketIoController", "dbgSetDrainSnapshotHook",
+            sub (HttpAsyncSocketIoController ctrl) {
+                held.push(True);
+                go.get();
+            });
+        on_exit call_static_method("HttpAsyncSocketIoController", "dbgSetDrainSnapshotHook");
         Counter stopped(1);
         background sub () {
             on_exit stopped.dec();

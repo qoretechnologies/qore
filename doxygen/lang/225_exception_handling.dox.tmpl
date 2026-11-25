@@ -43,6 +43,23 @@
     @note A maximum limit of 20 exceptions can be raised at any time; excess exceptions over this limit will be
     ignored.
 
+    @section exception_memory Memory Allocation Failures
+
+    When memory cannot be allocated, for example when the process has reached its address-space limit
+    (\c RLIMIT_AS, <tt>ulimit -v</tt>) or the memory limit of its container, the operation that needed the memory
+    raises a \c MEMORY-ALLOCATION-ERROR exception, which the code can catch like any other, and the process goes on:
+    - a call of builtin code (a function or a method of a builtin class, such as @ref Qore::strmul() "strmul()"),
+      in every @ref execution_modes "execution mode" and in compiled code
+    - in the @ref exec_mode_ast "AST" execution mode, also a statement whose own evaluation needs the memory, such as
+      an assignment that adds an element to a list
+
+    The value that the operation was changing is left as it was.  Where memory that the code needs cannot be
+    allocated outside of these operations (in the @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT" and
+    @ref exec_mode_tiered "tiered" execution modes and in compiled code, an operation of the code itself, such as an
+    assignment that adds an element to a list; or code of the runtime that runs no %Qore code), the process ends with
+    the message <tt>qore: MEMORY-ALLOCATION-ERROR: memory could not be allocated in code that cannot fail with a Qore
+    exception (std::bad_alloc); the process ends</tt> on stderr.
+
     @section exception_location The Location of an Exception
 
     The location of an exception, the \c file, \c line and \c endline keys of its

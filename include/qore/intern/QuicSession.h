@@ -831,6 +831,13 @@ public:
     */
     DLLLOCAL void releaseStream(int64_t stream_id);
 
+    //! Returns true if ngtcp2 still has the bidirectional stream open (either side of it has not ended)
+    /** A client stream whose response ended while its request side is still open (an extended CONNECT tunnel)
+        stays open until the client ends it, and counts against the peer's limit of streams for the life of the
+        connection (qore#7443)
+    */
+    DLLLOCAL bool isBidiStreamOpen(int64_t stream_id) const;
+
     //! Get the number of bytes in unacknowledged sent packets
     /** Uses ngtcp2_conn_get_conn_info() to read the connection-level
         bytes_in_flight counter.  A non-zero value means some packets have not
@@ -983,6 +990,19 @@ public:
 
     //! Returns the close cause; @ref CloseReason::Open if still open.
     DLLLOCAL CloseReason getCloseReason() const;
+
+    //! Returns a description of a close cause, for diagnostics (qore#7443)
+    DLLLOCAL static const char* getCloseReasonName(CloseReason reason) {
+        switch (reason) {
+            case CloseReason::Open: return "open";
+            case CloseReason::Idle: return "its idle timer expired";
+            case CloseReason::LocalClose: return "closed locally (CONNECTION_CLOSE sent)";
+            case CloseReason::PeerClose: return "closed by the peer (CONNECTION_CLOSE received)";
+            case CloseReason::Unresponsive: return "the peer did not acknowledge a request (peer response timeout)";
+            case CloseReason::StatelessReset: return "reset by the peer (stateless reset)";
+        }
+        return "unknown";
+    }
 
     //! Drains the stream IDs reset/stop-sent by the peer since the last call
     /** One-shot reporting channel for the H3 server poll operation: each peer
@@ -1794,11 +1814,6 @@ private:
         the stream closed, which needs the peer's acknowledgment of that RESET_STREAM, so a response could be read
         whole while a send still went out unreported.  See @ref recordPeerStopSending().
     */
-#ifdef DEBUG
-    //! a Retry taken by a client connection: counted for dbg_quic_retries_received() before ngtcp2's callback takes it
-    DLLLOCAL static int recvRetryCallback(ngtcp2_conn* conn, const ngtcp2_pkt_hd* hd, void* user_data);
-#endif
-
     //! a stateless reset that ends a client connection (qore#6931): its close reason is then StatelessReset
     DLLLOCAL static int recvStatelessResetCallback(ngtcp2_conn* conn, const ngtcp2_pkt_stateless_reset* sr,
         void* user_data);

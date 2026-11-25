@@ -53,6 +53,15 @@ module PineconeDataProvider {
                 "- Assign roles, invite users, and manage organization access\n\n"
                 "**Connection**: Uses a **Pinecone Admin** service-account connection with OAuth2 client credentials. "
                 "Use the **Pinecone** application with a project API key for indexes and records.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "pinecone.io",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://www.pinecone.io/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "pinecone-admin", "logo": PineconeLogo, "logo_file_name": "pinecone-logo.svg",
             "logo_mime_type": MimeTypeSvg, "groups": (AppGroup::Databases, AppGroup::AiLlm),
         });
@@ -94,6 +103,15 @@ module PineconeDataProvider {
                 "@ref QoreRagUtils::PineconeVectorStore \"PineconeVectorStore\" backend in "
                 "@ref qoreragutilsintro \"QoreRagUtils\" drives the same API through "
                 "@ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "pinecone.io",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://www.pinecone.io/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "pinecone",
             "logo": PineconeLogo,
             "logo_file_name": "pinecone-logo.svg",

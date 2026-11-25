@@ -16,7 +16,9 @@
 # one of its own modules, never at TsoAStatic (with TsoZCyc loaded from its AOT module, a cycle was broken at the
 # module of the lowest name, TsoAStatic, in the first version of the fix).  In the run-time layout, the AOT module
 # TsoZRtHolder, which does not require TsoAStatic, loads it at run time and holds a TsoAStatic::Resource in a static
-# variable: only the requirement recorded at run time orders the two modules.
+# variable: only the requirement recorded at run time orders the two modules. In the runtime-cycle layouts,
+# TsoAStatic loads TsoZHolder at run time. TsoZHolder statically requires TsoAStatic and must release its resource
+# before TsoAStatic clears the mutex, even though TsoAStatic sorts first (qore#7451).
 
 %modern
 %no-child-restrictions
@@ -64,6 +66,22 @@ class StaticTeardownOrderTest inherits QUnit::Test {
             "source required module, AOT module requiring it": <StaticTeardownOrderLayout>{
                 "modules": {"TsoAStatic": False, "TsoZHolder": True},
             },
+            "cycle with a later-sorting runtime dependency": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZHolder": False},
+                "arg": "runtime-cycle",
+            },
+            "AOT cycle with a later-sorting runtime dependency": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": True, "TsoZHolder": True},
+                "arg": "runtime-cycle",
+            },
+            "source loader, AOT holder in a runtime cycle": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": False, "TsoZHolder": True},
+                "arg": "runtime-cycle",
+            },
+            "AOT loader, source holder in a runtime cycle": <StaticTeardownOrderLayout>{
+                "modules": {"TsoAStatic": True, "TsoZHolder": False},
+                "arg": "runtime-cycle",
+            },
             "cycle of source modules": <StaticTeardownOrderLayout>{
                 "modules": {"TsoAStatic": False, "TsoZHolder": False, "TsoZCyc": False},
                 "arg": "cycle",
@@ -88,6 +106,7 @@ class StaticTeardownOrderTest inherits QUnit::Test {
         #! the output of the child program by argument
         const ExpectedByArg = {
             "cycle": ("cycle loaded",) + Expected,
+            "runtime-cycle": Expected,
             "runtime": ("main done", "run-time resource released; live: 0"),
         };
     }

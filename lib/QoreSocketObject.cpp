@@ -1948,6 +1948,11 @@ public:
                 if (output != 0) {
                     printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
                         "cleaning up local state anyway\n", stream_id, (int)output);
+                } else {
+                    // the RST_STREAM is sent with the session's next write, after the wake that follows; the
+                    // stream's send state is released now, so that the stream is gone when the reset returns
+                    // (qore#7532)
+                    h2->releaseResetStream(stream_id, h2_error_code);
                 }
                 h2->cleanupStream(stream_id);
                 break;
@@ -2530,6 +2535,7 @@ public:
         IsSecure,
         SetAlpnProtocols,
         SetCaLocations,
+        SetCaTrustStore,
         SetTrustStore,
         GetAlpnProtocol,
         IsHttp2,
@@ -2551,6 +2557,17 @@ public:
             std::string&& ca_path)
             : sock(sock), action(Action::SetCaLocations), ca_file(std::move(ca_file)), ca_path(std::move(ca_path)) {
         sock->ref();
+    }
+
+    //! Sets the trust store of CA locations read under a sandbox policy; takes a reference to it (qore#7518)
+    DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, QoreSSLTrustStore* ts,
+            std::string&& ca_file, std::string&& ca_path)
+            : sock(sock), action(Action::SetCaTrustStore), ca_file(std::move(ca_file)), ca_path(std::move(ca_path)),
+            trust_store(ts) {
+        sock->ref();
+        if (ts) {
+            ts->ref();
+        }
     }
 
     //! Sets or clears the in-memory trust store; takes a reference to it (qoretechnologies/qore#7248)
@@ -2625,8 +2642,15 @@ public:
                 break;
 
             case Action::SetCaLocations:
+                // CA locations set again replace any read under a sandbox policy (qore#7518)
+                sp->setSslCaTrustStore(nullptr, nullptr, nullptr);
                 sp->ssl_ca_file = ca_file;
                 sp->ssl_ca_path = ca_path;
+                output = 0;
+                break;
+
+            case Action::SetCaTrustStore:
+                sp->setSslCaTrustStore(trust_store, ca_file.c_str(), ca_path.c_str());
                 output = 0;
                 break;
 
@@ -2677,6 +2701,7 @@ private:
                 return static_cast<int64>(-1);
             case Action::SetAlpnProtocols:
             case Action::SetCaLocations:
+            case Action::SetCaTrustStore:
             case Action::SetTrustStore:
                 return static_cast<int64>(-1);
             case Action::GetCipherName:
@@ -3974,8 +3999,11 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
     const QoreStringNode* raw = *raw_holder;
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw->stringRefSelf();
@@ -4796,6 +4824,7 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
     dst->setSslTrustStore(src->ssl_trust_store);
+    dst->setSslCaTrustStore(src->ssl_ca_trust_store, src->ssl_ca_file_read.c_str(), src->ssl_ca_path_read.c_str());
     dst->async_io_route_key = getIoIdentityHash();
     // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
     // reaches the connections that are already open
@@ -5635,6 +5664,12 @@ int qore_socket_object_private::checkIdleDataForAsyncPoll(ExceptionSink* xsink, 
     return checkIdleDataForAsyncPollLocked(xsink, buffered_is_data);
 }
 
+size_t qore_socket_object_private::getBufferedReadBytes() const {
+    AutoLocker al(priv->m);
+    qore_socket_private* p = qore_socket_private::get(*priv->socket);
+    return p->buflen > 0 ? (size_t)p->buflen : 0;
+}
+
 int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data) {
     assert(priv->m.trylock());
 
@@ -5643,8 +5678,10 @@ int qore_socket_object_private::checkIdleDataForAsyncPollLocked(ExceptionSink* x
         return -1;
     }
     // bytes that the socket has already read from the descriptor are not seen by a peek of the descriptor: a client
-    // that sent its next request before the response to the previous one (pipelining) has it here; for a server only
-    // (an HTTP client may have bytes there that it does not use, such as a body that a server sent to a HEAD request)
+    // that sent its next request before the response to the previous one (pipelining) has it here, and an HTTP client
+    // has bytes here that follow the response it read, which keep the connection from being reused (qore#7471): the
+    // client checks for them when a response ends, which closes such a connection, and again before it sends its
+    // next request on the connection
     if (buffered_is_data && p->buflen > 0) {
         return 1;
     }
@@ -5724,6 +5761,22 @@ void qore_socket_object_private::setSslTrustStore(QoreSSLTrustStore* ts, Excepti
         -1, "setSslTrustStore", "tls-state", xsink), xsink);
 }
 
+void qore_socket_object_private::setSslCaTrustStore(QoreSSLTrustStore* ts, const char* ca_file, const char* ca_path,
+        ExceptionSink* xsink) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        AutoLocker al(priv->m);
+        if (priv->checkValid(xsink)) {
+            return;
+        }
+        qore_socket_private::get(*priv->socket)->setSslCaTrustStore(ts, ca_file, ca_path);
+        return;
+    }
+
+    ValueHolder rv(qore_socket_object_exec_poll_output(so, new QoreSocketObjectTlsStatePollOperation(so, ts,
+        std::string(ca_file ? ca_file : ""), std::string(ca_path ? ca_path : "")),
+        -1, "setSslCaLocations", "tls-state", xsink), xsink);
+}
+
 void qore_socket_object_private::setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkValid(xsink)) {
@@ -5739,6 +5792,8 @@ void qore_socket_object_private::setSslCaLocationsForAsyncPoll(const char* ca_fi
         return;
     }
     qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    // CA locations set again replace any read under a sandbox policy (qore#7518)
+    sp->setSslCaTrustStore(nullptr, nullptr, nullptr);
     sp->ssl_ca_file = ca_file ? ca_file : "";
     sp->ssl_ca_path = ca_path ? ca_path : "";
 }
@@ -6240,6 +6295,9 @@ int qore_socket_object_private::resetHttp2StreamAsync(int32_t stream_id, uint32_
         if (rv != 0) {
             printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
                 "cleaning up local state anyway\n", stream_id, rv);
+        } else {
+            // the stream is gone when the reset returns, also if its RST_STREAM stays unsent (qore#7532)
+            h2->releaseResetStream(stream_id, error_code);
         }
         if (!rv && !*xsink) {
             if (on_io_thread) {
@@ -6354,6 +6412,11 @@ bool qore_socket_object_private::isHttp2StreamEndStreamReceivedForAsyncPoll(int3
     return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
+bool qore_socket_object_private::isHttp2StreamLocalOpen(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
+    return h2 && h2->isStreamLocalOpen(stream_id);
+}
+
 bool qore_socket_object_private::isHttp2StreamResetForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(so);
     return h2 && h2->isStreamReset(stream_id);
@@ -6393,6 +6456,11 @@ void qore_socket_object_private::releaseQuicStream(int64_t session_id, int64_t s
     if (session) {
         session->releaseStream(stream_id);
     }
+}
+
+bool qore_socket_object_private::isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const {
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(so, session_id);
+    return session && session->isBidiStreamOpen(stream_id);
 }
 
 int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms) {
@@ -6510,6 +6578,54 @@ QoreHashNode* qore_socket_object_private::dbgGetStreamRecordCounts(int64_t sessi
         return nullptr;
     }
     return h2->dbgGetStreamRecordCounts();
+}
+
+int qore_socket_object_private::dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    qore_socket_private::IoUseHelper io_use(*sp);
+    SSLSocketHelper* ssl = io_use.getSsl();
+    fd = io_use.getDescriptor();
+    if (!ssl || fd == QORE_INVALID_SOCKET) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the socket has no TLS connection");
+        return -1;
+    }
+    OptionalNonBlockingHelper nbh(*sp, true, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    size_t sent = 0;
+    size_t awaiting_drain = 0;
+    while (sent < size) {
+        size_t real_io = 0;
+        int rc = ssl->sendNonBlocking(xsink, "dbg_tls_answer_and_reset", const_cast<char*>(data + sent),
+            size - sent, real_io, awaiting_drain);
+        if (*xsink) {
+            return -1;
+        }
+        sent += real_io;
+        if (sent == size) {
+            break;
+        }
+        int64 left_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (left_ms <= 0) {
+            xsink->raiseException("DBG-TLS-WRITE-ERROR", "timeout writing on the TLS connection: " QLLD " of " QLLD
+                " bytes written", static_cast<int64>(sent), static_cast<int64>(size));
+            return -1;
+        }
+        if (!rc) {
+            continue;
+        }
+        assert(rc == SOCK_POLLIN || rc == SOCK_POLLOUT);
+        pollfd p = {fd, static_cast<short>(rc == SOCK_POLLIN ? POLLIN : POLLOUT), 0};
+        if (::poll(&p, 1, static_cast<int>(left_ms)) < 0 && errno != EINTR) {
+            xsink->raiseErrnoException("DBG-TLS-WRITE-ERROR", errno, "poll() failed");
+            return -1;
+        }
+    }
+    return 0;
 }
 #endif
 
@@ -7128,7 +7244,17 @@ int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_i
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return -1;
     }
+#ifdef DEBUG
+    int64_t rv = h2->streamTakenBytes(static_cast<int32_t>(stream_id));
+    // the hold of dbg_http2_hold_stream_reset() ends once the count of the stream, reset and its RST_STREAM held, has
+    // been read: the I/O thread is woken to send the RST_STREAM (qore#7532)
+    if (h2->dbgStreamResetHeld() && qore_dbg_h2_stream_reset_release(static_cast<int32_t>(stream_id))) {
+        qore_socket_object_wake_async_controller(s, xsink);
+    }
+    return rv;
+#else
     return h2->streamTakenBytes(static_cast<int32_t>(stream_id));
+#endif
 }
 
 int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink) {

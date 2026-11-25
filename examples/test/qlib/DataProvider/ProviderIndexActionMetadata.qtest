@@ -51,16 +51,13 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
 
-        # live-provider-optin: saves and restores the provider index directory variable
         bool had_env = exists ENV{ProviderIndexEnvVar};
-        # live-provider-optin: saves and restores the provider index directory variable
         string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
         on_exit {
             if (had_env) {
                 ProviderIndexUtil::setEnvironmentVariable(old_env);
             } else {
                 unsetenv(ProviderIndexEnvVar);
-                # live-provider-optin: saves and restores the provider index directory variable
                 remove ENV{ProviderIndexEnvVar};
             }
         }

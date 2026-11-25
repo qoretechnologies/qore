@@ -546,6 +546,21 @@ public class OpenSearchDataProviderTest inherits QUnit::Test {
             assertTrue(found{expected_actions[i]},
                 sprintf("action %y is registered", expected_actions[i]));
         }
+
+        hash<string, hash<DataProviderActionInfo>> action_map = map {$1.action: $1}, actions;
+        # the search actions send only _search requests (the scroll context that a scroll search opens expires
+        # by itself): they declare that they are read-only (qore#7454)
+        foreach string action_name in ("search-index", "knn-search", "neural-search", "hybrid-search",
+            "scroll-search", "aggregate") {
+            hash<DataProviderActionInfo> action = action_map{action_name};
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        # the actions that create indexes or write documents still change state
+        foreach string action_name in ("create-vector-index", "create-document", "bulk-operations") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action_map{action_name}), action_name);
+        }
     }
 
     semanticActionMetadataTest() {

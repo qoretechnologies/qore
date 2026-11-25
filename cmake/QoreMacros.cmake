@@ -3053,6 +3053,12 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
 
     if (NOT DEFINED QCC_FORMAT_STAMP)
+        # A standalone module is built by the build-tree owner. Its install target can run as a different user:
+        # building "all" there would regenerate the stamp and compiled modules with that user's permissions.
+        # Leave an embedding project's install target and any explicit generator setting to the caller.
+        if (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR AND NOT DEFINED CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
+            set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON CACHE BOOL "Install built module files without rebuilding all")
+        endif ()
         # A module built outside the Qore source tree: every AOT .qmod depends on this stamp, which is rewritten
         # whenever qcc, the Qore library or the installed qcc format fingerprint changes.  qcc itself is not always
         # relinked or reinstalled when a new Qore library is installed, so depending on the qcc executable alone left
@@ -3243,7 +3249,8 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # fixes that don't affect qmod output.  QoreAOTRuntime.cpp is part of
     # the stamp because it deserializes and registers slot-map metadata from
     # qmods; stale qmods can fail at load time if that path changes.
-    set(_qmod_opt_flags)
+    # @assert and @debug are compiled when qcc parses the module. Include them in Debug qmods.
+    set(_qmod_opt_flags "$<$<CONFIG:Debug>:--parse-option=enable-debug>")
     # Final module output uses the same source-prefix maps as native compilation.
     string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_qcc_build_type)
     separate_arguments(_qore_qcc_cxx_flags NATIVE_COMMAND
@@ -3309,6 +3316,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
         # Per-resource copy commands so rebuilds fire when a resource
@@ -3374,6 +3382,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
     endif()
@@ -3938,58 +3947,26 @@ MACRO (QORE_USER_MODULE _module_file)
                 "@INCLUDE = \"${MOD_DOXYFILE}\"\nWARN_IF_DOC_ERROR = NO\n")
         endif()
 
-        # add CMake target for the documentation
-        if (WIN32 AND (NOT MINGW) AND (NOT MSYS))
-            add_custom_target(docs-${f}
+        set(_html "${CMAKE_BINARY_DIR}/docs/modules/${f}/html")
+        set(_prune_search)
+        if (QORE_DOC_PRUNE_SEARCH)
+            set(_prune_search COMMAND ${QORE_DOC_PRUNE_SEARCH} "${_html}")
+        endif()
+        foreach(_target docs-${f} docs-fast-${f})
+            add_custom_target(${_target}
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
                 COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
+                ${_prune_search}
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post "${_html}/*.html" "${_html}/*.js"
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post "${_html}/search/*.html" "${_html}/search/*.js"
                 ${_qore_user_java_step}
                 COMMENT "Generating API documentation with Doxygen for module: ${f}"
                 VERBATIM
             )
-            add_dependencies(docs-${f} qore)
-            add_custom_target(docs-fast-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-fast-${f} qore)
-        else (WIN32 AND (NOT MINGW) AND (NOT MSYS))
-            add_custom_target(docs-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-${f} qore)
-            add_custom_target(docs-fast-${f}
-                COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/modules/${f}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_DOXYFILE_ARGS}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} ${QDX_QMDOXH_ARGS}
-                COMMAND ${DOXYGEN_EXECUTABLE} ${_qore_user_doxyfile}
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/*.js
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.html ${CMAKE_BINARY_DIR}/docs/modules/${f}/html/search/*.js
-                ${_qore_user_java_step}
-                COMMENT "Generating API documentation with Doxygen for module: ${f}"
-                VERBATIM
-            )
-            add_dependencies(docs-fast-${f} qore)
-        endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
+            add_dependencies(${_target} qore)
+        endforeach()
         if (QORE_GENERATE_JAVA_BINDINGS)
             _qore_java_bindings_clean(docs-${f})
             _qore_java_bindings_clean(docs-fast-${f})
@@ -4235,8 +4212,13 @@ function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
             file(WRITE "${_base}.final"
                 "@INCLUDE = \"${_base}\"\nTAGFILES += ${_quoted_doc_tags}\n"
                 "WARN_IF_DOC_ERROR = YES\nGENERATE_TAGFILE =\n")
+            set(_prune_search)
+            if (QORE_DOC_PRUNE_SEARCH)
+                set(_prune_search COMMAND ${QORE_DOC_PRUNE_SEARCH} "${_html}")
+            endif()
             add_custom_target(docs-${_mod}-final
                 COMMAND ${DOXYGEN_EXECUTABLE} "${_base}.final"
+                ${_prune_search}
                 COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND}
                     --post "${_html}" "${_html}/search"
                 WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"

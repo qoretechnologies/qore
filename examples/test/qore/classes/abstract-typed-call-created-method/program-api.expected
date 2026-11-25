@@ -1,5 +1,7 @@
 rollback: PARSE-TYPE-ERROR
 type: PARSE-TYPE-ERROR
+type unknown when parsing Cq: RUNTIME-TYPE-ERROR
+type unknown when parsing G10: RUNTIME-TYPE-ERROR
 abstract between: PARSE-TYPE-ERROR
 warning disabled at the call: null
 warning enabled at the call: "DEPRECATED"

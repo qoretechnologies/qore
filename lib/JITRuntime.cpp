@@ -48,6 +48,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreAOTMethodDispatchReclaim.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
@@ -75,7 +76,9 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <thread>
 #include <typeinfo>
+#include <vector>
 #if defined(__linux__) || defined(__APPLE__)
 // dladdr() of the location of a frame; see qore_is_aot_code_location()
 #include <dlfcn.h>
@@ -130,6 +133,7 @@
 #include <qore/intern/Context.h>  // Context class (for native `context` IR lowering helpers)
 #include <qore/intern/QoreObjectIntern.h>  // qore_object_private::takeMembers for HashKeySlice over object
 #include <qore/intern/BackquoteNode.h>
+
 
 // JITRuntimeGivenArgs.cpp compiles this file with QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT defined, outside the single
 // compilation unit, for the code of the calls that give the references of their temporary arguments to the callee
@@ -8051,6 +8055,13 @@ static const AbstractQoreZoneInfo* qore_rt_resolve_date_zone(const char* zone_na
         return nullptr;
     }
 
+    // the zone of a date literal was loaded when the code was parsed (also from a zoneinfo path that the code's
+    // %set-time-zone directive named): it is found by its name without access to a file
+    if (*zone_name != '+' && *zone_name != '-') {
+        if (const AbstractQoreZoneInfo* loaded = QTZM.findLoadedZone(zone_name)) {
+            return loaded;
+        }
+    }
     ExceptionSink xsink;
     const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
         ? QTZM.findCreateOffsetZone(zone_name, &xsink)
@@ -8432,11 +8443,13 @@ static uint64_t qore_rt_hashdecl_member_access_slot_impl(uint64_t hash_val,
     const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
     const qore_hash_private* hp = qore_hash_private::get(*hash);
     if (hp->hashdecl && slot >= 0
-            && static_cast<size_t>(slot) < hp->member_list.size()) {
-        auto member = hp->member_list.begin();
-        std::advance(member, slot);
-        if ((*member)->key == key) {
-            QoreValue result = (*member)->val.refSelf();
+            && static_cast<size_t>(slot) < hp->size()) {
+        const HashMember* member = hp->member_list.front();
+        for (int32_t i = 0; i < slot; ++i) {
+            member = member->next;
+        }
+        if (member->key == key) {
+            QoreValue result = member->val.refSelf();
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             return *xsink ? toBits(QoreValue()) : toBits(result);
         }
@@ -9076,10 +9089,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
@@ -9103,10 +9120,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             new_l->setEntry(index, entry, xsink);
@@ -9181,10 +9202,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
@@ -9209,10 +9234,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
-        if (QoreTypeInfo::hasType(vti)
-                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-            QoreTypeInfo::acceptAssignment(vti,
-                "<lvalue>", entry, xsink, QLVTS_List);
+        // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+        // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+        if (QoreTypeInfo::hasType(vti)) {
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+            }
+        } else if (entry.isPointer()) {
+            strip_untyped_list_element(vti, entry, xsink);
         }
         if (!*xsink) {
             new_l->setEntry(index, entry, xsink);
@@ -13439,12 +13468,18 @@ extern "C" DLLEXPORT void qore_rt_pop_native_function_context_v1(void* storage) 
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 namespace {
+//! sets the receiver type of a call for its frame (execJITWithDeopt(), QoreNativeMethodContext)
+/** The constructor and the destructor are always inlined: when this type replaced the function-local struct of
+    execJITWithDeopt() to be shared with QoreNativeMethodContext, without it, GCC 15 made every fast-call frame that
+    inlines execJITWithDeopt() (try_dispatch_method_fast(), qore_rt_call_fast() and the other fast call paths) 16
+    bytes larger, which each level of a recursion of interpreted code pays (issue #7514)
+*/
 struct QoreRtReceiverTypeInfoGuard {
     const QoreTypeInfo* old = nullptr;
     bool restore = false;
     bool unsafe = false;
 
-    explicit QoreRtReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
+    QORE_INTERN_ALWAYS_INLINE explicit QoreRtReceiverTypeInfoGuard(const QoreTypeInfo* ti) {
         if (ti) {
             old = runtime_set_receiver_type_info(ti);
             restore = true;
@@ -13456,7 +13491,7 @@ struct QoreRtReceiverTypeInfoGuard {
         }
     }
 
-    ~QoreRtReceiverTypeInfoGuard() {
+    QORE_INTERN_ALWAYS_INLINE ~QoreRtReceiverTypeInfoGuard() {
         if (restore) {
             runtime_set_receiver_type_info(old);
             if (unsafe) {
@@ -13499,13 +13534,63 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
         const QoreTypeInfo* receiver_type_info);
 
+//! Runs the body of a plain function that a fast call runs in another Program with the call Program context of that
+//! Program (qore#7394)
+/** Out of line, so that the frames of the calls within one Program, such as the levels of a recursion, hold neither
+    the helper nor its code; the helper restores the caller's call Program context on every exit, also when the body
+    raises an exception that unwinds through this frame (QoreJITException, which execJITWithDeopt() catches)
+
+    @param thread_data_ptr the current thread's data (CalleeContextHelper::getThreadData())
+*/
+template <typename ExecFn>
+static QORE_INTERN_NOINLINE uint64_t qore_rt_exec_body_in_call_program_context(QoreProgram* exec_pgm,
+        QoreProgram* caller_pgm, void* thread_data_ptr, ExecFn& exec_fn, ExceptionSink* xsink, bool& invalidated) {
+    QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, caller_pgm, thread_data_ptr);
+    return exec_fn(xsink, invalidated);
+}
+
+//! Runs the body of a function again in the AST interpreter after native code or the IR interpreter requested it (a
+//! guard failure, an invalidation): with the callee's call Program context when the call entered another Program, as
+//! the body ran (qore#7394)
+/** Out of line, so that the frames of the calls within one Program hold neither the helper nor its code; six
+    arguments; the helper restores the caller's call Program context on every exit
+*/
+static QORE_INTERN_NOINLINE QoreValue qore_rt_exec_deopt_body(StatementBlock* stmts, ExceptionSink* xsink,
+        bool body_call_ctx, QoreProgram* exec_pgm, QoreProgram* caller_pgm, void* thread_data_ptr) {
+    std::optional<QoreFunctionCallProgramContextHelper> call_ctx;
+    if (body_call_ctx) {
+        call_ctx.emplace(exec_pgm, caller_pgm, thread_data_ptr);
+    }
+    return stmts->exec(xsink);
+}
+
+#ifdef DEBUG
+//! returns true if the fast calls of the thread take the AST retry of their bodies (debug builds only, for tests:
+//! qore#7394); defined in the main unit of the JIT runtime, and used by its copies in the units of the calls that give
+//! their arguments (JITRuntimeGivenArgs.cpp, JITRuntimeTakeOver.cpp) as well
+DLLLOCAL bool qore_dbg_jit_force_deopt_enabled();
+#ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
+//! forces the AST retry of the bodies of the fast calls of the thread (dbg_jit_force_deopt())
+static thread_local bool qore_dbg_jit_force_deopt_flag = false;
+
+DLLLOCAL void qore_dbg_jit_force_deopt(bool on) {
+    qore_dbg_jit_force_deopt_flag = on;
+}
+
+DLLLOCAL bool qore_dbg_jit_force_deopt_enabled() {
+    return qore_dbg_jit_force_deopt_flag;
+}
+#endif
+#endif
+
 // The caller owns the frame storage so it can keep the frame through method return validation.
 template <bool IN_FRAME_RELEASE, typename ExecFn>
 static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
-        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
+        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr,
+        bool body_call_ctx = false, void* body_call_ctx_td = nullptr) {
     QoreProgram* runtime_pgm = exec_pgm ? exec_pgm : uvb->pgm;
     if (uvb->hasCachedAOT() && !uvb->ensureAOTContext(call_name.c_str(), xsink)) {
         // the parameters that the call bound are released, as without the call
@@ -13573,12 +13658,27 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
     bool fn_invalidated = false;
     uint64_t result_bits = 0;
     try {
-        result_bits = exec_fn(xsink, fn_invalidated);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context, out of line (qore#7394); a call within one Program keeps the caller's, which is that Program's
+        result_bits = __builtin_expect(body_call_ctx, 0)
+            ? qore_rt_exec_body_in_call_program_context(exec_pgm, caller_pgm, body_call_ctx_td, exec_fn, xsink,
+                fn_invalidated)
+            : exec_fn(xsink, fn_invalidated);
     } catch (const QoreJITException&) {
         // Native helpers throw this only after populating xsink.  Catch at the
         // fast-call boundary so the normal cleanup path below still runs for
         // self, args, body locals, runtime location, and gate state.
     }
+#ifdef DEBUG
+    // the AST retry of the body, forced by a test (qore#7394), of a body that ran to its end: its result is released
+    // first, as the retry gives the result of the call
+    if (__builtin_expect(qore_dbg_jit_force_deopt_enabled(), 0) && !fn_invalidated && !*xsink) {
+        QoreValue first = fromBits(result_bits);
+        result_bits = 0;
+        first.discard(xsink);
+        fn_invalidated = true;
+    }
+#endif
 
     // Check for JIT guard failure or recompilation invalidation requesting deopt to AST; the check is also taken
     // while a debugger has native frames to report, whose returns make their exit events here (issue #6602)
@@ -13599,7 +13699,11 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
                 // so TLS returnTypeInfo may still hold the *caller*'s return type here.
                 const QoreTypeInfo* old_rti = saveReturnTypeInfo(
                     qore_rt_get_effective_return_type(uvb->getUserSignature(), receiver_type_info));
-                val = stmts->exec(xsink);
+                // the body of a plain function that the call runs in another Program runs again with that Program's
+                // call Program context, as it ran (qore#7394)
+                val = __builtin_expect(body_call_ctx, 0)
+                    ? qore_rt_exec_deopt_body(stmts, xsink, body_call_ctx, exec_pgm, caller_pgm, body_call_ctx_td)
+                    : stmts->exec(xsink);
                 saveReturnTypeInfo(old_rti);
             }
             if (skip_body_locals) {
@@ -13665,10 +13769,11 @@ template <bool IN_FRAME_RELEASE = false, typename ExecFn>
 static QORE_INTERN_ALWAYS_INLINE void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
-        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr) {
+        QoreProgram* exec_pgm = nullptr, void (*release_in_frame)(void*) = nullptr, void* release_ctx = nullptr,
+        bool body_call_ctx = false, void* body_call_ctx_td = nullptr) {
     std::optional<QoreJITStackLocation> frame;
     execJITWithDeopt<IN_FRAME_RELEASE>(frame, uvb, call_name, std::forward<ExecFn>(exec_fn), val, xsink,
-        caller_pgm, receiver_type_info, exec_pgm, release_in_frame, release_ctx);
+        caller_pgm, receiver_type_info, exec_pgm, release_in_frame, release_ctx, body_call_ctx, body_call_ctx_td);
 }
 
 //! returns true if a call of a user function with the explicit Program \a call_pgm needs to enter that Program first
@@ -13785,6 +13890,8 @@ struct QoreRtCrossModuleCallState {
     std::optional<ProgramThreadCountContextHelper> ptcch;
     std::optional<ThreadSafeLocalVarRuntimeEnvironmentHelper> closure_env_clear;
     std::optional<QoreRtUserCallOverrideHelper> po_override;
+    //! the call Program context of the function's body, which runs in another Program (qore#7394)
+    std::optional<QoreFunctionCallProgramContextHelper> call_ctx;
     std::optional<RuntimeContextSwap> runtime_context;
     std::optional<CallSiteProgram> call_site_pgm;
 };
@@ -13881,6 +13988,10 @@ extern "C" DLLEXPORT int qore_rt_enter_cross_module_call(QoreAOTContext* ctx, in
     // a normal function call: a calling closure's captured locals do not shadow the callee's
     state->closure_env_clear.emplace(nullptr);
     state->po_override.emplace(exec_pgm, uvb, caller_pgm);
+    // the body of the function runs with the call Program context of the Program it runs in (qore#7394)
+    if (exec_pgm != caller_pgm) {
+        state->call_ctx.emplace(exec_pgm, caller_pgm);
+    }
     // A native fast entry inherits the caller's statement and uses the callee's parse options.
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     if (parse_loc) {
@@ -14436,6 +14547,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
             argv_context = &function_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context (qore#7394; see execJITWithDeopt())
+        const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
             IRDirectParams dp{args, nargs, CONSUME ? arg_cleanups : nullptr};
@@ -14451,13 +14565,15 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
                 }
                 return toBits(ir_return_value);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
         } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
@@ -14473,7 +14589,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
                 }
                 return toBits(ir_return_value);
             }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
         }
 
         // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
@@ -15083,10 +15200,14 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
             argv_context = &function_context;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context (qore#7394; see execJITWithDeopt())
+        const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
         execJITWithDeopt<CONSUME>(uvb, call_name, [target_fn](ExceptionSink* xs, bool& /*inv*/) {
             return target_fn(xs);
         }, val, xsink, caller_pgm, nullptr, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+            body_call_ctx, function_context.getThreadData());
 
         // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
         // (with softlist wrapping and the like)
@@ -16427,7 +16548,6 @@ extern "C" DLLEXPORT void qore_rt_discard_on_block_exit(int64_t saved_count) {
 }
 
 // --- AOT context-based helpers (Phase 7b) ---
-
 
 extern "C" DLLEXPORT CaseNodeRegex* qore_rt_get_regex_case_aot(QoreAOTContext* ctx, int32_t slot) {
     assert(ctx && slot >= 0 && slot < ctx->num_regex_cases);
@@ -18861,6 +18981,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         return toBits(QoreValue());
     }
 
+    if (inst->unary_op == LVUnaryOp::EnsureUnique) {
+        QoreValue value;
+        if (qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), value)) {
+            return toBits(value);
+        }
+    }
+
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
@@ -18879,6 +19006,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         if (o->isSystemObject()) {
             xsink->raiseException("SYSTEM-OBJECT-ERROR",
                 "cannot delete a system constant object (class '%s')", o->getClassName());
+            return;
+        }
+        // sandboxed code cannot delete a shared object (qore#6843)
+        if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
             return;
         }
         o->doDelete(xsink);
@@ -19141,7 +19272,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 if (o->isSystemObject()) {
                     xsink->raiseException("SYSTEM-OBJECT-ERROR", "cannot delete a system constant object (class '%s')",
                         o->getClassName());
-                } else {
+                } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+                    // sandboxed code cannot delete a shared object (qore#6843)
                     o->doDelete(xsink);
                 }
             }
@@ -19293,7 +19425,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         HashIterator hi(h);
                         while (hi.next()) {
                             if (hi.get().getType() == NT_STRING) {
-                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                 ensure_unique(v, xsink);
                                 if (*xsink || v.get<QoreStringNode>()->trim(xsink)) {
                                     return toBits(QoreValue());
@@ -19351,7 +19483,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                         HashIterator hi(h);
                         while (hi.next()) {
                             if (hi.get().getType() == NT_STRING) {
-                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                 ensure_unique(v, xsink);
                                 if (*xsink) {
                                     return toBits(QoreValue());
@@ -20529,11 +20661,15 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                 argv_context = &function_context;
             }
             QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
+            // the body of a plain function that the call runs in another Program runs with that Program's call Program
+            // context (qore#7394; see execJITWithDeopt())
+            const bool body_call_ctx = exec_pgm && exec_pgm != caller_pgm;
             if (uvb->hasCachedFunction()) {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                     return uvb->execCachedFunction(xs, inv);
                 }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+                body_call_ctx, function_context.getThreadData());
             } else if (uvb->getCachedIR()) {
                 const QoreIRFunction* callee_ir = uvb->getCachedIR();
                 execJITWithDeopt<CONSUME>(uvb, call_name,
@@ -20548,7 +20684,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                     }
                     return toBits(ir_return_value);
                 }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+                body_call_ctx, function_context.getThreadData());
             } else {
                 execJITWithDeopt<CONSUME>(uvb, call_name, [uvb, sig](ExceptionSink* xs, bool& inv) -> uint64_t {
                     QoreValue ast_return_value;
@@ -20560,7 +20697,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                     }
                     return toBits(ast_return_value);
                 }, val, xsink, caller_pgm, nullptr, exec_pgm,
-                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
+                CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr,
+                body_call_ctx, function_context.getThreadData());
             }
 
             // the return value is checked in the function's context too, as ReturnStatement::execImpl() checks it
@@ -21319,6 +21457,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/xxhash.h"
+
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
@@ -22526,65 +22665,29 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
             argv_context = &argv_helper;
         }
         QoreRtUserCallOverrideHelper po_override(exec_pgm, uvb, caller_pgm);
-        if (use_direct_params) {
-            // Direct params path: pass args straight to IR slot cache, no TLS
+        const bool use_native = !use_direct_params && uvb->hasCachedFunction() && !use_specialized_ir;
+        // Use one call frame for the three ways to run the body. Separate instantiations of execJITWithDeopt
+        // made GCC reserve more stack in every recursive method call while the return check kept that frame alive.
+        execJITWithDeopt<CONSUME>(frame, uvb, call_name, [&](ExceptionSink* xs, bool& invalidated) -> uint64_t {
+            if (use_native) {
+                return uvb->execCachedFunction(xs, invalidated);
+            }
             IRDirectParams dp{args, nargs, arg_cleanups};
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
-                    [ir, uvb, exec_pgm, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm, false, &dp);
-                if (!ok && !*xs) {
-                    inv = true;
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else if (uvb->hasCachedFunction() && !use_specialized_ir) {
-            // JIT/AOT fast path
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
-                return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        } else {
-            // IR fast path (standard TLS): execute IR directly without QoreListNode.
-            execJITWithDeopt<CONSUME>(frame, uvb, call_name,
-                    [ir, uvb, exec_pgm](ExceptionSink* xs, bool& inv) -> uint64_t {
-                QoreValue ir_return_value;
-                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
-                    nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
-                    uvb->getDebugEntryStatementBlock(), exec_pgm);
-                if (!ok && !*xs) {
-                    inv = true;  // Request deopt to AST
-                    return 0;
-                }
-                return toBits(ir_return_value);
-            }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
-            CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
-        }
+            QoreValue ir_return_value;
+            bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
+                nullptr, nullptr, ir->cached_pre_instantiated, nullptr,
+                uvb->getDebugEntryStatementBlock(), exec_pgm, false, use_direct_params ? &dp : nullptr);
+            if (!ok && !*xs) {
+                invalidated = true;
+                return 0;
+            }
+            return toBits(ir_return_value);
+        }, val, xsink, caller_pgm, receiver_type_info, exec_pgm,
+        CONSUME ? release_in_frame : nullptr, CONSUME ? &release_given : nullptr);
     }
     if constexpr (!CONSUME) {
-        if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
-            if (sig->argvid) {
-                sig->argvid->uninstantiate(xsink);
-            }
-            if (!use_direct_params) {
-                for (int i = static_cast<int>(num_params) - 1; i >= 0; --i) {
-                    sig->lv[i]->uninstantiate(xsink);
-                }
-            }
-            if (selfid_instantiated) {
-                selfid->uninstantiateSelf();
-            }
-            // the release of a consumed argument raised an exception after the call gave its value, which is
-            // released then, as the AST interpreter releases it (#6051)
-            val.discard(xsink);
-            result = toBits(QoreValue());
-            return true;
-        }
-
+        // The dispatcher selects this instantiation only when the caller gave no argument cleanups.
+        assert(!arg_cleanups);
         if (sig->argvid) {
             sig->argvid->uninstantiate(xsink);
         }
@@ -22690,12 +22793,29 @@ DLLLOCAL QoreObject* qore_rt_self_call_fast_object(const SelfFunctionCallNode* c
 //! makes an unqualified call of a method of self (m()) on the object that qore_rt_self_call_fast_object() returned
 //! with the fast method call path; returns false, having done nothing, if the call cannot take it (issue #7267)
 /** @param arg_cleanups the cleanup slots of the arguments whose references the caller gives to the call, or nullptr
+
+    Inlined explicitly into the IR interpreter, which calls it on the path of a recursion of a method that calls itself:
+    an out-of-line call puts its frame on the stack at each level (about 105 bytes per level), which GCC made when the
+    unit grew (qore#7336; tools/hot-inlining.txt, qore#6494).  The attribute is on the definition only, without
+    "inline", as the callers in another compilation unit (a build without a single compilation unit) call the external
+    definition; GCC warns that such a function "might not be inlinable", which is expected here.
 */
-DLLLOCAL bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#endif
+DLLLOCAL
+#if defined(__GNUC__)
+__attribute__((always_inline))
+#endif
+bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
     return qore_rt_try_self_call_fast(self, call->getMethod(), call->getClass(), call->getVariant(), args,
         arg_cleanups, nargs, xsink, result);
 }
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
@@ -23352,8 +23472,42 @@ static QoreAOTMethodDispatchCache* qore_rt_get_aot_method_dispatch_cache(
     return expected;
 }
 
-static const QoreAOTMethodDispatchCacheEntry*
-qore_rt_find_aot_method_dispatch_cache_entry(
+namespace {
+//! holds the reclamation domain's lock across fork()
+class QoreAOTMethodDispatchReclaimForkHandler : public QoreForkHandler {
+public:
+    QoreAOTMethodDispatchReclaimForkHandler() : QoreForkHandler(QFLR_LEAF, "aot_method_dispatch_reclaim") {
+    }
+
+    void prepare() noexcept override {
+        QoreAOTMethodDispatchReclaimer::forkPrepare();
+    }
+
+    void parent() noexcept override {
+        QoreAOTMethodDispatchReclaimer::forkParent();
+    }
+
+    void child() noexcept override {
+        QoreAOTMethodDispatchReclaimer::forkChild();
+    }
+};
+
+QoreAOTMethodDispatchReclaimForkHandler aot_method_dispatch_reclaim_fork_handler;
+}
+
+//! the method and variant of a matching cache entry; no method if none matched
+struct QoreAOTMethodDispatchHit {
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+};
+
+//! looks up a cache entry in a read section with @p reader, the calling thread's record
+/** Entries are read without a lock and an entry replaced by a writer is freed once no reader can hold it, so the
+    entry is only read within the read section here, and only its method and variant leave it (qore#7459).  Without
+    a record (one could not be allocated), no entry can be read: the lookup misses.
+*/
+static QoreAOTMethodDispatchHit
+qore_rt_find_aot_method_dispatch_cache_entry(QoreAOTMethodDispatchReclaimer::Record* reader,
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
         const qore_class_private* class_ctx, qore_program_id_t caller_program_id,
@@ -23364,8 +23518,13 @@ qore_rt_find_aot_method_dispatch_cache_entry(
         const std::array<uint8_t,
             QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_states,
         int nargs) {
+    QoreAOTMethodDispatchHit hit;
     if (!cache) {
-        return nullptr;
+        return hit;
+    }
+    QoreAOTMethodDispatchReclaimer::ReadGuard read_guard(reader);
+    if (!read_guard) {
+        return hit;
     }
     for (auto& slot : cache->entries) {
         const QoreAOTMethodDispatchCacheEntry* entry =
@@ -23388,14 +23547,16 @@ qore_rt_find_aot_method_dispatch_cache_entry(
                 }
             }
             if (match) {
-                return entry;
+                hit.method = entry->method;
+                hit.variant = entry->variant;
+                return hit;
             }
         }
     }
-    return nullptr;
+    return hit;
 }
 
-static void qore_rt_add_aot_method_dispatch_cache_entry(
+static void qore_rt_add_aot_method_dispatch_cache_entry(QoreAOTMethodDispatchReclaimer::Record* reader,
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
         const qore_class_private* class_ctx, qore_program_id_t caller_program_id,
@@ -23411,9 +23572,9 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
             || dispatch_epoch != qore_get_method_dispatch_epoch()) {
         return;
     }
-    if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
+    if (qore_rt_find_aot_method_dispatch_cache_entry(reader, cache, receiver_class,
             receiver_type_info, class_ctx, caller_program_id, object_program_id,
-            parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
+            parse_options, dispatch_epoch, arg_types, arg_states, nargs).method) {
         return;
     }
     std::unique_ptr<QoreAOTMethodDispatchCacheEntry> entry(
@@ -23430,23 +23591,209 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
     entry->arg_types = arg_types;
     entry->arg_states = arg_states;
     entry->nargs = static_cast<uint8_t>(nargs);
-    std::lock_guard<std::mutex> lock(cache->write_mutex);
-    if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
-            receiver_type_info, class_ctx, caller_program_id, object_program_id,
-            parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
-        return;
-    }
-    for (auto& slot : cache->entries) {
-        const QoreAOTMethodDispatchCacheEntry* current =
-            slot.load(std::memory_order_relaxed);
-        if (!current || current->dispatch_epoch != dispatch_epoch) {
-            const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
-            cache->owned_entries.push_back(std::move(entry));
-            slot.store(stored, std::memory_order_release);
+    // the entry replaced is retired after the lock is released: the retirement takes the reclamation domain's lock,
+    // which a fork() holds, and a thread holding the cache's lock (which has no fork handler) while waiting for it
+    // would leave the cache's lock held in the child
+    std::optional<QoreAOTMethodDispatchReclaimer::Retirement> retirement;
+    const QoreAOTMethodDispatchCacheEntry* replaced = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(cache->write_mutex);
+        if (qore_rt_find_aot_method_dispatch_cache_entry(reader, cache, receiver_class,
+                receiver_type_info, class_ctx, caller_program_id, object_program_id,
+                parse_options, dispatch_epoch, arg_types, arg_states, nargs).method) {
             return;
         }
+        // owned_entries holds exactly the entries in the slots: a replaced entry is retired, and freed once no reader
+        // can hold it; before, every replaced entry was kept until the process ended, and as entries are keyed by
+        // Program IDs, which are never reused, and destroying a class makes all of them stale, every Program created
+        // and destroyed added an entry for each call target reached (qore#7459)
+        for (auto& slot : cache->entries) {
+            const QoreAOTMethodDispatchCacheEntry* current =
+                slot.load(std::memory_order_relaxed);
+            if (!current) {
+                const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
+                cache->owned_entries.push_back(std::move(entry));
+                slot.store(stored, std::memory_order_release);
+                return;
+            }
+            if (current->dispatch_epoch != dispatch_epoch) {
+                auto i = std::find_if(cache->owned_entries.begin(), cache->owned_entries.end(),
+                    [current](const std::unique_ptr<const QoreAOTMethodDispatchCacheEntry>& owned) {
+                        return owned.get() == current;
+                    });
+                if (i == cache->owned_entries.end()) {
+                    // not possible: every entry in a slot is owned
+                    assert(false);
+                    return;
+                }
+                // allocated before the slot is replaced: the replaced entry must not be freed at once
+                retirement.emplace();
+                const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
+                [[maybe_unused]] const QoreAOTMethodDispatchCacheEntry* released = i->release();
+                assert(released == current);
+                *i = std::move(entry);
+                slot.store(stored, std::memory_order_release);
+                replaced = current;
+                break;
+            }
+        }
+    }
+    if (replaced) {
+#ifdef DEBUG
+        // poisoned when freed, so that a lookup that read an entry freed too early gets a method that matches no
+        // entry (see qore_rt_dbg_aot_dispatch_reclaim_stress())
+        retirement->retire(replaced, [](const void* p) {
+            QoreAOTMethodDispatchCacheEntry* e =
+                static_cast<QoreAOTMethodDispatchCacheEntry*>(const_cast<void*>(p));
+            e->method = reinterpret_cast<const QoreMethod*>(static_cast<uintptr_t>(0xdeadbeef));
+            e->variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(static_cast<uintptr_t>(0xdeadbeef));
+            delete e;
+        });
+#else
+        retirement->retire(replaced);
+#endif
     }
 }
+
+#ifdef DEBUG
+//! Debug-only: frees the replaced AOT method dispatch cache entries that no reader can hold, then returns the
+//! reclamation counters
+/** Retirements free entries in batches, so up to a batch of them can wait without a reader holding them
+*/
+QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stats() {
+    QoreAOTMethodDispatchReclaimer::reclaim();
+    QoreAOTMethodDispatchReclaimer::Stats st = QoreAOTMethodDispatchReclaimer::getStats();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    rv->setKeyValue("retired", static_cast<int64>(st.retired), nullptr);
+    rv->setKeyValue("reclaimed", static_cast<int64>(st.reclaimed), nullptr);
+    rv->setKeyValue("pending", static_cast<int64>(st.pending), nullptr);
+    rv->setKeyValue("readers", static_cast<int64>(st.readers), nullptr);
+    return rv.release();
+}
+
+//! Debug-only: looks up entries of one AOT method dispatch cache in reader threads while a writer replaces them
+/** The writer makes the entries stale (the dispatch epoch), so that each entry it adds after the first replaces one;
+    the readers look up the newest key, which can match the entry being replaced; the writer frees what it can after
+    each replacement (retirements alone free in batches).  Entries rotate between
+    @p target's \c value(), \c other() and \c third() methods by their key, and a freed entry is poisoned first,
+    so a reader that read an entry freed too early (or reused for a newer one) gets a method that does not match the
+    key; valgrind or a sanitizer also reports the use after free.  Every replaced entry must be freed once the
+    readers have ended.
+
+    The counters are those of the whole reclamation domain: no other thread may use AOT method dispatch meanwhile.
+
+    @return a hash with: \c iterations, \c retired, \c reclaimed (the entries retired and freed during the run),
+    \c pending (the entries retired and not freed after the readers ended), \c owned (the entries the cache owns
+    after the run), \c hits (the lookups that matched) and \c wrong_hits (hits with a method or variant other than
+    the key's)
+*/
+QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stress(QoreObject* target, int64 threads, int64 iterations,
+        ExceptionSink* xsink) {
+    const QoreClass* cls = target->getClass();
+    const QoreMethod* methods[3] = { cls->findMethod("value"), cls->findMethod("other"),
+        cls->findMethod("third") };
+    if (!methods[0] || !methods[1] || !methods[2]) {
+        xsink->raiseException("DBG-ERROR", "class '%s' needs value(), other() and third() methods", cls->getName());
+        return nullptr;
+    }
+    const AbstractQoreFunctionVariant* variants[3];
+    for (int i = 0; i < 3; ++i) {
+        variants[i] = qore_method_private::get(const_cast<QoreMethod&>(*methods[i]))->getFunction()->first();
+    }
+    if (threads < 1 || iterations < 2) {
+        xsink->raiseException("DBG-ERROR", "threads must be at least 1 and iterations at least 2");
+        return nullptr;
+    }
+
+    std::unique_ptr<QoreAOTMethodDispatchCache> cache(new QoreAOTMethodDispatchCache);
+    const std::array<const QoreTypeInfo*, QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_types{};
+    const std::array<uint8_t, QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_states{};
+    const QoreParseOptions parse_options;
+    // the key that the readers look up: the newest entry's caller Program ID and dispatch epoch
+    std::atomic<uint64_t> key_program{0};
+    std::atomic<uint64_t> key_epoch{0};
+    std::atomic<bool> done{false};
+    std::atomic<int64> hits{0};
+    std::atomic<int64> wrong_hits{0};
+
+    // the writer is the calling Qore thread
+    QoreAOTMethodDispatchReclaimer::Record* writer_reader = qore_acquire_aot_dispatch_thread_reader();
+    // entries that other code retired before the run and that wait for a batch are freed first, so that the run's
+    // counters are its own
+    QoreAOTMethodDispatchReclaimer::reclaim();
+    QoreAOTMethodDispatchReclaimer::Stats before = QoreAOTMethodDispatchReclaimer::getStats();
+    std::vector<std::thread> readers;
+    try {
+        readers.reserve(static_cast<size_t>(threads));
+        // stops and joins the readers, also if the writer fails
+        struct ReaderJoiner {
+            std::atomic<bool>& done;
+            std::vector<std::thread>& readers;
+
+            ~ReaderJoiner() {
+                done.store(true, std::memory_order_release);
+                for (std::thread& t : readers) {
+                    if (t.joinable()) {
+                        t.join();
+                    }
+                }
+            }
+        } joiner{done, readers};
+        for (int64 i = 0; i < threads; ++i) {
+            readers.emplace_back([&]() {
+                // a thread without Qore thread data: it keeps its own record
+                QoreAOTMethodDispatchReclaimer::Record* reader = QoreAOTMethodDispatchReclaimer::acquire();
+                if (!reader) {
+                    wrong_hits.fetch_add(1, std::memory_order_relaxed);
+                    return;
+                }
+                while (!done.load(std::memory_order_acquire)) {
+                    uint64_t program = key_program.load(std::memory_order_acquire);
+                    QoreAOTMethodDispatchHit hit = qore_rt_find_aot_method_dispatch_cache_entry(reader, cache.get(),
+                        cls, nullptr, nullptr, program, 0, parse_options, key_epoch.load(std::memory_order_acquire),
+                        arg_types, arg_states, 0);
+                    if (hit.method) {
+                        hits.fetch_add(1, std::memory_order_relaxed);
+                        if (hit.method != methods[program % 3] || hit.variant != variants[program % 3]) {
+                            wrong_hits.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    }
+                }
+                QoreAOTMethodDispatchReclaimer::release(reader);
+            });
+        }
+        for (int64 i = 0; i < iterations; ++i) {
+            qore_bump_method_dispatch_epoch();
+            uint64_t epoch = qore_get_method_dispatch_epoch();
+            uint64_t program = static_cast<uint64_t>(i) + 1;
+            qore_rt_add_aot_method_dispatch_cache_entry(writer_reader, cache.get(), cls, nullptr, nullptr,
+                program, 0,
+                parse_options, epoch, arg_types, arg_states, 0, methods[program % 3], variants[program % 3]);
+            key_program.store(program, std::memory_order_release);
+            key_epoch.store(epoch, std::memory_order_release);
+            // frees what no reader holds after each replacement, not only once per batch, so that an entry freed
+            // under a reader (a defect) is freed right after its replacement, while readers can still hold it
+            QoreAOTMethodDispatchReclaimer::reclaim();
+        }
+    } catch (std::exception& e) {
+        xsink->raiseException("DBG-ERROR", "the stress run failed: %s", e.what());
+        return nullptr;
+    }
+    // no reader is in a read section now: everything retired can be freed
+    QoreAOTMethodDispatchReclaimer::reclaim();
+    QoreAOTMethodDispatchReclaimer::Stats after = QoreAOTMethodDispatchReclaimer::getStats();
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("iterations", iterations, xsink);
+    rv->setKeyValue("retired", static_cast<int64>(after.retired - before.retired), xsink);
+    rv->setKeyValue("reclaimed", static_cast<int64>(after.reclaimed - before.reclaimed), xsink);
+    rv->setKeyValue("pending", static_cast<int64>(after.pending), xsink);
+    rv->setKeyValue("owned", static_cast<int64>(cache->owned_entries.size()), xsink);
+    rv->setKeyValue("hits", hits.load(), xsink);
+    rv->setKeyValue("wrong_hits", wrong_hits.load(), xsink);
+    return rv.release();
+}
+#endif
 
 static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         QoreAOTCallTarget& target, QoreObject* object,
@@ -23464,7 +23811,11 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         return toBits(QoreValue());
     }
 
-    const qore_class_private* class_ctx = runtime_get_class();
+    // the class context, the Program, the parse options and the thread's reclamation record from one lookup of the
+    // thread's data
+    QoreAOTDispatchThreadContext thread_ctx;
+    qore_get_aot_dispatch_thread_context(thread_ctx);
+    const qore_class_private* class_ctx = thread_ctx.class_ctx;
     // checked against the committed hierarchy, as in MethodCallNode::exec()
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(
             *object->getClass(), class_ctx)) {
@@ -23485,26 +23836,30 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     if (!explicit_type_param_instantiation) {
         cache = qore_rt_get_aot_method_dispatch_cache(target);
         if (cache) {
-            caller_program_id = qore_rt_aot_dispatch_program_id(getProgram());
+            caller_program_id = qore_rt_aot_dispatch_program_id(thread_ctx.pgm);
             object_program_id = qore_rt_aot_dispatch_program_id(object->getProgram());
-            parse_options = runtime_get_parse_options();
+            parse_options = thread_ctx.parse_options;
             cacheable = qore_rt_build_aot_dispatch_key(object, args, nargs,
                 arg_types, arg_states, receiver_type_info);
         }
         if (cacheable) {
+            if (!thread_ctx.reader) {
+                // the thread's first cacheable dispatch
+                thread_ctx.reader = qore_acquire_aot_dispatch_thread_reader();
+            }
             dispatch_epoch = qore_get_method_dispatch_epoch();
-            const QoreAOTMethodDispatchCacheEntry* entry =
-                qore_rt_find_aot_method_dispatch_cache_entry(cache,
-                    object->getClass(), receiver_type_info, class_ctx,
-                    caller_program_id, object_program_id, parse_options,
-                    dispatch_epoch, arg_types, arg_states, nargs);
-            if (entry) {
+            QoreAOTMethodDispatchHit hit = qore_rt_find_aot_method_dispatch_cache_entry(thread_ctx.reader,
+                cache, object->getClass(), receiver_type_info, class_ctx, caller_program_id, object_program_id,
+                parse_options, dispatch_epoch, arg_types, arg_states, nargs);
+            if (hit.method) {
+                const QoreMethod* cached_method = hit.method;
+                const AbstractQoreFunctionVariant* cached_variant = hit.variant;
                 uint64_t result;
                 static constinit QoreEnvFlag use_fast_entry_env("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
                 const bool use_fast_entry = !use_fast_entry_env.get();
-                if (use_fast_entry && !entry->method->isStatic()
-                        && try_dispatch_method_fast(object, entry->method,
-                            object->getClass(), entry->variant, args,
+                if (use_fast_entry && !cached_method->isStatic()
+                        && try_dispatch_method_fast(object, cached_method,
+                            object->getClass(), cached_variant, args,
                             arg_cleanups, nargs, xsink, result)) {
                     return result;
                 }
@@ -23515,8 +23870,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
                     return toBits(QoreValue());
                 }
                 return toBits(qore_method_private::evalTmpArgs(
-                    *entry->method, xsink, rc_get_current_ref(), object,
-                    *arg_list, class_ctx, entry->variant, receiver_type_info,
+                    *cached_method, xsink, rc_get_current_ref(), object,
+                    *arg_list, class_ctx, cached_variant, receiver_type_info,
                     explicit_type_param_instantiation));
             }
         }
@@ -23573,7 +23928,7 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     // cache key does not hold, so it is not cached
     if (cacheable && resolved_variant && !*xsink
         && !(resolved_variant->isUser() && resolved_variant->getUserVariantBase()->getDeclaredDomain())) {
-        qore_rt_add_aot_method_dispatch_cache_entry(cache,
+        qore_rt_add_aot_method_dispatch_cache_entry(thread_ctx.reader, cache,
             object->getClass(), receiver_type_info, class_ctx, caller_program_id,
             object_program_id, parse_options, dispatch_epoch, arg_types,
             arg_states, nargs, method, resolved_variant);

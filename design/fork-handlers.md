@@ -72,10 +72,15 @@ cannot deadlock with a thread that keeps to the order.
 | 320 | time zone manager (`QTZM`) | ACQUIRE | thread list (cancellation checks) |
 | 400 | thread counters (`thread_counter`, `tp_thread_counter`) | ACQUIRE | thread list, condition waker (cancellable waits) |
 | 450 | module locks whose holders check for cancellation (`QFR_MODULE_CANCELLABLE`: the sshutil registry) | ACQUIRE | thread list, leaf locks |
+| 470 | the entries of threads into the quiescent waits of type retirement (`qore_type_wait_entry_lock`, debug builds only; its condition is initialized again in the child) | ACQUIRE | thread list |
 | 500 | thread list (`thread_list.lck`) | ACQUIRE | condition waker, stack lock |
 | 510 | condition waker (`cond_waker.lck`) | ACQUIRE | — |
 | 520 | stack lock (`stack_lck`) | ACQUIRE | — (only `pthread_create()`) |
+| 900 | the registry of the tombstones of retired declarations (`QoreTombstoneRegistry`): making a tombstone creates declarations and types | ACQUIRE | leaf locks (complex types, class IDs), the type registries below |
 | 1000 | leaf locks: caches and registries (among them the JIT caches and queue, the AOT pending constants, the AOT regex cache, the registry of the native fast entries of AOT modules, the content hashes of the sources of linked AOT modules, the DBI object registry, the sandbox watchdog's deadline map, the insertion into the value sets of the parse options of Programs (`qore_parse_options_values_mutex`, held only while a value is inserted: a Program's options lock is held across checks and parses and cannot be acquired before `fork()`), the stripe locks of the records of Programs that other threads change at run time (`program_thread_containers`: the containers that record the threads of Programs, the records of a thread's Programs and of its thread-local data, the records of Programs that change at run time and at module load, their breakpoints, and the Programs of debug programs; held only while one of them is changed, under the owner's lock: these locks are per object, and held across waits, user code or other locks, so they cannot be acquired before `fork()`), the set of Programs left allocated at exit (`left_programs`), the class data locks (`qore_class_data_locks`, which every construction of an object through a copied class handle takes, qore#6732), the count of thread data of debug builds (`tpd_live_count`), and the QUIC idle-close test hook of debug builds), and the leaf locks of modules (`QFR_MODULE_LEAF`: the i18n locale data fallbacks, the logger_bin event start time and id sequence, the ml ONNX provider list) | ACQUIRE | environment, debug output, allocation tracking |
+| 1020 | the registry of the generic caches by the types their keys name (`QoreGenericCacheRegistry`), taken with the complex types lock held | ACQUIRE | the locks of the caches (one per object, not registered) |
+| 1030 | the registry of the epoch holds of type retirement (`QoreTypeEpochHold`), taken with the JIT's background queue lock held | ACQUIRE | — |
+| 1040 | the debug registries of the live types and declarations (debug builds only), taken whenever a type or a declaration is created or destroyed | ACQUIRE | — |
 | 1100 | LLVM target initialization (`qore_llvm_initialize_targets()`): held while LLVM registers its targets, once per process | ACQUIRE | — |
 | 1500 | environment (`SystemEnvironment`) | ACQUIRE | debug output, allocation tracking |
 | 1900 | debug output (`printd()`) | ACQUIRE | allocation tracking |
@@ -207,6 +212,20 @@ callbacks run, so it is only reset in the child, which takes it again as often a
 `pthread_atfork()` in each module would not keep the order: modules register after the library, so their prepare
 handlers would run before all of the library's, and their handlers cannot be removed when a module is unloaded on
 musl or macOS.
+
+## Type retirement
+
+The freeing of the retired declarations of deleted Programs (`design/derived-type-retirement.md`) keeps its process-wide
+state under the locks of ranks 470, 900, 1020, 1030 and 1040 above, all acquired before `fork()`: a thread that enters
+a quiescent wait, arms or releases an epoch hold, makes a tombstone, registers a generic cache entry, or creates a type
+or a declaration (debug builds) at the moment of `fork()` held one, and the child's first use of it waited forever
+(qore#7549: a `Counter::waitForZero()` in a child of `fork-thread-churn.qtest`). The epochs of the parent's other
+threads leave the child with their entries in the thread list (`ThreadEntry::abandonAfterFork()`), and the epoch hold
+of the work that the JIT's background compile thread was compiling is released by the JIT's child handler
+(`QoreTypeEpochHold::abandonAfterFork()`), since that work is never finished in the child; the holds of the queued
+work stay with the queue. `examples/test/qore/misc/fork-type-retirement-locks.qtest` holds each lock in another thread
+across `fork()` (`dbg_fork_while_type_lock_held()`, debug builds) and forks while a background compile of a specialized
+method is in progress.
 
 ## Children that exit without exit-time handlers
 
