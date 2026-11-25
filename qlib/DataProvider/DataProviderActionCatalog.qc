@@ -844,6 +844,13 @@ public hashdecl DataProviderActionBaseInfo {
     #! Free-form metadata for the action
     *hash<auto> metadata;
 
+    #! Message formats this action can submit, keyed by destination/authorization variant and then format
+    /** See @ref DataProviderMessageFormat for the declaration and upgrade-checking contract. An absent
+        declaration or variant means unknown. Option labels are localized through the ordinary action
+        option projection. Variant names, format names, option paths and selector values are stable data.
+    */
+    *hash<auto> message_formats;
+
     #! Processor capability bitfield (DPC_* constants) for pipeline processor actions
     /** @since %DataProvider 3.3
     */
@@ -4022,6 +4029,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         DataProviderActionCatalog::checkProcessingAndBilling("ACTION-ERROR", sprintf("action %s/%s", action.app,
             action.action), action.processing, action.billing);
+        if (exists action.message_formats) {
+            DataProviderMessageFormat::validate(action);
+        }
         action.path = DataProviderActionCatalog::normalizePath(action.path);
 
         # check that all path variables are defined

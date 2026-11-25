@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires FsUtil
+%exec-class MessageFormatsTest
+
+class MessageFormatsTest inherits QUnit::Test {
+    constructor() : Test("Message format declarations", "1.0") {
+        addTestCase("selected formats round-trip and detect a connector upgrade", \indexTest());
+        addTestCase("invalid presentation grants and conflicting forms", \validationTest());
+        addTestCase("nested bindings preserve neighboring fields", \nestedTest());
+        set_return_value(main());
+    }
+
+    private static hash<auto> option(string role, string type) {
+        return {"type_info": AbstractDataProviderTypeMap{type}.getInfo(), "metadata": {"message_role": role}};
+    }
+
+    private static hash<auto> fixture() {
+        return {
+            "app": "FormatFixture", "action": "send", "path": "/send",
+            "options": {
+                "text": option("text", "string"), "html": option("text", "string"),
+                "blocks": option("native", "list"), "no_mentions": option("mentions", "bool"),
+                "preview": option("link_preview", "bool"),
+                "mode": option("selector", "string") + {"allowed_values": ({"value": "HTML"},)},
+                "to": {"type_info": AbstractDataProviderTypeMap."string".getInfo()},
+                "key": option("text", "string") + {"sensitive": True},
+                "hook": option("text", "string"),
+            },
+            "metadata": {"connection_alternative": {"option": "hook"}},
+            "message_formats": {
+                "mail": {
+                    "plain": {"content": "text"},
+                    "html": {"content": "html", "selector": "mode", "selector_value": "HTML",
+                        "fallback": "text", "plain_alternative": True},
+                },
+                "chat": {"blocks": {"content": "blocks", "native": "slack-block-kit", "native_type": "list",
+                    "fallback": "text",
+                    "plain_alternative": True, "mentions": "no_mentions", "mentions_value": True,
+                    "link_preview": "preview", "link_preview_value": False}},
+                "sms": {"plain": {"content": "text", "limit": 1600, "unit": "characters"}},
+                "unverified": {},
+            },
+        };
+    }
+
+    private static writeVersion(string dir, hash<auto> action) {
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {}, "appmap": {"FormatFixture": {"FixtureModule": True}}, "schememap": {},
+            "appinfomap": {"FormatFixture": {"name": "FormatFixture"}},
+        }, ("FormatFixture",), *hash<auto> sub (string app) {
+            return {"send": action, "legacy": {"app": app, "action": "legacy"}};
+        }, 0s, {});
+    }
+
+    private indexTest() {
+        string first = make_tmp_dir();
+        # live-provider-optin: restore the index environment after testing two independent snapshots
+        *string old = ENV{ProviderIndexEnvVar};
+        on_exit {
+            if (exists old) {
+                ProviderIndexUtil::setEnvironmentVariable(old);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                # live-provider-optin: remove the test index environment variable
+                remove ENV{ProviderIndexEnvVar};
+            }
+            remove_tree(first);
+        }
+        hash<auto> source = fixture();
+        writeVersion(first, source);
+        hash<auto> summary = ProviderIndexUtil::tryGetActionSummary("FormatFixture", "send");
+        assertEq(source.message_formats, summary.message_formats);
+        assertFalse(summary.hasKey("options"));
+        assertNothing(ProviderIndexUtil::tryGetActionSummary("FormatFixture", "legacy").message_formats);
+        hash<auto> action = ProviderIndexUtil::tryGetActionMetadata("FormatFixture", "send");
+        hash<auto> saved = DataProviderMessageFormat::selectForm(action, "mail", "html");
+        hash<auto> route = {"to": "fixture@example.org"};
+        assertEq(route + {"html": "<p>Hello</p>", "text": "Hello", "mode": "HTML"},
+            DataProviderMessageFormat::bindForm(action, "mail", saved, route,
+                {"content": "<p>Hello</p>", "fallback": "Hello"}));
+        assertThrows("MESSAGE-FORMAT-ERROR", sub () {
+            DataProviderMessageFormat::bindForm(action, "mail", saved, route,
+                {"content": "Hello", "fallback": "Hello", "to": "other"});
+        });
+        hash<auto> chat = DataProviderMessageFormat::selectForm(action, "chat", "blocks");
+        list<auto> blocks = ({"type": "divider"},);
+        assertEq(route + {"blocks": blocks, "text": "Hello", "no_mentions": True, "preview": False},
+            DataProviderMessageFormat::bindForm(action, "chat", chat, route, {"content": blocks, "fallback": "Hello",
+                "mentions": True, "link_preview": True}));
+        assertThrows("MESSAGE-FORMAT-ERROR", sub () {
+            DataProviderMessageFormat::bindForm(action, "chat", chat, route, {"content": {"text": "wrong shape"},
+                "fallback": "Hello"});
+        });
+        assertEq(1600, DataProviderMessageFormat::selectForm(action, "sms", "plain").form.limit);
+        assertThrows("MESSAGE-FORMAT-UNSUPPORTED", sub () {
+            DataProviderMessageFormat::checkSavedForm(action, "unverified", chat);
+        });
+        remove source.options.mode;
+        remove source.message_formats.mail.html;
+        remove source.message_formats.chat.blocks.fallback;
+        source.message_formats.chat.blocks.plain_alternative = False;
+        writeVersion(first, source);
+        assertTrue(ProviderIndexUtil::reloadIndex().reloaded);
+        action = ProviderIndexUtil::tryGetActionMetadata("FormatFixture", "send");
+        assertThrows("MESSAGE-FORMAT-UNSUPPORTED", "FormatFixture/send .*mail.*/html: form unavailable", sub () {
+            DataProviderMessageFormat::bindForm(action, "mail", saved, route, {"content": "Hello", "fallback": "Hi"});
+        });
+        assertThrows("MESSAGE-FORMAT-UNSUPPORTED", "changed", sub () {
+            DataProviderMessageFormat::checkSavedForm(action, "chat", chat);
+        });
+        hash<auto> reviewed = DataProviderMessageFormat::selectForm(action, "mail", "plain");
+        assertEq(route + {"text": "Hello"},
+            DataProviderMessageFormat::bindForm(action, "mail", reviewed, route, {"content": "Hello"}));
+        assertEq({"to": "fixture@example.org"}, route);
+        assertThrows("MESSAGE-FORMAT-UNSUPPORTED", sub () {
+            DataProviderMessageFormat::selectForm(action, "unverified", "plain");
+        });
+    }
+
+    private validationTest() {
+        hash<auto> original = fixture();
+        DataProviderMessageFormat::validate(original);
+        foreach hash<auto> bad in ((
+            {"content": "missing"}, {"content": "to"}, {"content": "key"}, {"content": "hook"},
+            {"content": "blocks"}, {"content": "html", "selector": "mode", "selector_value": "Unknown"},
+            {"content": "html", "selector": "mode"}, {"content": "text", "fallback": "text"},
+            {"content": "html", "plain_alternative": True}, {"content": "text", "limit": 10},
+            {"content": "text", "mentions": "no_mentions", "mentions_value": "yes"},
+            {"content": "text", "recipient": "to"}
+        )) {
+            hash<auto> action = original;
+            action.message_formats = {"test": {"invalid": bad}};
+            assertThrows("MESSAGE-FORMAT-ERROR", sub () { DataProviderMessageFormat::validate(action); });
+        }
+        assertThrows("MESSAGE-FORMAT-ERROR", sub () {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": "FormatFixture", "action": "bad", "path": "/bad", "display_name": "Bad",
+                "short_desc": "Bad form", "desc": "Invalid message form", "action_code": DPAT_API,
+                "message_formats": {"default": {"plain": {"content": "recipient"}}},
+                "options": {"recipient": <ActionOptionInfo>{"type": AbstractDataProviderTypeMap."string"}},
+            });
+        });
+        original.message_formats.mail.other = original.message_formats.mail.html;
+        assertThrows("MESSAGE-FORMAT-ERROR", sub () { DataProviderMessageFormat::validate(original); });
+    }
+
+    private nestedTest() {
+        HashDataType body("NestedMessage");
+        body.addQoreFields({"text": {"type": StringType, "attr": {"metadata": {"message_role": "text"}}},
+            "address": {"type": StringType}});
+        hash<auto> action = fixture();
+        action.options.body = {"type_info": body.getInfo(), "metadata": {"message_role": "container"}};
+        action.message_formats = {"mail": {"plain": {"content": "body.text"}}};
+        hash<auto> saved = DataProviderMessageFormat::selectForm(action, "mail", "plain");
+        assertEq({"body": {"address": "original", "text": "Hi"}}, DataProviderMessageFormat::bindForm(
+            action, "mail", saved, {"body": {"address": "original"}}, {"content": "Hi"}));
+        action.message_formats.mail.plain.content = "body.address";
+        assertThrows("MESSAGE-FORMAT-ERROR", sub () { DataProviderMessageFormat::validate(action); });
+    }
+}

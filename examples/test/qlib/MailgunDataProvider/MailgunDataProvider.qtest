@@ -632,6 +632,18 @@ public class MailgunDataProviderTest inherits QUnit::Test {
         assertEq(1, (select params, $1 == "subject=hello%20there").size());
         assertEq(1, (select params, $1 == "to=a%40example.com%2Cb%40example.com").size());
         assertEq(1, (select params, $1 == "text=a%20test").size());
+        hash<auto> action = DataProviderActionCatalog::getAppActionEx("Mailgun", "send-email");
+        hash<auto> form = DataProviderMessageFormat::selectForm(action, "default", "html");
+        assertTrue(form.form.plain_alternative);
+        handler.requests = ();
+        provider.getChildProvider("send-email").doRequest(DataProviderMessageFormat::bindForm(action, "default", form,
+            {"from": "sender@example.com", "to": ("a@example.com",)},
+            {"subject": "Hello", "content": "<p>Hello</p>", "fallback": "Hello"}));
+        assertEq(1, handler.requests.size());
+        params = split("&", handler.requests[0].body);
+        assertTrue(params.contains("text=Hello"));
+        assertTrue(params.contains("html=%3Cp%3EHello%3C%2Fp%3E"));
+        assertTrue(params.contains("to=a%40example.com"));
         # the form-encoded request does not change the serialization of the shared client
         assertEq("json", rest.getSerialization());
 

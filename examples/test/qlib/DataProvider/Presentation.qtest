@@ -381,7 +381,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
         DataProviderPresentationCatalog catalog(Domain, "ja-JP",
             {"search_path": (root,)});
         hash<auto> localized_app = catalog.projectApp(app());
-        hash<auto> localized_action = catalog.projectAction(app(), action());
+        hash<auto> formats = {"default": {"plain": {"content": "body", "selector": "format",
+            "selector_value": "Text"}}};
+        hash<auto> localized_action = catalog.projectAction(app(), action() + {"message_formats": formats});
+        assertEq(formats, localized_action.message_formats);
         hash<auto> localized_option = catalog.projectOption(app(), action(),
             Option, option());
         hash<auto> localized_value = catalog.projectAllowedValue(app(),
