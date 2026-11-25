@@ -159,8 +159,8 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
         url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1", "service": 0}).port);
         # server b is reached with another host name, so that cookies of server a are not sent to it
-        url_b = sprintf("http://localhost:%d", server_b.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+        url_b = sprintf("http://127.0.0.1:%d", server_b.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0}).port);
         on_exit {
             peer_a.block.dec();

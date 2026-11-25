@@ -148,6 +148,19 @@ public:
         return dispatchValue(args, xsink);
     }
 
+    //! Returns the class context of the code that created the closure, or nullptr if it has none
+    DLLLOCAL const qore_class_private* getClassContext() const {
+        return class_ctx;
+    }
+
+    //! Marks the closure as used for the update of a shared object; returns false if it was used already
+    /** A closure is run in an update scope once only (see SandboxManager::updateSharedObject()), so that code that
+        obtains it cannot run the update again (qore#6843)
+    */
+    DLLLOCAL bool takeSharedUpdate() const {
+        return !shared_update_used.exchange(true);
+    }
+
     // A closure is user code; its declaration owns the argument filters, and its body owns its operations.
     QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
             const LexicalSemanticPolicy& policy) const override {
@@ -169,6 +182,8 @@ protected:
         the closure is created and never changed
     */
     bool module_init;
+    //! true once the closure has been run in an update scope of a shared object (see takeSharedUpdate())
+    mutable std::atomic<bool> shared_update_used{false};
 
     //! copies the type arguments and the receiver type of the code that creates the closure
     DLLLOCAL void captureTypeContext();

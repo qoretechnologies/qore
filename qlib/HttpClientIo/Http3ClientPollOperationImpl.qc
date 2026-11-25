@@ -153,9 +153,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
             %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param address_family the address family to connect in; if not set, the host name is resolved in all
-        families and the family of the first address is used (see \a avoid_families)
-        @param avoid_families address families not to connect in if the host name also resolves to an address in
-        another family
+        families, and the connection attempts to its addresses race (RFC 8305; see
+        @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()")
+        @param avoid_families address families to try last if the host name also resolves to an address in another
+        family
 
         Nothing that can block runs while the operation is created: the UDP socket is created unbound, and the
         operation resolves the host name and binds the socket in the family of the remote address once it is

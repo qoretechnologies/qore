@@ -72,6 +72,9 @@ public:
 
     DLLLOCAL int add(QoreEnumDecl* ed);
 
+    //! returns the enums with their names in the order in which they were declared (issue #7171)
+    DLLLOCAL std::vector<std::pair<const char*, QoreEnumDecl*>> getInDeclarationOrder() const;
+
     DLLLOCAL QoreEnumDecl* find(const char* name);
     DLLLOCAL const QoreEnumDecl* find(const char* name) const;
 
@@ -84,6 +87,11 @@ public:
 
     DLLLOCAL void assimilate(EnumList& n, qore_ns_private& ns,
         std::vector<std::string>* pending_names = nullptr);
+    //! Merges the enums of a namespace that is added at run time (qore_ns_private::runtimeAssimilate())
+    /** No parse is running: a declaration that conflicts with one of the namespace is not added, but left in \a n,
+        which is kept with the namespace (qore_ns_private::retained_ns), and no parse error is raised (qore#7530)
+    */
+    DLLLOCAL void runtimeAssimilate(EnumList& n, qore_ns_private& ns);
     DLLLOCAL QoreHashNode* getInfo();
 
     DLLLOCAL bool empty() const {
@@ -97,28 +105,33 @@ public:
 
 class EnumListIterator {
 protected:
-    hm_qen_t& hd;
-    hm_qen_t::iterator i;
+    //! the enums with their names, in the order in which they were declared (issue #7171)
+    std::vector<std::pair<const char*, QoreEnumDecl*>> v;
+    size_t i = 0;
+    bool started = false;
 
 public:
-    DLLLOCAL EnumListIterator(EnumList& n_hd) : hd(n_hd.hm), i(hd.end()) {
+    DLLLOCAL EnumListIterator(EnumList& n_hd) : v(n_hd.getInDeclarationOrder()) {
     }
 
     DLLLOCAL bool next() {
-        if (i == hd.end()) {
-            i = hd.begin();
-        } else {
+        if (!started) {
+            started = true;
+            i = 0;
+        } else if (i < v.size()) {
             ++i;
         }
-        return i != hd.end();
+        return i < v.size();
     }
 
     DLLLOCAL const char* getName() const {
-        return i->first;
+        assert(started && i < v.size());
+        return v[i].first;
     }
 
     DLLLOCAL QoreEnumDecl* get() const {
-        return i->second;
+        assert(started && i < v.size());
+        return v[i].second;
     }
 
     DLLLOCAL bool isPublic() const;
@@ -128,28 +141,33 @@ public:
 
 class ConstEnumListIterator {
 protected:
-    const hm_qen_t& hd;
-    hm_qen_t::const_iterator i;
+    //! the enums with their names, in the order in which they were declared (issue #7171)
+    std::vector<std::pair<const char*, QoreEnumDecl*>> v;
+    size_t i = 0;
+    bool started = false;
 
 public:
-    DLLLOCAL ConstEnumListIterator(const EnumList& n_hd) : hd(n_hd.hm), i(hd.end()) {
+    DLLLOCAL ConstEnumListIterator(const EnumList& n_hd) : v(n_hd.getInDeclarationOrder()) {
     }
 
     DLLLOCAL bool next() {
-        if (i == hd.end()) {
-            i = hd.begin();
-        } else {
+        if (!started) {
+            started = true;
+            i = 0;
+        } else if (i < v.size()) {
             ++i;
         }
-        return i != hd.end();
+        return i < v.size();
     }
 
     DLLLOCAL const char* getName() const {
-        return i->first;
+        assert(started && i < v.size());
+        return v[i].first;
     }
 
     DLLLOCAL const QoreEnumDecl* get() const {
-        return i->second;
+        assert(started && i < v.size());
+        return v[i].second;
     }
 
     DLLLOCAL bool isPublic() const;

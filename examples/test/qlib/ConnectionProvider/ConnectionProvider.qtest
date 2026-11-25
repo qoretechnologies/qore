@@ -96,12 +96,12 @@ public class ConnectionProviderTest inherits QUnit::Test {
     }
 
     ftpConnectionTest() {
-        FtpServer ftp(0, m_options.verbose);
+        FtpServer ftp(0, m_options.verbose, "127.0.0.1");
         on_exit ftp.shutdown();
 
         int ftp_port = ftp.getPort();
 
-        string url = "ftp://user:pass@localhost:" + ftp_port + "/";
+        string url = "ftp://user:pass@127.0.0.1:" + ftp_port + "/";
         FtpConnection fc("name", "desc", url);
         assertEq(True, fc.enabled, "connection is enabled by default");
         assertEq(True, fc.monitor, "connection is monitored by default");
@@ -211,7 +211,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
 
         # Test 1: Default http_version is "auto"
         {
-            HttpConnection hc("test", "test http_version default", "http://localhost:8080");
+            HttpConnection hc("test", "test http_version default", "http://127.0.0.1:8080");
             hash<auto> conn_opts = hc.getConnectionOptions();
             assertEq("auto", conn_opts.http_version, "default http_version should be 'auto'");
         }
@@ -219,36 +219,36 @@ public class ConnectionProviderTest inherits QUnit::Test {
         # Test 2: Explicit http_version values
         {
             # Test auto mode
-            HttpConnection hc_auto("test", "desc", "http://localhost:8080", {}, {"http_version": "auto"});
+            HttpConnection hc_auto("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "auto"});
             assertEq("auto", hc_auto.getConnectionOptions().http_version, "http_version auto");
 
             # Test HTTP/1.0
-            HttpConnection hc_10("test", "desc", "http://localhost:8080", {}, {"http_version": "1.0"});
+            HttpConnection hc_10("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "1.0"});
             assertEq("1.0", hc_10.getConnectionOptions().http_version, "http_version 1.0");
 
             # Test HTTP/1.1
-            HttpConnection hc_11("test", "desc", "http://localhost:8080", {}, {"http_version": "1.1"});
+            HttpConnection hc_11("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "1.1"});
             assertEq("1.1", hc_11.getConnectionOptions().http_version, "http_version 1.1");
 
             # Test HTTP/2.0
-            HttpConnection hc_20("test", "desc", "http://localhost:8080", {}, {"http_version": "2.0"});
+            HttpConnection hc_20("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "2.0"});
             assertEq("2.0", hc_20.getConnectionOptions().http_version, "http_version 2.0");
         }
 
         # Test 3: Invalid http_version value should raise error
         {
             assertThrows("CONNECTION-OPTION-ERROR", sub () {
-                new HttpConnection("test", "desc", "http://localhost:8080", {}, {"http_version": "invalid"});
+                new HttpConnection("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "invalid"});
             });
 
             # Test HTTP/3.0 is valid (QUIC support)
-            HttpConnection hc_30("test", "desc", "http://localhost:8080", {}, {"http_version": "3.0"});
+            HttpConnection hc_30("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "3.0"});
             assertEq("3.0", hc_30.getConnectionOptions().http_version, "http_version 3.0");
         }
 
         # Test 4: Verify http_version is in allowed_values of ConnectionScheme
         {
-            HttpConnection hc("test", "test", "http://localhost:8080");
+            HttpConnection hc("test", "test", "http://127.0.0.1:8080");
             hash<ConnectionSchemeInfo> scheme = hc.getConnectionSchemeInfo();
             assertTrue(exists scheme.options.http_version, "http_version option should exist");
             assertEq("auto", scheme.options.http_version.default_value, "default should be 'auto'");
@@ -265,7 +265,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
 
         # Test 5: Connection serialization preserves http_version
         {
-            HttpConnection hc("test", "desc", "http://localhost:8080", {}, {"http_version": "1.1"});
+            HttpConnection hc("test", "desc", "http://127.0.0.1:8080", {}, {"http_version": "1.1"});
             HttpConnection hc2 = Serializable::deserialize(hc.serialize());
             assertEq("1.1", hc2.getConnectionOptions().http_version, "serialization should preserve http_version");
         }
@@ -330,14 +330,14 @@ public class ConnectionProviderTest inherits QUnit::Test {
         hash<auto> opts = {"foo": "bar"};
 
         try {
-            HttpConnection h("foo", "bar", "http://localhost", {}, opts);
+            HttpConnection h("foo", "bar", "http://127.0.0.1", {}, opts);
             assertEq(False, exists h);
         } catch (hash<ExceptionInfo> ex) {
             assertEq("CONNECTION-OPTION-ERROR", ex.err);
             assertRegex("has unknown option", ex.desc);
         }
 
-        IgnoreOptionsConnection h("foo", "bar", "http://localhost", {}, opts);
+        IgnoreOptionsConnection h("foo", "bar", "http://127.0.0.1", {}, opts);
         assertEq(opts, h.opts);
     }
 
@@ -1185,7 +1185,7 @@ class TestSslServer {
         sock.setSslVerifyMode(SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
         sock.acceptAllCertificates(True);
 
-        if (sock.bind("localhost:0"))
+        if (sock.bind("127.0.0.1:0"))
             throw "BIND-ERROR", strerror();
 
         if (sock.listen())

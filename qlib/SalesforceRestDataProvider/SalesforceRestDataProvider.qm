@@ -62,6 +62,15 @@ module SalesforceRestDataProvider {
             "short_desc": "Salesforce® cloud CRM; Salesforce is a trademark of Salesforce, Inc.",
             "desc": "Salesforce® cloud CRM; Salesforce is a trademark of Salesforce, Inc.",
             "scheme": "sfrests",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "salesforce.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.salesforce.com/sales/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": SalesforceLogo,
             "logo_file_name": "salesforce-logo.svg",
             "logo_mime_type": MimeTypeSvg,

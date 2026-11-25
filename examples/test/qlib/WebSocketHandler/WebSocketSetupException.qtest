@@ -163,7 +163,7 @@ class WebSocketSetupExceptionTest inherits QUnit::Test {
         hash<auto!> conn_opts;
         switch (protocol) {
             case "h1": conn_opts = {"url": "ws://127.0.0.1:" + port}; break;
-            case "h2": conn_opts = {"url": "wss://localhost:" + port, "http_version": "2.0"}; break;
+            case "h2": conn_opts = {"url": "wss://127.0.0.1:" + port, "http_version": "2.0"}; break;
             case "h3": conn_opts = {"url": "wss://127.0.0.1:" + port, "http3_mode": "required"}; break;
         }
         WebSocketClient wsc(sub (*data msg) {}, conn_opts + {"ssl_verify_cert": False, "logger": logger});

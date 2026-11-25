@@ -529,6 +529,18 @@ public class ShippoDataProviderTest inherits QUnit::Test {
             ShippoDataProvider::AppName, "new-parcel");
         assertTrue(exists newParcelAction, "new-parcel action should exist");
         assertEq(DPAT_EVENT, newParcelAction.action_code);
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-order", "get-shipment", "get-shipping-label");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # validate-address POSTs /addresses, which creates an address object: it changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(DataProviderActionCatalog::getAppAction(
+            ShippoDataProvider::AppName, "validate-address")));
     }
 
     #! Integration tests - require SHIPPO_API_TOKEN

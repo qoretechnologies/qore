@@ -1,0 +1,307 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 keep-alive connections with chunked request bodies over local sockets
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The connection of an HTTP/1.1 request whose chunked body a handler stopped reading before its end is closed after
+    the response, so that the rest of the body is never taken for another request (issue 7417): a handler whose read
+    raised an error that it handled (its callback's, a timeout, the size limit) or that did not handle it; a body
+    read to its end, or not read by the handler (which the server reads), leaves the connection open.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerUnfinishedChunkedBodyTest
+
+#! a handler that reads the chunked request body itself from the connection's socket
+class UnfinishedBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the paths of the requests served
+        list<string> served = ();
+        #! decremented when a read of the "timeout" request has timed out
+        Counter timed_out(1);
+    }
+
+    private {
+        Mutex m();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        m.lock();
+        served += hdr.path;
+        m.unlock();
+
+        string path = (hdr.path =~ x/^([^-]+)/)[0];
+        switch (path) {
+            case "throw":
+                # the callback refuses the first chunk; the handler handles the error
+                try {
+                    s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                        if (v.hasKey("data")) {
+                            throw "TEST-ERROR", "refused";
+                        }
+                    }, 5s);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                break;
+
+            case "uncaught":
+                # the callback refuses the first chunk; the server handles the error
+                s.readHTTPChunkedBodyWithCallback(sub (hash<auto> v) {
+                    if (v.hasKey("data")) {
+                        throw "TEST-ERROR", "refused";
+                    }
+                }, 5s);
+                break;
+
+            case "stream":
+                try {
+                    s.readHTTPChunkedBodyToOutputStream(new FailingOutputStream(), 5s);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                break;
+
+            case "timeout":
+                try {
+                    s.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> v) {}, 250ms);
+                } catch (hash<ExceptionInfo> ex) {
+                    timed_out.dec();
+                }
+                break;
+
+            case "limit":
+                try {
+                    s.setMaxChunkedBodySize(4);
+                    s.readHTTPChunkedBodyBinary(5s);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                break;
+
+            case "full":
+                s.readHTTPChunkedBodyBinary(5s);
+                break;
+
+            case "read":
+                # the body is read by the handler's base class
+                getMessageBody(s, hdr, body);
+                break;
+
+            # "none", "noread" and the other requests do not read a body
+        }
+        return makeResponse(200, "served " + hdr.path, {"Content-Type": "text/plain"});
+    }
+}
+
+#! an output stream that the chunked body reader cannot write to (it is not I/O thread safe), so the read stops
+#! at the first chunk
+class FailingOutputStream inherits OutputStream {
+    write(binary data) {
+        throw "TEST-STREAM-ERROR", "the stream refuses the data";
+    }
+
+    close() {
+    }
+}
+
+class HttpServerUnfinishedChunkedBodyTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        UnfinishedBodyHandler handler();
+        int port;
+        #! the port of a listener with a maximum request body size
+        int limited_port;
+    }
+
+    constructor() : Test("HttpServerUnfinishedChunkedBodyTest", "1.0") {
+        addTestCase("a callback error that the handler handles", \throwTest());
+        addTestCase("a callback error that the server handles", \uncaughtTest());
+        addTestCase("an output stream error", \streamTest());
+        addTestCase("a read that times out", \timeoutTest());
+        addTestCase("a body over the size limit", \limitTest());
+        addTestCase("a body read to its end", \fullTest());
+        addTestCase("a body that the handler does not read", \noneTest());
+        addTestCase("a chunk larger than the limit or the memory", \largeChunkTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelFatal()),
+        });
+        on_exit delete server;
+        server.setDefaultHandler("unfinished", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        limited_port = server.addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1",
+            "max_request_body_size": 4096}).port;
+        server.waitForAsyncIo();
+        set_return_value(main());
+    }
+
+    throwTest() {
+        # the rest of the body holds a complete request
+        checkClosed("throw-1", body("a", "GET /smuggled-throw HTTP/1.1\r\nHost: localhost\r\n\r\n"));
+    }
+
+    uncaughtTest() {
+        checkClosed("uncaught-1", body("a", "GET /smuggled-uncaught HTTP/1.1\r\nHost: localhost\r\n\r\n"), 500);
+    }
+
+    streamTest() {
+        checkClosed("stream-1", body("a", "GET /smuggled-stream HTTP/1.1\r\nHost: localhost\r\n\r\n"));
+    }
+
+    limitTest() {
+        checkClosed("limit-1", body("abcdefgh", "GET /smuggled-limit HTTP/1.1\r\nHost: localhost\r\n\r\n"));
+    }
+
+    timeoutTest() {
+        # the body's first chunk is sent, and a request only after the handler's read has timed out
+        Socket c = connect();
+        on_exit c.close();
+        c.send(header("timeout-1") + "5\r\nhello\r\n");
+        assertEq(0, handler.timed_out.waitForZero(10s));
+        try {
+            c.send("GET /smuggled-timeout HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        } catch (hash<ExceptionInfo> ex) {
+            # the server may have closed the connection already
+        }
+        checkResponse(c, "timeout-1");
+    }
+
+    fullTest() {
+        # the request after the body is served on the same connection
+        Socket c = connect();
+        on_exit c.close();
+        c.send(header("full-1") + body("abc", "def") + "GET /after-full HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code);
+        assertNeq("close", resp.connection);
+        resp = readResponse(c);
+        assertEq(200, resp.status_code);
+        assertEq("served after-full", resp.body);
+    }
+
+    noneTest() {
+        # the server reads the body that the handler did not read, and serves the request after it
+        Socket c = connect();
+        on_exit c.close();
+        c.send(header("none-1") + body("abc", "GET /smuggled-none HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            + "GET /after-none HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code);
+        resp = readResponse(c);
+        assertEq("served after-none", resp.body);
+        assertFalse(inlist("smuggled-none", handler.served));
+    }
+
+    largeChunkTest() {
+        # a chunk size that no memory can hold, in a body that the handler reads or that the server reads after the
+        # handler: the server keeps running and serving other requests
+        foreach string size in (("ffffffffffff", "7ffffffffffffffd")) {
+            foreach string path in (("read", "noread")) {
+                # with a maximum body size, the request is refused before the chunk is read
+                {
+                    Socket c = connect(limited_port);
+                    on_exit c.close();
+                    c.send(header(path + "-limited") + size + "\r\nhello\r\n");
+                    hash<auto> resp = readResponse(c);
+                    assertEq("close", resp.connection, path);
+                    *hash<auto> next;
+                    try {
+                        next = readResponse(c);
+                    } catch (hash<ExceptionInfo> ex) {
+                    }
+                    assertNothing(next, path);
+                }
+                # without one, the server waits for the data of the chunk, and serves other requests meanwhile
+                Socket c = connect();
+                on_exit c.close();
+                c.send(header(path + "-unlimited") + size + "\r\nhello\r\n");
+                checkServed(sprintf("%s %s", path, size));
+            }
+        }
+    }
+
+    #! checks that the server answers a request on another connection
+    private checkServed(string label) {
+        Socket c = connect();
+        on_exit c.close();
+        c.send("GET /other HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(c);
+        assertEq(200, resp.status_code, label);
+        assertEq("served other", resp.body, label);
+    }
+
+    #! sends a request with the given chunked body; checks that the connection is closed after the response
+    private checkClosed(string path, string body, int code = 200) {
+        Socket c = connect();
+        on_exit c.close();
+        c.send(header(path) + body);
+        checkResponse(c, path, code);
+    }
+
+    #! checks the response, that no other one follows it, and that no request in the body was served
+    private checkResponse(Socket c, string path, int code = 200) {
+        hash<auto> resp = readResponse(c);
+        assertEq(code, resp.status_code, path);
+        assertEq("close", resp.connection, path);
+        # the connection is closed: the rest of the body is not answered as another request
+        *hash<auto> next;
+        try {
+            next = readResponse(c);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertNothing(next, path);
+        string smuggled = "smuggled-" + (path =~ x/^([^-]+)/)[0];
+        assertFalse(inlist(smuggled, handler.served), path);
+    }
+
+    #! returns the header of a chunked request for the given path
+    private static string header(string path) {
+        return sprintf("POST /%s HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n", path);
+    }
+
+    #! returns a chunked body of the given chunks
+    private static string body(string chunk1, string chunk2) {
+        return sprintf("%x\r\n%s\r\n%x\r\n%s\r\n0\r\n\r\n", chunk1.size(), chunk1, chunk2.size(), chunk2);
+    }
+
+    private Socket connect(*int p) {
+        Socket c();
+        c.connect("127.0.0.1:" + (p ?? port), 10s);
+        return c;
+    }
+
+    #! reads a response with a Content-Length body
+    private static hash<auto> readResponse(Socket c) {
+        hash<auto> resp = c.readHTTPHeader(5s);
+        int len = resp."content-length".toInt();
+        resp.body = len ? c.recv(len, 5s) : "";
+        return resp;
+    }
+}

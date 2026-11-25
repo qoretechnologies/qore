@@ -25,7 +25,7 @@ string sub result(code c) {
 }
 
 #! starts an HTTP/2 WebSocket stream of the handler; returns "ended" when the idle timer of the stream has ended it
-string sub stream_idle_timeout() {
+string sub stream_idle_timeout(Socket peer) {
     TestHandler h();
     Queue ended();
     hash<auto> cx = {
@@ -45,15 +45,15 @@ string sub stream_idle_timeout() {
     };
     hash<auto> hdr = {"method": "CONNECT", ":protocol": "websocket"};
     # the handler arms the heartbeat and idle timers of the stream and returns at once
-    if (!h.startImpl("1", cx, hdr, new Socket())) {
+    if (!h.startImpl("1", cx, hdr, peer)) {
         return "not externally managed";
     }
     return ended.get(60000);
 }
 
-list<string> sub test() {
+list<string> sub test(Socket peer) {
     return (
-        "WebSocketHandler stream idle timer: " + result(\stream_idle_timeout()),
+        "WebSocketHandler stream idle timer: " + result(string sub () { return stream_idle_timeout(peer); }),
         "declared own timer fired: " + result(auto sub () {
             WebSocketHandlerTimerFixture::ModuleTimer t(0s);
             return t.waitFired(60s);

@@ -225,7 +225,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         m_server = new HttpServer(http_opts);
         m_server.setHandler("ws-handler", "", NOTHING, ws_handler);
         m_server.setDefaultHandler("ws-handler", ws_handler);
-        linfo = m_server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0});
+        linfo = m_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
 
         set_return_value(main());
 
@@ -234,7 +234,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
     #! Helper: perform WebSocket upgrade handshake and return the HTTPClient
     private HTTPClient wsHandshake(*int port) {
-        HTTPClient hc({"url": port ? "http://127.0.0.1:" + port : "http://localhost:" + linfo.port});
+        HTTPClient hc({"url": port ? "http://127.0.0.1:" + port : "http://127.0.0.1:" + linfo.port});
         # the raw test server accepts one connection: the request's
         if (!port) {
             hc.connect();

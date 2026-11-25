@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - port reservation across IPv4/IPv6 families and SO_REUSEADDR bind rules of the kernel
+# test-loopback: localhost - it tests binding the name "localhost", which listens on its first address and holds the port on the other loopback address, and connecting to it by name; its only 127.0.0.1 socket checks that an IP address bind holds no port and has no client
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved

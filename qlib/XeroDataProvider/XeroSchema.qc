@@ -135,6 +135,18 @@ public class XeroSchema {
     }
 
     private {
+        #! The ID of the lazy value of getAccountingSchema() (qore#6843)
+        static int accounting_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildAccountingSchemaValue());
+        #! The ID of the lazy value of getProjectsSchema() (qore#6843)
+        static int projects_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildProjectsSchemaValue());
+        #! The ID of the lazy value of getAccountingActionSet() (qore#6843)
+        static int accounting_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildAccountingActionSetValue());
+        #! The ID of the lazy value of getProjectsActionSet() (qore#6843)
+        static int projects_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \XeroSchema::buildProjectsActionSetValue());
         #! The parsed schemas, keyed by file name
         static hash<string, OpenApi3Schema> schemas = {};
 
@@ -152,18 +164,45 @@ public class XeroSchema {
 
     #! Returns the parsed vendored accounting schema, parsing it on first use
     static OpenApi3Schema getAccountingSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(accounting_schema_value_id);
+    }
+
+    #! Builds the value of getAccountingSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3Schema buildAccountingSchemaValue() {
         AutoLock al(lck);
         return XeroSchema::getSchemaIntern(AccountingSchemaFileName);
     }
 
     #! Returns the parsed vendored projects schema, parsing it on first use
     static OpenApi3Schema getProjectsSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(projects_schema_value_id);
+    }
+
+    #! Builds the value of getProjectsSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3Schema buildProjectsSchemaValue() {
         AutoLock al(lck);
         return XeroSchema::getSchemaIntern(ProjectsSchemaFileName);
     }
 
     #! Returns the accounting action set, building it on first use
     static RestSchemaActionSet getAccountingActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(accounting_action_set_value_id);
+    }
+
+    #! Builds the value of getAccountingActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActionSet buildAccountingActionSetValue() {
         AutoLock al(lck);
         return XeroSchema::getAccountingActionSetIntern();
     }
@@ -173,6 +212,15 @@ public class XeroSchema {
         accounting listing that actually declares contacts.
     */
     static RestSchemaActionSet getProjectsActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(projects_action_set_value_id);
+    }
+
+    #! Builds the value of getProjectsActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActionSet buildProjectsActionSetValue() {
         AutoLock al(lck);
         if (!projects_set) {
             projects_set = new RestSchemaActionSet(XeroSchema::getSchemaIntern(ProjectsSchemaFileName),

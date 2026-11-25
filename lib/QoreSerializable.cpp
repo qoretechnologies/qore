@@ -1294,16 +1294,19 @@ int QoreSerializable::deserializeStaticClassVars(ExceptionSink* xsink, const Qor
             if (*xsink) {
                 return -1;
             }
-            ReferenceHolder<QoreHashNode> h(xsink);
-            ValueHolder vh(m->getValue(), xsink);
-            if (context.flags & QDF_MERGE_STATIC_CLASS_VARS && (vh->getType() == NT_HASH)
-                && (v->getType() == NT_HASH)) {
-                h = vh->get<const QoreHashNode>()->realCopy();
-                h->merge(v->get<const QoreHashNode>(), xsink);
-                if (*xsink) {
-                    return -1;
+            // QDF_MERGE_STATIC_CLASS_VARS includes the QDF_STATIC_CLASS_VARS bit, so all its bits must be set
+            if ((context.flags & QDF_MERGE_STATIC_CLASS_VARS) == QDF_MERGE_STATIC_CLASS_VARS
+                && v->getType() == NT_HASH) {
+                ValueHolder vh(m->getValue(), xsink);
+                if (vh->getType() == NT_HASH) {
+                    ReferenceHolder<QoreHashNode> h(vh->get<const QoreHashNode>()->realCopy(), xsink);
+                    h->merge(v->get<const QoreHashNode>(), xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    // the merged hash replaces the deserialized value; its reference passes to "v"
+                    v = h.release();
                 }
-                v = *h;
             }
             if (m->setValue(*v, xsink)) {
                 xsink->appendLastDescription(" (while setting static var '%s::%s')", cname, ci.getKey());
@@ -2584,20 +2587,9 @@ DateTimeNode* QoreSerializable::deserializeAbsDateFromStream(StreamReader& reade
             return nullptr;
         }
 
-        bool is_path = (!region.empty() && region.c_str()[0] == '.') || q_absolute_path(region.c_str());
-        if (QoreTimeZoneManager::checkRegion(region, is_path, xsink)) {
-            return nullptr;
-        }
-        if (is_path && runtime_check_parse_option(PO_NO_FILESYSTEM)) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot create a TimeZone object from absolute path "
-                "'%s' when sandboxing restriction PO_NO_FILESYSTEM is set", region.c_str());
-            return nullptr;
-        }
-
-        zone = is_path
-            ? QTZM.findLoadRegionFromPath(region.c_str(), xsink)
-            : QTZM.findLoadRegion(region.c_str(), xsink);
-
+        // a zone named in data is a region or the local zone, never a path: a path raises the error of an unknown
+        // region
+        zone = QTZM.findDataRegion(region, xsink);
         if (*xsink) {
             return nullptr;
         }

@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! a module whose code loads time zones for its callers (timezone-region-sandbox.qtest)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TzMod {
+    version = "1.0";
+    desc = "loads time zones for its callers";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace TzMod {
+    #! returns the UTC offset of the zone of the name
+    public int sub load(string name) {
+        return (new TimeZone(name)).UTCOffset();
+    }
+
+    #! returns the region of the zone of the name
+    public string sub region(string name) {
+        return (new TimeZone(name)).region();
+    }
+}
