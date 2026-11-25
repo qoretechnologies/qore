@@ -468,6 +468,62 @@ module HttpServerUtil {
       (<a href="https://github.com/qoretechnologies/qore/issues/719">issue 719</a>)
 */
 
+#! The requests that the server authenticated with the trusted authenticator of their handler (qore#7303)
+/** Not exported: only this module's code can create one (see
+    @ref HttpServer::AbstractHttpRequestHandler::authenticatePlatform() "AbstractHttpRequestHandler::authenticatePlatform()").
+    It marks the request of a handler on its thread, by the ID of the request, until it is destroyed; the marks of a
+    thread are a stack, so a request dispatched while another is authenticated on the thread does not take its mark
+*/
+class HttpPlatformAuthentication {
+    private:internal {
+        #! the token of this mark
+        object token = new Mutex();
+
+        #! the key of this mark's thread
+        string tid = string(gettid());
+
+        #! the marks, by thread: the token, the handler and the ID of the request
+        static hash<string, list<hash<auto>>> marks = {};
+
+        #! the lock of \c marks
+        static Mutex lock();
+    }
+
+    #! Marks the request of the handler on this thread
+    constructor(object handler, hash<auto> cx) {
+        AutoLock al(lock);
+        push marks{tid}, {"token": token, "handler": handler.uniqueHash(), "id": cx.id};
+    }
+
+    #! Removes the mark
+    destructor() {
+        AutoLock al(lock);
+        *list<hash<auto>> l = marks{tid};
+        for (int i = l.size() - 1; i >= 0; --i) {
+            if (l[i].token === token) {
+                splice l, i, 1;
+                break;
+            }
+        }
+        if (l) {
+            marks{tid} = l;
+        } else {
+            remove marks{tid};
+        }
+    }
+
+    #! Returns @ref True if the innermost mark of this thread is that of the request of the handler
+    static bool active(object handler, hash<auto> cx) {
+        AutoLock al(lock);
+        *list<hash<auto>> l = marks{string(gettid())};
+        if (!l) {
+            return False;
+        }
+        hash<auto> top = l.last();
+        return top.handler == handler.uniqueHash() && top.id == cx.id;
+    }
+}
+
 #! the main namespace for the HttpServer and HttpServerUtil modules
 /** To use this module, use \c "%requires HttpServerUtil" in your code.
 
@@ -5244,6 +5300,11 @@ public class AbstractHttpRequestHandler {
             listener.log("Handler %y: no authentication required", cx.handler_name);
             return;
         }
+        # the server authenticated the request with the handler's trusted authenticator on the raw request (see
+        # authenticatePlatform()); the code of the handler gets the request without its credentials (qore#7303)
+        if (HttpPlatformAuthentication::active(self, cx)) {
+            return;
+        }
         if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
             return ah;
         }
@@ -5588,7 +5649,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             }
             # the handleRequest() of a handler of restricted code gets the request without its credentials
             # (qore#7303)
-            if (filtersRequestsFor() || hostsRestrictedCode()) {
+            if (handlerCodeIsRestricted()) {
                 hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr);
                 return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(filtered.cx, filtered.hdr,
                     msg_body));
@@ -5674,6 +5735,71 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
         @since HttpServerUtil 1.6
     */
+    #! Returns @ref True if the code of this handler is restricted by a sandbox (qore#7303)
+    /** The calling code is restricted (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"),
+        or the class of the handler is of a restricted %Program
+        (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"); fails
+        closed.  The server then gives the handler's own methods the request without its credentials (see
+        withholdCredentialsForDispatch())
+
+        @since HttpServerUtil 1.6
+    */
+    final bool handlerCodeIsRestricted() {
+        try {
+            return SandboxManager::isRestricted() || SandboxManager::isFromRestrictedProgram(self);
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Authenticates the request with the handler's trusted authenticator on the raw request (qore#7303)
+    /** The server calls it for a handler of restricted code (see handlerCodeIsRestricted()) before it calls the
+        handler's authenticateRequest() with the request without its credentials: the authenticator of the handler
+        (@ref auth), if its class is not of a restricted %Program
+        (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()", failing
+        closed), consumes the credentials of the request and adds its context keys, and the code of the handler gets
+        the request without the credentials; an authenticator of restricted code gets the request without its
+        credentials in authenticateRequest(), as the handler's own code does.  While \a scope exists, the
+        authenticateRequest() of this class does not authenticate the request again.
+
+        Calling it with other request header fields than those of a request gives nothing that sending such a
+        request does not give, so it is not restricted.
+
+        @param listener the listener
+        @param hdr the raw request header fields
+        @param cx the request context, which the authenticator changes
+        @param scope set to the object that marks the request as authenticated by the platform, if it was; the caller
+        deletes it when the handler's authenticateRequest() has returned
+
+        @return the response of a failed authentication, if any
+
+        @since HttpServerUtil 1.6
+    */
+    final *hash<HttpResponseInfo> authenticatePlatform(HttpListenerInterface listener, hash<auto> hdr,
+            reference<hash<auto>> cx, reference<*object> scope) {
+        if (!auth) {
+            return;
+        }
+        bool trusted;
+        try {
+            trusted = !SandboxManager::isFromRestrictedProgram(auth);
+        } catch (hash<ExceptionInfo> ex) {
+            trusted = False;
+        }
+        if (!trusted) {
+            return;
+        }
+        if (*hash<HttpResponseInfo> ah = auth.authenticateRequest(listener, hdr, \cx)) {
+            return ah;
+        }
+        if (exists cx.user) {
+            listener.log("Handler %y: authenticated request with user %y", cx.handler_name, cx.user);
+        } else {
+            listener.log("Handler %y: authenticated request without a user context", cx.handler_name);
+        }
+        scope = new HttpPlatformAuthentication(self, cx);
+    }
+
     final hash<HttpFilteredRequestInfo> withholdCredentialsForDispatch(hash<auto> cx, hash<auto> hdr) {
         hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, hdr);
         # the raw Authorization value
