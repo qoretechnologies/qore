@@ -28,6 +28,10 @@ class TlsDescriptorsTest inherits QUnit::Test {
             testSkip(sprintf("TLS descriptors are checked on x86_64 Linux, not %s %s", info.PlatformOS,
                 info.PlatformCPU));
         }
+        # the build decides: the QORE_TLS_DESCRIPTORS option is off, or the compiler has no -mtls-dialect=gnu2
+        if (!info.TlsDescriptors) {
+            testSkip("the Qore library was built without TLS descriptors (QORE_TLS_DESCRIPTORS)");
+        }
         string readelf = trim(backquote("command -v readelf 2>/dev/null || true"));
         if (!readelf) {
             testSkip("readelf is not available");
