@@ -63,6 +63,15 @@ module GrokDataProvider {
                 "- **Deferred Completions**: asynchronous request processing\n\n"
                 "Get your API key from the [xAI Console](https://console.x.ai/)",
             "scheme": "grok",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "x.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://docs.x.ai/developers/models",
+                "effective_date": 2026-11-25,
+            },
             "logo": GrokLogo,
             "logo_file_name": "grok-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -98,6 +107,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/simple-chat",
             "action": "simple-chat",
+            "billing": <DataProviderBillingInfo>{"unit": "token"},
             "groups": ("Chat",),
             "display_name": "Simple Chat",
             "short_desc": "Chat with Grok by sending a single message and receiving a single reply",
@@ -214,6 +224,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/responses/{response}/get",
             "action": "get-response",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "groups": ("Responses",),
             "display_name": "Get Response",
             "short_desc": "Retrieve a previously stored response by ID",

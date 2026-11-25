@@ -58,6 +58,15 @@ module AnthropicDataProvider {
             "desc": "Anthropic Claude AI services providing access to Claude language models for text generation, "
                 "analysis, and tool use with streaming support",
             "scheme": "anthropic",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "anthropic.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": AnthropicLogo,
             "logo_file_name": "anthropic-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -123,6 +132,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/count-tokens",
             "action": "count-tokens",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Count Tokens",
             "short_desc": "Count the number of tokens in a message without creating it",
             "desc": "Count the number of input tokens that would be used by a message request without actually "
@@ -154,6 +164,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/models/get",
             "action": "get-model",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Model",
             "short_desc": "Get details for a specific model by ID or alias",
             "desc": "Retrieve details for a specific Anthropic model including capabilities, context window size, "
@@ -175,6 +186,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/models/list",
             "action": "list-models",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Models",
             "short_desc": "List all available Anthropic models",
             "desc": "List all available Anthropic models including their capabilities, context window sizes, "
@@ -218,6 +230,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/batches/get",
             "action": "get-batch",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Message Batch",
             "short_desc": "Get the status and details of a message batch",
             "desc": "Retrieve the status and metadata of a specific message batch. Use this to poll for "
@@ -239,6 +252,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/batches/list",
             "action": "list-batches",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Message Batches",
             "short_desc": "List all message batches in the workspace",
             "desc": "List all message batches with pagination support.",
@@ -302,6 +316,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/files/list",
             "action": "list-files",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Files",
             "short_desc": "List all uploaded files in the workspace (Beta)",
             "desc": "List all files that have been uploaded to the workspace with pagination support. "
@@ -324,6 +339,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/files/get",
             "action": "get-file",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get File",
             "short_desc": "Get metadata for a specific file (Beta)",
             "desc": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
@@ -344,6 +360,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/files/get-content",
             "action": "get-file-content",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get File Content",
             "short_desc": "Download the content of a file (Beta)",
             "desc": "Download the content of a previously uploaded file. Only available for files created by "
@@ -411,6 +428,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/skills/list",
             "action": "list-skills",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Skills",
             "short_desc": "List available skills (Beta)",
             "desc": "List all available skills including custom and Anthropic-provided skills with pagination "
@@ -437,6 +455,7 @@ module AnthropicDataProvider {
             "app": AnthropicDataProvider::AppName,
             "path": "/skills/get",
             "action": "get-skill",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Skill",
             "short_desc": "Get details for a specific skill (Beta)",
             "desc": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",

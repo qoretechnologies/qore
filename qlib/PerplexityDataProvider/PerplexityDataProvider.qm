@@ -62,6 +62,15 @@ module PerplexityDataProvider {
                 "- Streaming support via Server-Sent Events\n"
                 "- Structured JSON output with schema validation",
             "scheme": "perplexity",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "perplexity.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://docs.perplexity.ai/getting-started/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": PerplexityLogo,
             "logo_file_name": "perplexity-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -156,6 +165,7 @@ module PerplexityDataProvider {
             "app": PerplexityDataProvider::AppName,
             "path": "/search",
             "action": "search",
+            "billing": <DataProviderBillingInfo>{"unit": "request"},
             "display_name": "Web Search",
             "short_desc": "Search the web using Perplexity's dedicated search API",
             "desc": "Search the web using Perplexity's dedicated search API returning structured results with "
