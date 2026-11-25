@@ -4683,6 +4683,51 @@ int64 qore_get_variant_denied_domains_intern(const AbstractQoreFunctionVariant* 
     return rv | qore_denied_domains(vflags, po);
 }
 
+//! returns the functional domain bits of a builtin method variant that the restrictions of the caller do not allow
+/** qore#7543: a method call that entered another Program (a method of a class of another Program, such as a class of
+    a module) is searched for with the options of that Program, as is a call through a call reference to a method of
+    a class of the Program that calls it.  A Qore class can hold a builtin variant as a method of its own: the builtin
+    implementation, inherited from a builtin class, of an abstract method that it inherits from another parent class
+    (see AbstractMethodMap::parseInit()), or the inherited builtin overload of a method that it declares itself.  That
+    variant is builtin code that the caller calls, as on an object of the builtin class itself, where its domains are
+    checked against the caller's restrictions, which the options of the Program entered must not lift: they are also
+    checked against the restrictions of the caller (of the creator for a call through a call reference, which has no
+    \a user_dom_code_pgm), as the domains declared on a user variant are.
+
+    Called only for a call that entered another Program (\a user_dom_code_pgm is not the current Program) or that is
+    made through a call reference, and for a variant with functional domains (\a vflags).  A builtin function and a
+    variant that module code may call without the restrictions it inherits from its caller
+    (QCF_CALLER_RESTRICTION_RELIEF, which only static builtin methods have) are checked as before.
+*/
+static QORE_INTERN_NOINLINE int64 qore_get_entered_builtin_method_denied_domains(
+        const AbstractQoreFunctionVariant* variant, int64 vflags, const QoreParseOptions& user_dom_po,
+        const QoreProgram* user_dom_code_pgm) {
+    assert(vflags);
+    if (variant->isUser() || (variant->getFlags() & QCF_CALLER_RESTRICTION_RELIEF) || !variant->getClass()) {
+        return QDOM_DEFAULT;
+    }
+    return user_dom_code_pgm
+        ? qore_denied_domains(vflags, qore_relieve_module_declared_domains(user_dom_po, user_dom_code_pgm))
+        : qore_denied_domains(vflags, user_dom_po);
+}
+
+//! returns the functional domain bits of \a variant, which has the functional domains \a vflags, that a call resolved
+//! at run time in the Program \a pgm may not use; see qore_get_variant_denied_domains()
+/** Out of line, so that the run-time variant search of the calls of variants without functional domains keeps its code
+*/
+static QORE_INTERN_NOINLINE int64 qore_get_runtime_variant_denied_domains(const AbstractQoreFunctionVariant* variant,
+        int64 vflags, const QoreParseOptions& ppo, const QoreParseOptions* user_dom_po,
+        const QoreProgram* user_dom_code_pgm, const QoreProgram* pgm) {
+    assert(pgm);
+    int64 denied = qore_get_variant_denied_domains_intern(variant, vflags, ppo, user_dom_po, user_dom_code_pgm);
+    // a call that did not enter another Program has the Program of the code that makes it (pgm is not nullptr, so a
+    // call through a call reference, which has no user_dom_code_pgm, is included; qore#7543)
+    if (user_dom_code_pgm != pgm && user_dom_po) {
+        denied |= qore_get_entered_builtin_method_denied_domains(variant, vflags, *user_dom_po, user_dom_code_pgm);
+    }
+    return denied;
+}
+
 //! raises INVALID-FUNCTION-ACCESS for a variant whose functional domains are not allowed
 static void raise_invalid_function_access(ExceptionSink* xsink, const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, int64 denied) {
@@ -5000,12 +5045,17 @@ QORE_INTERN_ALWAYS_INLINE const AbstractQoreFunctionVariant* QoreFunction::runti
 
         // pgm could be zero if called from a foreign thread with no current Program
         if (pgm) {
-            // check the functional domains of the variant
-            if (int64 denied = qore_get_variant_denied_domains(variant, ppo, user_dom_po, user_dom_code_pgm)) {
-                if (!(variant_filter & QRFV_ONLY_USER)) {
-                    raise_invalid_function_access(xsink, this, variant, denied);
+            // check the functional domains of the variant; those of a builtin method variant of a call that entered
+            // another Program or that is made through a call reference are also checked against the restrictions of
+            // the caller (qore#7543)
+            if (int64 vflags = variant->getFunctionality()) {
+                if (int64 denied = qore_get_runtime_variant_denied_domains(variant, vflags, ppo, user_dom_po,
+                        user_dom_code_pgm, pgm)) {
+                    if (!(variant_filter & QRFV_ONLY_USER)) {
+                        raise_invalid_function_access(xsink, this, variant, denied);
+                    }
+                    return 0;
                 }
-                return 0;
             }
 
             assert(!(variant->getParseOptions(ppo) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS))

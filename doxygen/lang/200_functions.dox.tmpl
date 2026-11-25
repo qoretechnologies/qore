@@ -517,7 +517,11 @@ public class Registry {
       including a call that dispatches to an override in a subclass, @ref Qore::call_function() "call_function()",
       @ref Qore::call_object_method() "call_object_method()", @ref Qore::create_object() "create_object()", a base
       class constructor run for a subclass without a base class constructor list, and the reflection API raise an
-      \c INVALID-FUNCTION-ACCESS exception
+      \c INVALID-FUNCTION-ACCESS exception.  This includes a call of a builtin method that a %Qore class (also one of
+      a module or of another %Program) inherits from a builtin class of the domain and that the call reaches through a
+      method of the %Qore class, such as the implementation of an abstract method that the class inherits from another
+      parent class, or an overload of a method that the class declares itself: the builtin method is checked against
+      the restrictions of the code that calls it, as when it is called on an object of the builtin class
 
     A call reference or a @ref closure "closure" runs with the permissions of the context that created it: a call
     reference to code with a functional domain that code allowed to use the domain created can be called by code
