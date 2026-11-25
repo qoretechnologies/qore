@@ -15736,8 +15736,10 @@ load_local_done:
                     }
                     target_val = tv.getAsBigInt();
                     // the slot is set to the result below; until then it may only hold what the variable holds
+                    // the slot takes a reference of its own: the value read is released below, and an int outside the
+                    // immediate range is a node (qore#7637)
                     if (tv.getType() == NT_INT && fused_inst->target_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->target_slot_id, tv);
+                        locals_slot_cache.set(fused_inst->target_slot_id, tv.needsRef() ? tv.refSelf() : tv);
                     }
                     if (nd && tv.needsRef()) {
                         tv.discard(xsink);
@@ -16003,8 +16005,10 @@ load_local_done:
                     lhs_val = lv.getAsBigInt();
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    // the slot takes a reference of its own: the value read is released below, and an int outside the
+                    // immediate range is a node (qore#7637)
                     if (lv.getType() == NT_INT && fused_inst->lhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv);
+                        locals_slot_cache.set(fused_inst->lhs_slot_id, lv.needsRef() ? lv.refSelf() : lv);
                     }
                     if (nd && lv.needsRef()) {
                         lv.discard(xsink);
@@ -16033,8 +16037,9 @@ load_local_done:
                     rhs_val = rv.getAsBigInt();
                     // a comparison only reads its operands: the slot may only cache the value the variable holds,
                     // never the int it is read as (ex: an int local with no value is read as 0 but holds none)
+                    // the slot takes a reference of its own, as for the left operand (qore#7637)
                     if (rv.getType() == NT_INT && fused_inst->rhs_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv);
+                        locals_slot_cache.set(fused_inst->rhs_slot_id, rv.needsRef() ? rv.refSelf() : rv);
                     }
                     if (nd && rv.needsRef()) {
                         rv.discard(xsink);
