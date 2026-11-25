@@ -635,6 +635,18 @@ authenticate();
     - the messages that the library and the modules produce while they serve sandboxed code go to a logger that the
       caller gave its own object, to the loggers that the host configured, which no sandboxed code can replace, or are
       not logged; never to a logger of another tenant
+    - sandboxed code cannot write messages of its own to the loggers that the host configured as if they were a
+      module's: \c ProviderIndexUtil::log() refuses it, and a message that the code of an object of a class that
+      sandboxed code declares writes to the host's \c DataProvider logger (the errors that a data provider subclass
+      logs with \c AbstractDataProvider::logCaughtError() without a logger of its own, also those that the module's
+      methods that it inherits log) is marked with the %Program of the object's class, the tenant whose code chose it,
+      whichever code calls the object (<tt>[sandboxed Program &lt;id&gt;]</tt>, see
+      @ref Qore::SandboxManager::getSandboxedProgramId() "SandboxManager::getSandboxedProgramId()", which can be a
+      %Program that the tenant created); the line breaks, the Unicode line separators and the other control characters
+      of every message written this way are escaped, also in a message whose bytes are not valid UTF-8, so
+      that no value in it that a caller chose can start a line of its own or act on a terminal; the messages of the
+      objects of the classes of the modules and of the host keep their form otherwise, also when sandboxed code created
+      or calls them
 
     State that the host or the library sets for the whole process and that can hold data or configuration of the host
     or of other tenants is not readable by sandboxed code either, until a separate view per isolation domain is
@@ -1149,6 +1161,20 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     - \c ".." cannot be used to escape the sandbox root through components that do not exist yet
     - a symbolic link pointing outside the sandbox root is denied even when its target does not
       exist, so a dangling link cannot be used to create files outside the root
+
+    The rules apply to the file that is actually reached:
+    - a path that refers to an open descriptor (such as \c "/dev/fd/N" or \c "/dev/stdin") is checked as the
+      file of that descriptor; one whose descriptor has no file path (a pipe, a socket, a removed file) is denied
+    - a file that is opened (with @ref Qore::File "File", @ref Qore::ReadOnlyFile "ReadOnlyFile",
+      @ref Qore::FileInputStream "FileInputStream", @ref Qore::FileOutputStream "FileOutputStream" and the APIs based
+      on them) and a directory that is listed are checked again by the path of the file or directory that was opened;
+      if that path cannot be determined or is not allowed, the file is closed again and the operation is denied, and
+      a file opened with \c O_TRUNC is truncated only after this check
+    - an open with \c O_TRUNC needs write access, also with \c O_RDONLY
+    - a symbolic link created by @ref Qore::symlink() "symlink()" must have a target within the reach of the policy (not
+      denied, inside the sandbox root, and covered by an allowed path or the default policy), checked as the link
+      reaches it: a relative target is resolved against the directory of the link, and a target that does not exist yet
+      by its deepest existing directory; each access through the link is checked as before
 
     A path that cannot be resolved for any other reason - for example because a directory in the
     path cannot be searched - raises \c SANDBOX-PATH-ERROR.  This is a resolution failure, not a

@@ -414,11 +414,16 @@ DLLLOCAL void qore_request_current_thread_cancel(const char* reason, qore_progra
     calls that the called code makes.
 */
 DLLLOCAL const QoreProgramLocation* take_runtime_call_location();
+//! as take_runtime_call_location(), with the current thread's data (get_thread_data_for_native_calls()), for code
+//! that makes several of these calls (qore#7336); the same applies to the other functions with \a thread_data_ptr
+DLLLOCAL const QoreProgramLocation* take_runtime_call_location(void* thread_data_ptr);
 //! Returns the runtime location for the frame of code that no call expression calls, and hides the call site
 /** For a destructor, for example (see CodeEvaluationHelper): the call site, if any, is cleared, and the caller
     restores it through \a slot with \a prev when the code has run
 */
 DLLLOCAL const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev);
+DLLLOCAL const QoreProgramLocation* hide_runtime_call_site(void* thread_data_ptr, const QoreProgramLocation**& slot,
         const QoreProgramLocation*& prev);
 //! Sets the location of the call that the current thread makes; returns the thread's data
 /** @param loc the location of the call expression
@@ -476,8 +481,13 @@ DLLLOCAL const QoreStackLocation* update_get_runtime_stack_location(QoreStackLoc
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc,
         QoreProgram* frame_pgm = nullptr);
+DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(void* thread_data_ptr,
+        QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
+        const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm = nullptr);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc);
+DLLLOCAL void update_runtime_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
+        const QoreProgramLocation* runtime_loc);
 
 //! Returns the current thread's data, for push_native_call_stack_location() and pop_native_call_stack_location()
 /** Native code gets it once when a function is entered, so a direct call makes no thread-local lookup. */
@@ -684,6 +694,7 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
 //! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(void* thread_data_ptr, const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
@@ -992,6 +1003,7 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
 //! Raises \c SANDBOX-ISOLATION-ERROR and returns -1 if the thread entered the code of another tenant in a trusted build
 //! (see QoreSandboxBudgetStack::isIsolationRefused()), else returns 0 (qore#6536)
 DLLLOCAL int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation);
+DLLLOCAL int qore_sandbox_check_isolation(void* thread_data_ptr, ExceptionSink* xsink, const char* operation);
 
 //! Returns the isolation domain of the caller of the innermost trusted build of the thread, or nullptr (qore#6536)
 DLLLOCAL const std::string* qore_sandbox_build_caller_domain();
@@ -1608,6 +1620,13 @@ DLLLOCAL void parse_note_implicit_arg_use();
 
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
+
+//! returns the Program that the thread runs in if it is also the call Program context and its parse options are the
+//! thread's runtime parse options and those of \a rc, the thread's RuntimeConfig; nullptr otherwise
+/** Then code of the Program runs without entering it again: a class without a constructor whose source Program it is
+    constructs its objects without changing the thread's state (QoreImplicitConstructorProgramHelper, qore#7513)
+*/
+DLLLOCAL QoreProgram* runtime_get_program_with_current_options(const RuntimeConfig& rc);
 DLLLOCAL QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n);
 
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
@@ -2925,6 +2944,7 @@ DLLLOCAL void parseSetCodeInfo(const char* parse_code, const QoreTypeInfo* retur
 DLLLOCAL void parseRestoreCodeInfo(const char* parse_code, const QoreTypeInfo* returnTypeInfo);
 // sets the new type and returns the old
 DLLLOCAL const QoreTypeInfo* saveReturnTypeInfo(const QoreTypeInfo* returnTypeInfo);
+DLLLOCAL const QoreTypeInfo* saveReturnTypeInfo(void* thread_data_ptr, const QoreTypeInfo* returnTypeInfo);
 DLLLOCAL const QoreTypeInfo* getReturnTypeInfo();
 
 DLLLOCAL const QoreTypeInfo* parse_get_return_type_info();
@@ -3335,6 +3355,7 @@ DLLLOCAL void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_
 // to get or set the current generic receiver type for static generic method bodies
 DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
 DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti);
+DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(void* thread_data_ptr, const QoreTypeInfo* ti);
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
 
@@ -4202,6 +4223,8 @@ private:
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
+//! as check_stack(), with the current thread's data (see take_runtime_call_location(void*))
+DLLLOCAL int check_stack(void* thread_data_ptr, ExceptionSink* xsink);
 
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
 // stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp

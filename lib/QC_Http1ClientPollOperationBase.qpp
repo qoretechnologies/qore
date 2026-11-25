@@ -316,6 +316,11 @@ QoreHashNode* Http1ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 continue;
 
             case H1State::PROTOCOL_SWITCHED:
+                // the request body data queued when a 101 response arrived is sent, and nothing is read: the data
+                // of the connection belongs to the new protocol (qore#7503)
+                if (switched_sending_io) {
+                    return handleSwitchedSend(xsink);
+                }
                 return handleReading(xsink);
 
             case H1State::CLOSED: {
@@ -457,6 +462,8 @@ void Http1ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
         connect_req->sprintf("Proxy-Authorization: %s\r\n", proxy_authorization.c_str());
     }
     connect_req->concat("\r\n");
+    // the interim responses of the proxy to CONNECT are counted (see handleProxyConnectRecv())
+    interim_response_count = 0;
 
     releaseCurrentOp(xsink);
     sock_obj->ref();
@@ -525,8 +532,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
     if (poll_xsink) {
         QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        // the argument of the exception, such as the start of an invalid status line, is given with the error
         setError(*err_str ? err_str->c_str() : "HTTP1-CONNECT-ERROR",
-            *desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink);
+            *desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink,
+            poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }
@@ -537,28 +546,86 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
 
     if (current_op->goalReached()) {
         ValueHolder output_val(current_op->getOutput(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        // the tunnel is made only on a final 2xx response of the proxy: a read without a parsed header is a failure,
+        // never a success
+        QoreHashNode* hdr = nullptr;
         if (output_val->getType() == NT_HASH) {
-            QoreHashNode* output = output_val->get<QoreHashNode>();
-            QoreValue hdr_val = output->getKeyValue("hdr");
+            QoreValue hdr_val = output_val->get<QoreHashNode>()->getKeyValue("hdr");
             if (hdr_val.getType() == NT_HASH) {
-                QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
-                int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
-                if (status < 200 || status >= 300) {
-                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
-                    QoreValue msg_val = hdr->getKeyValue("status_message");
-                    QoreStringValueHelper msg_str(msg_val);
-                    const char* msg = msg_val.getType() == NT_STRING
-                        ? msg_str->c_str() : "unknown";
-                    desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
-                    // the status code and headers of the response let the client answer a proxy authentication
-                    // challenge (407) and connect again
-                    ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
-                    extra->setKeyValue("status_code", status, xsink);
-                    extra->setKeyValue("headers", hdr->refSelf(), xsink);
-                    setError("HTTP1-CONNECT-ERROR", desc->c_str(), *extra, xsink);
-                    return nullptr;
-                }
+                hdr = hdr_val.get<QoreHashNode>();
             }
+        }
+        if (!hdr) {
+            setError("HTTP1-CONNECT-ERROR", "proxy CONNECT response read returned no header", xsink);
+            return nullptr;
+        }
+        int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
+        // an interim response (1xx other than 101; RFC 9110 section 15.2) of the proxy is skipped as for any other
+        // request (qore#7483), and the final response that follows it decides whether the tunnel is made
+        // (qore#7486); their number is bounded, and each one is read with the size limit of a response header and
+        // has its status line checked, so a proxy that never sends a final response cannot make the client read
+        // without end
+        if (isInterimStatus(status)) {
+            if (++interim_response_count > MAX_INTERIM_RESPONSES) {
+                // setError() takes a literal description, not a format string
+                QoreString desc;
+                desc.sprintf("the proxy sent more than the maximum of %d interim (1xx) responses to CONNECT without "
+                    "sending a final response", MAX_INTERIM_RESPONSES);
+                setError("HTTP1-CONNECT-ERROR", desc.c_str(), xsink);
+                return nullptr;
+            }
+            ASYNC_IO_TRACE("H1 handleProxyConnectRecv: interim response %d (%d of max %d), reading the next header "
+                "fd=%d\n", status, interim_response_count, MAX_INTERIM_RESPONSES,
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
+            releaseCurrentOp(xsink);
+            sock_obj->ref();
+            // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
+            // pending stream and marks the connection closed
+            setCurrentOp(newHeaderReadOp(xsink, "proxy-connect-interim"));
+            if (!current_op) {
+                return nullptr;
+            }
+            current_op->setSelf(*self);
+            // an operation aborted meanwhile does no more I/O
+            if (isClosed()) {
+                return nullptr;
+            }
+            return handleProxyConnectRecv(xsink);
+        }
+        // any response other than 2xx fails the connection, including a 101, which a proxy cannot send to CONNECT
+        // (RFC 9110 sections 9.3.6 and 15.2.2: the request asks for no protocol upgrade)
+        if (status < 200 || status >= 300) {
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
+            QoreValue msg_val = hdr->getKeyValue("status_message");
+            QoreStringValueHelper msg_str(msg_val);
+            const char* msg = msg_val.getType() == NT_STRING
+                ? msg_str->c_str() : "unknown";
+            desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
+            // the status code and headers of the response let the client answer a proxy authentication
+            // challenge (407) and connect again
+            ReferenceHolder<QoreHashNode> extra(new QoreHashNode(autoTypeInfo), xsink);
+            extra->setKeyValue("status_code", status, xsink);
+            extra->setKeyValue("headers", hdr->refSelf(), xsink);
+            setError("HTTP1-CONNECT-ERROR", desc->c_str(), *extra, xsink);
+            return nullptr;
+        }
+        // the tunnel starts right after the proxy's 2xx response, and the client speaks first in it (the TLS
+        // ClientHello): bytes that the proxy sent after its response and that the socket has already read are not
+        // data that ends the connection after a response (qore#7471), and they are not data of the target server
+        // either: the TLS connection to the target server never reads them, so they would be returned as the first
+        // bytes received through it, as if the target server had sent them, and data injected by the proxy, or by
+        // anyone on the path to a plain HTTP proxy, would be taken for a response of the target server.  The
+        // connection fails instead (qore#7486)
+        if (size_t buffered = qore_socket_object_private(sock_obj).getBufferedReadBytes()) {
+            QoreString desc;
+            desc.sprintf("the proxy sent %zu byte%s after its %d response to CONNECT, before the client started the "
+                "TLS connection to the target server through the tunnel", buffered, buffered == 1 ? "" : "s",
+                status);
+            setError("HTTP1-CONNECT-ERROR", desc.c_str(), xsink);
+            return nullptr;
         }
         printd(5, "Http1ClientPollOperationPriv::handleProxyConnectRecv() tunnel established\n");
         startSslUpgrade(xsink);
@@ -740,15 +807,17 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
 #ifdef DEBUG
         dbgFailHeaderReadOp("full-duplex");
 #endif
-        read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        // the header read is that of a response, whose status line is checked (qore#7485)
+        read_op = new SocketReadHttpResponseHeaderPollOperation(&read_xsink, sock_obj);
         if (read_xsink) {
             read_op->deref(&read_xsink);
             QoreStringValueHelper err_str(read_xsink.getExceptionErr());
             QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
             std::string err(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR");
             std::string desc(*desc_str ? desc_str->c_str() : "the response read could not be started");
+            // the argument of the exception is given with the error (setError() references it)
+            setError(err.c_str(), desc.c_str(), xsink, read_xsink.getExceptionArg());
             read_xsink.clear();
-            setError(err.c_str(), desc.c_str(), xsink);
             return nullptr;
         }
     }
@@ -800,8 +869,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsin
     // The response completed and resetSendState() put the send side back to INACTIVE; any unsent request
     // bytes were abandoned there, and dispatchResponse() / dispatchStreamingEnd() forced the connection
     // closed so it cannot be reused with a half-written request on it.  AWAIT_SEND means the opposite: the
-    // response is complete and waiting, and awaitBufferedSend() has already driven the send side this cycle.
-    if (send_state == SendState::INACTIVE || req_state == ReqState::AWAIT_SEND) {
+    // response is complete and waiting, and awaitBufferedSend() has already driven the send side this cycle.  A
+    // 101 response leaves the send side to handleSwitchedSend(), which has driven it this cycle (qore#7503).
+    if (send_state == SendState::INACTIVE || req_state == ReqState::AWAIT_SEND || switched_sending_io) {
         return info.release();
     }
 
@@ -856,7 +926,9 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                 // gone, so the read on the next cycle returns at once: the response, or EOF, in which case the send
                 // error is reported.  A send that a local cancel or close interrupted is reported as it is, which
                 // leaves the cancel's or close's own error in place.
-                if (sendFailureReadsResponse(poll_xsink, true)) {
+                // After a 101 response, there is no response to read: the failure is reported, as the request body
+                // cannot be completed (qore#7503)
+                if (!switched_sending_io && sendFailureReadsResponse(poll_xsink, true)) {
                     std::string saved_err(err);
                     std::string saved_desc(desc);
                     poll_xsink.clear();
@@ -941,25 +1013,13 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
         if (!chunk) {
             // End-of-body sentinel: send the final "0\r\n" terminator plus any
             // trailers, then "\r\n".
-            SimpleRefHolder<BinaryNode> final_chunk(new BinaryNode());
-            final_chunk->append("0\r\n", 3);
             QoreHashNode* trailers = nullptr;
             {
                 AutoLocker al(stream_lock);
                 trailers = send_trailers;
                 send_trailers = nullptr;
             }
-            if (trailers) {
-                ConstHashIterator hi(trailers);
-                while (hi.next()) {
-                    QoreStringValueHelper sv(hi.get());
-                    QoreString trailer_line;
-                    trailer_line.sprintf("%s: %s\r\n", hi.getKey(), sv->c_str());
-                    final_chunk->append(trailer_line.c_str(), trailer_line.size());
-                }
-                trailers->deref(xsink);
-            }
-            final_chunk->append("\r\n", 2);
+            SimpleRefHolder<BinaryNode> final_chunk(makeFinalBodyChunk(trailers, xsink));
             ASYNC_IO_TRACE("H1 driveSendSide: sending final chunk fd=%d\n",
                 sock_obj ? sock_obj->getPollableDescriptor() : -1);
             sock_obj->ref();
@@ -977,12 +1037,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
         // Normal chunk: HTTP/1.1 chunked TE frame "<hexsize>\r\n<data>\r\n"
         ASYNC_IO_TRACE("H1 driveSendSide: sending chunk (%lu bytes) fd=%d\n",
             (unsigned long)chunk->size(), sock_obj ? sock_obj->getPollableDescriptor() : -1);
-        SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
-        QoreString size_line;
-        size_line.sprintf("%lx\r\n", (unsigned long)chunk->size());
-        chunk_data->append(size_line.c_str(), size_line.size());
-        chunk_data->append(chunk->c_str(), chunk->size());
-        chunk_data->append("\r\n", 2);
+        SimpleRefHolder<BinaryNode> chunk_data(makeBodyChunk(chunk));
         chunk->deref(xsink);
 
         sock_obj->ref();
@@ -995,6 +1050,34 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
         send_state = SendState::SENDING;
         continue;  // loop to poll the new send op
     }
+}
+
+BinaryNode* Http1ClientPollOperationPriv::makeBodyChunk(const QoreStringNode* data) {
+    // HTTP/1.1 chunked TE frame "<hexsize>\r\n<data>\r\n"
+    SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
+    QoreString size_line;
+    size_line.sprintf("%lx\r\n", (unsigned long)data->size());
+    chunk_data->append(size_line.c_str(), size_line.size());
+    chunk_data->append(data->c_str(), data->size());
+    chunk_data->append("\r\n", 2);
+    return chunk_data.release();
+}
+
+BinaryNode* Http1ClientPollOperationPriv::makeFinalBodyChunk(QoreHashNode* trailers, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> trailers_holder(trailers, xsink);
+    SimpleRefHolder<BinaryNode> final_chunk(new BinaryNode());
+    final_chunk->append("0\r\n", 3);
+    if (trailers) {
+        ConstHashIterator hi(trailers);
+        while (hi.next()) {
+            QoreStringValueHelper sv(hi.get());
+            QoreString trailer_line;
+            trailer_line.sprintf("%s: %s\r\n", hi.getKey(), sv->c_str());
+            final_chunk->append(trailer_line.c_str(), trailer_line.size());
+        }
+    }
+    final_chunk->append("\r\n", 2);
+    return final_chunk.release();
 }
 
 #ifdef DEBUG
@@ -1013,7 +1096,9 @@ SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(Exception
 #ifdef DEBUG
     dbgFailHeaderReadOp(site);
 #endif
-    SocketPollOperationBase* op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+    // the header read is that of a response, whose status line is checked: a response that does not start with a
+    // valid status line fails the request, and the connection is closed (qore#7485)
+    SocketPollOperationBase* op = new SocketReadHttpResponseHeaderPollOperation(&read_xsink, sock_obj);
     if (!read_xsink) {
         return op;
     }
@@ -1022,8 +1107,9 @@ SocketPollOperationBase* Http1ClientPollOperationPriv::newHeaderReadOp(Exception
     QoreStringValueHelper desc_str(read_xsink.getExceptionDesc());
     std::string err(*err_str ? err_str->c_str() : "HTTP1-RECV-ERROR");
     std::string desc(*desc_str ? desc_str->c_str() : "the response read could not be started");
+    // the argument of the exception is given with the error (setError() references it)
+    setError(err.c_str(), desc.c_str(), xsink, read_xsink.getExceptionArg());
     read_xsink.clear();
-    setError(err.c_str(), desc.c_str(), xsink);
     return nullptr;
 }
 
@@ -1047,7 +1133,8 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
 #ifdef DEBUG
         dbgFailHeaderReadOp("send-failure-recovery");
 #endif
-        read_op = new SocketReadHttpHeaderPollOperation(&read_xsink, sock_obj);
+        // the header read is that of a response, whose status line is checked (qore#7485)
+        read_op = new SocketReadHttpResponseHeaderPollOperation(&read_xsink, sock_obj);
         if (read_xsink) {
             read_op->deref(&read_xsink);
             read_xsink.clear();
@@ -1684,13 +1771,92 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
     return nullptr;
 }
 
-void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, ExceptionSink* xsink) {
+void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, ExceptionSink* xsink, int timeout_ms) {
+    {
+        AutoLocker al(stream_lock);
+        // data that follows the end of the body is refused instead of being dropped; another end is ignored
+        // (qore#7503)
+        if (send_body_ended) {
+            if (data) {
+                xsink->raiseException("HTTPCLIENT-STATE-ERROR", "cannot send data: the request body has ended");
+            }
+            return;
+        }
+        switch (switched_body) {
+            case SwitchedBody::NONE:
+            case SwitchedBody::IO:
+                // the I/O thread sends the data
+                if (data) {
+                    send_body_queue.push_back(data->stringRefSelf());
+                } else {
+                    // End sentinel
+                    send_body_queue.push_back(nullptr);
+                    send_body_ended = true;
+                }
+                return;
+            case SwitchedBody::DONE:
+                if (data) {
+                    xsink->raiseException("HTTPCLIENT-STATE-ERROR", "cannot send data: the request body was "
+                        "complete when the server switched protocols with a 101 response");
+                }
+                return;
+            case SwitchedBody::FAILED:
+                xsink->raiseException("HTTPCLIENT-STATE-ERROR", "cannot send data: the request body could not be "
+                    "completed after the server switched protocols with a 101 response");
+                return;
+            case SwitchedBody::CALLER:
+                break;
+        }
+    }
+    // the rest of the request body after a 101 response is written in this thread (qore#7503)
+    writeSwitchedBody(data, xsink, timeout_ms);
+}
+
+void Http1ClientPollOperationPriv::writeSwitchedBody(const QoreStringNode* data, ExceptionSink* xsink,
+        int timeout_ms) {
+    // one thread writes at a time, so that the chunks are written whole and in the order given
+    AutoLocker wl(switched_send_lock);
+    SimpleRefHolder<BinaryNode> frame;
+    // the trailers are released after stream_lock
+    QoreHashNode* trailers = nullptr;
+    {
+        AutoLocker al(stream_lock);
+        // checked again with the write lock held, as in pushSendData(): another thread may have ended the body, or
+        // the write of another thread failed
+        if (switched_body == SwitchedBody::FAILED) {
+            xsink->raiseException("HTTPCLIENT-STATE-ERROR", "cannot send data: the request body could not be "
+                "completed after the server switched protocols with a 101 response");
+            return;
+        }
+        if (switched_body != SwitchedBody::CALLER || send_body_ended) {
+            if (data) {
+                xsink->raiseException("HTTPCLIENT-STATE-ERROR", "cannot send data: the request body has ended");
+            }
+            return;
+        }
+        if (!data) {
+            send_body_ended = true;
+            trailers = send_trailers;
+            send_trailers = nullptr;
+        }
+    }
+    frame = data ? makeBodyChunk(data) : makeFinalBodyChunk(trailers, xsink);
+    ASYNC_IO_TRACE("H1 writeSwitchedBody: writing %s (%lu bytes) after the 101 response fd=%d\n",
+        data ? "a chunk" : "the final chunk", (unsigned long)frame->size(),
+        sock_obj ? sock_obj->getPollableDescriptor() : -1);
+    int rc = sock_obj->send(static_cast<const char*>(frame->getPtr()), (int)frame->size(), timeout_ms, xsink);
     AutoLocker al(stream_lock);
-    if (data) {
-        send_body_queue.push_back(data->stringRefSelf());
-    } else {
-        // End sentinel
-        send_body_queue.push_back(nullptr);
+    if (*xsink || rc < 0) {
+        // a part of the chunk may have been written: the body cannot be completed
+        switched_body = SwitchedBody::FAILED;
+        if (!*xsink) {
+            xsink->raiseException("HTTPCLIENT-SEND-ERROR", "the request body could not be written after the 101 "
+                "response");
+        }
+        return;
+    }
+    if (!data) {
+        switched_body = SwitchedBody::DONE;
     }
 }
 
@@ -1753,8 +1919,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 err_code = "SOCKET-CLOSED";
             }
         }
+        // the argument of the exception, such as the start of an invalid status line (qore#7485), is given with the
+        // error
         setError(err_code,
-            *desc_str ? desc_str->c_str() : "header read failed", xsink);
+            *desc_str ? desc_str->c_str() : "header read failed", xsink, poll_xsink.getExceptionArg());
         poll_xsink.clear();
         return nullptr;
     }
@@ -2027,22 +2195,47 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 if (delivered) {
                     switched_protocol.store(true, std::memory_order_release);
                 }
-            } else {
-                // Non-streaming: dispatch as a normal response with no body
-                return dispatchResponse(xsink);
-            }
-            // Enter PROTOCOL_SWITCHED state - continuePoll() will now
-            // use separate send/recv ops for full-duplex raw I/O.
-            protocol_switched = true;
-            req_state = ReqState::PROTOCOL_SWITCHED;
-            // an operation aborted meanwhile does no more I/O
-            if (!setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched")) {
+                // a request body that is still being sent is completed (RFC 9110 section 7.8): the data in hand is
+                // sent by this operation, which then leaves the rest to the threads that give it (qore#7503)
+                bool body_open = delivered
+                    && (send_state == SendState::IDLE || send_state == SendState::SENDING);
+                // Enter PROTOCOL_SWITCHED state; the operation is done (its goal is reached) once the request body
+                // data in hand is sent
+                protocol_switched = !body_open;
+                switched_sending_io = body_open;
+                req_state = ReqState::PROTOCOL_SWITCHED;
+                // an operation aborted meanwhile does no more I/O
+                bool open = setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "protocol-switched");
+                if (delivered) {
+                    AutoLocker al(stream_lock);
+                    if (!open || send_state == SendState::ABANDONED) {
+                        switched_body = SwitchedBody::FAILED;
+                    } else if (body_open) {
+                        switched_body = SwitchedBody::IO;
+                    } else {
+                        switched_body = SwitchedBody::DONE;
+                    }
+                }
+                if (!open) {
+                    switched_sending_io = false;
+                    releaseCurrentOp(xsink);
+                    return nullptr;
+                }
+                ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED (request body open: %d)\n",
+                    (int)body_open);
                 releaseCurrentOp(xsink);
-                return nullptr;
+                if (body_open) {
+                    return handleSwitchedSend(xsink);
+                }
+                // the response ends with its 101 header: the reader of the stream is given the end of the stream
+                // at once instead of waiting for a body that never comes (qore#7487)
+                if (delivered) {
+                    dispatchStreamingSwitchEnd(xsink);
+                }
+                return handleProtocolSwitched(xsink);
             }
-            ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
-            releaseCurrentOp(xsink);
-            return handleProtocolSwitched(xsink);
+            // Non-streaming: dispatch as a normal response with no body
+            return dispatchResponse(xsink);
         }
 
         // Interim responses: RFC 9110 section 15.2 defines every 1xx response other than 101 (handled above) as
@@ -2768,6 +2961,47 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink
     return nullptr;
 }
 
+QoreHashNode* Http1ClientPollOperationPriv::handleSwitchedSend(ExceptionSink* xsink) {
+    assert(switched_sending_io);
+    while (true) {
+        int send_events = driveSendSide(xsink);
+        if (send_events < 0) {
+            // setError() reported the error to the reader of the stream and closed the connection
+            switched_sending_io = false;
+            AutoLocker al(stream_lock);
+            switched_body = SwitchedBody::FAILED;
+            return nullptr;
+        }
+        if (send_events) {
+            // a partial write: the socket is waited for to become writable; nothing is read
+            return getSocketPollInfoHash(xsink, send_events);
+        }
+        // nothing is in flight: the request body is complete, or the data given so far was sent
+        AutoLocker al(stream_lock);
+        if (send_state == SendState::IDLE && !send_body_queue.empty()) {
+            // data was given meanwhile
+            continue;
+        }
+        if (send_state == SendState::IDLE) {
+            // the rest of the body is written by the threads that give it (see pushSendData())
+            switched_body = SwitchedBody::CALLER;
+        } else {
+            // driveSendSide() reports a failed send in this state with setError() (see above)
+            assert(send_state == SendState::DONE);
+            switched_body = SwitchedBody::DONE;
+        }
+        break;
+    }
+    ASYNC_IO_TRACE("H1 handleSwitchedSend: the queued request body data was sent after the 101 response fd=%d\n",
+        sock_obj ? sock_obj->getPollableDescriptor() : -1);
+    switched_sending_io = false;
+    protocol_switched = true;
+    // the stream ends now, after the request body data in hand, so that the caller, which takes the socket over
+    // when the stream has ended, never writes the data of the new protocol before it (qore#7487, qore#7503)
+    dispatchStreamingSwitchEnd(xsink);
+    return handleProtocolSwitched(xsink);
+}
+
 // --- Response dispatch ---
 
 bool Http1ClientPollOperationPriv::connectionEndsWithResponse() {
@@ -3003,6 +3237,30 @@ void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
         action->execute(data_resp.release(), xsink);
         action->deref(xsink);
     }
+}
+
+void Http1ClientPollOperationPriv::dispatchStreamingSwitchEnd(ExceptionSink* xsink) {
+    AbstractAsyncAction* action = nullptr;
+    int stream_id;
+    {
+        AutoLocker al(stream_lock);
+        stream_id = active_sid;
+        action = stream_action;
+        if (action) {
+            action->ref();
+        }
+    }
+    if (!action) {
+        return;
+    }
+    ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
+    end_resp->setKeyValue("end_stream", true, xsink);
+    end_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);
+    action->execute(end_resp.release(), xsink);
+    // no more is delivered on the stream: an error of the connection that follows, such as when the caller closes
+    // it, is not reported to the reader of the response, which has ended
+    action->complete(xsink);
+    action->deref(xsink);
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* xsink) {
@@ -3681,6 +3939,8 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             active_upgrade = upgrade_requested;
             streaming_active = streaming;
             streaming_send = streaming_send_flag;
+            send_body_ended = false;
+            switched_body = SwitchedBody::NONE;
             old_pending_request_data = pending_request_data;
             pending_request_data = bin_holder.release();
             pending_request_header_len = header_len;
@@ -4341,20 +4601,32 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
 
     Thread-safe — may be called from any thread.
 
+    After a \c 101 response that the server sent before the request body was complete, once the data given before
+    it has been sent, the rest of the body is written to the socket in the calling thread, which blocks until the
+    data is written or \a timeout_ms has passed, one thread at a time; it must therefore not be called in an I/O
+    thread of the async I/O controller then (qore#7503).
+
     @param data the chunk to send (string or binary); pass \c NOTHING to
         signal end-of-stream
+    @param timeout_ms the time to wait for a write in the calling thread after a \c 101 response; a negative value
+        means no limit
+
+    @throw HTTPCLIENT-STATE-ERROR data is given after the end of the request body, or after a \c 101 response with
+    which the request body was complete or could not be completed
+    @throw HTTPCLIENT-SEND-ERROR the request body could not be written after a \c 101 response; socket errors are
+    raised as they are
 
     @since %Qore 3.0
 */
-nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS] {
+nothing Http1ClientPollOperationBase::pushSendData(*data data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (!data) {
         // EOF sentinel
-        priv->pushSendData(nullptr, xsink);
+        priv->pushSendData(nullptr, xsink, (int)timeout_ms);
         return QoreValue();
     }
     if (data->getType() == NT_STRING) {
         // note: safe; qpp makes a node of an inline short string for a *data parameter
-        priv->pushSendData(static_cast<const QoreStringNode*>(data), xsink);
+        priv->pushSendData(static_cast<const QoreStringNode*>(data), xsink, (int)timeout_ms);
         return QoreValue();
     }
     // NT_BINARY: wrap raw bytes in a QoreStringNode (no transcoding —
@@ -4363,7 +4635,7 @@ nothing Http1ClientPollOperationBase::pushSendData(*data data) [flags=NAMED_ARGS
     SimpleRefHolder<QoreStringNode> str(
         new QoreStringNode(static_cast<const char*>(b->getPtr()),
             b->size(), QCS_DEFAULT));
-    priv->pushSendData(*str, xsink);
+    priv->pushSendData(*str, xsink, (int)timeout_ms);
 }
 
 //! Sets HTTP/1.1 chunked-transfer trailers for a streaming-send request

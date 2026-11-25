@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LlmCallbackPassThrough.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires QUnit
+
+%exec-class LlmCallbackPassThroughTest
+
+#! A callback's exception marked as pass-through reaches the code that called the backend unchanged
+/** CallbackLlmProvider raises every exception of its callback as LLM-ERROR, so a gateway callback could not stop a
+    call with a signal of its own (for example that it hands the call over to another thread) and have its caller
+    receive that signal: the caller saw LLM-ERROR, which reads as a failed call.  An exception whose argument sets
+    CallbackLlmProvider::PassThroughKey to True is raised to the caller unchanged, on the chat, completion and stream
+    paths; every other exception is wrapped as before.
+*/
+class LlmCallbackPassThroughTest inherits QUnit::Test {
+    public {
+        const Handover = "TEST-HANDOVER";
+        const OkResponse = {"choices": ({"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"},),
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}};
+    }
+
+    constructor() : Test("LlmCallbackPassThroughTest", "1.0", \ARGV) {
+        addTestCase("chat: a pass-through exception reaches the caller unchanged", \chatPassThrough());
+        addTestCase("complete: a pass-through exception reaches the caller unchanged", \completePassThrough());
+        addTestCase("stream: a pass-through exception reaches the caller unchanged", \streamPassThrough());
+        addTestCase("stream without a stream callback: a pass-through exception of its chat call reaches the caller",
+            \streamFallbackPassThrough());
+        addTestCase("other callback exceptions are still raised as LLM-ERROR with the callback's exception",
+            \otherExceptionsWrapped());
+        addTestCase("only an argument hash with the key set to True passes through", \onlyDeclaredPassThrough());
+        set_return_value(main());
+    }
+
+    chatPassThrough() {
+        LlmBackend llm = backend(throwing(passThroughArg()));
+        hash<ExceptionInfo> ex = caught(sub () { llm.chat(userMessage()); });
+        assertPassedThrough(ex);
+    }
+
+    completePassThrough() {
+        LlmBackend llm = backend(throwing(passThroughArg()));
+        hash<ExceptionInfo> ex = caught(sub () { llm.complete("system", "user"); });
+        assertPassedThrough(ex);
+    }
+
+    streamPassThrough() {
+        LlmBackend llm(<LlmBackendConfig>{"mode": "callback",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> body) { return OkResponse; },
+            "api_stream_callback": sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> delta_cb) {
+                delta_cb({"choices": ({"delta": {"content": "par"}},)});
+                throw Handover, "the call continues elsewhere", passThroughArg();
+            }});
+        list<hash<ChatStreamEvent>> events = ();
+        hash<ExceptionInfo> ex = caught(sub () {
+            llm.chatStream(userMessage(), sub (hash<ChatStreamEvent> event) { events += event; });
+        });
+        assertPassedThrough(ex);
+        assertEq(1, events.size(), "the deltas before the signal were delivered");
+    }
+
+    streamFallbackPassThrough() {
+        LlmBackend llm = backend(throwing(passThroughArg()));
+        hash<ExceptionInfo> ex = caught(sub () {
+            llm.chatStream(userMessage(), sub (hash<ChatStreamEvent> event) {});
+        });
+        assertPassedThrough(ex);
+    }
+
+    otherExceptionsWrapped() {
+        LlmBackend llm = backend(throwing({"status": 503}, "UPSTREAM-ERROR"));
+        foreach code call in ((sub () { llm.chat(userMessage()); }, sub () { llm.complete("system", "user"); })) {
+            hash<ExceptionInfo> ex = caught(call);
+            assertEq("LLM-ERROR", ex.err);
+            assertEq("UPSTREAM-ERROR", ex.arg.err, "the callback's exception is the argument");
+        }
+        LlmBackend stream(<LlmBackendConfig>{"mode": "callback",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> body) { return OkResponse; },
+            "api_stream_callback": sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> delta_cb) {
+                throw "UPSTREAM-ERROR", "the provider failed", {"status": 503};
+            }});
+        hash<ExceptionInfo> ex = caught(sub () { stream.chatStream(userMessage(), sub (hash<ChatStreamEvent> e) {}); });
+        assertEq("LLM-ERROR", ex.err);
+        assertEq("UPSTREAM-ERROR", ex.arg.err);
+
+        # a cancellation from the stream callback is raised unchanged, as before
+        LlmBackend cancelled(<LlmBackendConfig>{"mode": "callback",
+            "api_callback": hash<auto> sub (string m, string p, hash<auto> body) { return OkResponse; },
+            "api_stream_callback": sub (string m, string p, hash<auto> body, code<nothing(hash<auto>)> delta_cb) {
+                throw "LLM-CANCELLED", "cancelled";
+            }});
+        ex = caught(sub () { cancelled.chatStream(userMessage(), sub (hash<ChatStreamEvent> e) {}); });
+        assertEq("LLM-CANCELLED", ex.err);
+    }
+
+    onlyDeclaredPassThrough() {
+        foreach auto arg in ((NOTHING, "llm_callback_pass_through", {CallbackLlmProvider::PassThroughKey: "true"},
+                {CallbackLlmProvider::PassThroughKey: 1}, {CallbackLlmProvider::PassThroughKey: False})) {
+            LlmBackend llm = backend(throwing(arg));
+            hash<ExceptionInfo> ex = caught(sub () { llm.chat(userMessage()); });
+            assertEq("LLM-ERROR", ex.err, sprintf("argument %y is wrapped", arg));
+        }
+        assertTrue(CallbackLlmProvider::isPassThrough(<ExceptionInfo>{"err": Handover, "desc": "",
+            "arg": passThroughArg()}));
+    }
+
+    private assertPassedThrough(hash<ExceptionInfo> ex) {
+        assertEq(Handover, ex.err, "the callback's code");
+        assertEq("the call continues elsewhere", ex.desc, "its description");
+        assertEq(passThroughArg(), ex.arg, "its argument");
+        assertEq(basename(get_script_path()), basename(ex.file), "raised where the callback raised it");
+    }
+
+    private static hash<auto> passThroughArg() {
+        return {CallbackLlmProvider::PassThroughKey: True, "id": 7};
+    }
+
+    private static code throwing(auto arg, string err = Handover) {
+        return hash<auto> sub (string m, string p, hash<auto> body) {
+            throw err, "the call continues elsewhere", arg;
+        };
+    }
+
+    private static LlmBackend backend(code api_callback) {
+        return new LlmBackend(<LlmBackendConfig>{"mode": "callback", "api_callback": api_callback});
+    }
+
+    private static list<hash<ChatMessage>> userMessage() {
+        return (<ChatMessage>{"role": "user", "content": "hello"},);
+    }
+
+    private hash<ExceptionInfo> caught(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        throw "TEST-ERROR", "no exception was raised";
+    }
+}

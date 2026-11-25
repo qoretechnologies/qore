@@ -10,7 +10,7 @@ own keys: ["secret", "isecret"]
 own first: "secret"
 own last: "secret"
 own slice: {secret: "secret", isecret: "isecret"}
-own iterator: []
+own iterator: ["secret", "isecret"]
 own method: METHOD-IS-PRIVATE
 own imethod: METHOD-DOES-NOT-EXIST
 own callable: True
@@ -32,7 +32,7 @@ import keys: ["secret", "isecret"]
 import first: "secret"
 import last: "secret"
 import slice: {secret: "secret", isecret: "isecret"}
-import iterator: []
+import iterator: ["secret", "isecret"]
 import method: METHOD-IS-PRIVATE
 import imethod: METHOD-DOES-NOT-EXIST
 import callable: True
@@ -49,7 +49,7 @@ import-object keys: ["secret", "isecret"]
 import-object first: "secret"
 import-object last: "secret"
 import-object slice: {secret: "secret", isecret: "isecret"}
-import-object iterator: []
+import-object iterator: ["secret", "isecret"]
 import-object method: METHOD-IS-PRIVATE
 import-object imethod: METHOD-DOES-NOT-EXIST
 import-object callable: True
@@ -71,7 +71,7 @@ injection-object keys: ["secret", "isecret"]
 injection-object first: "secret"
 injection-object last: "secret"
 injection-object slice: {secret: "secret", isecret: "isecret"}
-injection-object iterator: []
+injection-object iterator: ["secret", "isecret"]
 injection-object method: METHOD-IS-PRIVATE
 injection-object imethod: METHOD-DOES-NOT-EXIST
 injection-object callable: True

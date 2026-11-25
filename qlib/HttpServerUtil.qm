@@ -170,6 +170,9 @@ module HttpServerUtil {
       members of the class when sandboxed code declares them; the context is a copy with the request metadata only
       (@ref HttpServer::AbstractStreamRequest::ContextKeys "ContextKeys",
       @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "HeaderInfoKeys"; issue #6843)
+    - added @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", through which
+      the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request is set up without the
+      connection's socket (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
     - added @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "AbstractHttpRequestHandler::setHandlerSocketView()"
       and @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView() "needsHandlerSocketView()": the handler
       of an HTTP/1.x request that is declared by sandboxed code, or that asks for it, gets a socket of its request
@@ -5514,6 +5517,144 @@ public class AbstractUrlHandler inherits HttpServer::AbstractHttpRequestHandler 
       the handler returns
     - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 */
+#! A handle of the poll operation of an HTTP/1.1 WebSocket connection, which gives no socket (qore#7476)
+/** The HTTP server gives this handle, not the poll operation, to the setup of the WebSocket connection of a handler
+    that gets the socket of its request (see
+    @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()"):
+    the poll operation holds the connection's socket, which such a handler must not get, and the server cannot tell
+    the method of the trusted handler from a method with the same name of another class.  The handle keeps the
+    poll operation in an internal member and gives only what the setup and the connection need: its settings, the
+    frames that it sends, its state, and the wake-up of the async I/O controller for the connection, never the poll
+    operation or its socket.
+
+    @since HttpServerUtil 1.6
+*/
+public final class HttpWebSocketPollOperationHandle {
+    private:internal {
+        #! the poll operation, which holds the connection's socket
+        HttpWebSocketPollOperationBase op;
+    }
+
+    #! Creates the handle of a poll operation
+    constructor(HttpWebSocketPollOperationBase op) {
+        self.op = op;
+    }
+
+    #! A copy of a handle is not supported
+    /** @throw HANDLE-COPY-ERROR always
+    */
+    copy() {
+        throw "HANDLE-COPY-ERROR", "a poll operation handle cannot be copied";
+    }
+
+    #! Sets the interval of the heartbeat pings in milliseconds
+    nothing setHeartbeat(int ms) {
+        op.setHeartbeat(ms);
+    }
+
+    #! Sets the idle timeout in milliseconds
+    nothing setIdleTimeout(int ms) {
+        op.setIdleTimeout(ms);
+    }
+
+    #! Sets the send timeout in milliseconds
+    nothing setSendTimeout(int ms) {
+        op.setSendTimeout(ms);
+    }
+
+    #! Sets whether the send timeout is scaled
+    nothing setSendTimeoutScaled(bool scaled) {
+        op.setSendTimeoutScaled(scaled);
+    }
+
+    #! Sets the minimum send rate
+    nothing setSendMinRate(int min_rate, timeout window) {
+        op.setSendMinRate(min_rate, window);
+    }
+
+    #! Sets the close timeout
+    nothing setCloseTimeout(timeout close_timeout) {
+        op.setCloseTimeout(close_timeout);
+    }
+
+    #! Sets the maximum frame size
+    nothing setMaxFrameSize(int size) {
+        op.setMaxFrameSize(size);
+    }
+
+    #! Sets the RSV bits of the negotiated extensions
+    nothing setExtensionRsvMask(int mask) {
+        op.setExtensionRsvMask(mask);
+    }
+
+    #! Enables or disables echo mode
+    nothing setEchoMode(bool enabled) {
+        op.setEchoMode(enabled);
+    }
+
+    #! Sets the connection and its handler that the frames are dispatched to
+    nothing setConnection(auto wsc, auto handler) {
+        call_object_method(op, "setConnection", wsc, handler);
+    }
+
+    #! Sets the counter that is decremented when the connection ends
+    nothing setDone(Counter done) {
+        call_object_method(op, "setDone", done);
+    }
+
+    #! Sets the code that is called when the connection has ended
+    nothing setDoneCallback(code<nothing()> cb) {
+        call_object_method(op, "setDoneCallback", cb);
+    }
+
+    #! Queues an encoded frame
+    nothing sendRawFrame(binary frame) {
+        op.sendRawFrame(frame);
+    }
+
+    #! Queues a close frame
+    nothing sendClose(int code = 1000, string reason = "") {
+        op.sendClose(code, reason);
+    }
+
+    #! Ends the connection at once, if the poll operation supports it
+    nothing forceClose() {
+        if (op.hasCallableMethod("forceClose")) {
+            call_object_method(op, "forceClose");
+        }
+    }
+
+    #! Wakes the async I/O controller for the connection
+    nothing wake() {
+        Qore::AsyncIoController::wakeSocket(io_object: op.getSocket());
+    }
+
+    #! Returns the size of the send queue
+    int getSendQueueSize() {
+        return op.getSendQueueSize();
+    }
+
+    #! Returns True if the connection failed
+    bool hasError() {
+        return op.hasError();
+    }
+
+    #! Returns the error of the connection, if any
+    *hash<auto> getError() {
+        return op.getError();
+    }
+
+    #! Returns the close code
+    int getCloseCode() {
+        return op.getCloseCode();
+    }
+
+    #! Returns the close reason
+    string getCloseReason() {
+        return op.getCloseReason();
+    }
+}
+
 public class AbstractHttpSocketHandlerInterface {
     private {
         #! stop listener flag

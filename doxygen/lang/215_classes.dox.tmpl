@@ -580,24 +580,14 @@ x1.viaB();    # "P1::m": B1's code can call P1::m()
 	- @ref memberNotification_methods "memberNotification()": these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 	- methodGate(): these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 
-    A <b><tt>final</tt></b> method holds for the whole class hierarchy: a call of the method's name on an object of
-    any subclass with arguments that the <b><tt>final</tt></b> variant accepts selects that variant.  Overload
-    resolution considers the variants of a class's own method first, then those of its parent classes in the order
-    in which they are listed, each with its own parent classes (depth first), and an earlier variant wins a tie, so
-    the following are parse errors in a subclass of a class with a <b><tt>final</tt></b> method:
-    - a method with the same signature (an override)
-    - a variant of the same name with another signature that accepts arguments that the <b><tt>final</tt></b> variant
-      accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
-      arguments; a variant whose parameters accept none of the same arguments is allowed
-    - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
-      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
-      position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a
-      <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
-    - a parent class listed before the class with the <b><tt>final</tt></b> method that declares or inherits a method
-      of the same name, as the subclass's calls of the name are then resolved in that method, or one of its variants
-      is selected first
+    An inherited <b><tt>final</tt></b> method reserves its name in subclasses. A subclass declaring an
+    instance or static method with that name gets a parse error, even when its parameter types, names or arity
+    differ. The declaring class can provide several overloads itself. A <b><tt>private:internal</tt></b>
+    final variant is visible only in its declaring class and does not reserve the name in subclasses.
 
-    <b><tt>final</tt></b> variants declared <b><tt>private:internal</tt></b> are not inherited and are not affected.
+    In multiple inheritance, a call accepting the final variant's arguments must still reach that variant.
+    Parent classes are searched depth first in declaration order. A parent listed before the final method's
+    class that redirects the call to another method also causes a parse error.
 
     @par Example:
     @code{.py}
@@ -618,8 +608,8 @@ class T2 inherits Base, Other {}
 class C inherits Base {
     # parse error: a call with a string argument could select this variant
     string log(data msg) { return "c"; }
-    # OK: accepts none of the arguments of Base::log()
-    string log(int code) { return "c"; }
+    # parse error: Base's final method reserves the name for static methods and disjoint overloads too
+    static string log(int code) { return "c"; }
 }
     @endcode
 

@@ -2061,7 +2061,7 @@ string Datasource::getOSCharset() [flags=CONSTANT] {
     @endcode
 */
 *int Datasource::getPort() [flags=CONSTANT] {
-    int port = ds->getPort();
+    int port = ds->getPendingPort();
     return port ? QoreValue(port) : QoreValue();
 }
 

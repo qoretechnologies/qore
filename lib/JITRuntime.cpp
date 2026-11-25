@@ -48,6 +48,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreHashKeyHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreAOTMethodDispatchReclaim.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
@@ -74,7 +75,9 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <thread>
 #include <typeinfo>
+#include <vector>
 #if defined(__linux__) || defined(__APPLE__)
 // dladdr() of the location of a frame; see qore_is_aot_code_location()
 #include <dlfcn.h>
@@ -22509,12 +22512,29 @@ DLLLOCAL QoreObject* qore_rt_self_call_fast_object(const SelfFunctionCallNode* c
 //! makes an unqualified call of a method of self (m()) on the object that qore_rt_self_call_fast_object() returned
 //! with the fast method call path; returns false, having done nothing, if the call cannot take it (issue #7267)
 /** @param arg_cleanups the cleanup slots of the arguments whose references the caller gives to the call, or nullptr
+
+    Inlined explicitly into the IR interpreter, which calls it on the path of a recursion of a method that calls itself:
+    an out-of-line call puts its frame on the stack at each level (about 105 bytes per level), which GCC made when the
+    unit grew (qore#7336; tools/hot-inlining.txt, qore#6494).  The attribute is on the definition only, without
+    "inline", as the callers in another compilation unit (a build without a single compilation unit) call the external
+    definition; GCC warns that such a function "might not be inlinable", which is expected here.
 */
-DLLLOCAL bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#endif
+DLLLOCAL
+#if defined(__GNUC__)
+__attribute__((always_inline))
+#endif
+bool qore_rt_try_self_call_fast_object(QoreObject* self, const SelfFunctionCallNode* call, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink, uint64_t& result) {
     return qore_rt_try_self_call_fast(self, call->getMethod(), call->getClass(), call->getVariant(), args,
         arg_cleanups, nargs, xsink, result);
 }
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #endif // QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 
 #if !defined(QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT) || defined(QORE_JIT_RUNTIME_TAKE_OVER_UNIT)
@@ -23171,8 +23191,42 @@ static QoreAOTMethodDispatchCache* qore_rt_get_aot_method_dispatch_cache(
     return expected;
 }
 
-static const QoreAOTMethodDispatchCacheEntry*
-qore_rt_find_aot_method_dispatch_cache_entry(
+namespace {
+//! holds the reclamation domain's lock across fork()
+class QoreAOTMethodDispatchReclaimForkHandler : public QoreForkHandler {
+public:
+    QoreAOTMethodDispatchReclaimForkHandler() : QoreForkHandler(QFLR_LEAF, "aot_method_dispatch_reclaim") {
+    }
+
+    void prepare() noexcept override {
+        QoreAOTMethodDispatchReclaimer::forkPrepare();
+    }
+
+    void parent() noexcept override {
+        QoreAOTMethodDispatchReclaimer::forkParent();
+    }
+
+    void child() noexcept override {
+        QoreAOTMethodDispatchReclaimer::forkChild();
+    }
+};
+
+QoreAOTMethodDispatchReclaimForkHandler aot_method_dispatch_reclaim_fork_handler;
+}
+
+//! the method and variant of a matching cache entry; no method if none matched
+struct QoreAOTMethodDispatchHit {
+    const QoreMethod* method = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+};
+
+//! looks up a cache entry in a read section with @p reader, the calling thread's record
+/** Entries are read without a lock and an entry replaced by a writer is freed once no reader can hold it, so the
+    entry is only read within the read section here, and only its method and variant leave it (qore#7459).  Without
+    a record (one could not be allocated), no entry can be read: the lookup misses.
+*/
+static QoreAOTMethodDispatchHit
+qore_rt_find_aot_method_dispatch_cache_entry(QoreAOTMethodDispatchReclaimer::Record* reader,
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
         const qore_class_private* class_ctx, qore_program_id_t caller_program_id,
@@ -23183,8 +23237,13 @@ qore_rt_find_aot_method_dispatch_cache_entry(
         const std::array<uint8_t,
             QoreAOTMethodDispatchCacheEntry::MAX_ARGS>& arg_states,
         int nargs) {
+    QoreAOTMethodDispatchHit hit;
     if (!cache) {
-        return nullptr;
+        return hit;
+    }
+    QoreAOTMethodDispatchReclaimer::ReadGuard read_guard(reader);
+    if (!read_guard) {
+        return hit;
     }
     for (auto& slot : cache->entries) {
         const QoreAOTMethodDispatchCacheEntry* entry =
@@ -23207,14 +23266,16 @@ qore_rt_find_aot_method_dispatch_cache_entry(
                 }
             }
             if (match) {
-                return entry;
+                hit.method = entry->method;
+                hit.variant = entry->variant;
+                return hit;
             }
         }
     }
-    return nullptr;
+    return hit;
 }
 
-static void qore_rt_add_aot_method_dispatch_cache_entry(
+static void qore_rt_add_aot_method_dispatch_cache_entry(QoreAOTMethodDispatchReclaimer::Record* reader,
         QoreAOTMethodDispatchCache* cache, const QoreClass* receiver_class,
         const QoreTypeInfo* receiver_type_info,
         const qore_class_private* class_ctx, qore_program_id_t caller_program_id,
@@ -23230,9 +23291,9 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
             || dispatch_epoch != qore_get_method_dispatch_epoch()) {
         return;
     }
-    if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
+    if (qore_rt_find_aot_method_dispatch_cache_entry(reader, cache, receiver_class,
             receiver_type_info, class_ctx, caller_program_id, object_program_id,
-            parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
+            parse_options, dispatch_epoch, arg_types, arg_states, nargs).method) {
         return;
     }
     std::unique_ptr<QoreAOTMethodDispatchCacheEntry> entry(
@@ -23249,23 +23310,209 @@ static void qore_rt_add_aot_method_dispatch_cache_entry(
     entry->arg_types = arg_types;
     entry->arg_states = arg_states;
     entry->nargs = static_cast<uint8_t>(nargs);
-    std::lock_guard<std::mutex> lock(cache->write_mutex);
-    if (qore_rt_find_aot_method_dispatch_cache_entry(cache, receiver_class,
-            receiver_type_info, class_ctx, caller_program_id, object_program_id,
-            parse_options, dispatch_epoch, arg_types, arg_states, nargs)) {
-        return;
-    }
-    for (auto& slot : cache->entries) {
-        const QoreAOTMethodDispatchCacheEntry* current =
-            slot.load(std::memory_order_relaxed);
-        if (!current || current->dispatch_epoch != dispatch_epoch) {
-            const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
-            cache->owned_entries.push_back(std::move(entry));
-            slot.store(stored, std::memory_order_release);
+    // the entry replaced is retired after the lock is released: the retirement takes the reclamation domain's lock,
+    // which a fork() holds, and a thread holding the cache's lock (which has no fork handler) while waiting for it
+    // would leave the cache's lock held in the child
+    std::optional<QoreAOTMethodDispatchReclaimer::Retirement> retirement;
+    const QoreAOTMethodDispatchCacheEntry* replaced = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(cache->write_mutex);
+        if (qore_rt_find_aot_method_dispatch_cache_entry(reader, cache, receiver_class,
+                receiver_type_info, class_ctx, caller_program_id, object_program_id,
+                parse_options, dispatch_epoch, arg_types, arg_states, nargs).method) {
             return;
         }
+        // owned_entries holds exactly the entries in the slots: a replaced entry is retired, and freed once no reader
+        // can hold it; before, every replaced entry was kept until the process ended, and as entries are keyed by
+        // Program IDs, which are never reused, and destroying a class makes all of them stale, every Program created
+        // and destroyed added an entry for each call target reached (qore#7459)
+        for (auto& slot : cache->entries) {
+            const QoreAOTMethodDispatchCacheEntry* current =
+                slot.load(std::memory_order_relaxed);
+            if (!current) {
+                const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
+                cache->owned_entries.push_back(std::move(entry));
+                slot.store(stored, std::memory_order_release);
+                return;
+            }
+            if (current->dispatch_epoch != dispatch_epoch) {
+                auto i = std::find_if(cache->owned_entries.begin(), cache->owned_entries.end(),
+                    [current](const std::unique_ptr<const QoreAOTMethodDispatchCacheEntry>& owned) {
+                        return owned.get() == current;
+                    });
+                if (i == cache->owned_entries.end()) {
+                    // not possible: every entry in a slot is owned
+                    assert(false);
+                    return;
+                }
+                // allocated before the slot is replaced: the replaced entry must not be freed at once
+                retirement.emplace();
+                const QoreAOTMethodDispatchCacheEntry* stored = entry.get();
+                [[maybe_unused]] const QoreAOTMethodDispatchCacheEntry* released = i->release();
+                assert(released == current);
+                *i = std::move(entry);
+                slot.store(stored, std::memory_order_release);
+                replaced = current;
+                break;
+            }
+        }
+    }
+    if (replaced) {
+#ifdef DEBUG
+        // poisoned when freed, so that a lookup that read an entry freed too early gets a method that matches no
+        // entry (see qore_rt_dbg_aot_dispatch_reclaim_stress())
+        retirement->retire(replaced, [](const void* p) {
+            QoreAOTMethodDispatchCacheEntry* e =
+                static_cast<QoreAOTMethodDispatchCacheEntry*>(const_cast<void*>(p));
+            e->method = reinterpret_cast<const QoreMethod*>(static_cast<uintptr_t>(0xdeadbeef));
+            e->variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(static_cast<uintptr_t>(0xdeadbeef));
+            delete e;
+        });
+#else
+        retirement->retire(replaced);
+#endif
     }
 }
+
+#ifdef DEBUG
+//! Debug-only: frees the replaced AOT method dispatch cache entries that no reader can hold, then returns the
+//! reclamation counters
+/** Retirements free entries in batches, so up to a batch of them can wait without a reader holding them
+*/
+QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stats() {
+    QoreAOTMethodDispatchReclaimer::reclaim();
+    QoreAOTMethodDispatchReclaimer::Stats st = QoreAOTMethodDispatchReclaimer::getStats();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    rv->setKeyValue("retired", static_cast<int64>(st.retired), nullptr);
+    rv->setKeyValue("reclaimed", static_cast<int64>(st.reclaimed), nullptr);
+    rv->setKeyValue("pending", static_cast<int64>(st.pending), nullptr);
+    rv->setKeyValue("readers", static_cast<int64>(st.readers), nullptr);
+    return rv.release();
+}
+
+//! Debug-only: looks up entries of one AOT method dispatch cache in reader threads while a writer replaces them
+/** The writer makes the entries stale (the dispatch epoch), so that each entry it adds after the first replaces one;
+    the readers look up the newest key, which can match the entry being replaced; the writer frees what it can after
+    each replacement (retirements alone free in batches).  Entries rotate between
+    @p target's \c value(), \c other() and \c third() methods by their key, and a freed entry is poisoned first,
+    so a reader that read an entry freed too early (or reused for a newer one) gets a method that does not match the
+    key; valgrind or a sanitizer also reports the use after free.  Every replaced entry must be freed once the
+    readers have ended.
+
+    The counters are those of the whole reclamation domain: no other thread may use AOT method dispatch meanwhile.
+
+    @return a hash with: \c iterations, \c retired, \c reclaimed (the entries retired and freed during the run),
+    \c pending (the entries retired and not freed after the readers ended), \c owned (the entries the cache owns
+    after the run), \c hits (the lookups that matched) and \c wrong_hits (hits with a method or variant other than
+    the key's)
+*/
+QoreHashNode* qore_rt_dbg_aot_dispatch_reclaim_stress(QoreObject* target, int64 threads, int64 iterations,
+        ExceptionSink* xsink) {
+    const QoreClass* cls = target->getClass();
+    const QoreMethod* methods[3] = { cls->findMethod("value"), cls->findMethod("other"),
+        cls->findMethod("third") };
+    if (!methods[0] || !methods[1] || !methods[2]) {
+        xsink->raiseException("DBG-ERROR", "class '%s' needs value(), other() and third() methods", cls->getName());
+        return nullptr;
+    }
+    const AbstractQoreFunctionVariant* variants[3];
+    for (int i = 0; i < 3; ++i) {
+        variants[i] = qore_method_private::get(const_cast<QoreMethod&>(*methods[i]))->getFunction()->first();
+    }
+    if (threads < 1 || iterations < 2) {
+        xsink->raiseException("DBG-ERROR", "threads must be at least 1 and iterations at least 2");
+        return nullptr;
+    }
+
+    std::unique_ptr<QoreAOTMethodDispatchCache> cache(new QoreAOTMethodDispatchCache);
+    const std::array<const QoreTypeInfo*, QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_types{};
+    const std::array<uint8_t, QoreAOTMethodDispatchCacheEntry::MAX_ARGS> arg_states{};
+    const QoreParseOptions parse_options;
+    // the key that the readers look up: the newest entry's caller Program ID and dispatch epoch
+    std::atomic<uint64_t> key_program{0};
+    std::atomic<uint64_t> key_epoch{0};
+    std::atomic<bool> done{false};
+    std::atomic<int64> hits{0};
+    std::atomic<int64> wrong_hits{0};
+
+    // the writer is the calling Qore thread
+    QoreAOTMethodDispatchReclaimer::Record* writer_reader = qore_acquire_aot_dispatch_thread_reader();
+    // entries that other code retired before the run and that wait for a batch are freed first, so that the run's
+    // counters are its own
+    QoreAOTMethodDispatchReclaimer::reclaim();
+    QoreAOTMethodDispatchReclaimer::Stats before = QoreAOTMethodDispatchReclaimer::getStats();
+    std::vector<std::thread> readers;
+    try {
+        readers.reserve(static_cast<size_t>(threads));
+        // stops and joins the readers, also if the writer fails
+        struct ReaderJoiner {
+            std::atomic<bool>& done;
+            std::vector<std::thread>& readers;
+
+            ~ReaderJoiner() {
+                done.store(true, std::memory_order_release);
+                for (std::thread& t : readers) {
+                    if (t.joinable()) {
+                        t.join();
+                    }
+                }
+            }
+        } joiner{done, readers};
+        for (int64 i = 0; i < threads; ++i) {
+            readers.emplace_back([&]() {
+                // a thread without Qore thread data: it keeps its own record
+                QoreAOTMethodDispatchReclaimer::Record* reader = QoreAOTMethodDispatchReclaimer::acquire();
+                if (!reader) {
+                    wrong_hits.fetch_add(1, std::memory_order_relaxed);
+                    return;
+                }
+                while (!done.load(std::memory_order_acquire)) {
+                    uint64_t program = key_program.load(std::memory_order_acquire);
+                    QoreAOTMethodDispatchHit hit = qore_rt_find_aot_method_dispatch_cache_entry(reader, cache.get(),
+                        cls, nullptr, nullptr, program, 0, parse_options, key_epoch.load(std::memory_order_acquire),
+                        arg_types, arg_states, 0);
+                    if (hit.method) {
+                        hits.fetch_add(1, std::memory_order_relaxed);
+                        if (hit.method != methods[program % 3] || hit.variant != variants[program % 3]) {
+                            wrong_hits.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    }
+                }
+                QoreAOTMethodDispatchReclaimer::release(reader);
+            });
+        }
+        for (int64 i = 0; i < iterations; ++i) {
+            qore_bump_method_dispatch_epoch();
+            uint64_t epoch = qore_get_method_dispatch_epoch();
+            uint64_t program = static_cast<uint64_t>(i) + 1;
+            qore_rt_add_aot_method_dispatch_cache_entry(writer_reader, cache.get(), cls, nullptr, nullptr,
+                program, 0,
+                parse_options, epoch, arg_types, arg_states, 0, methods[program % 3], variants[program % 3]);
+            key_program.store(program, std::memory_order_release);
+            key_epoch.store(epoch, std::memory_order_release);
+            // frees what no reader holds after each replacement, not only once per batch, so that an entry freed
+            // under a reader (a defect) is freed right after its replacement, while readers can still hold it
+            QoreAOTMethodDispatchReclaimer::reclaim();
+        }
+    } catch (std::exception& e) {
+        xsink->raiseException("DBG-ERROR", "the stress run failed: %s", e.what());
+        return nullptr;
+    }
+    // no reader is in a read section now: everything retired can be freed
+    QoreAOTMethodDispatchReclaimer::reclaim();
+    QoreAOTMethodDispatchReclaimer::Stats after = QoreAOTMethodDispatchReclaimer::getStats();
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("iterations", iterations, xsink);
+    rv->setKeyValue("retired", static_cast<int64>(after.retired - before.retired), xsink);
+    rv->setKeyValue("reclaimed", static_cast<int64>(after.reclaimed - before.reclaimed), xsink);
+    rv->setKeyValue("pending", static_cast<int64>(after.pending), xsink);
+    rv->setKeyValue("owned", static_cast<int64>(cache->owned_entries.size()), xsink);
+    rv->setKeyValue("hits", hits.load(), xsink);
+    rv->setKeyValue("wrong_hits", wrong_hits.load(), xsink);
+    return rv.release();
+}
+#endif
 
 static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         QoreAOTCallTarget& target, QoreObject* object,
@@ -23283,7 +23530,11 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
         return toBits(QoreValue());
     }
 
-    const qore_class_private* class_ctx = runtime_get_class();
+    // the class context, the Program, the parse options and the thread's reclamation record from one lookup of the
+    // thread's data
+    QoreAOTDispatchThreadContext thread_ctx;
+    qore_get_aot_dispatch_thread_context(thread_ctx);
+    const qore_class_private* class_ctx = thread_ctx.class_ctx;
     // checked against the committed hierarchy, as in MethodCallNode::exec()
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(
             *object->getClass(), class_ctx)) {
@@ -23304,26 +23555,30 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     if (!explicit_type_param_instantiation) {
         cache = qore_rt_get_aot_method_dispatch_cache(target);
         if (cache) {
-            caller_program_id = qore_rt_aot_dispatch_program_id(getProgram());
+            caller_program_id = qore_rt_aot_dispatch_program_id(thread_ctx.pgm);
             object_program_id = qore_rt_aot_dispatch_program_id(object->getProgram());
-            parse_options = runtime_get_parse_options();
+            parse_options = thread_ctx.parse_options;
             cacheable = qore_rt_build_aot_dispatch_key(object, args, nargs,
                 arg_types, arg_states, receiver_type_info);
         }
         if (cacheable) {
+            if (!thread_ctx.reader) {
+                // the thread's first cacheable dispatch
+                thread_ctx.reader = qore_acquire_aot_dispatch_thread_reader();
+            }
             dispatch_epoch = qore_get_method_dispatch_epoch();
-            const QoreAOTMethodDispatchCacheEntry* entry =
-                qore_rt_find_aot_method_dispatch_cache_entry(cache,
-                    object->getClass(), receiver_type_info, class_ctx,
-                    caller_program_id, object_program_id, parse_options,
-                    dispatch_epoch, arg_types, arg_states, nargs);
-            if (entry) {
+            QoreAOTMethodDispatchHit hit = qore_rt_find_aot_method_dispatch_cache_entry(thread_ctx.reader,
+                cache, object->getClass(), receiver_type_info, class_ctx, caller_program_id, object_program_id,
+                parse_options, dispatch_epoch, arg_types, arg_states, nargs);
+            if (hit.method) {
+                const QoreMethod* cached_method = hit.method;
+                const AbstractQoreFunctionVariant* cached_variant = hit.variant;
                 uint64_t result;
                 static constinit QoreEnvFlag use_fast_entry_env("QORE_DISABLE_AOT_POLYMORPHIC_DISPATCH_FAST_ENTRY");
                 const bool use_fast_entry = !use_fast_entry_env.get();
-                if (use_fast_entry && !entry->method->isStatic()
-                        && try_dispatch_method_fast(object, entry->method,
-                            object->getClass(), entry->variant, args,
+                if (use_fast_entry && !cached_method->isStatic()
+                        && try_dispatch_method_fast(object, cached_method,
+                            object->getClass(), cached_variant, args,
                             arg_cleanups, nargs, xsink, result)) {
                     return result;
                 }
@@ -23334,8 +23589,8 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
                     return toBits(QoreValue());
                 }
                 return toBits(qore_method_private::evalTmpArgs(
-                    *entry->method, xsink, rc_get_current_ref(), object,
-                    *arg_list, class_ctx, entry->variant, receiver_type_info,
+                    *cached_method, xsink, rc_get_current_ref(), object,
+                    *arg_list, class_ctx, cached_variant, receiver_type_info,
                     explicit_type_param_instantiation));
             }
         }
@@ -23392,7 +23647,7 @@ static uint64_t qore_rt_dispatch_aot_object_method_by_name(
     // cache key does not hold, so it is not cached
     if (cacheable && resolved_variant && !*xsink
         && !(resolved_variant->isUser() && resolved_variant->getUserVariantBase()->getDeclaredDomain())) {
-        qore_rt_add_aot_method_dispatch_cache_entry(cache,
+        qore_rt_add_aot_method_dispatch_cache_entry(thread_ctx.reader, cache,
             object->getClass(), receiver_type_info, class_ctx, caller_program_id,
             object_program_id, parse_options, dispatch_epoch, arg_types,
             arg_states, nargs, method, resolved_variant);
