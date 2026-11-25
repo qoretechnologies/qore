@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires Util
+%requires FsUtil
+%exec-class ModuleInitFramesTest
+
+#! The frames of the calls that the initialization of a module makes name the module's Program (qore#7289)
+/** A module loaded at run time (Program::loadModule() or load_module(), by its path or by its name) is initialized
+    while the call of the code that loads it runs.  The frames of the calls that its initialization made named the
+    Program of the loading code, so that a caller-sensitive API that reads the frames (such as the Program of a
+    call's frame in the thread's call stack) took the loading code for the module's code; with \c %requires, they
+    named the module's Program.
+
+    The probe (module-init-frames/probe.q) loads a module (InitFramesA) in each way, and the module's initialization
+    records the Program that the frame of a call it makes names, against the module's own Program: also in the
+    initialization of a module that it loads by path (InitFramesB), after that load, in a closure that it creates and
+    in a thread that it starts, and in the initialization that follows one that raised an exception.  The caller of
+    the initialization is unchanged: the sandbox of a sandboxed Program that loads a module by a path outside the
+    module path governs the module's initialization, and a module from the module path is initialized as library
+    code, with no sandbox.  The probe runs in every execution mode, and with the modules compiled with qcc.
+
+    The init closure of a module (its \c init key) is part of its initialization: the frames of the calls that it
+    makes name the module's Program however the module is loaded, by name or by path, from top-level code or from a
+    method, by trusted code or by a Program with restrictions (module-init-frames/probe-init-closure.q).  Code of the
+    loading Program that the initialization calls back keeps its own Program in the frames of the calls that it makes
+    into another Program, also when the IR interpreter runs them inline (module-init-frames/probe-reentry.q).
+*/
+class ModuleInitFramesTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the initialization of a module that trusted code loads
+        const Trusted = "init-frames=module nested=module restored=module closure=module thread=module "
+            "sandboxed=False registration=True opt=\"set\"";
+
+        #! the initialization of a module that a sandboxed Program loads by a path outside the module path: the
+        #! sandbox of the loading code governs it, and its code does not get the module options of the process (so it
+        #! loads no other module)
+        const Sandboxed = "init-frames=module nested=none restored=module closure=module thread=module "
+            "sandboxed=True registration=False opt=null";
+
+        #! the loads and what the initialization saw
+        const Expected = {
+            "program-path": Trusted,
+            "independent-program-path": Trusted,
+            "load-path": Trusted,
+            "load-name": Trusted,
+            "after-failed-init": "failed: INIT-FRAMES-TEST-ERROR\n" + Trusted + "\nscript frames: consistent",
+        };
+
+        #! with %requires; the module options are set after the script is parsed
+        const Requires = "init-frames=module nested=none restored=module closure=module thread=module "
+            "sandboxed=False registration=True opt=null";
+
+        #! the init closure of a module: the frames of its calls name the module's Program
+        const InitClosure = "init-closure=module init-closure-fn=module";
+
+        #! the code of the loading Program that the initialization calls back: the frames of its calls into another
+        #! Program name the loading Program
+        const Reentry = "reentry-fn=loader reentry-static=loader";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string fixtures = normalize_dir(get_script_dir() + "/module-init-frames");
+    }
+
+    constructor() : QUnit::Test("module initialization frames", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("the frames of a module's initialization name its Program", \testSource());
+        addTestCase("the frames of an AOT module's initialization name its Program", \testAot());
+        addTestCase("the frames of a module's init closure name its Program", \testInitClosure());
+        addTestCase("the code called back by a module's initialization keeps its Program", \testReentry());
+        set_return_value(main());
+    }
+
+    testSource() {
+        # the modules that a sandboxed Program loads by a path outside the module path, which has only the module
+        # that their initializations call
+        TmpDir tmp("qore-module-init-frames-");
+        TmpDir mods("qore-module-init-frames-mods-");
+        foreach string name in (("InitFramesA", "InitFramesB")) {
+            copy_file(fixtures + DirSep + name + ".qm", tmp.path + DirSep + name + ".qm");
+        }
+        copy_file(fixtures + DirSep + "InitFramesProbe.qm", mods.path + DirSep + "InitFramesProbe.qm");
+        string sandboxed_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 "
+            "QORE_MODULE_DIR=%s%s%s", libqore_dir, libqore_dir, mods.path, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 QORE_MODULE_DIR=%s%s%s",
+            libqore_dir, libqore_dir, fixtures, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        foreach string mode in (ExecModes) {
+            foreach hash<auto> i in (Expected.pairIterator()) {
+                assertEq(i.value, run(sprintf("%s %s --exec-mode=%s %s/probe.q %s %s", env, qore_bin, mode, fixtures,
+                    i.key, fixtures)), mode + ": " + i.key);
+            }
+            assertEq(Sandboxed, run(sprintf("%s %s --exec-mode=%s %s/probe.q sandboxed-path %s", sandboxed_env,
+                qore_bin, mode, fixtures, tmp.path)), mode + ": sandboxed-path");
+            assertEq(Requires, run(sprintf("%s %s --exec-mode=%s %s/probe-requires.q", env, qore_bin, mode,
+                fixtures)), mode + ": requires");
+        }
+    }
+
+    testAot() {
+        TmpDir tmp("qore-module-init-frames-aot-");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s%s%s",
+            libqore_dir, libqore_dir, libqore_dir, tmp.path, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        foreach string name in (("InitFramesProbe", "InitFramesA", "InitFramesB")) {
+            copy_file(fixtures + DirSep + name + ".qm", tmp.path + DirSep + name + ".qm");
+        }
+        foreach string name in (("InitFramesProbe", "InitFramesB", "InitFramesA")) {
+            string qmod = tmp.path + DirSep + name + ".qmod";
+            string out = backquote(sprintf("%s %s --module -o %s %s 2>&1", env, qcc_bin, qmod,
+                tmp.path + DirSep + name + ".qm"));
+            if (!is_file(qmod)) {
+                testSkip(sprintf("qcc could not compile %s: %s", name, out));
+            }
+        }
+        # the compiled modules, not their sources
+        foreach string name in (("InitFramesProbe", "InitFramesA", "InitFramesB")) {
+            unlink(tmp.path + DirSep + name + ".qm");
+        }
+        assertEq(Trusted, run(sprintf("%s %s %s/probe.q load-name %s .qmod", env, qore_bin, fixtures, tmp.path)),
+            "AOT: load-name");
+        assertEq(Trusted, run(sprintf("%s %s %s/probe.q load-path %s .qmod", env, qore_bin, fixtures, tmp.path)),
+            "AOT: load-path");
+        assertEq(Requires, run(sprintf("%s %s %s/probe-requires.q", env, qore_bin, fixtures)), "AOT: requires");
+    }
+
+    testInitClosure() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 QORE_MODULE_DIR=%s%s%s",
+            libqore_dir, libqore_dir, fixtures, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        foreach string mode in (ExecModes) {
+            foreach string loader in (("trusted", "restricted")) {
+                foreach string place in (("top", "method")) {
+                    foreach string how in (("name", "path")) {
+                        assertEq(InitClosure, run(sprintf("%s %s --exec-mode=%s %s/probe-init-closure.q %s %s %s %s",
+                            env, qore_bin, mode, fixtures, loader, place, how, fixtures)),
+                            sprintf("%s: %s %s %s", mode, loader, place, how));
+                    }
+                }
+            }
+        }
+    }
+
+    testReentry() {
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 QORE_MODULE_DIR=%s%s%s",
+            libqore_dir, libqore_dir, fixtures, PathSep, ENV.QORE_MODULE_DIR ?? "");
+        foreach string mode in (ExecModes) {
+            foreach string how in (("name", "path")) {
+                assertEq(Reentry, run(sprintf("%s %s --exec-mode=%s %s/probe-reentry.q %s %s", env, qore_bin, mode,
+                    fixtures, how, fixtures)), sprintf("%s: %s", mode, how));
+            }
+        }
+    }
+
+    #! runs the command and returns its output without the trailing newline and the module loader's warnings
+    private string run(string cmd) {
+        list<string> lines = map $1, backquote(cmd + " 2>&1").split("\n"),
+            $1 !~ /BINARY-MODULE-SOURCE-FALLBACK|^next warning|^warning encountered/;
+        return trim(lines.join("\n"));
+    }
+}

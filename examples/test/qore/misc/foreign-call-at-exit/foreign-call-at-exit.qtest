@@ -24,7 +24,8 @@
 
     The foreign thread is started by staticpgm_foreign_call() of the test module "staticpgmcode"; the scripts make
     the wait short with dbg_set_process_end_foreign_wait() except for one run, which checks the default bound.  Each
-    run is limited by a timeout, so a hang fails the test instead of the run.
+    run is limited by a timeout, so a hang fails the test instead of the run. The module registers a native exit
+    handler: it runs after a normal return and is skipped when cleanup leaves a Program to a foreign thread (#7340).
 */
 class ForeignCallAtExitTest inherits QUnit::Test {
     public {
@@ -36,7 +37,8 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         const BlockedExitOutput = "script exits\n";
 
         #! the output of a script whose foreign call is released by an exit hook
-        const ReturnsOutput = "script ends\nexit hook releases the call\nforeign call returned\n";
+        const ReturnsOutput = "script ends\nexit hook releases the call\nforeign call returned\n"
+            + "staticpgmcode: process exit handler\n";
 
         #! the limit of a run, in seconds
         const Limit = 120;
@@ -57,7 +59,7 @@ class ForeignCallAtExitTest inherits QUnit::Test {
         string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
-        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+        env = sprintf("QORE_STATICPGM_EXIT_MARKER=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
             libqore_dir);
         dir = get_script_dir();
         foreach string cmd in (("timeout", "gtimeout")) {
@@ -99,7 +101,7 @@ class ForeignCallAtExitTest inherits QUnit::Test {
             args));
     }
 
-    #! checks the output of a run; the module's own message is not part of it
+    #! The module Program can be cleared during library cleanup; its message is independent of the native exit handler.
     private checkRun(hash<auto> r, int rc, string output, string label) {
         assertEq(rc, r.rc, label + ": status (124: the run hung): " + r.out);
         assertEq(output, replace(r.out, "staticpgmcode: teardown complete\n", ""), label + ": output");

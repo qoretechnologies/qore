@@ -284,7 +284,12 @@ struct AbstractMethodMap : amap_t {
             i.second->parseRollback();
     }
 
-    DLLLOCAL void parseInit(qore_class_private& qc, BCList* scl);
+    //! installs the concrete variants of the parent classes for the class's abstract variants
+    /** Sets qore_class_private::abstract_method_created if it creates a method in the class (qore#7307).
+
+        @return true if concrete variants were installed on a method of the class, created or existing (qore#7425)
+    */
+    DLLLOCAL bool parseInit(qore_class_private& qc, BCList* scl);
 
     //! drops the abstract variants inherited from the parent classes that none of them has pending any more
     /** Called when the abstract variants of the parent classes have been resolved (qore_class_private::
@@ -477,6 +482,9 @@ public:
 #define METHV(f) (reinterpret_cast<MethodVariant*>(f))
 #define METHV_const(f) (reinterpret_cast<const MethodVariant*>(f))
 
+class BuiltinConstructorValueVariant;
+class UserConstructorVariant;
+
 class ConstructorMethodVariant : public MethodVariantBase {
 protected:
     // evaluates base class constructors and initializes members
@@ -485,7 +493,13 @@ protected:
     DLLLOCAL int constructorPrelude(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
     template <bool Lexical>
-    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, CodeEvaluationHelper& ceh, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const {
+        return constructorPreludeImpl<Lexical>(policy, thisclass, ceh.getRuntimeConfig(), self, bcl, bceal, xsink);
+    }
+
+    //! as above, with the runtime configuration of the call
+    template <bool Lexical>
+    DLLLOCAL int constructorPreludeImpl(LexicalSemanticPolicy policy, const QoreClass &thisclass, RuntimeConfig& rc, QoreObject* self, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
 public:
     DLLLOCAL ConstructorMethodVariant(ClassAccess n_access, int64 n_flags, bool n_is_user = false) : MethodVariantBase(n_access, false, n_flags, n_is_user) {
@@ -498,6 +512,18 @@ public:
     DLLLOCAL virtual bool evalConstructor(const QoreClass &thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
     DLLLOCAL virtual bool evalLexicalConstructor(const QoreClass& thisclass, QoreObject* self,
         CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const = 0;
+
+    //! returns the variant if it is a builtin constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper when it is called without arguments (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const {
+        return nullptr;
+    }
+
+    //! returns the variant if it is a user constructor that ConstructorMethodFunction::evalConstructor() can call
+    //! without a CodeEvaluationHelper (qore#7336), otherwise nullptr
+    DLLLOCAL virtual const UserConstructorVariant* getDirectUserConstructor() const {
+        return nullptr;
+    }
 };
 
 #define CONMV(f) (reinterpret_cast<ConstructorMethodVariant*>(f))
@@ -613,6 +639,9 @@ protected:
     // base class argument list for constructors
     BCAList* bcal;
 
+    //! the cached result of getDirectUserConstructor(): -1 if not computed yet, 1 if the variant is eligible, else 0
+    mutable std::atomic<int8_t> direct_call{-1};
+
     DLLLOCAL virtual ~UserConstructorVariant();
 
 public:
@@ -645,6 +674,27 @@ public:
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
 
+    //! see ConstructorMethodVariant::getDirectUserConstructor()
+    /** Only a variant that the fast call paths take (UserVariantBase::isStaticallyFastCallEligible(): not
+        synchronized, no read of the implicit arguments, no declared functional domain, no type parameters, no default
+        arguments, no parameter of a no-narrow container type), without QCF_NO_DOMAIN_THROW (which a debug build's
+        CodeEvaluationHelper verifies); the arguments are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call set up by the caller (qore#7336)
+    /** Makes what UserVariantExecHelper makes (the entry of the Program the call runs in, \a exec_pgm, or the
+        variant's, the frame boundary, the parameters, which take the arguments, which need no conversion: see
+        qore_eval_direct_user_constructor()) and what evalConstructorImpl() makes
+
+        @param take_args true if \a args is a temporary list whose values the parameters take over, as
+        UserVariantBase::setupCall() takes them over from a list it can edit
+    */
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, QoreListNode* args,
+            bool take_args, BCList* bcl, BCEAList* bceal, RuntimeConfig& rc, QoreProgram* exec_pgm,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL virtual int parseInit(QoreFunction* f) override;
 
     //! Set the BCAList for AOT deserialization (takes ownership)
@@ -659,6 +709,12 @@ public:
     DLLLOCAL bool evalConstructor(const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh,
             BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const override {
         return evalLexicalConstructor(thisclass, self, ceh, bcl, bceal, xsink);
+    }
+
+    //! the base class constructors of the variant are invoked with its declaration's policy (evalConstructor()): it
+    //! is called through CodeEvaluationHelper (qore#7336)
+    DLLLOCAL const UserConstructorVariant* getDirectUserConstructor() const override {
+        return nullptr;
     }
 };
 
@@ -907,6 +963,20 @@ public:
 
     template <bool Lexical>
     DLLLOCAL bool evalConstructorImpl(LexicalSemanticPolicy policy, const QoreClass& thisclass, QoreObject* self, CodeEvaluationHelper& ceh, BCList* bcl, BCEAList* bceal, ExceptionSink* xsink) const;
+
+    //! see ConstructorMethodVariant::getDirectBuiltinConstructor()
+    /** Only a variant without parameters (so no argument conversion and no default argument), with no flag that
+        the variant search tests at run time (QCF_NOOP, QCF_RUNTIME_NOOP), without QCF_NO_DOMAIN_THROW (which a debug
+        build's CodeEvaluationHelper verifies), without the uncontrolled API domain (which
+        CodeEvaluationHelper checks against the sandbox), and public (so the access check of the variant search
+        cannot refuse it); the functional domains are checked by the caller (see
+        ConstructorMethodFunction::evalConstructor())
+    */
+    DLLLOCAL const BuiltinConstructorValueVariant* getDirectBuiltinConstructor() const override;
+
+    //! runs the constructor as evalConstructor() does, with the call frame set up by the caller (qore#7336)
+    DLLLOCAL bool evalDirectConstructor(const QoreClass& thisclass, QoreObject* self, BCList* bcl,
+            BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 };
 
 class BuiltinExternalConstructorValueVariant : public BuiltinConstructorVariantBase {
@@ -1592,6 +1662,15 @@ public:
         return is_local;
     }
 
+    //! returns true if the class that declares the member declares it private or private:internal (qore#6843)
+    /** The access of a member imported from a base class is the maximum of its declared access and the access of the
+        inheritance; this is the declared access alone, which decides whether code of a class that sandboxed code
+        declared can use the member (see qore_class_private::sandboxDeniesPrivateAccess())
+    */
+    DLLLOCAL bool declaredNonPublic() const {
+        return is_local ? access > Public : decl_non_public;
+    }
+
     // returns the class where the member was declared
     DLLLOCAL const qore_class_private* getClass() const {
         return decl_cls;
@@ -1755,7 +1834,10 @@ private:
     // local flag
     bool is_local,
         // transient flag
-        is_transient = false;
+        is_transient = false,
+        // the member is not public in the class that declares it, for a member imported from a base class (see
+        // declaredNonPublic())
+        decl_non_public = false;
 
     /**
         @param old the old object
@@ -1820,6 +1902,20 @@ public:
             // an imported copy reads and writes the same external storage as the original; del_cb is deliberately
             // not copied, since the module data belongs to the variable the module registered
             get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls) {
+    }
+
+    //! Makes the parse initialization of the static variable of a builtin class (parseInit()), when it is added
+    /** The type of the variable is resolved and its initial value is a value, not code to parse, so nothing is left
+        for a parse to initialize: the value is assigned when the class is finalized (qore_class_private::
+        finalizeBuiltin()), and parseInit(), which the first reference to the variable in parsed code calls, must not
+        reset it afterwards (qore#7541)
+    */
+    DLLLOCAL void initBuiltin() {
+        assert(!QoreMemberInfoBaseAccess::init);
+        assert(!parseTypeInfo);
+        refreshInitializationFilter();
+        val.set(typeInfo);
+        QoreMemberInfoBaseAccess::init = true;
     }
 
     DLLLOCAL ~QoreVarInfo() {
@@ -2983,7 +3079,8 @@ public:
     DLLLOCAL void parseAddAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
     DLLLOCAL void parseAddStaticAncestors(QoreMethod* m, AncestorAccessCache* cache = nullptr);
 
-    DLLLOCAL void parseResolveAbstract();
+    //! Returns true if resolution changed method dispatch in this uncommitted hierarchy.
+    DLLLOCAL bool parseResolveAbstract();
 
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
             const qore_class_private* class_ctx, bool allow_internal,
@@ -3278,6 +3375,8 @@ public:
     //! true if the class is the copy of a class of another namespace (a builtin class, a module's class, a class
     //! that a Program imports), which outlives the Program the copy is in; see ownedByProgram()
     bool ns_copy = false;
+    //! false when an AOT class was reconstructed without proof that its loading Program declared it
+    bool declaration_owner_known = true;
     //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
     //! the class (issue #3286)
     bool parse_abr = false;
@@ -3482,9 +3581,27 @@ public:
         hierarchy_initialized : 1 = false,
         //! set when the class or one of its ancestors has created a method by resolving an abstract method
         /** The inheritance lists of the methods of its subclasses are built again then (see
-            parseUpdateAbstractAncestors(); qore#7307)
+            parseUpdateAbstractAncestors(); qore#7307).  It is kept when the class is committed, as a class created at
+            runtime checks it in its committed parent classes (runtimeUpdateAbstractAncestors()).  A variant installed in
+            an existing method does not set it: the method is in the subclasses' lists already.  See also
+            abstract_dispatch_changed.
         */
-        abstract_method_created : 1 = false
+        abstract_method_created : 1 = false,
+        //! set when abstract resolution installed concrete variants in this class or an uncommitted ancestor
+        /** In an existing or a created method (AbstractMethodMap::parseInit()): the return types of the class's
+            hierarchy are checked again then, as the installed variant is selected before the inherited ones checked
+            when the class was initialized (parseResolveAbstract(); qore#7425).  Only a parsed hierarchy is rechecked:
+            a committed ancestor was resolved before the class was initialized, and code loaded from compiled code or
+            created at runtime is not checked.  Unlike abstract_method_created, a committed class does not propagate
+            it (parseResolveAbstract() returns false for one).
+        */
+        abstract_dispatch_changed : 1 = false,
+        //! a builtin class that belongs to no binary module, which is freed after every Program
+        /** Set (setNotModuleDecl()) on the classes of the static system namespace (Qore::) when the namespace has
+            been built, on the pseudo-classes and on the tombstone classes when they are created, and kept by copies;
+            every other builtin class, whenever it is created, is a binary module's (isTypeOwnerModule(), qore#7533)
+        */
+        not_module_decl : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -3602,7 +3719,7 @@ public:
     //! needs neither the lock nor a reference to it (see getSourceProgramForCall()); never cleared
     mutable std::atomic<bool> spgm_module_lifetime{false};
 
-    //! the cached result of getMemberInitCode(): -1 if not computed for the current member initialization list
+    //! the cached result of getMemberInitState(): -1 if not computed for the current member initialization list
     mutable std::atomic<int8_t> member_init_code{-1};
 
     //! true if the class is reached through more than one path in the hierarchy of a class whose objects are created
@@ -3624,6 +3741,20 @@ public:
 
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
+
+    //! true if sandboxed code declared the class: it was sandboxed code when the class was committed (qore#6843)
+    /** Its code has no private access to the members and methods that a class that trusted code declared declares
+        (see sandboxDeniesPrivateAccess()); set in parseCommit(), copied with the class
+    */
+    bool sandbox_ctx = false;
+
+    //! true if sandbox_ctx is set and the class inherits a member that a class that trusted code declared declares
+    //! private or private:internal (qore#6843)
+    /** Read by the inline member access check for the code of the class on its own objects
+        (runtimeCheckMemberAccess()), which then checks the member out of line; set in parseCommit(), copied with the
+        class
+    */
+    bool sandbox_private_members = false;
 
     //! true while the wrapper that created the class (cls) holds the reference to the values in var_refs that it
     //! took with the class; see takeWrapperVarRef()
@@ -3748,6 +3879,11 @@ public:
 
     // This function must only be called from QoreObject
     DLLLOCAL QoreValue evalMemberGate(QoreObject* self, const char* nme, ExceptionSink* xsink) const;
+
+    //! A reconstructed source Program alone cannot establish ownership of an embedded class.
+    DLLLOCAL bool declaredBy(const QoreProgram* pgm) const {
+        return pgm && declaration_owner_known && spgm.load() == pgm;
+    }
 
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();
@@ -4313,6 +4449,18 @@ public:
 
     DLLLOCAL int parseInitConstants();
 
+    //! The receiver's name for a member diagnostic, qualified when another declaration shares its name.
+    DLLLOCAL const char* memberDiagnosticName() const;
+
+    DLLLOCAL static void raiseCastError(ExceptionSink* xsink, const QoreClass& actual, const QoreClass& expected,
+        bool private_access);
+
+    //! Keep the leading :: on a root class, where it distinguishes the path from the short name.
+    DLLLOCAL static const char* diagnosticPath(const QoreClass& cls) {
+        const char* path = cls.getPath();
+        return !strncmp(path, "::", 2) && strstr(path + 2, "::") ? path + 2 : path;
+    }
+
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
@@ -4337,17 +4485,17 @@ public:
                 qore_class_private* self = const_cast<qore_class_private*>(this);
                 if (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this)) {
                     parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
-                        "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                        "a method is called with an argument list, as in %s()", mem, memberDiagnosticName(), mem, mem);
                     rc = -1;
                 } else if (parseHasPublicMembersInHierarchy()) {
                     parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public " \
-                        "member list (or inherited public member list)", mem, name.c_str());
+                        "member list (or inherited public member list)", mem, memberDiagnosticName());
                     rc = -1;
                 } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                     parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was " \
                         "not declared in a public or private member list, but parse options require type " \
                         "information for all declarations",
-                        mem, name.c_str());
+                        mem, memberDiagnosticName());
                     rc = -1;
                 }
             }
@@ -4369,7 +4517,14 @@ public:
                     || !parseCheckPrivateMemberAccess(qc, access)
                     || (access == Internal && omi->local() && qc == this))) {
             memberTypeInfo = nullptr;
-            parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
+            parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, memberDiagnosticName());
+            return -1;
+        }
+        // a class that sandboxed code declared cannot use the private members of a class that trusted code declared
+        // (qore#6843)
+        if ((access > Public) && !parseHasMemberGate() && omi->declaredNonPublic()
+                && parseCheckSandboxPrivateAccess(loc, omi->getClass(), parse_get_class_priv(), "member", mem)) {
+            memberTypeInfo = nullptr;
             return -1;
         }
         // a member that this class reaches only through a base class that one of its base classes inherits with
@@ -4378,7 +4533,7 @@ public:
         if (access == Inaccessible && !parseHasMemberGate() && parse_get_class_priv() == this) {
             memberTypeInfo = nullptr;
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
-                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+                "class inherited with private:internal", mem, qc->memberDiagnosticName(), memberDiagnosticName());
             return -1;
         }
         return 0;
@@ -4422,7 +4577,14 @@ public:
         // #6669; see parseResolveInternalMemberAccess())
         if (omi && access == Inaccessible) {
             parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
-                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+                "class inherited with private:internal", mem, qc->memberDiagnosticName(), memberDiagnosticName());
+            memberTypeInfo = nullptr;
+            return -1;
+        }
+        // a class that sandboxed code declared cannot use the private members of a class that trusted code declared
+        // (qore#6843)
+        if (omi && access > Public && omi->declaredNonPublic()
+                && parseCheckSandboxPrivateAccess(loc, omi->getClass(), parse_get_class_priv(), "member", mem)) {
             memberTypeInfo = nullptr;
             return -1;
         }
@@ -4447,20 +4609,20 @@ public:
             if (((pflag & PF_FOR_ASSIGNMENT) ? !member_write_gate : !memberGate)
                     && (self->parseFindNormalMethodIntern(mem, this) || self->parseFindStaticMethodIntern(mem, this))) {
                 parse_error(*loc, "member '%s' of class '%s' is not declared, and '%s' is a method of the class: "
-                    "a method is called with an argument list, as in %s()", mem, name.c_str(), mem, mem);
+                    "a method is called with an argument list, as in %s()", mem, memberDiagnosticName(), mem, mem);
                 if (!rc) {
                     rc = -1;
                 }
             } else if (parseHasPublicMembersInHierarchy()) {
                 parse_error(*loc, "illegal access to unknown member '%s' in class '%s' which has a public member " \
-                    "list (or inherited public member list)", mem, name.c_str());
+                    "list (or inherited public member list)", mem, memberDiagnosticName());
                 if (!rc) {
                     rc = -1;
                 }
             } else if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
                 parse_error(*loc, "member '%s' of class '%s' referenced has no type information because it was not " \
                     "declared in a public or private member list, but parse options require type information for " \
-                    "all declarations", mem, name.c_str());
+                    "all declarations", mem, memberDiagnosticName());
                 if (!rc) {
                     rc = -1;
                 }
@@ -4579,8 +4741,14 @@ public:
         if (!class_ctx) {
             return false;
         }
-        // the class itself and the class that declares a private member, inline; the other contexts out of line
-        if (class_ctx == this || (info->access == Private && class_ctx == info->getClass())) {
+        // the class itself and the class that declares a private member, inline; the other contexts out of line, and
+        // the class itself if sandboxed code declared it and it inherits private members of a class that trusted code
+        // declared (qore#6843)
+        if (class_ctx == this) {
+            if (__builtin_expect(!sandbox_private_members, 1)) {
+                return true;
+            }
+        } else if (info->access == Private && class_ctx == info->getClass()) {
             return true;
         }
         return runtimeCheckMemberAccessContext(info, class_ctx);
@@ -4896,7 +5064,10 @@ public:
         // check for accessibility to private constants
         if (found && (access > Public)) {
             qore_class_private* class_ctx = parse_get_class_priv();
-            if ((access >= Internal && class_ctx != this) || !parseCheckPrivateClassAccess(class_ctx)) {
+            // a class that sandboxed code declared cannot use the private constants of a class that trusted code
+            // declared (qore#6843)
+            if ((access >= Internal && class_ctx != this) || !parseCheckPrivateClassAccess(class_ctx)
+                    || sandboxDeniesPrivateAccess(this, class_ctx)) {
                 rv.clear();
                 cTypeInfo = nullptr;
                 found = false;
@@ -4925,7 +5096,10 @@ public:
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
 
-        if (vi && (vi->access > Public) && !parseCheckPrivateClassAccess())
+        // a class that sandboxed code declared cannot use the private static variables of a class that trusted code
+        // declared (qore#6843)
+        if (vi && (vi->access > Public) && (!parseCheckPrivateClassAccess()
+                || sandboxDeniesPrivateAccess(this, parse_get_class_priv())))
             vi = nullptr;
 
         return vi;
@@ -4963,8 +5137,11 @@ public:
 
                 // return null and stop searching in this class if we should verify access, and the var is not accessible:
                 // an internal member is accessible only in its own class, not in subclasses
+                // a class that sandboxed code declared cannot use the private static variables of a class that
+                // trusted code declared (qore#6843)
                 if (check && (access > Public)
-                    && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess())) {
+                    && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess()
+                        || (va > Public && sandboxDeniesPrivateAccess(this, parse_get_class_priv())))) {
                     stop = true;
                     return nullptr;
                 }
@@ -5231,6 +5408,45 @@ public:
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
 
+    //! Returns true if sandboxed code declared the class (qore#6843)
+    /** For a committed class, the state of its Program when it was committed (sandbox_ctx); for a class being parsed,
+        the state of its Program now (isSandboxedCode()); a builtin class is trusted
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared() const;
+
+    //! Returns true if the code of \a class_ctx cannot use the private declarations of \a decl (qore#6843)
+    /** A class that sandboxed code declared has no private access to the members, methods and static variables that
+        a class that trusted code declared declares, on any object: for it they are as if they were
+        \c private:internal.  The code of the class's own declarations, and the code of another class that sandboxed
+        code declared, is not affected.
+
+        @param decl the class that declares the member, method or static variable
+        @param class_ctx the class context of the access
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE static bool sandboxDeniesPrivateAccess(const qore_class_private* decl,
+            const qore_class_private* class_ctx);
+
+    //! Raises a parse error if the parse class context cannot use the private member, method or static variable
+    //! \a what of class \a decl (qore#6843); returns -1 if an error was raised, 0 if not
+    DLLLOCAL static int parseCheckSandboxPrivateAccess(const QoreProgramLocation* loc, const qore_class_private* decl,
+            const qore_class_private* class_ctx, const char* kind, const char* what);
+
+    //! Raises a parse error if the parse class context cannot call the private method \a m that a parse-time lookup
+    //! found (qore#6843); returns -1 if an error was raised, 0 if not
+    /** An abstract method is looked up at run time, which checks the implementation called.
+
+        @param loc the location of the call
+        @param m the method found
+        @param class_ctx the class context of the call
+        @param base_call true if \a m is called on the object of the code (a call of a method of the class or of a
+        base class); then a normal method that the class context declares itself, which overrides \a m, can call it
+    */
+    DLLLOCAL static int parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
+            const qore_class_private* class_ctx, bool base_call);
+
+    //! Sets sandbox_ctx and sandbox_private_members when the class is committed (qore#6843)
+    DLLLOCAL void initSandboxAccess();
+
     //! Returns a reference to the source Program of the class, or nullptr if it has released the class or is deleted
     /** spgm is cleared under dataLock() in deleteClassData() before the Program can be freed, so the Program read
         here under the lock is still allocated; a reference is taken only if it still has one (a Program whose last
@@ -5369,11 +5585,29 @@ public:
         Computed once the list is complete (see addLocalMembersForInit())
     */
     DLLLOCAL int8_t getMemberInitCode() const {
+        return getMemberInitState() & QCMI_CODE_MASK;
+    }
+
+    //! returns true if no member in the member initialization list has an initializer (qore#7336)
+    /** The members of an object of such a class are then created without a value, and no code runs: they need no
+        object context (see initMembers())
+    */
+    DLLLOCAL bool memberInitIsPlain() const {
+        return !(getMemberInitState() & QCMI_HAS_INITIALIZER);
+    }
+
+    //! the code level of getMemberInitCode() in the state cached in member_init_code
+    static constexpr int8_t QCMI_CODE_MASK = 3;
+    //! set in the state cached in member_init_code if any member in the member initialization list has an initializer
+    static constexpr int8_t QCMI_HAS_INITIALIZER = 4;
+
+    //! returns the cached state of the member initialization list: getMemberInitCode() and QCMI_HAS_INITIALIZER
+    DLLLOCAL int8_t getMemberInitState() const {
         int8_t rv = member_init_code.load(std::memory_order_relaxed);
         return rv < 0 ? computeMemberInitCode() : rv;
     }
 
-    //! computes and caches the result of getMemberInitCode()
+    //! computes and caches the state returned by getMemberInitState()
     DLLLOCAL int8_t computeMemberInitCode() const;
 
     //! returns true if code of this class may call another method than a private method of one of its parent classes
@@ -5726,11 +5960,18 @@ public:
     DLLLOCAL const QoreMethod* doRuntimeMethodAccess(const QoreMethod* m, ClassAccess& access, ClassAccess ma, const qore_class_private* class_ctx) const {
         assert(m);
 
-        // a private:internal method only for its own class, by identity (qore#7036)
-        if (ma >= Internal && (!class_ctx || !sameClass(*class_ctx)))
-            m = nullptr;
-        else if (access < ma)
-            access = ma;
+        if (ma > Public) {
+            // a private:internal method only for its own class, by identity (qore#7036); a private method of a class
+            // that trusted code declared is private:internal for the code of a class that sandboxed code declared
+            // (qore#6843)
+            if (ma >= Internal ? (!class_ctx || !sameClass(*class_ctx))
+                    : (class_ctx && class_ctx->sandbox_ctx && sandboxDeniesPrivateAccess(this, class_ctx))) {
+                return nullptr;
+            }
+            if (access < ma) {
+                access = ma;
+            }
+        }
 
         return m;
     }
@@ -5989,7 +6230,15 @@ public:
     DLLLOCAL int parseCheckReturnTypeHierarchy() const;
     DLLLOCAL int parseResolveHierarchy();
     DLLLOCAL void parseResolveClassMembers();
-    DLLLOCAL void parseResolveAbstract();
+    //! resolves the abstract methods of the class and of its parent classes
+    /** Builds the inheritance lists of the methods again if a parent class created a method by resolving an abstract
+        method (parseUpdateAbstractAncestors()), then checks the return types of the hierarchy again if variants were
+        installed here or in an uncommitted parent class (abstract_dispatch_changed; qore#7425).
+
+        @return true if resolution changed method dispatch in this uncommitted hierarchy (abstract_dispatch_changed
+        for an uncommitted class)
+    */
+    DLLLOCAL bool parseResolveAbstract();
     //! builds the inheritance lists of the class's methods again if a parent class has created a method by resolving
     //! an abstract method since they were built (qore#7307)
     /** Called when the abstract methods of the parent classes have been resolved, before the class's own: the lists
@@ -6007,7 +6256,11 @@ public:
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void parseRollback();
-    DLLLOCAL int addUserMethod(const char* mname, MethodVariantBase* f, bool n_static);
+    //! adds a user method variant; a method that it creates gets the given declaration sequence number, if any
+    /** \a decl_seq is given by the loader of an AOT image: the image records the declaration order of each method,
+        as the loader creates the methods in the order of the method maps (issue #7169)
+    */
+    DLLLOCAL int addUserMethod(const char* mname, MethodVariantBase* f, bool n_static, int64_t decl_seq = -1);
     DLLLOCAL void addLocalMembersForInit();
 
     DLLLOCAL QoreValue evalPseudoMethod(const QoreValue n, const char* name, const QoreListNode* args,
@@ -6523,8 +6776,9 @@ public:
         qc.priv->resolveCopy();
     }
 
-    DLLLOCAL static int addUserMethod(QoreClass& qc, const char* mname, MethodVariantBase* f, bool n_static) {
-        return qc.priv->addUserMethod(mname, f, n_static);
+    DLLLOCAL static int addUserMethod(QoreClass& qc, const char* mname, MethodVariantBase* f, bool n_static,
+            int64_t decl_seq = -1) {
+        return qc.priv->addUserMethod(mname, f, n_static, decl_seq);
     }
 
     DLLLOCAL static void initialize(QoreClass& qc) {
@@ -6654,6 +6908,14 @@ public:
         return qc.priv;
     }
 
+    //! Marks a builtin class that belongs to no binary module (qore#7533)
+    /** A class of the static system namespace (Qore::), marked when the namespace has been built, a pseudo-class or
+        a tombstone class, marked when it is created, before it is shared with another thread; see isTypeOwnerModule()
+    */
+    DLLLOCAL static void setNotModuleDecl(QoreClass& qc) {
+        qc.priv->not_module_decl = true;
+    }
+
     DLLLOCAL static bool isPublic(const QoreClass& qc) {
         return qc.priv->pub;
     }
@@ -6724,6 +6986,17 @@ protected:
         return sys;
     }
 
+    //! A builtin class that is not one of the static system namespace (Qore::), a pseudo-class or a tombstone: a
+    //! binary module's (qore#7533)
+    /** Decided by ownership, not by the module context of its creation: a binary module can create builtin classes
+        after its initialization (module-jni and module-python create them when they are first needed, with no module
+        context or with that of a user module being parsed); a class shares its private data with its copies in
+        Programs, and an imported copy keeps the flag of its source
+    */
+    DLLLOCAL bool isTypeOwnerModule() const {
+        return sys && !not_module_decl;
+    }
+
     DLLLOCAL bool keepsTypeOwnerMembers() const {
         return false;
     }
@@ -6738,6 +7011,14 @@ protected:
 
     //! The declarations named by the types of the members, static variables and method signatures
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const;
+
+    //! The binary module declarations named by the types of the members, static variables, method signatures and
+    //! type parameters of a binary module's class and of its module base classes (qore#7533)
+    DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const;
+
+    //! Calls \a f with each type of the members, static variables, method signatures and type parameters
+    template <typename F>
+    DLLLOCAL void forEachTypeOwnerType(F&& f) const;
 
     //! The base classes (the special method list of the class holds a reference to each) and the source of an imported
     //! class
@@ -6876,6 +7157,16 @@ private:
 /** Returns nullptr if the method runs in the caller's Program; the holder must be declared before the helper that
     enters the Program returned
 */
+//! Returns true if objects are created and destroyed without the shortcuts of qore#7336
+/** Set with the environment variable \c QORE_DISABLE_DIRECT_OBJECT_CALLS (testing only; read once when the library is
+    loaded); it only turns optimizations off, which do what the general path does, so that the tests can compare
+    what the shortcuts do with what the general call path does: the creation of the members of a class without
+    member initializers (qore_class_private::initMembers()), the calls of builtin constructors without arguments and of
+    builtin destructors without a CodeEvaluationHelper, and the direct calls of user constructors; see
+    design/object-construction-cost.md
+*/
+DLLLOCAL bool qore_direct_object_calls_disabled();
+
 DLLLOCAL QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreSourceProgramHolder& holder,
         QoreProgram* explicit_pgm = nullptr);
 
@@ -6974,6 +7265,13 @@ public:
 
     //! returns the next declaration sequence number
     DLLLOCAL static uint64_t nextDeclSeq();
+
+    //! reserves \a n declaration sequence numbers and returns the first of them
+    /** The loader of an AOT image gives the methods that it creates the sequence numbers of their declaration order
+        from such a block (see qore_class_private::addUserMethod()), so that the methods created after them have
+        greater ones
+    */
+    DLLLOCAL static uint64_t reserveDeclSeq(uint64_t n);
 
     //! returns the declaration sequence number of the method
     DLLLOCAL static uint64_t getDeclSeq(const QoreMethod& m) {

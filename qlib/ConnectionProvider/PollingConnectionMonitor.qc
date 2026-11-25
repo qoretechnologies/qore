@@ -596,6 +596,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 return;  # stale or superseded
             }
             cache{name}.ping_active = False;
+            # issue #7236: a ping that could not be started is a check that failed, as in the continuePoll() error
+            # path below, so the connection does not read as never checked
+            cache{name}.conn.last_check = now_us();
             deferLog(LoggerLevel::ERROR, sprintf("%y: error handling ping start: %s", name,
                 get_exception_string(ex)));
             failedToStartPing(name, ex);
@@ -800,7 +803,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         return conn.startPollConnect(getLogger());
     }
 
-    #! Could not start ping
+    #! Could not start ping; called with the connection's \c last_check set to the time of the failure
     private failedToStartPing(string name, hash<ExceptionInfo> ex) {
         # error already logged
         cache{name}.conn.handlePingFailed(0s, ex);

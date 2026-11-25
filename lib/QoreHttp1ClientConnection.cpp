@@ -224,7 +224,7 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 
     // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
     // stored on the socket and re-applied by qore_socket_private at the
-    // post-connect hook (confirmConnected).
+    // post-connect hook (applyTcpUserTimeout()).
     if (manager_) {
         int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
         if (ut_ms > 0) {
@@ -813,7 +813,7 @@ void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSi
             "cannot push data: connection has no poll operation");
         return;
     }
-    poll_op_priv->pushSendData(data, xsink);
+    poll_op_priv->pushSendData(data, xsink, switched_send_timeout_ms.load(std::memory_order_relaxed));
 
     // Wake the I/O controller so it processes the queued data
     if (sock_obj) {

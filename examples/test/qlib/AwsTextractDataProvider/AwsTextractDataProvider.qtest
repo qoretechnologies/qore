@@ -107,6 +107,15 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         AwsTextractActions::registerNativeActions();
         assertEq(sort(Actions), sort(map $1.action, DataProviderActionCatalog::getActionsEx("AwsTextract")));
         assertEq((), DataProviderActionCatalog::getInitializationFailures(("AwsTextract",)));
+        # the synchronous DetectDocumentText and AnalyzeDocument calls return their result and store nothing
+        # (qore#7454)
+        foreach string name in ("detect-document-text", "analyze-document") {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("AwsTextract"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, info.mutates_state.typeCode(), name);
+            assertFalse(info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
         list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected =
             (<DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract"},)
             + (map <DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract", "action": $1}, Actions);

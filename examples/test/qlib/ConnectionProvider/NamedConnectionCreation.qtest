@@ -37,15 +37,21 @@ class NamedConnectionCreationTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! restricted code creates the connection that it looks up and gets its client, but cannot create one itself
+    #! the refusal of a synchronous client that is not bound to the target of the connection's creator (qore#7262)
+    const UnboundDenied = "^PERMISSION-DENIED: connection .*synchronous client is not bound";
+
+    #! restricted code creates the connection that it looks up, but cannot create one itself; the connection's
+    #! synchronous client is not given to it, as its requests would be made by module code from targets that it can
+    #! change (qore#7262)
     private testLookup(string mode) {
         assertEq("created", run(mode, False, "lookup", "net"), "lookup, " + mode);
-        assertEq("client", run(mode, False, "client", "net"), "client, " + mode);
+        assertRegex(UnboundDenied, run(mode, False, "client", "net"), "client, " + mode);
         assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create",
             run(mode, False, "create", "direct"), "direct, " + mode);
     }
 
-    #! the sandbox that governs the restricted code governs the I/O of the clients of the connections that it looks up
+    #! a synchronous client of the connections that the restricted code looks up is refused before any I/O, also for a
+    #! target that its sandbox allows (qore#7262)
     private testSandbox(string mode) {
         Socket allowed();
         allowed.bind("127.0.0.1:0");
@@ -59,9 +65,9 @@ class NamedConnectionCreationTest inherits QUnit::Test {
             "NCC_DENIED_URL": sprintf("http://127.0.0.1:%d", denied.getSocketInfo().port),
             "NCC_ALLOWED_PORT": allowed.getSocketInfo().port,
         };
-        assertEq("connected", run(mode, True, "connect", "allowed", env), "allowed target, " + mode);
-        assertTrue(exists allowed.accept(5s), "the allowed target is connected, " + mode);
-        assertRegex("^NETWORK-ACCESS-DENIED", run(mode, True, "connect", "denied", env), "denied target, " + mode);
+        assertRegex(UnboundDenied, run(mode, True, "connect", "allowed", env), "allowed target, " + mode);
+        assertEq(NOTHING, allowed.accept(0), "the allowed target is not connected, " + mode);
+        assertRegex(UnboundDenied, run(mode, True, "connect", "denied", env), "denied target, " + mode);
         assertEq(NOTHING, denied.accept(0), "the denied target is not connected, " + mode);
     }
 

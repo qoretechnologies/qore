@@ -56,6 +56,15 @@ module CloseDataProvider {
                 "notes, meetings, SMS).\n\n"
                 "This integration supports leads, contacts, opportunities, tasks, calls, emails, "
                 "notes, meetings, SMS, and event triggers.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "close.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://close.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "closerest",
             "logo": CloseLogo,
             "logo_file_name": "close-logo.svg",
@@ -955,6 +964,7 @@ module CloseDataProvider {
             "app": CloseDataProvider::AppName,
             "path": "/calls/create",
             "action": "create-call",
+            "billing": <DataProviderBillingInfo>{"model": "unknown"},
             "groups": "Calls",
             "display_name": "Create a Call",
             "short_desc": "Log a new call",
@@ -1602,6 +1612,7 @@ module CloseDataProvider {
             "app": CloseDataProvider::AppName,
             "path": "/sms/create",
             "action": "create-sms",
+            "billing": <DataProviderBillingInfo>{"model": "unknown"},
             "groups": "SMS",
             "display_name": "Create an SMS",
             "short_desc": "Send a new SMS",

@@ -83,7 +83,7 @@ ObjectPairReverseIterator i(obj);
     @endcode
  */
 ObjectPairReverseIterator::constructor(object object_value) [flags=NAMED_ARGS] {
-   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(object_value), xsink);
+   ReferenceHolder<QoreObjectReverseIterator> p(new QoreObjectReverseIterator(object_value, runtime_get_caller_class()), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_OBJECTPAIRREVERSEITERATOR, p.release());
 }

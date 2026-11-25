@@ -80,6 +80,25 @@ class FakeChargebeeHandler inherits AbstractHttpRequestHandler {
                 "body": make_json({"message": "customer not found", "api_error_code": "resource_not_found"}),
             };
         }
+        # the invoice PDF link is only served to POST, as Chargebee documents it
+        if (hdr.path =~ /invoices\/[^\/]+\/pdf$/) {
+            if (hdr.method != "POST") {
+                return <HttpResponseInfo>{
+                    "code": 405,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({"message": "method not allowed", "api_error_code": "invalid_request"}),
+                };
+            }
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"download": {
+                    "download_url": "https://example.chargebee.com/invoices/inv1.pdf",
+                    "valid_till": 1767225600,
+                    "mime_type": "application/pdf",
+                }}),
+            };
+        }
         if (hdr.method == "POST") {
             return <HttpResponseInfo>{
                 "code": 200,
@@ -122,6 +141,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
 
         # Sanity tests (always run, no credentials needed)
         addTestCase("sanity tests", \sanityTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("child provider tests", \childProviderTests());
@@ -449,13 +469,13 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
 
         ChargebeeRestClient::ChargebeeRestClient rest({"api_key": "test_key",
-            "url": "http://localhost:" + port + "/api/v2"}, True);
+            "url": "http://127.0.0.1:" + port + "/api/v2"}, True);
         handler.rate_limited = 1;
         hash<auto> info;
         rest.doRequest("GET", "customers", NOTHING, \info);
@@ -470,11 +490,11 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
-        string url = "http://localhost:" + port + "/api/v2";
+        string url = "http://127.0.0.1:" + port + "/api/v2";
 
         # the example event data is requested once; with retries, the third request would return a record
         ChargebeeDataProvider::ChargebeeWatchCustomersEventDataProvider watch(
@@ -618,13 +638,13 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeChargebeeHandler handler();
         server.setHandler("chargebee", "", NOTHING, handler);
         server.setDefaultHandler("chargebee", handler);
 
         ChargebeeDataProvider::ChargebeeDataProvider provider(new ChargebeeRestClient::ChargebeeRestClientIo(
-            {"api_key": "test_key", "url": "http://localhost:" + port + "/api/v2"}));
+            {"api_key": "test_key", "url": "http://127.0.0.1:" + port + "/api/v2"}));
         assertTrue(provider.getRestClient() instanceof ChargebeeRestClient::ChargebeeRestClientIo);
         AbstractDataProvider customers = provider.getChildProviderPath("customers");
 
@@ -649,6 +669,24 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         assertEq("api/v2/customers", handler.requests[0].path);
         assertRegex("^" + MimeTypeFormUrlEncoded, handler.requests[0]."content-type");
         assertEq({"first_name": "Jane", "email": "jane@example.com"}, handler.requests[0].body);
+
+        # the invoice PDF link is requested with POST /invoices/{id}/pdf, as Chargebee documents it (qore#7505)
+        handler.requests = ();
+        result = provider.getChildProviderPath("get-invoice-link").doRequest({"id": "inv1"});
+        assertEq("https://example.chargebee.com/invoices/inv1.pdf", result.download_url);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v2/invoices/inv1/pdf", handler.requests[0].path);
+
+        # an invoice's details are updated with POST /invoices/{id}/update_details, as Chargebee documents it; the
+        # operation takes no metadata (qore#7511)
+        handler.requests = ();
+        provider.getChildProviderPath("update-invoice").doRequest({"id": "inv1", "po_number": "PO-1"});
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v2/invoices/inv1/update_details", handler.requests[0].path);
+        assertEq({"po_number": "PO-1"}, handler.requests[0].body);
+        assertFalse(exists provider.getChildProviderPath("update-invoice").getRequestType().getFields()."meta_data");
 
         # a rate-limited request is retried after the time given by the server
         handler.requests = ();
@@ -1494,6 +1532,23 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("\n--- Event Trigger tests completed ---\n");
         }
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-transaction",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("Chargebee", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # makes a download URL that expires: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("Chargebee", "get-invoice-link")));
     }
 }
 

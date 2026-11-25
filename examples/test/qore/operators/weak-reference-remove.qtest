@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of remove and delete through weak references
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReferenceRemoveTest
+
+#! remove and delete through a weak reference change the list or hash that it designates (qore#7306)
+/** remove and delete of an element, a key, a slice or a range through a weak reference that an lvalue holds removed
+    the weak reference itself and gave the whole list (for any index of a list), or removed nothing and gave NOTHING
+    (for a hash), in every mode, and a slice gave different results in the AST and in the compiled modes.  They now
+    change the container that the weak reference designates, as an assignment through it does: an index before the
+    start of the list raises \c NEGATIVE-LIST-INDEX, a container freed under the weak reference raises \c LIST-ERROR
+    or \c HASH-ERROR, and a list whose element type does not take NOTHING keeps its type.  The program covers locals,
+    closures, references, members, globals, static class variables, hash keys and list elements that hold the weak
+    reference, nested paths, typed lists and hashes, freed containers, objects removed and deleted, and the same
+    changes without a weak reference.  Every mode must print the output of the AST.
+    A second program removes the entry or the key that holds the weak reference from the container that it designates,
+    which frees or moves the storage of the lvalue: it is not read afterwards (valgrind reported invalid reads of it in
+    every mode; qore#7402); and a removal that ends a cycle through an object lets the object be collected.
+    A third program runs remove of a range with \c %broken-list-range, which \c %modern refuses, so that only the
+    AST interpreter runs it: through a weak reference, and of a copy of a list freed under a weak reference, which
+    raises \c LIST-ERROR.
+
+    The programs are in \c weak-reference-remove/.
+*/
+class WeakReferenceRemoveTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-reference-remove";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-reference-remove", "weak-reference-remove-own-entry");
+        #! programs with %broken-list-range, which %modern refuses, so that only the AST interpreter runs them
+        const AstPrograms = ("weak-reference-remove-broken-range",);
+    }
+
+    constructor() : QUnit::Test("WeakReferenceRemoveTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs + AstPrograms) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-reference-remove-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: qcc compiles the program: %s", name, opt, out));
+                if (rc || !is_file(exe)) {
+                    continue;
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

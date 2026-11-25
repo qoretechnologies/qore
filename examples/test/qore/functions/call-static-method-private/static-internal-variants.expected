@@ -1,0 +1,11 @@
+qualified: base internal
+reference: base internal
+typed: base internal
+untyped: base internal
+static by name: base internal
+object by name: child public
+object by args: child public
+outside: child public
+object reference: base internal
+parent: parent public
+unrelated: other public

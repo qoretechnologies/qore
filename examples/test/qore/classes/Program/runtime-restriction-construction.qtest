@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the compiled child program
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class RuntimeRestrictionConstructionTest
+
+#! Tests that a restriction set on a Program after parsing applies to the construction of objects of its classes
+/** The child script (runtime-restriction-construction/construct.q) creates objects of classes that inherit a builtin
+    class whose constructor has a functional domain, in a Program whose parse options restrict the domain after
+    parsing, with and without a sandbox manager: a class without a constructor of its own runs the constructors of its
+    base classes in its Program with the options that the Program has then, as a class with a constructor does, so
+    that both are refused (issue #7513), also through a diamond, a member initializer and a background thread; a class
+    of the parent Program runs them with the parent's options, whether or not it has a constructor, and whether or not
+    the child class that inherits it has one; a class of a module runs them with the module's options and, for a
+    sandboxed caller, with the caller's restrictions as well (module RestrictionConstruction there).  It runs in every
+    execution mode, and compiled with AOT at optimization levels 0 and 3, against the same expected output.
+*/
+class RuntimeRestrictionConstructionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-runtime-restriction-construction-");
+
+        #! the calls of the child script: the function, the class it instantiates, and its result with the restriction
+        /** The classes of the child Program are refused with or without a constructor of their own; those that
+            inherit a class of the parent Program run its base class constructor with the parent's options
+        */
+        const Cases = (
+            ("w", "W", "INVALID-FUNCTION-ACCESS"),
+            ("wnew", "W", "INVALID-FUNCTION-ACCESS"),
+            ("wc", "WC", "INVALID-FUNCTION-ACCESS"),
+            ("m", "M", "INVALID-FUNCTION-ACCESS"),
+            ("mc", "MC", "INVALID-FUNCTION-ACCESS"),
+            ("pw", "PW", "PW"),
+            ("pwc", "PWC", "PWC"),
+            ("mpw", "MPW", "MPW"),
+            ("lpw", "LPW", "LPW"),
+            ("mpwc", "MPWC", "MPWC"),
+            ("lpwc", "LPWC", "LPWC"),
+            ("diamond", "D", "INVALID-FUNCTION-ACCESS"),
+            ("member", "HI", "INVALID-FUNCTION-ACCESS"),
+            ("memberc", "HIC", "INVALID-FUNCTION-ACCESS"),
+            ("bg", "W", "INVALID-FUNCTION-ACCESS"),
+        );
+
+        #! the results of the calls on the classes of a module, by the label of the calling Program
+        /** A module's class runs its base class constructors with the module's options, whether or not it has a
+            constructor of its own, and for a sandboxed caller with the caller's restrictions as well
+        */
+        const ModuleCases = {
+            "module restricted": (("mt", "MT"), ("mtc", "MTC"), ("xmt", "XMT"), ("xmtc", "XMTC")),
+            "module sandboxed": (("mt", "INVALID-FUNCTION-ACCESS"), ("mtc", "INVALID-FUNCTION-ACCESS"),
+                ("xmt", "INVALID-FUNCTION-ACCESS"), ("xmtc", "INVALID-FUNCTION-ACCESS")),
+        };
+    }
+
+    constructor() : QUnit::Test("RuntimeRestrictionConstruction", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/runtime-restriction-construction/construct.q";
+
+        addTestCase("construction after a restriction set at run time, in every mode", \testModes());
+        addTestCase("construction after a restriction set at run time, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    #! returns the expected output of the child script
+    private string expected() {
+        string rv;
+        foreach string label in ("restricted", "sandboxed") {
+            # every class can be instantiated before the restriction is set
+            foreach list<string> c in (Cases) {
+                rv += sprintf("%s before: %s: %s\n", label, c[0], c[1]);
+            }
+            foreach list<string> c in (Cases) {
+                rv += sprintf("%s: %s: %s\n", label, c[0], c[2]);
+            }
+            foreach string cls in ("W", "WC", "M", "MC") {
+                rv += sprintf("%s: create_object %s: CREATE-OBJECT-ERROR: current Program sandboxing "
+                    "restrictions do not allow access to the '%s' class\n", label, cls, cls);
+            }
+        }
+        foreach hash<auto> i in (ModuleCases.pairIterator()) {
+            foreach list<string> c in (i.value) {
+                rv += sprintf("%s: %s: %s\n", i.key, c[0], c[1]);
+            }
+        }
+        return rv;
+    }
+
+    testModes() {
+        string exp = expected();
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s %s", env(), qore_bin, mode, script, dirname(script)));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(exp, r.out, mode);
+        }
+    }
+
+    testAot() {
+        string exp = expected();
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/construct-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s", env(), bin,
+                dirname(script)));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(exp, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

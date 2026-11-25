@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServer
+%requires HttpClientIo
+%requires Logger
+%requires Mime
+%requires JsonLd
+%requires OneRecordClient
+%requires OneRecordServerHandler
+%requires Util
+
+%exec-class OneRecordServerHandlerRestrictedCreatorTest
+
+#! queues the callback requests it receives
+class RestrictedCreatorCallback inherits AbstractHttpRequestHandler {
+    public {
+        Queue requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests.push({"path": cx.raw_path, "body": body ? parse_json(body.typeCode() == NT_BINARY
+            ? body.toString("UTF-8") : body) : NOTHING});
+        return makeResponse(204, NOTHING);
+    }
+}
+
+#! A ONE Record server handler that code restricted from the NETWORK functional domain constructs
+/** Code restricted from NETWORK may not create an HttpClientIo connection manager (qore#6981).  The handler's
+    notification manager was created in its constructor, so such code could not construct a handler at all; it is now
+    created when a subscription with a callback URL is created, or set by the host on its own side
+    (qoretechnologies/qorus#1129).
+*/
+class OneRecordServerHandlerRestrictedCreatorTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+    }
+
+    constructor() : Test("OneRecordServerHandlerRestrictedCreatorTest", "1.0") {
+        addTestCase("restricted code constructs a handler; callbacks need the host's manager", \restrictedTest());
+        addTestCase("unrestricted code creates the notification manager with a subscription", \unrestrictedTest());
+        set_return_value(main());
+    }
+
+    restrictedTest() {
+        foreach hash<auto> mode in (Modes.pairIterator()) {
+            Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+            p.setExecMode(mode.value);
+            p.parse("%modern\n%requires Logger\n%requires OneRecordServerHandler\n"
+                "auto sub make() { try { return new OneRecordServerHandler::OneRecordServerHandler("
+                "new Logger::Logger(\"restricted\", Logger::LoggerLevel::getLevelInfo()), \"http://localhost\", "
+                "new OneRecordServerHandler::InMemoryOneRecordStorage(), "
+                "new OneRecordServerHandler::PermissiveOneRecordAuthorizer()); } catch (hash<ExceptionInfo> ex) { "
+                "return ex.err + \": \" + ex.desc; } }", "restricted");
+            auto h = p.callFunction("make");
+            assertEq(Type::Object, h.type(), sprintf("%s: restricted code constructs the handler: %y", mode.key, h));
+            if (h.type() != Type::Object) {
+                continue;
+            }
+            OneRecordServerHandler handler = h;
+            on_exit handler.stopNotificationWorkers();
+            serve(handler, sub (OneRecordClient client, string callback_url, RestrictedCreatorCallback callback) {
+                # no manager: the handler's code may not create one, so a subscription with a callback is refused
+                hash<ExceptionInfo> ex;
+                try {
+                    subscribe(client, "RestrictedNoManager", callback_url + "/none");
+                } catch (hash<ExceptionInfo> ex1) {
+                    ex = ex1;
+                }
+                assertNeq(NOTHING, ex, mode.key + ": a subscription without a manager is refused");
+                assertRegex("501|notifications cannot be delivered", sprintf("%s: %s %y", ex.err, ex.desc, ex.arg),
+                    mode.key);
+
+                # the host gives the handler a manager built on its own side
+                handler.setNotificationConnectionManager(new HttpClientConnectionManager(
+                    OneRecordServerHandler::getNotificationConnectionManagerOptions()));
+                assertThrows("ONE-RECORD-ERROR", "already has", \handler.setNotificationConnectionManager(),
+                    (new HttpClientConnectionManager(),));
+                string type = "https://onerecord.iata.org/ns/cargo#RestrictedWithManager" + mode.key;
+                assertEq(201, subscribe(client, type, callback_url + "/ok").headers.status_code, mode.key);
+                string object_uri = client.createLogisticsObject({"@type": type}).headers.location;
+                hash<auto> req = callback.requests.get(10000);
+                assertEq("/ok", req.path, mode.key + ": the host's manager delivers");
+                assertEq(object_uri, req.body."api:hasTopic", mode.key);
+            });
+        }
+    }
+
+    unrestrictedTest() {
+        OneRecordServerHandler handler(new Logger("unrestricted", LoggerLevel::getLevelInfo()), "http://localhost",
+            new InMemoryOneRecordStorage(), new PermissiveOneRecordAuthorizer());
+        on_exit handler.stopNotificationWorkers();
+        serve(handler, sub (OneRecordClient client, string callback_url, RestrictedCreatorCallback callback) {
+            string type = "https://onerecord.iata.org/ns/cargo#UnrestrictedOwnManager";
+            assertEq(201, subscribe(client, type, callback_url + "/own").headers.status_code);
+            # the subscription created the manager: the host can no longer set one
+            assertThrows("ONE-RECORD-ERROR", "already has", \handler.setNotificationConnectionManager(),
+                (new HttpClientConnectionManager(),));
+            string object_uri = client.createLogisticsObject({"@type": type}).headers.location;
+            hash<auto> req = callback.requests.get(10000);
+            assertEq("/own", req.path, "the handler's own manager delivers");
+            assertEq(object_uri, req.body."api:hasTopic");
+        });
+    }
+
+    #! subscribes to the creation of objects of the given type
+    private static hash<auto> subscribe(OneRecordClient client, string type, string url) {
+        return client.createSubscription({
+            "@context": OneRecordContext,
+            "@type": "api:Subscription",
+            "api:hasTopicType": {"@id": OneRecordTopicType::LogisticsObjectType},
+            "api:hasTopic": type,
+            "api:includeSubscriptionEventType": (
+                {"@id": OneRecordSubscriptionEventType::ObjectCreated},
+            ),
+            "api:hasCallbackUrl": url,
+            "api:sendLogisticsObjectBody": False,
+        });
+    }
+
+    #! serves the handler and a callback receiver for the call
+    private serve(OneRecordServerHandler handler, code call) {
+        Logger logger("http", LoggerLevel::getLevelInfo());
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger});
+        on_exit http.stop();
+        http.setHandler("1r", "", MimeTypeOneRecord, handler);
+        http.setDefaultHandler("1r", handler);
+        string base_url = sprintf("http://localhost:%d",
+            http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port);
+        handler.setBaseUrl(base_url);
+        OneRecordClient client(base_url);
+        on_exit client.close();
+        RestrictedCreatorCallback callback();
+        HttpServer callback_http(<HttpServerOptionInfo>{"logger": logger});
+        on_exit callback_http.stop();
+        callback_http.setHandler("callback", "", NOTHING, callback);
+        callback_http.setDefaultHandler("callback", callback);
+        call(client, sprintf("http://localhost:%d",
+            callback_http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port), callback);
+    }
+}

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - it checks that "localhost" at a port is another origin than "127.0.0.1" at the same port, and trusted clients follow such redirects; its plain listener listens on both loopback addresses with the same port, and its TLS listener is bound to the name "localhost", which listens on its first address and holds the port on the other loopback address
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -22,6 +23,11 @@
 %requires McpClient
 %requires A2aClient
 %requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires ServerSentEventClient
+%requires YamlRpcClient
+%requires JsonRpcConnection
 %requires ../../../TestCertificates.qm
 
 %try-module process >= 2.2
@@ -61,6 +67,10 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
     }
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         string path = (hdr.path ?? "").split("?")[0];
+        if (path =~ /^\/?rest/) {
+            return <HttpResponseInfo>{"code": 200, "body": "{\"ok\":true}",
+                "hdr": {"Content-Type": "application/json"}};
+        }
         if (path =~ /same$/) {
             return <HttpResponseInfo>{"code": 302, "hdr": {"Location": "/redirect/ok"}};
         }
@@ -94,7 +104,10 @@ class LentClientCreatorProofTest inherits QUnit::Test {
         const OriginDenied = "^PERMISSION-DENIED: .*does not create connections to ";
         const ProxyDenied = "^PERMISSION-DENIED: .*through another proxy";
         const CaDenied = "^PERMISSION-DENIED: .*other CA certificate locations";
-        const EditedDenied = "^PERMISSION-DENIED: (.*does not create connections to |the calling code may not create)";
+        const LentTargetDenied = "^PERMISSION-DENIED: connection .*may connect only to the target of a connection";
+        const UnboundDenied = "^PERMISSION-DENIED: connection .*synchronous client is not bound";
+        const EditedDenied = "^PERMISSION-DENIED: (.*does not create connections to |the calling code may not create"
+            "|connection .*may connect only to the target of a connection)";
 
         const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
 
@@ -103,6 +116,7 @@ class LentClientCreatorProofTest inherits QUnit::Test {
 %requires WebSocketClient
 %requires HttpClientIo
 %requires JsonRpcClientIo
+%requires RestClientIo
 string sub cycle(object wsc) {
     try {
         wsc.connect();
@@ -167,6 +181,147 @@ string sub no_proxy(object conn) {
 bool sub take(string url) {
     return exists HttpClientCreatorProof::forClient(url);
 }
+string sub rest_get(object conn, string path) {
+    try {
+        object c = conn.getAsync(False);
+        hash<auto> r = c.restGet(path);
+        return string(r.status_code);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_retarget(object conn, string url) {
+    try {
+        object c = conn.getAsync(False);
+        object o = c.copyWithUrl(url);
+        o.restGet(\"/rest/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_retarget_client(object client, string url) {
+    try {
+        object o = client.copyWithUrl(url);
+        o.restGet(\"/rest/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_ping(object conn) {
+    try {
+        hash<auto> h = conn.ping(True);
+        return h.ok ? \"UP\" : (\"DOWN: \" + h.info);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_client_get(object c, string path) {
+    try {
+        hash<auto> r = c.restGet(path);
+        return string(r.status_code);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub client_mgr_request(object c, string url, string path) {
+    try {
+        object m = c.getConnectionManager();
+        hash<auto> resp = m.request(url, \"GET\", path);
+        return string(resp.status_code);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub own_rest(string url) {
+    try {
+        RestClientIo c({\"url\": url});
+        return \"CREATED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub rest_sync(object conn, bool poll) {
+    try {
+        object c = poll ? conn.getPollImpl() : conn.get(False);
+        c.restGet(\"/rest/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub rest_real_opts_proxy(object conn, string proxy) {
+    try {
+        conn.real_opts.proxy = proxy;
+        object c = conn.getAsync(False);
+        c.restGet(\"/rest/x\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub plain_get(object conn, *string url) {
+    try {
+        if (url) {
+            conn.url = url;
+        }
+        conn.get(False);
+        return \"CLIENT\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub poll_drive(object conn, string url) {
+    try {
+        conn.url = url;
+        conn.real_url = url;
+        object op = conn.startPollConnect();
+        for (int i = 0; i < 1000 && !op.goalReached(); ++i) {
+            op.continuePoll();
+        }
+        return op.goalReached() ? \"GOAL\" : \"NOT-REACHED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub retargeted_ping(object conn, string url) {
+    try {
+        conn.url = url;
+        conn.real_url = url;
+        hash<auto> h = conn.ping(True);
+        return h.ok ? \"UP\" : (\"DOWN: \" + h.info);
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub sync_get(object conn, *string url, *string proxy) {
+    try {
+        if (url) {
+            conn.url = url;
+            conn.real_url = url;
+        }
+        if (proxy) {
+            conn.opts.proxy = proxy;
+        }
+        conn.get(True);
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub sync_poll(object conn, *string url) {
+    try {
+        if (url) {
+            conn.url = url;
+            conn.real_url = url;
+        }
+        conn.startPollConnect();
+        return \"STARTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
 string sub own_rpc(string url) {
     try {
         JsonRpcClientIo c(url);
@@ -205,57 +360,12 @@ string sub call_after_close(object c) {
         return ex.err;
     }
 }
-class WsRetarget inherits WebSocketClient {
-    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {}
-    static retarget(WebSocketClient w, string url) {
-        w.url = url;
-        w.http_opts.url = regex_subst(url, \"^wss:\", \"https:\");
-    }
-    static setProxy(WebSocketClient w, string proxy) {
-        w.http_opts.proxy = proxy;
-    }
-}
-class MgrEdit inherits HttpClientConnectionManager {
-    static setCa(HttpClientConnectionManager m, string file) {
-        m.opts.ssl_ca_file = file;
-    }
-}
-string sub proxied_ws(object wsc, string proxy) {
-    try {
-        WsRetarget::setProxy(wsc, proxy);
-        wsc.connect();
-        wsc.disconnect();
-        return \"CONNECTED\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
 string sub proxied_conn(object conn, string proxy) {
     try {
         conn.opts.proxy = proxy;
         object m = conn.getAsync(False);
         m.request(conn.url, \"GET\", \"/\");
         return \"DONE\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
-string sub ca_edit(object conn, string file) {
-    try {
-        object m = conn.getAsync(False);
-        MgrEdit::setCa(m, file);
-        m.request(conn.url, \"GET\", \"/\");
-        return \"DONE\";
-    } catch (hash<ExceptionInfo> ex) {
-        return why(ex);
-    }
-}
-string sub retarget_ws(object wsc, string url) {
-    try {
-        WsRetarget::retarget(wsc, url);
-        wsc.connect();
-        wsc.disconnect();
-        return \"CONNECTED\";
     } catch (hash<ExceptionInfo> ex) {
         return why(ex);
     }
@@ -360,12 +470,81 @@ object sub lookalike() {
     return new HttpClientCreatorProof(True);
 }
 ";
+
+        #! the restricted code's classes derived from a client and a manager of a trusted module, which change the
+        #! private target, proxy and CA certificate locations of a lent client; the restricted Program, which is not
+        #! sandboxed, parses them with #Code: its attempts are refused when the manager creates a connection
+        const WsRetargetCode = "
+class WsRetarget inherits WebSocketClient {
+    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {}
+    static retarget(WebSocketClient w, string url) {
+        w.url = url;
+        w.http_opts.url = regex_subst(url, \"^wss:\", \"https:\");
+    }
+    static setProxy(WebSocketClient w, string proxy) {
+        w.http_opts.proxy = proxy;
+    }
+}
+string sub proxied_ws(object wsc, string proxy) {
+    try {
+        WsRetarget::setProxy(wsc, proxy);
+        wsc.connect();
+        wsc.disconnect();
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub retarget_ws(object wsc, string url) {
+    try {
+        WsRetarget::retarget(wsc, url);
+        wsc.connect();
+        wsc.disconnect();
+        return \"CONNECTED\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+";
+
+        #! see #WsRetargetCode
+        const MgrEditCode = "
+class MgrEdit inherits HttpClientConnectionManager {
+    static setCa(HttpClientConnectionManager m, string file) {
+        m.opts.ssl_ca_file = file;
+    }
+}
+string sub ca_edit(object conn, string file) {
+    try {
+        object m = conn.getAsync(False);
+        MgrEdit::setCa(m, file);
+        m.request(conn.url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+string sub client_ca_edit(object c, string url, string file) {
+    try {
+        object m = c.getConnectionManager();
+        MgrEdit::setCa(m, file);
+        m.request(url, \"GET\", \"/\");
+        return \"DONE\";
+    } catch (hash<ExceptionInfo> ex) {
+        return why(ex);
+    }
+}
+";
+
+        #! the refusal of the private declarations of a trusted class to a class declared by sandboxed code (issue
+        #! #6843): a sandboxed Program refuses #WsRetargetCode and #MgrEditCode when it parses them
+        const TrustedPrivateRefused = "cannot use the private declarations of a class declared by trusted code";
     }
 
     private {
         HttpServer server;
         int port;
-        #! the port of the plain HTTP listener on 127.0.0.1 (redirects)
+        #! the port of the plain HTTP listener on both loopback addresses (redirects)
         int plain_port;
         #! a port where nothing listens
         int closed_port;
@@ -394,6 +573,12 @@ object sub lookalike() {
         addTestCase("a lent connection keeps its proxy, " + m, sub () { testProxyRemoved(m); });
         addTestCase("redirects of a lent connection, " + m, sub () { testRedirects(m); });
         addTestCase("restricted code inside a trusted call takes no grant, " + m, sub () { testCallback(m); });
+        addTestCase("a lent REST connection's async client, " + m, sub () { testLentRest(m); });
+        addTestCase("a lent RestClientIo client, " + m, sub () { testLentRestClient(m); });
+        addTestCase("a lent HTTP connection's synchronous client, " + m, sub () { testLentSync(m); });
+        addTestCase("a lent HTTP connection's synchronous poll, " + m, sub () { testLentSyncPoll(m); });
+        addTestCase("a lent REST connection's synchronous client, " + m, sub () { testLentRestSync(m); });
+        addTestCase("the connect paths of a lent connection's pings, " + m, sub () { testConnectPaths(m); });
         addTestCase("restricted code's own clients, " + m, sub () { testOwn(m); });
         addTestCase("a look-alike proof, " + m, sub () { testLookAlike(m); });
         addTestCase("the borrower's sandbox, " + m, sub () { testSandbox(m); });
@@ -411,15 +596,51 @@ object sub lookalike() {
         });
         RedirectHandler rh();
         server.setHandler("redirect", "^/?redirect", NOTHING, rh);
-        hash<auto> plinfo = server.addListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "service": 0,
-        });
+        server.setHandler("rest", "^/?rest", NOTHING, rh);
+        plain_port = addLoopbackListener();
         server.waitForAsyncIo();
         port = linfo.port;
-        plain_port = plinfo.port;
         rh.setPort(plain_port);
         closed_port = get_free_port();
+    }
+
+    #! Adds the plain HTTP listener on both loopback addresses with the same port and returns the port
+    /** \c "localhost" at the port of the listener is another origin than \c "127.0.0.1" at the same port, and the
+        trusted clients connect to both: a listener on only \c 127.0.0.1 would leave a client of \c "localhost",
+        which tries \c ::1 first, to a test running beside this one that listens on \c ::1 at the same port number
+        (qore#7469).  The port that the system assigns on \c 127.0.0.1 can be in use on \c ::1, in which case
+        another port is taken.  Without an IPv6 loopback address, the listener is only on \c 127.0.0.1.
+    */
+    private int addLoopbackListener() {
+        for (int attempt = 1; ; ++attempt) {
+            hash<auto> v4 = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0});
+            if (!hasIpv6Loopback()) {
+                return v4.port;
+            }
+            try {
+                server.addListener(<HttpListenerOptionInfo>{"node": "::1", "service": v4.port});
+            } catch (hash<ExceptionInfo> ex) {
+                # the port is in use on the IPv6 loopback address: another port is taken
+                server.stopListenerID(v4.id);
+                if (attempt == 20) {
+                    rethrow;
+                }
+                continue;
+            }
+            return v4.port;
+        }
+    }
+
+    #! Returns True if the IPv6 loopback address can be bound
+    private static bool hasIpv6Loopback() {
+        Socket s();
+        on_exit s.close();
+        try {
+            s.bindINET("::1", 0, False, AF_INET6);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        return True;
     }
 
     globalTearDown() {
@@ -429,13 +650,17 @@ object sub lookalike() {
     }
 
     #! returns a Program restricted from the network in the given execution mode
+    /** A Program with a sandbox manager is sandboxed: a class that its code declares cannot use the private
+        declarations of a class of a trusted module, so it parses #Code without #WsRetargetCode and #MgrEditCode
+        (see testSandbox())
+    */
     private Program getProgram(string mode, *SandboxManager sm) {
         Program p(PO_NEW_STYLE | PO_NO_NETWORK);
         if (sm) {
             p.setSandboxManager(sm);
         }
         p.setExecMode(Modes{mode});
-        p.parse(Code, "restricted-" + mode);
+        p.parse(sm ? Code : Code + WsRetargetCode + MgrEditCode, "restricted-" + mode);
         return p;
     }
 
@@ -553,6 +778,64 @@ object sub lookalike() {
         return (rv =~ x/^([^:]+)/)[0] ?? rv;
     }
 
+    #! the async client of a lent REST connection makes requests to the connection's target for restricted code (its
+    #! manager is created with the creator's proof when the client is created), not to another origin, and the
+    #! connection's ping with a ping method is up
+    testLentRest(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("rest://127.0.0.1:%d/rest", plain_port);
+        RestConnection rest("r", "r", url, {"monitor": False}, {"data": "json"});
+        assertEq("200", p.callFunction("rest_get", rest, "/rest/x"), "a request of a lent REST connection, " + mode);
+        assertRegex(OriginDenied + "http://localhost:" + plain_port, p.callFunction("rest_retarget", rest,
+            sprintf("http://localhost:%d/rest", plain_port)), "the client retargeted to another origin, " + mode);
+        RestConnection pinged("p", "p", url, {"monitor": False}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/rest/ping",
+        });
+        assertEq("UP", p.callFunction("rest_ping", pinged), "a ping with a ping method of a lent connection, " + mode);
+    }
+
+    #! a RestClientIo client that trusted code created and lends makes requests to its target for restricted code (its
+    #! manager was created with the creator's proof), reaches no other origin through a copy of itself, and restricted
+    #! code that creates a client of its own is refused (qore#7295)
+    testLentRestClient(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("http://127.0.0.1:%d/rest", plain_port);
+        RestClientIo client({"url": url, "data": "json"});
+        on_exit client.close();
+        assertEq("200", p.callFunction("rest_client_get", client, "/rest/x"), "a request of a lent client, " + mode);
+        assertEq("200", p.callFunction("rest_client_get", client, "/rest/y"), "a second request, " + mode);
+        assertRegex(OriginDenied + "http://localhost:" + plain_port, p.callFunction("rest_retarget_client", client,
+            sprintf("http://localhost:%d/rest", plain_port)), "a copy of the client with another origin, " + mode);
+        assertEq("PERMISSION-DENIED", p.callFunction("own_rest", url), "a client that restricted code creates, " + mode);
+        # the manager of the client is the creator's: restricted code that takes it reaches only the client's origin,
+        # also through the redirects of a request, and no CA certificate locations of its own
+        string base = sprintf("http://127.0.0.1:%d", plain_port);
+        RestClientIo plain({"url": base});
+        on_exit plain.close();
+        assertEq("200", p.callFunction("client_mgr_request", plain, base, "/redirect/ok"),
+            "a request of the client's manager, " + mode);
+        assertEq("200", p.callFunction("client_mgr_request", plain, base, "/redirect/same"),
+            "a same-origin redirect, " + mode);
+        assertRegex(OriginDenied + "http://localhost:" + plain_port, p.callFunction("client_mgr_request", plain, base,
+            "/redirect/cross"), "a cross-origin redirect, " + mode);
+        assertRegex(OriginDenied + "http://localhost:" + plain_port, p.callFunction("client_mgr_request", plain,
+            sprintf("http://localhost:%d", plain_port), "/redirect/ok"), "a request to another origin, " + mode);
+        # the CA locations are checked when the manager creates a connection: a client that has made no request yet
+        RestClientIo fresh({"url": base});
+        on_exit fresh.close();
+        assertRegex(CaDenied, p.callFunction("client_ca_edit", fresh, base, "/etc/hosts"),
+            "CA certificate locations of the manager, " + mode);
+        # trusted code's own client follows the cross-origin redirect and reaches other origins
+        assertEq(200, plain.getConnectionManager().request(base, "GET", "/redirect/cross").status_code,
+            "trusted code, cross-origin redirect");
+        # trusted code's own client is not affected, also through a copy with another origin
+        assertEq(200, client.restGet("/rest/x").status_code, "trusted code's request");
+        assertEq(200, client.copyWithUrl(sprintf("http://localhost:%d/rest", plain_port)).restGet("/rest/x").status_code,
+            "trusted code's request to another origin");
+    }
+
     #! restricted code that runs while trusted code calls getAsync() on a connection takes no grant: the connection
     #! grants its proof only to a restricted caller; restricted code that runs while that caller calls it (the
     #! documented limit) can take the grant, which is bound to the connection's target, as the caller's client would
@@ -600,6 +883,110 @@ object sub lookalike() {
             "cross-origin redirect of trusted code");
     }
 
+    #! returns a socket listening on a free port of 127.0.0.1
+    private static Socket listen() {
+        Socket s();
+        s.bind("127.0.0.1:0");
+        s.listen();
+        return s;
+    }
+
+    #! the synchronous client that a lent HTTP connection's get() creates connects to the connection's own target for
+    #! restricted code, not to a target or through a proxy that the restricted code set in the connection's members
+    testLentSync(string mode) {
+        Program p = getProgram(mode);
+        Socket own = listen();
+        on_exit own.close();
+        Socket other = listen();
+        on_exit other.close();
+        string own_url = sprintf("http://127.0.0.1:%d/", own.getSocketInfo().port);
+        string other_url = sprintf("http://127.0.0.1:%d/", other.getSocketInfo().port);
+        HttpConnection h("h", "h", own_url, {"monitor": False});
+        assertEq("CONNECTED", p.callFunction("sync_get", h), "the lent connection's own target, " + mode);
+        # the connection was made when get() returned; the listener accepts it (the kernel queues it asynchronously)
+        assertTrue(exists own.accept(5s), "the own target's listener sees the connection, " + mode);
+        HttpConnection r("r", "r", own_url, {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("sync_get", r, other_url), "a retargeted connection, " + mode);
+        HttpConnection x("x", "x", own_url, {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("sync_get", x, NOTHING, other_url),
+            "a connection with another proxy, " + mode);
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+        # unrestricted code that changes its own connection is not checked
+        HttpConnection u("u", "u", own_url, {"monitor": False});
+        u.url = other_url;
+        u.real_url = other_url;
+        u.get(True);
+        assertTrue(exists other.accept(5s), "trusted code connects to the target that it set");
+    }
+
+    #! a lent REST connection gives restricted code no synchronous client (whose requests are made by its Qore code
+    #! from targets that the caller can change), only its async client, which is bound to the creator's target; a proxy
+    #! that restricted code sets in the connection's options is refused by that client
+    testLentRestSync(string mode) {
+        Program p = getProgram(mode);
+        string url = sprintf("rest://127.0.0.1:%d/rest", plain_port);
+        Socket other = listen();
+        on_exit other.close();
+        RestConnection rest("r", "r", url, {"monitor": False}, {"data": "json"});
+        assertRegex(UnboundDenied, p.callFunction("rest_sync", rest, False), "get() of a lent REST connection, " + mode);
+        assertRegex(UnboundDenied, p.callFunction("rest_sync", rest, True),
+            "getPollImpl() of a lent REST connection, " + mode);
+        RestConnection proxied("x", "x", url, {"monitor": False}, {"data": "json"});
+        assertRegex(ProxyDenied, p.callFunction("rest_real_opts_proxy", proxied,
+            sprintf("http://127.0.0.1:%d", other.getSocketInfo().port)), "a proxy set in real_opts, " + mode);
+        assertFalse(other.isDataAvailable(0), "the proxy's listener sees no connection, " + mode);
+        # trusted code's own synchronous client is not checked
+        assertEq(200, rest.get(False).restGet("/rest/x").status_code, "trusted code's synchronous client");
+        # a lent server-sent event connection's synchronous client (it sends the connection's credentials from targets
+        # that the restricted code can change) is not given either
+        ServerSentEventConnection sse("s", "s", sprintf("sse://127.0.0.1:%d/rest", plain_port), {"monitor": False});
+        assertRegex(UnboundDenied, p.callFunction("plain_get", sse, sprintf("sse://127.0.0.1:%d/",
+            other.getSocketInfo().port)), "get() of a lent server-sent event connection, " + mode);
+        assertFalse(other.isDataAvailable(0), "the other listener sees no connection, " + mode);
+        # trusted code's own client is created
+        assertTrue(exists sse.get(False), "trusted code's server-sent event client");
+    }
+
+    #! the ping paths of a lent connection that connect outside get() and getAsync() (a poll operation that restricted
+    #! code drives itself, with and without a ping method, and ping()) reach no target that restricted code set: the
+    #! poll operation's connection manager has no proof of a restricted creator, and the synchronous client is refused
+    #! or checked (qore#7262)
+    testConnectPaths(string mode) {
+        Program p = getProgram(mode);
+        Socket other = listen();
+        on_exit other.close();
+        string url = sprintf("http://127.0.0.1:%d/", other.getSocketInfo().port);
+        # an unbound synchronous client (YAML-RPC): with a ping method, the poll operation's manager is refused; without
+        # one, the synchronous client
+        YamlRpcConnection y1("y", "y", "yamlrpc://127.0.0.1:1/", {"monitor": False},
+            {"ping_method": "GET", "ping_path": "/"});
+        assertRegex("^PERMISSION-DENIED: ", p.callFunction("poll_drive", y1, url),
+            "a poll operation with a ping method that restricted code drives, " + mode);
+        YamlRpcConnection y2("y", "y", "yamlrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(UnboundDenied, p.callFunction("poll_drive", y2, url),
+            "a poll operation that restricted code drives, " + mode);
+        YamlRpcConnection y3("y", "y", "yamlrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(UnboundDenied, p.callFunction("retargeted_ping", y3, url), "a ping of an unbound connection, " + mode);
+        # a bound synchronous client (JSON-RPC): checked against the creator's target before it connects
+        JsonRpcConnection j("j", "j", "jsonrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("retargeted_ping", j, url), "a ping of a bound connection, " + mode);
+        JsonRpcConnection j2("j", "j", "jsonrpc://127.0.0.1:1/", {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("poll_drive", j2, url),
+            "a poll operation of a bound connection, " + mode);
+        assertFalse(other.isDataAvailable(0), "no connection to the target that restricted code set, " + mode);
+    }
+
+    #! the synchronous client of a lent HTTP connection's poll operation is checked as get()'s
+    testLentSyncPoll(string mode) {
+        Program p = getProgram(mode);
+        string own_url = sprintf("http://127.0.0.1:%d/", closed_port);
+        HttpConnection h("h", "h", own_url, {"monitor": False});
+        assertEq("STARTED", p.callFunction("sync_poll", h), "the lent connection's own target, " + mode);
+        HttpConnection r("r", "r", own_url, {"monitor": False});
+        assertRegex(LentTargetDenied, p.callFunction("sync_poll", r, sprintf("http://localhost:%d/", closed_port)),
+            "a retargeted connection, " + mode);
+    }
+
     #! the origins of a proof: TLS mode, host and port, with canonical host names
     testOrigins() {
         HttpClientCreatorProof p = HttpClientCreatorProof::get("https://Host.Example.:8443/x");
@@ -630,6 +1017,41 @@ object sub lookalike() {
         # a URL without a scheme uses TLS, as the manager does
         HttpClientCreatorProof n = HttpClientCreatorProof::get("h:8000");
         assertFalse(n.allowsOrigin(False, "h", 8000), "plain HTTP for a URL without a scheme");
+        # the REST schemes are mapped to HTTP
+        HttpClientCreatorProof rs = HttpClientCreatorProof::get("rests://h/");
+        assertTrue(rs.allowsOrigin(True, "h", 443), "rests://");
+        assertFalse(rs.allowsOrigin(False, "h", 80), "rests:// is TLS");
+        HttpClientCreatorProof r = HttpClientCreatorProof::get("rest://h:8080/");
+        assertTrue(r.allowsOrigin(False, "h", 8080), "rest://");
+        # a URL and a proxy as a whole
+        assertTrue(r.allowsUrl("http://H:8080/x"), "the proof's own target");
+        assertFalse(r.allowsUrl("https://h:8080/"), "TLS to a plain origin");
+        assertFalse(r.allowsUrl("http://h:8080/", "http://proxy:3128"), "a proxy that the proof does not have");
+        assertFalse(r.allowsUrl("not a url"), "an invalid URL");
+        # an IPv6 host without brackets is ambiguous (where does the host end and the port start?): it allows nothing
+        HttpClientCreatorProof r6 = HttpClientCreatorProof::get("http://[::1]:8080/");
+        assertTrue(r6.allowsUrl("http://[::1]:8080/"), "a bracketed IPv6 host");
+        assertFalse(r6.allowsUrl("http://::1:8080/"), "an IPv6 host without brackets");
+        # brackets in the userinfo do not make the host bracketed
+        HttpClientCreatorProof r80 = HttpClientCreatorProof::get("http://[::1]:80/");
+        assertFalse(r80.allowsUrl("http://[x]:p@::1:80/"), "an IPv6 host without brackets after bracketed userinfo");
+        # a checked URL with user information allows nothing (its credentials can make it read as another target;
+        # the gate's callers give the target without them, qore#7236), but a proof's own URL can have them
+        assertFalse(r80.allowsUrl("http://u:p@[::1]:80/"), "a checked URL with user information");
+        assertTrue(HttpClientCreatorProof::get("http://u:p@[::1]:80/").allowsUrl("http://[::1]:80/"),
+            "a proof of a bracketed IPv6 host after userinfo");
+        assertFalse(HttpClientCreatorProof::get("http://::1:8080/").allowsUrl("http://::1:8080/"),
+            "a proof of an IPv6 host without brackets");
+        HttpClientCreatorProof r6p = HttpClientCreatorProof::get("http://h/", {"proxy": "http://[::1]:3128"});
+        assertTrue(r6p.allowsUrl("http://h/", "http://[::1]:3128"), "a bracketed IPv6 proxy");
+        assertFalse(r6p.allowsUrl("http://h/", "http://::1:3128"), "an IPv6 proxy without brackets");
+        # a proof whose proxy is ambiguous allows no proxy, also not another ambiguous one
+        HttpClientCreatorProof amb = HttpClientCreatorProof::get("http://h/", {"proxy": "http://::1:3128"});
+        assertFalse(amb.allowsUrl("http://h/", "http://::2:3128"), "another ambiguous proxy");
+        assertFalse(amb.allowsUrl("http://h/", "http://::1:3128"), "the same ambiguous proxy");
+        HttpClientCreatorProof rp = HttpClientCreatorProof::get("rest://h:8080/", {"proxy": "http://proxy:3128"});
+        assertTrue(rp.allowsUrl("http://h:8080/", "http://Proxy:3128"), "the proof's proxy");
+        assertFalse(rp.allowsUrl("http://h:8080/"), "without the proof's proxy");
         # a scheme that is not mapped to HTTP allows no origin
         HttpClientCreatorProof f = HttpClientCreatorProof::get("ftp://h/");
         assertFalse(f.allowsOrigin(False, "h", 80));
@@ -750,6 +1172,31 @@ object sub lookalike() {
         WebSocketClient wsc = getWs();
         on_exit delete wsc;
         assertEq("NETWORK-ACCESS-DENIED", p.callFunction("connect_once", wsc), "sandboxed borrower, " + mode);
+        # a class of sandboxed code cannot use the private declarations of the trusted client and manager: the code
+        # that changes a lent client's target, proxy or CA locations with them is refused when it is parsed
+        # (each use is an error; the first one parsed is given)
+        assertSandboxParseRefused(sm, mode, WsRetargetCode, "WsRetarget", "(url|http_opts)");
+        assertSandboxParseRefused(sm, mode, MgrEditCode, "MgrEdit", "opts");
+    }
+
+    #! asserts that a sandboxed Program refuses the given code of the restricted Program when it parses it, as the
+    #! given class that the code declares uses a private member of a class of a trusted module (\a member is a regular
+    #! expression)
+    private assertSandboxParseRefused(SandboxManager sm, string mode, string code, string cls, string member) {
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        p.setSandboxManager(sm);
+        p.setExecMode(Modes{mode});
+        string label = sprintf("sandboxed class %s, %s", cls, mode);
+        try {
+            p.parse("%modern\n%requires WebSocketClient\n%requires HttpClientIo\n"
+                "string sub why(hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }\n" + code,
+                "sandboxed-" + mode);
+            assertTrue(False, label + ": the code must be refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", label, ex.desc));
+            assertRegex(sprintf("^illegal access to private member '%s' of class '[^']+' in class '%s': .*%s", member,
+                cls, TrustedPrivateRefused), ex.desc, label);
+        }
     }
 
     #! a lent client whose HTTP/2 server does not support WebSocket tunnels falls back to HTTP/1.1, creating its

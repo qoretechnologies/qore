@@ -189,7 +189,7 @@ class WebSocketFrameHeaderLimitTest inherits QUnit::Test {
         server.setHandler("small", "/small", NOTHING, new EchoHandler({"max_message_size": SmallLimit}), NOTHING,
             False);
         server.setDefaultHandler("sse", push_handler);
-        ws_port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        ws_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         tls_port = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "service": 0,
@@ -211,9 +211,9 @@ class WebSocketFrameHeaderLimitTest inherits QUnit::Test {
     testHttp1Server() {
         Socket s();
         on_exit s.close();
-        s.connect("localhost:" + ws_port);
+        s.connect("127.0.0.1:" + ws_port);
         s.sendHTTPMessage("GET", "/ws", "1.1", {
-            "Host": "localhost:" + ws_port,
+            "Host": "127.0.0.1:" + ws_port,
             "Upgrade": "websocket",
             "Connection": "Upgrade",
             "Sec-WebSocket-Key": get_random_string(16).toBase64(),
@@ -335,9 +335,9 @@ class WebSocketFrameHeaderLimitTest inherits QUnit::Test {
 
     #! Opens a raw HTTP/1.1 WebSocket connection to a path
     private openRaw(Socket s, string path) {
-        s.connect("localhost:" + ws_port);
+        s.connect("127.0.0.1:" + ws_port);
         s.sendHTTPMessage("GET", path, "1.1", {
-            "Host": "localhost:" + ws_port,
+            "Host": "127.0.0.1:" + ws_port,
             "Upgrade": "websocket",
             "Connection": "Upgrade",
             "Sec-WebSocket-Key": get_random_string(16).toBase64(),

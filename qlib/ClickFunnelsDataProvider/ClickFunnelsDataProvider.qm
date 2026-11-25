@@ -53,6 +53,15 @@ module ClickFunnelsDataProvider {
                 "This integration supports full CRUD operations on core resources, "
                 "tag management, and event-based triggers.",
             "scheme": "clickfunnelsrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "myclickfunnels.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://support.myclickfunnels.com/docs/clickfunnels-pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": ClickFunnelsLogo,
             "logo_file_name": "clickfunnels-logo.svg",
             "logo_mime_type": MimeTypeSvg,

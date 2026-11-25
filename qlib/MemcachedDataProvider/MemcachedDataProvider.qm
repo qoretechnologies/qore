@@ -117,6 +117,7 @@ module MemcachedDataProvider {
             "short_desc": "Retrieve a value from the cache",
             "desc": "Retrieve a cached value by key",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -128,6 +129,7 @@ module MemcachedDataProvider {
             "short_desc": "Retrieve a value with CAS token",
             "desc": "Retrieve a cached value with its CAS token for optimistic locking",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -139,6 +141,7 @@ module MemcachedDataProvider {
             "short_desc": "Retrieve multiple values",
             "desc": "Retrieve multiple cached values in a single batch request",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -198,6 +201,7 @@ module MemcachedDataProvider {
             "short_desc": "Get server statistics",
             "desc": "Retrieve general server statistics and metrics",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 
@@ -210,6 +214,7 @@ module MemcachedDataProvider {
             "short_desc": "Get server version",
             "desc": "Retrieve the memcached server version",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_dependent_options": True,
         });
 

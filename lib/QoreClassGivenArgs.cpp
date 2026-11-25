@@ -91,6 +91,12 @@ QoreValue qore_invoke_call_ref_given_args(const ResolvedCallReferenceNode* ref, 
     if (ref->getType() == NT_RUNTIME_CLOSURE) {
         return static_cast<const QoreClosureBase*>(ref)->execValueTmpArgs(args, xsink);
     }
+    // a reference to a function, the most frequent target, is recognized by its exact type, which is a comparison of
+    // the type's identity, without the walk of the class hierarchy of the dynamic cast below; its execValueTmpArgs()
+    // applies the reference's sandbox provenance itself (qore#6052)
+    if (typeid(*ref) == typeid(FunctionCallReferenceNode)) {
+        return static_cast<const FunctionCallReferenceNode*>(ref)->execValueTmpArgs(args, xsink);
+    }
     if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
         QoreSandboxProvenanceHelper provenance(ref);
         return rcr->execValueTmpArgs(args, xsink);

@@ -3,6 +3,11 @@
 This document clarifies how Qore user modules are structured in this repository.
 Follow these rules to avoid load and documentation issues.
 
+Build standalone AOT modules as the build-tree owner with `cmake --build build` before installing them.
+Their generated install target installs the existing artifacts, so installing under another account leaves
+the compiler stamp and module builds to their owner. An external project that wants its install target to
+build first can configure with `-DCMAKE_SKIP_INSTALL_ALL_DEPENDENCY=OFF`.
+
 External module documentation uses the SDK's `share/qore/qore.tag` language index,
 installed when Qore's documentation has been built before installation. This index
 does not require the complete language HTML documentation. The exported CMake helpers
@@ -116,6 +121,13 @@ In the Qore build, both bundled binary module and user module documentation depe
 This initial pass writes the core tag file before any module reads it; `docs-lang-final` then imports
 completed module tags. These dependencies apply to individual module documentation targets as well as
 full builds, so parallel generation cannot read a stale or partially rewritten core tag file.
+
+A user module imports the transitive tag files it needs to resolve inherited members, signature types,
+and documentation-only references. After Doxygen renders its pages, the Python documentation helper
+removes search results from sibling modules with no links in its content pages or diagrams
+(#6376). Generated listings such as the namespace index can include every imported namespace and do not
+contribute links to this selection. The module's own symbols, language symbols, and all symbols from linked
+modules remain searchable.
 
 Qdx retains parameter declarations when an abstract method is represented by the tree-sitter grammar
 as a member declaration with constructor arguments. The CST translator normalizes these arguments to
@@ -1004,7 +1016,16 @@ The teardown handles each holder:
 - **Phase 0** (`delUser()`): the `del` callbacks of all user modules run.
 - **Phase 1** (`delUser()`): the namespace data of every user and AOT module Program
   is cleared, and the cycles held up by opaque references that they own are broken,
-  while every module Program exists (holder 1).
+  while every module Program exists (holder 1). The user and AOT modules are cleared
+  together, each before the modules that it requires, directly or through other
+  modules, with the requirements recorded at run time that `cleanup()` also orders by
+  (`getTeardownModuleDependencies()`, `qore_order_module_programs_dependents_first()`):
+  the objects that a module's data holds can be objects of the classes of a module that
+  it requires, whose destructors use the static variables of their own classes
+  (qore#7432). A cycle is broken only after all modules outside it that require it have been cleared.
+  As in `cleanup()`, the first choice is a module that the remaining modules require only at run time.
+  Module names decide ties. The opaque targets are
+  broken in the same order.
 - **Phase 2** (`delUser()`): user modules and native binary modules are deleted in
   dependency order. A native binary module is deleted first, as soon as no module
   left requires it (`deleteUnrequiredNativeModule()`): its `module_delete` function

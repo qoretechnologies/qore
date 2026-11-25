@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class ValgrindSuppressionsTest
+
+#! Tests the valgrind suppressions of the tests (examples/test/valgrind.supp)
+/** run_tests.sh passes the suppressions to every valgrind that a test starts.  They suppress reports of LLVM 21's JIT
+    that are not errors (see the file), and must not suppress a report of Qore's own code: with them, a deliberate read
+    of a value that was never written in Qore's code (dbg_read_uninitialized()), a read of freed memory
+    (dbg_use_after_free()) and a value that was never written passed by Qore's code to the LLVM call that its JIT makes
+    (dbg_llvm_uninitialized_level()), debug functions, are still reported, and a JIT compile has no report.
+*/
+class ValgrindSuppressionsTest inherits QUnit::Test {
+    public {
+        #! a function compiled to native code
+        const JitScript = "%modern
+int sub f(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i; } return s; }
+int t = 0;
+for (int i = 0; i < 20; ++i) { t += f(10); }
+printf(\"%d\\n\", t);
+";
+    }
+
+    private {
+        string valgrind;
+        string qore_bin;
+        string libqore_dir;
+        string supp;
+        TmpDir tmp("qore-valgrind-suppressions-");
+    }
+
+    constructor() : QUnit::Test("valgrind suppressions", "1.0", \ARGV) {
+        valgrind = trim(backquote("command -v valgrind 2>/dev/null || true"));
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        supp = normalize_dir(get_script_dir() + "/../../valgrind.supp");
+        addTestCase("a report of Qore's code is not suppressed", \testQoreReport());
+        addTestCase("a use-after-free of Qore's code is not suppressed", \testUseAfterFree());
+        addTestCase("an uninitialised value that Qore's code passes to LLVM is not suppressed", \testLlvmArgument());
+        addTestCase("a JIT compile has no report", \testJit());
+        set_return_value(main());
+    }
+
+    testQoreReport() {
+        checkAvailable();
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_read_uninitialized() requires a debug build");
+        }
+        string out = run("-e 'printf(\"%d\\n\", dbg_read_uninitialized());'");
+        assertRegex("Conditional jump or move depends on uninitialised value", out, "the read is reported");
+        assertRegex("f_dbg_read_uninitialized", out, "in Qore's code");
+    }
+
+    testUseAfterFree() {
+        checkAvailable();
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_use_after_free() requires a debug build");
+        }
+        string out = run("-e 'printf(\"%d\\n\", dbg_use_after_free());'");
+        assertRegex("Invalid read of size", out, "the read is reported");
+        assertRegex("f_dbg_use_after_free", out, "in Qore's code");
+    }
+
+    #! an optimization level that was never written, passed by Qore's code to the LLVM call that Qore's JIT makes
+    #! (buildPerModuleDefaultPipeline()): it is reported in that LLVM function, which the suppressions do not match, as
+    #! they match only the two frames of LLVM's own reports
+    testLlvmArgument() {
+        checkAvailable();
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_llvm_uninitialized_level() requires a debug build");
+        }
+        string out = run("-e 'printf(\"%d\\n\", dbg_llvm_uninitialized_level());'");
+        assertRegex("Conditional jump or move depends on uninitialised value", out, "the use is reported");
+        assertRegex("buildPerModuleDefaultPipeline", out, "in the LLVM function that uses it");
+        assertRegex("qore_jit_dbg_pipeline_uninitialized_level", out, "called by Qore's code");
+    }
+
+    testJit() {
+        checkAvailable();
+        string script = tmp.path + DirSep + "jit.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(JitScript);
+        f.close();
+        string out = run("--exec-mode=jit " + quote(script), "QORE_JIT_SYNC_COMPILE=1 ");
+        assertEq("900", trim((select out.split("\n"), $1 =~ /^[0-9]+$/)[0] ?? ""), "the script ran: " + out);
+        assertFalse(out =~ /Conditional jump|uninitialised|Invalid read|Invalid write/, "no report: " + out);
+    }
+
+    private checkAvailable() {
+        if (!valgrind) {
+            testSkip("valgrind is not available");
+        }
+        if (!is_file(supp)) {
+            testSkip("the suppressions file is not in this tree");
+        }
+    }
+
+    #! runs qore under valgrind with only the suppressions of the tests
+    private string run(string args, *string env) {
+        return backquote(sprintf("%sQORE_PCRE2_NO_JIT=1 VALGRIND_OPTS= LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -q "
+            "--suppressions=%s %s -b %s 2>&1", env ?? "", quote(libqore_dir), quote(libqore_dir), quote(valgrind),
+            quote(supp), quote(qore_bin), args));
+    }
+
+    #! quotes a path for the shell
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

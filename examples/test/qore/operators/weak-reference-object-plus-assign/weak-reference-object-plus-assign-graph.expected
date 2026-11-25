@@ -1,0 +1,10 @@
+premature strong: collected early False name "peer"
+premature strong: collected after True
+premature weak: collected early False name "peer"
+premature weak: collected after True
+premature weak-value: collected early False name "peer"
+premature weak-value: collected after True
+made member: collected True
+made nested: collected True
+broken one: collected True
+broken both: collected True

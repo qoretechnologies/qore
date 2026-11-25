@@ -68,7 +68,14 @@
     getHttpFieldsAtTopLevel() (#6761), QoreSandboxManager::setIsolationDomain(), getIsolationDomain() and
     qore_caller_isolation_domain() with their feature macro QORE_HAVE_ISOLATION_DOMAINS (#6536; the state of the
     isolation domain is in the private implementation, so the layout of QoreSandboxManager is unchanged), and
-    QoreObject::setInternalMemberValue() and QoreObject::getReferencedInternalMemberValue() (#6839);
+    QoreObject::setInternalMemberValue() and QoreObject::getReferencedInternalMemberValue() (#6839),
+    qore_dbi_method_list::registerOption() with option flags, QDBI_OPT_SENSITIVE and their feature macro
+    QORE_HAVE_DBI_SENSITIVE_OPTIONS (#7070), DBI_CAP_SENSITIVE_DBNAME and its feature macro
+    QORE_HAVE_DBI_SENSITIVE_DBNAME (#7275), QoreValue::resolveIndirectRef() (#7231),
+    QoreHttpClientObject::getProxyURL(int) (#7236), qore_set_module_cleanup_handover_grace(),
+    qore_get_module_cleanup_handover_grace() and qore_cleanup_left_library() with their feature macro
+    _QORE_HAS_MODULE_CLEANUP_HANDOVER_GRACE (#7239), and the ssl_trust_store member of
+    HttpClientConnectionManagerBase::Options (#7248; a member added to a structure of the unreleased 2.3 API);
     changed in 2.3 (never in a released module API): qore_type_get_code_param_types() and
     qore_type_get_type_arguments() have forms that copy the types to a type_vec_t that the caller gives and return a
     bool (#6419), with their feature macros _QORE_HAS_CODE_PARAM_TYPES_BY_REF and _QORE_HAS_TYPE_ARGUMENTS_BY_REF;

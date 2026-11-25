@@ -1,0 +1,30 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# a creator proof that a module's class static holds is destroyed when the program ends, after the static members
+# of HttpClientCreatorProof were cleared: its destructor must not depend on them (qore#7236; a module's cache of
+# shared clients held one, and the program raised an exception when it ended)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires HttpClientIo
+%requires ProofHolderModule
+
+%exec-class ProofTeardownTest
+
+class ProofTeardownTest inherits QUnit::Test {
+    constructor() : Test("ProofTeardownTest", "1.0") {
+        addTestCase("a proof held by a module's class static", \heldTest());
+        set_return_value(main());
+    }
+
+    heldTest() {
+        ProofHolder::hold("http://127.0.0.1:1/");
+        assertTrue(HttpClientCreatorProof::genuine(ProofHolder::proof));
+        # the proof is destroyed when the program ends; the test fails if its destructor raises an exception then
+    }
+}

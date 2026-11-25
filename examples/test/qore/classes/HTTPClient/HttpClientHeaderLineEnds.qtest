@@ -1,0 +1,402 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.x headers read from local TCP sockets, keep-alive reuse and the close of the connection
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The header of an HTTP/1.x message ends at its first empty line, where a line ends with LF, which a CR can precede
+# (RFC 9112 section 2.2): a response whose header lines end with LF alone, or with LF and CRLF mixed, is read, and the
+# connection is reused; before, the readers waited for "\r\n\r\n", and the request timed out.  A request with a line
+# that ends with a bare LF is still refused (HttpServer answers 400 and closes the connection), now at once.  A field
+# line with a control character other than HTAB (RFC 9110 section 5.5) is refused with SOCKET-HTTP-ERROR, whose
+# argument has the start of the line, escaped; the client closes the connection, and HttpServer answers 400 and closes
+# the connection; obs-text and HTAB are accepted (qore#7491).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpClientHeaderLineEndsTest
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the timeout of a request
+const RequestTimeout = 10s;
+
+#! the response to each request but the first one
+const Answer = "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: keep-alive\r\n\r\nanswer";
+
+#! responses with valid headers: each is the response to the first request, whose body is "first", and the connection
+#! is reused
+const ValidResponses = {
+    "LF line ends": "HTTP/1.1 200 OK\nContent-Length: 5\nConnection: keep-alive\nX-Test: a\n\nfirst",
+    "CRLF line ends, an empty line with LF": "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-Test: a\r\n\nfirst",
+    "LF line ends, an empty line with CRLF": "HTTP/1.1 200 OK\nContent-Length: 5\nX-Test: a\n\r\nfirst",
+    "mixed line ends": "HTTP/1.1 200 OK\r\nContent-Length: 5\nX-Test: a\r\n\nfirst",
+    "LF line ends, a chunked body": "HTTP/1.1 200 OK\nTransfer-Encoding: chunked\nX-Test: a\n\n5\r\nfirst\r\n0\r\n\r\n",
+    "a tab in a field value": "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-Test: \ta\tb\r\n\r\nfirst",
+};
+
+#! the expected value of the X-Test field of each valid response
+const ValidValues = {
+    "a tab in a field value": "a\tb",
+};
+
+class ScriptedServer {
+    public {
+        #! the number of the connection and the method and path of each request received
+        Queue requests();
+        #! decremented when the server's first connection has ended
+        Counter first_closed(1);
+        #! why the server's first connection ended: \c "closed" when the client closed it, the error otherwise
+        string first_end;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+        #! the data sent for the first request
+        data first_response;
+    }
+
+    constructor(data first_response) {
+        self.first_response = first_response;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    #! stops the server; the connections of the client must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        on_exit if (n == 1) {
+            first_closed.dec();
+        }
+        bool first = n == 1;
+        while (True) {
+            hash<auto> h;
+            try {
+                # longer than the wait of a test for the end of the connection, so that only the client's close of the
+                # connection ends it in time
+                h = s.readHTTPHeader(Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                if (n == 1) {
+                    first_end = ex.err == "SOCKET-CLOSED" ? "closed" : sprintf("%s: %s", ex.err, ex.desc);
+                }
+                return;
+            }
+            if (!h.method) {
+                if (n == 1) {
+                    first_end = "closed";
+                }
+                return;
+            }
+            requests.push(sprintf("%d %s %s", n, h.method, h.path));
+            if (first) {
+                first = False;
+                s.send(first_response);
+            } else {
+                s.send(Answer);
+            }
+        }
+    }
+}
+
+#! a handler that counts the requests that reach it
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        int calls = 0;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ++calls;
+        return makeResponse(200, "path=" + cx.raw_path);
+    }
+}
+
+class HttpClientHeaderLineEndsTest inherits QUnit::Test {
+    private {
+        const Clients = ("HTTPClient", "HttpClientIo");
+
+        #! responses with a field line with a control character: [response, description regex, argument]
+        const InvalidResponses = {
+            "ESC in a field value": (
+                binary("HTTP/1.1 200 OK\r\nX-Test: ") + <1b> + binary("[31mred\r\nContent-Length: 5\r\n\r\nfirst"),
+                "control character 0x1b in a field line", "X-Test: \\x1b[31mred"),
+            "ESC in a field value, LF line ends": (
+                binary("HTTP/1.1 200 OK\nX-Test: ") + <1b> + binary("[31mred\nContent-Length: 5\n\nfirst"),
+                "control character 0x1b in a field line", "X-Test: \\x1b[31mred"),
+            "DEL in a field value": (
+                binary("HTTP/1.1 200 OK\r\nX-Test: a") + <7f> + binary("b\r\nContent-Length: 5\r\n\r\nfirst"),
+                "control character 0x7f in a field line", "X-Test: a\\x7fb"),
+            "0x01 in a field value": (
+                binary("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-Test: a") + <01> + binary("\r\n\r\nfirst"),
+                "control character 0x01 in a field line", "X-Test: a\\x01"),
+            "a vertical tab in a field value": (
+                binary("HTTP/1.1 200 OK\r\nX-Test: a") + <0b> + binary("b\r\nContent-Length: 5\r\n\r\nfirst"),
+                "control character 0x0b in a field line", "X-Test: a\\x0bb"),
+            "a control character in a field name": (
+                binary("HTTP/1.1 200 OK\r\nX") + <1f> + binary("Test: a\r\nContent-Length: 5\r\n\r\nfirst"),
+                "control character 0x1f in a field line", "X\\x1fTest: a"),
+            "a control character in a folded line": (
+                binary("HTTP/1.1 200 OK\r\nX-Test: a\r\n b") + <1b> + binary("\r\nContent-Length: 5\r\n\r\nfirst"),
+                "control character 0x1b in a field line", " b\\x1b"),
+            "NUL in a field value": (
+                binary("HTTP/1.1 200 OK\r\nX-Test: a") + <00> + binary("b\r\nContent-Length: 5\r\n\r\nfirst"),
+                "NUL character", NOTHING),
+            "a bare CR in a field value": (
+                binary("HTTP/1.1 200 OK\r\nX-Test: a\rb\r\nContent-Length: 5\r\n\r\nfirst"),
+                "bare CR character", NOTHING),
+        };
+    }
+
+    constructor() : QUnit::Test("HttpClientHeaderLineEnds", "1.0") {
+        foreach string client in (Clients) {
+            foreach hash<auto> i in (ValidResponses.pairIterator()) {
+                addTestCase(sprintf("%s: %s: read, the connection is reused", client, i.key), \testValid(),
+                    (client, i.key, i.value, ValidValues{i.key} ?? "a"));
+            }
+            addTestCase(client + ": obs-text in a field value: read, the connection is reused", \testValid(),
+                (client, "obs-text", binary("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-Test: caf") + <e9ff80>
+                    + binary("\r\n\r\nfirst"), "caféÿ\u0080"));
+            foreach hash<auto> i in (InvalidResponses.pairIterator()) {
+                addTestCase(sprintf("%s: %s: an error, the connection is closed", client, i.key), \testInvalid(),
+                    (client, i.value[0], i.value[1], i.value[2]));
+            }
+        }
+        addTestCase("Socket::readHTTPHeader(): LF line ends", \testSocket());
+        addTestCase("HttpServer: requests", \testServer());
+        set_return_value(main());
+    }
+
+    #! sends a request whose response has a valid header, then a second request on the same connection
+    testValid(string client, string label, data response, string value) {
+        ScriptedServer server(response);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        hash<auto> first;
+        hash<auto> second;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            first = hc.send(NOTHING, "GET", "/first", NOTHING, True);
+            second = hc.send(NOTHING, "GET", "/second", NOTHING, True);
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            first = mgr.request(url, "GET", "/first", NOTHING, NOTHING, RequestTimeout);
+            second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
+        }
+        assertEq(200, first.status_code, label + ": the status code");
+        assertEq("first", first.body, label + ": the body");
+        assertEq(value, first.headers."x-test" ?? first."x-test", label + ": the field value");
+        assertEq("1 GET /first", server.requests.get(Timeout), label + ": the first request");
+        assertEq(200, second.status_code, label + ": the second response");
+        assertEq("answer", second.body, label + ": the second response");
+        assertEq("1 GET /second", server.requests.get(Timeout), label + ": the connection is reused");
+        assertEq(1, server.getConnectionCount(), label + ": no new connection was made");
+    }
+
+    #! sends a request whose response has an invalid field line, then a second request on a new connection
+    testInvalid(string client, binary response, string desc, *string arg) {
+        ScriptedServer server(response);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        *hash<ExceptionInfo> ex;
+        hash<auto> second;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            try {
+                hash<auto> r = hc.send(NOTHING, "GET", "/first");
+                if (m_options.verbose > 2) {
+                    printf("%s: unexpected response: %y\n", client, r);
+                }
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+            # the client's close of the connection is seen before the next request
+            assertEq(0, server.first_closed.waitForZero(Timeout), "the connection is closed");
+            second = hc.send(NOTHING, "GET", "/second");
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": RequestTimeout,
+                "max_request_retries": 3,
+            });
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            try {
+                hash<auto> r = mgr.request(url, "GET", "/first", NOTHING, NOTHING, RequestTimeout);
+                if (m_options.verbose > 2) {
+                    printf("%s: unexpected response: %y\n", client, r);
+                }
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+            # the client's close of the connection is seen before the next request
+            assertEq(0, server.first_closed.waitForZero(Timeout), "the connection is closed");
+            second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
+        }
+        if (m_options.verbose > 2) {
+            printf("%s: %s: %s (%y)\n", client, ex.err, ex.desc, ex.arg);
+        }
+        assertTrue(exists ex, "the request fails");
+        string err = sprintf("%s: %s", ex.err, ex.desc);
+        assertRegex((client == "HTTPClient" ? "^" : "^HTTPCLIENT-REQUEST-ERROR: ")
+            + "SOCKET-HTTP-ERROR: invalid HTTP header received with (the|a) " + desc, err, "the error is reported");
+        if (arg) {
+            # the start of the line is given in the argument of the exception, not in its description
+            assertEq(arg, ex.arg, "the argument of the exception gives the start of the line");
+            assertEq(-1, ex.desc.find(arg), "the description does not give the line");
+        }
+        assertEq("1 GET /first", server.requests.get(Timeout), "the request");
+        assertEq("closed", server.first_end, "the client closed the connection");
+        assertEq(200, second.status_code, "the second response");
+        assertEq("answer", second.body, "the second response is the server's answer to the second request");
+        assertEq("2 GET /second", server.requests.get(Timeout), "the second request is sent on a new connection");
+        assertEq(0, server.requests.size(), "the first request reached the server once");
+        assertEq(2, server.getConnectionCount(), "a new connection was made for the second request");
+    }
+
+    #! Socket::readHTTPHeader() and Socket::readHTTPHeaderString() read headers with LF line ends
+    testSocket() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Counter done(1);
+        *hash<ExceptionInfo> server_ex;
+        # the reads of the client are made before the server's connection is closed
+        Counter read_done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                Socket s = listener.accept(Timeout);
+                on_exit s.close();
+                s.send("HTTP/1.1 200 OK\nContent-Length: 2\n\nok" + "HTTP/1.1 204 No Content\r\nX: a\r\n\n"
+                    + "HTTP/1.1 200 OK\nX: b\n\r\n" + "HTTP/1.1 200 OK\r\nX: c\n\n");
+                read_done.waitForZero(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                server_ex = ex;
+            }
+        }();
+        on_exit {
+            read_done.dec();
+            listener.close();
+            done.waitForZero();
+        }
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", port), Timeout);
+        on_exit s.close();
+        hash<auto> h = s.readHTTPHeader(Timeout);
+        assertEq(200, h.status_code);
+        assertEq("2", h."content-length");
+        assertEq("ok", s.recv(2, Timeout), "the body follows the header");
+        h = s.readHTTPHeader(Timeout);
+        assertEq(204, h.status_code);
+        assertEq("a", h.x);
+        assertEq("HTTP/1.1 200 OK\nX: b\n", s.readHTTPHeaderString(Timeout));
+        assertEq("HTTP/1.1 200 OK\r\nX: c\n", s.readHTTPHeaderString(Timeout));
+        assertNothing(server_ex);
+    }
+
+    #! HttpServer answers a request with a line that ends with a bare LF, or with a control character in a field line,
+    #! with 400 and closes the connection; a valid request is served
+    testServer() {
+        CountingHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelFatal())});
+        on_exit server.stop();
+        server.setDefaultHandler("default", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        list<hash<auto>> requests = (
+            {"label": "LF line ends", "req": binary("GET /lf HTTP/1.1\nHost: localhost\n\n")},
+            {"label": "an empty line with LF", "req": binary("GET /lf HTTP/1.1\r\nHost: localhost\r\n\n")},
+            {"label": "ESC in a field value", "req": binary("GET /esc HTTP/1.1\r\nHost: localhost\r\nX: a") + <1b>
+                + binary("b\r\n\r\n")},
+            {"label": "DEL in a field value", "req": binary("GET /del HTTP/1.1\r\nHost: localhost\r\nX: a") + <7f>
+                + binary("b\r\n\r\n")},
+        );
+        foreach hash<auto> i in (requests) {
+            Socket c();
+            c.connect(sprintf("127.0.0.1:%d", port), Timeout);
+            on_exit c.close();
+            # a request sent after the first one on the connection is never served
+            c.send(i.req + binary("GET /after HTTP/1.1\r\nHost: localhost\r\n\r\n"));
+            hash<auto> resp = c.readHTTPHeader(Timeout);
+            assertEq(400, resp.status_code, i.label);
+            assertEq("close", resp.connection, i.label);
+            if (resp."content-length") {
+                c.recv(resp."content-length".toInt(), Timeout);
+            }
+            # the connection is closed
+            *hash<auto> next;
+            try {
+                next = c.readHTTPHeader(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            assertNothing(next, i.label);
+            assertEq(0, handler.calls, i.label);
+        }
+
+        # a valid request with a tab and obs-text in a field value is served
+        Socket c();
+        c.connect(sprintf("127.0.0.1:%d", port), Timeout);
+        on_exit c.close();
+        c.send(binary("GET /ok HTTP/1.1\r\nHost: localhost\r\nX: a\tb") + <e9> + binary("\r\n\r\n"));
+        hash<auto> resp = c.readHTTPHeader(Timeout);
+        assertEq(200, resp.status_code);
+        assertEq("path=/ok", c.recv(resp."content-length".toInt(), Timeout));
+        assertEq(1, handler.calls);
+    }
+}

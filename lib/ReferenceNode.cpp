@@ -667,3 +667,29 @@ const QoreTypeInfo* ReferenceNode::getTypeInfo() const {
 const QoreTypeInfo* ReferenceNode::getLValueTypeInfo() const {
    return priv->getLValueTypeInfo();
 }
+
+int qore_reference_binding_keeps_value(const ReferenceNode* r, const QoreTypeInfo* target_ti,
+        ExceptionSink* xsink) {
+    assert(r);
+    if (target_ti != autoHashTypeInfo && target_ti != autoHashOrNothingTypeInfo && target_ti != autoListTypeInfo
+            && target_ti != autoListOrNothingTypeInfo) {
+        return 0;
+    }
+    const lvalue_ref* lr = lvalue_ref::get(r);
+    // a reference to a closure-bound variable itself has the variable as its lvalue (ClosureVarValue::getReference())
+    if (lr->vexp.getType() != NT_VARREF) {
+        return 0;
+    }
+    const VarRefNode* v = lr->vexp.get<const VarRefNode>();
+    if (v->getType() != VT_IMMEDIATE) {
+        return 0;
+    }
+    const ClosureVarValue* cvv = v->ref.cvv;
+    assert(cvv);
+    // the type of a variable whose type is not a reference type is never changed, so it can be read without the
+    // variable's lock; a read-only variable raises an exception when it is resolved as an lvalue
+    if (cvv->refTypeInfo || cvv->read_only || cvv->typeInfo != target_ti) {
+        return 0;
+    }
+    return qore_reference_resolution_check(lr->pgm, lr, xsink);
+}

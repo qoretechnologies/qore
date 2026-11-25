@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# cancels an async I/O operation during a step, with the I/O thread's idle grace period at its minimum (qore#6703): the
+# thread must stay until the step's result arrives, and abort() must not run during the step; needs a debug build
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+const Code = "
+class Op inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+        Counter completed;
+    }
+    constructor(Counter completed) {
+        self.completed = completed;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+    abort() {
+        # the step, held before it enters this Program, has run
+        printf(\"abort: step has run: %y\\n\", done);
+        flush();
+    }
+    onComplete(hash<SocketPollResultInfo> result) {
+        printf(\"onComplete: canceled: %y\\n\", result.canceled);
+        flush();
+        completed.dec();
+    }
+}
+
+# the code of a Program that is only called (callFunction()) does not run its top-level statements
+our *EventNotifier notifier;
+our *Counter completed;
+
+sub start() {
+    completed = new Counter(1);
+    notifier = new EventNotifier();
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new Op(completed),
+        \"owner\": \"teardown-long-step\",
+        \"to\": -1s,
+    });
+}
+
+bool sub wait_completed() {
+    return !completed.waitForZero(30s);
+}
+";
+
+const Step = 0;
+const AutostopKept = 8;
+
+call_function("dbg_async_io_pause_cancel_point", Step, True);
+call_function("dbg_async_io_set_autostop_grace", 0);
+on_exit {
+    call_function("dbg_async_io_set_autostop_grace", -1);
+    call_function("dbg_async_io_pause_cancel_point", Step, False);
+    call_function("dbg_async_io_pause_cancel_point", AutostopKept, False);
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-long-step");
+p.callFunction("start");
+printf("step held: %y\n", call_function("dbg_async_io_wait_cancel_point", Step, 30s));
+# the cancellation is deferred until the step's result; the thread is idle otherwise, with no grace period
+call_function("dbg_async_io_pause_cancel_point", AutostopKept, True);
+AsyncIoController::cancelByOwner("teardown-long-step");
+printf("thread stays: %y\n", call_function("dbg_async_io_wait_cancel_point", AutostopKept, 30s));
+call_function("dbg_async_io_pause_cancel_point", Step, False);
+printf("result received: %y\n", p.callFunction("wait_completed"));
+AsyncIoController::flushCallbacks();
+delete p;
+printf("done\n");

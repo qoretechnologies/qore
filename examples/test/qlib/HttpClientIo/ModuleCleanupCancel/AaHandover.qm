@@ -1,0 +1,156 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor submits an operation whose onComplete(), work of the module cleanup that the cleanup
+# counts, takes a handle of its work (AsyncIoController::holdModuleCleanupWork()) and releases it twice, or never, or
+# hands itself over to code that it then discards without running it (AsyncIoController::wrapModuleCleanupWork());
+# see ModuleCleanupCancel.qtest (qore#7239, qore#7339)
+
+%modern
+
+module AaHandover {
+    version = "1.0";
+    desc = "work of the module cleanup that hands itself over with a handle";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AaHandover {
+#! an operation that reaches its goal in its first step; its onComplete() uses a handle as the mode says
+class HandoverOperation inherits AbstractPollOperation<auto> {
+    private {
+        bool reached = False;
+        string mode;
+    }
+
+    constructor(string mode) {
+        self.mode = mode;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return reached ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        reached = True;
+        return NOTHING;
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        printf("handle taken: %y\n", handle != 0);
+        switch (mode) {
+            case "twice":
+                printf("first release: %y\n", AsyncIoController::releaseModuleCleanupWork(handle));
+                printf("second release: %y\n", AsyncIoController::releaseModuleCleanupWork(handle));
+                break;
+            case "never":
+                # the handle is never released: the cleanup waits for it until the grace period after its deadline
+                break;
+            case "drop": {
+                printf("release: %y\n", AsyncIoController::releaseModuleCleanupWork(handle));
+                # code that would run on another thread holds a handle of this work; it is discarded without being
+                # run, which releases the handle, so the cleanup does not wait for it
+                code<nothing()> wrapped = AsyncIoController::wrapModuleCleanupWork(sub () {
+                    printf("the discarded code ran\n");
+                });
+                remove wrapped;
+                printf("code discarded\n");
+                break;
+            }
+            case "wrap": {
+                AsyncIoController::releaseModuleCleanupWork(handle);
+                # code run on another thread as this work (qore#7339): it runs as work that the cleanup counts, so it
+                # can hand work over in turn, and the cleanup waits for it
+                code<nothing()> c = sub () {
+                    int nested = AsyncIoController::holdModuleCleanupWork();
+                    printf("wrapped code ran: counted: %y\n", nested != 0);
+                    AsyncIoController::releaseModuleCleanupWork(nested);
+                    flush();
+                };
+                code w = AsyncIoController::wrapModuleCleanupWork(c);
+                printf("wrapped: %y, wrapped again: %y\n", w != c, AsyncIoController::wrapModuleCleanupWork(w) == w);
+                background w();
+                break;
+            }
+            case "wrap-throw": {
+                AsyncIoController::releaseModuleCleanupWork(handle);
+                # the handle is released when the code raises an exception: the cleanup does not wait for it
+                code w = AsyncIoController::wrapModuleCleanupWork(sub () {
+                    # written before the exception, while the handle is held: the cleanup waits for it
+                    printf("wrapped code raising\n");
+                    flush();
+                    throw "WRAPPED-ERROR", "the wrapped code raised an exception";
+                });
+                background sub () {
+                    try {
+                        w();
+                    } catch (hash<ExceptionInfo> ex) {
+                        printf("wrapped code raised: %s\n", ex.err);
+                        flush();
+                    }
+                    # the wrapped code runs once
+                    try {
+                        w();
+                        printf("wrapped code ran twice\n");
+                    } catch (hash<ExceptionInfo> ex) {
+                        printf("wrapped code called again: %s\n", ex.err);
+                    }
+                    flush();
+                }();
+                break;
+            }
+        }
+        flush();
+    }
+}
+
+#! submits the operation when the module cleanup deletes the module's data
+class Submitter {
+    private {
+        EventNotifier notifier();
+        string mode;
+    }
+
+    constructor(string mode) {
+        self.mode = mode;
+    }
+
+    destructor() {
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new HandoverOperation(mode),
+            "owner": "module-cleanup-handover-" + mode,
+            "to": 10s,
+        });
+    }
+}
+
+#! the data of this module
+public class Holder {
+    public {
+        static *Submitter submitter;
+    }
+
+    #! outside of work of the module cleanup, a handle is 0 and has no effect
+    static start(string mode) {
+        int handle = AsyncIoController::holdModuleCleanupWork();
+        printf("outside: handle %d, release: %y\n", handle, AsyncIoController::releaseModuleCleanupWork(handle));
+        # outside of such work, wrapped code is the code itself
+        code c = sub () {};
+        printf("outside: wrapped code is the code: %y\n", AsyncIoController::wrapModuleCleanupWork(c) == c);
+        flush();
+        submitter = new Submitter(mode);
+    }
+}
+}

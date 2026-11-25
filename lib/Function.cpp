@@ -1149,7 +1149,23 @@ void MethodFunctionBase::resolveOwnerCopies() {
     }
 }
 
-QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+QoreFunction* IList::getFunctionAt(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator aqfi, bool& internal_access) const {
+    QoreFunction* rv = (*aqfi).func;
+    const QoreClass* fc = rv->getClass();
+    if (fc) {
+        // get the function's class
+        last_class = qore_class_private::get(*fc);
+        if (last_class && class_ctx) {
+            // set the internal access flag
+            // by identity, never by name and signature (qore#7036)
+            internal_access = last_class->sameClass(*class_ctx);
+        }
+    }
+    return rv;
+}
+
+QoreFunction* IList::getNextFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const {
     // an ancestor that the context cannot access is skipped: the search continues with the ancestors after it, as a
     // path that it cannot access does not hide another path from it; the ancestors on the inaccessible path have its
@@ -1163,21 +1179,22 @@ QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore
                 || (n.access() == Internal && n.owners()->contains(*class_ctx))))) {
             continue;
         }
-
-        QoreFunction* rv = n.func;
-        const QoreClass* fc = rv->getClass();
-        if (fc) {
-            // get the function's class
-            last_class = qore_class_private::get(*fc);
-            if (last_class && class_ctx) {
-                // set the internal access flag
-                // by identity, never by name and signature (qore#7036)
-                internal_access = last_class->sameClass(*class_ctx);
-            }
-        }
-        return rv;
+        return getFunctionAt(class_ctx, last_class, aqfi, internal_access);
     }
     return nullptr;
+}
+
+// inline (as before qore#7381): the run-time variant search calls it for every call whose variant was not resolved
+// at parse time; an entry that the context can access without the search (the function itself, a public ancestor,
+// a private one from a class context) is taken here without a call, and only the search past an inaccessible
+// ancestor is one
+inline QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const {
+    assert(aqfi != aqfe);
+    if (!last_class || (*aqfi).access() == Public || (class_ctx && (*aqfi).access() == Private)) {
+        return getFunctionAt(class_ctx, last_class, aqfi, internal_access);
+    }
+    return getNextFunction(class_ctx, last_class, aqfi, aqfe, internal_access);
 }
 
 bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bool relaxed_match,
@@ -1998,7 +2015,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
         if (caller_pgm && caller_pgm != pgm_ctx && qore_program_is_module_inline(pgm_ctx)) {
             module_po_override.set(qore_get_module_call_runtime_po_override(pgm_ctx, caller_runtime_po, caller_pgm));
         }
-        set(xsink, pgm_ctx, true);
+        set(xsink, pgm_ctx, true, self);
         if (*xsink) {
             return;
         }
@@ -3324,6 +3341,22 @@ int UserSignature::resolveTypes() {
     return err;
 }
 
+UserSignature::~UserSignature() {
+    // type-parameter types are cached by signature address, which the next signature allocated can reuse
+    qore_purge_derived_types(this, nullptr, nullptr);
+    for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i) {
+        delete* i;
+    }
+    delete parseReturnTypeInfo;
+}
+
+const QoreTypeInfo* UserSignature::parseGetReturnTypeInfo(int& err) const {
+    if (const_cast<UserSignature*>(this)->resolve() && !err) {
+        err = -1;
+    }
+    return returnTypeInfo;
+}
+
 int UserSignature::resolve() {
     if (resolved) {
         return 0;
@@ -3356,9 +3389,7 @@ int UserSignature::resolve() {
             if (!QoreTypeInfo::parseAccepts(typeList[i], argTypeInfo)) {
                 QoreStringNode* desc = new QoreStringNode;
                 desc->sprintf("parameter '%s' expects ", names[i].c_str());
-                QoreTypeInfo::getThisType(typeList[i], *desc);
-                desc->concat(", but the default value is ");
-                QoreTypeInfo::getThisType(argTypeInfo, *desc);
+                QoreTypeInfo::describeTypeComparison(*desc, typeList[i], ", but the default value is ", argTypeInfo);
                 desc->concat(" instead");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
                 if (!err) {

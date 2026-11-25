@@ -1,0 +1,171 @@
+A::constructor(0, "a") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:172:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:172:main
+A: 0
+B::constructor(2, "s")
+B: 1
+B::constructor(3, null)
+B nothing: 1
+C::constructor(5)
+C: 1
+C::constructor(7)
+C arg: 1
+A::constructor(1, "d") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:48:main < D::constructor:user:users.q:177:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:177:main
+D::constructor(0) x: 1
+D: 1
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:users.q:178:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:178:main
+E1: 1
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:users.q:179:main < E2::constructor:user:users.q:179:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:179:main
+E2::constructor()
+E2: 1
+F: F-ERROR: i: 1 @ users.q:73 F::constructor:user:users.q:180:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:180:main
+F::destructor()
+F ok: 1
+G scope: G-ERROR: destructor @ users.q:88 G::destructor:user:users.q:165:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:182:main
+G delete: G-ERROR: destructor @ users.q:88 G::destructor:user:users.q:183:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:183:main
+H0::constructor() H1::m()
+H1::constructor()
+H1: 1
+K::copy() old: 0
+K: 0
+A::constructor(2, "d") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:48:main < D::constructor:user:users.q:186:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:186:main
+D::constructor(1) x: 2
+L::constructor() D null null
+L: 1
+A::constructor(1, "x") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:187:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:187:main
+L::constructor() A {a: 1} 2
+L hash: 1
+Q: Q-ERROR: innermost @ users.q:150 Q::constructor:user:users.q:148:main < Q::constructor:user:users.q:148:main < Q::constructor:user:users.q:188:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:188:main
+C::constructor(1)
+L wrong object: RUNTIME-OVERLOAD-ERROR: no variant matching '::L::constructor(object<::C>, nothing, nothing)' can be found; the following variants were tested:
+   ::L::constructor(object<::A> a, *hash<auto> h, *int i) @ users.q:189 <anonymous closure>:user:users.q:165:main < run:user:users.q:189:main
+A::constructor(9, "private") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:135:main < PA::constructor:user:users.q:190:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:190:main
+L private object: RUNTIME-OVERLOAD-ERROR: no variant matching '::L::constructor(object<::PA>, nothing, nothing)' can be found; the following variants were tested:
+   ::L::constructor(object<::A> a, *hash<auto> h, *int i) @ users.q:190 <anonymous closure>:user:users.q:165:main < run:user:users.q:190:main
+A::constructor(9, "private") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:135:main < PA::constructor:user:users.q:191:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:191:main
+L::constructor() PA null null
+L private object in class: 1
+R extra: RUNTIME-OVERLOAD-ERROR: no variant matching '::R::constructor(integer, integer)' can be found; the following variants were tested:
+   ::R::constructor(int i) @ users.q:192 create_object:builtin:users.q:192:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:192:main
+R::constructor(0)
+R auto: 1
+A wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching '::A::constructor(string, string)' can be found; the following variants were tested:
+   ::A::constructor(int x, string s) @ users.q:194 create_object:builtin:users.q:194:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:194:main
+A auto wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching '::A::constructor(string, string)' can be found; the following variants were tested:
+   ::A::constructor(int x, string s) @ users.q:195 <anonymous closure>:user:users.q:165:main < run:user:users.q:195:main
+A::constructor(1, "a") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:172:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:172:main
+A: 1
+B::constructor(2, "s")
+B: 1
+B::constructor(3, null)
+B nothing: 1
+C::constructor(5)
+C: 1
+C::constructor(7)
+C arg: 1
+A::constructor(2, "d") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:48:main < D::constructor:user:users.q:177:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:177:main
+D::constructor(1) x: 2
+D: 1
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:users.q:178:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:178:main
+E1: 1
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:users.q:179:main < E2::constructor:user:users.q:179:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:179:main
+E2::constructor()
+E2: 1
+F: F-ERROR: i: 1 @ users.q:73 F::constructor:user:users.q:180:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:180:main
+F::destructor()
+F ok: 1
+G scope: G-ERROR: destructor @ users.q:88 G::destructor:user:users.q:165:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:182:main
+G delete: G-ERROR: destructor @ users.q:88 G::destructor:user:users.q:183:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:183:main
+H0::constructor() H1::m()
+H1::constructor()
+H1: 1
+K::copy() old: 1
+K: 1
+A::constructor(2, "d") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:48:main < D::constructor:user:users.q:186:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:186:main
+D::constructor(1) x: 2
+L::constructor() D null null
+L: 1
+A::constructor(1, "x") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:187:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:187:main
+L::constructor() A {a: 1} 2
+L hash: 1
+Q: Q-ERROR: innermost @ users.q:150 Q::constructor:user:users.q:148:main < Q::constructor:user:users.q:148:main < Q::constructor:user:users.q:188:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:188:main
+C::constructor(1)
+L wrong object: RUNTIME-OVERLOAD-ERROR: no variant matching '::L::constructor(object<::C>, nothing, nothing)' can be found; the following variants were tested:
+   ::L::constructor(object<::A> a, *hash<auto> h, *int i) @ users.q:189 <anonymous closure>:user:users.q:165:main < run:user:users.q:189:main
+A::constructor(9, "private") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:135:main < PA::constructor:user:users.q:190:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:190:main
+L private object: RUNTIME-OVERLOAD-ERROR: no variant matching '::L::constructor(object<::PA>, nothing, nothing)' can be found; the following variants were tested:
+   ::L::constructor(object<::A> a, *hash<auto> h, *int i) @ users.q:190 <anonymous closure>:user:users.q:165:main < run:user:users.q:190:main
+A::constructor(9, "private") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:135:main < PA::constructor:user:users.q:191:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:191:main
+L::constructor() PA null null
+L private object in class: 1
+R extra: RUNTIME-OVERLOAD-ERROR: no variant matching '::R::constructor(integer, integer)' can be found; the following variants were tested:
+   ::R::constructor(int i) @ users.q:192 create_object:builtin:users.q:192:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:192:main
+R::constructor(1)
+R auto: 1
+A wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching '::A::constructor(string, string)' can be found; the following variants were tested:
+   ::A::constructor(int x, string s) @ users.q:194 create_object:builtin:users.q:194:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:194:main
+A auto wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching '::A::constructor(string, string)' can be found; the following variants were tested:
+   ::A::constructor(int x, string s) @ users.q:195 <anonymous closure>:user:users.q:165:main < run:user:users.q:195:main
+A::constructor(2, "a") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:172:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:172:main
+A: 2
+B::constructor(2, "s")
+B: 1
+B::constructor(3, null)
+B nothing: 1
+C::constructor(5)
+C: 1
+C::constructor(7)
+C arg: 1
+A::constructor(3, "d") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:48:main < D::constructor:user:users.q:177:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:177:main
+D::constructor(2) x: 3
+D: 1
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:users.q:178:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:178:main
+E1: 1
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:users.q:179:main < E2::constructor:user:users.q:179:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:179:main
+E2::constructor()
+E2: 1
+F: F-ERROR: i: 1 @ users.q:73 F::constructor:user:users.q:180:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:180:main
+F::destructor()
+F ok: 1
+G scope: G-ERROR: destructor @ users.q:88 G::destructor:user:users.q:165:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:182:main
+G delete: G-ERROR: destructor @ users.q:88 G::destructor:user:users.q:183:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:183:main
+H0::constructor() H1::m()
+H1::constructor()
+H1: 1
+K::copy() old: 2
+K: 2
+A::constructor(2, "d") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:48:main < D::constructor:user:users.q:186:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:186:main
+D::constructor(1) x: 2
+L::constructor() D null null
+L: 1
+A::constructor(1, "x") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:187:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:187:main
+L::constructor() A {a: 1} 2
+L hash: 1
+Q: Q-ERROR: innermost @ users.q:150 Q::constructor:user:users.q:148:main < Q::constructor:user:users.q:148:main < Q::constructor:user:users.q:188:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:188:main
+C::constructor(1)
+L wrong object: RUNTIME-OVERLOAD-ERROR: no variant matching '::L::constructor(object<::C>, nothing, nothing)' can be found; the following variants were tested:
+   ::L::constructor(object<::A> a, *hash<auto> h, *int i) @ users.q:189 <anonymous closure>:user:users.q:165:main < run:user:users.q:189:main
+A::constructor(9, "private") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:135:main < PA::constructor:user:users.q:190:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:190:main
+L private object: RUNTIME-OVERLOAD-ERROR: no variant matching '::L::constructor(object<::PA>, nothing, nothing)' can be found; the following variants were tested:
+   ::L::constructor(object<::A> a, *hash<auto> h, *int i) @ users.q:190 <anonymous closure>:user:users.q:165:main < run:user:users.q:190:main
+A::constructor(9, "private") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:users.q:135:main < PA::constructor:user:users.q:191:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:191:main
+L::constructor() PA null null
+L private object in class: 1
+R extra: RUNTIME-OVERLOAD-ERROR: no variant matching '::R::constructor(integer, integer)' can be found; the following variants were tested:
+   ::R::constructor(int i) @ users.q:192 create_object:builtin:users.q:192:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:192:main
+R::constructor(2)
+R auto: 1
+A wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching '::A::constructor(string, string)' can be found; the following variants were tested:
+   ::A::constructor(int x, string s) @ users.q:194 create_object:builtin:users.q:194:main < <anonymous closure>:user:users.q:165:main < run:user:users.q:194:main
+A auto wrong type: RUNTIME-OVERLOAD-ERROR: no variant matching '::A::constructor(string, string)' can be found; the following variants were tested:
+   ::A::constructor(int x, string s) @ users.q:195 <anonymous closure>:user:users.q:165:main < run:user:users.q:195:main
+A::constructor(0, "child") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:child:1:other < make:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:211:main
+child sandboxed: False: 0 "child"
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:child:2:main < make_e:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:213:main
+A::constructor(1, "child") governed: False frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:child:1:other < make:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:211:main
+child sandboxed: False: 1 "child"
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:child:2:main < make_e:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:213:main
+A::constructor(0, "child") governed: True frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:child:1:other < make:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:211:main
+child sandboxed: True: 0 "child"
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:child:2:main < make_e:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:213:main
+A::constructor(1, "child") governed: True frames: get_thread_call_stack:builtin:users.q:28:main < A::constructor:user:child:1:other < make:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:211:main
+child sandboxed: True: 1 "child"
+E0::constructor() frames: get_thread_call_stack:builtin:users.q:56:main < E0::constructor:user:child:2:main < make_e:user:<builtin>:-1:other < Program::callFunction:builtin:users.q:213:main

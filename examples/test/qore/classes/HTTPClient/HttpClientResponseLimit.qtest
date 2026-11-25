@@ -469,7 +469,7 @@ class HttpClientResponseLimitTest inherits QUnit::Test {
         # over TLS, the poll API negotiates the protocol of a new connection asynchronously; the concrete
         # connection gets the limit too.  The body is not compressed, so only the limit of the connection applies.
         hc = new HTTPClient({
-            "url": "https://localhost:" + tls_port,
+            "url": "https://127.0.0.1:" + tls_port,
             "ssl_verify_cert": False,
             "timeout": 30s,
             "max_response_body_size": Limit,
@@ -548,7 +548,7 @@ class HttpClientResponseLimitTest inherits QUnit::Test {
     # returns a client for the TLS listener with the given HTTP version, or skips the test if it is not negotiated
     private HTTPClient getTlsClient(string version, string expected) {
         HTTPClient hc({
-            "url": "https://localhost:" + tls_port,
+            "url": "https://127.0.0.1:" + tls_port,
             "ssl_verify_cert": False,
             "timeout": 30s,
             "http_version": version,

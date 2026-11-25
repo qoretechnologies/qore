@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -83,6 +83,16 @@ public:
         return lvars;
     }
 
+    //! returns true if the body reads the implicit index (\c $#) of the statement (qore#7270)
+    /** Counts the reads of \c $# in the body; code in the body that has an index scope of its own does not count
+        (see QoreParseImplicitElementScope).  The code that the body calls, the closures created in it and a fold
+        expression in it cannot refer to the index (qore#5690).  The statement sets the thread's implicit index for
+        each element only if the body reads it; true until the statement has been parse initialized.
+    */
+    DLLLOCAL bool readsImplicitElement() const {
+        return reads_implicit_element;
+    }
+
 protected:
     template <bool Lexical>
     DLLLOCAL int execCommon(QoreValue& return_value, ExceptionSink* xsink);
@@ -102,6 +112,8 @@ private:
     LVList* lvars = nullptr;
     FunctionalOperator* iterator_func = nullptr;
     bool is_ref = false;
+    //! true if the body reads the statement's implicit index; see readsImplicitElement()
+    bool reads_implicit_element = true;
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);

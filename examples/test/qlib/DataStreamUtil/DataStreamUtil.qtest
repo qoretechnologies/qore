@@ -56,6 +56,7 @@ class DataStreamUtilTest inherits QUnit::Test {
         addTestCase("ds v1 send recv roundtrip", \testDSv1SendRecvRoundtrip());
         addTestCase("ds v1 multiplexed partial YAML", \testDSv1MultiplexedPartialYaml());
         addTestCase("ds v1 send error trailer", \testDSv1SendErrorTrailer());
+        addTestCase("decode concatenated compressed streams", \testDecodeContentStreams());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -1466,6 +1467,69 @@ class DataStreamUtilTest inherits QUnit::Test {
         assertEq("ERR: <description not valid in its encoding>", send("ERR", bad_utf8)."DataStream-Error");
         assertEq("ERR: <description not valid in its encoding>", send("ERR", bad_sjis)."DataStream-Error");
         assertEq("<error code not valid in its encoding>: d", send(bad_sjis, "d")."DataStream-Error");
+    }
+
+    #! a string of the given size that compresses little, so that the compressed data has candidate stream headers
+    static string makeNoise(int seed, int size) {
+        string rv;
+        int x = seed;
+        while (rv.size() < size) {
+            x = (x * 1103515245 + 12345) % 2147483648;
+            rv += sprintf("%08x", x);
+        }
+        return rv.substr(0, size);
+    }
+
+    #! the offsets of the gzip and zlib stream headers in the given data
+    static list<int> streamHeaders(binary data) {
+        list<int> rv = ();
+        for (int p = 0; p + 1 < data.size(); ++p) {
+            int b = data[p];
+            int n = data[p + 1];
+            if ((b == 0x1f && n == 0x8b) || (b == 0x78 && (n == 0x01 || n == 0x9c || n == 0xda))) {
+                rv += p;
+            }
+        }
+        return rv;
+    }
+
+    testDecodeContentStreams() {
+        foreach string ce in (("gzip", "deflate")) {
+            code encode = ds_get_content_encode(ce);
+            code decode = ds_get_content_decode(ce);
+
+            # a single stream
+            assertEq(("one",), ds_decode_content_streams(decode, binary(encode("one")), "utf8"), ce + ": single");
+
+            # many concatenated streams: each is decoded, in order (qore#7323: the boundary scan of a buffer of
+            # many streams no longer takes time quadratic in its size)
+            list<string> records = ();
+            binary data = binary();
+            list<int> starts = ();
+            for (int i = 0; i < 300; ++i) {
+                string rec = sprintf("%d: %s", i, makeNoise(i, 2000));
+                records += rec;
+                starts += data.size();
+                data += binary(encode(rec));
+            }
+            # the compressed data holds byte pairs that look like a stream header but are not one, which are
+            # skipped
+            list<int> headers = streamHeaders(data);
+            assertGt(starts.size(), headers.size(), ce + ": false stream headers");
+            date start = now_us();
+            assertEq(records, ds_decode_content_streams(decode, data, "utf8"), ce + ": 300 streams");
+            if (m_options.verbose) {
+                printf("%s: %d streams of %d bytes decoded in %y\n", ce, records.size(), data.size(),
+                    now_us() - start);
+            }
+
+            # a stream that ends early cannot be decoded
+            binary truncated = data.substr(0, data.size() - 10);
+            assertThrows("ZLIB-ERROR", \ds_decode_content_streams(), (decode, truncated, "utf8"), ce + ": truncated");
+            # bytes after the last stream that are not a stream
+            assertThrows("ZLIB-ERROR", \ds_decode_content_streams(), (decode, data + binary("garbage"), "utf8"),
+                ce + ": trailing garbage");
+        }
     }
 }
 

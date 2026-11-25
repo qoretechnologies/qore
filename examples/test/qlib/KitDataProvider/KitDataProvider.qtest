@@ -260,6 +260,18 @@ public class KitDataProviderTest inherits QUnit::Test {
         assertEq(True, found_create_subscriber, "create-subscriber action registered");
         assertEq(True, found_list_subscribers, "list-subscribers action registered");
         assertEq(True, found_subscriber_activate, "subscriber-activate event registered");
+
+        # get-broadcast-stats only reads the statistics (GET): it declares that it is read-only, which the
+        # catalogue reports as such; the broadcast actions that write do not (qore#7454)
+        list<hash<DataProviderActionInfo>> typed_actions = DataProviderActionCatalog::getActionsEx("Kit");
+        hash<DataProviderActionInfo> stats = (select typed_actions, $1.action == "get-broadcast-stats")[0];
+        assertEq(NT_BOOLEAN, stats.mutates_state.typeCode());
+        assertFalse(stats.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(stats));
+        foreach string name in ("create-broadcast", "update-broadcast", "delete-broadcast") {
+            hash<DataProviderActionInfo> action = (select typed_actions, $1.action == name)[0];
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     dataTypeTests() {

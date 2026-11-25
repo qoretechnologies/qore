@@ -430,7 +430,7 @@ public class LlmStreamingTest inherits QUnit::Test {
 
     geminiDataProviderStreamTest() {
         server.script((sseReply((geminiChunk("classified", "STOP"),)),));
-        GeminiRestClient::GeminiRestClientIo rest({"url": "http://localhost:" + port, "apikey": "test-only-key"});
+        GeminiRestClient::GeminiRestClientIo rest({"url": "http://127.0.0.1:" + port, "apikey": "test-only-key"});
         GeminiDataProvider::GeminiStreamContentDataProvider stream(rest);
         GeminiStreamObserver observer();
         stream.registerObserver(observer);
@@ -682,7 +682,7 @@ public class LlmStreamingTest inherits QUnit::Test {
             sseReply((geminiChunk("a", NOTHING), geminiChunk("b", "STOP"))),
             errorReply(403, "{\"error\":{\"code\":403,\"message\":\"denied\"}}"),
         ));
-        GeminiRestClientIo rest({"apikey": "gemini-key", "url": "http://localhost:" + port, "protocol": "h1"});
+        GeminiRestClientIo rest({"apikey": "gemini-key", "url": "http://127.0.0.1:" + port, "protocol": "h1"});
         on_exit rest.close();
         GeminiResponseSseStreamIo stream = rest.openStreamingConnection("gemini-test", {
             "contents": ({"role": "user", "parts": ({"text": "hi"},)},),
@@ -810,7 +810,7 @@ public class LlmStreamingTest inherits QUnit::Test {
     private int streamDeadlineCall(string mode, string stage, int call_timeout_ms) {
         # the client's own deadline is longer than any test run, so only a call's deadline can end the call
         LlmBackend llm(<LlmBackendConfig>{"mode": mode,
-            "url": "http://localhost:" + port, "protocol": "h1",
+            "url": "http://127.0.0.1:" + port, "protocol": "h1",
             "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
             "api_key": "fixture-key", "timeout_ms": 3600000, "max_retries": 0});
         bool held_headers = stage == "headers";
@@ -979,7 +979,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         )));
         LlmBackend llm(<LlmBackendConfig>{
             "mode": "azure-openai",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
             "api_key": "azure-key",
             "protocol": "h1",
             "provider_options": {
@@ -1269,7 +1269,7 @@ public class LlmStreamingTest inherits QUnit::Test {
     private LlmBackend geminiBackend(*int timeout_ms, *hash<LlmTelemetryObserver> observer) {
         hash<LlmBackendConfig> config = <LlmBackendConfig>{
             "mode": "gemini",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
             "model": "gemini-test",
             "api_key": "gemini-key",
             "max_retries": 0,
@@ -1426,7 +1426,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         hash<auto> raw = {"created": 1791363040, "choices": ({"message": {"content": "391",
             "reasoning_content": "private reasoning"}, "finish_reason": "stop"},), "usage": {"total_tokens": 120}};
         server.script((reply, errorReply(200, make_json(raw)), errorReply(200, make_json(raw))));
-        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://localhost:" + port,
+        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://127.0.0.1:" + port,
             "protocol": "h1", "api_key": "test-key", "model": "deepseek-flash", "max_retries": 0});
         list<hash<auto>> chunks;
         hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
@@ -1466,7 +1466,7 @@ public class LlmStreamingTest inherits QUnit::Test {
             {"choices": (), "usage": usage},
         )), sync));
         list<hash<LlmTelemetryEvent>> errors;
-        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://localhost:" + port,
+        LlmBackend llm(<LlmBackendConfig>{"mode": "deepseek", "url": "http://127.0.0.1:" + port,
             "protocol": "h1", "api_key": "test-key", "model": "deepseek-flash", "max_retries": 0,
             "telemetry_observer": <LlmTelemetryObserver>{
                 "error_callback": sub (hash<LlmTelemetryEvent> event) { push errors, event; }}});
@@ -1496,7 +1496,7 @@ public class LlmStreamingTest inherits QUnit::Test {
 
     private LlmBackend mistralBackend() {
         return new LlmBackend(<LlmBackendConfig>{"mode": "mistral",
-            "url": "http://localhost:" + port, "protocol": "h1",
+            "url": "http://127.0.0.1:" + port, "protocol": "h1",
             "api_key": "test-key", "model": "mistral-medium-3-5", "max_retries": 0});
     }
 
@@ -1749,7 +1749,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         hash<string, string> models = {"http": "gpt-test", "gemini": "gemini-test", "anthropic": "claude-test"};
         return new LlmBackend(<LlmBackendConfig>{
             "mode": mode,
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
             "model": models{mode},
             "api_key": mode + "-key",
             "max_retries": 3,
@@ -1853,7 +1853,7 @@ public class LlmStreamingTest inherits QUnit::Test {
     cancelRetryBackoffTest() {
         LlmBackend llm(<LlmBackendConfig>{
             "mode": "http",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
             "model": "gpt-test",
             "api_key": "openai-key",
             "max_retries": 3,
@@ -2077,7 +2077,7 @@ public class LlmStreamingTest inherits QUnit::Test {
     private LlmBackend openAiBackend(*int timeout_ms) {
         hash<LlmBackendConfig> config = <LlmBackendConfig>{
             "mode": "http",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
             "model": "gpt-test",
             "api_key": "openai-key",
             "max_retries": 0,
@@ -2092,7 +2092,7 @@ public class LlmStreamingTest inherits QUnit::Test {
     private LlmBackend anthropicBackend(*int timeout_ms, *hash<LlmTelemetryObserver> observer) {
         hash<LlmBackendConfig> config = <LlmBackendConfig>{
             "mode": "anthropic",
-            "url": "http://localhost:" + port,
+            "url": "http://127.0.0.1:" + port,
             "model": "claude-test",
             "api_key": "anthropic-key",
             "max_retries": 0,
@@ -2230,7 +2230,7 @@ class TestGeminiPathProvider inherits GeminiBodyShape::AbstractGeminiModelProvid
     }
 
     RestClientIo createRestClient() {
-        return new RestClientIo({"url": "http://localhost"});
+        return new RestClientIo({"url": "http://127.0.0.1"});
     }
 
     string getRequestPath(*hash<LlmRequestOptions> opts) {

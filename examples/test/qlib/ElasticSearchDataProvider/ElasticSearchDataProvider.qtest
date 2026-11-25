@@ -539,6 +539,19 @@ public class ElasticSearchDataProviderTest inherits QUnit::Test {
             assertTrue(action_map{action_name}.data_dependent_options,
                 sprintf("action %y has data_dependent_options", action_name));
         }
+
+        # the search actions send only _search requests (the scroll context that a scroll search opens expires
+        # by itself): they declare that they are read-only (qore#7454)
+        foreach string action_name in ("search-index", "scroll-search", "aggregate") {
+            hash<DataProviderActionInfo> action = action_map{action_name};
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        # the actions that write documents still change state
+        foreach string action_name in ("create-document", "bulk-operations") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action_map{action_name}), action_name);
+        }
     }
 
     private usageIntern() {
