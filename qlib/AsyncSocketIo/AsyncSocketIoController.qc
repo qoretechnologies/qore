@@ -396,6 +396,40 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         Qore::AsyncIoController::setLogger(logger: logger);
     }
 
+    #! Returns the logger that the methods of LoggerWrapper log through and change the level of
+    /** The process-wide wrapper (see @ref getGlobalAsyncIoController()) has no logger for code that is sandboxed or
+        acts for sandboxed code, which therefore can neither log through the logger that trusted code set nor change
+        its level (issue #7666)
+    */
+    private *LoggerInterface getLogger() {
+        if (SandboxManager::isSharedObject(self) && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
+        return LoggerWrapper::getLogger();
+    }
+
+    #! Returns @ref True if the passed logger is the logger used to log, @ref False if not
+    /** For code that is sandboxed or acts for sandboxed code, the process-wide wrapper has no logger (issue #7666);
+        such code can only compare a logger that it already holds, through the base class method, but it can neither
+        get, use nor change the logger
+    */
+    bool isLogger(LoggerInterface logger) {
+        if (SandboxManager::isSharedObject(self) && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            return False;
+        }
+        return LoggerWrapper::isLogger(logger);
+    }
+
+    #! A copy of the process-wide wrapper that code that is sandboxed or acts for sandboxed code makes has no logger
+    /** The copy is not shared, so it would otherwise give its caller the logger that trusted code set on the
+        process-wide wrapper (issue #7666)
+    */
+    copy(AsyncSocketIoController old) {
+        if (SandboxManager::isSharedObject(old) && !SandboxManager::isProcessWideRegistrationAllowed()) {
+            LoggerWrapper::setLogger();
+        }
+    }
+
     #! Sets the maximum number of callback and task worker threads
     /** Controls concurrency for callbacks dispatched off the I/O thread and for
         @ref submitTask() work.  The default value of \c 0 auto-sizes to
@@ -591,12 +625,24 @@ public synchronized AsyncSocketIoController sub getGlobalAsyncIoController() {
 #! (issue #6996)
 /** An object that library code creates while it serves a restricted caller runs its code for that caller (its
     provenance): the process-wide controller is shared by every caller, so it is created when the module is
-    initialized, which is not a call by any caller; the constructor used changes no process-wide setting
+    initialized, which is not a call by any caller; the constructor used changes no process-wide setting.  It is
+    marked as shared by every Program (see @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"),
+    so that code that is sandboxed or acts for sandboxed code cannot change its state (its logger) if it obtains it
+    (issue #7666)
 */
 class GlobalAsyncIoControllerHolder {
     public {
         #! the process-wide controller
-        static AsyncSocketIoController controller = new AsyncSocketIoController();
+        static AsyncSocketIoController controller = GlobalAsyncIoControllerHolder::create();
+    }
+
+    #! Creates the process-wide controller and marks it as shared when trusted code creates it
+    private:internal static AsyncSocketIoController create() {
+        AsyncSocketIoController ctrl();
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(ctrl);
+        }
+        return ctrl;
     }
 }
 
