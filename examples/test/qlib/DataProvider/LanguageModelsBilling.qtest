@@ -1,0 +1,41 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class LanguageModelsBillingTest
+
+class LanguageModelsBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("LanguageModels provider billing") {
+        addVendor("Anthropic", "Anthropic", "anthropic.com", "metered",
+            "https://platform.claude.com/docs/en/about-claude/pricing", {
+                "count-tokens": "included", "get-batch": "included", "get-model": "included",
+                "create-message": "metered",
+            });
+        addVendor("OpenAi", "OpenAI", "openai.com", "metered",
+            "https://developers.openai.com/api/docs/pricing", {
+                "simple-chat": "token", "list-response-input-items": "included",
+                "create-image": "metered",
+            });
+        addVendor("Gemini", "Gemini", "googleapis.com", "metered",
+            "https://ai.google.dev/gemini-api/docs/pricing", {
+                "simple-chat": "token", "embed-content": "token", "batch-embed": "token",
+                "create-cached-content": "metered",
+            });
+        addVendor("Grok", "Grok", "x.ai", "metered",
+            "https://docs.x.ai/developers/models", {
+                "simple-chat": "token", "get-response": "included",
+                "create-response-direct": "metered",
+            });
+        addVendor("Perplexity", "Perplexity", "perplexity.ai", "metered",
+            "https://docs.perplexity.ai/getting-started/pricing", {
+                "search": "request", "simple-chat": "metered",
+            });
+        set_return_value(main());
+    }
+}

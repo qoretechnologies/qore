@@ -54,6 +54,15 @@ module BitlyDataProvider {
                 "This integration supports creating, managing, and tracking bitlinks, "
                 "campaigns, QR codes, and engagement events.",
             "scheme": "bitlyrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "bitly.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://bitly.com/pages/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": BitlyLogo,
             "logo_file_name": "bitly-logo.svg",
             "logo_mime_type": MimeTypeSvg,

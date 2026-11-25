@@ -494,6 +494,13 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
     actionCatalogTest() {
         hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(App);
         assertEq("AmazonS3", app.name);
+        # The connected storage service can be Amazon S3, MinIO or Ceph. URL signing uses local credentials.
+        assertEq(NOTHING, app.processing);
+        assertEq(NOTHING, DataProviderActionCatalog::getActionProcessing(App, "get-object"));
+        assertEq(<DataProviderProcessingInfo>{"locality": "local"},
+            DataProviderActionCatalog::getActionProcessing(App, "presigned-url"));
+        assertEq(<DataProviderBillingInfo>{"model": "included"},
+            DataProviderActionCatalog::getActionBilling(App, "presigned-url"));
         assertEq("en", app.presentation_source_locale,
             "the app declares the producer language for presentation catalogs");
         assertEq("s3", app.scheme);

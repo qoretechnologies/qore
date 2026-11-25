@@ -71,6 +71,15 @@ module AzureOpenAiDataProvider {
                 "**Conversations:** Use a Foundry project endpoint and Microsoft Entra authentication.\n\n"
                 "[Azure OpenAI documentation](https://learn.microsoft.com/en-us/azure/foundry/openai/)",
             "scheme": "azure-openai",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "azure.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://azure.microsoft.com/en-us/pricing/details/azure-openai/",
+                "effective_date": 2026-11-25,
+            },
             "logo": AzureLogo,
             "logo_file_name": "azure-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -80,12 +89,8 @@ module AzureOpenAiDataProvider {
         # the actions are built from the vendored API description the first time that the catalog is asked for
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(AzureOpenAiDataProvider::AppName, sub () {
-            foreach RestSchemaActionSet actions in (AzureOpenAiSchema::getActionSets()) {
-                foreach hash<DataProviderActionInfo> action in (
-                        actions.getActionInfoList(AzureOpenAiDataProvider::AppName)) {
-                    DataProviderActionCatalog::registerAction(action);
-                }
-            }
+            map DataProviderActionCatalog::registerAction($1),
+                AzureOpenAiSchema::getActionInfoList(AzureOpenAiDataProvider::AppName);
         });
     };
 }

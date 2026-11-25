@@ -59,6 +59,15 @@ module OneDriveDataProvider {
                 "- **Change tracking**: watch for file changes using delta queries\n"
                 "- **Large file uploads**: create resumable upload sessions for files larger than 4 MB\n\n"
                 "Microsoft and OneDrive are trademarks of the Microsoft group of companies",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "microsoft.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://learn.microsoft.com/en-us/graph/metered-api-list",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "onedrive",
             "logo": OneDriveLogo,
             "logo_file_name": "onedrive-logo.svg",
@@ -91,6 +100,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/get-drive-info",
             "action": "get-drive-info",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Drive Info",
             "short_desc": "Get drive metadata and quota",
             "desc": "Retrieve the current user's OneDrive metadata including storage quota, drive type, "
@@ -108,6 +118,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/items",
             "action": "search-items",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Search Items",
             "short_desc": "List or search files and folders",
             "desc": "List items in a folder or search across the drive. Supports pagination and sorting",
@@ -152,6 +163,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/get-item",
             "action": "get-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Item",
             "short_desc": "Get file or folder metadata",
             "desc": "Retrieve metadata for a specific file or folder by ID or path",
@@ -175,6 +187,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/create-folder",
             "action": "create-folder",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Folder",
             "short_desc": "Create a new folder",
             "desc": "Create a new folder in OneDrive, optionally within a specific parent folder",
@@ -197,6 +210,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/upload-file",
             "action": "upload-file",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Upload File",
             "short_desc": "Upload a file (up to 4 MB)",
             "desc": "Upload a file to OneDrive using simple upload. For files larger than 4 MB, use the "
@@ -220,6 +234,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/create-upload-session",
             "action": "create-upload-session",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Upload Session",
             "short_desc": "Create a resumable upload session",
             "desc": "Create a resumable upload session for uploading large files (>4 MB) in chunks. "
@@ -243,6 +258,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/download-file",
             "action": "download-file",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Download File",
             "short_desc": "Download a file",
             "desc": "Get the download URL and metadata for a file. Returns a pre-authenticated download "
@@ -263,6 +279,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/delete-item",
             "action": "delete-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Delete Item",
             "short_desc": "Delete a file or folder",
             "desc": "Delete a file or folder from OneDrive. The item is moved to the recycle bin",
@@ -281,6 +298,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/update-item",
             "action": "update-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Update Item",
             "short_desc": "Rename, move, or update a file or folder",
             "desc": "Update the metadata of a file or folder in OneDrive. Can be used to rename an item, "
@@ -304,6 +322,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/copy-item",
             "action": "copy-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Copy Item",
             "short_desc": "Copy a file or folder",
             "desc": "Asynchronously copy a file or folder to a new location, optionally with a new name. "
@@ -330,6 +349,7 @@ module OneDriveDataProvider {
             "app": OneDriveDataProvider::AppName,
             "path": "/create-sharing-link",
             "action": "create-sharing-link",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Sharing Link",
             "short_desc": "Create a sharing link for an item",
             "desc": "Create a sharing link (view, edit, or embed) for a file or folder in OneDrive",

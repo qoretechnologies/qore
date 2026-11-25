@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FinalNewVariantWarningTest
+
+#! the language-traps warning for a new variant under the name of a final method of a parent class (issue #7111)
+/** A child class may add a variant with another signature under the name of a final method, as long as no call of the
+    final variant can select it; a call that the final variant cannot take then reaches the new variant.  The strict
+    language-traps warning says so; overriding a variant that a parent class already has under that name (the request
+    handler pattern of SoapHandler) is not reported.
+*/
+class FinalNewVariantWarningTest inherits QUnit::Test {
+    public {
+        #! a parent class with a final variant and a non-final variant under the same name
+        const Handler = "
+class AbstractHandler {
+    abstract string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body);
+}
+class ProtocolHandler inherits AbstractHandler {
+    final string handleRequest(hash<auto> cx, hash<auto> hdr, *data body) { return \"final\"; }
+    string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body) {
+        return handleRequest(cx, hdr, body);
+    }
+    static final string make(int i) { return \"final\"; }
+}
+";
+    }
+
+    constructor() : QUnit::Test("final new variant warning", "1.0", \ARGV) {
+        addTestCase("a new variant under a final name warns", \testNewVariant());
+        addTestCase("overriding a variant that a parent class has does not warn", \testOverride());
+        addTestCase("implementing an abstract variant of a parent class does not warn", \testAbstractImplementation());
+        addTestCase("the warning is off unless language-traps is enabled", \testOff());
+        addTestCase("a new static variant under a final static name warns", \testStatic());
+        addTestCase("a private:internal final method is not inherited", \testInternal());
+        addTestCase("grandchild classes", \testGrandchild());
+        addTestCase("the code with the warning is accepted and dispatches as before", \testBehavior());
+        set_return_value(main());
+    }
+
+    private list<hash<ParseDiagnosticInfo>> parseWarnings(string source, int warnings = WARN_LANGUAGE_TRAPS) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        p.parse(Handler + source, "<final-new-variant>", warnings);
+        return (select p.getParseDiagnostics(), $1.id == "NEW-VARIANT-UNDER-FINAL-NAME");
+    }
+
+    testNewVariant() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("class App inherits ProtocolHandler {
+    string handleRequest(int code) { return \"app\"; }
+}");
+        assertEq(1, diags.size());
+        assertEq("warning", diags[0].severity);
+        assertEq("LANGUAGE-TRAP", diags[0].code);
+        assertEq(WARN_LANGUAGE_TRAPS, diags[0].warningCode);
+        assertEq("App", diags[0].facts."class");
+        assertEq("handleRequest", diags[0].facts.method);
+        assertEq("ProtocolHandler::handleRequest(hash<auto> cx, hash<auto> hdr, *data body)", diags[0].facts.final_method);
+        assertRegex("child class method App::handleRequest\\(int code\\) adds a variant under the name of parent class "
+            "method final ProtocolHandler::handleRequest\\(hash<auto> cx, hash<auto> hdr, \\*data body\\)",
+            diags[0].message);
+        assertRegex("a call that the final method cannot take selects it", diags[0].message);
+    }
+
+    testOverride() {
+        assertEq((), parseWarnings("class App inherits ProtocolHandler {
+    string handleRequest(object listener, object s, hash<auto> cx, hash<auto> hdr, *data body) { return \"app\"; }
+}"));
+    }
+
+    testAbstractImplementation() {
+        # the final variant is declared in a class that also implements the abstract variant of its parent
+        assertEq((), parseWarnings("class Base {
+    abstract string go(string a, string b);
+}
+class Mid inherits Base {
+    final string go(int i) { return \"final\"; }
+}
+class Leaf inherits Mid {
+    string go(string a, string b) { return \"leaf\"; }
+}"));
+    }
+
+    testOff() {
+        assertEq((), parseWarnings("class App inherits ProtocolHandler {
+    string handleRequest(int code) { return \"app\"; }
+}", WARN_DEFAULT));
+        assertEq((), parseWarnings("class App inherits ProtocolHandler {
+    string handleRequest(int code) { return \"app\"; }
+}", WARN_ALL));
+    }
+
+    testStatic() {
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("class App inherits ProtocolHandler {
+    static string make(string s) { return \"app\"; }
+}");
+        assertEq(1, diags.size());
+        assertRegex("child class method static App::make\\(string s\\) adds a variant under the name of parent class "
+            "method final static ProtocolHandler::make\\(int i\\)", diags[0].message);
+    }
+
+    testInternal() {
+        assertEq((), parseWarnings("class I {
+    private:internal final string q() { return \"i\"; }
+}
+class J inherits I {
+    string q(*int x) { return \"j\"; }
+}"));
+    }
+
+    testGrandchild() {
+        # a new variant in a grandchild warns, naming the final method's class
+        list<hash<ParseDiagnosticInfo>> diags = parseWarnings("class App inherits ProtocolHandler {
+}
+class App2 inherits App {
+    string handleRequest(int code) { return \"app2\"; }
+}");
+        assertEq(1, diags.size());
+        assertEq("App2", diags[0].facts."class");
+        assertRegex("final ProtocolHandler::handleRequest", diags[0].message);
+        # overriding the new variant of the child class: the child class warned already, the grandchild does not
+        diags = parseWarnings("class App inherits ProtocolHandler {
+    string handleRequest(int code) { return \"app\"; }
+}
+class App2 inherits App {
+    string handleRequest(int code) { return \"app2\"; }
+}");
+        assertEq(1, diags.size());
+        assertEq("App", diags[0].facts."class");
+    }
+
+    testBehavior() {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        p.parse(Handler + "class App inherits ProtocolHandler {
+    string handleRequest(int code) { return \"app\"; }
+}
+list<string> sub test() {
+    ProtocolHandler h = new App();
+    return (h.handleRequest({}, {}), cast<App>(h).handleRequest(1), h.handleRequest(h, h, {}, {}));
+}", "<final-new-variant>", WARN_LANGUAGE_TRAPS);
+        assertEq(("final", "app", "final"), p.callFunction("test"));
+    }
+}
