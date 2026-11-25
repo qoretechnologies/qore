@@ -25143,6 +25143,25 @@ static QoreValue f_dbg_h2_client_hold_stream_registrations(const QoreListNode* p
     return QoreValue();
 }
 
+//! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, or lets them go on
+/** Tests use this to release the values of an owner (SandboxManager::releaseProgramCacheValues()) while a reader holds
+    a value that it found and has not used yet, deterministically.  A test must stop holding them (also when it
+    fails).
+ */
+static QoreValue f_dbg_program_cache_hold_reads(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_program_cache_hold_reads(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until the given number of reads of the per-Program cache are held (see dbg_program_cache_hold_reads())
+/** Returns True when they are, or False if they are not after the given number of milliseconds, a bound that only
+    keeps a failing test from hanging
+ */
+static QoreValue f_dbg_program_cache_wait_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_program_cache_wait_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        get_param_value(params, 1).getAsBigInt());
+}
+
 //! Debug-only: holds the references that the async I/O threads release on callback workers, or releases them
 /** Tests use this to make an object outlive the delivery of an operation's result deterministically: while
     @a hold is true, the references that an I/O thread releases off the I/O thread (the poll operation of a
@@ -36684,6 +36703,14 @@ static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, Run
     qore_sandbox_dbg_fail_next_budgets(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
+//! Makes the next count resolutions of the sandbox that governs the thread fail as if no memory could be allocated
+/** Tests that code that marks what trusted code creates as shared fails closed (qore#6843)
+*/
+static QoreValue f_dbg_sandbox_fail_next_resolutions(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_sandbox_resolutions(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
 #endif
 
 #ifdef DEBUG
@@ -37263,6 +37290,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_sandbox_fail_next_resolutions", f_dbg_sandbox_fail_next_resolutions,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_fail_next_system_thread_starts", f_dbg_fail_next_system_thread_starts,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
@@ -37289,6 +37319,13 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_program_cache_hold_reads", f_dbg_program_cache_hold_reads,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_program_cache_wait_held", f_dbg_program_cache_wait_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, bigIntTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");

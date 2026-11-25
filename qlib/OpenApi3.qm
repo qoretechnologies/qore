@@ -342,6 +342,24 @@ or a date, and a \c date-time string property of an object alternative a date
 
 #! main namespace for all public %OpenApi3 declarations
 public namespace OpenApi3 {
+#! Runs a closure that updates a cache of an object of the module, in an update scope if the object is shared
+/** A schema or schema object that trusted code created is shared by every Program of the process, so it can only be
+    changed by sandboxed code, or code that acts for it, in an update scope (qore#6843; see
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()").  Each caller computes the
+    new state of the cache from the object itself, never from data that its caller gives.
+
+    @param obj the object whose cache is updated
+    @param update a closure created by a method of a class of \a obj in this module
+
+    @return the value that \a update returns
+*/
+auto sub update_shared_cache(object obj, code update) {
+    if (SandboxManager::isSharedObject(obj)) {
+        return SandboxManager::updateSharedObject(obj, update);
+    }
+    return update();
+}
+
 #! Schema objects whose composition type the current thread is building
 /** "Any JSON value" is a string, a number, a boolean, an array of JSON values or an object of them, and
     a vendor that accepts arbitrary JSON declares exactly that - Exa's \c JsonValue is a \c oneOf whose
@@ -773,6 +791,8 @@ public class ParameterGroup inherits Qore::Serializable {
         not declare is reported as unknown rather than folded into one of them.
     */
     addParameter(string key, ParameterObject p) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "add a parameter");
         if (p.inLoc == "query" && !p.content && p.schema && p.schema.type == "object") {
             query_objs{key} = True;
             query_obj = query_objs.size() == 1 ? key : NOTHING;
@@ -817,6 +837,12 @@ public hashdecl ComponentInfo {
 
 #! This is the root document object for the API specification. It combines what previously was the Resource Listing and API Declaration (version 1.2 and earlier) together into one document.
 public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
+    private {
+        #! The number of types built from a sandboxed caller's data that a shared document keeps for a Program
+        /** see getType() */
+        const CallerTypeCacheSize = 256;
+    }
+
     public {
         #! <a href="https://swagger.io/">OpenApi3</a> Specification version being used.
         /**
@@ -1934,8 +1960,19 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     }
 
     #! Returns the data type for the given type specification
+    /** A document that is shared by every Program (see
+        @ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()") writes its type cache only in
+        its own type builds (see
+        @ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"):
+        a type asked for outside a type build of the document is taken from its type cache if it is there, and
+        otherwise built with no type build and no cache write, and kept in the per-Program cache of the calling code
+        (qore#6843)
+    */
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
             bool required = True, *bool strict) {
+        if (!isTypeBuildActive() && SandboxManager::isSharedObject(self)) {
+            return getCallerType(path, typestr, format, arrayItems, required, strict);
+        }
         if (!isTypeBuildActive()) {
             return runTypeBuild(AbstractDataProviderType sub () {
                 return getType(path, typestr, format, arrayItems, required, strict);
@@ -1947,6 +1984,32 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         }
         AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
         setCachedType(id, required ? "Y" : "N", rv);
+        return rv;
+    }
+
+    #! Returns a type asked for outside a type build of a shared document; see getType()
+    private AbstractDataProviderType getCallerType(string path, string typestr, *string format,
+            *SchemaObject arrayItems, bool required, *bool strict) {
+        # the unique hash of a schema object that the document did not build is the caller's
+        bool own_items = !arrayItems || SandboxManager::isSharedObject(arrayItems);
+        string id;
+        if (own_items) {
+            if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id, strict)) {
+                return rv;
+            }
+        } else {
+            id = sprintf("%s-%s-%s-%s%s", path, typestr, format ?? "x", arrayItems.uniqueHash(),
+                strict ? "-strict" : "");
+        }
+        string key = "type-" + (required ? "Y" : "N") + "-" + id;
+        if (*AbstractDataProviderType rv = SandboxManager::getProgramCacheValue(self, key)) {
+            return rv;
+        }
+        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
+        # a value of a per-Program cache can be given to other code of the Program, also to trusted code that
+        # sandboxed code calls, so it cannot be changed (qore#6843)
+        rv.freeze();
+        SandboxManager::setProgramCacheValue(self, key, rv, CallerTypeCacheSize);
         return rv;
     }
 
@@ -1964,19 +2027,45 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     #! Caches a type, recording the write in the type build in progress
     private setCachedType(string id, string key, AbstractDataProviderType t) {
         if (isTypeBuildActive()) {
-            *AbstractDataProviderType prev = typemap{id}{key};
-            recordTypeBuildWrite(sub () {
-                if (prev) {
-                    typemap{id}{key} = prev;
-                } else {
-                    remove typemap{id}{key};
-                    if (!typemap{id}) {
-                        remove typemap{id};
-                    }
-                }
+            bool had_outer = exists typemap && typemap.hasKey(id);
+            recordTypeBuildUndo({
+                "restore": getTypeUndoRestore(),
+                "id": id,
+                "key": key,
+                "prev": typemap{id}{key},
+                "had_key": had_outer && typemap{id}.typeCode() == NT_HASH && typemap{id}.hasKey(key),
+                "had_outer": had_outer,
+                "had_cache": exists typemap,
             });
         }
-        typemap{id}{key} = t;
+        # the type built from the document, which is shared as the document is (qore#6843)
+        recordTypeBuildCache(t);
+        update_shared_cache(self, sub () { typemap{id}{key} = t; });
+    }
+
+    #! Returns the code that restores a record of setCachedType(); it binds no variable of a caller
+    private:internal code getTypeUndoRestore() {
+        return sub (hash<auto> record) { undoCachedType(record); };
+    }
+
+    #! Restores an entry of the type cache in the failure path of the type build that made the record (qore#6843)
+    private:internal undoCachedType(hash<auto> record) {
+        if (!isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () {
+            if (record.had_key) {
+                typemap{record.id}{record.key} = record.prev;
+            } else {
+                remove typemap{record.id}{record.key};
+                if (!record.had_outer) {
+                    remove typemap{record.id};
+                }
+                if (!record.had_cache) {
+                    remove typemap;
+                }
+            }
+        });
     }
 
     #! Returns the data type corresponding to the values
@@ -2059,6 +2148,16 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
             *object rest) {
         return schema.getDataType(required, rest);
+    }
+
+    #! Restores the document; a shared document restores no type in its type cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove typemap;
+        }
     }
 
     #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
@@ -4898,6 +4997,8 @@ public class OpenApi3HashDataType inherits HashDataType {
         @since OpenApi3 1.0
     */
     addResponseField(AbstractDataField field, *string after) {
+        # a shared type cannot be changed by sandboxed code (qore#6843)
+        checkChange("fields");
         response_fields += {"field": field, "after": after};
     }
 
@@ -5338,7 +5439,10 @@ public class OpenApi3TupleDataType inherits ListDataType {
     }
     #! Marks an independent snapshot for response validation
     /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
-    setResponseDirection() { for_request = False; }
+    setResponseDirection() {
+        checkChange("direction");
+        for_request = False;
+    }
     #! Validates array positions without coercing an image into a timestamp or vice versa
     /** @param value positional array
         @return validated array
@@ -5437,7 +5541,10 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 
     #! Marks an independent type snapshot for response validation
     /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
-    setResponseDirection() { for_request = False; }
+    setResponseDirection() {
+        checkChange("direction");
+        for_request = False;
+    }
 
     #! Returns the type's short description
     string getShortDescription() {
@@ -5851,6 +5958,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     *RestSchemaValidator::AbstractRestSchemaValidator getTypeBuildSchema() {
         # the document is held through a weak reference, which does not exist once the document is deleted
         return exists openapi3 ? openapi3 : NOTHING;
+    }
+
+    #! Restores the object; a shared object restores no alternative type in its cache (qore#6843)
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::deserializeMembers() "AbstractRestSchemaObject::deserializeMembers()"
+    */
+    private:internal deserializeMembers(*hash<auto> members) {
+        self += members;
+        if (SandboxManager::createsSharedObjects()) {
+            remove alternativeDataType;
+        }
+    }
+
+    #! Returns @ref True once the document of this schema object has been destroyed
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::isTypeBuildSchemaDestroyed() "AbstractRestSchemaObject::isTypeBuildSchemaDestroyed()"
+    */
+    bool isTypeBuildSchemaDestroyed() {
+        return !exists openapi3;
     }
 
     #! private constructor; use newSchemaObject() instead
@@ -6457,38 +6581,70 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @return the data type of the schema as a mandatory union alternative
     */
     AbstractDataProviderType getAlternativeDataType(*object rest) {
+        # the defaults that a REST client gives never reach the caches of a shared schema, and its code never runs in
+        # a type build of one (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return isPlainAlternative() ? getAlternativeDataType() : getDataType(True, rest);
+        }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
         if (schema && !schema.isTypeBuildActive()) {
             return schema.runTypeBuild(AbstractDataProviderType sub () {
                 return getAlternativeDataType(rest);
             });
         }
-        # the conditions under which getDataType() returns a plain scalar or array type
-        bool plain = (prefix_items ? False : additional_items)
-            && !(discriminatorMapping && !oneOf && !anyOf)
-            && !isAllOfWrapper()
-            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
-            && type != "object" && !properties && !notSchema;
-        if (!plain) {
+        # an orphaned shared object reads its cache, and writes none (qore#6843)
+        if (!schema && isOrphanedSharedObject() && alternativeDataType) {
+            return alternativeDataType;
+        }
+        if (!isPlainAlternative()) {
             return getDataType(True, rest);
         }
         if (!alternativeDataType) {
+            checkCacheWrite();
             AbstractDataProviderType t = getLiveDocument().getType("/", type, format, items, !nullable, True)
                 .copyWithConstraints(getConstraintInfo());
             bool opaque;
             if (schema) {
                 opaque = schema.isTypeBuildActive() && holdCacheEntryOpaquely(schema);
-                schema.recordTypeBuildWrite(sub () {
-                    remove alternativeDataType;
+                schema.recordTypeBuildCache(t);
+                schema.recordTypeBuildUndo({
+                    "restore": getAlternativeUndoRestore(),
+                    "prev": alternativeDataType,
                 });
             }
-            if (opaque) {
-                alternativeDataType @= t;
-            } else {
-                alternativeDataType = t;
-            }
+            # the type built from this schema object
+            update_shared_cache(self, sub () {
+                if (opaque) {
+                    alternativeDataType @= t;
+                } else {
+                    alternativeDataType = t;
+                }
+            });
         }
         return alternativeDataType;
+    }
+
+    #! Returns the code that restores a record of getAlternativeDataType(); it binds no variable of a caller
+    private:internal code getAlternativeUndoRestore() {
+        return sub (hash<auto> record) { undoAlternativeDataType(record); };
+    }
+
+    #! Restores the alternative type in the failure path of the type build that made the record (qore#6843)
+    private:internal undoAlternativeDataType(hash<auto> record) {
+        *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
+        if (!schema || !schema.isUndoingTypeBuild(record.build)) {
+            return;
+        }
+        update_shared_cache(self, sub () { alternativeDataType = record.prev; });
+    }
+
+    #! Returns @ref True if getDataType() returns a plain scalar or array type, which getAlternativeDataType() builds itself
+    private bool isPlainAlternative() {
+        return (prefix_items ? False : additional_items)
+            && !(discriminatorMapping && !oneOf && !anyOf)
+            && !isAllOfWrapper()
+            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
+            && type != "object" && !properties && !notSchema;
     }
 
     #! Releases the types and fields that this object caches
@@ -6500,6 +6656,15 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     releaseTypeCaches() {
         RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCaches();
         remove alternativeDataType;
+    }
+
+    #! Releases the types and fields that this object caches, for its schema
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCachesFor() "AbstractRestSchemaObject::releaseTypeCachesFor()"
+    */
+    releaseTypeCachesFor(RestSchemaValidator::AbstractRestSchemaValidator schema) {
+        RestSchemaValidator::AbstractRestSchemaObject::releaseTypeCachesFor(schema);
+        # the shared object was checked above
+        update_shared_cache(self, sub () { remove alternativeDataType; });
     }
 
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
@@ -6525,13 +6690,38 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
     }
 
+    #! Returns the variant of this schema's type that a type build cached, or @ref nothing
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getCachedDataType() "AbstractRestSchemaObject::getCachedDataType()"
+    */
+    *AbstractDataProviderType getCachedDataType(bool required) {
+        return RestSchemaValidator::AbstractRestSchemaObject::getCachedDataType(required && !nullable);
+    }
+
     #! Returns the data type for the schema
+    /** @see @ref RestSchemaValidator::AbstractRestSchemaObject::getDataType() "AbstractRestSchemaObject::getDataType()"
+    */
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
+        # the defaults that a REST client gives never reach the caches of a shared schema (qore#6843)
+        if (rest && SandboxManager::isSharedObject(self)) {
+            return getRestDefaultsType(required, rest);
+        }
         *RestSchemaValidator::AbstractRestSchemaValidator schema = getTypeBuildSchema();
-        if (schema && !schema.isTypeBuildActive()) {
-            return schema.runTypeBuild(AbstractDataProviderType sub () {
-                return getDataType(required, rest);
-            });
+        if (schema) {
+            # a cached type is read without a build; a build runs only if it is not cached
+            if (*AbstractDataProviderType t = schema.getBuiltDataType(self, required)) {
+                return t;
+            }
+            if (!schema.isTypeBuildActive()) {
+                return schema.runTypeBuild(AbstractDataProviderType sub () {
+                    return getDataType(required, rest);
+                });
+            }
+        } else if (isOrphanedSharedObject()) {
+            # its caches are read, never written (qore#6843)
+            if (*AbstractDataProviderType t = getCachedDataType(required)) {
+                return t;
+            }
+            checkCacheWrite();
         }
         required = required && !nullable;
         if (*AbstractDataProviderType t = getReplacedDataType(required)) {
@@ -7485,6 +7675,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         @since OpenApi3 1.0
     */
     setEnumDisplayNames(hash<string, string> display_names) {
+        # a shared schema cannot be changed by sandboxed code (qore#6843)
+        SandboxManager::checkSharedObjectChange(self, "set the display names of the values");
         if (!enumValues) {
             throw "SCHEMA-ENUM-ERROR", sprintf("schema %y has no enumeration to give display names to", name);
         }

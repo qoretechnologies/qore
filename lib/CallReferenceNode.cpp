@@ -796,6 +796,10 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                 // class access is checked internally
                 m = qore_class_private::get(*const_cast<QoreClass*>(n_qc))->parseFindAnyMethod(method.c_str(),
                     class_ctx);
+                // as for a call of the method (qore#6843)
+                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, class_ctx, false) && !err) {
+                    err = -1;
+                }
                 if (m) {
                     if (!m->isStatic() && !strcmp(m->getName(), "copy")) {
                         parseException(*loc, "PARSE-ERROR", "cannot take a call reference to copy method %s::%s()",
@@ -895,6 +899,10 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
     if (!meth) {
         return -1;
     }
+    // as for a call of the method (qore#6843)
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, true)) {
+        return -1;
+    }
     return check_call_reference_domain(loc, parse_context, meth);
 }
 
@@ -933,6 +941,10 @@ int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseC
     delete nscope;
     nscope = nullptr;
     if (!method) {
+        return -1;
+    }
+    // as for a call of the method (qore#6843)
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, true)) {
         return -1;
     }
     return check_call_reference_domain(loc, parse_context, method);
@@ -1694,6 +1706,10 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         // parseResolveBarewordIntern()) and avoids dereferencing a null class context
         if (QoreClass* qc = parse_get_class()) {
             const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
+            // as for a call of the method (qore#6843)
+            if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc), true)) {
+                return -1;
+            }
             if (m) {
                 if (!explicit_parse_type_args.empty()) {
                     parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a "
@@ -2485,6 +2501,14 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     if (qore_program_private::parseAddDomain(parse_context.pgm, qc->getDomain())) {
         parse_error(*loc, "class '%s' implements capabilities that are not allowed by current parse options",
             qc->getName());
+        return -1;
+    }
+
+    // as for a call of the method (qore#6843): a reference to a normal method is a reference to the method of the
+    // object of the code
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, qm, parse_context.oflag
+            ? qore_class_private::get(*QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
+            : parse_get_class_priv(), !qm->isStatic())) {
         return -1;
     }
 

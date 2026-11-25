@@ -334,6 +334,12 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                 class_ctx = nullptr;
             }
             meth = qore_class_private::get(*const_cast<QoreClass*>(nqc))->parseFindAnyMethod(mname, class_ctx);
+            // a class that sandboxed code declared cannot call the private methods of a class that trusted code
+            // declared (qore#6843)
+            if (meth && strcmp(mname, "copy")
+                    && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, class_ctx, false)) {
+                return -1;
+            }
             if (meth && strcmp(mname, "copy") && meth->isStatic()) {
                 m->parseSetClassAndMethod(nqc, meth);
                 parse_context.typeInfo = nullptr;
@@ -537,6 +543,12 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         }
     }
     assert(meth);
+
+    // a class that sandboxed code declared cannot call the private methods of a class that trusted code declared, on
+    // any object (qore#6843)
+    if (!m->isPseudo() && qore_class_private::parseCheckSandboxMethodAccess(loc, meth, parse_get_class_priv(), false)) {
+        return -1;
+    }
 
     // a method that has concrete variants beside abstract variants that the class of the method does not implement
     // (issue #6161)

@@ -663,10 +663,13 @@ class TenantEchoHandler inherits AbstractDataStreamRequestHandler {
         list<auto> records = ();
         int sent = 0;
         string probe;
+        *string version;
     }
 
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
         probe = probe_socket(cx);
+        # a class declared by sandboxed code cannot use the private members of the module's class
+        version = cx.hdr.http_version;
     }
 
     private nothing recvDataImpl(auto data) {
@@ -678,7 +681,7 @@ class TenantEchoHandler inherits AbstractDataStreamRequestHandler {
             return records[sent++];
         }
         if (sent++ == records.size()) {
-            return {\"probe\": probe, \"version\": cx.hdr.http_version};
+            return {\"probe\": probe, \"version\": version};
         }
     }
 }

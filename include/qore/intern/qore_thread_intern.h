@@ -635,6 +635,14 @@ DLLLOCAL bool qore_scope_creator_is_sandboxed();
 */
 DLLLOCAL const char* thread_capability_call_refusal(const char* call_name);
 
+//! Returns true if the code that calls this builtin is sandboxed: the Program that its frame records, or the Program
+//! running on the thread; fails closed: true if the builtin's frame is not the innermost one
+DLLLOCAL bool qore_builtin_caller_is_sandboxed();
+
+//! Returns the Program of the code that calls this builtin, which its frame records, or nullptr if the builtin's frame
+//! is not the innermost one
+DLLLOCAL QoreProgram* qore_builtin_caller_program();
+
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests
@@ -2213,6 +2221,10 @@ private:
 */
 DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
 
+//! Releases the values of the per-Program cache of library classes of the Program (see
+//! SandboxManager::setProgramCacheValue()); called when the Program is deleted, while its code can still run
+DLLLOCAL void qore_program_cache_release_values(QoreProgram* pgm, ExceptionSink* xsink);
+
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
@@ -2350,6 +2362,58 @@ DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size
     that the host chose (its loggers, its own code called from such an object) is written
 */
 DLLLOCAL bool qore_caller_restricts_terminal_io();
+
+//! returns 1 if the calling code is sandboxed (see qore_caller_is_sandboxed()), 0 if not, and -1 if the governing
+//! sandbox cannot be resolved for lack of memory
+/** For callers that must fail closed in the other direction than qore_caller_is_sandboxed(): code that marks what
+    the calling code creates as shared (which sandboxed code cannot change) treats an unknown caller as trusted, so
+    that the object is shared (see qore_caller_creates_shared_objects())
+*/
+DLLLOCAL int qore_caller_sandbox_state();
+
+//! returns true if what the calling code creates may be shared by every Program: the code is not sandboxed, or the
+//! governing sandbox cannot be resolved (fails closed: such an object is treated as shared, which sandboxed code
+//! cannot change)
+DLLLOCAL inline bool qore_caller_creates_shared_objects() {
+    return qore_caller_sandbox_state() != 1;
+}
+
+class QoreCallerSandboxHelper;
+
+//! The point of a thread's Program context stack where code opened an update scope of a shared object
+/** see qore_thread_program_marker() and qore_thread_sandboxed_entered_since()
+*/
+struct QoreThreadProgramMarker {
+    //! the innermost Program context of the thread when the marker was taken
+    const ProgramThreadCountContextHelper* ctx = nullptr;
+    //! the sandboxed caller that a parse or module load hid when the marker was taken
+    const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
+};
+
+//! Returns the current point of the calling thread's Program context stack
+DLLLOCAL QoreThreadProgramMarker qore_thread_program_marker();
+
+//! Returns true if the calling thread has entered the code of a sandboxed Program since \a marker was taken and not
+//! left it yet: the thread runs code that sandboxed code supplied (a callback, a method of a class of a sandboxed
+//! Program, a destructor), or code that such code called
+/** Fails closed: true if \a marker is not on the thread's Program context stack
+*/
+DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker);
+
+//! Returns the Program of the calling code whose per-Program cache a library class uses (see
+//! SandboxManager::setProgramCacheValue())
+/** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
+    outermost Program of the stack (the Program whose code made the call).  Fails closed: nullptr if the calling code
+    is sandboxed but no sandboxed Program is on the stack (a sandbox inherited by the thread), so that nothing is
+    cached for it
+*/
+DLLLOCAL QoreProgram* qore_caller_cache_program();
+
+#ifdef DEBUG
+//! Makes the next \a count resolutions of the sandbox that governs the thread in qore_caller_sandbox_state() fail as
+//! if no memory could be allocated (debug builds, for tests)
+DLLLOCAL void qore_dbg_fail_next_sandbox_resolutions(int count);
+#endif
 
 //! returns true if the calling code may have the process load native code that it chose (a binary module from outside
 //! the module path)

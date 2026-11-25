@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - the Program contexts and call frames of threads, in the JIT and AOT native code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedObjectScopeFramesTest
+
+#! Regression test for qore#6843: the frames of update scopes, sharing objects and the per-Program cache
+/** Code that a tenant (a sandboxed Program) calls in an update scope of a shared object (a callback, a destructor)
+    cannot change the object, open another scope or share objects, also through a method of the object's class; the
+    scope changes the object after the callback returns; a tenant cannot share objects; the code of a tenant that
+    trusted code runs in closures and call references of its own cannot change a shared object; the per-Program cache
+    keeps the values of an object for one Program, for trusted code of the Program of a class of the object only (not
+    for a tenant directly, through Reflection or a subclass, nor for trusted code of another Program), bounded (also
+    by the library's own limit), releasing replaced values, the values of deleted owners and, with the Program, all
+    others, reporting the exception of a value.
+
+    SharedObjectScopeFrames.q checks these; its output must be the one in SharedObjectScopeFrames.expected in every
+    execution mode, and in programs compiled with qcc -O0 and -O3.
+*/
+class SharedObjectScopeFramesTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedObjectScopeFrames.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedObjectScopeFrames.expected");
+    }
+
+    constructor() : QUnit::Test("shared object scope frames", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs, whose code chooses its own execution, so the native compilation
+                # is not checked
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/shared-object-scope-frames";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the output of the fixture only: a library module that the program loads from source because its binary
+        # module was built for another Qore library warns on stderr
+        assertEq(expected, backquote(shellQuote(program) + " 2>/dev/null"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

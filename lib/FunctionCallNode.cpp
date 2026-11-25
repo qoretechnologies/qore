@@ -1429,6 +1429,12 @@ int SelfFunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
     }
 
+    // a class that sandboxed code declared cannot call the private methods of a class that trusted code declared,
+    // except the version of a base class of a method that it overrides (qore#6843)
+    if (method && qore_class_private::parseCheckSandboxMethodAccess(loc, method, class_ctx, true)) {
+        return -1;
+    }
+
     // by here, if there are no errors, the class has been initialized
     if (parseInitCall(val, parse_context) && !err) {
         err = -1;
@@ -1750,6 +1756,12 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                 sfcn = qore_make_function_call<SelfFunctionCallNode>(getSemanticPolicy(), loc, takeName(), nullptr, qc, true);
             } else {
                 const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), c_str);
+                // a class that sandboxed code declared cannot call the private methods of a class that trusted code
+                // declared (qore#6843)
+                if (m && qore_class_private::parseCheckSandboxMethodAccess(loc, m, qore_class_private::get(*qc),
+                        true)) {
+                    return -1;
+                }
                 if (m) {
                     if (!m->isStatic()) {
                         sfcn = qore_make_function_call<SelfFunctionCallNode>(getSemanticPolicy(), loc, takeName(), takeParseArgs(), m, qc,
@@ -2599,6 +2611,12 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
 
     assert(method->isStatic());
+
+    // a class that sandboxed code declared cannot call the private static methods of a class that trusted code
+    // declared (qore#6843)
+    if (qore_class_private::parseCheckSandboxMethodAccess(loc, method, parse_get_class_priv(), false)) {
+        return -1;
+    }
 
     // the receiver of a call that names no type arguments of the method's generic class (qore#6186)
     bool current_receiver = false;

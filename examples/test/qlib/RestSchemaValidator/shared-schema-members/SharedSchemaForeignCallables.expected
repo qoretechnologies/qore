@@ -1,0 +1,3 @@
+a callback that Java code calls: built, SHARED-OBJECT-ERROR
+a callback that Python code calls: built, SHARED-OBJECT-ERROR
+the shared schema's caches are unchanged: type cache True, field cache True, use cache True

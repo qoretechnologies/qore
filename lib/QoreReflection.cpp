@@ -920,7 +920,10 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
             allowed = caller_class == qc;
             break;
         case Private:
-            allowed = qc->runtimeCheckPrivateClassAccess(caller_class);
+            // a class that sandboxed code declared cannot use the private declarations of a class that trusted code
+            // declared (qore#6843)
+            allowed = qc->runtimeCheckPrivateClassAccess(caller_class)
+                && !qore_class_private::sandboxDeniesPrivateAccess(qc, caller_class);
             break;
         default:
             allowed = false;

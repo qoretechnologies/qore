@@ -163,6 +163,30 @@ public class PineconeSchema {
     }
 
     private {
+        #! The ID of the lazy value of getControlSchema() (qore#6843)
+        static int control_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildControlSchemaValue());
+        #! The ID of the lazy value of getDataSchema() (qore#6843)
+        static int data_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildDataSchemaValue());
+        #! The ID of the lazy value of getInferenceSchema() (qore#6843)
+        static int inference_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildInferenceSchemaValue());
+        #! The ID of the lazy value of getAdminSchema() (qore#6843)
+        static int admin_schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildAdminSchemaValue());
+        #! The ID of the lazy value of getAdminActionSet() (qore#6843)
+        static int admin_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildAdminActionSetValue());
+        #! The ID of the lazy value of getInferenceActionSet() (qore#6843)
+        static int inference_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildInferenceActionSetValue());
+        #! The ID of the lazy value of getControlActionSet() (qore#6843)
+        static int control_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildControlActionSetValue());
+        #! The ID of the lazy value of getDataActionSet() (qore#6843)
+        static int data_action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \PineconeSchema::buildDataActionSetValue());
         #! The parsed schemas, keyed by file name
         static hash<string, OpenApi3::OpenApi3Schema> schemas = {};
 
@@ -186,18 +210,45 @@ public class PineconeSchema {
 
     #! Returns the parsed vendored control-plane description, parsing it on first use
     static OpenApi3::OpenApi3Schema getControlSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(control_schema_value_id);
+    }
+
+    #! Builds the value of getControlSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3::OpenApi3Schema buildControlSchemaValue() {
         AutoLock al(lck);
         return PineconeSchema::getSchemaIntern(ControlSchemaFileName);
     }
 
     #! Returns the parsed vendored data-plane description, parsing it on first use
     static OpenApi3::OpenApi3Schema getDataSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(data_schema_value_id);
+    }
+
+    #! Builds the value of getDataSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3::OpenApi3Schema buildDataSchemaValue() {
         AutoLock al(lck);
         return PineconeSchema::getSchemaIntern(DataSchemaFileName);
     }
 
     #! Returns the parsed vendored inference description, parsing it on first use
     static OpenApi3::OpenApi3Schema getInferenceSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(inference_schema_value_id);
+    }
+
+    #! Builds the value of getInferenceSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3::OpenApi3Schema buildInferenceSchemaValue() {
         AutoLock al(lck);
         return PineconeSchema::getSchemaIntern(InferenceSchemaFileName);
     }
@@ -207,6 +258,15 @@ public class PineconeSchema {
         @throw REST-SCHEMA-ERROR the vendored schema cannot be parsed
     */
     static OpenApi3::OpenApi3Schema getAdminSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(admin_schema_value_id);
+    }
+
+    #! Builds the value of getAdminSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3::OpenApi3Schema buildAdminSchemaValue() {
         AutoLock al(lck);
         return PineconeSchema::getSchemaIntern(AdminSchemaFileName);
     }
@@ -216,6 +276,15 @@ public class PineconeSchema {
         @throw REST-SCHEMA-ACTION-ERROR the manifest does not match the schema
     */
     static RestSchemaActions::RestSchemaActionSet getAdminActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(admin_action_set_value_id);
+    }
+
+    #! Builds the value of getAdminActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActions::RestSchemaActionSet buildAdminActionSetValue() {
         AutoLock al(lck);
         if (!admin_set) {
             admin_set = new RestSchemaActions::RestSchemaActionSet(
@@ -228,6 +297,15 @@ public class PineconeSchema {
 
     #! Returns the inference action set, building it on first use
     static RestSchemaActions::RestSchemaActionSet getInferenceActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(inference_action_set_value_id);
+    }
+
+    #! Builds the value of getInferenceActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActions::RestSchemaActionSet buildInferenceActionSetValue() {
         AutoLock al(lck);
         return PineconeSchema::getInferenceActionSetIntern();
     }
@@ -237,6 +315,15 @@ public class PineconeSchema {
         the embedding models the inference API lists.
     */
     static RestSchemaActions::RestSchemaActionSet getControlActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(control_action_set_value_id);
+    }
+
+    #! Builds the value of getControlActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActions::RestSchemaActionSet buildControlActionSetValue() {
         AutoLock al(lck);
         return PineconeSchema::getControlActionSetIntern();
     }
@@ -247,6 +334,15 @@ public class PineconeSchema {
         inference set.
     */
     static RestSchemaActions::RestSchemaActionSet getDataActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(data_action_set_value_id);
+    }
+
+    #! Builds the value of getDataActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActions::RestSchemaActionSet buildDataActionSetValue() {
         AutoLock al(lck);
         if (!data_set) {
             data_set = new RestSchemaActions::RestSchemaActionSet(

@@ -1479,6 +1479,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         mud(old.mud ? old.mud->copy() : nullptr),
         spgm(old.spgm && old.deref_source_program ? old.spgm.load()->programRefSelf() : old.spgm.load()),
         deref_source_program(old.deref_source_program),
+        sandbox_ctx(old.sandbox_ctx),
+        sandbox_private_members(old.sandbox_private_members),
         from_module(old.from_module),
         lang(old.lang) {
     // the bare references option of the declaration (issue #3286)
@@ -1625,6 +1627,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
             ? old.spgm.load()->programRefSelf() : old.spgm.load()),
         deref_source_program(old.spgm && (old.deref_source_program
                 || (ns && ns->getProgram() != old.spgm.load()))),
+        sandbox_ctx(old.sandbox_ctx),
+        sandbox_private_members(old.sandbox_private_members),
         from_module(old.from_module),
         lang(old.lang) {
     // the bare references option of the declaration (issue #3286)
@@ -2181,6 +2185,12 @@ bool qore_class_private::runtimeCanUseMember(const char* mem, const qore_class_p
 
 bool qore_class_private::runtimeCheckMemberAccessContext(const QoreMemberInfo* info,
         const qore_class_private* class_ctx) const {
+    // a class that sandboxed code declared cannot use the private members of a class that trusted code declared, on
+    // any object (qore#6843); only a class context that sandboxed code declared is checked further
+    if (class_ctx->sandbox_ctx && info->declaredNonPublic()
+            && sandboxDeniesPrivateAccess(info->getClass(), class_ctx)) {
+        return false;
+    }
     // the context of the code of a class imported into a child Program is the class it was parsed in, a copy of the
     // declaration of this class (qore#6671)
     if (isClassContext(class_ctx)) {
@@ -3613,6 +3623,11 @@ void qore_class_private::parseCommit() {
     if (!has_public_memdecl && (scl ? scl->parseHasPublicMembersInHierarchy() : false)) {
         has_public_memdecl = true;
     }
+    // the private access of the code of the class to the declarations of the classes that trusted code declared, as
+    // the class's Program is now (qore#6843)
+    if (!sys) {
+        initSandboxAccess();
+    }
     // the committed class is visible to running code, which reads its members without a lock (#6272); a module cannot
     // add members to it (#6422)
     members.freeze();
@@ -4804,6 +4819,11 @@ static LookupVisit runtime_context_method_visit(const qore_class_private& priv, 
     if (ma >= Internal) {
         // a private:internal method only for its own class, by identity (qore#7036)
         return priv.sameClass(*class_ctx) ? LookupVisit::Found : LookupVisit::Descend;
+    }
+    // a private method of a class that trusted code declared is private:internal for the code of a class that
+    // sandboxed code declared (qore#6843)
+    if (class_ctx->sandbox_ctx && qore_class_private::sandboxDeniesPrivateAccess(&priv, class_ctx)) {
+        return LookupVisit::Descend;
     }
     if (!priv.runtimeCheckPrivateClassAccess(class_ctx)) {
         return LookupVisit::Skip;
@@ -7267,7 +7287,10 @@ QoreValue qore_class_private::parseFindLocalAccessibleConstantValue(const char* 
                 cTypeInfo = nullptr;
                 found = false;
             }
-        } else if (access == Private && !parseCheckPrivateClassAccess(class_ctx)) {
+        } else if (access == Private && (!parseCheckPrivateClassAccess(class_ctx)
+                // a class that sandboxed code declared cannot use the private constants of a class that trusted code
+                // declared (qore#6843)
+                || sandboxDeniesPrivateAccess(this, class_ctx))) {
             cTypeInfo = nullptr;
             found = false;
         } else {
@@ -8171,7 +8194,9 @@ const QoreMethod* qore_class_private::runtimeFindCommittedMethodForEval(const ch
             return m;
         }
         if (ma == Private) {
-            if (!class_ctx) {
+            // as for a caller outside the hierarchy for the code of a class that sandboxed code declared, if trusted
+            // code declared this class (qore#6843)
+            if (!class_ctx || (class_ctx->sandbox_ctx && sandboxDeniesPrivateAccess(this, class_ctx))) {
                 access = Private;
             }
             return m;
@@ -8259,6 +8284,12 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
                 // (see runtimeFindCommittedMethodForEval()): the common case of a private method called in its class
                 // hierarchy, such as the implementation of a private abstract method, is not looked up again
                 w = runtimeFindCallableCommittedMethod(nme, w, access, class_ctx);
+                // the code of a class that sandboxed code declared cannot call a private method of a class that
+                // trusted code declared, as from outside the class hierarchy (qore#6843)
+                if (class_ctx->sandbox_ctx && w->getAccess() == Private
+                        && sandboxDeniesPrivateAccess(get(*w->getClass()), class_ctx)) {
+                    return raiseInaccessibleMethodError(nme, w, xsink);
+                }
             }
         } else {
             // a public method found through private inheritance that the context's own hierarchy overrides
@@ -8504,8 +8535,10 @@ const QoreMethod* qore_class_private::runtimeFindCallableCommittedMethod(const c
 
 bool qore_class_private::runtimeContextCanCallMethod(const QoreMethod& m, const qore_class_private* class_ctx) {
     assert(class_ctx);
-    // a private:internal method is found only from its own class
-    return m.getAccess() == Public || runtimeCheckPrivateClassAccess(*m.getClass(), class_ctx);
+    // a private:internal method is found only from its own class; a private method of a class that trusted code
+    // declared is private:internal for the code of a class that sandboxed code declared (qore#6843)
+    return m.getAccess() == Public || (runtimeCheckPrivateClassAccess(*m.getClass(), class_ctx)
+        && !(class_ctx->sandbox_ctx && sandboxDeniesPrivateAccess(get(*m.getClass()), class_ctx)));
 }
 
 const QoreMethod* qore_class_private::runtimeFindContextCallableCommittedMethod(const char* nme,
@@ -9141,6 +9174,58 @@ bool qore_class_private::isSandboxedCode() const {
     std::lock_guard<std::mutex> al(dataLock());
     p = spgm.load();
     return p ? qore_program_is_sandboxed(p) : released_sandboxed.load();
+}
+
+bool qore_class_private::isSandboxDeclared() const {
+    if (sys) {
+        return false;
+    }
+    return committed ? sandbox_ctx : isSandboxedCode();
+}
+
+bool qore_class_private::sandboxDeniesPrivateAccess(const qore_class_private* decl,
+        const qore_class_private* class_ctx) {
+    if (!decl || !class_ctx || class_ctx->sys || decl->isClassContext(class_ctx)) {
+        return false;
+    }
+    return class_ctx->isSandboxDeclared() && !decl->isSandboxDeclared();
+}
+
+int qore_class_private::parseCheckSandboxPrivateAccess(const QoreProgramLocation* loc, const qore_class_private* decl,
+        const qore_class_private* class_ctx, const char* kind, const char* what) {
+    if (!sandboxDeniesPrivateAccess(decl, class_ctx)) {
+        return 0;
+    }
+    parse_error(*loc, "illegal access to private %s '%s' of class '%s' in class '%s': a class declared by sandboxed "
+        "code cannot use the private declarations of a class declared by trusted code, which are private:internal "
+        "for it", kind, what, decl->name.c_str(), class_ctx->name.c_str());
+    return -1;
+}
+
+int qore_class_private::parseCheckSandboxMethodAccess(const QoreProgramLocation* loc, const QoreMethod* m,
+        const qore_class_private* class_ctx, bool base_call) {
+    if (!m || !class_ctx || qore_method_private::getAccess(*m) != Private || qore_method_private::get(*m)->isAbstract()) {
+        return 0;
+    }
+    // an override calls the version of a base class: it is called on the object of the override
+    if (base_call && !m->isStatic() && const_cast<qore_class_private*>(class_ctx)->parseFindLocalMethod(m->getName())) {
+        return 0;
+    }
+    return parseCheckSandboxPrivateAccess(loc, get(*m->getClass()), class_ctx, "method", m->getName());
+}
+
+void qore_class_private::initSandboxAccess() {
+    sandbox_ctx = !sys && isSandboxedCode();
+    if (!sandbox_ctx) {
+        return;
+    }
+    for (const auto& i : members.getList()) {
+        const QoreMemberInfo* mi = i.second;
+        if (!mi->local() && mi->declaredNonPublic() && mi->getClass() && !mi->getClass()->isSandboxDeclared()) {
+            sandbox_private_members = true;
+            return;
+        }
+    }
 }
 
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {
@@ -10806,6 +10891,11 @@ bool qore_class_private::runtimeCheckMethodVariantAccess(const QoreMethod& m, co
     // the class context of the call is checked again against the method's class, as CodeEvaluationHelper does it:
     // a context related only to the class of the object (another of its parent classes) has no access
     if (!class_ctx || !runtimeCheckPrivateClassAccess(*m.getClass(), class_ctx)) {
+        return false;
+    }
+    // a private variant of a class that trusted code declared is private:internal for the code of a class that
+    // sandboxed code declared (qore#6843)
+    if (class_ctx->sandbox_ctx && sandboxDeniesPrivateAccess(get(*m.getClass()), class_ctx)) {
         return false;
     }
     // a private:internal variant only from the class that declares it (see IList::getFunction())
@@ -13756,7 +13846,7 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
     member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr),
-    decl_seq(old.decl_seq), is_local(old.is_local) {
+    decl_seq(old.decl_seq), is_local(old.is_local), decl_non_public(old.decl_non_public) {
     deferInitializerCopy(old);
 }
 
@@ -13767,7 +13857,8 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
     decl_cls(old.decl_cls),
     cls_list(old.cls_list),
     cls_context_map(old.cls_context_map ? new cls_context_map_t(*old.cls_context_map) : nullptr),
-    member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(false) {
+    member_info_list(old.member_info_list ? new member_info_list_t(*old.member_info_list) : nullptr), is_local(false),
+    decl_non_public(old.declaredNonPublic()) {
     //printd(5, "QoreMemberInfo::QoreMemberInfo() copy cls: %p '%s' member_info_list: %p old.access: '%s' "
     //    "new.access: '%s' context_map: %p (%d) member_info_list: %p (%d)\n", cls, cls->name.c_str(),
     //    member_info_list, privpub(old.access), privpub(access), cls_context_map,

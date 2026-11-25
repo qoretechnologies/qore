@@ -301,6 +301,12 @@
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
+    @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
+    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code but
+    can override them and call an overridden method's base version; library classes give their subclasses final public
+    methods, so a subclass method with one of their names and signatures is a parse error and must be renamed
+    (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
+
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
     The static members in which public classes of the standard modules keep state shared by all of their callers, and
     the options of an HTTP listener with its TLS keys, are \c private:internal, so no subclass can read them (see
@@ -4603,6 +4609,15 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - sandboxed code cannot change the data types, data fields and REST schemas that library modules share with every
+      %Program of the process, nor change the members of a REST or AsyncAPI schema or of another
+      @ref sandbox_shared_objects "shared object" or delete it, whose classes update the state that they build from
+      themselves with @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()" (see
+      @ref dataprovider_v3_12 "DataProvider v3.12"; issues #6843, #6863)
+    - only trusted code @ref Qore::SandboxManager::shareObject() "shares objects", and what a shared REST schema
+      derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
+      @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
+      @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
       their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
       an exception leaves the call after a return statement
