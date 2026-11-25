@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandboxed host calls with async I/O operations on several I/O threads (EventNotifier polling)
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # qore#7148 with qore#7624: host code that acts for a tenant, with operations on several I/O threads
