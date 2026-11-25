@@ -7878,6 +7878,15 @@ QoreProgram* qore_builtin_caller_program() {
     return own->getProgram();
 }
 
+bool qore_caller_in_untrusted_module_init() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->module_init_barriers.empty()) {
+        return false;
+    }
+    const ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
+    return !mib.lift && mib.loader_untrusted;
+}
+
 bool qore_caller_is_untrusted() {
     // the in-module domain only marks the Programs of modules
     static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
