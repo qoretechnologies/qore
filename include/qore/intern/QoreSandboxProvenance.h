@@ -114,6 +114,14 @@ DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode
     released the class counts as it was then (fails closed)
 */
 DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
+//! Returns true if a sandbox that does not trust its code governs the Program of the class of the object, now
+//! (qore#6843)
+/** The sandboxes are those of qore_object_program_is_sandboxed(); a sandbox does not trust its code if it refuses
+    uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); for a composition, if any member refuses them), as
+    for SandboxManager::isRestricted().  Fails closed: true if the sandboxes cannot be resolved, and for a Program
+    marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
+*/
+DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program
 /** As qore_object_program_is_sandboxed(), for the code that identifies the tenant whose code declares the class of an
     object (SandboxManager::getSandboxedProgramId(); qore#7110): the Program that declares the class, or else the first

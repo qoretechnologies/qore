@@ -110,6 +110,7 @@ static_assert(QORE_IR_MAX_OPCODE == 443,
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreDeleteOperatorNode.h>
 
+
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
 extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
@@ -174,14 +175,14 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
 
 static bool qore_ir_try_safe_value_no_arg_pseudo_fast_path(bool pseudo, bool base_safe_value_dispatch,
         QoreIRIntrinsic intrinsic, const QoreValue& base, int nargs, QoreValue& res) {
-    if (!pseudo || !base_safe_value_dispatch || nargs) {
+    // the intrinsic is tested before the argument count: in QoreIRInterpreter::execute(), into which this is inlined,
+    // the intrinsic is in a register and the argument count can be spilled to the stack; written in this order, the
+    // common case (another intrinsic) is decided without reloading the argument count (qore#7272)
+    if (!pseudo || !base_safe_value_dispatch || intrinsic != QoreIRIntrinsic::ToNumber || nargs) {
         return false;
     }
-    if (intrinsic == QoreIRIntrinsic::ToNumber) {
-        res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
-        return true;
-    }
-    return false;
+    res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
+    return true;
 }
 
 static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_string,
@@ -537,6 +538,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
 static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK");
@@ -652,7 +654,6 @@ static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     }
     return evalAndRef(val.getInternalNode(), xsink);
 }
-
 
 static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     if (value.getType() == NT_LIST) {
@@ -3364,7 +3365,6 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
-
 
 static void updateLocalVarFromLvalue(
         IRLocalVarSet& instantiated_locals,
@@ -10379,9 +10379,11 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
             ? direct_inst->fallback_method_name
             : (direct_inst->method ? direct_inst->method->getName() : nullptr);
         bool inline_may_invalidate_external_caches = true;
+        // the inline IR path is the common one: its block is placed on the straight path of the instruction
+        // (qore#7272: without the hint, GCC placed it out of line, with a jump back, after an unrelated change)
         if (mname && tryExecuteInterpreterInlineIRDotEvalMethod<GIVEN>(direct_inst, base, mname,
                 explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
-                &inline_may_invalidate_external_caches, given.get())) {
+                &inline_may_invalidate_external_caches, given.get())) [[likely]] {
             // Result produced by the inline IR path.
             called_external = inline_may_invalidate_external_caches;
         } else if (direct_inst->method && direct_inst->qc) {
@@ -15560,10 +15562,14 @@ load_local_done:
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
-                            if (QoreTypeInfo::hasType(vti)
-                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                                QoreTypeInfo::acceptAssignment(vti,
-                                    "<lvalue>", entry, xsink, QLVTS_List);
+                            // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+                            // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+                            if (QoreTypeInfo::hasType(vti)) {
+                                if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                    QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+                                }
+                            } else if (entry.isPointer()) {
+                                strip_untyped_list_element(vti, entry, xsink);
                             }
                             if (xsink && *xsink) {
                                 entry.discard(xsink);
@@ -15625,10 +15631,14 @@ load_local_done:
                         {
                             const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
-                            if (QoreTypeInfo::hasType(vti)
-                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                                QoreTypeInfo::acceptAssignment(vti,
-                                    "<lvalue>", entry, xsink, QLVTS_List);
+                            // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+                            // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+                            if (QoreTypeInfo::hasType(vti)) {
+                                if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                    QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+                                }
+                            } else if (entry.isPointer()) {
+                                strip_untyped_list_element(vti, entry, xsink);
                             }
                             if (!(xsink && *xsink)) {
                                 new_l->setEntry(index, entry, xsink);
@@ -20600,6 +20610,10 @@ load_local_done:
                             "cannot delete a system constant object (class '%s')", o->getClassName());
                         return;
                     }
+                    // sandboxed code cannot delete a shared object (qore#6843)
+                    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+                        return;
+                    }
                     o->doDelete(xsink);
                 };
                 // direct_list: the removed value is the synthetic list of elements a list index or range
@@ -20852,7 +20866,8 @@ load_local_done:
                                 if (o->isSystemObject()) {
                                     xsink->raiseException("SYSTEM-OBJECT-ERROR",
                                         "cannot delete a system constant object (class '%s')", o->getClassName());
-                                } else {
+                                } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+                                    // sandboxed code cannot delete a shared object (qore#6843)
                                     o->doDelete(xsink);
                                 }
                             }
@@ -21000,7 +21015,7 @@ load_local_done:
                                         HashIterator hi(h);
                                         while (hi.next()) {
                                             if (hi.get().getType() == NT_STRING) {
-                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                                 ensure_unique(v, xsink);
                                                 if (v.get<QoreStringNode>()->trim(xsink)) {
                                                     return -1;
@@ -21055,7 +21070,7 @@ load_local_done:
                                         HashIterator hi(h);
                                         while (hi.next()) {
                                             if (hi.get().getType() == NT_STRING) {
-                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                                 ensure_unique(v, xsink);
                                                 if (*xsink) {
                                                     return -1;
@@ -21819,7 +21834,10 @@ load_local_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir;
-                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                    // a call that gives its temporary arguments is the uncommon one: the common call stays on the
+                    // straight path of the instruction (qore#7272: without the hint, GCC placed it out of line, with a
+                    // jump back, after an unrelated change)
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) [[unlikely]] {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallStaticDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,

@@ -2028,7 +2028,15 @@ add_custom_target(all-qo ALL DEPENDS ${AGG_STAMPS} ${AGG_PARTIAL_STAMP} ${AGG_FU
             "the partial aggregate leaves the holder's declarations unresolved");
     }
 
+    #! managed qcc outputs are pruned safely with each generator: the Ninja build refused to prune a removed object
+    #! group's directory for a file that the name rules did not know (qore#6153)
     testManagedQccOutputPruning() {
+        foreach string generator in (qmodCheckGenerators()) {
+            checkManagedQccOutputPruning(generator);
+        }
+    }
+
+    private checkManagedQccOutputPruning(string generator) {
         TmpDir tmp("qore-cmake-qcc-prune-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
@@ -2144,9 +2152,10 @@ endif()
             + "/qo-scripts/LEGACY_GROUP/.qcc-incremental-plan.stamp", "");
 
         string qore_arg = qore_dir ? " -DQore_DIR=" + qore_dir : "";
-        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir, qore_arg));
+        string configure = run(sprintf("cmake -G %s -S %s -B %s%s", shellQuote(generator), src_dir, build_dir,
+            qore_arg));
         assertTrue(is_file(build_dir + "/.qore-qcc-managed-outputs.manifest"),
-            "initial configure writes the managed-output manifest: " + configure);
+            generator + ": initial configure writes the managed-output manifest: " + configure);
         assertFalse(is_dir(build_dir + "/qo/LEGACY_GROUP")
                 || is_dir(build_dir + "/qo-scripts/LEGACY_GROUP"),
             "first managed configure prunes recognized pre-manifest groups");
@@ -2216,7 +2225,7 @@ endif()
             "cmake -S %s -B %s -DPRUNE_SOURCE_MODE=single -DENABLE_GROUP_B=OFF"
                 + " -DENABLE_AGGREGATES=OFF%s", src_dir, build_dir, qore_arg));
         assertFalse(is_dir(build_dir + "/qo/GROUP_B"),
-            "removed object group output directory is pruned: " + remove_group);
+            generator + ": removed object group output directory is pruned: " + remove_group);
         assertFalse(is_dir(build_dir + "/qo-scripts/GROUP_B"),
             "removed object group script directory is pruned");
         assertFalse(is_dir(build_dir + "/qo/GROUP_A_link"),

@@ -200,6 +200,12 @@ public:
     DLLLOCAL QoreListNode* getList();
     DLLLOCAL void assimilate(FunctionList& fl, qore_ns_private* ns,
         std::vector<std::string>* pending_names = nullptr);
+    //! Merges the functions of a namespace that is added at run time (qore_ns_private::runtimeAssimilate())
+    /** No parse is running: a new function is added, and a function that the namespace has is kept as it is, the new
+        one being left in \a fl, which is kept with the namespace (qore_ns_private::retained_ns); no parse error is
+        raised (qore#7530)
+    */
+    DLLLOCAL void runtimeAssimilate(FunctionList& fl, qore_ns_private* ns);
 };
 
 #endif

@@ -1513,7 +1513,10 @@ module DataProviderML {
                 "- `document_format` — detected format (e.g., `PDF`, `JPEG`, `TIFF`)\n"
                 "- `document_pages` — number of pages\n"
                 "- `document_ocr_pages` — how many pages required OCR\n"
-                "- `document_confidence` — average OCR confidence (0.0 to 1.0)\n\n"
+                "- `document_confidence` — mean page score (digital text 1.0, OCR uses its recognition "
+                "score, blank or incompletely read PDF pages 0.0)\n"
+                "- `document_page_results` — text, status, confidence, and any diagnostic per page\n"
+                "- `document_review_pages` — zero-based indexes of partial or unreadable pages\n\n"
                 "**Optional modules:** `pdf` (for PDFs), `imagemagick` (for WebP, HEIC, "
                 "and 100+ other formats), `cairo` (for SVGs).",
             "action_code": DPAT_PIPELINE_PROCESSOR,

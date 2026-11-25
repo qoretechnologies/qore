@@ -177,6 +177,7 @@ public class ListDataType inherits QoreDataType {
         @since DataProvider 3.11 \a keep_name
     */
     updateElementType(AbstractDataProviderType element_type, *bool keep_name) {
+        checkChange("element type");
         setElementTypeIntern(element_type, keep_name);
     }
 
@@ -261,6 +262,11 @@ public class ListDataType inherits QoreDataType {
         return qtype
             ? ListDataType::getQoreType(qtype, or_nothing)
             : (or_nothing ? AutoListOrNothingType : AutoListType);
+    }
+
+    #! Marks the types that the type holds as shared; see AbstractDataProviderType::freeze()
+    private freezeImpl() {
+        element_type.freeze();
     }
 }
 }

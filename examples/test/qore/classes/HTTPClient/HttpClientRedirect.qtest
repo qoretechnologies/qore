@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - redirects between local HTTP listeners and UNIX domain sockets
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -31,6 +32,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestSocketDir.qm
 %requires Util
 %requires Mime
 %requires Logger
@@ -993,20 +995,16 @@ public class HttpClientRedirectTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("skipping because UNIX socket URLs are not available on Windows");
 %endif
-        string prefix = sprintf("%s%sqore-redirect-%d-%s", tmp_location(), DirSep, getpid(), get_random_string(12));
+        TestSocketDir socket_dir();
         # the socket of the request, a socket served by another local server, and a socket that does not exist
         hash<string, string> paths = {
-            "main": prefix + ".sock",
-            "other": prefix + "-other.sock",
-            "missing": prefix + "-missing.sock",
+            "main": socket_dir.path + "/main.sock",
+            "other": socket_dir.path + "/other.sock",
+            "missing": socket_dir.path + "/missing.sock",
         };
         hash<string, string> urls;
         foreach hash<auto> i in (paths.pairIterator()) {
             urls{i.key} = "http://socket=" + encode_url(i.value, True);
-        }
-        on_exit {
-            unlink(paths.main);
-            unlink(paths.other);
         }
 
         # each server answers one connection per request until the "/stop" request is received: with a redirect for

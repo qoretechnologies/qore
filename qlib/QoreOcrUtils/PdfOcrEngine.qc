@@ -32,7 +32,13 @@ public hashdecl PdfPageOcrResult {
     string text;
     #! Whether OCR was used (True) or text was extracted from the digital layer (False)
     bool ocr_used;
-    #! OCR confidence (0.0 to 1.0); only meaningful when ocr_used is True
+    #! Page outcome: digital, ocr, blank (verified white PDF raster), partial, or unreadable
+    string status;
+    #! Diagnostic for a page requiring review
+    *string error;
+    #! Description of the diagnostic
+    *string error_description;
+    #! Digital text scores 1.0, recognized text uses the OCR score, and pages requiring review score 0.0
     float confidence;
 }
 
@@ -87,10 +93,19 @@ public class PdfOcrEngine {
     #! Creates a PdfOcrEngine
     /** @param config a @ref PdfOcrConfig hash
 
-        @throw OCR-DEPENDENCY-ERROR if the ocr module is not available for
-            native mode
+        @throw OCR-DEPENDENCY-ERROR if the pdf module cannot be loaded, or native mode needs an unavailable ocr module
     */
     constructor(*hash<PdfOcrConfig> config) {
+        # Load in this module's program, including when the caller uses an AOT
+        # DataProviderML. Image-only DocumentOcrEngine calls do not need pdf.
+        try {
+            load_module("pdf");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+            throw "OCR-DEPENDENCY-ERROR", sprintf("cannot load the pdf module: %s", ex.desc);
+        }
         dpi = config.dpi ?? 300;
         page_separator = config.page_separator ?? "\n\n--- Page Break ---\n\n";
         int scanned_threshold = config.scanned_threshold ?? 50;
@@ -114,24 +129,12 @@ public class PdfOcrEngine {
     /** @param pdf_data binary PDF document data
         @return a @ref PdfOcrResult hash with combined text and per-page details
 
-        @throw OCR-DEPENDENCY-ERROR if required modules are not available
         @throw PDF-ERROR if the PDF cannot be read
-        @throw OCR-ERROR if OCR fails on a scanned page
+        Page-level rendering and recognition failures are reported in the corresponding page result.
     */
     hash<PdfOcrResult> processPdf(binary pdf_data) {
-        # Create PdfReader once, reuse for page count and text extraction
-        auto reader;
-        try {
-            reader = create_object("Pdf::PdfReader", pdf_data);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "UNKNOWN-CLASS" || ex.err == "CREATE-OBJECT-ERROR") {
-                throw "OCR-DEPENDENCY-ERROR",
-                    "the pdf module is required for PDF processing but is not available; "
-                    "install the pdf module to enable PDF OCR";
-            }
-            rethrow;
-        }
-
+        # Reader errors (including a password requirement) describe the input document.
+        auto reader = create_object("Pdf::PdfReader", pdf_data);
         int page_count = call_object_method(reader, "pageCount");
 
         list<hash<PdfPageOcrResult>> page_results = ();
@@ -161,92 +164,81 @@ public class PdfOcrEngine {
         @return a @ref PdfPageOcrResult hash
     */
     hash<PdfPageOcrResult> processPage(binary pdf_data, int page_index) {
-        # Step 1: Try to extract digital text
-        string digital_text = "";
-        try {
-            digital_text = call_static_method("Pdf::PdfRenderer", "extractTextFromData",
-                pdf_data, page_index);
-        } catch (hash<ExceptionInfo> ex) {
-            # If text extraction fails, treat as scanned
+        if (!call_static_method("Pdf::PdfRenderer", "isAvailable")) {
+            return reviewPage(page_index, "", "OCR-RENDERER-UNAVAILABLE",
+                "the pdf module requires PDFium for text extraction and page rendering");
         }
 
-        # Step 2: Check if the page has enough text (digital)
-        if (!detector.isScannedPage(digital_text)) {
+        string digital_text = "";
+        *hash<ExceptionInfo> extraction_error;
+        try {
+            digital_text = call_static_method("Pdf::PdfRenderer", "extractTextFromData", pdf_data, page_index);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PDF-ERROR") {
+                rethrow;
+            }
+            extraction_error = ex;
+        }
+        if (trim(digital_text).val() && !detector.isScannedPage(digital_text)) {
             return <PdfPageOcrResult>{
-                "page_index": page_index,
-                "text": digital_text,
-                "ocr_used": False,
-                "confidence": 1.0,
+                "page_index": page_index, "text": digital_text, "status": "digital",
+                "ocr_used": False, "confidence": 1.0,
             };
         }
 
-        # Step 3: Page appears scanned — rasterize and OCR
+        bool ocr_used = False;
         try {
-            return ocrPage(pdf_data, page_index);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc =~ /PDFium/) {
-                # PDFium not available — cannot rasterize; return what we have
+            hash<auto> raster = call_static_method("Pdf::PdfRenderer", "renderPageFromData",
+                pdf_data, page_index, dpi);
+            binary bmp = convertPixelsToBmp(raster);
+            ocr_used = True;
+            hash<OcrResult> result = ocr.extractText(bmp);
+            if (trim(result.text).val()) {
                 return <PdfPageOcrResult>{
-                    "page_index": page_index,
-                    "text": digital_text,
-                    "ocr_used": False,
-                    "confidence": 0.0,
+                    "page_index": page_index, "text": result.text, "status": "ocr",
+                    "ocr_used": True, "confidence": result.confidence,
                 };
             }
-            rethrow;
+            if (extraction_error) {
+                return reviewPage(page_index, digital_text, extraction_error.err, extraction_error.desc, True);
+            }
+            if (!trim(digital_text).val() && isWhitePage(raster)) {
+                return <PdfPageOcrResult>{
+                    "page_index": page_index, "text": "", "status": "blank", "ocr_used": True, "confidence": 0.0,
+                };
+            }
+            return reviewPage(page_index, digital_text, "OCR-NO-TEXT",
+                "OCR returned no text for a page with content", True);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PDF-ERROR" && ex.err != "OCR-ERROR") {
+                rethrow;
+            }
+            return reviewPage(page_index, digital_text, ex.err, ex.desc, ocr_used);
         }
     }
 
-    #! Rasterizes a PDF page and runs OCR on it
-    private hash<PdfPageOcrResult> ocrPage(binary pdf_data, int page_index) {
-        hash<auto> render_result;
-        try {
-            render_result = call_static_method("Pdf::PdfRenderer", "renderPageFromData",
-                pdf_data, page_index, dpi);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "UNKNOWN-CLASS") {
-                throw "OCR-DEPENDENCY-ERROR",
-                    "the pdf module is required for PDF page rasterization";
-            }
-            rethrow;
-        }
-
-        # Convert raw BGRA pixels to an image format Tesseract can read
-        binary image_data = convertPixelsToImage(render_result);
-
-        hash<OcrResult> ocr_result = ocr.extractText(image_data);
-
+    private static hash<PdfPageOcrResult> reviewPage(int page_index, string text, string err,
+            string description, bool ocr_used = False) {
         return <PdfPageOcrResult>{
-            "page_index": page_index,
-            "text": ocr_result.text,
-            "ocr_used": True,
-            "confidence": ocr_result.confidence,
+            "page_index": page_index, "text": text, "status": trim(text).val() ? "partial" : "unreadable",
+            "ocr_used": ocr_used, "confidence": 0.0, "error": err, "error_description": description,
         };
     }
 
-    #! Converts raw BGRA pixels to an image format for OCR
-    /** Tries ImageMagick (PNG output) first for better quality; falls back
-        to a built-in BMP encoder if ImageMagick is not available.
-    */
-    private binary convertPixelsToImage(hash<auto> render_result) {
-        # Try ImageMagick for high-quality PNG conversion
-%ifndef NoImageMagick
-        try {
-            auto img = create_object("ImageMagick::MagickImage",
-                render_result.width, render_result.height, "white");
-            # Import raw BGRA pixel data and export as PNG
-            call_object_method(img, "readData", render_result.data, "BGRA");
-            return call_object_method(img, "toData", "PNG");
-        } catch () {
-            # ImageMagick failed — fall through to BMP
+    # PDFium paints into an opaque white BGRA bitmap. Ignore stride padding.
+    private static bool isWhitePage(hash<auto> raster) {
+        int width = raster.width * 4;
+        binary white = parse_hex_string(strmul("ff", width));
+        binary pixels = raster.data;
+        for (int y = 0; y < raster.height; ++y) {
+            if (pixels.substr(y * raster.stride, width) != white) {
+                return False;
+            }
         }
-%endif
-        return convertPixelsToBmp(render_result);
+        return True;
     }
 
-    #! Fallback: converts BGRA pixels to BMP format without dependencies
-    /** BMP supports BGRA natively. Tesseract can read BMP files.
-    */
+    #! Encodes PDFium BGRA pixels as a lossless BMP for Tesseract
     private binary convertPixelsToBmp(hash<auto> render_result) {
         int w = render_result.width;
         int h = render_result.height;
@@ -258,41 +250,27 @@ public class PdfOcrEngine {
         int file_size = 54 + pixel_data_size;
 
         # BMP file header (14 bytes) + DIB header (40 bytes)
-        binary bmp = binary();
-        bmp += <424D>;                          # "BM"
-        bmp += int_to_le_bytes(file_size, 4);
-        bmp += <00000000>;                      # reserved
-        bmp += int_to_le_bytes(54, 4);          # pixel data offset
-
-        bmp += int_to_le_bytes(40, 4);          # DIB header size
-        bmp += int_to_le_bytes(w, 4);
-        bmp += int_to_le_bytes(h, 4);           # positive = bottom-up
-        bmp += int_to_le_bytes(1, 2);           # color planes
-        bmp += int_to_le_bytes(32, 2);          # bits per pixel (BGRA)
-        bmp += int_to_le_bytes(0, 4);           # compression
-        bmp += int_to_le_bytes(pixel_data_size, 4);
-        bmp += int_to_le_bytes(2835, 4);        # h resolution (72 DPI)
-        bmp += int_to_le_bytes(2835, 4);        # v resolution
-        bmp += int_to_le_bytes(0, 4);           # palette colors
-        bmp += int_to_le_bytes(0, 4);           # important colors
-
-        # Pixel data (bottom-up: last row first)
+        BinaryOutputStream output();
+        StreamWriter writer(output);
+        writer.write(<424D>);
+        writer.writei4LSB(file_size);
+        writer.writei4LSB(0);
+        writer.writei4LSB(54);
+        writer.writei4LSB(40);
+        writer.writei4LSB(w);
+        writer.writei4LSB(h);
+        writer.writei2LSB(1);
+        writer.writei2LSB(32);
+        writer.writei4LSB(0);
+        writer.writei4LSB(pixel_data_size);
+        writer.writei4LSB(2835);
+        writer.writei4LSB(2835);
+        writer.writei4LSB(0);
+        writer.writei4LSB(0);
         for (int y = h - 1; y >= 0; --y) {
-            int row_offset = y * stride;
-            bmp += pixels.substr(row_offset, row_size);
+            writer.write(pixels.substr(y * stride, row_size));
         }
-
-        return bmp;
-    }
-
-    #! Converts an integer to little-endian bytes
-    private binary int_to_le_bytes(int val, int byte_count) {
-        binary result = binary();
-        for (int i = 0; i < byte_count; ++i) {
-            result += chr(val & 0xFF).toBinary();
-            val >>= 8;
-        }
-        return result;
+        return output.getData();
     }
 }
 

@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/LexicalSemanticPolicy.h"
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 #ifdef DEBUG
@@ -217,9 +218,15 @@ BinaryNode* BinaryNode::copy() const {
     if (!len)
         return new BinaryNode();
 
-    void* np = malloc(len);
+    // memory that cannot be allocated fails with std::bad_alloc (qore#7466)
+    void* np = qore_malloc_or_throw(len);
     memcpy(np, ptr, len);
-    return new BinaryNode(np, len);
+    try {
+        return new BinaryNode(np, len);
+    } catch (...) {
+        free(np);
+        throw;
+    }
 }
 
 //! the data of an empty binary value: a valid address with no bytes after it

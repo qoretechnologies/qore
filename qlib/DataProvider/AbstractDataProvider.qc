@@ -1341,6 +1341,16 @@ public hashdecl DataProviderBaseInfo {
     */
     bool supports_observable = False;
 
+    #! Whether the source redelivers an event refused by an observer
+    /** An exception from @ref DataProvider::Observer::update() "Observer::update()" refuses the event.
+        When this flag is @ref True, the provider leaves the event unacknowledged and the source delivers it
+        again, possibly after a back-off. With the default @ref False, a refused event may be lost.
+
+        @see dataprovider_watch_delivery
+        @since %DataProvider 3.13
+    */
+    bool supports_refusal_redelivery = False;
+
     #! Output message support
     /** @see dataprovider_message_support
 
@@ -2576,6 +2586,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         if (!exists rv.has_record) {
             rv.has_record = rv.supports_read;
+        }
+        if (self instanceof AbstractWatchDataProviderBase) {
+            rv.supports_refusal_redelivery = True;
         }
         if (!rv.events && rv.supports_observable) {
             rv.events = getEventTypes();
@@ -5729,7 +5742,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.6
     */
-    private static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
+    static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
         return (ex.arg.typeCode() == NT_HASH ? ex.arg : {}) + {"ex": ex};
     }
 
@@ -7520,7 +7533,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @note The error code passed as \c err is thrown if any errors are detected
     */
-    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+    *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
             *hash<auto> uoptions, *string required_options) {
         # to ensure that the return value has type "hash<auto>"
         hash<auto> options += uoptions;
@@ -7669,7 +7682,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @return the processed expression
     */
-    private *hash<DataProviderExpression> processSearchParameters(*hash<DataProviderExpression> exp,
+    *hash<DataProviderExpression> processSearchParameters(*hash<DataProviderExpression> exp,
             *hash<auto> search_options) {
         if (!exp) {
             return exp;
