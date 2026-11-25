@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpServerPumpPipeBody.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# test-platform: macos - named pipes that the I/O-thread pump of HTTP/2 and HTTP/3 bodies reads, and their poll readiness
+# An HTTP/2 or HTTP/3 response body that the I/O thread sends from a pipe whose writer pauses arrives whole: a pipe that
+# has no data yet is waited for, not taken as the end of the body.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+%requires FsUtil
+
+%exec-class HttpServerPumpPipeBodyTest
+
+#! the size of each chunk that the writer writes
+const ChunkSize = 64 * 1024;
+
+#! the number of chunks
+const Chunks = 3;
+
+#! the pause of the writer between chunks
+const Pause = 1500ms;
+
+#! responds with a body read from a named pipe, which the I/O thread sends
+class PipeBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the path of the named pipe
+        string path;
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, new FileInputStream(path), {"Content-Type": "application/octet-stream"});
+    }
+}
+
+class HttpServerPumpPipeBodyTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerPumpPipeBody", "1.0") {
+        foreach bool http3 in ((False, True)) {
+            string v = http3 ? "HTTP/3" : "HTTP/2";
+            addTestCase(v + ": a pipe body whose writer pauses arrives whole", \testPauses(), (http3, Chunks));
+            addTestCase(v + ": an empty pipe body ends", \testPauses(), (http3, 0));
+        }
+        set_return_value(main());
+    }
+
+    #! returns the bytes of a chunk
+    static binary chunk(int i) {
+        return binary(strmul(chr(ord("a") + i), ChunkSize));
+    }
+
+    testPauses(bool http3, int chunks) {
+        TmpDir dir("pump-pipe-");
+        string path = dir.path + "/body";
+        if (mkfifo(path)) {
+            testSkip("mkfifo: " + strerror());
+        }
+
+        HttpServer hs(<HttpServerOptionInfo>{});
+        hs.setDefaultHandler("pipe", new PipeBodyHandler(path));
+        hs.waitForAsyncIo();
+        on_exit hs.stop();
+        int port = hs.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        }).port;
+        hs.waitForAsyncIo();
+
+        # the writer opens the pipe when the handler does, then writes the chunks with pauses between them
+        Counter done(1);
+        Queue writer_errors();
+        # the writer closes its end and records that it did under the lock, so that the cleanup below never waits
+        # for a writer that is gone
+        Mutex writer_lock();
+        bool writer_closed;
+        background sub () {
+            on_exit done.dec();
+            File f();
+            on_exit {
+                writer_lock.lock();
+                on_exit writer_lock.unlock();
+                if (f.isOpen()) {
+                    f.close();
+                }
+                writer_closed = True;
+            }
+            try {
+                f.open2(path, O_WRONLY);
+                for (int i = 0; i < chunks; ++i) {
+                    if (i) {
+                        usleep(Pause);
+                    }
+                    f.write(chunk(i));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                writer_errors.push(get_exception_string(ex));
+            }
+        }();
+        # if the request fails, the writer can wait for a reader or for room in the pipe: a reader of the test's own
+        # takes the rest of the data, so that the writer ends
+        on_exit {
+            if (done.waitForZero(1ms)) {
+                drainPipe(path, writer_lock, \writer_closed);
+                done.waitForZero(30s);
+            }
+        }
+
+        hash<auto> r = get(port, http3);
+        assertEq(200, r.status_code);
+        binary expected = binary();
+        for (int i = 0; i < chunks; ++i) {
+            expected += chunk(i);
+        }
+        assertEq(expected.size(), (r.body ?? binary()).size(), "the whole body arrived");
+        assertEq(expected, r.body ?? binary(), "the body arrived in order");
+        assertEq(0, done.waitForZero(30s), "the writer ended");
+        assertEq(0, writer_errors.size(), writer_errors.size() ? writer_errors.get() : "");
+    }
+
+    #! reads a named pipe to its end, unless its writer has closed it
+    /** The pipe is opened without waiting, which also ends a writer's wait for a reader, and each read waits for
+        data at most 30 seconds
+    */
+    static drainPipe(string path, Mutex writer_lock, reference<bool> writer_closed) {
+        try {
+            File r();
+            {
+                writer_lock.lock();
+                on_exit writer_lock.unlock();
+                if (writer_closed) {
+                    return;
+                }
+                r.open2(path, O_RDONLY | O_NONBLOCK);
+            }
+            while (r.isDataAvailable(30s)) {
+                if (!r.readBinary(65536)) {
+                    break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
+    #! sends the request and returns the response
+    private hash<auto> get(int port, bool http3) {
+        if (http3) {
+            HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 60s,
+                "connect_timeout": 15s,
+            });
+            on_exit delete mgr;
+            hash<auto> r = mgr.request("https://127.0.0.1:" + port, "GET", "/", NOTHING, NOTHING);
+            return {"status_code": r.status_code, "body": r.body};
+        }
+        HTTPClient c({"url": "https://127.0.0.1:" + port, "ssl_verify_cert": False, "http_version": "2.0",
+            "timeout": 60s});
+        on_exit c.disconnect();
+        hash<auto> r = c.send(NOTHING, "GET", "/", NOTHING, False);
+        return {"status_code": r.status_code, "body": r.body ? binary(r.body) : NOTHING};
+    }
+}

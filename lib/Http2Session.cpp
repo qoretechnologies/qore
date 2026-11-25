@@ -74,6 +74,7 @@ static bool http2DebugEnabled() {
 #include <nghttp2/nghttp2ver.h>
 
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/FileStreamIo.h"
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/qore_string_private.h"
 #if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
@@ -4198,6 +4199,18 @@ void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStream
 
     // Read one chunk per stream per iteration
     if (info.is_pollable) {
+        // readNonBlock() returns 0 both at the end and when a read would block, so a descriptor that can wait is
+        // read only when it is readable; one that is not is waited for through getExtraFds() (qore#7628)
+        if (info.is_epoll_compatible) {
+            int ready = qore_file_stream_ready_now(info.stream_fd, POLLIN);
+            if (ready < 0) {
+                xsink->raiseErrnoException("HTTP2-ERROR", errno, "poll() on the response body's descriptor failed");
+                return;
+            }
+            if (!ready) {
+                return;
+            }
+        }
         SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
         chunk->preallocate(65536);
         int64 count = info.input_stream->readNonBlock(

@@ -36,6 +36,7 @@
 #include <qore/ScopeGuard.h>
 
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/FileStreamIo.h"
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/WebSocketFrameCodec.h"
 #include "qore/intern/FastRouteGuard.h"
@@ -7542,6 +7543,18 @@ void QuicSession::processStreamInputStream(int64_t stream_id, StreamInputStreamI
 
     // Read one chunk
     if (info.is_pollable) {
+        // readNonBlock() returns 0 both at the end and when a read would block, so a descriptor that can wait is
+        // read only when it is readable; one that is not is waited for through getExtraFds() (qore#7628)
+        if (!info.is_regular_file) {
+            int ready = qore_file_stream_ready_now(info.stream_fd, POLLIN);
+            if (ready < 0) {
+                xsink->raiseErrnoException("QUIC-ERROR", errno, "poll() on the response body's descriptor failed");
+                return;
+            }
+            if (!ready) {
+                return;
+            }
+        }
         SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
         chunk->preallocate(65536);
         int64 count = info.input_stream->readNonBlock(const_cast<void*>(chunk->getPtr()), 65536, xsink);
