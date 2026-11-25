@@ -73,8 +73,8 @@ HFTokenizer::constructor(hash<auto> config) {
     @throw INVALID-ENCODING the text is not valid in its encoding (ex: <tt>"HFTokenizer::encode(): the text is not
     valid UTF-8: invalid byte sequence at byte offset 3"</tt>)
     @throw PRETOKENIZER-MATCH-ERROR a regular expression of a \c Split pre-tokenizer cannot be matched against the
-    text (ex: a match limit, or text made invalid UTF-8 by a \c Replace normalizer whose pattern matches part of a
-    character); this applies to every method that pre-tokenizes text
+    text (for example, when it reaches its match limit). This applies to every method that pre-tokenizes text.
+    @throw TOKENIZER-NORMALIZER-ERROR a regular expression in a \c Replace normalizer failed during matching
 */
 hash<auto> HFTokenizer::encode(string text) {
     return tok->encode(text, nullptr, true, "HFTokenizer::encode()", xsink);
@@ -103,6 +103,8 @@ hash<auto> HFTokenizer::encodeWithOptions(string text, *string text_pair, softbo
     UTF-8 (ex: the tokens of a part of a character, such as the first byte-level token of an emoji) is replaced by
     the replacement character U+FFFD (\c "\ufffd"), one for each maximal part of a valid sequence or each byte that
     cannot start one; see @ref tokenizer_text_encoding
+
+    @throw TOKENIZER-DECODER-ERROR a regular expression in a \c Replace decoder failed during matching
 */
 string HFTokenizer::decode(list<softint> ids, softbool skip_special_tokens = False) {
     return tok->decode(ids, (bool)skip_special_tokens, xsink);

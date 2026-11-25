@@ -10,48 +10,32 @@
 
 #include "DigitsPreTokenizer.h"
 
+#include <utf8proc.h>
+
 namespace QoreTokenizer {
 
 std::vector<PreToken> DigitsPreTokenizer::pretokenize(
         const std::string& text) const {
     std::vector<PreToken> result;
-    if (text.empty()) return result;
-
-    std::string current;
-    size_t current_start = 0;
-    bool in_digits = false;
-
-    for (size_t i = 0; i < text.size(); ++i) {
-        bool is_digit = (text[i] >= '0' && text[i] <= '9');
-
-        if (is_digit != in_digits && !current.empty()) {
-            result.push_back({current, current_start});
-            current.clear();
+    size_t start = 0;
+    bool was_numeric = false;
+    for (size_t pos = 0; pos < text.size();) {
+        utf8proc_int32_t cp;
+        auto length = utf8proc_iterate(reinterpret_cast<const utf8proc_uint8_t*>(text.data() + pos),
+            text.size() - pos, &cp);
+        size_t end = pos + (length > 0 ? length : 1);
+        auto category = utf8proc_category(cp);
+        bool numeric = category >= UTF8PROC_CATEGORY_ND && category <= UTF8PROC_CATEGORY_NO;
+        if (start < pos && (numeric != was_numeric || (numeric && individual))) {
+            result.push_back({text.substr(start, pos - start), start, pos});
+            start = pos;
         }
-
-        if (is_digit && individual) {
-            // Each digit is a separate pre-token
-            if (!current.empty() && !in_digits) {
-                result.push_back({current, current_start});
-                current.clear();
-            }
-            result.push_back({std::string(1, text[i]), i});
-            in_digits = true;
-            current_start = i + 1;
-            continue;
-        }
-
-        if (current.empty()) {
-            current_start = i;
-        }
-        current += text[i];
-        in_digits = is_digit;
+        was_numeric = numeric;
+        pos = end;
     }
-
-    if (!current.empty()) {
-        result.push_back({current, current_start});
+    if (start < text.size()) {
+        result.push_back({text.substr(start), start, text.size()});
     }
-
     return result;
 }
 

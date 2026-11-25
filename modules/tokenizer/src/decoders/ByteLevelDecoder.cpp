@@ -20,15 +20,12 @@ ByteLevelDecoder::ByteLevelDecoder(const QoreHashNode* /* config */, ExceptionSi
     // No configuration needed
 }
 
-std::string ByteLevelDecoder::decode(const std::vector<std::string>& tokens) const {
-    // Join all tokens
-    std::string joined;
-    for (const auto& tok : tokens) {
-        joined += tok;
+std::vector<std::string> ByteLevelDecoder::decodeChain(std::vector<std::string> tokens) const {
+    std::string bytes;
+    for (const auto& token : tokens) {
+        bytes += unicodeToBytes(token);
     }
-
-    // Convert from GPT-2 unicode representation back to raw bytes
-    return unicodeToBytes(joined);
+    return {decodedUtf8(bytes)};
 }
 
 } // namespace QoreTokenizer
