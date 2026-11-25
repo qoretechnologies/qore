@@ -11369,27 +11369,6 @@ int MethodFunctionBase::checkFinalResolution(const qore_class_private& cls, cons
                 return -1;
             }
         }
-
-        // A subclass cannot declare the name of an inherited final method in either method table (#7111).
-        // Check the declaring class: resolving an abstract method can copy an inherited variant into a local table.
-        for (const hm_method_t* methods : {&cls.hm, &cls.shm}) {
-            auto entry = methods->find(getName());
-            if (entry == methods->end()) {
-                continue;
-            }
-            const MethodFunctionBase* func = qore_method_private::get(*entry->second)->getFunction();
-            for (const auto* variant : func->vlist) {
-                if (METHV_const(variant)->getClassPriv() != &cls) {
-                    continue;
-                }
-                const UserSignature* sig = dynamic_cast<const UserSignature*>(variant->getSignature());
-                parse_error(sig ? *sig->getParseLocation() : *loc, "class '%s' cannot declare %smethod '%s': "
-                    "its name is reserved by parent class method final %s%s::%s(%s)", cls.name.c_str(),
-                    func->isStatic() ? "static " : "", getName(), stat, final_func.qc->getName(), getName(),
-                    fsig->getSignatureText());
-                return -1;
-            }
-        }
     }
     return 0;
 }
