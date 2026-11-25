@@ -425,6 +425,32 @@ static QORE_INTERN_NOINLINE void raise_method_call_deleted_object(ExceptionSink*
     }
 }
 
+//! returns the method to call for an object of a copy of the class resolved at parse time, or nullptr
+/** The object's class is neither \a qc nor the class of \a method, but it can be a copy of one of them in another
+    Program, such as a class that a Program imports or inherits from another one, which is the same class: the method
+    and variant resolved at parse time, which the parser checked against the code's parse options, are used, as the
+    IR, JIT and AOT method dispatch (dispatch_method_on_object()) use them, with the method of the object's class of
+    the name if there is one (qore#7578).  A subclass is not the same class: its method is resolved by name, as before.
+
+    Outlined from AbstractMethodCallNode::execImpl(): only a call on an object of another class than the one resolved
+    gets here (issue #5852).
+*/
+static QORE_INTERN_NOINLINE const QoreMethod* get_same_class_copy_method(const QoreObject* o, const QoreClass* qc,
+        const QoreMethod* method) {
+    const QoreClass* oc = o->getClass();
+    assert(oc != qc && oc != method->getClass());
+    // the call on a deleted object raises the exception of the dispatch by name, as before
+    if (!o->isValid()) {
+        return nullptr;
+    }
+    qore_classid_t id = oc->getID();
+    if (id != qc->getID() && id != method->getClass()->getID()) {
+        return nullptr;
+    }
+    const QoreMethod* own = oc->findLocalMethod(method->getName());
+    return own ? own : method;
+}
+
 // Only a reusable background call needs to own an argument-list copy.  Outlining its lifetime keeps the holder
 // and its exception-cleanup state out of every ordinary recursive call, including calls with a lexical policy.
 template <bool Lexical>
@@ -462,8 +488,11 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
         implemented below on average
     */
     // a static method called through an object is bound to the receiver's declared class, whatever the class of the
-    // object, as Class::method() is (qore#5990)
-    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass() || method->isStatic())) {
+    // object, as Class::method() is (qore#5990); an object of a copy of the class in another Program is of the same
+    // class (qore#7578)
+    const QoreMethod* call_method = method;
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass() || method->isStatic()
+            || (call_method = get_same_class_copy_method(o, qc, method)))) {
         //printd(5, "AbstractMethodCallNode::exec() using parse info for %s::%s() qc: %s (o: %s) v: %p\n",
         //    method->getClassName(), method->getName(), qc->getName(), o->getClass()->getName(), variant);
         assert(method);
@@ -481,28 +510,28 @@ QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSema
             // a named call resolved at run time by parameter name has no variant; a call with a variant pays nothing
             // for it
             if (!variant && runtime_arg_names) {
-                return execNamed(policy, o, method, c_str, ctx, rc, xsink);
+                return execNamed(policy, o, call_method, c_str, ctx, rc, xsink);
             }
             if (reusable_tmp_args && args) {
-                return execReusableTmpArgs<Lexical>(policy, *method, rc, o, ctx, variant, xsink);
+                return execReusableTmpArgs<Lexical>(policy, *call_method, rc, o, ctx, variant, xsink);
             }
-            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, variant,
-                nullptr, explicit_inst);
+            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *call_method, xsink, rc, o, args, ctx,
+                variant, nullptr, explicit_inst);
         }
         if (variant) {
-            return qore_method_private::evalNormalVariantWithPolicy<Lexical>(policy, *method, xsink, rc, o,
+            return qore_method_private::evalNormalVariantWithPolicy<Lexical>(policy, *call_method, xsink, rc, o,
                 reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst);
         }
         if (runtime_arg_names) {
-            return execNamed(policy, o, method, c_str, ctx, rc, xsink);
+            return execNamed(policy, o, call_method, c_str, ctx, rc, xsink);
         }
         // a static method called through an object (not through self in a method: s()) checks the object after the
         // arguments, as the call of a variant resolved at parse time does above (issue #6056)
-        if (qore_method_private::get(*method)->static_flag && getType() != NT_SELF_CALL) {
-            return qore_method_private::evalStaticOnObject<Lexical>(policy, *method, xsink, rc, o, args, ctx,
+        if (qore_method_private::get(*call_method)->static_flag && getType() != NT_SELF_CALL) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *call_method, xsink, rc, o, args, ctx,
                 nullptr, explicit_inst);
         }
-        return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr,
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *call_method, xsink, rc, o, args, ctx, nullptr,
             nullptr, explicit_inst);
     }
     return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
