@@ -594,6 +594,15 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     /** @param connect if @ref True "True" then a connection is made by calling @ref Qore::HTTPClient::connect() before returning the object
         @param rtopts this connection type does not accept any runtime option, so this parameter is ignored
     */
+    #! Returns @ref True: the clients of the connection are bound to its creator's target by its creator proof
+    /** The HTTP client that the connection creates for restricted code that was lent it is the creator's, bound to its
+        origin and proxy (qore#7262), so AbstractConnection::getLentTargetSource() does not confine such code to the
+        members that the connection's creator set (qore#7327)
+    */
+    private bool hasCreatorBoundClients() {
+        return True;
+    }
+
     private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
         checkRawHttpNegotiateUnsupported();
         HTTPClient sc(getConnectionOptions());

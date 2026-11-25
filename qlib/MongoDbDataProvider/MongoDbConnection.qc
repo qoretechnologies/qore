@@ -228,6 +228,10 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         # the default database travels in the URI, which is where MongoDB itself reads it from;
         # the provider takes only the client
+        # the data provider is created from the connection's members and its constructor options: for restricted code
+        # that was lent the connection, from its creator's members, and with options that cannot change the target
+        # (qore#7327)
+        getLentDataProviderSource(constructor_options);
         return new MongoDbDataProvider({"client": get()} + constructor_options);
     }
 
@@ -399,7 +403,10 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         @throw MONGODB-CONNECTION-ERROR the server did not answer the ping
     */
     private pingImpl() {
-        MongoClient client(getUriIntern(get_ms(opts.ping_timeout
+        # for restricted code that was lent the connection, the client is created from a private copy with its
+        # creator's target (qore#7327)
+        MongoDbConnection src = cast<MongoDbConnection>(getLentTargetSource());
+        MongoClient client(src.getUriIntern(get_ms(src.opts.ping_timeout
             ?? ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout)));
         if (!client.ping()) {
             throw "MONGODB-CONNECTION-ERROR", "failed to ping MongoDB server";
