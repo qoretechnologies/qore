@@ -960,15 +960,17 @@ private:
     bool setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
             const QoreProgramLocation* loc, std::string& error);
     //! Gives the ScopeExit \a se past the inline cap whose handlers' values replace the value of a return (its
-    //! operands, QoreIRScopeExitInstruction::hand_over_return) the paths of the request that the last handler it runs
-    //! ends with (qore#7531), in code with the paths of the requests
+    //! operands, QoreIRScopeExitInstruction::hand_over_return), or one in the cleanups of a return statement that
+    //! replaces the value of the return (replacesPendingReturn()) that runs the handlers of the scope of a handler
+    //! whose body has the return (the protected scope of emitBlockCleanups()), the paths of the request that the last
+    //! handler it runs ends with (qore#7531), in code with the paths of the requests
     /** A request that goes on with the return (a return request, or a break or a continue that ends the function,
         qore#6949) goes on after the ScopeExit as the code does: in the cleanups of a return statement (\a
         handed_over_return nullptr), the return takes what the handlers handed over or its own value; elsewhere, the
         return of the value handed over (\a handed_over_return, see lowerHandedOverReturn()) if one was, else the path
         of a request made after the block (setScopeExitFlowTargets()).  Another request abandons the return: the entry
         of its path releases what the handlers handed over and, in the cleanups of a return statement, the return's
-        own value (the operands), as a request abandons the return of a handler lowered inline (qore#7022), before the
+        own value (pending_return), as a request abandons the return of a handler lowered inline (qore#7022), before the
         path of a request made after the block, which goes on with the return that the replaced one resumes.  Leaves
         the builder in the code after the ScopeExit.
     */

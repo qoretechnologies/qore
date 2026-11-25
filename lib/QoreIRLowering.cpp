@@ -6091,8 +6091,10 @@ bool QoreIRLowering::setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction*
 
 bool QoreIRLowering::setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
         QoreIRBasicBlock* handed_over_return, const QoreProgramLocation* loc, std::string& error) {
-    assert(se && !se->flow && se->hand_over_return && scope_entry < cleanup_stack.size());
+    assert(se && !se->flow && (se->hand_over_return || !handed_over_return) && scope_entry < cleanup_stack.size());
     assert(!handed_over_return == !se->result.isValid());
+    // in the cleanups of a return statement, the value that the handlers replace is the return's
+    assert(handed_over_return || (pending_return_active && try_depth == pending_return_try_depth));
     if (!builder.getFunction()->hasDebugFlowPaths() || se->is_error) {
         return true;
     }
@@ -6160,15 +6162,17 @@ bool QoreIRLowering::setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction
         } else {
             // the request abandons the return: what the handlers handed over before it is released, the result of the
             // ScopeExit cleared (as the return of the value does), and, in the cleanups of a return statement, the
-            // return's own value (the operands: the first hand-over of the run may have released it already, and the
-            // release then finds nothing); the return that it replaced resumes (qore#7022)
+            // return's own value (the operands of a ScopeExit that hands over: the first hand-over of the run may have
+            // released it already, and the release then finds nothing); the return that it replaced resumes
+            // (qore#7022)
             if (se->result.isValid()) {
                 builder.createReleaseHandedOverReturn(loc, se->result);
             }
             builder.createReleaseHandedOverReturn(loc);
-            if (cont) {
-                for (const QoreIRValue& v : se->operands) {
-                    builder.createReleaseOwnedTemp(v, loc);
+            if (cont && pending_return.isValid()) {
+                builder.createReleaseOwnedTemp(pending_return, loc);
+                if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
+                    builder.createReleaseOwnedTemp(pending_return_base, loc);
                 }
             }
             // an exception that a destructor raises goes where the exceptions of the handlers that the ScopeExit ran
@@ -6474,8 +6478,16 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         se_inst->exception_target = entry.outer_exception_target;
                         // in the code of a debugger's request (a return request in a handler that is not the last of
                         // its exit), a request in the handlers that have not run is that of the block (qore#7008)
-                        if ((flags & CF_HANDLERS_OUT_OF_LINE) && keep_runs
-                                && !setScopeExitFlowTargets(se_inst, i - 1, error)) {
+                        if (flags & CF_HANDLERS_OUT_OF_LINE) {
+                            if (keep_runs && !setScopeExitFlowTargets(se_inst, i - 1, error)) {
+                                return false;
+                            }
+                        } else if (keep_runs && return_walk && pending_return_active
+                                && try_depth == pending_return_try_depth
+                                && !setReplacingScopeExitFlowTargets(se_inst, i - 1, nullptr, entry.loc, error)) {
+                            // in the cleanups of a return in the handler's body, which replaces the value of the
+                            // return that the handler runs in: a request in the handlers that have not run is that
+                            // of the block, which can abandon the return, as for those lowered inline (qore#7531)
                             return false;
                         }
                         break;
