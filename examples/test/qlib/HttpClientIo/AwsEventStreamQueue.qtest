@@ -41,6 +41,7 @@ class AwsEventStreamQueueTest inherits QUnit::Test {
         addTestCase("malformed frames", \formatTest());
         addTestCase("a stream that ends inside a frame", \truncatedTest());
         addTestCase("the decoder installed after the response ended", \afterEndTest());
+        addTestCase("a string initial body", \stringInitialBodyTest());
         set_return_value(main());
     }
 
@@ -123,7 +124,13 @@ class AwsEventStreamQueueTest inherits QUnit::Test {
     }
 
     #! starts the stream, installs the decoder and returns the items of the queue until the sentinel
-    private list<auto> queueItems(list<binary> pieces, *EventNotifier notifier, bool wait_sent = False) {
+    /** @param pieces the pieces of the body that the server sends
+        @param notifier the notifier given to the decoder
+        @param wait_sent if @ref True, the decoder is installed after the whole response has been sent
+        @param initial_body the initial body given to the decoder instead of the body read with the response headers
+    */
+    private list<auto> queueItems(list<binary> pieces, *EventNotifier notifier, bool wait_sent = False,
+            *data initial_body) {
         Counter sent(1);
         Counter served = serve(pieces, sent);
         HttpClientIo::HttpClientConnectionManager mgr();
@@ -148,7 +155,7 @@ class AwsEventStreamQueueTest inherits QUnit::Test {
             sent.waitForZero(30s);
         }
         Queue queue();
-        stream.installEventStreamState(queue, notifier, item.body);
+        stream.installEventStreamState(queue, notifier, initial_body ?? item.body);
         list<auto> rv = ();
         while (exists (auto v = queue.get(30s))) {
             push rv, v;
@@ -304,6 +311,21 @@ class AwsEventStreamQueueTest inherits QUnit::Test {
         assertEq(expected, queueItems(cut(stream, (7,))));
         assertEq("AWS-EVENT-STREAM-FORMAT-ERROR", expected[1].err);
         assertEq("stream ended with 10 unconsumed frame bytes", expected[1].desc);
+    }
+
+    #! an initial body given as a string is taken as its bytes
+    stringInitialBodyTest() {
+        # shorter than a prelude
+        foreach string initial in (("abc", strmul("x", 11))) {
+            list<auto> items = queueItems((), NOTHING, True, initial);
+            assertEq(({"err": "AWS-EVENT-STREAM-FORMAT-ERROR",
+                "desc": sprintf("stream ended with %d unconsumed frame bytes", initial.size())},), items,
+                sprintf("%d bytes", initial.size()));
+        }
+        # a whole frame given as the initial body in a string
+        binary frame = AwsEventStreamEncoder::encode({":event-type": "a"}, binary("{}"));
+        list<auto> items = queueItems((), NOTHING, True, frame.toString("ISO-8859-1"));
+        assertEq(decoderItems(frame), items, "a frame in a string");
     }
 
     afterEndTest() {
