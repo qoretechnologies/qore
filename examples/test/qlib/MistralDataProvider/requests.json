@@ -1042,5 +1042,260 @@
   "list-trigger-events": {
     "trigger_id": "00000000-0000-4000-8000-000000000001",
     "limit": 2
+  },
+  "create-client-session": {
+    "model": "test-value"
+  },
+  "create-service-account": {
+    "name": "test-value",
+    "workspace_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "list-service-accounts": {
+    "offset": 1,
+    "limit": 1
+  },
+  "list-assignable-service-account-roles": {
+    "workspace_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "get-service-account": {
+    "service_account_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "update-service-account": {
+    "service_account_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "delete-service-account": {
+    "service_account_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "set-service-account-roles": {
+    "service_account_id": "00000000-0000-0000-0000-000000000001",
+    "role_ids": [
+      "00000000-0000-0000-0000-000000000001"
+    ]
+  },
+  "list-service-account-roles": {
+    "service_account_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "share-connector-to-workspace": {
+    "connector_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "unshare-connector-from-workspace": {
+    "connector_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "share-connector-to-organization": {
+    "connector_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "unshare-connector-from-organization": {
+    "connector_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "activate-connector-for-organization": {
+    "connector_id": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "organization"
+  },
+  "activate-connector-for-workspace": {
+    "connector_id": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "workspace"
+  },
+  "activate-connector-for-user": {
+    "connector_id": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "user"
+  },
+  "deactivate-connector-for-organization": {
+    "connector_id": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "organization"
+  },
+  "deactivate-connector-for-workspace": {
+    "connector_id": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "workspace"
+  },
+  "deactivate-connector-for-user": {
+    "connector_id": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "user"
+  },
+  "delete-all-user-credentials-for-a-connector": {
+    "connector_id_or_name": "00000000-0000-0000-0000-000000000001"
+  },
+  "create-workspace-credentials-for-a-connector": {
+    "connector_id_or_name": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "workspace",
+    "name": "test-value"
+  },
+  "create-user-credentials-for-a-connector": {
+    "connector_id_or_name": "00000000-0000-0000-0000-000000000001",
+    "consumer_scope": "user",
+    "name": "test-value"
+  },
+  "unharden-workflow-deployment": {
+    "deployment_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "list-webhooks": {},
+  "create-webhook": {
+    "provider": "slack",
+    "name": "test-value"
+  },
+  "get-webhook": {
+    "webhook_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "delete-webhook": {
+    "webhook_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "get-webhook-signing-secret": {
+    "webhook_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "get-identity": {},
+  "list-my-organizations": {},
+  "list-my-workspaces": {},
+  "whoami": {},
+  "get-billing-budget": {},
+  "get-billing-subscription": {},
+  "admin-query-usage": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-01-01T00:00:00Z"
+  },
+  "admin-list-users": {},
+  "admin-create-users": {
+    "body": [
+      {
+        "email": "test-value",
+        "first_name": "test-value",
+        "last_name": "test-value"
+      }
+    ]
+  },
+  "admin-invite-users": {
+    "email": "test-value"
+  },
+  "admin-list-invitations": {},
+  "admin-delete-invitation": {
+    "invite_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-update-user": {
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-delete-user": {
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-get-user": {
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-deactivate-user": {
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-reactivate-user": {
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-list-user-workspaces": {
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-list-roles": {},
+  "admin-list-workspaces": {},
+  "admin-create-workspace": {
+    "name": "test-value",
+    "admin_user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-update-workspace": {
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-archive-workspace": {
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-add-workspace-members": {
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-add-or-update-workspace-members": {
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-remove-workspace-members": {
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001",
+    "members": [
+      {
+        "user_uuid": "00000000-0000-0000-0000-000000000001"
+      }
+    ]
+  },
+  "admin-get-rate-limits": {},
+  "admin-get-spend-limits": {},
+  "admin-update-spend-limits": {
+    "amount": 1
+  },
+  "admin-get-monthly-usage": {},
+  "admin-list-audit-logs": {},
+  "admin-list-user-groups": {},
+  "admin-create-user-group": {
+    "name": "test-value"
+  },
+  "admin-get-user-group": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-update-user-group": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-delete-user-group": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-list-user-group-members": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-add-user-group-members": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001",
+    "user_uuids": [
+      "00000000-0000-0000-0000-000000000001"
+    ]
+  },
+  "admin-remove-user-group-members": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001",
+    "user_uuids": [
+      "00000000-0000-0000-0000-000000000001"
+    ]
+  },
+  "admin-list-user-group-workspaces": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-assign-user-group-to-workspace": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001",
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-update-user-group-workspace-role": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001",
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-remove-user-group-from-workspace": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001",
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-update-user-group-organization-role": {
+    "group_uuid": "00000000-0000-0000-0000-000000000001",
+    "organization_role": "member"
+  },
+  "admin-list-api-keys": {},
+  "admin-create-api-key": {
+    "workspace_uuid": "00000000-0000-0000-0000-000000000001",
+    "user_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-delete-api-key": {
+    "key_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-start-scim-sync": {},
+  "admin-get-scim-sync-run": {
+    "run_id": "00000000-0000-0000-0000-000000000001"
+  },
+  "admin-get-vibe-work-usage-by-user": {
+    "start_time": 1,
+    "end_time": 1
+  },
+  "admin-get-vibe-work-usage-by-agent": {
+    "start_time": 1,
+    "end_time": 1
+  },
+  "admin-get-vibe-work-usage-over-time": {
+    "start_time": 1,
+    "end_time": 1
+  },
+  "admin-get-vibe-code-usage-by-workspace": {
+    "start_time": 1,
+    "end_time": 1
+  },
+  "admin-get-vibe-code-usage-by-organization": {
+    "start_time": 1,
+    "end_time": 1
   }
 }
