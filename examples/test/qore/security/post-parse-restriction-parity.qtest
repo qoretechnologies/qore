@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation and qcc executables
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class PostParseRestrictionParityTest
+
+#! A restriction set after parsing gives the same result for a call resolved at parse time in every mode (qore#7578)
+/** Code of a %Program that a functional-domain restriction is set for with Program::setParseOptions() after the code
+    was parsed calls builtin methods of the domain that the parser resolved, on objects of classes of the parent
+    %Program that the %Program imported (a copy of the class) or inherited: every execution mode calls the method
+    resolved at parse time, as on an object of a builtin class of the domain, where the AST interpreter refused the
+    calls on an object of an imported class whose method holds the builtin variant (the implementation of an abstract
+    method, the inherited overload of a method that the class overloads itself).  The class's own code calls a method
+    of self on an object of the class or of the Program's copy of it in every mode.  A call on an object of a subclass
+    and a call with named arguments of the overloaded method, which are resolved at run time, are refused in every
+    mode, as is the code parsed with the restriction, and a call on a deleted object of an imported class raises the
+    same error in every mode.
+    The checks are in post-parse-restriction-parity/post-parse-restriction-parity-worker.q, which is run in each
+    execution mode and as a program compiled with qcc.
+*/
+class PostParseRestrictionParityTest inherits QUnit::Test {
+    public {
+        #! the expected results of the worker, in the order it prints them
+        const Results = (
+            "imported-script_file=called",
+            "imported-own_overload=called",
+            "imported-own_overload_own=called",
+            "imported-plain=called",
+            "imported-builtin=called",
+            "imported-file_name=called",
+            "imported-named=INVALID-FUNCTION-ACCESS",
+            "imported-self_call=called",
+            "imported-self_call_copy=called",
+            "imported-subclass=INVALID-FUNCTION-ACCESS",
+            "imported-deleted=OBJECT-ALREADY-DELETED: cannot call ScriptFile::getFileName() on an object that has "
+                "already been deleted",
+            "imported-parse=PARSE-EXCEPTION",
+            "inherited-script_file=called",
+            "inherited-own_overload=called",
+            "inherited-own_overload_own=called",
+            "inherited-plain=called",
+            "inherited-builtin=called",
+            "inherited-file_name=called",
+            "inherited-named=INVALID-FUNCTION-ACCESS",
+            "inherited-self_call=called",
+            "inherited-self_call_copy=called",
+            "inherited-subclass=INVALID-FUNCTION-ACCESS",
+            "inherited-deleted=OBJECT-ALREADY-DELETED: cannot call ScriptFile::getFileName() on an object that has "
+                "already been deleted",
+            "inherited-parse=PARSE-EXCEPTION",
+        );
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string worker = get_script_dir() + DirSep + "post-parse-restriction-parity" + DirSep
+            + "post-parse-restriction-parity-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("PostParseRestrictionParityTest", "1.0", \ARGV) {
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        addTestCase("each execution mode", \testModes());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the expected output of the worker
+    private static string expected() {
+        return (map $1 + "\n", Results).join("");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the Programs that the worker creates run with its execution mode
+            assertEq(expected(), ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        assertEq(expected(), ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-post-parse-restriction-parity-exe-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "post-parse-restriction-parity" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(expected(), ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}

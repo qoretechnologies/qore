@@ -2818,6 +2818,8 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
 
     @see Program::disableParseOptions() for a reciprocal method that disables parse options; also see Program::replaceParseOptions()
      @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
+    @note A functional-domain restriction set after code was parsed does not refuse the calls of that code that the
+    parser resolved; see @ref function_domains
 */
 nothing Program::setParseOptions(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
@@ -2842,6 +2844,8 @@ pgm.setParseOptions(opts);
 
     @since %Qore 3.0
     @note Compatibility semantics of already parsed code are unchanged; see @ref lexical_compatibility_options.
+    @note A functional-domain restriction set after code was parsed does not refuse the calls of that code that the
+    parser resolved; see @ref function_domains
 */
 nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)

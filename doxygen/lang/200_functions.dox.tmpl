@@ -523,6 +523,12 @@ public class Registry {
       parent class, or an overload of a method that the class declares itself: the builtin method is checked against
       the restrictions of the code that calls it, as when it is called on an object of the builtin class
 
+    A call that the parser resolved and checked calls the variant it resolved in every execution mode: a restriction
+    that @ref Qore::Program::setParseOptions() "Program::setParseOptions()" sets after the code was parsed does not
+    refuse it, also when the call is made on an object of a class of another %Program that the %Program imported or
+    inherited, which is the same class; a call on an object of a subclass is resolved when it is made, and checked as
+    a call made at run time.
+
     A call reference or a @ref closure "closure" runs with the permissions of the context that created it: a call
     reference to code with a functional domain that code allowed to use the domain created can be called by code
     that is not allowed to use it.  A closure created in code that declares a functional domain does not inherit the
