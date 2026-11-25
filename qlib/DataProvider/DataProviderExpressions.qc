@@ -700,8 +700,19 @@ auto sub dp_list_promote(auto value, int common) {
 auto sub dp_list_reduce(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
     string name = exp.exp;
     list<auto> source = dp_list_source(name, dp_eval_arg(rec, exp, 0, tc));
-    list<hash<auto>> path = dp_list_path(name, dp_eval_arg(rec, exp, 1, tc));
-    return dp_reduce_values(name, source, path);
+    if (name == DP_FUNC_PERCENTILE) {
+        auto p = dp_eval_arg(rec, exp, 1, tc);
+        if (!inlist(p.typeCode(), (NT_INT, NT_FLOAT, NT_NUMBER))) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("percentile expects a numeric percentage, got %s",
+                p.fullType());
+        }
+        if ((p.typeCode() != NT_INT && (p.nanp() || p.infp())) || p < 0 || p > 100) {
+            throw "DATA-PROVIDER-EXPRESSION-ERROR", "percentile expects a finite percentage from 0 to 100";
+        }
+        return dp_reduce_values(name, source, dp_list_path(name, dp_eval_arg(rec, exp, 2, tc)),
+            dp_list_promote(p, NT_NUMBER));
+    }
+    return dp_reduce_values(name, source, dp_list_path(name, dp_eval_arg(rec, exp, 1, tc)));
 }
 
 #! Compares scalar arguments using the same promotion and absence rules as list extrema
@@ -718,9 +729,34 @@ auto sub dp_list_numeric_result(auto value, int common) {
     return value;
 }
 
+#! Finds the requested rank in promoted numeric values, interpolating between neighboring ranks
+auto sub dp_list_percentile(list<auto> values, int common, number percentage) {
+    list<auto> sorted = sort(map dp_list_promote($1, common), values);
+    # Keep the rank scaled by 100 until the last division. Integral weights and integral
+    # observations then give an exact integer whenever the interpolated value is integral.
+    number scaled_rank = percentage * (sorted.size() - 1);
+    int lower = floor(scaled_rank / 100).toInt();
+    number weight = scaled_rank - 100n * lower;
+    auto left = sorted[lower];
+    if (!weight) {
+        return left;
+    }
+    auto right = sorted[lower + 1];
+    if (weight == 50n) {
+        # Preserve median arithmetic, including float rounding and overflow behavior.
+        if (common == NT_FLOAT) {
+            float sum = left + right;
+            return sum.infp() ? left / 2.0 + right / 2.0 : sum / 2.0;
+        }
+        return dp_list_numeric_result((left.toNumber() + right.toNumber()) / 2, common);
+    }
+    number result = (left.toNumber() * (100n - weight) + right.toNumber() * weight) / 100n;
+    return common == NT_FLOAT ? result.toFloat() : dp_list_numeric_result(result, common);
+}
+
 #! Applies a reducer to a list of already evaluated values
-auto sub dp_reduce_values(string name, list<auto> source, list<hash<auto>> path) {
-    bool numeric_only = name == DP_FUNC_SUM || name == DP_FUNC_AVG || name == DP_FUNC_MEDIAN;
+auto sub dp_reduce_values(string name, list<auto> source, list<hash<auto>> path, number percentage = 50n) {
+    bool numeric_only = name == DP_FUNC_SUM || name == DP_FUNC_AVG || name == DP_FUNC_MEDIAN || name == DP_FUNC_PERCENTILE;
     list<auto> values = ();
     int common = NT_NOTHING;
     foreach auto item in (source) {
@@ -744,20 +780,8 @@ auto sub dp_reduce_values(string name, list<auto> source, list<hash<auto>> path)
         }
         return best;
     }
-    if (name == DP_FUNC_MEDIAN) {
-        list<auto> sorted = sort(map dp_list_promote($1, common), values);
-        int mid = sorted.size() / 2;
-        if (sorted.size() % 2) {
-            return sorted[mid];
-        }
-        auto left = sorted[mid - 1];
-        auto right = sorted[mid];
-        if (common == NT_FLOAT) {
-            # Halve before adding only when the sum overflows.
-            float sum = left + right;
-            return sum.infp() ? left / 2.0 + right / 2.0 : sum / 2.0;
-        }
-        return dp_list_numeric_result((left.toNumber() + right.toNumber()) / 2, common);
+    if (name == DP_FUNC_MEDIAN || name == DP_FUNC_PERCENTILE) {
+        return dp_list_percentile(values, common, percentage);
     }
     # Accumulate integer inputs as numbers so an intermediate sum cannot wrap.
     auto total = common == NT_FLOAT ? 0.0 : 0n;
@@ -776,6 +800,39 @@ auto sub dp_reduce_values(string name, list<auto> source, list<hash<auto>> path)
         total /= values.size();
     }
     return dp_list_numeric_result(total, common);
+}
+
+#! Selects an original element in one pass, retaining the first on ties
+auto sub dp_list_extreme_by(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    list<auto> source = dp_list_source(exp.exp, dp_eval_arg(rec, exp, 0, tc));
+    auto location = dp_eval_arg(rec, exp, 1, tc);
+    if (location.typeCode() != NT_STRING) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("%s expects a string field path, got %s", exp.exp,
+            location.fullType());
+    }
+    list<hash<auto>> path = dp_find_in_location(location);
+    bool minimum = exp.exp == DP_FUNC_MIN_BY;
+    int common = NT_NOTHING;
+    hash<auto> best_key = {};
+    hash<auto> best_item = {};
+    foreach auto item in (source) {
+        auto key = dp_find_in_value(item, path);
+        if (!exists key || key === NULL) {
+            continue;
+        }
+        common = dp_list_value_type(exp.exp, common, key, False);
+        # A later number can change numeric ordering and ties by promoting the entire list.
+        # Keep the first winner under both possible orders until the final type is known.
+        list<int> orders = common == NT_INT || common == NT_FLOAT ? (NT_FLOAT, NT_NUMBER) : (common,);
+        foreach int order in (orders) {
+            auto value = dp_list_promote(key, order);
+            if (!best_key.hasKey(order) || (minimum ? value < best_key{order} : value > best_key{order})) {
+                best_key{order} = value;
+                best_item{order} = item;
+            }
+        }
+    }
+    return best_item{common == NT_INT ? NT_NUMBER : common};
 }
 
 #! Returns distinct projected values in source order, using strict equality
@@ -1083,6 +1140,84 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "groups": "Data Manipulation",
             "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
             "arg_info": DpListPathArgs,
+            "return_type": new QoreUnionDataType(("*int", "float", "number")),
+        },
+        "impl": \dp_list_reduce(),
+    },
+    DP_FUNC_FLATTEN: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_FLATTEN,
+            "display_name": "flatten",
+            "short_desc": "Expands lists by one level",
+            "desc": "Keeps the elements of each nested list in source order. Other elements are kept as they are.",
+            "symbol": "flatten()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType,),
+            "arg_info": (DpListPathArgs[0],),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            list<auto> result = ();
+            foreach auto item in (dp_list_source(exp.exp, dp_eval_arg(rec, exp, 0, tc))) {
+                if (item.typeCode() == NT_LIST) {
+                    result += item;
+                } else {
+                    push result, item;
+                }
+            }
+            return result;
+        },
+    },
+    DP_FUNC_MIN_BY: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MIN_BY,
+            "display_name": "min_by",
+            "short_desc": "Returns the first element with the smallest key",
+            "desc": "Skips missing and null keys. Returns NOTHING when no element has a key.",
+            "symbol": "min_by()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureStringType),
+            "arg_info": (DpListPathArgs[0], <DataProviderArgInfo>{"display_name": "Key path",
+                "short_desc": "Field to compare", "desc": "Path to a numeric, date, or string key"}),
+            "return_type": AbstractDataProviderTypeMap."any",
+        },
+        "impl": \dp_list_extreme_by(),
+    },
+    DP_FUNC_MAX_BY: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MAX_BY,
+            "display_name": "max_by",
+            "short_desc": "Returns the first element with the largest key",
+            "desc": "Skips missing and null keys. Returns NOTHING when no element has a key.",
+            "symbol": "max_by()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureStringType),
+            "arg_info": (DpListPathArgs[0], <DataProviderArgInfo>{"display_name": "Key path",
+                "short_desc": "Field to compare", "desc": "Path to a numeric, date, or string key"}),
+            "return_type": AbstractDataProviderTypeMap."any",
+        },
+        "impl": \dp_list_extreme_by(),
+    },
+    DP_FUNC_PERCENTILE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_PERCENTILE,
+            "display_name": "percentile",
+            "short_desc": "Returns a percentile of numeric values",
+            "desc": "Linearly interpolates between adjacent ranks. Skips missing and null values.",
+            "symbol": "percentile()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureNumberType,
+                DataProviderSignatureOptionalStringType),
+            "arg_info": (DpListPathArgs[0], <DataProviderArgInfo>{"display_name": "Percentage",
+                "short_desc": "Percentile to compute", "desc": "A number from 0 to 100 inclusive"}, DpListPathArgs[1]),
             "return_type": new QoreUnionDataType(("*int", "float", "number")),
         },
         "impl": \dp_list_reduce(),
