@@ -1197,7 +1197,9 @@ public:
     }
 
     //! copies the members to the new hash \a h, which has none
-    DLLLOCAL void copyIntern(qore_hash_private& h) const {
+    /** always inline, as the compiler inlined it before qore#7557, so that a copy of a small hash costs no call more
+    */
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL void copyIntern(qore_hash_private& h) const {
         bool copy_layout = h.reserveForCopy(*this);
         // copy all members to new object
         for (const HashMember* i : member_list) {
