@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation of the phis that replace the reads of hashes with a chosen literal key
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class IRFiniteHashKeySelectorElisionTest
+
+#! The fixed-aggregate scalar replacement of a hash read with a key that a conditional chooses from literal keys
+/** A read of a local hash with native scalar members whose key is a phi of literal keys of the hash (directly, or
+    through string locals with one store) is replaced by a phi of the members' values on the same edges, so that the
+    hash is not built; the phi, its literals and the local that holds the key are removed when nothing else uses them.
+    The scenario must print in every tier and as a compiled executable what the AST tier prints; the optimizer's
+    statistics and the LLVM IR of the compiled functions show which hashes and keys are removed.
+*/
+class IRFiniteHashKeySelectorElisionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! disables the replacement of the reads with a key chosen from literals
+        const Gate = "QORE_DISABLE_IR_FINITE_HASH_KEY_SCALAR_REPLACEMENT=1 ";
+        #! disables the removal of the keys only
+        const SelectorGate = "QORE_DISABLE_IR_FINITE_HASH_KEY_SELECTOR_ELISION=1 ";
+
+        #! the functions whose hashes are replaced, with the number of hashes
+        const Replaced = {
+            "finiteKey": 1, "directKey": 1, "linkedKey": 1, "repeatedKey": 1, "duplicateKey": 1, "unicodeKey": 1,
+            "extremeKey": 1, "loopKey": 1, "observableKey": 1, "twoHashKey": 2, "copiedKey": 1, "sideEffectKey": 1,
+            "wideKey": 1, "wideConstantKey": 1, "partialKey": 2, "floatKey": 1, "boolKey": 1, "autoKey": 1,
+        };
+        #! the functions whose key and its literals are removed too
+        const SelectorRemoved = ("finiteKey", "directKey", "repeatedKey", "duplicateKey", "unicodeKey", "extremeKey",
+            "loopKey", "twoHashKey", "sideEffectKey", "wideKey", "wideConstantKey", "partialKey", "floatKey", "boolKey",
+            "autoKey");
+        #! the functions whose key is used otherwise, so it stays while the hash is replaced
+        const SelectorKept = ("observableKey", "linkedKey", "copiedKey");
+        #! the functions whose hash must stay: a key computed before the hash, a key that the hash does not have, an
+        #! arbitrary key, a key or hash that is changed, aliased, captured or passed by reference, a nested
+        #! conditional, handlers, members of different types
+        const Kept = ("earlyKey", "missingKey", "arbitraryKey", "changedKey", "mutatedHash", "aliasedHash",
+            "capturedHash", "referencedKey", "nestedKey", "caughtKey", "rejoinedKey", "mixedKey");
+    }
+
+    constructor() : QUnit::Test("IRFiniteHashKeySelectorElisionTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "";
+        fixture = get_script_dir() + "/IRFiniteHashKeySelectorElisionScenario.qr";
+
+        addTestCase("ast", \testAst());
+        foreach string tier in (("ir", "jit", "tiered")) {
+            # a local of the loop body, so that each closure binds its own
+            string mode = tier;
+            addTestCase(mode, sub () {
+                assertEq(astOutput(), run(mode), sprintf("exec-mode=%s output matches AST", mode));
+            });
+        }
+        addTestCase("ir with the replacement or the removal disabled", sub () {
+            assertEq(astOutput(), run("ir", Gate), "exec-mode=ir output with the replacement disabled matches AST");
+            assertEq(astOutput(), run("ir", SelectorGate),
+                "exec-mode=ir output with the removal of the keys disabled matches AST");
+        });
+        addTestCase("scalar replacement", \testScalarReplacement());
+        addTestCase("aot", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        assertEq("finite key selector checks passed\n", astOutput());
+    }
+
+    testScalarReplacement() {
+        string stats = run("ir", "QORE_IR_OPT_STATS=1 ");
+        foreach hash<auto> i in (Replaced.pairIterator()) {
+            assertRegex(sprintf("IR-OPT: %s:.* scalar-hashes=%d ", i.key, i.value), stats, i.key + " hash replaced");
+        }
+        foreach string name in (Kept) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-hashes=0 ", stats, name + " hash kept");
+        }
+        string disabled = run("ir", Gate + "QORE_IR_OPT_STATS=1 ");
+        foreach string name in (keys Replaced) {
+            assertRegex("IR-OPT: " + name + ":.* scalar-hashes=0 ", disabled, name + " hash kept when disabled");
+        }
+    }
+
+    testAot() {
+        if (!qcc_bin) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-finite-hash-key-");
+        foreach hash<auto> i in ((("level": 0, "env": ""), ("level": 3, "env": ""), ("level": 3, "env": Gate),
+                ("level": 3, "env": SelectorGate))) {
+            string exe = sprintf("%s/scenario-O%d-%d", tmp.path, i.level, $#);
+            string out = ExecModeHarness::run_any(sprintf("%sQORE_DUMP_LLVM_IR=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s -O%d --strip-source -o %s %s", i.env, shellQuote(libqore_dir),
+                shellQuote(libqore_dir), shellQuote(qcc_bin), i.level, shellQuote(exe), shellQuote(fixture)));
+            string label = sprintf("AOT -O%d%s", i.level, i.env ? " " + trim(i.env) : "");
+            assertTrue(is_file(exe), sprintf("%s compile produced an executable: %s", label, out.substr(-2000)));
+            if (i.level == 3) {
+                foreach string name in (keys Replaced) {
+                    assertEq(i.env == Gate, calls(out, name, "qore_rt_make_hash"),
+                        sprintf("%s: %s builds its hash", label, name));
+                }
+                foreach string name in (Kept) {
+                    assertTrue(calls(out, name, "qore_rt_make_hash"), sprintf("%s: %s builds its hash", label, name));
+                }
+                foreach string name in (SelectorRemoved) {
+                    assertEq(i.env == Gate || i.env == SelectorGate, calls(out, name, "qore_rt_make_[a-z_]*string"),
+                        sprintf("%s: %s makes its key", label, name));
+                }
+                foreach string name in (SelectorKept) {
+                    assertTrue(calls(out, name, "qore_rt_make_[a-z_]*string"),
+                        sprintf("%s: %s makes its key", label, name));
+                }
+            }
+            assertEq(astOutput(), ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+                shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(exe))), label + " output matches AST");
+        }
+    }
+
+    #! returns True if the LLVM definition of the function calls a runtime function whose name matches the pattern
+    private bool calls(string ir, string name, string function) {
+        *list<*string> body = regex_extract(ir, "(?s)define [^\n]*@" + name + "_[^\n]*\n(.*?)\n\\}");
+        assertTrue(exists body[0], name + " has an LLVM definition");
+        return regex(body[0] ?? "", "(?:call|invoke) [^\n]*@" + function);
+    }
+
+    private string run(string mode, string env = "") {
+        # ExecModeHarness compiles synchronously, so tiered execution reaches native code deterministically
+        return ExecModeHarness::run(sprintf("%sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s", env, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture)));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast");
+        }
+        return ast_output;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
