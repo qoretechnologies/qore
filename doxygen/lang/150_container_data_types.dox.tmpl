@@ -891,7 +891,13 @@ sub test() {
 
     Lists, hashes, closures and references that are part of a recursive graph are treated the same way: as long as
     any of them is also referenced from outside the graph, for example a list of the graph's objects that is also
-    assigned to a local variable, none of the objects in the graph are collected.
+    assigned to a local variable, none of the objects in the graph are collected.  @anchor closure_var_collection A
+    variable captured by a closure of the graph is collected with it; a call of the closure that another thread makes
+    through a weak reference to an object of the graph once the collection has been decided keeps the variable's value
+    if the call has started before the collection takes the value: the collection is then decided again when the call
+    has released the variable.  A call that starts once the value has been taken, or that was made through a
+    reference to the closure or to an object of the graph taken after the decision and before the value was taken,
+    reads @ref nothing for the variable.
 
     A cycle can also be closed by a value stored in a @ref Qore::Thread::Queue "Queue" or a
     @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue that the object
