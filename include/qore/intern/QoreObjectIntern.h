@@ -926,10 +926,16 @@ public:
 
         rlck orders this with the releases of the locking path; increments take no lock, and are seen by the
         compare-and-swap.  The object's lock is held exclusively.
+
+        @param others_referenced true if another member or a node of the set has been referenced since the decision
+        (RSetDerefHelper::referencedSinceDecision(), qore#7556): the collection is abandoned as well
     */
-    DLLLOCAL bool takeCollectDeleteReference(int decided, unsigned releases) {
+    DLLLOCAL bool takeCollectDeleteReference(int decided, unsigned releases, bool others_referenced) {
         AutoLocker al(rlck);
         collect_pending.fetch_sub(1, std::memory_order_relaxed);
+        if (others_referenced) {
+            return false;
+        }
         int since = static_cast<int>(locked_releases - releases);
         int refs = references.load(std::memory_order_acquire);
         do {

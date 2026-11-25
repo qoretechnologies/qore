@@ -2956,6 +2956,9 @@
       \c MEMORY-ALLOCATION-ERROR exception and leaves the string or list that could not grow unchanged, where the
       process ended with a segmentation fault or \c std::terminate() (@ref exception_memory "allocation failures";
       <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
+    - an object or a closure of a recursive graph read through a weak reference while another thread decides to collect
+      the graph keeps the whole graph, instead of the graph being collected while the value is held (see
+      @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7556">issue 7556</a>)
     - a closure called through a weak reference while another thread decides to collect the recursive graph of a
       variable that the closure captured keeps the variable's value instead of reading @ref nothing (see
       @ref closure_var_collection; <a href="https://github.com/qoretechnologies/qore/issues/7546">issue 7546</a>)

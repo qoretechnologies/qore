@@ -32878,6 +32878,8 @@ DerefPointHold deref_delete_hold;
 DerefPointHold deref_last_hold;
 //! the hold of dbg_hold_closure_var_collect()
 DerefPointHold closure_var_collect_hold;
+//! the hold of dbg_hold_closure_var_collected()
+DerefPointHold closure_var_collected_hold;
 #ifdef DEBUG
 //! the hold of dbg_hold_container_free(); its class name is the type of the container ("list" or "hash")
 DerefPointHold container_free_hold;
@@ -32930,6 +32932,11 @@ void dbg_hold_deref_last_hook(const char* class_name) {
 void dbg_hold_closure_var_collect_hook(const char* name) {
     dbg_run_deref_point_hold(closure_var_collect_hold, qore_dbg_closure_var_collect_decided_hook, name,
         "dbg_hold_closure_var_collect");
+}
+
+void dbg_hold_closure_var_collected_hook(const char* name) {
+    dbg_run_deref_point_hold(closure_var_collected_hold, qore_dbg_closure_var_collected_hook, name,
+        "dbg_hold_closure_var_collected");
 }
 
 #ifdef DEBUG
@@ -33052,6 +33059,26 @@ static QoreValue f_dbg_hold_closure_var_collect(const QoreListNode* params, Runt
         ExceptionSink* xsink) {
     return dbg_arm_deref_point_hold(closure_var_collect_hold, qore_dbg_closure_var_collect_decided_hook,
         dbg_hold_closure_var_collect_hook, params, xsink);
+}
+
+//! holds the next dereference that collects a closure-bound variable of the given name with its recursive set once
+//! it has taken the variable's value
+/** The hold is taken once, in ClosureVarValue::deref(), after the dereference has checked that nothing of the set has
+    been referenced since its decision and has taken the variable's value, with no lock held, and before the deletion
+    releases the value; another thread can read a closure that captured the variable meanwhile, through a weak
+    reference to the value, and call it once the value has been released, and tests use the hold to make that
+    deterministic (qore#7546, qore#7556).
+
+    @param name the name of the variable
+    @param held decremented once the dereferencing thread is held
+    @param release the dereferencing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_closure_var_collected(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return dbg_arm_deref_point_hold(closure_var_collected_hold, qore_dbg_closure_var_collected_hook,
+        dbg_hold_closure_var_collected_hook, params, xsink);
 }
 
 //! returns the reads of the size of the list or hash of the weak reference in the first entry of a list, given as
@@ -38129,6 +38156,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
     qns.addBuiltinVariant("dbg_hold_closure_var_collect", f_dbg_hold_closure_var_collect,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_hold_closure_var_collected", f_dbg_hold_closure_var_collected,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "release");
