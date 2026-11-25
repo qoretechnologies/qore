@@ -80,6 +80,15 @@ module LinkedInOrganizationsDataProvider {
                 "To publish content as the signed-in member, use the **LinkedIn** application "
                 "instead.\n\n"
                 "LinkedIn is a trademark of LinkedIn Corporation",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "linkedin.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.linkedin.com/legal/api-terms-of-use",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "linkedindma",
             "logo": LinkedInOrganizationsLogo,
             "logo_file_name": "linkedin-logo.svg",

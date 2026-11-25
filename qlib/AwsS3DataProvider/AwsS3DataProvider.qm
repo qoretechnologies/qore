@@ -299,6 +299,8 @@ module AwsS3DataProvider {
             "app": AwsS3DataProvider::AppName,
             "path": "/presigned-url",
             "action": "presigned-url",
+            "processing": <DataProviderProcessingInfo>{"locality": "local"},
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Presigned URL",
             "short_desc": "Create a temporary URL granting access without AWS credentials",
             "desc": "Creates a URL carrying its own authorization, so that a system that cannot authenticate "

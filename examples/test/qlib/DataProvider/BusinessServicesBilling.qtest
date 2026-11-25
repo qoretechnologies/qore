@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class BusinessServicesBillingTest
+
+class BusinessServicesBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("BusinessServices provider billing") {
+        addVendor("ClickFunnels", "ClickFunnels", "myclickfunnels.com", "subscription",
+            "https://support.myclickfunnels.com/docs/clickfunnels-pricing/");
+        addVendor("BaseLinker", "BaseLinker", "baselinker.com", "subscription",
+            "https://base.com/en-US/pricing/");
+        addVendor("MewsRest", "Mews", "mews.com", "contract",
+            "https://www.mews.com/en/pricing");
+        addVendor("Deel", "Deel", "letsdeel.com", "unknown",
+            "https://www.deel.com/pricing/");
+        addVendor("Squarespace", "Squarespace", "squarespace.com", "subscription",
+            "https://www.squarespace.com/pricing");
+        set_return_value(main());
+    }
+}

@@ -55,6 +55,15 @@ module CdsRestDataProvider {
                 "Dynamics 365 application instances. Microsoft, Microsoft 365, and Microsoft Dynamics 365 are "
                 "trademarks of the Microsoft group of companies",
             "scheme": "dynamics",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "dynamics.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.microsoft.com/en-us/dynamics-365/products/sales/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": DynamicsLogo,
             "logo_file_name": "dynamics-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -200,6 +209,15 @@ module CdsRestDataProvider {
                 "and medium-sized organizations. Microsoft, Microsoft 365, and Microsoft Dynamics 365 are "
                 "trademarks of the Microsoft group of companies",
             "scheme": "bcrests",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "dynamics.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.microsoft.com/en-us/dynamics-365/products/business-central/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": BusinessCentralLogo,
             "logo_file_name": "business-central-logo.svg",
             "logo_mime_type": MimeTypeSvg,

@@ -56,6 +56,15 @@ module DiscordDataProvider {
             "display_name": "Discord",
             "short_desc": "Discord messaging services",
             "desc": "Discord messaging services",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "discord.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://discord.com/developers/docs/policies-and-agreements/developer-terms-of-service",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "discord",
             "logo": DiscordLogo,
             "logo_file_name": "Discord-logo.svg",

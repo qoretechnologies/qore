@@ -2141,6 +2141,10 @@
         (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo",
         @ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo"; an action's value of a field overrides
         its app's) (<a href="https://github.com/qoretechnologies/qore/issues/6736">issue 6736</a>)
+      - hosted provider apps publish their recipient and vendor billing terms through
+        @ref DataProvider::DataProviderActionCatalog::getActionProcessing() "getActionProcessing()" and
+        @ref DataProvider::DataProviderActionCatalog::getActionBilling() "getActionBilling()"
+        (<a href="https://github.com/qoretechnologies/qore/issues/7568">issue 7568</a>)
       - see @ref dataprovider_v3_12 for all changes
 
     - @ref datasourceproviderintro "DatasourceProvider" module

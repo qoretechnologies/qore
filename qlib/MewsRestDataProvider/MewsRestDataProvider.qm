@@ -55,6 +55,15 @@ module MewsRestDataProvider {
             "short_desc": "Mews server",
             "desc": "Mews server",
             "scheme": "mewsrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "mews.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "contract",
+                "source": "https://www.mews.com/en/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": MewsLogoWhite,
             "logo_file_name": "mews-logo.svg",
             "logo_mime_type": MimeTypeSvg,

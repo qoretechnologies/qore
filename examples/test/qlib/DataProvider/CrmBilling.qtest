@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class CrmBillingTest
+
+class CrmBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Crm provider billing") {
+        addVendor("Bitly", "Bitly", "bitly.com", "included",
+            "https://bitly.com/pages/pricing");
+        addVendor("Freshsales", "Freshsales", "myfreshworks.com", "subscription",
+            "https://www.freshworks.com/crm/pricing-compare/");
+        addVendor("Keap", "Keap", "infusionsoft.com", "subscription",
+            "https://keap.com/pricing");
+        addVendor("SalesforceRest", "Salesforce", "salesforce.com", "subscription",
+            "https://www.salesforce.com/sales/pricing/");
+        addVendor("ServiceNowRest", "ServiceNow", "service-now.com", "contract",
+            "https://www.servicenow.com/products/itsm/pricing.html");
+        set_return_value(main());
+    }
+}

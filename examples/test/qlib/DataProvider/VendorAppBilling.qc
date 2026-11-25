@@ -6,8 +6,8 @@ class VendorAppBillingTest inherits QUnit::Test {
     }
 
     # Check the catalog values a consumer sees after lazy action registration.
-    addVendor(string mod, string app, string recipient, string model, string source,
-            *hash<string, string> action_terms, *hash<string, string> action_sources) {
+    addVendor(string mod, string app, string recipient, string model, *string source,
+            *hash<string, string> action_terms, *hash<string, string> action_sources, *string unit) {
         addTestCase(app, sub () {
             load_module(mod + "DataProvider");
             hash<DataProviderAppInfo> info = DataProviderActionCatalog::getAppEx(app);
@@ -15,8 +15,14 @@ class VendorAppBillingTest inherits QUnit::Test {
                 "locality": "external", "external_recipient": recipient,
             };
             hash<DataProviderBillingInfo> billing = <DataProviderBillingInfo>{
-                "model": model, "source": source, "effective_date": 2026-11-25,
+                "model": model, "effective_date": 2026-11-25,
             };
+            if (source) {
+                billing.source = source;
+            }
+            if (unit) {
+                billing.unit = unit;
+            }
             assertEq(processing, info.processing);
             assertEq(billing, info.billing);
             list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(app);
@@ -37,6 +43,7 @@ class VendorAppBillingTest inherits QUnit::Test {
                 if (inlist(term.value, ("included", "metered", "subscription", "unknown", "contract"))) {
                     expected.model = term.value;
                 } else {
+                    expected.model = "metered";
                     expected.unit = term.value;
                 }
                 assertEq(expected, DataProviderActionCatalog::getActionBilling(app, term.key), term.key);

@@ -60,6 +60,15 @@ module KeapDataProvider {
                 "This integration supports full CRUD operations on core CRM resources, "
                 "tag management, and event-based triggers.",
             "scheme": "keaprest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "infusionsoft.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://keap.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": KeapLogo,
             "logo_file_name": "keap-logo.svg",
             "logo_mime_type": MimeTypeSvg,

@@ -56,6 +56,15 @@ module ConstantContactDataProvider {
                 "managing contacts, and tracking engagement.\n\n"
                 "This integration supports contacts, contact lists, tags, custom fields, "
                 "segments, email campaigns, bulk activities, reports, and events.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "cc.email",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.constantcontact.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "constantcontactres",
             "logo": ConstantContactLogo,
             "logo_file_name": "constantcontact-logo.svg",

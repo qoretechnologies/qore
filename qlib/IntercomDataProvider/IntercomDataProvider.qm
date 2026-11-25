@@ -70,6 +70,15 @@ module IntercomDataProvider {
                 "an access token may do is set by the permissions granted to the app in Intercom's own "
                 "developer hub.\n\n"
                 "Intercom is a trademark of Intercom, Inc.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "intercom.io",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.intercom.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "intercom",
             "logo": Priv::IntercomLogo,
             "logo_file_name": "intercom-logo.svg",

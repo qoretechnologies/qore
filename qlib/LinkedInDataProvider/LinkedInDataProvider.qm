@@ -78,6 +78,15 @@ module LinkedInDataProvider {
                 "followers and analytics — use the **LinkedIn Organizations** application "
                 "instead.\n\n"
                 "LinkedIn is a trademark of LinkedIn Corporation",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "linkedin.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.linkedin.com/legal/api-terms-of-use",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "linkedin",
             "logo": LinkedInLogo,
             "logo_file_name": "linkedin-logo.svg",

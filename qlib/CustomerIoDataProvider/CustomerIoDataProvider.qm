@@ -62,6 +62,15 @@ module CustomerIoDataProvider {
                 "- Segment management\n"
                 "- Collection and snippet management\n"
                 "- Real-time webhooks for email, SMS, push, and Slack events",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "customer.io",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://customer.io/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "customerio",
             "logo": CustomerIoLogo,
             "logo_file_name": "customerio-logo.svg",
@@ -420,6 +429,7 @@ module CustomerIoDataProvider {
             "app": CustomerIoDataProvider::AppName,
             "path": "/send-transactional-email",
             "action": "send-transactional-email",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Transactional",
             "display_name": "Send Transactional Email",
             "short_desc": "Send a transactional email",
