@@ -2164,7 +2164,16 @@ public class HttpAsyncSocketIoController {
 
     #! Handles accept completion
     private handleAcceptComplete(hash<HttpListenerInfo> linfo, hash<auto> output) {
-        Socket sock = output.sock;
+        # the connection's socket is the server's: handler code gets it, and sandboxed code may not use it, also when
+        # a trusted handler that gets it passes it on; the server does its own I/O on the connection through its alias
+        # (qore#7338), which keeps the connection's socket while it exists.  The socket is marked also when the accept
+        # runs for sandboxed code (a listener added on behalf of a tenant): setServerOwned() is decided by the code
+        # that calls it; it returns False only for the code of a sandboxed Program, and the socket is then used itself
+        Socket sock;
+        {
+            Socket conn = output.sock;
+            sock = conn.setServerOwned() ? conn.getServerAlias() : conn;
+        }
         string uh = sock.uniqueHash();
         # Ensure the accepted socket is closed on any unexpected exception.
         # Log first: closing here sends a FIN to a client that is typically still in

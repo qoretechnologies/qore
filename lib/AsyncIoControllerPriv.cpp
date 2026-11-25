@@ -3797,6 +3797,17 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                             work_xsink.clear();
                         } else if (rv->getType() == NT_HASH) {
                             new_poll_info = rv.release().get<QoreHashNode>();
+                            // an operation of sandboxed code cannot have the controller poll the connection socket
+                            // of a server (qore#7338); checked here, with the submitter's sandbox context applied
+                            if (AsyncIoControllerPriv::checkPollInfoServerSockets(new_poll_info, &work_xsink)) {
+                                QoreException* ex_obj = qore_exception_sink_ops(work_xsink).getException();
+                                if (ex_obj) {
+                                    ex_hash = ex_obj->makeExceptionObject();
+                                }
+                                work_xsink.clear();
+                                new_poll_info->deref(nullptr);
+                                new_poll_info = nullptr;
+                            }
                         } else {
                             completed = true;
                         }
@@ -4733,6 +4744,10 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         return nullptr;
     }
     ReferenceHolder<AbstractPollableIoObjectBase> sock_holder(sock, xsink);
+    // the connection socket of a server is refused to sandboxed code (qore#7338)
+    if (qore_pollable_server_guard(sock_obj, sock, xsink)) {
+        return nullptr;
+    }
 
     v = info->getKeyValue("spop");
     QoreObject* spop_obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
@@ -13601,6 +13616,34 @@ bool qore_async_io_controller_log_v(int level, const char* fmt, va_list args, Ex
 
 const std::string& AsyncIoControllerPriv::getSocketHash(AbstractPollableIoObjectBase* sock) {
     return sock->getIoIdentityHash();
+}
+
+int AsyncIoControllerPriv::checkPollInfoServerSockets(const QoreHashNode* poll_info, ExceptionSink* xsink) {
+    auto check = [xsink] (QoreValue v) -> int {
+        if (v.getType() != NT_OBJECT) {
+            return 0;
+        }
+        const QoreObject* obj = v.get<const QoreObject>();
+        TryPrivateDataRefHolder<AbstractPollableIoObjectBase> p(obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        return qore_pollable_server_guard(obj, *p, xsink);
+    };
+    if (check(poll_info->getKeyValue("socket"))) {
+        return -1;
+    }
+    QoreValue extra = poll_info->getKeyValue("extra_fds");
+    if (extra.getType() == NT_LIST) {
+        const QoreListNode* l = extra.get<const QoreListNode>();
+        for (size_t i = 0, e = l->size(); i < e; ++i) {
+            QoreValue entry = l->retrieveEntry(i);
+            if (entry.getType() == NT_HASH && check(entry.get<const QoreHashNode>()->getKeyValue("pollable"))) {
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info,
