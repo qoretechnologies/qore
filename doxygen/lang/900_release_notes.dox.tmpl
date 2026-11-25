@@ -101,6 +101,18 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Closures Run in the Program That Compiled Them
+    A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
+    that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
+    @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
+
+    @par Library Code Gives Restricted Code No Values of the Host's Environment
+    For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
+    URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
+    Logger file names expand no environment variables, and
+    @ref DataProvider::DataProvider::getAutoConfig() "DataProvider::getAutoConfig()" is @ref False for it and for
+    sandboxed code, so data providers take no options from the environment (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
@@ -1925,6 +1937,14 @@
     (<a href="https://github.com/qoretechnologies/qore/issues/6257">issue 6257</a>);
     @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()" tells it whether it may use
     the terminal for its caller (<a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>).
+
+    @par Asking Whether the Calling Code May Read the Host's Environment or Receive Its Secrets
+    @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()",
+    @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()" and the C++
+    functions \c qore_caller_may_read_external_info() and \c qore_caller_may_receive_host_secrets()
+    (\c QORE_HAVE_CALLER_AMBIENT_PREDICATES) tell library code whether it may resolve ambient data or credentials of
+    the host for its caller (see @ref sandbox_ambient_host_data;
+    <a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>).
 
     @par Process-Wide Registries Refuse Sandboxed Code
     Process-wide callback, hook and handler registries and the async I/O controller settings refuse changes by sandboxed
