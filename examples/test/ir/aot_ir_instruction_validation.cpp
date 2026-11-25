@@ -9,6 +9,7 @@
 #include <qore/intern/QoreIR.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreAOTInstRegistry.h>
+#include <qore/intern/qore_thread_intern.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -24,7 +25,7 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         const std::vector<uint32_t>& operands, const Payload& payload, const char* expected,
         bool tag_only = false, bool wide = false, uint16_t version = QORE_AOT_BINARY_VERSION,
         uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr,
-        const Payload* unwind = nullptr) {
+        const Payload* unwind = nullptr, const std::function<bool(const QoreIRFunction&)>* inspect = nullptr) {
     QoreAOTBinaryWriter writer;
     writer.feature_flags = features | (wide ? QORE_AOT_FEAT_WIDE_IR_OPERANDS : 0);
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
@@ -202,6 +203,10 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             ok = ok && site != ir->local_unwind_locations.end() && site->second == (slot ? loc : nullptr);
         }
     }
+    // The case checks what the reader made of the instruction.
+    if (ok && inspect && !expected) {
+        ok = (*inspect)(*ir);
+    }
     // A mismatched group must fail before its payload reader is called, even with no payload bytes.
     if (tag_only && expression_reads) {
         ok = false;
@@ -225,6 +230,74 @@ static Payload invoke(O opcode, bool wrong_node = false) {
         w.writeU16(0xffff); // normal/exception targets (not executed)
         w.writeU16(0xffff);
     };
+}
+
+// The payload of a background helper instruction (group 62) of format \a version: the helper's self mode, its callee
+// (QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION, qore#7087), \a params parameters by slot and the helper's IR, a function
+// with a local variable for each parameter that returns
+static Payload background_helper(uint16_t version, int32_t callee, uint32_t params) {
+    return [version, callee, params](QoreAOTBinaryWriter& w) {
+        w.writeU8(static_cast<uint8_t>(QoreIRBackgroundKind::Helper));
+        w.writeStringRef("helper");
+        w.writeU8(0); // no reference arguments
+        w.writeU8(0); // QBHS_NONE
+        if (version >= QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION) {
+            w.writeU32(static_cast<uint32_t>(callee));
+        }
+        w.writeU32(params);
+        for (uint32_t i = 0; i < params; ++i) {
+            w.writeU32(i);
+        }
+        w.writeStringRef("background-helper");
+        w.writeU32(1); // maximum value ID
+        w.writeU32(params); // maximum local slot ID
+        w.writeU32(0); // guards
+        w.writeStringRef(""); // return type
+        w.writeU32(0); // parent slots
+        w.writeU16(1); // blocks
+        w.writeU16(static_cast<uint16_t>(params)); // local variables
+        w.writeU16(0); // body locals
+        for (uint32_t i = 0; i < params; ++i) {
+            w.writeStringRef("p");
+            w.writeStringRef("auto");
+            w.writeU32(i);
+            w.writeU8(static_cast<uint8_t>(AOTIRLocalBinding::NONE));
+            w.writeU32(UINT32_MAX);
+        }
+        if (version >= QORE_AOT_HANDLER_OWN_LOCALS_VERSION) {
+            w.writeU32(0); // handler-own slots
+        }
+        w.writeStringRef("entry");
+        w.writeU8(0); // block flags
+        w.writeU16(1); // instructions: return
+        w.writeU16(static_cast<uint16_t>(O::ReturnNothing));
+        w.writeU8(static_cast<uint8_t>(G::Return));
+        w.writeU32(0);
+        w.writeU8(0); // operands
+        w.writeU16(0xffff); // no exception target
+        w.writeU8(0); // no value
+        w.writeU32(0); // source start/end line
+        w.writeU32(0);
+        w.writeStringRef("");
+        w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+        w.writeU8(0); // no temp scopes
+        w.writeU8(0);
+        w.writeU32(0); // catch-exit depths
+        w.writeU32(0); // catch-cleanup results
+        w.writeU16(0); // local unwind locations
+    };
+}
+
+// returns the background instruction of a function read by check()
+static const QoreIRBackgroundInstruction* find_background(const QoreIRFunction& func) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == O::BackgroundInt) {
+                return static_cast<const QoreIRBackgroundInstruction*>(inst.get());
+            }
+        }
+    }
+    return nullptr;
 }
 
 int main() {
@@ -263,6 +336,8 @@ int main() {
         false, false, QORE_AOT_BATCH_AM_VERSION);
     run("AN v50 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 50 ",
         false, false, QORE_AOT_BATCH_AN_VERSION);
+    run("AO v51 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 51 ",
+        false, false, QORE_AOT_BATCH_AO_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -484,8 +559,49 @@ int main() {
             w.writeU32(1);
         }, "runtime location 1 is beyond");
     }
+    {
+        // the callee of a background helper (qore#7087): a v52 image records it; the reader refuses a v51 image, whose
+        // helpers have none, with the message to rebuild it
+        auto callee = [&](const char* label, uint16_t version, int32_t value, uint32_t params, int32_t read,
+                const char* error = nullptr) {
+            std::vector<uint32_t> operands;
+            for (uint32_t i = 0; i < params; ++i) {
+                operands.push_back(i + 1);
+            }
+            const std::function<bool(const QoreIRFunction&)> inspect = [label, read, params](
+                    const QoreIRFunction& func) {
+                const QoreIRBackgroundInstruction* bi = find_background(func);
+                if (!bi || bi->kind != QoreIRBackgroundKind::Helper || !bi->helper_ir
+                        || bi->helper_params.size() != params || bi->helper_callee != read) {
+                    fprintf(stderr, "%s: callee %d read as %d\n", label, read, bi ? bi->helper_callee : -100);
+                    return false;
+                }
+                return true;
+            };
+            ok = check(pgm, label, O::BackgroundInt, static_cast<uint8_t>(G::Background), operands,
+                background_helper(version, value, params), error, false, false, version, 30, 0, nullptr, nullptr,
+                &inspect) && ok;
+            ++count;
+        };
+        static_assert(QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
+            "the reader refuses the layout before the callee");
+        constexpr uint16_t old_version = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION - 1;
+        callee("v51 helper without a callee", old_version, 0, 2, 0,
+            "unsupported binary format version 51 (supported 52-52); rebuild the artifact with this version of qcc");
+        callee("helper callee parameter 0", QORE_AOT_BINARY_VERSION, 0, 2, 0);
+        callee("helper callee parameter 1", QORE_AOT_BINARY_VERSION, 1, 2, 1);
+        callee("helper callee checked in the thread", QORE_AOT_BINARY_VERSION, QBH_CHECK_IN_THREAD, 2,
+            QBH_CHECK_IN_THREAD);
+        callee("helper callee unknown", QORE_AOT_BINARY_VERSION, QBH_CALLEE_UNKNOWN, 1, QBH_CALLEE_UNKNOWN);
+        callee("helper callee beyond its parameters", QORE_AOT_BINARY_VERSION, 2, 2, 0,
+            "invalid background helper callee 2");
+        callee("helper callee without parameters", QORE_AOT_BINARY_VERSION, 0, 0, 0,
+            "invalid background helper callee 0");
+        callee("helper callee below the markers", QORE_AOT_BINARY_VERSION, -3, 1, 0,
+            "invalid background helper callee -3");
+    }
     constexpr unsigned expected_count =
-        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 169 : 159;
+        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168;
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));

@@ -678,11 +678,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         \c FILESYSTEM and CA certificate locations are given
     */
     private:internal static checkCreator(*hash<HttpClientConnectionManagerOptions> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if ((opts.ssl_ca_file || opts.ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection manager CA "
                 "certificate locations, as it is restricted from the FILESYSTEM functional domain";
         }
@@ -2635,7 +2635,7 @@ printf("%d connection(s) migrated\n", migrated);
 
     #! Applies the connection's credential policy to a REST client copy sharing this transport
     nothing checkTlsCredentialCopy(string url) {
-        if (origin_tls_credentials.file_backed && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if (origin_tls_credentials.file_backed && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "ILLEGAL-FILESYSTEM-ACCESS", "copying a REST client with TLS credential paths requires filesystem access";
         }
         HttpClientConnectionManager::checkTlsCredentialOrigin(url);
@@ -2714,7 +2714,9 @@ printf("%d connection(s) migrated\n", migrated);
         if (bound_proof) {
             return bound_proof;
         }
-        return lent_proof && SandboxManager::isCallerRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
+        # the borrower counts also when it calls through the method of a lent object, whose capability frame lends
+        # nothing here (qore#7052): a restricted borrower is always bound to the proof (fail closed)
+        return lent_proof && SandboxManager::isLentToRestricted(DOM_NETWORK) ? lent_proof : NOTHING;
     }
 
     #! Refuses a request target that a manager bound to its client's target does not allow (qore#7262)
