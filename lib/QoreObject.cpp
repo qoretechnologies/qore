@@ -2505,7 +2505,17 @@ int qore_object_private::checkSandboxedMethodCallIntern(const QoreObject& obj, c
         return 0;
     }
     const qore_object_private* priv = obj.priv;
-    if (!priv->sandboxedWriterDeniedIntern(*class_ctx)) {
+    // the call can have entered the Program of the method already (CodeEvaluationHelper); the code that makes it is
+    // the code of class_ctx, whose sandboxes are decided in the Program of that class
+    bool denied;
+    QoreProgram* cpgm = class_ctx->spgm.load(std::memory_order_acquire);
+    if (cpgm && cpgm != getProgram()) {
+        QoreProgramContextHelper pch(cpgm);
+        denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
+    } else {
+        denied = priv->sandboxedWriterDeniedIntern(*class_ctx);
+    }
+    if (!denied) {
         return 0;
     }
     xsink->raiseException("SANDBOX-OBJECT-ACCESS-ERROR", "the code of class '%s', which sandboxed code declared, "
