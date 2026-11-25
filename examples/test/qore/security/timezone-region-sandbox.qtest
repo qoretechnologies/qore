@@ -25,6 +25,11 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
 
 # a module whose code loads time zones for its callers, loaded by the test (the host Program)
 %append-module-path "${SCRIPT_DIR}/tz-modules"
@@ -98,8 +103,8 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         *string zoneinfo;
         #! a zoneinfo file of a zone 14 hours east of UTC to copy, if any
         *string gmt14;
-        #! the qore binary for child processes
-        string qore_bin;
+        #! the upper bound of the run of a child process
+        const ChildTimeout = 60s;
     }
 
     constructor() : QUnit::Test("time zone regions in sandboxed code", "1.0", \ARGV) {
@@ -160,9 +165,49 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
                 gmt14 = zroot + "/Etc/GMT-14";
             }
         }
-        # the qore binary as an absolute path, as children run in other directories
-        string bin = QORE_ARGV[0];
-        qore_bin = (bin =~ /\// && !absolute_path(bin)) ? getcwd() + "/" + bin : bin;
+    }
+
+    #! runs the qore interpreter (never this process's own executable) in a child process and returns its output
+    /** The child is ended before this method returns, also when it does not end in time; the case is skipped if
+        there is no interpreter to run (a test compiled with qcc with none configured) or no process module
+        @param args the arguments of the interpreter
+        @param env variables to add to the environment of the child
+        @param cwd the current directory of the child
+        @return \c out: stdout, \c all: stdout followed by stderr, \c rc: the exit code
+    */
+    hash<auto> runChild(list<string> args, *hash<auto> env, *string cwd) {
+%ifdef NoProcess
+        testSkip("no process module 2.2 or later to run child processes");
+%else
+        string interp;
+        try {
+            interp = TestInterpreter::qore_interpreter();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("no qore interpreter for child processes: %s: %s", ex.err, ex.desc));
+        }
+        hash<auto> opts = {"env": Process::getEnvironment() + env} + (cwd ? {"cwd": cwd} : {});
+        Process proc(interp, args, opts);
+        bool ended;
+        on_exit {
+            if (!ended) {
+                proc.terminate();
+                proc.wait();
+            }
+        }
+        ended = proc.wait(ChildTimeout);
+        if (!ended) {
+            throw "CHILD-TIMEOUT", sprintf("%s %y did not end within %y", interp, args, ChildTimeout);
+        }
+        string out = "";
+        while (*string str = proc.readStdout(65536, 0)) {
+            out += str;
+        }
+        string err = "";
+        while (*string str = proc.readStderr(65536, 0)) {
+            err += str;
+        }
+        return {"out": out, "all": out + err, "rc": proc.exitCode()};
+%endif
     }
 
     #! copies a file
@@ -520,9 +565,7 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
         copyFile(gmt14, cwd_dir + "/" + region);
 
         foreach string tz in (prefix + region, ":" + prefix + region, region, ":" + region) {
-            string cmd = sprintf("cd '%s' && TZ='%s' '%s' -e 'printf(\"%%d\", TimeZone::get().UTCOffset());'",
-                cwd_dir, tz, qore_bin);
-            string out = backquote(cmd);
+            string out = runChild(("-e", "printf(\"%d\", TimeZone::get().UTCOffset());"), {"TZ": tz}, cwd_dir).out;
             assertEq("-18000", trim(out), "TZ=" + tz);
         }
     }
@@ -655,7 +698,7 @@ try { out += p.callFunction(\"des\", data); } catch (hash<ExceptionInfo> ex) { o
 print(out.join(\"|\"));
 ");
         f.close();
-        string out = backquote(sprintf("TZ='%s' '%s' '%s'", local, qore_bin, script));
+        string out = runChild((script,), {"TZ": local}).out;
         assertEq((local, "ILLEGAL-FILESYSTEM-ACCESS", "ILLEGAL-FILESYSTEM-ACCESS", local).join("|"), trim(out),
             "a path naming the local zone is a path for the region APIs; a date in the local zone deserializes");
     }
@@ -979,9 +1022,9 @@ print(out.join(\"|\"));
             "for (int i = 0; i < 3; ++i) { f(); }\nprint(f().format(\"Z\"));\n");
         f.close();
         foreach string mode in ("ast", "ir", "jit") {
-            int rc;
-            string out = backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 '%s' --exec-mode=%s '%s' 2>&1", qore_bin, mode,
-                script), \rc);
+            hash<auto> res = runChild(("--exec-mode=" + mode, script), {"QORE_JIT_SYNC_COMPILE": "1"});
+            int rc = res.rc;
+            string out = res.all;
             if (rc && out =~ /exec-mode|JIT/i && mode == "jit") {
                 continue;
             }
@@ -1141,7 +1184,7 @@ out += \"host-paths:\" + m;
 print(out.join(\"|\"));
 ", qoreList(TimeZoneRegions), qoreList(paths)));
         f.close();
-        string out = backquote(sprintf("'%s' '%s' 2>&1", qore_bin, script));
+        string out = runChild((script,)).all;
         assertEq("b:Indian/Mauritius|host:Indian/Reunion|host-paths:300", trim(out),
             "the host and its other Programs are not affected");
     }

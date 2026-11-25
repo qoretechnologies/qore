@@ -2734,9 +2734,9 @@ int QoreTimeZoneManager::checkPathPolicy(const char* name, const std::string& pa
     // errors name the path as given, not the path that is checked
     ExceptionSink xsink2;
     if (qore_qf_private::checkOpenAccess(path.c_str(), O_RDONLY, &xsink2)) {
-        QoreValue err = xsink2.getExceptionErr();
-        QoreString code(err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str()
-            : "FILESYSTEM-ACCESS-DENIED");
+        // the error code can be an inline short string, which has no QoreStringNode
+        QoreStringDataHelper err(xsink2.getExceptionErr());
+        QoreString code(err ? err.c_str() : "FILESYSTEM-ACCESS-DENIED");
         xsink2.clear();
         raisePathDenied(name, code.c_str(), xsink);
         return -1;
