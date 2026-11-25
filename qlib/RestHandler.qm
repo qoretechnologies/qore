@@ -244,6 +244,26 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     |\c rest_action_method|string|the name of the method that will be called on the @ref RestHandler::AbstractRestClass "AbstractRestClass" object
     |\c rest_api_path|string|the URI path after any prefix is removed used to resolve the REST API method
     |\c rest_method|*string|any original REST action name in the request (if any) with the first letter capitalized
+
+    @section rest_request_credentials The Credentials of a Request
+
+    The REST classes that a sandbox governs (the calling code is sandboxed, or the REST class or the handler is of a
+    sandboxed Program), and every REST class of a handler that asks for it with
+    @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()", get the request context
+    without the objects of the server and the credentials of the request, as the code that serves a stream request
+    does (see @ref httpserverutil_request_credentials); the other REST classes get the request context as before.
+    The filtered request context has the keys of
+    @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys", the keys that the REST
+    handler adds (@ref RestHandler::RestHandlerContextKeys "RestHandlerContextKeys"), and the keys that trusted code
+    names with @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"; the \c hdr
+    key has no
+    \c Proxy-Authorization field and no cookies, and no \c Authorization field unless the handler authenticates its
+    own endpoint and opts in to receive it
+    (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()").
+    The keys that the REST classes get besides those are set with
+    @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()"; only trusted code can
+    call either setter: they refuse sandboxed callers.
+    A stream request that a REST class creates is handed the raw request, which only its own code reads.
 */
 /** @page resthierarchy Implementing Object Hierarchies
 
@@ -427,6 +447,13 @@ Content-Length: 16
 /** @page resthandler_relnotes RestHandler Release Notes
 
     @section rh_1_6_8 RestHandler v1.6.8
+    - the REST classes that a sandbox governs, and all of them with the handler's
+      @ref HttpServer::AbstractHttpRequestHandler::setFilterRequests() "setFilterRequests()", get the request without
+      the objects of the server and the credentials of the request: the
+      \c Authorization field only if the handler authenticates its own endpoint and opts in to receive it, never the
+      \c Proxy-Authorization field or the cookies; trusted code that adds keys to the request context for the REST
+      classes names them with @ref RestHandler::RestHandler::setRestContextKeys() "setRestContextKeys()" (see
+      @ref rest_request_credentials; issue #6843)
     - the handler gets the socket of an HTTP/1.x request when one of its REST classes is of a class of a sandboxed
       Program, and refuses a request (\c 500, closing the connection) that would hand the connection's socket to a REST
       class or a stream handler of a sandboxed Program on its dispatch path (see @ref httpserver_handler_socket;
@@ -589,8 +616,25 @@ Content-Length: 16
     - initial release
 */
 
+#! The body readers of the requests that REST handlers dispatch on the thread, the innermost last (qore#6843)
+/** Not public: the REST classes get the request without the server's objects (see @ref rest_request_credentials), so
+    the code of this module that reads the body of an HTTP/1.x request for a REST class (qore#7323) takes the server's
+    body reader of the request from here
+*/
+thread_local *list<*HttpServer::Http1BodyReader> rest_body_readers;
+
 #! the RestHandler namespace contains all the objects in the RestHandler module
 public namespace RestHandler {
+    #! The keys of the request context that the REST handler adds for its REST classes (see @ref rest_context_argument)
+    /** The REST classes get the request context without the server's objects and the credentials of the request:
+        the keys of @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys" and these
+        (see @ref rest_request_credentials)
+
+        @since RestHandler 1.6.8
+    */
+    public const RestHandlerContextKeys = ("aih", "body", "encoding", "orig_method", "orig-request-body",
+        "rest_action_method", "rest_api_path", "rest_method", "stream-body");
+
     #! the base abstract class for REST stream request handlers
     /**
         The calling order is as follows:
@@ -1100,7 +1144,8 @@ public namespace RestHandler {
                         && s.isOpen()) {
                     return rest_refuse_connection_socket(cls);
                 }
-                return cls.handleRequest(listener, rh, s, cl, mn, cx, args);
+                return cls.handleRequest(listener, rh, s, cl, mn,
+                    rh.filtersRequestsFor(cls) ? rh.getRestClassContext(cx) : cx, args);
             }
             if (rh.isLogDebugEnabled()) {
                 rh.logDebug("REST DBG: class %y: dispatching method %y args: %s", name(), mn,
@@ -1176,7 +1221,8 @@ public namespace RestHandler {
                                     map ah{$1} = cx.body{$1}, keys cx.body, !exists ah{$1};
                                 }
                             }
-                        } else if (*HttpServer::Http1BodyReader body_reader = cx."header-info".body_reader) {
+                        } else if (*HttpServer::Http1BodyReader body_reader = rest_body_readers
+                                ? rest_body_readers.last() : NOTHING) {
                             # an HTTP/1.x body with a Content-Length that the server left to a stream request
                             # (see RestHandler::wantsBodyStreaming()) is read whole for a method without a stream
                             # handler, and given to it as a body read before dispatching is (qore#7323)
@@ -1405,6 +1451,11 @@ public namespace RestHandler {
         private {
             #! REST schema validator
             RestSchemaValidator::AbstractRestSchemaValidator validator;
+        }
+
+        private:internal {
+            #! more keys of the request context that the REST classes get; see setRestContextKeys()
+            *list<string> rest_context_keys;
         }
 
         #! Returns the REST classes of the handler, whose code it runs (qore#7305)
@@ -1697,7 +1748,8 @@ public namespace RestHandler {
             # socket object needed for call; will not be used
             Socket s();
 
-            hash<HttpHandlerResponseInfo> rv = rcls.handleRequest(listener, self, s, cl, mn, rcx, args);
+            hash<HttpHandlerResponseInfo> rv = rcls.handleRequest(listener, self, s, cl, mn,
+                filtersRequestsFor(rcls) ? getRestClassContext(rcx) : rcx, args);
             if (rv.code < 200 || rv.code >= 300)
                 throw "REST-ERROR", rv.body, rv.code;
             return rv.body;
@@ -1898,7 +1950,18 @@ public namespace RestHandler {
 
             try {
                 checkAccess(cx);
-                rv = dispatchRequest(listener, s, cl, mn, path, cx, args);
+                # the REST classes that a sandbox governs get the request without the server's objects and the
+                # credentials of the request, with the keys that this handler adds (qore#6843; see
+                # @ref rest_request_credentials), and so do all of them if the handler asks for it; a stream
+                # request that a REST class creates is handed the raw request
+                *object handoff;
+                withholdRequestCredentials(cx, hdr, \handoff);
+                on_exit delete handoff;
+                hash<auto> rcx = filtersRequestsFor() ? getRestClassContext(cx) : cx;
+                # the server's body reader of an HTTP/1.x request is read by the code of this module only
+                push rest_body_readers, cx."header-info".body_reader;
+                on_exit pop rest_body_readers;
+                rv = dispatchRequest(listener, s, cl, mn, path, rcx, args);
             } catch (hash<ExceptionInfo> ex) {
                 string desc = !cx.debug
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
@@ -2024,6 +2087,57 @@ public namespace RestHandler {
         private *hash<auto> errorResponseHeaders(hash<auto> cx) {
         }
 
+        #! Returns the request context that a REST class gets when the request is filtered for its code
+        /** Without the server's objects and the credentials of the request, with the keys of
+            @ref RestHandlerContextKeys and of setRestContextKeys() and the path of the arguments; see
+            @ref rest_request_credentials
+
+            @param cx the request context of the REST handler, with the request header fields in \c hdr
+
+            @return the request context that the REST class gets
+
+            @since RestHandler 1.6.8
+        */
+        final hash<auto> getRestClassContext(hash<auto> cx) {
+            hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, cx.hdr ?? {});
+            hash<auto> rcx = filtered.cx;
+            foreach string key in (RestHandlerContextKeys + ("arg_path",) + (rest_context_keys ?? ())) {
+                if (cx.hasKey(key)) {
+                    rcx{key} = cx{key};
+                }
+            }
+            rcx.hdr = filtered.hdr;
+            return rcx;
+        }
+
+        #! Sets more keys of the request context that the REST classes get
+        /** The REST classes get the request without the server's objects and the credentials of the request (see
+            @ref rest_request_credentials): the keys of
+            @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys" and of
+            @ref RestHandlerContextKeys; trusted code that adds keys to the request context for the REST classes
+            before they are dispatched names them here.  Only trusted code can set them: sandboxed callers are
+            refused.
+
+            @param names the names of more keys of the request context that the REST classes get
+
+            @throw REST-ERROR the calling code is sandboxed
+
+            @since RestHandler 1.6.8
+        */
+        setRestContextKeys(*softlist<string> names) {
+            bool sandboxed;
+            try {
+                sandboxed = SandboxManager::isSandboxed();
+            } catch (hash<ExceptionInfo> ex) {
+                # fails closed
+                sandboxed = True;
+            }
+            if (sandboxed) {
+                throw "REST-ERROR", "sandboxed code cannot set the keys of the request context of the REST classes";
+            }
+            rest_context_keys = names;
+        }
+
         #! Dispatches the request and returns the response
         private hash<HttpHandlerResponseInfo> dispatchRequest(HttpListenerInterface listener, Socket s,
                 *list<string> class_list, string method_name, string path, hash<auto> cx, *hash<auto> args) {
@@ -2064,7 +2178,8 @@ public namespace RestHandler {
                     && s.isOpen()) {
                 return rest_refuse_connection_socket(rcls);
             }
-            return rcls.handleRequest(listener, self, s, class_list, method_name, cx, args);
+            return rcls.handleRequest(listener, self, s, class_list, method_name,
+                filtersRequestsFor(rcls) ? getRestClassContext(cx) : cx, args);
         }
 
         #! method that determines how exceptions handling REST requests are returned
