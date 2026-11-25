@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class CallerRestrictionCapabilityTest
+
+#! An object of library code that unrestricted code created and lent to restricted code is a capability: its methods
+#! do what they do for whoever calls them (issue #7052)
+/** Library code creates objects whose classes declare functional domains lazily, in the methods of the objects that
+    the host lends (a connection creates its client when it is used): the check of the declared domain found the
+    restricted Program that called the lent object and refused it.  The objects that the restricted Program creates
+    itself, its callbacks and the references that it creates stay restricted
+*/
+class CallerRestrictionCapabilityTest inherits QUnit::Test {
+    private {
+        #! the results of the interpreted child: restricted, unrestricted
+        *list<hash<string, string>> checked;
+    }
+
+    constructor() : Test("CallerRestrictionCapability", "1.0", \ARGV) {
+        addTestCase("lent objects", \lentTest());
+        addTestCase("qcc executables", \compiledTest());
+        set_return_value(main());
+    }
+
+    lentTest() {
+        string dir = normalize_dir(get_script_dir()) + DirSep + "caller-restriction" + DirSep;
+        string cmd = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' %%s 2>/dev/null", (dir, ENV.QORE_MODULE_DIR).join(PathSep),
+            TestInterpreter::qore_interpreter(), dir + "CapabilityChild.q");
+        hash<string, string> r = parse(backquote(sprintf(cmd, "restricted")));
+        hash<string, string> u = parse(backquote(sprintf(cmd, "unrestricted")));
+        # the lent connection creates its client, and its code is not restricted, also in what it creates and in the
+        # threads that it starts
+        assertEq("\"client\"", r.lent_get, "restricted: a lent connection creates its client");
+        assertEq("False", r.lent_probe, "restricted: the lent connection's code");
+        assertEq("\"client\"", r.lent_nested_get, "restricted: a connection that the lent connection created");
+        assertEq("False", r.lent_nested_probe, "restricted: the code of that connection");
+        assertEq("False", r.lent_thread, "restricted: a thread that the lent connection started");
+        # the loading of native code is not lent
+        assertEq("True", r.lent_native, "restricted: native code is not lent");
+        # code of the restricted Program, and references that it created, are restricted
+        assertEq("True", r.lent_callback, "restricted: its callback that the lent connection calls");
+        assertEq("True", r.own_ref_to_lent, "restricted: its reference to a method of the lent connection");
+        assertEq("False", r.host_ref_to_lent, "restricted: the host's reference to it");
+        # connections that it created itself are restricted
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.own_get, "restricted: its own connection");
+        assertEq("True", r.own_probe, "restricted: its own connection's code");
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.own_subclass_get, "restricted: its subclass of the connection");
+        # an object that library code created in its initialization is not lent by anybody
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.library_shared_get, "restricted: the library's shared connection");
+        assertEq("True", r.library_shared_probe, "restricted: the library's shared connection's code");
+        # connections of the library that the host lent keep creating their clients
+        # the async client of a lent HTTP connection uses the network for the borrower, but only to the target of the
+        # connection's creator (qore#7262 with the lent capability)
+        assertEq("\"HTTPCLIENT-CONNECT-ERROR\"", r.lent_bound_own, "restricted: a lent connection's own target");
+        assertEq("\"PERMISSION-DENIED\"", r.lent_bound_other, "restricted: another origin of a lent connection");
+        assertEq("\"HTTPCLIENT-CONNECT-ERROR\"", u.lent_bound_own, "unrestricted: a connection's own target");
+        assertEq("\"HTTPCLIENT-CONNECT-ERROR\"", u.lent_bound_other, "unrestricted: another origin");
+        foreach string k in (("http", "rest", "smtp", "bound")) {
+            assertEq("\"client\"", r{"lent_connection_" + k}, "restricted: a lent connection: " + k);
+            assertEq("\"client\"", u{"lent_connection_" + k}, "unrestricted: a lent connection: " + k);
+        }
+        # top-level code of the restricted Program in every execution mode
+        foreach string m in (("ast", "ir", "jit", "tiered", "sbast", "sbir", "sbjit", "sbtiered")) {
+            assertEq("\"client\"", r{"top_" + m + "_lent_get"}, "restricted: top-level: lent connection: " + m);
+            assertEq("False", r{"top_" + m + "_lent_probe"}, "restricted: top-level: lent connection's code: " + m);
+            assertEq("\"INVALID-FUNCTION-ACCESS\"", r{"top_" + m + "_own_get"},
+                "restricted: top-level: its own connection: " + m);
+            assertEq("\"client\"", u{"top_" + m + "_own_get"}, "unrestricted: top-level: own connection: " + m);
+            # factories and inherited methods of lent objects in every execution mode
+            assertEq("True", r{"top_" + m + "_factory_other_probe"},
+                "restricted: top-level: a factory: another module's class: " + m);
+            assertEq("\"client\"", r{"top_" + m + "_factory_own_get"},
+                "restricted: top-level: a factory: the lent module's own class: " + m);
+            assertEq("\"client\"", r{"top_" + m + "_inherited_base_get"},
+                "restricted: top-level: an inherited method: its module's class: " + m);
+            assertEq("False", r{"top_" + m + "_inherited_own_probe"},
+                "restricted: top-level: the subclass's method: its module's class: " + m);
+            assertEq("True", r{"top_" + m + "_inherited_override_probe"},
+                "restricted: top-level: an override called by an inherited method: " + m);
+            foreach string k in (("factory_other_probe", "inherited_own_probe", "inherited_override_probe")) {
+                assertEq("False", u{"top_" + m + "_" + k}, "unrestricted: top-level: " + k + ": " + m);
+            }
+            foreach string k in (("factory_own_get", "inherited_base_get")) {
+                assertEq("\"client\"", u{"top_" + m + "_" + k}, "unrestricted: top-level: " + k + ": " + m);
+            }
+        }
+        # only the domains that a host grant lends are lent
+        assertEq("True", r.lent_process, "restricted: the process domain is not lent");
+        assertEq("False", u.lent_process, "unrestricted: the process domain");
+        # what a module that a lent method loaded first created in its initialization is not lent
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.lazy_shared_get, "restricted: a module loaded in a lent method");
+        assertEq("\"client\"", u.lazy_shared_get, "unrestricted: a module loaded in a lent method");
+        # a sandboxed Program connects through the lent connection
+        assertEq("\"connected\"", r.sandboxed_lent_connect, "restricted: sandboxed: the lent connection connects");
+        assertEq("\"connected\"", u.sandboxed_lent_connect, "unrestricted: sandboxed: the lent connection connects");
+        # library code acting on a lent object for the restricted code: not lent
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.registry_get, "restricted: a registry of the host's connections");
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.helper_get, "restricted: a helper given the lent connection");
+        assertEq("\"client\"", u.registry_get, "unrestricted: a registry of the host's connections");
+        assertEq("\"client\"", u.helper_get, "unrestricted: a helper given the lent connection");
+        # an object created under a host grant for the restricted code: not lent
+        assertEq("\"INVALID-FUNCTION-ACCESS\"", r.made_in_grant_get, "restricted: created under a grant");
+        assertEq("\"client\"", u.made_in_grant_get, "unrestricted: created under a grant");
+        # the destructor of a lent object that the restricted code deletes is checked against it
+        assertEq("True", r.lent_destructor, "restricted: the destructor of a lent object");
+        assertEq("False", u.lent_destructor, "unrestricted: the destructor of a lent object");
+        # a factory of a lent object lends only objects of the lent module's own classes
+        assertEq("True", r.factory_other_probe, "restricted: a factory: another module's class");
+        assertEq("\"client\"", r.factory_own_get, "restricted: a factory: the lent module's own class");
+        assertEq("False", u.factory_other_probe, "unrestricted: a factory: another module's class");
+        assertEq("\"client\"", u.factory_own_get, "unrestricted: a factory: the lent module's own class");
+        # SandboxManager::isLentToRestricted() answers for the code that a lent object was lent to (qore#7262)
+        assertEq("True", r.lent_to_restricted, "restricted: isLentToRestricted() in a lent method");
+        assertEq("False", r.lent_to_restricted_barrier, "restricted: isLentToRestricted() under the module's barrier");
+        assertEq("True", r.copy_probe, "restricted: a copy of a lent object is not lent");
+        assertEq("False", r.host_lent_to_restricted, "restricted: isLentToRestricted() in the host's own call");
+        foreach string k in (("lent_to_restricted", "lent_to_restricted_barrier", "copy_probe",
+                "host_lent_to_restricted")) {
+            assertEq("False", u{k}, "unrestricted: " + k);
+        }
+        assertEq("\"PERMISSION-DENIED\"", r.lent_rest_tls_path,
+            "restricted: a TLS certificate file that the borrower names for a lent connection's client");
+        assertNeq("\"PERMISSION-DENIED\"", u.lent_rest_tls_path, "unrestricted: its own TLS certificate file");
+        assertEq(98, r.size(), "restricted: every result");
+        checked = (r, u);
+        # nothing is restricted for an unrestricted Program
+        foreach string k in (("lent_get", "lent_nested_get", "own_get", "own_subclass_get", "library_shared_get")) {
+            assertEq("\"client\"", u{k}, "unrestricted: " + k);
+        }
+        foreach string k in (("lent_probe", "lent_nested_probe", "lent_thread", "lent_native", "lent_callback",
+                "own_ref_to_lent", "host_ref_to_lent", "own_probe", "library_shared_probe")) {
+            assertEq("False", u{k}, "unrestricted: " + k);
+        }
+    }
+
+    #! the child compiled with qcc gives the results of the interpreted child: the host's code, which creates and lends
+    #! the objects, runs as native code (the restricted code and the library's code are parsed at run time)
+    compiledTest() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        if (!checked) {
+            lentTest();
+        }
+        string dir = normalize_dir(get_script_dir()) + DirSep + "caller-restriction" + DirSep;
+        string mdir = (dir, ENV.QORE_MODULE_DIR).join(PathSep);
+        TmpDir tmp("caller-restriction-capability-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "capability-child" + opt;
+            string out = backquote(sprintf("QORE_MODULE_DIR='%s' '%s' %s -o '%s' '%s' 2>&1", mdir, qcc_bin, opt, exe,
+                dir + "CapabilityChild.q"));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable: " + out);
+            if (!is_file(exe)) {
+                continue;
+            }
+            foreach hash<auto> i in ({"restricted": checked[0], "unrestricted": checked[1]}.pairIterator()) {
+                assertEq(i.value, parse(backquote(sprintf("QORE_MODULE_DIR='%s' '%s' %s 2>/dev/null", mdir, exe,
+                    i.key))), "qcc " + opt + ": " + i.key);
+            }
+        }
+    }
+
+    #! parses the output of a child process: one line per result, with the key, \c "=" and the value written with
+    #! \c %y
+    private hash<string, string> parse(string out) {
+        hash<string, string> rv;
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> kv = (line =~ x/^([a-z_]+)=(.*)$/);
+            if (!kv) {
+                throw "CHILD-OUTPUT-ERROR", sprintf("unexpected output: %s", out);
+            }
+            rv{kv[0]} = kv[1];
+        }
+        return rv ?? {};
+    }
+}
