@@ -56,6 +56,15 @@ module SmartSheetDataProvider {
                 "folders, reports, users, and groups. Sheets are modeled as dynamic tables "
                 "with typed columns for structured data access",
             "scheme": "smartsheetrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "smartsheet.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.smartsheet.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": SmartSheetLogo,
             "logo_file_name": "smartsheet-logo.svg",
             "logo_mime_type": MimeTypeSvg,
