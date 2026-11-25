@@ -613,7 +613,13 @@ DLLLOCAL QORE_INTERN_NOINLINE __attribute__((cold)) QoreValue qore_weak_share_co
     for such a value
 */
 static QORE_INTERN_ALWAYS_INLINE bool qore_store_needs_scan(QoreValue& v) {
-    if (!needs_scan(v)) {
+    // needs_scan() with the tags tested inline: only a node held as an ordinary reference, or an enum value, whose
+    // member's value can be a node, can need a scan; an opaque reference and every other inline value cannot
+    if (v.isPlainPointer()) {
+        if (!needs_scan(v.getPtr())) {
+            return false;
+        }
+    } else if (!v.isEnum() || !needs_scan(v)) {
         return false;
     }
     if (qore_weak_shared(v)) [[unlikely]] {

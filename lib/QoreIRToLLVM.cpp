@@ -77,6 +77,16 @@ static bool qore_assignment_mode_converts_value(AssignmentMode mode) {
     return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque;
 }
 
+//! returns true if a store to a local in \a mode checks after the local's conversion that it did not copy the value
+/** A weak or opaque store refuses a container that the local's type converted to a copy (qore#7572).  A weak store
+    converts the value with the weak helper (see qore_coerce_helper_name()), which refuses such a copy itself
+    (qore_weak_assignment_conversion()), so only an opaque store calls the check
+    (qore_rt_check_weak_store_conversion()) after its conversion
+*/
+static bool qore_store_checks_weak_conversion(AssignmentMode mode) {
+    return mode == AssignmentMode::Opaque;
+}
+
 // LLVM 21 removed IRBuilder::CreateGlobalStringPtr(); preserve its [0, 0] GEP semantics.
 static llvm::Constant* qore_ir_create_global_string_ptr(
         const std::unique_ptr<llvm::IRBuilder<>>& builder,
@@ -22252,9 +22262,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 module, llvm_func, inst);
                     }
                     emitExceptionCheck(module, llvm_func, inst);
-                    if (qore_assignment_mode_converts_value(linst->mode)) {
-                        // a weak or opaque store whose value the local's type converted to a copy is refused, as
-                        // LValueHelper::assign() refuses it (qore#7572)
+                    if (qore_store_checks_weak_conversion(linst->mode)) {
+                        // an opaque store whose value the local's type converted to a copy is refused, as
+                        // LValueHelper::assign() refuses it (qore#7572); the weak helper refuses it for a weak store
                         llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
                             linst->mode == AssignmentMode::Weak ? 1 : 0);
                         if (aot_mode) {
@@ -22315,9 +22325,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 module, llvm_func, inst);
                     }
                     emitExceptionCheck(module, llvm_func, inst);
-                    if (qore_assignment_mode_converts_value(linst->mode)) {
-                        // a weak or opaque store whose value the local's type converted to a copy is refused, as
-                        // LValueHelper::assign() refuses it (qore#7572)
+                    if (qore_store_checks_weak_conversion(linst->mode)) {
+                        // an opaque store whose value the local's type converted to a copy is refused, as
+                        // LValueHelper::assign() refuses it (qore#7572); the weak helper refuses it for a weak store
                         llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
                             linst->mode == AssignmentMode::Weak ? 1 : 0);
                         if (aot_mode) {
@@ -22881,9 +22891,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
                 emitExceptionCheck(module, llvm_func, inst);
-                if (qore_assignment_mode_converts_value(linst->mode)) {
-                    // a weak or opaque store whose value the local's type converted to a copy is refused, as
-                    // LValueHelper::assign() refuses it (qore#7572)
+                if (qore_store_checks_weak_conversion(linst->mode)) {
+                    // an opaque store whose value the local's type converted to a copy is refused, as
+                    // LValueHelper::assign() refuses it (qore#7572); the weak helper refuses it for a weak store
                     llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
                         linst->mode == AssignmentMode::Weak ? 1 : 0);
                     if (aot_mode) {
@@ -22942,9 +22952,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {ti_as_ptr, boxed, cleanup, xsink_arg});
                 }
                 emitExceptionCheck(module, llvm_func, inst);
-                if (qore_assignment_mode_converts_value(linst->mode)) {
-                    // a weak or opaque store whose value the local's type converted to a copy is refused, as
-                    // LValueHelper::assign() refuses it (qore#7572)
+                if (qore_store_checks_weak_conversion(linst->mode)) {
+                    // an opaque store whose value the local's type converted to a copy is refused, as
+                    // LValueHelper::assign() refuses it (qore#7572); the weak helper refuses it for a weak store
                     llvm::Value* weak_flag = llvm::ConstantInt::get(i32_type,
                         linst->mode == AssignmentMode::Weak ? 1 : 0);
                     if (aot_mode) {

@@ -20487,9 +20487,14 @@ load_local_done:
                     cleanupLocalCaches();
                     return exitAfterUnwind();
                 }
-                if (inst->opcode == QoreIROpcode::AddAssignAny && addAssignGaveOperand(res, right)) [[unlikely]] {
-                    releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
-                        weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                // the result's tag first, which is in a register: the result of most operations holds no node; the
+                // operand is read again from its slot, which the operation does not change, so that it need not be
+                // kept across the call
+                if (res.isPlainPointer() && inst->opcode == QoreIROpcode::AddAssignAny) [[unlikely]] {
+                    if (addAssignGaveOperand(res, getIRValue(values, inst->operands[1]))) {
+                        releaseAddAssignOperand(func, values, cleanup, inst->operands[1], res, value_use_counts,
+                            weak_load_temp_slots, borrowed_temp_remaining, xsink);
+                    }
                 }
                 setValueSlot(values, inst->result.id, res, xsink);
                 if (res.needsRef()) {
