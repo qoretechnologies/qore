@@ -418,6 +418,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
+                                 "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
