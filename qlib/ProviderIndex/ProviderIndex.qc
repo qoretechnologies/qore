@@ -1349,11 +1349,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         }
         if (info.expressions) {
             rv.expressions = map {
-                $1.key: $1.value + {
-                    "args": (map $1 + {
-                        "type": $1.type.getBaseTypeName(),
-                    }, $1.value.args),
-                    "return_type": $1.value.return_type.getBaseTypeName(),
+                $1.key: $1.value + getSerializableExpressionType("return_type", $1.value.return_type) + {
+                    "args": (map $1 + getSerializableExpressionType("type", $1.type), $1.value.args),
                 }
             }, info.expressions.pairIterator();
         }
@@ -1364,6 +1361,17 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
                     "type": $1.value.type.getBaseTypeName(),
                 }}, info{key}.pairIterator();
             }
+        }
+        return rv;
+    }
+
+    #! Keep the compact base name for older readers and describe types that the name cannot restore.
+    private:internal static hash<auto> getSerializableExpressionType(string key, AbstractDataProviderType type) {
+        string base = type.getBaseTypeName();
+        hash<auto> rv;
+        rv{key} = base;
+        if (type !== AbstractDataProviderTypeMap{base}) {
+            rv{key + "_info"} = type.getInfo();
         }
         return rv;
     }
