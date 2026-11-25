@@ -28,6 +28,7 @@ class PrivateInternalOwnerStepsTest inherits QUnit::Test {
         addTestCase("the methods of a class do not multiply the steps", \methodsTest());
         addTestCase("the steps grow linearly with the hierarchy", \sizeTest());
         addTestCase("the steps grow linearly with the subclasses", \subclassesTest());
+        addTestCase("subclasses share the owner sets of merge points", \ownerSetsTest());
         addTestCase("the calls of the owner classes", \callsTest());
         set_return_value(main());
     }
@@ -51,10 +52,11 @@ class PrivateInternalOwnerStepsTest inherits QUnit::Test {
         inherit \c R with a method each.  \c M(l+1) declares \c m(int), which the code of each \c Oi and \c Xj
         calls on an object of \c R.
     */
-    private static string hierarchy(int k, int l, int t, int q) {
+    private static string hierarchy(int k, int l, int t, int q, bool merge_methods = False) {
         string src = sprintf("class M%d { string m(int i) { return \"M%d\"; } }\n", l + 1, l + 1);
         for (int j = l; j >= 1; --j) {
-            src += sprintf("class M%d inherits M%d {}\n", j, j + 1);
+            src += sprintf("class M%d inherits M%d { %s }\n", j, j + 1,
+                merge_methods ? "string m(int i) { return \"merge\"; }" : "");
         }
         for (int j = 1; j <= l; ++j) {
             src += sprintf("class X%d inherits private:internal M%d { "
@@ -127,6 +129,28 @@ class PrivateInternalOwnerStepsTest inherits QUnit::Test {
         int size = (101 + 100 + 1 + 100 + 1 + 1) + (100 + 100 + 1 + 100 + 200 + 1);
         assertTrue(twenty <= 20 * 4 * size, sprintf("20 subclasses: %d steps for %d classes and edges", twenty,
             size));
+    }
+
+    ownerSetsTest() {
+        if (!exists steps()) {
+            testSkip("the library has no owner set counter (a debug build is required)");
+        }
+        string common = hierarchy(64, 64, 1, 1, True);
+        int one = retainedSets(common);
+        assertTrue(one >= 64, sprintf("64 merge points retained %d sets", one));
+        string src = "class Mid inherits private R {}\n";
+        for (int i = 0; i < 64; ++i) {
+            src += sprintf("class S%d inherits %s { string m(bool b) { return \"S\"; } }\n", i,
+                i % 2 ? "Mid" : "R");
+        }
+        assertEq(one, retainedSets(common + src), "64 additional subclasses share the first table");
+    }
+
+    private static int retainedSets(string source) {
+        Program p(PO_NEW_STYLE);
+        int before = call_function("dbg_live_internal_owner_sets");
+        p.parse(source, "merge points");
+        return call_function("dbg_live_internal_owner_sets") - before;
     }
 
     callsTest() {
