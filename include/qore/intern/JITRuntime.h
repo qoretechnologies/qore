@@ -518,6 +518,25 @@ void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 //! Assigns a value to a local in a weak or opaque assignment (\a mode: an AssignmentMode), checking its type first;
 //! returns the value of the assignment, owned by the caller
 uint64_t qore_rt_assign_local_mode(LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink);
+//! Returns 1 if a local holds a reference on the current thread, otherwise 0 (qore#7617)
+uint8_t qore_rt_local_holds_reference(const LocalVar* var);
+uint8_t qore_rt_local_holds_reference_aot(QoreAOTContext* ctx, int32_t idx);
+//! Assigns a value to the lvalue that a local holding a reference designates, with that lvalue's type, in an
+//! assignment of the given mode (an AssignmentMode: Normal, Weak or Opaque); returns the value of the assignment,
+//! owned by the caller (qore#7617)
+uint64_t qore_rt_assign_local_through(LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_through_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value, int32_t mode,
+        ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_through_throwing(LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_through_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t value, int32_t mode,
+        ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_foreach_through(LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_foreach_through_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value, int32_t mode,
+        ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_foreach_through_throwing(LocalVar* var, uint64_t value, int32_t mode,
+        ExceptionSink* xsink);
+uint64_t qore_rt_assign_local_foreach_through_aot_throwing(QoreAOTContext* ctx, int32_t idx, uint64_t value,
+        int32_t mode, ExceptionSink* xsink);
 void qore_rt_assign_local_throwing(LocalVar* var, uint64_t value, ExceptionSink* xsink);
 
 //! Assign a NaN-boxed QoreValue to a local variable without type coercion.
