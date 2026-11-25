@@ -4396,6 +4396,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 // Use SwitchRegexMatch instruction which directly calls CaseNodeRegex::matches()
                 // without creating temporary AST nodes that would corrupt the switch statement
                 auto* inst = builder.createSwitchRegexMatch(regex_case, switch_val, node->loc);
+                if (!inst) {
+                    error = "IR builder failed to create a switch regex case match";
+                    return false;
+                }
                 if (!exception_stack.empty()) {
                     inst->exception_target = exception_stack.back();
                 }
@@ -6118,6 +6122,105 @@ bool QoreIRLowering::setHandOverScopeExitFlowTargets(QoreIRScopeExitInstruction*
     return true;
 }
 
+bool QoreIRLowering::setReplacingScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry,
+        QoreIRBasicBlock* handed_over_return, const QoreProgramLocation* loc, std::string& error) {
+    assert(se && !se->flow && (se->hand_over_return || !handed_over_return) && scope_entry < cleanup_stack.size());
+    assert(!handed_over_return == !se->result.isValid());
+    // in the cleanups of a return statement, the value that the handlers replace is the return's
+    assert(handed_over_return || (pending_return_active && try_depth == pending_return_try_depth));
+    if (!builder.getFunction()->hasDebugFlowPaths() || se->is_error) {
+        return true;
+    }
+    // the handler lowered inline whose body has the scope, as for setScopeExitFlowTargets()
+    size_t hf_index = SIZE_MAX;
+    for (size_t j = inline_handler_flow_stack.size(); j > 0; --j) {
+        if (inline_handler_flow_stack[j - 1].cleanup_depth <= scope_entry) {
+            hf_index = j - 1;
+            break;
+        }
+    }
+    // whether the request goes on with the return, as in the AST interpreter (qore#6949): a return request, and a break
+    // or a continue that no loop or switch statement around the block takes and that no later handler of the exits
+    // around it replaces (inlineHandlerRequestEndsFunction())
+    auto goes_on = [&](int rc) -> bool {
+        if (rc == RC_RETURN) {
+            return true;
+        }
+        const LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK, scope_entry);
+        if (hf_index == SIZE_MAX) {
+            return !jt.target;
+        }
+        if (jt.target && jt.cleanup_depth >= inline_handler_flow_stack[hf_index].cleanup_depth) {
+            return false;
+        }
+        return inlineHandlerRequestEndsFunction(hf_index, rc);
+    };
+    // the paths of a request made after the block (qore#7008)
+    const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error, hf_index);
+    if (!paths) {
+        return false;
+    }
+    // in the cleanups of a return statement, the code after the ScopeExit, where a request that goes on with the
+    // return goes on
+    QoreIRBasicBlock* cont = nullptr;
+    if (!handed_over_return) {
+        if (!(cont = createBlock("handler.past.cap.cont"))) {
+            error = "IR builder failed to create the block of a debugger flow request";
+            return false;
+        }
+        builder.createBranch(cont, loc);
+    }
+    QoreIRBasicBlock* saved_block = builder.getBlock();
+    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    for (int rc : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
+        QoreIRBasicBlock* path = rc == RC_RETURN ? paths->return_path
+            : (rc == RC_BREAK ? paths->break_path : paths->continue_path);
+        // an entry of its own for each request (see makeDebugFlowEntries())
+        QoreIRBasicBlock* entry = createBlock(rc == RC_RETURN ? "debug.flow.past.cap.return.entry"
+            : (rc == RC_BREAK ? "debug.flow.past.cap.break.entry" : "debug.flow.past.cap.continue.entry"));
+        if (!entry) {
+            error = "IR builder failed to create the block of a debugger flow request";
+            return false;
+        }
+        entry->debug_flow = true;
+        builder.setBlock(entry);
+        if (goes_on(rc)) {
+            if (cont) {
+                builder.createBranch(cont, loc);
+            } else {
+                // a value handed over in the run replaced the value of the return, which the return of the value
+                // gives; otherwise the request goes on in the handler's body
+                builder.createBranchIf(se->result, handed_over_return, path, loc);
+            }
+        } else {
+            // the request abandons the return: what the handlers handed over before it is released, the result of the
+            // ScopeExit cleared (as the return of the value does), and, in the cleanups of a return statement, the
+            // return's own value (the operands of a ScopeExit that hands over: the first hand-over of the run may have
+            // released it already, and the release then finds nothing); the return that it replaced resumes
+            // (qore#7022)
+            if (se->result.isValid()) {
+                builder.createReleaseHandedOverReturn(loc, se->result);
+            }
+            builder.createReleaseHandedOverReturn(loc);
+            if (cont && pending_return.isValid()) {
+                builder.createReleaseOwnedTemp(pending_return, loc);
+                if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
+                    builder.createReleaseOwnedTemp(pending_return_base, loc);
+                }
+            }
+            // an exception that a destructor raises goes where the exceptions of the handlers that the ScopeExit ran
+            // go, where the later handlers are still registered (bug 380, qore#7022)
+            builder.createCheckException(loc)->exception_target = se->exception_target;
+            builder.createBranch(path, loc);
+        }
+        (rc == RC_RETURN ? flow->return_target : (rc == RC_BREAK ? flow->break_target : flow->continue_target))
+            = entry;
+    }
+    se->flow = std::move(flow);
+    builder.setBlock(cont ? cont : saved_block);
+    return true;
+}
+
 const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t scope_entry, std::string& error,
         size_t hf_index) {
     const BlockCleanupEntry& entry = cleanup_stack[scope_entry];
@@ -6408,8 +6511,18 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         se_inst->exception_target = entry.outer_exception_target;
                         // in the code of a debugger's request (a return request in a handler that is not the last of
                         // its exit), a request in the handlers that have not run is that of the block (qore#7008)
-                        if ((flags & CF_HANDLERS_OUT_OF_LINE) && keep_runs
-                                && !setScopeExitFlowTargets(se_inst, i - 1, error)) {
+                        if (flags & CF_HANDLERS_OUT_OF_LINE) {
+                            if (keep_runs && !setScopeExitFlowTargets(se_inst, i - 1, error)) {
+                                return false;
+                            }
+                        } else if (keep_runs && return_walk && pending_return_active
+                                && try_depth == pending_return_try_depth && !try_replaced_handed_over
+                                && !setReplacingScopeExitFlowTargets(se_inst, i - 1, nullptr, entry.loc, error)) {
+                            // in the cleanups of a return in the handler's body, which replaces the value of the
+                            // return that the handler runs in: a request in the handlers that have not run is that
+                            // of the block, which can abandon the return, as for those lowered inline (qore#7531);
+                            // not where a value that handlers handed over to the return of a try statement is held,
+                            // which the release at the paths' entries would take (as qore#7008)
                             return false;
                         }
                         break;
@@ -7280,6 +7393,14 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                         }
                     }
                     if (return_walk) {
+                        // a request in the handlers is that of the block, which can abandon the return (qore#7531);
+                        // not where a value that handlers handed over to the return of a try statement is held,
+                        // which the release at the paths' entries would take (as qore#7008)
+                        if (barrier_depth != SIZE_MAX && !try_replaced_handed_over
+                                && !setReplacingScopeExitFlowTargets(se_inst, barrier_depth - 1, nullptr, scope_loc,
+                                    error)) {
+                            return false;
+                        }
                         pending_return_handed_over = true;
                         return true;
                     }
@@ -7295,6 +7416,15 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
                     }
                     QoreIRBasicBlock* return_block = createBlock("handler.return.past.cap");
                     QoreIRBasicBlock* cont_block = createBlock("handler.return.past.cap.cont");
+                    // where their values replace that of a return, a request in the handlers is that of the block
+                    // too, which can abandon the value handed over (qore#7531); not where a value handed over to the
+                    // return is held, which the release at the paths' entries would take (as above)
+                    if (replaces && !pending_return_handed_over && !try_replaced_handed_over
+                            && barrier_depth != SIZE_MAX
+                            && !setReplacingScopeExitFlowTargets(se_inst, barrier_depth - 1, return_block, scope_loc,
+                                error)) {
+                        return false;
+                    }
                     builder.createBranchIf(se_inst->result, return_block, cont_block, scope_loc);
                     builder.setBlock(return_block);
                     // the scope that the ScopeExit left and the entries above it have been left

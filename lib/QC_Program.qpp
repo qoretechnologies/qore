@@ -110,8 +110,14 @@ static QoreProgram* program_take_over_self(QoreObject* self, QoreProgram* p, Exc
 }
 
 //! source location information
-/**
+/** Code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" is given the \c file and \c source with
+    the file names of the sources only, as their directories are external information; see
+    @ref no-external-info "%no-external-info"
+
     @since %Qore 0.9
+
+    @since %Qore 3.0 the files are named without their directories for code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"
 */
 hashdecl SourceLocationInfo {
     //! if @ref True then the code is builtin and there is no user source location
@@ -2649,6 +2655,11 @@ pgm.importClass("MyNamespace::MyClass");
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set, or the class name or the name to import it as contains a NUL character (since %Qore 3.0)
     @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
+
+    @note The methods of the imported class run in the Program that it is imported from, with that Program's options
+    and names, also for objects created in the Program that imports it, and so do the @ref closure_program "closures"
+    that they create, wherever they are called (since %Qore 3.0; such closures ran in the Program of their object
+    before)
 
     @param reexport if @ref True "True", the imported class is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported class so the child's parse can resolve unqualified references to it.  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic and avoids diamond conflicts with namespace-merged public classes that the host never opted to expose.
 

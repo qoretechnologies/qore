@@ -2021,9 +2021,15 @@ if (action.data_provider_info) {
         allow_env_config = True;
     }
 
-    #! Returns the auto config flag
+    #! Returns the auto config flag for the calling code
+    /** @return @ref True if setAutoConfig() was called and the calling code may receive the host's secrets (see
+        @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()"):
+        data providers take missing options (including client secrets and passwords) from the environment only then,
+        so code restricted from external information and sandboxed code give their own options, unless the host
+        grants them with a policy barrier or a system-policy capability (qore#6844)
+    */
     static bool getAutoConfig() {
-        return allow_env_config;
+        return allow_env_config && SandboxManager::callerMayReceiveHostSecrets();
     }
 
     #! Returns a list of strings in a path separated by "/" characters

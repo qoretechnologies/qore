@@ -6979,6 +6979,9 @@ private:
     class CalleeOverride {
     public:
         DLLLOCAL CalleeOverride(QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm) {
+            // the inline calls run code in the Program that compiled it, or module code: code compiled in another
+            // Program than the one it runs in is called through the call helper, which holds that Program (qore#7202)
+            assert(!uvb->pgm || exec_pgm == uvb->pgm || qore_program_is_module_inline(uvb->pgm));
             qore_set_user_call_runtime_po_override(helper, exec_pgm, uvb, nullptr, caller_pgm);
         }
 
@@ -7866,7 +7869,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
     }
     // the increment runs without entering the closure's Program, which is the caller's here: once its deletion has
     // started, the call path decides, as for the AST interpreter (qore#5822)
-    if (nargs == 0 && simple_increment && !uvb->pgm_deleted.load(std::memory_order_acquire)
+    if (nargs == 0 && simple_increment && !uvb->fastCallBlocked()
             && tryExecuteSimpleClosureIncrement(cb, simple_increment->local,
                 simple_increment->delta, result, xsink)) {
         if (may_invalidate_external_caches) {
@@ -9453,6 +9456,10 @@ struct IRHandlerHandOver {
     bool replaced = false;
     //! the count of the values handed over in the run (QoreHandlerRunContext::hand_over_count, #6552)
     uint64_t count = 0;
+    //! true if a debugger's request in a later handler of the run can resume the return whose values the first
+    //! hand-over releases (a ScopeExit with paths, qore#7531): data is kept, as the typed release of a return that a
+    //! handler lowered inline replaces keeps it (QoreIRBuilder::createReleaseReplacedReturn(), #7022)
+    bool keep_data = false;
 
     //! Releases the value of the return slot \a id if it holds a reference of its own to it: a borrowed value has none
     void releaseReturnSlot(uint32_t id, ExceptionSink* xsink) {
@@ -9528,6 +9535,10 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, Qo
         h.replaced = true;
         if (h.return_values) {
             for (const QoreIRValue& v : *h.return_values) {
+                if (h.keep_data && v.id < h.frame->values.size()
+                        && !qore_return_release_observable(h.frame->values[v.id])) {
+                    continue;
+                }
                 h.releaseReturnSlot(v.id, xsink);
             }
         }
@@ -9623,6 +9634,7 @@ static int executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink
     // the values of the handler's return statements are handed to the frame as they execute (#6074): the value that
     // the handler's function returns is not used
     IRHandlerHandOver hand_over{parent_frame, try_returns, returning ? &returning->operands : nullptr};
+    hand_over.keep_data = returning && returning->flow;
     QoreHandlerRunContext run_ctx;
     IRCallFramePool& pool = TlFramePool::get();
     QoreHandlerRunContext* outer = qore_handler_run_context();

@@ -188,11 +188,9 @@ public:
     }
 
     //! appends the key of the signature as an abstract variant (MethodVariantBase::getAbstractSignature())
-    /** The key is made from the parameter types (with the path of a class, hashdecl or other named type) and the
-        \c const qualifiers of the parameters only, without the parameter names and default values: a declaration has
-        the same key whether its class was parsed or loaded from an AOT image (qore#7331).  As the key made from the
-        parse types of a signature that is not resolved yet, it has neither the default arguments nor the varargs of
-        the signature.
+    /** The parameter types (including their paths), const qualifiers, presence of default arguments by position,
+        and declared ellipsis distinguish inherited method contracts. Parameter names and the values of defaults
+        are not part of the key. Parsed and AOT-loaded declarations use the same representation (qore#7331, #7404).
 
         @return true if the key is made from the resolved types, false if from the parse types of a signature that
         is not resolved yet, in which case it is made again when the signature has been resolved
@@ -207,6 +205,12 @@ public:
                 str.append("const ");
             }
             str.append(QoreTypeInfo::getPath(typeList[i]));
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
+        }
+        if (varargs) {
+            str.append("...");
         }
         return true;
     }
@@ -285,8 +289,8 @@ public:
         parameters in \a sig: they are substituted before the types are compared (an abstract method of a generic class
         implemented in a subclass of a specialization; issue #5773)
     */
-    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const;
+    DLLLOCAL bool compare(const AbstractFunctionSignature& sig, bool relaxed_match,
+            const QoreTypeInfo* receiver, bool implements_abstract) const;
 
     DLLLOCAL bool hasVarargs() const {
         return varargs;
@@ -779,6 +783,12 @@ public:
             } else {
                 str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
             }
+            if (hasDefaultArg(i)) {
+                str.append("=");
+            }
+        }
+        if (varargs) {
+            str.append("...");
         }
         return false;
     }
@@ -1550,10 +1560,10 @@ public:
 
     //! @param receiver see AbstractFunctionSignature::compare()
     DLLLOCAL bool isSignatureIdentical(const AbstractFunctionSignature& sig, bool relaxed_match = false,
-            const QoreTypeInfo* receiver = nullptr) const {
+            const QoreTypeInfo* receiver = nullptr, bool implements_abstract = false) const {
         //printd(5, "AbstractQoreFunctionVariant::isSignatureIdentical() this: %p '%s' == '%s': %d\n", this,
         //  getSignature()->getSignatureText(), sig.getSignatureText(), *(getSignature()) == sig);
-        return getSignature()->compare(sig, relaxed_match, receiver);
+        return getSignature()->compare(sig, relaxed_match, receiver, implements_abstract);
     }
 
     // only returns a non-nullptr value for normal user method variants
@@ -1774,9 +1784,25 @@ public:
         setProgram() is called only before the variant can be called
     */
     mutable std::atomic<bool> pgm_module_lifetime{false};
-    //! true once the deletion of \a pgm has started: a fast path that evaluates the variant's code without entering
-    //! the Program takes the call path then, which refuses the call (qore#5822)
-    mutable std::atomic<bool> pgm_deleted{false};
+    //! the reasons why the fast paths of native code take the call path for the variant: a bitmask of
+    //! FAST_CALL_BLOCK_* values, tested with one load by the fast paths (fastCallBlocked())
+    mutable std::atomic<uint8_t> fast_call_blocks{0};
+    //! fast_call_blocks: the deletion of \a pgm has started: a fast path that evaluates the variant's code without
+    //! entering the Program takes the call path then, which refuses the call (qore#5822)
+    static constexpr uint8_t FAST_CALL_BLOCK_PGM_DELETED = 1;
+    //! fast_call_blocks: a closure of the variant was created that runs in another Program than \a pgm: the call path
+    //! holds \a pgm before anything of the variant (its parameter types) is read (qore#7202); never cleared
+    static constexpr uint8_t FAST_CALL_BLOCK_RUNS_FOREIGN = 2;
+
+    //! returns true once the deletion of \a pgm has started (see FAST_CALL_BLOCK_PGM_DELETED)
+    DLLLOCAL bool pgmDeleted() const {
+        return fast_call_blocks.load(std::memory_order_acquire) & FAST_CALL_BLOCK_PGM_DELETED;
+    }
+
+    //! returns true if the fast paths of native code take the call path for the variant (see fast_call_blocks)
+    DLLLOCAL bool fastCallBlocked() const {
+        return fast_call_blocks.load(std::memory_order_acquire);
+    }
     //! the previous variant in its Program's list of variants; protected by the Program's user_variant_lock (see
     //! qore_program_private::registerUserVariant())
     mutable const UserVariantBase* uv_prev = nullptr;
@@ -2418,7 +2444,10 @@ public:
             ThreadFrameBoundaryHelper(!*n_xsink),
             uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
-        if (*xsink || uvb->setupCall(ceh, argv, xsink)) {
+        // (code compiled in another Program than the one it runs in holds the Program that compiled it while the
+        // call runs, qore#7202; the context releases it when it is left, see holdForeignCodeProgram())
+        if (*xsink || (exec_pgm != uvb->pgm && holdForeignCodeProgram(uvb->pgm, xsink))
+                || uvb->setupCall(ceh, argv, xsink)) {
             uvb = nullptr;
         }
     }
@@ -3294,10 +3323,13 @@ public:
             const QoreTypeInfo** deferred_rt = nullptr) const;
 
     //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
+    /** @param runtime_possible if not nullptr, set to true if no variant is returned because the variant is selected
+        at run time (another variant can match then), false otherwise
+    */
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
             QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const type_vec_t* explicit_type_args = nullptr) const;
+            const type_vec_t* explicit_type_args = nullptr, bool* runtime_possible = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t& argNames,
@@ -3652,7 +3684,7 @@ protected:
     (refineInterpreterEffectSummary()); their Programs free that code with their namespaces when they are deleted, also
     while another thread reads it.  Each Program reached is held (qore_program_private::tryHoldForCompile()), which its
     teardown waits for without the hold being visible to its code (qore#5874).  A Program that its teardown has marked
-    (UserVariantBase::pgm_deleted, or qore_program_private::ptid, which refuses the hold) is not held, and its code is
+    (UserVariantBase::pgmDeleted(), or qore_program_private::ptid, which refuses the hold) is not held, and its code is
     not read: the function is called through the call path, which refuses the call (qore#5822).  The root function's
     Program is held as well (holdRoot()): the thread that reads its code need not be counted in it (the fast call path
     can run code of the current Program without entering it).  The holds are released with release() or when the
@@ -4058,6 +4090,18 @@ public:
     */
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
+
+    //! evalClosure() for a closure whose own Program is not the one that compiled its code: runs it in the Program
+    //! that compiled it, which it holds before anything of the variant is read (qore#7202); out of line, so that the
+    //! other closures only test for it
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const;
+
+    //! the call of evalClosure() and evalForeignClosure(); inlined into both, so that the call of a closure keeps one
+    //! frame on its path
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalClosureBody(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const;
 
     //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure's variant by name (M4 phase 3)

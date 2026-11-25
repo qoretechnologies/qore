@@ -1005,10 +1005,12 @@ QoreValue qore_object_private::runSharedUpdate(const ResolvedCallReferenceNode* 
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
     }
-    // the closure runs in the Program that was current when it was created (the Program of the object's class for a
-    // method of a base class of another module), which is the Program of the code that changes the object in it
-    const QoreProgram* run_pgm = closure->getProgram();
-    if (!run_pgm || qore_program_is_sandboxed(run_pgm)) {
+    // the closure runs in the Program that compiled it when its own Program (the Program that was current when it was
+    // created) is another one (qore#7202, UserClosureFunction::evalForeignClosure()), else in its own Program; that is
+    // the Program of the code that changes the object in it.  Neither Program may be sandboxed
+    const QoreProgram* own_pgm = closure->getProgram();
+    const QoreProgram* run_pgm = closure->runsForeign() ? qore_closure_code_program(closure) : own_pgm;
+    if (!own_pgm || !run_pgm || qore_program_is_sandboxed(own_pgm) || qore_program_is_sandboxed(run_pgm)) {
         xsink->raiseException("SHARED-OBJECT-ERROR", "the update of an object of class '%s' must be a closure that a "
             "method of a class of the object creates in the code that opens the update scope", theclass->getName());
         return QoreValue();
