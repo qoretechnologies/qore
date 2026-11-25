@@ -245,3 +245,19 @@ members whose local is written after the aggregate is built (compound
 assignments, increments, assignments, writes through a reference and by a
 closure, writes in loops and branches, member and element stores) or goes out of
 scope, in every execution mode and compiled code.
+
+### Constant locals and fused instructions
+
+Fixed-aggregate scalar replacement resolves a selector through a local that has
+one store dominating its loads (`constant_local_assignments`), and removes the
+store and the loads of such a local once the replacement leaves no read of it.
+The fused integer instructions name their locals in their own fields instead of
+taking the value of a `LoadLocal` as an operand: `BranchIfLtLocalInt` reads both
+of its locals, `AddAssignLocalInt` reads its source and reads and writes its
+target, and `IncrementLocalInt` reads and writes its local.  A local that one of
+them accesses is therefore never such a constant local: its writes make it
+variable, and its reads keep its store, which would otherwise be removed as
+unused (the bound of a loop or the source of an addition then read a local that
+was never assigned).  `IRScalarFusedLocals.qtest` checks loop bounds and
+counters, additions and increments next to replaced lists and hashes in every
+execution mode and compiled code.

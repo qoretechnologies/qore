@@ -3760,6 +3760,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     // locals written by an instruction other than a StoreLocal, an InstantiateLocal or an UninstantiateLocal, such as
     // an IncrementLocalInt: their value is not the one stored
     std::unordered_set<const LocalVar*> otherwise_written_locals;
+    // locals read by a fused instruction, which names them in its own fields rather than taking the value of a
+    // LoadLocal as an operand (AddAssignLocalInt's source, BranchIfLtLocalInt's operands): a local whose only reads are
+    // such is not unused, and its store must stay
+    std::unordered_set<const LocalVar*> fused_read_locals;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -3768,6 +3772,17 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
             positions.emplace(inst, InstructionPosition{inst, block_id, offset});
+            if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                const auto* add = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                fused_read_locals.insert(add->source);
+                fused_read_locals.insert(add->target);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                fused_read_locals.insert(static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local);
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                const auto* branch = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                fused_read_locals.insert(branch->lhs);
+                fused_read_locals.insert(branch->rhs);
+            }
             if (inst->opcode != QoreIROpcode::StoreLocal && inst->opcode != QoreIROpcode::InstantiateLocal
                     && inst->opcode != QoreIROpcode::UninstantiateLocal) {
                 if (const LocalVar* written = qore_ir_get_written_local(inst)) {
@@ -3835,7 +3850,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 || func.ast_referenced_locals.count(local_key)
                 || func.lvalue_path_locals.count(local_key)
                 || local_path_operations.count(local)
-                || otherwise_written_locals.count(local)) {
+                || otherwise_written_locals.count(local)
+                || fused_read_locals.count(local)) {
             continue;
         }
         const InstructionPosition* store = nullptr;
