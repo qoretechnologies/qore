@@ -276,7 +276,7 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
 
     The \c socketobject key of the request context gives the socket of the request: for an HTTP/2 or HTTP/3 request
     the handler socket of its own stream; for an HTTP/1.x request the socket that the server gives the handler: a
-    socket of the request alone when the handler hosts the code of a sandboxed Program (see
+    socket of the request alone when the handler hosts the code of a restricted Program (see
     @ref httpserver_handler_socket), or the socket of the connection, which only a REST class of a Program that no
     restricted sandbox governs gets: the key is not set for a REST class of a restricted Program
     (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"), which cannot

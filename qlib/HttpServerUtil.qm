@@ -3324,7 +3324,14 @@ class HttpServerDispatchCapability {
         socket of its request alone (a view), not the socket of a connection, in the decisions about the socket that
         restricted code gets (see @ref httpserver_handler_socket); a socket of another class than the handler sockets
         of the HTTP server is the socket of a connection otherwise, unless it is not open.  The host registers only a
-        class whose sockets are views of a request alone, of its own code.
+        class of its own code whose every socket carries the I/O of one request alone, never an operation on another
+        request of the connection.
+
+        The registry is a host-only API: it is process-wide (it applies to every dispatch of the process, also of the
+        HTTP server), it is keyed by the unqualified name of the class (see
+        @ref Qore::Object::className() "Object::className()"), so that a class of another %Program with the same
+        name counts as well, and a registration cannot be removed.  A class of restricted code cannot be relied on:
+        the sockets that a handler gets come from the dispatch, which the trusted code of the server or the host makes.
 
         @param cls the name of the class
 
@@ -3624,8 +3631,8 @@ public class AbstractStreamRequest {
                 "makes its raw request current; none is current for this request: the request was not dispatched by "
                 "the HTTP server, or the server's dispatch has no capability to make it current";
         }
-        # the socket of the connection of an HTTP/1.x request is not driven by a stream request that sandboxed code
-        # creates or declares, as the handler of a sandboxed Program does not get it either (qore#7305)
+        # the socket of the connection of an HTTP/1.x request is not driven by a stream request that restricted code
+        # creates or declares, as the handler of a restricted Program does not get it either (qore#7305)
         # (restricted code only, as for the handler socket decisions: trusted code that a sandbox governs only for its
         # resource limits, interrupts or I/O policy gets the connection's socket, qore#7577)
         if (HttpRawRequestScope::isConnectionSocket(raw.s) && (HttpRawRequestScope::isRestricted(self)
@@ -6185,7 +6192,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         # (see AbstractStreamRequest::filterRequest()); the HTTP server's dispatch makes the raw request current on the
         # thread while the request is served (see getRawRequest()): the concurrent streams of an HTTP/2 or HTTP/3
         # connection are served on threads of their own
-        # the HTTP server gives the handler of a sandboxed Program a socket of its own request (qore#7305); the socket
+        # the HTTP server gives the handler of a restricted Program a socket of its own request (qore#7305); the socket
         # of the connection, which a stream request needs, never reaches its code (qore#6843)
         if (HttpRawRequestScope::isConnectionSocket(s) && HttpRawRequestScope::isRestricted(self)) {
             throw "HTTP-HANDLER-ERROR", "a stream request handler of a class of a restricted Program cannot serve an "
