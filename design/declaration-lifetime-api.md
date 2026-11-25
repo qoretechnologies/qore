@@ -20,11 +20,11 @@ Program's namespace data.
 - An unattached declaration has no Program owner. A reference-counted declaration
   that survives its namespace also has no owner after namespace teardown.
   Consequently, a null result alone does not prove process-wide lifetime.
-- An original builtin declaration that a binary module adds to a namespace that a
-  Program owns at run time (`QoreNamespace::addNamespace()`, `addSystemClass()`,
-  `addSystemHashDecl()`, `addSystemEnum()` outside the static system namespace and the
-  namespace of a module) is owned by that Program and is mortal: it is marked
-  `program_local` before it is published (`qore_ns_private::markProgramLocal()`), and
+- An original builtin declaration in a namespace tree that a binary module attaches to
+  a namespace that a Program owns at run time (`QoreNamespace::addNamespace()`, outside
+  the static system namespace and the namespace of a module) is owned by that Program
+  and is mortal: it is marked `program_local` before the tree is published
+  (`qore_ns_private::markProgramLocal()`), and
   the declaration lifetime system treats it as a user declaration
   (`isTypeOwnerSystem()` is false; `isSystem()` is unchanged). The import copy of a
   builtin class and the instances of a mortal generic hashdecl are mortal too. A
@@ -33,7 +33,10 @@ Program's namespace data.
   (`BuiltinFunctionVariantBase::refMortalDecls()`), so that the variant can be
   imported into another Program or copied into a child Program that does not inherit
   the classes and outlive the Program; such a declaration can therefore outlive its
-  Program (qore#7540). One that something keeps to the end of the process (a value
+  Program (qore#7540). A builtin declaration that a module adds one at a time to a
+  namespace already attached to a Program (`addSystemClass()`, `addSystemHashDecl()`,
+  `addSystemEnum()`) is not marked: it keeps the lifetime handling of a system
+  declaration (module-jni shares such classes between Programs; qore#7649, qore#7650). One that something keeps to the end of the process (a value
   kept in static storage, a Program with static storage duration) is freed after
   the modules' `del` functions have run, as the static namespace's module classes
   are: binary modules are never unloaded, and a module's `del` function must leave

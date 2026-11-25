@@ -439,7 +439,7 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
-    // variant 4: variant 2 with a failure of the marking event of DbgRtLate's addition (see below)
+    // variant 4: variant 2 with a failure of the marking event of the attach of a namespace (see below)
     bool fail_refresh = variant == 4;
     if (fail_refresh) {
         variant = 2;
@@ -529,27 +529,33 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         // the class is added to the namespace that the Program has now
         QoreNamespace* added = root->findLocalNamespace(inner.c_str());
         assert(added);
-        if (fail_refresh) {
-            // the class is added and marked, but its marking event does not complete: the next event completes it
-            qore_dbg_fail_next_runtime_refresh();
-            try {
-                added->addSystemClass(late);
-            } catch (std::bad_alloc&) {
-            }
-            // the event is still pending here
-            if (!qore_root_ns_private::get(*root)->runtimeRefreshPending()) {
-                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the failed event is not pending");
-            }
-        } else {
-            added->addSystemClass(late);
-        }
+        added->addSystemClass(late);
         // a variant added twice to the namespace that the Program has: the function keeps the first one only
         for (int i = 0; i < 2; ++i) {
             added->addBuiltinVariant("dbg_rt_late2", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
                 late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
         }
-        // with variant 4, no later event marks a declaration: the variants added above complete the failed event
-        if (!fail_refresh) {
+        if (fail_refresh) {
+            // the attach of a namespace with a class fails after the class is marked: the namespace is not attached
+            // (and is freed here), and its marking event is completed by the next one, the attach of an empty
+            // namespace
+            std::unique_ptr<QoreNamespace> fns(new QoreNamespace((inner + "X").c_str()));
+            fns->addSystemClass(new QoreClass("DbgRtFailClass",
+                (std::string("::") + inner + "X::DbgRtFailClass").c_str()));
+            qore_dbg_fail_next_runtime_refresh();
+            try {
+                root->addNamespace(fns.get());
+                fns.release();
+            } catch (std::bad_alloc&) {
+            }
+            if (!fns) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attach did not fail");
+            }
+            if (!qore_root_ns_private::get(*root)->runtimeRefreshPending()) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the failed event is not pending");
+            }
+            root->addNamespace(new QoreNamespace((inner + "Y").c_str()));
+        } else {
             root->addNamespace(late_fns.release());
             root->addNamespace(late_cns.release());
         }
