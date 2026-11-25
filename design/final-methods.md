@@ -28,8 +28,10 @@ variant `F` that is not `private:internal` (such variants are not inherited and 
 1. The class's lookup of the name must reach `F`'s method: it must be in the inheritance list of the method that
    the lookup starts with (the class's own method, or the first found depth-first in its parent classes).
 2. No variant of a method before `F`'s method in that list may accept arguments that `F` accepts.
+3. A subclass cannot declare an instance or static method with that name, including a disjoint overload (#7111).
+   The check examines variants declared by the subclass in both method tables.
 
-`qore_class_private::parseCheckFinalHierarchy()` applies both, for normal and static methods, at
+`qore_class_private::parseCheckFinalHierarchy()` applies these rules, for normal and static methods, at
 `qore_class_private::parseInit()` for every user class with parent classes, also one without methods of its own
 (`collect_final_methods()`, `find_first_parent_method()`, `MethodFunctionBase::checkFinalResolution()`). The class's
 own variants are checked by `checkFinalVariant()`, which refuses an identical signature as before and now also an

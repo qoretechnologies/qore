@@ -46,6 +46,7 @@
 #endif
 
 #include "qore/intern/ThreadResourceList.h"
+#include "qore/intern/QoreAOTMethodDispatchReclaim.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
@@ -785,11 +786,18 @@ static size_t get_stack_size() {
 static int initial_thread = -1;
 
 // this structure holds all thread-specific data
-class ThreadData {
+class DLLLOCAL ThreadData {
 public:
     //! the run-time parse options of the thread and the override that they were computed with; a struct declared in
     //! qore_thread_intern.h, so that RuntimeParseOptionsOverrideHelper restores it inline (qore#6446)
     QoreRuntimePoState runtime_po_state = QoreRuntimePoState();
+    //! the thread's record of the AOT method dispatch cache's reclamation domain, or nullptr before the first
+    //! cacheable dispatch (see qore_acquire_aot_dispatch_thread_reader()); released when the data is deleted
+    //! (qore#7459)
+    QoreAOTMethodDispatchReclaimer::Record* aot_dispatch_reader = nullptr;
+    //! true once the record has been released (the data is being deleted) or could not be allocated: no record is
+    //! acquired again, and the thread's lookups miss
+    bool aot_dispatch_reader_done = false;
     //! the functional-domain restrictions of the code that started the thread, when module code started it
     /** The calling code of module code that runs on the thread when no Program that is not a module's is on the
         thread's stack (see qore_get_caller_domain_restrictions()); set while the thread runs the code that it was
@@ -1448,6 +1456,13 @@ public:
         // after this body run none either, so no QoreThreadLocalObject is first used after the cleanups above; one
         // that were would register a release that never runs
         assert(exit_cleanups.empty());
+        // last: the cleanups above can run code that AOT code dispatches by name
+        if (aot_dispatch_reader) {
+            QoreAOTMethodDispatchReclaimer::release(aot_dispatch_reader);
+            // another thread can claim it now: code that still runs with this data must not use it
+            aot_dispatch_reader = nullptr;
+        }
+        aot_dispatch_reader_done = true;
     }
 
     //! runs the exit cleanups of the thread's QoreThreadLocalObject objects, last registered first
@@ -4402,7 +4417,7 @@ static inline QoreParseOptions apply_runtime_po_override(ThreadData* td, const Q
    Set once in init_qore_threads(), before any other thread exists, and never changed: a pop that relied on the
    walker's barrier while a walk went without one would be unsafe.
 */
-static bool stack_walk_heavy_barrier = false;
+bool stack_walk_heavy_barrier = false;
 
 // Chooses how pops are ordered against walks of the call stack; called once, before any other thread exists
 static void init_stack_walk_barrier() {
@@ -4425,10 +4440,20 @@ static void stack_walk_barrier() {
     do {
         rc = syscall(__NR_membarrier, MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
     } while (rc && errno == EINTR);
-    assert(!rc);
+    if (rc) {
+        // the threads that rely on this barrier have only a compiler barrier of their own, and cannot switch to a
+        // full fence now: continuing could free memory that they still read (qore#7459)
+        fprintf(stderr, "qore: membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED) failed: %s; aborting\n",
+            strerror(errno));
+        abort();
+    }
 #else
     assert(false);
 #endif
+}
+
+void qore_process_heavy_barrier() {
+    stack_walk_barrier();
 }
 
 // Publishes a location pushed on this thread's call stack
@@ -9849,6 +9874,44 @@ QoreParseOptions parse_get_parse_options() {
 
 QoreParseOptions runtime_get_parse_options() {
     return (thread_data.get())->runtime_po_state.po;
+}
+
+void qore_get_aot_dispatch_thread_context(QoreAOTDispatchThreadContext& ctx) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        // no Qore thread: no class context, Program or record (a lookup without a record misses)
+        ctx = QoreAOTDispatchThreadContext();
+        return;
+    }
+    ctx.class_ctx = td->current_class;
+    ctx.pgm = td->current_pgm;
+    ctx.parse_options = td->runtime_po_state.po;
+    ctx.reader = td->aot_dispatch_reader;
+}
+
+QoreAOTMethodDispatchReclaimer::Record* qore_acquire_aot_dispatch_thread_reader() {
+    ThreadData* td = thread_data.get();
+    if (!td || td->aot_dispatch_reader_done) {
+        return nullptr;
+    }
+    if (!td->aot_dispatch_reader) {
+        td->aot_dispatch_reader = QoreAOTMethodDispatchReclaimer::acquire();
+        if (!td->aot_dispatch_reader) {
+            // not retried on each call
+            td->aot_dispatch_reader_done = true;
+        }
+    }
+    return td->aot_dispatch_reader;
+}
+
+QoreProgram* runtime_get_program_with_current_options(const RuntimeConfig& rc) {
+    ThreadData* td = thread_data.get();
+    QoreProgram* pgm = td->current_pgm;
+    if (!pgm || (td->call_program_context && td->call_program_context != pgm)) {
+        return nullptr;
+    }
+    QoreParseOptions po = qore_program_private::getParseOptions(*pgm);
+    return td->runtime_po_state.po == po && rc.getParseOptions() == po ? pgm : nullptr;
 }
 
 QoreParseOptions runtime_get_effective_program_parse_options() {

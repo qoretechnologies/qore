@@ -83,7 +83,7 @@ ObjectReverseIterator i(obj);
     @endcode
  */
 ObjectReverseIterator::constructor(object object_value) [flags=NAMED_ARGS] {
-   self->setPrivate(CID_OBJECTREVERSEITERATOR, new QoreObjectReverseIterator(object_value));
+   self->setPrivate(CID_OBJECTREVERSEITERATOR, new QoreObjectReverseIterator(object_value, runtime_get_caller_class()));
 }
 
 //! Creates an empty iterator object

@@ -140,6 +140,17 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
 
 
     @section websockethandler_v2_8 Version 2.8
+    - added @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()":
+      the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request (see
+      @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView()) is set up without the connection's
+      socket; the server keeps the connection's poll operation, which the handler and its connection objects do not
+      get (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
+    - <b>backwards compatibility</b>: the HTTP/1.1 poll operation of a connection is internal to the module
+      (qore#7476): @ref WebSocketHandler::WebSocketConnection::setWsPollOp() "WebSocketConnection::setWsPollOp()" is
+      final and takes a @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", the
+      connection's poll operation member and WebSocketHandler::endAsyncConnection() are no longer accessible to
+      subclasses, and the private WebSocketHandler::finishConnection() hook no longer gets the poll operation: an
+      override must take <tt>(WebSocketConnection wsc, string cid)</tt> and call the parent's method
     - added the \c send_min_rate and \c send_min_rate_window options
       (@ref WebSocketHandler::WebSocketHandler::setSendMinRate() "setSendMinRate()"; default: 1 KiB/s over 60 seconds):
       a client that takes data more slowly while a send waits for it is disconnected, on HTTP/1.1, HTTP/2 and HTTP/3;
@@ -416,11 +427,6 @@ public class WebSocketConnection {
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
         *AsyncSocketIo::AbstractStreamContext stream_ctx;
 
-        #! Optional WebSocket poll operation for async H1 I/O
-        /** @since WebSocketHandler 2.7
-        */
-        *HttpWebSocketPollOperationBase async_ws_poll_op;
-
         #! Optional stream processor for async H2/H3 I/O
         /** @since WebSocketHandler 2.7
         */
@@ -526,6 +532,14 @@ public class WebSocketConnection {
         #! The socket used by the server for this connection
         Socket sock;
 
+        #! Optional WebSocket poll operation for async H1 I/O
+        /** Internal, so that no subclass (of any code) can take it, as it holds the connection's socket (qore#7476)
+
+            @since WebSocketHandler 2.7
+        */
+        *HttpServer::HttpWebSocketPollOperationHandle async_ws_poll_op;
+
+
         #! the status code with which the connection was closed; 0 if not closed (issue #5861)
         int close_code = 0;
         #! the reason with which the connection was closed (issue #5861)
@@ -571,15 +585,32 @@ public class WebSocketConnection {
     }
 
     #! Sets the WebSocket poll operation for async HTTP/1.1 I/O
-    /** @param poll_op the poll operation, or @ref nothing to clear
+    /** Final, so that a subclass cannot take the poll operation, which holds the connection's socket (qore#7476)
+
+        @param poll_op the handle of the poll operation, or @ref nothing to clear
+
+        @since WebSocketHandler 2.8 takes the handle of the poll operation instead of the poll operation (qore#7476)
 
         @since WebSocketHandler 2.7
     */
-    setWsPollOp(*HttpWebSocketPollOperationBase poll_op) {
+    final setWsPollOp(*HttpServer::HttpWebSocketPollOperationHandle poll_op) {
         AutoLock al(send_lock);
         self.async_ws_poll_op = poll_op;
         if (!poll_op) {
             direct_send_enabled = False;
+        }
+    }
+
+    #! Wakes the async I/O controller for the connection
+    /** The controller routes wakes by the connection's socket: async H1 I/O wakes it through the poll operation, as
+        the socket that the connection got can be the socket of its request (qore#7476)
+    */
+    private:internal wakeIntern() {
+        *HttpServer::HttpWebSocketPollOperationHandle op = async_ws_poll_op;
+        if (op) {
+            op.wake();
+        } else {
+            async_ctrl.wakeSocket(sock);
         }
     }
 
@@ -725,7 +756,7 @@ public class WebSocketConnection {
         }
         if (async_ctrl) {
             try {
-                async_ctrl.wakeSocket(sock);
+                wakeIntern();
             } catch () {
                 # Wake failure is non-critical; the I/O loop will wake on its next cycle
             }
@@ -1459,7 +1490,7 @@ stop();
             # it has written them, which releases the handler thread's done Counter
             if (async_ctrl) {
                 try {
-                    async_ctrl.wakeSocket(sock);
+                    wakeIntern();
                 } catch () {}
             }
             # A forced close releases the handler thread's done Counter at once, discarding the frames not yet
@@ -1470,9 +1501,9 @@ stop();
             # idempotent with the poll op's normal onComplete().  It is not used for a stop(): releasing the
             # handler thread closes the socket, which would discard the frames sent before the stop.  (Only the
             # async H1 HttpWebSocketPollOperation implements forceClose(); guard accordingly.)
-            if (force && async_ws_poll_op.hasCallableMethod("forceClose")) {
+            if (force) {
                 try {
-                    call_object_method(async_ws_poll_op, "forceClose");
+                    async_ws_poll_op.forceClose();
                 } catch () {}
             }
         }
@@ -2780,6 +2811,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     private:internal {
         #! Thread-local key for I/O check
         string tlk = get_random_string(50);
+
+        #! The poll operations that the server keeps for the HTTP/1.1 connections of requests whose handler gets the
+        #! socket of its request, by connection ID, while startAsyncWebSocketForRequest() runs (qore#7476)
+        hash<string, HttpServer::HttpWebSocketPollOperationHandle> request_poll_ops;
+
+        #! Protects @ref request_poll_ops
+        Mutex request_poll_ops_lock();
     }
 
     #! create the object optionally with the given @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator"
@@ -3330,6 +3368,59 @@ handler.setCloseTimeout(2s);
     private streamListenerRegistered(WebSocketConnection wsc) {
     }
 
+    #! Starts the WebSocket connection of an HTTP/1.1 request whose handler gets the socket of its request
+    /** The HTTP server calls this method instead of @ref start() for a handler that gets the socket of its request (see
+        @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView(), which is the case for a handler declared by
+        sandboxed code): the server makes the connection's poll operation from the connection's socket and keeps it,
+        so that neither the handler nor its connection objects get the connection's socket.  The connection gets the
+        socket of the request, whose methods give the connection's information only, and the poll operation is given
+        to the setup of the connection in this class only, through a handle that gives neither the poll operation nor
+        the connection's socket (@ref HttpServer::HttpWebSocketPollOperationHandle): no method that a subclass can
+        implement gets it, and the connection keeps it in an internal member.
+
+        The method is final, so that a subclass cannot change how the connection is set up; a handler customizes its
+        connection with @ref getConnectionImpl() and
+        @ref WebSocketHandler::WebSocketConnection::registered() "WebSocketConnection::registered()" as with
+        @ref start().
+
+        @param lid the unique HTTP listener ID
+        @param cx call context hash; see @ref start()
+        @param hdr a hash of headers in the request
+        @param sock the socket of the request, which the connection gets
+        @param ws_poll_op the handle of the connection's poll operation, made by the server; it gives neither the poll
+        operation nor the connection's socket
+
+        @return @ref True "True" if the connection is managed externally (see @ref startImpl())
+
+        @since WebSocketHandler 2.8
+    */
+    final bool startAsyncWebSocketForRequest(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock,
+            HttpServer::HttpWebSocketPollOperationHandle ws_poll_op) {
+        softstring cid = cx.id;
+        {
+            AutoLock al(request_poll_ops_lock);
+            if (request_poll_ops{cid}) {
+                throw "WEBSOCKET-HANDLER-ERROR", sprintf("the WebSocket connection %y is already being set up", cid);
+            }
+            request_poll_ops{cid} = ws_poll_op;
+        }
+        # a startImpl() of a subclass that does not call this class's does not take it; only this call's entry is
+        # removed
+        on_exit {
+            AutoLock al(request_poll_ops_lock);
+            if (request_poll_ops{cid} == ws_poll_op) {
+                remove request_poll_ops{cid};
+            }
+        }
+        return start(lid, cx, hdr, sock);
+    }
+
+    #! Takes the poll operation that the server keeps for the connection, if any (see startAsyncWebSocketForRequest())
+    private:internal *HttpServer::HttpWebSocketPollOperationHandle takeRequestPollOp(string cid) {
+        AutoLock al(request_poll_ops_lock);
+        return remove request_poll_ops{cid};
+    }
+
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
     /** Depending on the transport, the method delegates I/O to different async mechanisms:
         - <b>HTTP/1.1 async</b>: an @ref Qore::HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" C++ poll
@@ -3360,8 +3451,20 @@ handler.setCloseTimeout(2s);
         int h2_stream_id = is_http2 ? cx."header-info".stream_id : -1;
         int h3_session_id = is_http3 ? cx."header-info".session_id : -1;
         int h3_stream_id = is_http3 ? cx."header-info".stream_id : -1;
-        # Check for async H1 WebSocket poll operation
-        *HttpWebSocketPollOperationBase ws_poll_op = cx."header-info".ws_poll_op;
+        # Check for async H1 WebSocket poll operation: the server keeps the poll operation of a request whose handler
+        # gets the socket of its request, and gives it to startAsyncWebSocketForRequest() only, never in the context
+        # (qore#7476)
+        *HttpServer::HttpWebSocketPollOperationHandle ws_poll_op = takeRequestPollOp(cid);
+        if (!ws_poll_op && cx."header-info".ws_poll_op) {
+            ws_poll_op = new HttpServer::HttpWebSocketPollOperationHandle(cx."header-info".ws_poll_op);
+        }
+        # an HTTP/1.1 connection always has a poll operation (the server's async I/O makes one); one without it (a
+        # request whose poll operation the server keeps, and that was taken or not given) gets no connection
+        # (qore#7476)
+        if (!is_extended_connect && !ws_poll_op) {
+            throw "WEBSOCKET-HANDLER-ERROR", sprintf("the HTTP/1.1 WebSocket connection %y has no poll operation",
+                cid);
+        }
         bool is_ws_async = exists ws_poll_op;
         @debug(bool h2_ws_debug_handler = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
         @debug {
@@ -3389,7 +3492,7 @@ handler.setCloseTimeout(2s);
         # connectionClosed() and is removed too (issue #6794)
         bool deferred = False;
         on_exit if (!deferred) {
-            finishConnection(wsc, ws_poll_op, cid);
+            finishConnectionIntern(wsc, ws_poll_op, cid);
         }
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
@@ -3487,7 +3590,7 @@ handler.setCloseTimeout(2s);
             ws_poll_op.setExtensionRsvMask(pending_extensions{cid}.rsv_mask ?? 0);
             wsc.setWsPollOp(ws_poll_op);
             # Give the poll op references for frame dispatch from worker thread
-            call_object_method(ws_poll_op, "setConnection", wsc, self);
+            ws_poll_op.setConnection(wsc, self);
         }
 
         # Set negotiated extensions on the connection (stored by handleRequest)
@@ -3544,7 +3647,7 @@ handler.setCloseTimeout(2s);
                 # a server that does not give its end of the connection ends the connection when this method
                 # returns, so this thread waits for the connection to end
                 Counter done(1);
-                call_object_method(ws_poll_op, "setDone", done);
+                ws_poll_op.setDone(done);
                 # If stop() was called during the setup window (before setWsPollOp() wired the poll op), its
                 # transport close was skipped; replay it now that the poll op is registered.
                 if (wsc.stop_flag) {
@@ -3562,7 +3665,7 @@ handler.setCloseTimeout(2s);
                     ws_poll_op.getCloseCode());
                 return False;
             }
-            HttpWebSocketPollOperationBase end_op = ws_poll_op;
+            HttpServer::HttpWebSocketPollOperationHandle end_op = ws_poll_op;
             # the end holds the connection until it has ended it, and then releases it, so that an error of the
             # connection's destructor is logged (see releaseEndedConnection())
             *WebSocketConnection end_wsc = wsc;
@@ -3574,7 +3677,7 @@ handler.setCloseTimeout(2s);
             deferred = True;
             # tell the server that this handler runs its end of the connection (ws_end)
             accept_end();
-            call_object_method(ws_poll_op, "setDoneCallback", end);
+            ws_poll_op.setDoneCallback(end);
             # If stop() was called during the setup window (before setWsPollOp() wired the poll op),
             # its transport close was skipped; replay it now that the poll op is registered so the
             # connection is torn down instead of lingering until an unrelated timeout.  An error is logged, not
@@ -3695,7 +3798,7 @@ handler.setCloseTimeout(2s);
         the connection's header-info), so that it is not destroyed in this handler's part of the end, while it still
         counts the connection (issue #7188)
     */
-    private endAsyncConnection(*HttpWebSocketPollOperationBase ws_poll_op, WebSocketConnection wsc,
+    private:internal endAsyncConnection(*HttpServer::HttpWebSocketPollOperationHandle ws_poll_op, WebSocketConnection wsc,
             string cid, string lid, *code<nothing()> server_end, *code<nothing()> server_hold) {
         # the server holds itself until its end of the connection (server_end) has run
         if (server_hold) {
@@ -3736,7 +3839,7 @@ handler.setCloseTimeout(2s);
             # service's context)
             *hash<auto> tld_save = saveThreadLocalData();
             on_exit restoreThreadLocalData(tld_save);
-            finishConnection(wsc, ws_poll_op, cid);
+            finishConnectionIntern(wsc, ws_poll_op, cid);
         } catch (hash<ExceptionInfo> ex) {
             logError("exception ending a WebSocket connection: %s", get_exception_string(ex));
         }
@@ -3767,14 +3870,14 @@ handler.setCloseTimeout(2s);
 
     #! This handler's cleanup of a connection that has ended
     /** Run when startImpl() returns, or, for an asynchronous HTTP/1.1 connection, by endAsyncConnection(): clears
-        the connection's poll operation, closes its stream context, deregisters it (deregisterConnectionImpl(),
-        \c WebSocketConnection::connectionClosed()), marks it ended and removes it.
+        the connection's poll operation and runs finishConnection().  Internal, as the poll operation holds the
+        connection's socket, which no subclass gets (qore#7476).
 
         @param wsc the connection
         @param ws_poll_op the connection's poll operation, if any
         @param cid the connection ID
     */
-    private finishConnection(WebSocketConnection wsc, *HttpWebSocketPollOperationBase ws_poll_op,
+    private:internal finishConnectionIntern(WebSocketConnection wsc, *HttpServer::HttpWebSocketPollOperationHandle ws_poll_op,
             string cid) {
         # Clear async WebSocket poll op resources
         if (ws_poll_op) {
@@ -3790,6 +3893,20 @@ handler.setCloseTimeout(2s);
                 logError("exception clearing WebSocket poll op: %s", get_exception_string(ex));
             }
         }
+        finishConnection(wsc, cid);
+    }
+
+    #! This handler's cleanup of a connection that has ended, after its poll operation was cleared
+    /** Closes the connection's stream context, deregisters it (deregisterConnectionImpl(),
+        \c WebSocketConnection::connectionClosed()), marks it ended and removes it; a subclass that overrides it must
+        call this method.
+
+        @param wsc the connection
+        @param cid the connection ID
+
+        @since WebSocketHandler 2.8 the poll operation is no longer an argument (qore#7476)
+    */
+    private finishConnection(WebSocketConnection wsc, string cid) {
         # Close the stream context: ends the stream (END_STREAM or FIN) unless the close handshake ended it; a
         # connection dropped with forceStop() (a client that takes no data for the send timeout, backpressure, a
         # listener or server stop) discards what it has not sent: its stream is reset, which tells the client and

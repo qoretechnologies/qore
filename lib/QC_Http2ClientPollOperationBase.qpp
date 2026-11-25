@@ -408,6 +408,8 @@ void Http2ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
         connect_req->sprintf("Proxy-Authorization: %s\r\n", proxy_authorization.c_str());
     }
     connect_req->concat("\r\n");
+    // the interim responses of the proxy to CONNECT are counted (see handleProxyConnectRecv())
+    proxy_interim_response_count = 0;
 
     sock_obj->ref();
     // SocketSendPollOperation takes ownership of the string ref
@@ -453,7 +455,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
     if (goal_reached) {
         printd(5, "Http2ClientPollOperationPriv::handleProxyConnectSend() CONNECT sent, reading response\n");
         sock_obj->ref();
-        SocketPollOperationBase* recv_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+        // the proxy's response, whose status line is checked (qore#7485)
+        SocketPollOperationBase* recv_op = new SocketReadHttpResponseHeaderPollOperation(xsink, sock_obj);
         if (*xsink) {
             recv_op->deref(xsink);
             return nullptr;
@@ -496,25 +499,72 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
     if (goal_reached) {
         ValueHolder output_val(op->getOutput(), xsink);
         op->deref(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        // the tunnel is made only on a final 2xx response of the proxy: a read without a parsed header is a failure,
+        // never a success
+        QoreHashNode* hdr = nullptr;
         if (output_val->getType() == NT_HASH) {
-            QoreHashNode* output = output_val->get<QoreHashNode>();
-            QoreValue hdr_val = output->getKeyValue("hdr");
+            QoreValue hdr_val = output_val->get<QoreHashNode>()->getKeyValue("hdr");
             if (hdr_val.getType() == NT_HASH) {
-                QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
-                int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
-                if (status < 200 || status >= 300) {
-                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
-                    QoreValue msg_val = hdr->getKeyValue("status_message");
-                    QoreStringValueHelper msg_str(msg_val);
-                    const char* msg = msg_val.getType() == NT_STRING
-                        ? msg_str->c_str() : "unknown";
-                    desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
-                    setError("HTTP2-CONNECT-ERROR", desc->c_str(), xsink);
-                    return nullptr;
-                }
+                hdr = hdr_val.get<QoreHashNode>();
             }
         }
+        if (!hdr) {
+            setError("HTTP2-CONNECT-ERROR", "proxy CONNECT response read returned no header", xsink);
+            return nullptr;
+        }
         if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
+            return nullptr;
+        }
+        int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
+        // an interim response (1xx other than 101; RFC 9110 section 15.2) of the proxy is skipped, as by the
+        // HTTP/1.x client, and the final response that follows it decides whether the tunnel is made (qore#7486);
+        // their number is bounded, and each one is read with the size limit of a response header and has its status
+        // line checked, so a proxy that never sends a final response cannot make the client read without end
+        if (status >= 100 && status < 200 && status != 101) {
+            if (++proxy_interim_response_count > MAX_PROXY_INTERIM_RESPONSES) {
+                // setError() takes a literal description, not a format string
+                QoreString desc;
+                desc.sprintf("the proxy sent more than the maximum of %d interim (1xx) responses to CONNECT without "
+                    "sending a final response", MAX_PROXY_INTERIM_RESPONSES);
+                setError("HTTP2-CONNECT-ERROR", desc.c_str(), xsink);
+                return nullptr;
+            }
+            sock_obj->ref();
+            // the proxy's response, whose status line is checked (qore#7485)
+            SocketPollOperationBase* recv_op = new SocketReadHttpResponseHeaderPollOperation(xsink, sock_obj);
+            if (*xsink) {
+                recv_op->deref(xsink);
+                return nullptr;
+            }
+            if (!replaceCurrentOp(recv_op, H2State::PROXY_CONNECT_RECV, xsink)) {
+                return nullptr;
+            }
+            return handleProxyConnectRecv(xsink);
+        }
+        // any response other than 2xx fails the connection, including a 101, which a proxy cannot send to CONNECT
+        // (RFC 9110 sections 9.3.6 and 15.2.2: the request asks for no protocol upgrade)
+        if (status < 200 || status >= 300) {
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
+            QoreValue msg_val = hdr->getKeyValue("status_message");
+            QoreStringValueHelper msg_str(msg_val);
+            const char* msg = msg_val.getType() == NT_STRING
+                ? msg_str->c_str() : "unknown";
+            desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
+            setError("HTTP2-CONNECT-ERROR", desc->c_str(), xsink);
+            return nullptr;
+        }
+        // bytes that the proxy sent after its 2xx response and that the socket has already read would be returned as
+        // the first bytes received through the TLS connection to the target server, which never reads them: the
+        // connection fails instead (see Http1ClientPollOperationPriv::handleProxyConnectRecv(); qore#7486)
+        if (size_t buffered = qore_socket_object_private(sock_obj).getBufferedReadBytes()) {
+            QoreString desc;
+            desc.sprintf("the proxy sent %zu byte%s after its %d response to CONNECT, before the client started the "
+                "TLS connection to the target server through the tunnel", buffered, buffered == 1 ? "" : "s",
+                status);
+            setError("HTTP2-CONNECT-ERROR", desc.c_str(), xsink);
             return nullptr;
         }
         printd(5, "Http2ClientPollOperationPriv::handleProxyConnectRecv() tunnel established\n");
