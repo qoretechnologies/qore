@@ -88,7 +88,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 445,
+static_assert(QORE_IR_MAX_OPCODE == 446,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -749,11 +749,41 @@ static void evaluateOwnedListElement(QoreValue& value, ExceptionSink* xsink) {
     evaluateOwnedWeakReferenceResult(value, xsink);
 }
 
+// Returns true if the square-brackets operator on a value of type \a t reads a list element, which can be a weak
+// reference that evaluateOwnedListElement() reads as its target: an element of a list, or one of the list that a
+// reference element names, as the operator reads through it (qore#6662)
+static QORE_INTERN_ALWAYS_INLINE bool qore_ir_index_reads_list_element(qore_type_t t) {
+    return t == NT_LIST || t == NT_REFERENCE;
+}
+
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // As evaluateOwnedListElement() for a list element borrowed from its list; the target is returned borrowed as well:
 // the weak reference held by the list keeps it allocated
 static QoreValue getBorrowedListElement(const QoreListNode* l, size_t i) {
     return getWeakReferenceTarget(l->retrieveEntry(i));
+}
+
+//! Applies the container access \a op to the value that the reference \a left names (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_eval_binary_through_reference(QoreIROpcode op,
+        const QoreValue& left, const QoreValue& right, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(left, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    return QoreIRInterpreter::evalBinary(op, *value, right, xsink);
+}
+
+//! Returns the member \a key of the value that the reference \a ref names, as the native helpers read it (qore#6662)
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_ir_hash_key_access_through_reference(const QoreValue& ref,
+        const char* key, bool preserve_weak_result, ExceptionSink* xsink) {
+    ValueHolder value(qore_read_access_base(ref, xsink), xsink);
+    if (*xsink || value->getType() == NT_REFERENCE) {
+        return QoreValue();
+    }
+    uint64_t bits = toBits(*value);
+    return fromBits(preserve_weak_result
+        ? qore_rt_hash_key_access_for_call(bits, key, xsink)
+        : qore_rt_hash_key_access(bits, key, xsink));
 }
 
 QoreValue QoreIRInterpreter::evalPluginComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
@@ -2644,6 +2674,23 @@ static inline void setValueSlot(IRValueSlots& values,
     assert(id < values.size());
     values[id].discard(xsink);
     values[id] = new_val;
+}
+
+//! Executes ReadReferenceThrough: the referenced value of a reference element, or the value itself (qore#6662)
+/** @return true if an exception was raised
+*/
+static QORE_INTERN_NOINLINE QORE_INTERN_COLD bool qore_ir_exec_read_reference_through(IRValueSlots& values,
+        IRCleanupSlots& cleanup, const QoreIRInstruction* inst, ExceptionSink* xsink) {
+    QoreValue res = fromBits(qore_rt_read_access_base(toBits(getIRValue(values, inst->operands[0])), xsink));
+    if (xsink && *xsink) {
+        res.discard(xsink);
+        return true;
+    }
+    setValueSlot(values, inst->result.id, res, xsink);
+    if (res.needsRef()) {
+        cleanup.push_back(inst->result.id);
+    }
+    return false;
 }
 
 static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& cleanup,
@@ -8789,7 +8836,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                     QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(
                         lhs_val, rhs_val, true, true, true, xsink);
-                    if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                    if (qore_ir_index_reads_list_element(lhs_val.getType()) && !(xsink && *xsink)) {
                         evaluateOwnedListElement(out, xsink);
                     }
                     return out;
@@ -8816,6 +8863,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         }
                         QoreStringNodeValueHelper key(rhs_val);
                         return o->evalMember(*key, xsink);
+                    }
+                    // a member of a reference element is a member of the referenced value (qore#6662)
+                    if (lt == NT_REFERENCE) {
+                        return qore_hash_object_deref_through_reference(lhs_val, rhs_val, xsink);
                     }
                     return QoreValue();
                 }
@@ -15576,6 +15627,16 @@ load_local_done:
                         cleanupLocalCaches();
                         return exitAfterUnwind();
                     }
+                } else if (base.getType() == NT_REFERENCE) {
+                    // a member of a reference element is a member of the referenced value, read as the native
+                    // helper reads it, which also evaluates a weak reference result (qore#6662)
+                    out = qore_ir_hash_key_access_through_reference(base, hka_inst->key_name.c_str(),
+                        preserve_weak_result, xsink);
+                    if (xsink && *xsink) {
+                        unwindForException();
+                        cleanupLocalCaches();
+                        return exitAfterUnwind();
+                    }
                 }
                 // a weak reference to an object is read as its object also as the base of a call: the receiver
                 // of a call read from a container is a temporary of the statement, which keeps the object until
@@ -18983,6 +19044,21 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ReadReferenceThrough: {
+                // a member or an element that holds a reference gives the referenced value, with a reference of its
+                // own, read before the assignment locks its target; any other value is given as it is (qore#6662)
+                // out of line, as the instruction is rare and the loop is hot
+                if (qore_ir_exec_read_reference_through(values, cleanup, inst, xsink)) {
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
+                    unwindForException();
+                    cleanupLocalCaches();
+                    return exitAfterUnwind();
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::IteratorCreate:
             case QoreIROpcode::IteratorCreateIterate:
             case QoreIROpcode::IteratorCreateSelectors:
@@ -20701,7 +20777,7 @@ load_local_done:
                     ? QoreSquareBracketsOperatorNode::doSquareBrackets(left_val, right_val, true,
                         string_index_char != 0, qore_compiled_code_negative_offsets(), xsink)
                     : QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
-                if (inst->opcode == QoreIROpcode::ListIndexDynamic && left_val.getType() == NT_LIST
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic && qore_ir_index_reads_list_element(left_val.getType())
                         && !(xsink && *xsink)) {
                     evaluateOwnedListElement(res, xsink);
                 }
@@ -22557,7 +22633,7 @@ load_local_done:
                         assert(sq->hasStringIndexChar() && sq->hasNegativeOffsets());
                         res = QoreSquareBracketsOperatorNode::doSquareBrackets(
                             lhs_val, rhs_val, true, true, true, xsink);
-                        if (lhs_val.getType() == NT_LIST && !(xsink && *xsink)) {
+                        if (qore_ir_index_reads_list_element(lhs_val.getType()) && !(xsink && *xsink)) {
                             evaluateOwnedListElement(res, xsink);
                         }
                         used_operands = true;
@@ -25465,12 +25541,16 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 evaluateOwnedWeakReferenceResult(out, xsink);
                 return out;
             }
+            // a member of a reference element is a member of the referenced value (qore#6662)
+            if (bt == NT_REFERENCE) {
+                return qore_ir_eval_binary_through_reference(op, left, right, xsink);
+            }
             return QoreValue();
         }
         case QoreIROpcode::ListIndexDynamic: {
             QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
                 qore_compiled_code_negative_offsets(), xsink);
-            if (left.getType() == NT_LIST && !(xsink && *xsink)) {
+            if (qore_ir_index_reads_list_element(left.getType()) && !(xsink && *xsink)) {
                 evaluateOwnedListElement(out, xsink);
             }
             return out;

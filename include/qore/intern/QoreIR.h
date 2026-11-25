@@ -1167,14 +1167,21 @@ enum class QoreIROpcode : uint16_t {
     ReleaseHandedOverReturn = 442,
     //! Release an operator source loaded from a local unless the load read through a reference.
     ReleasePlainLocalRead = 443,
-
     //! Take an argument's own reference, copying a list or hash designated by a weak reference.
     CopyCallArg = 444,
     //! Release the owned source of CopyCallArg. With a second operand (the argument), keep the original call
     //! temporary in the statement scope when the argument took a copy.
     ReleaseCallArgSource = 445,
+    /** Reads the value of the lvalue that a reference names: the value of the typed assignment of a member or an
+        element that holds a reference (QoreReadReferenceOperatorNode, qore#6662)
+        One operand, the value of the member or element access; the result is the referenced value, with a reference of
+        its own, or the operand's value itself, with a reference of its own, when it is not a reference.  Raises an
+        exception if the referenced lvalue cannot be read (a member of a deleted object, for example).  See
+        qore_rt_read_reference_local().
+    */
+    ReadReferenceThrough = 446,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (446, 447, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (447, 448, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -1183,8 +1190,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ReleaseCallArgSource);
-static_assert(QORE_IR_MAX_OPCODE == 445, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ReadReferenceThrough);
+static_assert(QORE_IR_MAX_OPCODE == 446, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Returns the Any comparison of a plugin comparison opcode (QoreIROpcode::EqPlugin...GePlugin), or \a op itself

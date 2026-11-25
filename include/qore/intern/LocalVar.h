@@ -74,6 +74,19 @@ public:
 */
 DLLLOCAL QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink);
 
+//! Returns the value of the lvalue that a reference element names, for a member or element access through it
+/** A container element or member that holds an lvalue reference is read as the reference itself; an access to a
+    member or an element of it reads the referenced value (qore#6662).  The value given is borrowed: it can be an
+    element of a container that reading the lvalue releases, so the reference is held while it is read.
+
+    @param ref a value that is a reference (NT_REFERENCE)
+    @param xsink for exceptions
+
+    @return the value of the referenced lvalue, with a reference for the caller
+*/
+DLLLOCAL QORE_INTERN_NOINLINE QORE_INTERN_COLD QoreValue qore_read_access_base(const QoreValue& ref,
+        ExceptionSink* xsink);
+
 template <class T>
 class LValueRefHelper : public LocalRefHelper<T> {
 protected:
