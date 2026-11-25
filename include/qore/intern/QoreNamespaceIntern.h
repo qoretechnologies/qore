@@ -49,6 +49,7 @@
 #include <atomic>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <list>
 
@@ -686,6 +687,18 @@ public:
 
     DLLLOCAL void addModuleNamespace(qore_ns_private* nns, QoreModuleContext& qmc);
     DLLLOCAL void addCommitNamespaceIntern(qore_ns_private* nns);
+
+    //! Returns true if a declaration added to this namespace is owned by a Program: it is attached to a Program's
+    //! root namespace, and it is not the namespace of a module (qore#7540)
+    DLLLOCAL bool ownedByProgram() const;
+
+    //! Marks the original builtin declarations of the namespace tree \a tree as Program-local, if this namespace, to
+    //! which it is added, is owned by a Program (ownedByProgram(); qore#7540)
+    /** Called before the tree is published, under the runtime namespace write lock: a class whose own namespace is in
+        the tree, a hashdecl that is not a copy and an enum that is the original are marked; copies of declarations of a
+        module or of the static system namespace, which share their private data, are not.
+    */
+    DLLLOCAL void markProgramLocal(qore_ns_private& tree) const;
     DLLLOCAL void addNamespace(qore_ns_private* nns);
 
     DLLLOCAL int parseInit();
@@ -1485,11 +1498,32 @@ struct deferred_new_check_t {
     }
 };
 
+#ifdef DEBUG
+//! Makes the next completion of a marking event of a namespace that a Program owns fail after its upgrade, as an
+//! allocation failure would (qore#7540)
+DLLLOCAL void qore_dbg_fail_next_runtime_refresh();
+#endif
+
 class qore_root_ns_private : public qore_ns_private {
     friend class qore_ns_private;
     friend class QoreNamespace;
 
 protected:
+    //! The builtin variants of the namespace functions that the Program owns (not added to a namespace that no Program
+    //! owns), referenced (qore#7540)
+    /** Their references to the mortal declarations that they name are refreshed whenever a declaration of the Program
+        becomes mortal (refRuntimeVariantDecls()), so that a variant added before a declaration that it names is marked
+        references it too.  Written under the runtime namespace write lock; not copied into a child Program, which
+        does not own them
+    */
+    std::vector<AbstractQoreFunctionVariant*> runtime_variants;
+    //! the variants of runtime_variants, for the test of membership
+    std::unordered_set<const AbstractQoreFunctionVariant*> runtime_variant_set;
+    //! true from the start of a marking event until its upgrade of the derived types and its refresh of
+    //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
+    //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
+    bool runtime_refresh_pending = false;
+
     //! Protects committed namespace containers during cold runtime module merges
     mutable QoreRWLock runtime_namespace_lock;
     mutable std::atomic<int> runtime_namespace_writer_tid{-1};
@@ -2662,6 +2696,49 @@ public:
     DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
     DLLLOCAL ~qore_root_ns_private() {
+        releaseRuntimeVariants();
+    }
+
+    //! Adds a builtin variant of a namespace function that the Program owns to runtime_variants, with a reference
+    //! (qore#7540)
+    DLLLOCAL void addRuntimeVariant(AbstractQoreFunctionVariant* v);
+
+    //! Makes each variant of runtime_variants reference the mortal declarations that it names
+    //! (BuiltinFunctionVariantBase::refMortalDecls()), from the variant with the index \a start; called whenever a
+    //! declaration of the Program becomes mortal
+    DLLLOCAL void refRuntimeVariantDecls(size_t start = 0);
+
+    //! Releases the references of runtime_variants
+    DLLLOCAL void releaseRuntimeVariants();
+
+    //! Starts a marking event (qore#7540); returns true if an earlier one did not complete, in which case the event
+    //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
+    //! write lock
+    DLLLOCAL bool beginRuntimeMarking() {
+        bool incomplete = runtime_refresh_pending;
+        runtime_refresh_pending = true;
+        return incomplete;
+    }
+
+    //! Completes a marking event: upgrades the derived types of the declarations marked (all of them if \a full) and
+    //! refreshes the references of runtime_variants (from \a start if nothing was marked and not \a full)
+    DLLLOCAL void completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full);
+
+    //! Completes a marking event that did not complete, if any (as the next event would)
+    DLLLOCAL void completePendingRuntimeMarking() {
+        if (runtime_refresh_pending) {
+            completeRuntimeMarking(type_vec_t(), 0, true);
+        }
+    }
+
+    //! Returns true if a marking event did not complete (runtime_refresh_pending)
+    DLLLOCAL bool runtimeRefreshPending() const {
+        return runtime_refresh_pending;
+    }
+
+    //! Returns the number of the variants of runtime_variants
+    DLLLOCAL size_t runtimeVariantCount() const {
+        return runtime_variants.size();
     }
 
     DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {

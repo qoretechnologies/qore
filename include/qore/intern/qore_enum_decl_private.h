@@ -121,7 +121,19 @@ public:
     }
 
     DLLLOCAL bool isTypeOwnerSystem() const {
-        return sys && orig == this;
+        return sys && orig == this && !program_local.load(std::memory_order_acquire);
+    }
+
+    //! Marks an original builtin enum as owned by the Program to whose namespace it is added; returns true if it was
+    //! marked now and adds its types to \a marked_types (qore#7540)
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types) {
+        if (!sys || orig != this || program_local.load(std::memory_order_relaxed)) {
+            return false;
+        }
+        marked_types.push_back(getTypeInfo(false));
+        marked_types.push_back(getTypeInfo(true));
+        program_local.store(true, std::memory_order_release);
+        return true;
     }
 
     //! An original builtin enum that is not one of the static system namespace (Qore::) or a tombstone: a binary
@@ -399,6 +411,14 @@ protected:
         whenever it is created, is a binary module's (isTypeOwnerModule(), qore#7533)
     */
     bool not_module_decl = false;
+    //! true for an original builtin declaration that a binary module added to a Program's namespace at run time
+    //! (qore#7540)
+    /** It is owned by that Program's namespace, not by a module or the static system namespace, so it is mortal: the
+        declaration lifetime system treats it as it treats a user declaration (isTypeOwnerSystem() is false).  Set
+        under the runtime namespace write lock, and never cleared; atomic, as the declaration lifetime system can read
+        it in another thread through a derived type that was made before it was set (released and acquired)
+    */
+    std::atomic<bool> program_local{false};
     //! copied into this Program by importing a module; never exported again
     bool mod_imported = false;
 

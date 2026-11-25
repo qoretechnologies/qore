@@ -1631,6 +1631,11 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         sandbox_private_members(old.sandbox_private_members),
         from_module(old.from_module),
         lang(old.lang) {
+    // the import copy of a builtin class is owned by the importing Program's namespace and freed with it: it is mortal
+    // (qore#7540)
+    if (old.sys) {
+        program_local.store(true, std::memory_order_relaxed);
+    }
     // the bare references option of the declaration (issue #3286)
     parse_abr = old.parse_abr;
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");

@@ -827,8 +827,191 @@ void qore_ns_private::addModuleNamespace(qore_ns_private* nns, QoreModuleContext
     holder.release();
 }
 
+BuiltinFunctionVariantBase::~BuiltinFunctionVariantBase() {
+    delete mortal_decl_refs;
+}
+
+void BuiltinFunctionVariantBase::refMortalDecls() {
+    if (mortal_decl_refs) {
+        // the references already taken are kept; a declaration is referenced once
+        mortal_decl_refs->addMortal(signature.getReturnTypeInfo());
+        for (unsigned i = 0, e = signature.numParams(); i < e; ++i) {
+            mortal_decl_refs->addMortal(signature.getParamTypeInfo(i));
+        }
+        return;
+    }
+    std::unique_ptr<QoreTypeDeclRefs> refs(new QoreTypeDeclRefs);
+    refs->addMortal(signature.getReturnTypeInfo());
+    for (unsigned i = 0, e = signature.numParams(); i < e; ++i) {
+        refs->addMortal(signature.getParamTypeInfo(i));
+    }
+    // installed only when complete, and only if the signature names a mortal declaration
+    if (!refs->empty()) {
+        mortal_decl_refs = refs.release();
+    }
+}
+
+//! Returns the builtin function variant base of a variant, or nullptr
+static BuiltinFunctionVariantBase* get_builtin_variant_base(const AbstractQoreFunctionVariant* v) {
+    if (v->getCallType() != CT_BUILTIN) {
+        return nullptr;
+    }
+    return dynamic_cast<BuiltinFunctionVariantBase*>(const_cast<AbstractQoreFunctionVariant*>(v));
+}
+
+void qore_root_ns_private::addRuntimeVariant(AbstractQoreFunctionVariant* v) {
+    if (runtime_variant_set.count(v)) {
+        return;
+    }
+    runtime_variants.reserve(runtime_variants.size() + 1);
+    // both can throw before the variant is recorded
+    runtime_variant_set.insert(v);
+    runtime_variants.push_back(v->ref());
+}
+
+void qore_root_ns_private::refRuntimeVariantDecls(size_t start) {
+    for (size_t i = start, e = runtime_variants.size(); i < e; ++i) {
+        if (BuiltinFunctionVariantBase* bv = get_builtin_variant_base(runtime_variants[i])) {
+            bv->refMortalDecls();
+        }
+    }
+}
+
+#ifdef DEBUG
+//! makes the next completion of a marking event fail after the upgrade, as an allocation failure would
+static std::atomic<bool> dbg_fail_runtime_refresh{false};
+
+void qore_dbg_fail_next_runtime_refresh() {
+    dbg_fail_runtime_refresh.store(true, std::memory_order_relaxed);
+}
+#endif
+
+void qore_root_ns_private::completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full) {
+    bool all = full || !marked_types.empty();
+    if (all) {
+        qore_upgrade_program_local_derived_types(marked_types, full);
+    }
+#ifdef DEBUG
+    if (dbg_fail_runtime_refresh.exchange(false, std::memory_order_relaxed)) {
+        throw std::bad_alloc();
+    }
+#endif
+    refRuntimeVariantDecls(all ? 0 : start);
+    runtime_refresh_pending = false;
+}
+
+void qore_root_ns_private::releaseRuntimeVariants() {
+    for (AbstractQoreFunctionVariant* v : runtime_variants) {
+        v->deref();
+    }
+    runtime_variants.clear();
+    runtime_variant_set.clear();
+}
+
+//! Returns true if the function has the variant
+static bool function_has_variant(const QoreFunction& f, const AbstractQoreFunctionVariant* v) {
+    QoreFunctionIterator fi(f);
+    while (fi.next()) {
+        if (fi.getVariant() == v) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Visits a namespace tree with the namespaces kept by qore_ns_private::runtimeAssimilate() (qore#7530, qore#7540)
+template <typename F>
+static void visit_namespace_tree(qore_ns_private& tree, F visit) {
+    QorePrivateNamespaceIterator qpni(&tree);
+    while (qpni.next()) {
+        qore_ns_private* ns = qpni.get();
+        visit(*ns);
+        for (QoreNamespace* rns : ns->retained_ns) {
+            visit_namespace_tree(*qore_ns_private::get(*rns), visit);
+        }
+    }
+}
+
+//! Adds the builtin variants of the functions of a namespace that were not added to a namespace that no Program owns
+//! to the runtime variants of the root namespace (qore_root_ns_private::runtime_variants; qore#7540)
+static void add_runtime_function_variants(qore_ns_private& ns, qore_root_ns_private& rns) {
+    for (auto& i : ns.func_list) {
+        // a function shared with a namespace that no Program owns has no variant of the Program
+        if (i.second->isSharedUnowned()) {
+            continue;
+        }
+        QoreFunctionIterator fi(*i.second->getFunction());
+        while (fi.next()) {
+            BuiltinFunctionVariantBase* bv = get_builtin_variant_base(fi.getVariant());
+            if (bv && !bv->isSharedOrigin()) {
+                rns.addRuntimeVariant(const_cast<AbstractQoreFunctionVariant*>(fi.getVariant()));
+            }
+        }
+    }
+}
+
+bool qore_ns_private::ownedByProgram() const {
+    if (module_owned) {
+        return false;
+    }
+    // a namespace of a module, or one attached to the static system namespace, has no Program
+    for (const qore_ns_private* n = this; n; n = n->parent) {
+        if (n->module_owned) {
+            return false;
+        }
+    }
+    return getProgram() != nullptr;
+}
+
+void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
+    if (tree.module_owned || !ownedByProgram()) {
+        return;
+    }
+    qore_root_ns_private* rns = const_cast<qore_root_ns_private*>(getRoot());
+    assert(rns);
+    // an event that does not complete (an allocation failed) is completed by the next one
+    bool full = rns->beginRuntimeMarking();
+    type_vec_t marked_types;
+    size_t old_variants = rns->runtime_variants.size();
+    visit_namespace_tree(tree, [&](qore_ns_private& ns) {
+        {
+            ClassListIterator cli(ns.classList);
+            while (cli.next()) {
+                qore_class_private* cp = qore_class_private::get(*cli.get());
+                // a copy of the class of a module shares its private data, whose namespace is the module's
+                if (cp->ns == &ns) {
+                    cp->setProgramLocal(marked_types);
+                }
+            }
+        }
+        {
+            HashDeclListIterator hli(ns.hashDeclList);
+            while (hli.next()) {
+                typed_hash_decl_private::get(*hli.get())->setProgramLocal(marked_types);
+            }
+        }
+        {
+            EnumListIterator eli(ns.enumList);
+            while (eli.next()) {
+                qore_enum_decl_private::get(*eli.get())->setProgramLocal(marked_types);
+            }
+        }
+        // the variants of the functions of the tree that the Program owns
+        add_runtime_function_variants(ns, *rns);
+    });
+    // the parameterized class types that the module made from the declarations before they were marked are upgraded,
+    // and every variant of the Program references the mortal declarations that it names, also a variant added before a
+    // declaration that it names was marked; when no declaration was marked, only the variants added now can name one
+    // that they do not reference yet
+    rns->completeRuntimeMarking(marked_types, old_variants, full);
+}
+
 void qore_ns_private::addCommitNamespaceIntern(qore_ns_private* nns) {
     assert(!classList.find(nns->name.c_str()));
+
+    // the declarations of a tree that a binary module adds to a Program's namespace are owned by that Program: they are
+    // marked before the tree is published (qore#7540)
+    markProgramLocal(*nns);
 
     nns = nsl.runtimeAdd(nns->ns, this);
 
@@ -897,14 +1080,44 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
 
     FunctionEntry* fe = func_list.findNode(fname);
 
-    if (fe) {
-        fe->getFunction()->addBuiltinVariant(vh.release());
-        return;
+    // a variant added to a namespace that a Program owns references the mortal declarations that it names, also those
+    // marked later (qore#7540); one added to a namespace that no Program owns, or to a function that the namespace
+    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs and
+    // references none: it would keep them until the static system namespace is deleted at library cleanup
+    BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v);
+    bool runtime_variant = false;
+    if (bv) {
+        if (ownedByProgram() && !(fe && fe->isSharedUnowned())) {
+            runtime_variant = !bv->isSharedOrigin();
+        } else if (getRoot() || module_owned || (fe && fe->isSharedUnowned())) {
+            bv->setSharedOrigin();
+        }
     }
 
-    QoreFunction* u = new QoreFunction(fname);
-    u->addBuiltinVariant(vh.release());
-    fe = func_list.add(u, this);
+    // the function frees a variant whose signature it already has (QoreFunction::addBuiltinVariant()): a reference of
+    // our own keeps it while we find out whether the function kept it
+    SimpleRefHolder<AbstractQoreFunctionVariant> keep(runtime_variant ? v->ref() : nullptr);
+
+    bool new_function = !fe;
+    if (fe) {
+        fe->getFunction()->addBuiltinVariant(vh.release());
+    } else {
+        QoreFunction* u = new QoreFunction(fname);
+        u->addBuiltinVariant(vh.release());
+        fe = func_list.add(u, this);
+    }
+
+    if (runtime_variant && function_has_variant(*fe->getFunction(), v)) {
+        qore_root_ns_private* rns = getRoot();
+        rns->addRuntimeVariant(v);
+        bv->refMortalDecls();
+        // a marking event that did not complete is completed now
+        rns->completePendingRuntimeMarking();
+    }
+
+    if (!new_function) {
+        return;
+    }
 
     // add to root function map if attached
     qore_root_ns_private* rns = getRoot();
@@ -6210,5 +6423,10 @@ void qore_ns_private::getTypeOwners(std::vector<QoreTypeOwner*>& owners) {
     }
     for (auto& i : nsl.nsmap) {
         qore_ns_private::get(*i.second)->getTypeOwners(owners);
+    }
+    // the namespaces that a run-time merge kept are freed with this one, and the declarations that a binary module
+    // added to the Program in them are mortal (qore#7530, qore#7540)
+    for (QoreNamespace* rns : retained_ns) {
+        qore_ns_private::get(*rns)->getTypeOwners(owners);
     }
 }
