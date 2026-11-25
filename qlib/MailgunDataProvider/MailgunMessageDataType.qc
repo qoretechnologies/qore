@@ -59,6 +59,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "desc": "Blind carbon copy recipients",
             },
             "subject": {
+                "metadata": {"message_role": "subject"},
                 "type": StringType,
                 "display_name": "Subject",
                 "short_desc": "Email subject",
@@ -67,6 +68,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "required": True,
             },
             "text": {
+                "metadata": {"message_role": "text"},
                 "type": StringOrNothingType,
                 "display_name": "Text Body",
                 "short_desc": "Plain text body",
@@ -75,6 +77,7 @@ public class MailgunSendEmailRequestDataType inherits HashDataType {
                 "required_groups": ("body",),
             },
             "html": {
+                "metadata": {"message_role": "text"},
                 "type": StringOrNothingType,
                 "display_name": "HTML Body",
                 "short_desc": "HTML body",

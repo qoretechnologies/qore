@@ -75,6 +75,10 @@ module MailgunDataProvider {
             "app": MailgunDataProvider::AppName,
             "path": "/send-email",
             "action": "send-email",
+            "message_formats": {"default": {
+                "plain": {"content": "text", "subject": "subject"},
+                "html": {"content": "html", "subject": "subject", "fallback": "text", "plain_alternative": True},
+            }},
             "groups": "Email",
             "display_name": "Send Email",
             "short_desc": "Send an email via Mailgun",

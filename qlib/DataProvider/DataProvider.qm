@@ -1787,6 +1787,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       and before a module is loaded, the hooks the module needs to run code for sandboxed callers, and the module reads
       them in its initialization, even when it is loaded lazily
       (<a href="https://github.com/qoretechnologies/qore/issues/6845">issue 6845</a>)
+    - @ref DataProvider::DataProviderMessageFormat "DataProviderMessageFormat" describes registered and indexed
+      delivery forms and checks a saved form against the installed action and variant (issue 6880)
     - added optional processing-locality and billing-model metadata to apps and actions: the \c processing
       (@ref DataProvider::DataProviderProcessingInfo "DataProviderProcessingInfo") and \c billing
       (@ref DataProvider::DataProviderBillingInfo "DataProviderBillingInfo") fields of
