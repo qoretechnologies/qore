@@ -464,6 +464,17 @@ int main() {
             ++count;
         }
     }
+    // the typed ReleaseOwnedTemp of a replaced pending return in debug IR: type object and one operand (qore#7022)
+    const auto typed = [](const char* type) -> Payload {
+        return [type](QoreAOTBinaryWriter& w) { w.writeStringRef(type); };
+    };
+    const char* typed_release = "a typed ReleaseOwnedTemp requires object and one operand";
+    run("typed ReleaseOwnedTemp", O::ReleaseOwnedTemp, G::TypedBase, {1}, typed("object"));
+    run("typed ReleaseOwnedTemp of another type", O::ReleaseOwnedTemp, G::TypedBase, {1}, typed("int"),
+        typed_release);
+    run("typed ReleaseOwnedTemp without a type", O::ReleaseOwnedTemp, G::TypedBase, {1}, typed(""), typed_release);
+    run("typed ReleaseOwnedTemp with two operands", O::ReleaseOwnedTemp, G::TypedBase, {1, 2}, typed("object"),
+        typed_release);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -712,7 +723,7 @@ int main() {
         static_assert(QORE_AOT_BINARY_MIN_VERSION >= QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
             "the reader refuses the layout before the callee");
         constexpr uint16_t old_version = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION - 1;
-        // the versions that the reader supports, which a later batch can raise (qore#7379)
+        // the versions that the reader supports, which a later batch can raise (qore#7379, qore#7022)
         const std::string old_error = "unsupported binary format version " + std::to_string(old_version)
             + " (supported " + std::to_string(QORE_AOT_BINARY_MIN_VERSION) + "-"
             + std::to_string(QORE_AOT_BINARY_VERSION) + "); rebuild the artifact with this version of qcc";
@@ -730,9 +741,9 @@ int main() {
             "invalid background helper callee -3");
     }
     // the v52 refusal, the three implicit element cases, the eight exit restoration cases and the six truncated tables
-    // of v53 (qore#7379)
-    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 196
-        : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168);
+    // of v53 (qore#7379), and the typed ReleaseOwnedTemp checks (qore#7022)
+    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 201
+        : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 183 : 173);
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));

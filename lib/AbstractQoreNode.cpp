@@ -53,6 +53,7 @@
 #include <cstring>
 #include <type_traits>
 #include <vector>
+#include <unordered_set>
 #include <memory>
 
 #define TRACK_REFS 0
@@ -1214,6 +1215,54 @@ bool needs_scan(const QoreValue& v) {
         return false;
     }
     return needs_scan(v.getInternalNode());
+}
+
+bool qore_return_release_observable(const QoreValue& value) {
+    if (value.isOpaque() || needs_scan(value)) {
+        return true;
+    }
+    const AbstractQoreNode* node = value.getInternalNode();
+    if (!node || (node->getType() != NT_LIST && node->getType() != NT_HASH)) {
+        return false;
+    }
+
+    // Opaque references own their targets but do not contribute to a container's GC scan count. Check
+    // the stored entries without resolving or following those references. A shared subcontainer is visited once.
+    std::vector<const AbstractQoreNode*> pending{node};
+    std::unordered_set<const AbstractQoreNode*> seen;
+    auto visit = [&](const QoreValue& entry) {
+        if (entry.isOpaque() || needs_scan(entry)) {
+            return true;
+        }
+        const AbstractQoreNode* child = entry.getInternalNode();
+        if (child && (child->getType() == NT_LIST || child->getType() == NT_HASH)) {
+            pending.push_back(child);
+        }
+        return false;
+    };
+    while (!pending.empty()) {
+        node = pending.back();
+        pending.pop_back();
+        if (!seen.insert(node).second) {
+            continue;
+        }
+        if (node->getType() == NT_LIST) {
+            ConstListIterator it(static_cast<const QoreListNode*>(node));
+            while (it.next()) {
+                if (visit(it.getValue())) {
+                    return true;
+                }
+            }
+        } else {
+            ConstHashIterator it(static_cast<const QoreHashNode*>(node));
+            while (it.next()) {
+                if (visit(it.get())) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 void inc_container_obj(const AbstractQoreNode* n, int dt) {

@@ -5987,6 +5987,10 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
             ok = emitBlockCleanups(hf.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
                 hf.temp_depth, loc);
             if (ok && !blockHasTerminator(builder.getBlock())) {
+                // the cleanups can release a return that the request abandons, whose destructor can raise an
+                // exception: it is one of the handler's, raised before the code after the handler drops the handlers
+                // still registered, so that they run with it (bug 380; qore#7022)
+                builder.createCheckException(loc)->exception_target = hf.exception_target;
                 builder.createBranch(end, loc);
             }
         }
@@ -6184,9 +6188,9 @@ void QoreIRLowering::releaseReplacedReturn(const QoreProgramLocation* loc) {
         builder.createReleaseHandedOverReturn(loc);
     }
     if (replacesPendingReturn()) {
-        builder.createReleaseOwnedTemp(pending_return, loc);
+        builder.createReleaseReplacedReturn(pending_return, loc);
         if (pending_return_base.isValid() && pending_return_base.id != pending_return.id) {
-            builder.createReleaseOwnedTemp(pending_return_base, loc);
+            builder.createReleaseReplacedReturn(pending_return_base, loc);
         }
     }
 }
@@ -6577,9 +6581,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 // it would have replaced is kept
                 // the handler of an exception raised when the try statement ends (qore#6658)
                 builder.createCheckException(entry.loc)->exception_target = entry.try_end_target;
-                builder.createReleaseOwnedTemp(try_replaced_return, entry.loc);
+                builder.createReleaseReplacedReturn(try_replaced_return, entry.loc);
                 if (try_replaced_return_base.isValid() && try_replaced_return_base.id != try_replaced_return.id) {
-                    builder.createReleaseOwnedTemp(try_replaced_return_base, entry.loc);
+                    builder.createReleaseReplacedReturn(try_replaced_return_base, entry.loc);
                 }
                 // an exception that the release raises (a destructor) is raised once the try statement has ended, as
                 // by the AST interpreter's try statement, which replaces the value after it has left its try and catch
@@ -7372,6 +7376,8 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         hf.scope_id = scope_id;
         hf.return_walk = return_walk;
         hf.try_depth = try_depth;
+        // the target that the handler's code raises to (below)
+        hf.exception_target = set_exception_target ? handler_exception_target : getCurrentExceptionTarget();
         // the entry of the handler's scope, also for a handler that is not the last: it tells whether the handler is in
         // the body of the handler around it (qore#6949)
         if (scope_id) {
@@ -7810,6 +7816,10 @@ QoreIRBasicBlock* QoreIRLowering::lowerInlineHandlerOuterRequest(size_t hf_index
         ok = emitBlockCleanups(outer.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
             outer.temp_depth, nullptr, inner_depth);
         if (ok && !blockHasTerminator(builder.getBlock())) {
+            // the request goes on in the outer handler's code: an exception raised by the release of the return that
+            // it abandons goes to that handler's exception target, where its later handlers are still registered
+            // (bug 380; qore#7022)
+            builder.createCheckException(nullptr)->exception_target = outer.exception_target;
             builder.createBranch(outer_end, nullptr);
         }
     }

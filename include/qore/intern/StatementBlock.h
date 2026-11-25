@@ -54,6 +54,96 @@ class QoreIRFunction;
 struct QoreAOTContext;
 class BCList;
 
+//! The innermost pending return snapshot of the current thread (StatementBlock.cpp), or nullptr if none is active
+/** A snapshot is active only while the exit handlers of a block, or the body of a loop, run with a pending return
+    (#7022); constant-initialized, so that its reads need no TLS initialization guard, with the default TLS model (see
+    q_thread_stack_limit_tls)
+*/
+DLLLOCAL extern constinit thread_local void* qore_pending_return_snapshot_tls;
+
+//! Notifies the active pending return snapshots that a return replaces the value of this slot (#7022)
+DLLLOCAL void qore_replacing_return_notify(QoreValue& slot);
+
+class StatementBlock;
+
+//! An entry in the chain of the handlers that run in the current thread (StatementBlock::requestTakenInFunction())
+/** A handler that runs (\c block set), or a try statement in the body of a handler, whose try and catch blocks have
+    a return slot of their own (\c alias_of set: the slot that the statement gives its return to), which a break or a
+    continue passes as it is (#7022)
+*/
+struct QoreHandlerRun {
+    //! the return slot of the code that runs the handler or the try statement's blocks
+    const QoreValue* slot;
+    //! for a try statement: the return slot that encloses the statement
+    const QoreValue* alias_of;
+    //! for a handler: the block that declares the handler
+    const StatementBlock* block;
+    //! for a handler: it is the last that runs at its exit (QoreIRLowering's last_run)
+    bool last;
+    QoreHandlerRun* previous;
+};
+
+//! The innermost entry of the chain of the handlers that run in the current thread, or nullptr (#7022)
+DLLLOCAL extern constinit thread_local QoreHandlerRun* qore_handler_run_tls;
+
+//! Adds an entry to the chain of the thread, and removes it on every way out (#7022)
+class QoreHandlerRunHelper {
+public:
+    DLLLOCAL QoreHandlerRunHelper(const QoreValue& slot, const StatementBlock* block, bool last)
+            : run{&slot, nullptr, block, last, qore_handler_run_tls} {
+        qore_handler_run_tls = &run;
+    }
+
+    DLLLOCAL ~QoreHandlerRunHelper() {
+        assert(qore_handler_run_tls == &run);
+        qore_handler_run_tls = run.previous;
+    }
+
+    // a copy would leave the chain with an entry of a dead object
+    QoreHandlerRunHelper(const QoreHandlerRunHelper&) = delete;
+    QoreHandlerRunHelper& operator=(const QoreHandlerRunHelper&) = delete;
+
+private:
+    QoreHandlerRun run;
+};
+
+//! The slot of a try statement's blocks while a handler runs: a request passes the statement as it is (#7022)
+/** Only a TLS read outside of handlers
+*/
+class QoreTryReturnSlotHelper {
+public:
+    DLLLOCAL QoreTryReturnSlotHelper(const QoreValue& slot, const QoreValue& outer) {
+        if (qore_handler_run_tls) {
+            run = {&slot, &outer, nullptr, false, qore_handler_run_tls};
+            qore_handler_run_tls = &run;
+            pushed = true;
+        }
+    }
+
+    DLLLOCAL ~QoreTryReturnSlotHelper() {
+        if (pushed) {
+            assert(qore_handler_run_tls == &run);
+            qore_handler_run_tls = run.previous;
+        }
+    }
+
+    // a copy would leave the chain with an entry of a dead object
+    QoreTryReturnSlotHelper(const QoreTryReturnSlotHelper&) = delete;
+    QoreTryReturnSlotHelper& operator=(const QoreTryReturnSlotHelper&) = delete;
+
+private:
+    QoreHandlerRun run{};
+    bool pushed = false;
+};
+
+//! Notifies the active pending return snapshots, if any, when a source return replaces the value of this slot
+/** A TLS read inline: the snapshots are only active while handlers or a loop run with a pending return (#7022)
+*/
+DLLLOCAL inline void qore_replacing_return(QoreValue& slot) {
+    if (qore_pending_return_snapshot_tls) {
+        qore_replacing_return_notify(slot);
+    }
+}
 class LVList {
 public:
     typedef std::vector<LocalVar*> lv_vec_t;
@@ -146,6 +236,21 @@ public:
 
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL virtual int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+    //! A loop or switch consumes a break (and optionally a continue), abandoning the value of that exit.
+    DLLLOCAL int execLoopBody(QoreValue& return_value, ExceptionSink* xsink, bool takes_continue = true);
+    DLLLOCAL int execLoopBody(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+            bool takes_continue = true) {
+        // a loop that runs with no pending return (the common case) needs no snapshot: a value left in the slot by
+        // an iteration whose return a break or a continue abandons is released (#7022)
+        if (return_value.isNothing()) {
+            int flow = execImpl(rc, return_value, xsink);
+            if ((flow == RC_BREAK || (takes_continue && flow == RC_CONTINUE)) && !return_value.isNothing()) {
+                releaseAbandonedReturn(return_value, xsink);
+            }
+            return flow;
+        }
+        return execLoopBodyPending(rc, return_value, xsink, takes_continue);
+    }
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 
     DLLLOCAL void del();
@@ -238,6 +343,20 @@ protected:
     //! true once the block has been parse-initialized; the analysis of the code that calls the function, method or
     //! closure of the block reads it (issue #5940)
     bool parse_initialized = false;
+    //! the requests that a loop or switch statement around the block takes in its function, before the body of a
+    //! handler or the function's top block: PF_BREAK_OK and PF_CONTINUE_OK of the parse context (#7022)
+    unsigned char request_targets = 0;
+
+    //! True if a loop or switch statement around the block takes the request (RC_BREAK or RC_CONTINUE) before the body
+    //! of a handler or the top block of its function (#7022)
+    DLLLOCAL bool loopTakesRequest(int rc) const {
+        return request_targets & (rc == RC_BREAK ? PF_BREAK_OK : PF_CONTINUE_OK);
+    }
+
+    //! True if a break or a continue that leaves the block is taken in its function: by a loop or switch statement,
+    //! or by the later handler of a handler around it; otherwise it ends the function, and a return that it left goes
+    //! on with its value (#6949), as compiled code decides (QoreIRLowering::inlineHandlerRequestEndsFunction(); #7022)
+    DLLLOCAL bool requestTakenInFunction(int rc, const QoreValue& return_value) const;
 
     // start must be the element before the start position
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start);
@@ -246,6 +365,13 @@ protected:
     //! return type that does not accept NOTHING (issue #5940)
     DLLLOCAL int parseCheckReturn(const UserVariantBase* uvb);
 
+    DLLLOCAL int execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& return_value, ExceptionSink* xsink);
+    //! A loop body that runs with a pending return: its snapshot restores that return when a break or a continue
+    //! abandons another one (#7022)
+    DLLLOCAL int execLoopBodyPending(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+            bool takes_continue);
+    //! Releases the value of a return that a break or a continue abandons in a loop with no pending return (#7022)
+    DLLLOCAL static void releaseAbandonedReturn(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 

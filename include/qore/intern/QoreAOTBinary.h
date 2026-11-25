@@ -684,6 +684,10 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!      - PopImplicitElement (opcode 278, Base group) can have a second operand, the element that a foreach statement
 //!        saved before its loop, with which it sets the index of the loop's next element (its first operand) and
 //!        leaves the push open (qore#7379)
+//!      - ReleaseOwnedTemp (opcode 411) can be in the TypedBase group, with the type object and one operand: in debug
+//!        IR, the release of a pending return that a return replaces, which releases the value only if that can run
+//!        an object destructor (an object, or a value that owns one), and keeps any other value for a debugger request
+//!        that resumes the replaced return (qore#7022)
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
@@ -716,12 +720,15 @@ static_assert(QORE_AOT_WILDCARD_BOUND_VERSION == QORE_AOT_BATCH_AOT_IDENTITY_VER
 //! Serialized IR functions record the implicit contexts that the frame's exit on an exception restores (see v53 above,
 //! qore#7379)
 constexpr uint16_t QORE_AOT_EXIT_RESTORE_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+//! First format version whose debug IR can have the typed ReleaseOwnedTemp of a replaced pending return (see v53
+//! above, qore#7022)
+constexpr uint16_t QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 //! Old compiled artifacts must be rebuilt (see v53 above): the reader refuses older images, the program image of a qcc
 //! executable included (qore_aot_run_v4() reads it before anything else), before it reads any record; the reader of a
 //! v53 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
 //! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
-//! METHODS record (qore#7169), the callee of each background helper (qore#7087) and the exit restorations of its IR
-//! functions (qore#7379)
+//! METHODS record (qore#7169), the callee of each background helper (qore#7087), the exit restorations of its IR
+//! functions (qore#7379) and the layout of the typed ReleaseOwnedTemp of its debug IR (qore#7022)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -872,6 +879,11 @@ constexpr uint16_t QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION = 51;
 static_assert(QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION == QORE_AOT_BATCH_AO_VERSION,
     "the format changes of batch AO share one format version (v51)");
 constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
+static_assert(QORE_AOT_EXIT_RESTORE_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
+    && QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
+    && QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION
+    && QORE_AOT_BINARY_VERSION == QORE_AOT_BATCH_AOT_IDENTITY2_VERSION,
+    "the format changes of the second AOT-identity batch share one format version (v53), which the reader requires");
 
 //! The tag of the runtime location of a serialized IR instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 enum class QoreAOTStmtLocTag : uint8_t {

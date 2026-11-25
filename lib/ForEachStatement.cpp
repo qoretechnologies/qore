@@ -166,7 +166,7 @@ int ForEachStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) 
         ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
-        if (((rc = code->execImpl(return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc = code->execLoopBody(return_value, xsink)) == RC_BREAK) || *xsink) {
             rc = 0;
             break;
         }
@@ -239,7 +239,7 @@ int ForEachStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, Exc
         ForEachElementHelper eh(reads_implicit_element, i++);
 
         // execute "foreach" body
-        if (((rc_state = code->execImpl(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
+        if (((rc_state = code->execLoopBody(rc, return_value, xsink)) == RC_BREAK) || *xsink) {
             rc_state = 0;
             break;
         }
@@ -311,7 +311,7 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
-        rc = code->execImpl(return_value, xsink);
+        rc = code->execLoopBody(return_value, xsink);
         if (*xsink) {
             return 0;
         }
@@ -429,7 +429,7 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         ForEachElementHelper eh(reads_implicit_element, l_tlist ? (int)i : 0);
 
         // execute "for" body
-        rc_state = code->execImpl(rc, return_value, xsink);
+        rc_state = code->execLoopBody(rc, return_value, xsink);
         if (*xsink) {
             return 0;
         }
