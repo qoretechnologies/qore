@@ -52,6 +52,9 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
         #! The stream ID of the upgrade request whose caller took the socket over with @ref getSocket() (qore#7500)
         *int taken_over_stream_id;
+
+        #! The ID of the Program of the code that submitted the upgrade request of @ref upgrade_stream_id (qore#7544)
+        *int upgrade_owner_pgm_id;
     }
 
     #! Copying is not supported
@@ -86,8 +89,9 @@ public class Http1ClientConnection inherits HttpClientConnection {
             : HttpClientConnection(url_info, connect_timeout, logger,
                     Http1ClientConnection::validateMaxStreams(max_streams),
                     proxy_info) {
-        # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
-        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
+        # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981); the
+        # connection is owned by the owner of the manager that creates it, or by the code that creates it (qore#7544)
+        setConnectionOwner(HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path));
         log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https",
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING,
@@ -129,15 +133,65 @@ public class Http1ClientConnection inherits HttpClientConnection {
         request's stream handle then leaves the connection to the caller (see @ref closeUnclaimedUpgrade()).  The
         take-over is recorded also when the call comes before the \c 101 response has been fully processed, as it
         does when the caller takes the socket as soon as it has the response header.
+
+        The connection's socket carries the requests of every caller of its connection manager, so code that a
+        sandbox restricts (@ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()") and whose
+        %Program does not own the connection (the owner of the manager that created it, or the code that created it)
+        gets it only for a connection of its own: the switched stream of its own upgrade request, or an idle
+        connection, which it then takes out of the pool for good, so that the manager gives it to no other request
+        (qore#7544).
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox, does not own the connection, and the
+        connection is used by another request, or was taken by other code
     */
     Socket getSocket() {
+        bool owner = callerOwnsConnection();
+        *int caller = owner ? NOTHING : SandboxManager::getCallerProgramId();
+        bool take_own;
         {
             AutoLock al(lock);
             if (exists upgrade_stream_id) {
-                taken_over_stream_id = upgrade_stream_id;
+                if (owner) {
+                    taken_over_stream_id = upgrade_stream_id;
+                    return getSocketIntern();
+                }
+                # restricted code takes the switched stream of its own upgrade request, while it is the
+                # connection's: switched, or still active
+                if (exists caller && caller == upgrade_owner_pgm_id
+                        && (poll_op.isProtocolSwitched() || poll_op.getActiveStreamCount() > 0)) {
+                    taken_over_stream_id = upgrade_stream_id;
+                    take_own = True;
+                }
             }
         }
+        # the connection is taken out of the pool for good, also when the server answers the upgrade request with
+        # another status, after which the connection would serve other requests (qore#7544)
+        if (take_own) {
+            if (!markTaken(caller)) {
+                throw "PERMISSION-DENIED", "the socket of this HTTP connection was taken by other code";
+            }
+            return getSocketIntern();
+        }
+        if (!owner && !takeIdleForRestrictedCaller()) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the socket of a pooled HTTP "
+                "connection of a connection manager that it does not own while another request uses it";
+        }
         return getSocketIntern();
+    }
+
+    #! Records the latest request submitted on the connection: an upgrade request, whose caller takes the socket over
+    #! after a \c 101 response, or another request, after which no upgrade request is the connection's (qore#7544)
+    private recordSubmit(int sid, *hash<auto> headers) {
+        bool upgrade = Http1ClientConnection::hasUpgradeHeader(headers);
+        *int owner = upgrade ? SandboxManager::getCallerProgramId() : NOTHING;
+        AutoLock al(lock);
+        if (upgrade) {
+            upgrade_stream_id = sid;
+            upgrade_owner_pgm_id = owner;
+        } else {
+            remove upgrade_stream_id;
+            remove upgrade_owner_pgm_id;
+        }
     }
 
     #! Closes the connection of a request that asked for a protocol upgrade, unless the caller took its socket over
@@ -181,7 +235,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
     #! Returns the underlying socket (cached for stable identity) without taking it over
     private Socket getSocketIntern() {
         if (!cached_socket) {
-            cached_socket = poll_op.getSocket();
+            cached_socket = poll_op.getSocketFor(HttpClientIoSocketAccess::get());
         }
         return cached_socket;
     }
@@ -196,6 +250,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         checkRequestBody(method, headers, body);
         int sid = poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams);
+        recordSubmit(sid, headers);
         # Wake the I/O controller so it processes the queued request
         *AsyncSocketIoController ctl;
         {
@@ -212,8 +267,10 @@ public class Http1ClientConnection inherits HttpClientConnection {
     int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise, EventNotifier notifier) {
         checkRequestBody(method, headers, body);
-        return poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
+        int sid = poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
             notifier, max_concurrent_streams);
+        recordSubmit(sid, headers);
+        return sid;
     }
 
     #! Submits a streaming request on this connection
@@ -246,10 +303,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming, body_streaming, notifier,
             sse_install_eligible);
         # the caller of a request that asks for an upgrade takes the socket over after a 101 response (qore#7500)
-        if (Http1ClientConnection::hasUpgradeHeader(headers)) {
-            AutoLock al(lock);
-            upgrade_stream_id = sid;
-        }
+        recordSubmit(sid, headers);
         # Wake the I/O controller so it processes the queued request
         *AsyncSocketIoController ctl;
         {
@@ -364,6 +418,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         checkRequestBody(method, headers, body);
         int sid = poll_op.submitRequestSse(method, path, headers, body, queue,
             max_concurrent_streams, notifier);
+        recordSubmit(sid, headers);
         # Wake the I/O controller so it processes the queued request
         *AsyncSocketIoController ctl;
         {

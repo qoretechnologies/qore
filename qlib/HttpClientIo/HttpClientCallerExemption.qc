@@ -25,6 +25,36 @@
 #! Main namespace
 public namespace HttpClientIo {
 
+#! The access of this module's code to the socket of a poll operation (qore#7544)
+/** Not exported: only this module's code can name it, and so get its token.  The socket of a connection carries the
+    requests of every caller of its connection manager: a poll operation gives it with
+    @ref HttpClientIo::HttpClientPollOperation::getSocket() "getSocket()" to code that a sandbox restricts only for a
+    connection of its own (see @ref HttpClientIo::HttpClientConnection::getSocket() "HttpClientConnection::getSocket()"),
+    while this module's code, which uses the socket for every caller, takes it with
+    @ref HttpClientIo::HttpClientPollOperation::getSocketFor() "getSocketFor()" and this class's token.
+*/
+class HttpClientIoSocketAccess {
+    private:internal {
+        #! the token
+        static object token = new Mutex();
+    }
+
+    #! Returns the token
+    static object get() {
+        return token;
+    }
+
+    #! Raises an exception if the given object is not the token
+    /** @throw PERMISSION-DENIED the object is not the token
+    */
+    static check(object access) {
+        if (access !== token) {
+            throw "PERMISSION-DENIED", "this method of an HTTP client poll operation is reserved for the code of the "
+                "HttpClientIo module";
+        }
+    }
+}
+
 #! The caller check of the connections and poll operations of the module, and its exemption (qore#6981)
 /** Not exported: only this module's code can create one.  A connection
     (@ref HttpClientIo::Http1ClientConnection "Http1ClientConnection", @ref HttpClientIo::Http2ClientConnection
@@ -52,23 +82,28 @@ class HttpClientCallerExemption {
         #! the key of this exemption's thread
         string tid = string(gettid());
 
-        #! the exemptions held, by thread
-        static hash<string, object> active = {};
+        #! the exemptions held, by thread: the token of the exemption and the ID of the Program that owns the
+        #! connection that it is for, if known (qore#7544); the object itself is not held, so that it is destroyed
+        #! when it goes out of scope
+        static hash<string, hash<auto>> active = {};
 
         #! the lock of \c active
         static Mutex lock();
     }
 
     #! Grants the exemption to the next check in this thread
-    constructor() {
+    /** @param owner_pgm_id the ID of the Program that owns the connection that is created with the exemption: the
+        owner of the connection manager that creates it (qore#7544)
+    */
+    constructor(*int owner_pgm_id) {
         AutoLock al(lock);
-        active{tid} = token;
+        active{tid} = {"token": token, "owner": owner_pgm_id};
     }
 
     #! Removes the exemption if it was not taken
     destructor() {
         AutoLock al(lock);
-        if (active{tid} === token) {
+        if (active{tid}.token === token) {
             remove active{tid};
         }
     }
@@ -77,12 +112,16 @@ class HttpClientCallerExemption {
     /** @param ssl_ca_file the CA certificate file of the connection, if any
         @param ssl_ca_path the CA certificate directory of the connection, if any
 
+        @return the ID of the Program that owns the connection, if known: the owner of the connection manager that
+        holds the exemption, else the Program of the calling code (qore#7544)
+
         @throw PERMISSION-DENIED the calling code is restricted from \c NETWORK, or from \c FILESYSTEM and CA
         locations are given
     */
-    static check(*string ssl_ca_file, *string ssl_ca_path) {
-        if (HttpClientCallerExemption::take()) {
-            return;
+    static *int check(*string ssl_ca_file, *string ssl_ca_path) {
+        *hash<auto> exemption = HttpClientCallerExemption::take();
+        if (exemption) {
+            return exemption.owner;
         }
         if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection, as it is "
@@ -92,12 +131,13 @@ class HttpClientCallerExemption {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection CA certificate "
                 "locations, as it is restricted from the FILESYSTEM functional domain";
         }
+        return SandboxManager::getCallerProgramId();
     }
 
-    #! Takes the exemption of the thread; returns @ref True if one was held
-    private:internal static bool take() {
+    #! Takes the exemption of the thread, if one is held
+    private:internal static *hash<auto> take() {
         AutoLock al(lock);
-        return exists remove active{string(gettid())};
+        return remove active{string(gettid())};
     }
 }
 }

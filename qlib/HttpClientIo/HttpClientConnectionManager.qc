@@ -468,6 +468,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             for its borrower
         */
         *HttpClientCreatorProof lent_proof;
+
+        #! The ID of the Program whose code owns the manager, if known (qore#7544)
+        /** The creator of the manager, or the code that took the proof that it was created with: the code of that
+            Program takes the sockets of the manager's connections, which other code that the manager is lent to and
+            that a sandbox restricts does not (see @ref HttpClientIo::HttpClientConnection::getSocket()
+            "HttpClientConnection::getSocket()")
+        */
+        *int owner_pgm_id;
     }
 
     #! Creates a new connection manager with the given options
@@ -478,6 +486,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     constructor(*hash<HttpClientConnectionManagerOptions> opts) {
         HttpClientConnectionManager::checkCreator(opts);
+        owner_pgm_id = SandboxManager::getCallerProgramId();
         initManager(opts);
     }
 
@@ -518,6 +527,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # the manager is the creator's: its creator is not bound, but a restricted borrower of the client is
             lent_proof = proof;
         }
+        # the manager is the code's that took the proof: the client's creator (qore#7544)
+        owner_pgm_id = proof.getOwnerProgramId();
         initManager(opts);
     }
 
@@ -713,7 +724,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     "locations";
             }
         }
-        return new HttpClientCallerExemption();
+        # the connection is the owner's of the manager (qore#7544)
+        return new HttpClientCallerExemption(owner_pgm_id);
     }
 
     #! Destructor - closes all connections
@@ -3389,7 +3401,7 @@ printf("%d connection(s) migrated\n", migrated);
         # directly to setUserTimeout(int).
         if (opts.tcp_user_timeout > 0) {
             try {
-                conn.getPollOperation().getSocket().setUserTimeout(opts.tcp_user_timeout);
+                conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).setUserTimeout(opts.tcp_user_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG,
                     "TCP_USER_TIMEOUT could not be applied: %s: %s",
@@ -4850,7 +4862,7 @@ printf("%d connection(s) migrated\n", migrated);
         HttpClientPollOperation op = conn.getPollOperation();
         # the socket of the poll operation, the object that HttpClientConnection::getSocket() returns as well, which
         # a caller takes over with it after a 101 response (qore#7500)
-        Socket sock = conn.getPollOperation().getSocket();
+        Socket sock = conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get());
         string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
@@ -5573,7 +5585,7 @@ printf("%d connection(s) migrated\n", migrated);
         }
         # the socket of the poll operation: HttpClientConnection::getSocket() takes the socket of a connection whose
         # protocol is switched over from its stream (qore#7500)
-        if (!conn.getPollOperation().getSocket().isOpen()) {
+        if (!conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
                 conn.getConnectionId());
             return False;

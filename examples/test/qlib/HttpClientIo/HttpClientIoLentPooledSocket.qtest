@@ -1,0 +1,394 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - pooled HTTP/1.1 and HTTP/2 client connections over TCP and TLS, and the sockets taken over
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires HttpServer
+%requires HttpServerUtil
+
+%exec-class HttpClientIoLentPooledSocketTest
+
+#! A sandboxed borrower of a connection manager that other code shares cannot take over a pooled connection that the
+#! other code reuses (qore#7544)
+/** Sandboxed code that does not own the manager gets the socket of an HTTP/1.1 connection only for its own switched
+    stream (qore#7500), or for an idle connection, which is then out of the pool for good: the other code's later
+    requests use other connections.  It is refused the socket of a connection that another request is using, the
+    socket of an HTTP/2 connection, whose streams are other code's too, and the socket of a connection's poll
+    operation.  Code that owns the manager is not restricted.
+*/
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! the code of the borrower
+const BorrowerCode = "%modern
+%requires HttpClientIo
+%requires reflection
+our HttpClientConnection conn;
+our *Socket sock;
+our *HttpClientStreamHandle upgrade_sh;
+our *hash<auto> upgrade_req;
+#! makes a request with the manager and keeps its connection; returns the status code
+int sub request(HttpClientConnectionManager mgr, string url, string path) {
+    HttpClientStreamHandle sh = mgr.acquireStream(url);
+    hash<auto> r = sh.submitAsync(\"GET\", path);
+    int status = r.future.get(20s).status_code;
+    conn = sh.getConnection();
+    return status;
+}
+#! takes the socket of the kept connection, directly or from its poll operation; returns \"taken\" or the error
+string sub take(string how) {
+    try {
+        sock = how == \"poll\" ? conn.getPollOperation().getSocket() : conn.getSocket();
+        return \"taken\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! writes to the taken socket, which corrupts the next exchange of a request on its connection
+string sub write() {
+    sock.send(\"GET /junk HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n\");
+    return \"written\";
+}
+#! puts the taken connection back into the pool with the connection's public methods
+string sub repool() {
+    try {
+        conn.releaseStreamReservation();
+        conn.setLeased(False);
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! calls the builtin getSocket() of the poll operation's class through reflection
+string sub reflect(string cls) {
+    try {
+        sock = Class::forName(cls).getMethod(\"getSocket\").call(conn.getPollOperation());
+        return \"taken\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! cuts the connection off from its poll operation, or sets another one
+string sub cut(string how) {
+    try {
+        HttpClientPollOperation op = conn.getPollOperation();
+        if (how == \"clear\") {
+            call_object_method(op, \"clearConnection\");
+        } else {
+            call_object_method(op, \"setConnection\", conn);
+        }
+        return \"done\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! submits a request that asks for a protocol upgrade, which the server holds
+nothing sub upgrade(HttpClientConnectionManager mgr, string url) {
+    upgrade_sh = mgr.acquireStream(url);
+    upgrade_req = upgrade_sh.submitAsync(\"GET\", \"/hold\", {\"Upgrade\": \"websocket\", \"Connection\": \"Upgrade\"});
+    conn = upgrade_sh.getConnection();
+}
+#! returns the status code of the response of the upgrade request
+int sub upgradeStatus() {
+    int rv = upgrade_req.future.get(20s).status_code;
+    remove upgrade_req;
+    remove upgrade_sh;
+    return rv;
+}
+#! returns the ID of the kept connection
+int sub connId() {
+    return conn.getConnectionId();
+}
+#! makes a manager of its own, a request with it, and takes the socket of its connection
+string sub own(string url, string protocol) {
+    HttpClientConnectionManager m(<HttpClientConnectionManagerOptions>{
+        \"protocol\": protocol,
+        \"accept_all_certs\": True,
+        \"request_timeout\": 20s,
+    });
+    on_exit m.closeAll();
+    request(m, url, \"/ok\");
+    string rv = take(\"conn\");
+    remove sock;
+    remove conn;
+    return rv;
+}
+";
+
+#! answers each request with 200; a request for /hold waits until the test releases it
+class HoldHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue held();
+        Queue release();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.url.path == "hold") {
+            held.push(True);
+            release.get(HangGuard);
+        }
+        return <HttpResponseInfo>{"code": 200, "body": "ok " + cx.url.path};
+    }
+}
+
+class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
+    constructor() : QUnit::Test("lent manager: pooled connection sockets", "1.0", \ARGV) {
+        addTestCase("HTTP/1.1: an idle connection is taken out of the pool", \idleTest());
+        addTestCase("HTTP/1.1: the socket of a connection in use is refused", \inUseTest());
+        addTestCase("HTTP/2: the socket of a connection is refused", \http2Test());
+        addTestCase("the code that owns the manager takes its sockets", \ownerTest());
+        addTestCase("HTTP/1.1: a taken connection cannot be put back into the pool", \repoolTest());
+        addTestCase("HTTP/1.1: an upgrade request answered without a switch leaves its taken connection out of the pool",
+            \upgradeNoSwitchTest());
+        addTestCase("the builtin socket accessor of a poll operation is refused through reflection", \reflectionTest());
+        addTestCase("the connection of a poll operation is not cut off or replaced by other code", \cutTest());
+        set_return_value(main());
+    }
+
+    #! returns a server, its handler and its URL
+    private hash<auto> startServer(bool tls) {
+        HoldHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("hold", handler);
+        hash<auto> lopts = {"node": "127.0.0.1", "service": 0};
+        if (tls) {
+            lopts += {
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+                "http_version": "2.0",
+            };
+        }
+        int port = server.addListener(cast<hash<HttpListenerOptionInfo>>(lopts)).port;
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "handler": handler,
+            "port": port,
+            "url": sprintf("%s://127.0.0.1:%d", tls ? "https" : "http", port),
+        };
+    }
+
+    #! a manager that the host creates and lends
+    private HttpClientConnectionManager getManager(string protocol) {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "max_request_retries": 0,
+            "request_timeout": HangGuard,
+        });
+    }
+
+    #! a sandboxed borrower that may reach the server
+    private Program getBorrower(int port) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        sm.addNetworkAllowedPort(port);
+        p.setSandboxManager(sm);
+        p.parse(BorrowerCode, "borrower");
+        return p;
+    }
+
+    #! a request of the host; returns the status code and the ID of its connection
+    private list<auto> hostRequest(HttpClientConnectionManager mgr, string url, string path) {
+        HttpClientStreamHandle sh = mgr.acquireStream(url);
+        hash<auto> r = sh.submitAsync("GET", path);
+        hash<auto> resp = r.future.get(HangGuard);
+        return (resp.status_code, sh.getConnection().getConnectionId(), resp.body);
+    }
+
+    idleTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        int borrowed = p.callFunction("connId");
+        # the connection is idle in the pool: the borrower takes it over, and it is no longer the pool's
+        assertEq("taken", p.callFunction("take", "conn"), "the socket of an idle connection");
+        assertEq("written", p.callFunction("write"), "the borrower uses the socket");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the host's request after the take-over");
+        assertEq("ok after", r[2], "the host's response");
+        assertNeq(borrowed, r[1], "the host's request uses another connection");
+        p.callFunction("take", "conn");
+        assertEq("taken", p.callFunction("take", "conn"), "the taker gets the socket again");
+    }
+
+    inUseTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        int borrowed = p.callFunction("connId");
+        # the host's request reuses the connection, and is held by the server
+        Queue done();
+        background sub () {
+            try {
+                done.push(hostRequest(mgr, srv.url, "/hold"));
+            } catch (hash<ExceptionInfo> ex) {
+                done.push(ex.err);
+            }
+        }();
+        # the server has the host's request, or the request ended without reaching it
+        if (!srv.handler.held.get(HangGuard)) {
+            fail(sprintf("the host's request did not reach the server: %y", done.get(0)));
+        }
+        on_exit srv.handler.release.push(True);
+        assertEq("PERMISSION-DENIED", p.callFunction("take", "conn"), "the socket of a connection in use");
+        assertEq("PERMISSION-DENIED", p.callFunction("take", "poll"), "the socket of its poll operation");
+        srv.handler.release.push(True);
+        list<auto> r = done.get(HangGuard);
+        assertEq(200, r[0], "the host's request");
+        assertEq("ok hold", r[2], "the host's response");
+        assertEq(borrowed, r[1], "the host's request reused the connection");
+    }
+
+    http2Test() {
+        hash<auto> srv = startServer(True);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h2");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        assertEq("PERMISSION-DENIED", p.callFunction("take", "conn"), "the socket of an HTTP/2 connection");
+        assertEq("PERMISSION-DENIED", p.callFunction("take", "poll"), "the socket of its poll operation");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the host's request");
+    }
+
+    ownerTest() {
+        foreach hash<auto> c in ({"tls": False, "protocol": "h1"}, {"tls": True, "protocol": "h2"}) {
+            hash<auto> srv = startServer(c.tls);
+            on_exit srv.server.stop();
+            Program p = getBorrower(srv.port);
+            assertEq("taken", p.callFunction("own", srv.url, c.protocol), c.protocol + ": a manager of its own");
+            # the host owns the manager that it creates
+            HttpClientConnectionManager mgr = getManager(c.protocol);
+            on_exit mgr.closeAll();
+            HttpClientStreamHandle sh = mgr.acquireStream(srv.url);
+            sh.submitAsync("GET", "/ok").future.get(HangGuard);
+            assertEq("Socket", sh.getConnection().getSocket().className(), c.protocol + ": the host's socket");
+        }
+    }
+
+    repoolTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        int borrowed = p.callFunction("connId");
+        assertEq("taken", p.callFunction("take", "conn"), "the socket of an idle connection");
+        assertEq("done", p.callFunction("repool"), "the public methods of the connection can be called");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the host's request");
+        assertNeq(borrowed, r[1], "the taken connection is not given to the host's request");
+    }
+
+    upgradeNoSwitchTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        p.callFunction("upgrade", mgr, srv.url);
+        srv.handler.held.get(HangGuard);
+        int borrowed = p.callFunction("connId");
+        # the socket of its own upgrade request, while the request is active
+        assertEq("taken", p.callFunction("take", "conn"), "the socket of the borrower's own upgrade request");
+        srv.handler.release.push(True);
+        assertEq(200, p.callFunction("upgradeStatus"), "the server does not switch the protocol");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the host's request");
+        assertNeq(borrowed, r[1], "the connection whose socket was taken is not given to the host's request");
+    }
+
+    reflectionTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        assertEq("REFLECTION-ACCESS-ERROR", p.callFunction("reflect", "Http1ClientPollOperationBase"),
+            "the builtin accessor of the poll operation's base class");
+    }
+
+    cutTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        assertNeq("done", p.callFunction("cut", "clear"), "clearConnection() needs the module's token");
+        assertNeq("done", p.callFunction("cut", "set"), "setConnection() is private");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the connection still serves requests");
+    }
+}
