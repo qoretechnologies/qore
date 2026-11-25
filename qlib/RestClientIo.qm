@@ -5605,6 +5605,8 @@ rest.addSensitiveHeaders("Qorus-Token");
             @param opts options passed through to SseObservable:
             - \c serialization: "json" or "none" (default: inherits from data serialization)
             - \c timeout: I/O timeout for reading events (default: 30s)
+            - \c start_timeout: the time in milliseconds that the startup waits for the response that starts the
+              stream (default: the client's request timeout); not passed to SseObservable
 
             @note A response that does not start an event stream (an error status, or a successful response whose
             \c Content-Type is not \c text/event-stream) closes the observable with \c reason \c "startup-error" and the
@@ -5669,9 +5671,11 @@ obs.observersReady();
             if (!obs_opts.serialization) {
                 obs_opts.serialization = "none";
             }
+            *int start_timeout_ms = remove obs_opts.start_timeout;
             obs_opts.startup_callback =
                 auto sub (HttpClientStreamingIo::SseObservable obs) {
-                    return startSseObservableOperation(obs, method, path, body, hdr, request_context, format, raw);
+                    return startSseObservableOperation(obs, method, path, body, hdr, request_context, format, raw,
+                        start_timeout_ms);
                 };
 
             return new HttpClientStreamingIo::SseObservable(mgr, url, method, path, hdr,
@@ -5697,10 +5701,11 @@ obs.observersReady();
         private *code<bool()> startSseObservableOperation(
                 HttpClientStreamingIo::SseObservable obs, string method, string path,
                 auto body, *hash<auto> hdr, *hash<RestClient::RestRequestContext> request_context,
-                RestClientIoStreamFormat format = RestClientIoStreamFormat::Sse, bool raw = False) {
+                RestClientIoStreamFormat format = RestClientIoStreamFormat::Sse, bool raw = False,
+                *int start_timeout_ms) {
             ensureToken();
             RestClientIoSseObservableStartOperation op(self, obs, method, path,
-                body, hdr, request_context, format, raw);
+                body, hdr, request_context, format, raw, start_timeout_ms);
             op.start();
             return bool sub () {
                 return op.cancel();
@@ -6756,6 +6761,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         RestClientIoStreamFormat format;
         #! @ref True if the body is already serialized
         bool raw;
+        #! The time in milliseconds to wait for the response that starts the stream; the client's request timeout
+        #! when not set
+        *int start_timeout_ms;
 
         string state = SPS_CONNECTING;
         bool goal_reached = False;
@@ -6773,13 +6781,17 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         @param request_context the resolved target of the request
         @param format the format of the response's event stream
         @param raw @ref True if \a body is already serialized and is sent unchanged
+        @param start_timeout_ms the positive time in milliseconds to wait for the response that starts the stream;
+        the client's request timeout when not set
     */
     constructor(RestClientIo rcio, HttpClientStreamingIo::SseObservable observable,
             string method, string path, auto body, *hash<auto> hdr,
             *hash<RestClient::RestRequestContext> request_context,
-            RestClientIoStreamFormat format = RestClientIoStreamFormat::Sse, bool raw = False) {
+            RestClientIoStreamFormat format = RestClientIoStreamFormat::Sse, bool raw = False,
+            *int start_timeout_ms) {
         self.format = format;
         self.raw = raw;
+        self.start_timeout_ms = start_timeout_ms > 0 ? start_timeout_ms : NOTHING;
         self.request_context = request_context;
         self.rcio = rcio;
         self.observable = observable;
@@ -6803,7 +6815,9 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
                 "sock": poll_info.socket,
                 "spop": self,
                 # a request timeout of 0 means no deadline; a negative controller timeout means none
-            "to": rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1,
+                "to": start_timeout_ms
+                    ? milliseconds(start_timeout_ms)
+                    : (rcio.getTimeout() > 0 ? milliseconds(rcio.getTimeout()) : -1),
                 "owner": "restclientio-sse-observable:" + self.uniqueHash(),
                 "has_on_complete": True,
             });

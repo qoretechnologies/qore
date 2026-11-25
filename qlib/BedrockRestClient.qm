@@ -745,7 +745,7 @@ class BedrockAsyncStreamObserver inherits DataProvider::Observer {
                 if (data_.reason == "stream-error" && data_.error.typeCode() == NT_HASH) {
                     # an error of the decoder (a CRC or format error) or of the transport, as readFrame() raises it
                     ex = QoreLlmUtils::AbstractLlmProvider::makeException("LLM-ERROR",
-                        "Bedrock ConverseStream failed: " + (data_.error.desc ?? "the AWS event stream failed"),
+                        "Bedrock ConverseStream failed: " + (data_.error.desc ?? "HTTP stream failed"),
                         data_.error);
                 } else {
                     ex = QoreLlmUtils::LlmAsyncSseRequest::getCloseError(data_);
@@ -1004,16 +1004,32 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             return;
         }
         BedrockAsyncStreamState state();
-        int timeout_ms;
         # chatStream() does not retry the start of the stream (qore#7661), and nor does this call
         hash<QoreLlmUtils::LlmRequestOptions> stream_opts = opts;
         stream_opts.max_retries = 0;
         stream_opts.rate_limit_retries = 0;
+        # the call's deadline (LlmRequestOptions::deadline) ends the stream, as chatStream()'s reads end at it; a
+        # deadline that has passed is reported by the attempt, which sends nothing then
+        *int deadline_ms;
+        if (opts.deadline) {
+            int remaining_ms = (opts.deadline - now_us()).durationMilliseconds();
+            if (remaining_ms > 0) {
+                deadline_ms = remaining_ms;
+            }
+        }
         QoreLlmUtils::LlmAsyncSseRequest req(self, op, stream_opts,
             code<nothing()> sub (QoreLlmUtils::LlmAsyncSseRequest r, int attempt) {
-                timeout_ms = getRequestTimeoutMs(opts);
+                # each wait, also the wait for the response that starts the stream, is bounded by the request
+                # timeout, as each read of chatStream() is
+                int timeout_ms;
+                try {
+                    timeout_ms = getRequestTimeoutMs(opts);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the deadline has passed: the error of chatStream()'s read
+                    throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
+                }
                 HttpClientStreamingIo::SseObservable obs = rest_client.observeConverseStream(model_id, body,
-                    {"idle_timeout": timeout_ms, "emit_heartbeat": False});
+                    {"idle_timeout": timeout_ms, "start_timeout": timeout_ms, "emit_heartbeat": False});
                 obs.registerObserver(new BedrockAsyncStreamObserver(r, attempt, state));
                 obs.observersReady();
                 return sub () { obs.stopEvents(); };
@@ -1044,6 +1060,10 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     + BedrockLlmProvider::StreamTimeoutDesc, NOTHING);
             },
             hash<ExceptionInfo> sub (hash<ExceptionInfo> ex) {
+                # an error that is already the call's error
+                if (ex.err == "LLM-ERROR") {
+                    return ex;
+                }
                 # no response started the stream in time: the error of chatStream() for a stream that no data
                 # arrives on
                 if (ex.err == "HTTPCLIENT-TIMEOUT") {
@@ -1053,7 +1073,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 return makeException("LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc
                     + BedrockLlmProvider::getErrorMessageSuffix(ex), ex);
             },
-            on_end, error_cb);
+            on_end, error_cb, deadline_ms);
         req.start();
     }
 

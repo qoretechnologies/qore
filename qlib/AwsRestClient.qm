@@ -1797,8 +1797,14 @@ hash<RestClient::RestResponseInfo> response = future.get();
             hash<RestClient::RestRequestTarget> target, *data body, *hash<auto> hdr, *hash<auto> opts) {
         hash<RestClient::RestRequestContext> request_context = resolveRequestTarget(target, method);
         request_context.path_is_encoded = True;
-        # the frames are decoded as they arrive; a compressed response could not be
-        hash<auto!> stream_hdr = hdr ?? {};
+        # the frames are decoded as they arrive; a compressed response could not be.  An Accept-Encoding header of
+        # the caller in any case is replaced
+        hash<auto!> stream_hdr = {};
+        foreach hash<auto> i in ((hdr ?? {}).pairIterator()) {
+            if (i.key.lwr() != "accept-encoding") {
+                stream_hdr{i.key} = i.value;
+            }
+        }
         stream_hdr."accept-encoding" = "identity";
         return restObserveStreamIntern(method, target.path, body, stream_hdr, opts, request_context,
             RestClientIo::RestClientIoStreamFormat::AwsEventStream, True);
