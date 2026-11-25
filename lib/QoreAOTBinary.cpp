@@ -2962,16 +2962,34 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
 }
 
 const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pgm, ExceptionSink* xsink) {
-    if (!*name || !strcmp(name, "UTC")) {
+    if (!name || !*name || !strcmp(name, "UTC")) {
         return nullptr;
     }
     if (*name == '+' || *name == '-') {
         return QTZM.findCreateOffsetZone(name, xsink);
     }
-    if (pgm && QoreTimeZoneManager::isPathName(name) && !QTZM.findLocalZone(name)) {
-        return qore_program_private::get(*pgm)->findTimeZoneDirectiveZone(name, xsink);
+    // a zone that is loaded already (when the code was parsed in this process, or by an earlier literal) is found by
+    // its exact name without access to a file (qore#7442)
+    if (const AbstractQoreZoneInfo* zone = QTZM.findLoadedZone(name)) {
+        return zone;
     }
-    return QTZM.findLoadRegion(name, xsink);
+    if (!pgm) {
+        // data names only: a path is refused as an unknown region
+        return QTZM.findLoadRegion(name, xsink);
+    }
+    if (QoreTimeZoneManager::isPathName(name)) {
+        // a zoneinfo file path is loaded only for an unrestricted Program, as for the %set-time-zone directive;
+        // findLoadRegionFromPath() is given the Program as the caller has checked it
+        if ((pgm->getParseOptions64() & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
+            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the time zone of a date literal is the zoneinfo file "
+                "path '%s', which cannot be loaded in a restricted Program; restricted code can load time zone "
+                "regions only", name);
+            return nullptr;
+        }
+        return QTZM.findLoadRegionFromPath(name, xsink, pgm);
+    }
+    // whether the code is restricted is decided by the loading Program, not by the code that loads it
+    return QTZM.findLoadRegionForProgram(name, pgm, xsink);
 }
 
 static std::string qoreAOTExceptionText(ExceptionSink& xsink) {

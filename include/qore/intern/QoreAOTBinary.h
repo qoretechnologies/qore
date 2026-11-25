@@ -248,7 +248,12 @@ bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
     bool defer_if_pending, bool wrap_top_level_if_ready = false, bool* resolved = nullptr);
 
-//! Resolves a date literal in the loading Program. A null Program permits only data zone names and offsets.
+//! Resolves the time zone of a date literal for the loading Program
+/** A zone that is loaded already is found by its exact name (QoreTimeZoneManager::findLoadedZone()) without access to
+    a file; otherwise a zoneinfo file path is loaded only if \a pgm is not restricted (else
+    \c ILLEGAL-FILESYSTEM-ACCESS is raised), and a region subject to the restrictions of \a pgm.  A null Program
+    permits only region names and UTC offsets.
+*/
 DLLLOCAL const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pgm, ExceptionSink* xsink);
 
 //! Returns the canonical AOT-serializable type path for \a ti.
