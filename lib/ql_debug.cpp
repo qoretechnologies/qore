@@ -401,6 +401,35 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
     added again (it is kept with the namespace, as the declarations that are added can use its type), and nothing
     reaches the parse-error path, as there is no parse
 */
+//! a static generic builtin class (Qore::DbgRtBox<T>), made when the debug functions are added (qore#7540)
+static QoreClass* dbg_rt_box = nullptr;
+//! the type DbgRtBox<DbgRtClass> that the last dbg_add_runtime_namespace() with variant 3 made, before the namespace
+//! was added to the Program; read only while that Program lives
+static std::atomic<const QoreTypeInfo*> dbg_rt_box_type{nullptr};
+
+//! Returns True if the type DbgRtBox<DbgRtClass> made by the last dbg_add_runtime_namespace() with variant 3 is an
+//! unsafe receiver (qore#7540); valid while the Program that added the namespace lives
+static QoreValue f_dbg_rt_box_unsafe(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreTypeInfo* ti = dbg_rt_box_type.load(std::memory_order_acquire);
+    if (!ti) {
+        return xsink->raiseException("DBG-RT-BOX-ERROR", "no type made yet");
+    }
+    return QoreTypeInfo::isUnsafeReceiver(ti);
+}
+
+//! Returns True if a marking event of the current Program's root namespace did not complete (qore#7540)
+static QoreValue f_dbg_runtime_refresh_pending(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    RootQoreNamespace* root = getProgram()->getRootNS();
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(*qore_root_ns_private::get(*root));
+    return qore_root_ns_private::get(*root)->runtimeRefreshPending();
+}
+
+//! Returns the number of scans of the parameterized class types for declarations that became mortal (qore#7540)
+static QoreValue f_dbg_program_local_derived_type_scans(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_program_local_derived_type_scans();
+}
+
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     // a short string value is inline: read through the helper
     QoreStringValueHelper name(get_hard_value_param(params, 0));
@@ -410,6 +439,11 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     size_t sep = full.find("::");
     std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
     std::string path = std::string("::") + full;
+    // variant 4: variant 2 with a failure of the marking event of DbgRtLate's addition (see below)
+    bool fail_refresh = variant == 4;
+    if (fail_refresh) {
+        variant = 2;
+    }
     if (variant == 2 && sep != std::string::npos) {
         return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 2 takes a name without '::'");
     }
@@ -422,6 +456,15 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     ns->addConstant("DbgRtConst", static_cast<int64>(variant));
     QoreClass* qc = new QoreClass("DbgRtClass", (path + "::DbgRtClass").c_str());
     ns->addSystemClass(qc);
+    if (variant == 3) {
+        // a type of a static generic class with the class as its type argument, made before the namespace is added, and
+        // a function that names it: the type is upgraded to an unsafe receiver when the class becomes mortal
+        type_vec_t args = {qc->getTypeInfo()};
+        const QoreTypeInfo* bt = qore_get_parameterized_class_type(dbg_rt_box, args, false);
+        dbg_rt_box_type.store(bt, std::memory_order_release);
+        ns->addBuiltinVariant("dbg_rt_box", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qore_get_parameterized_class_type(dbg_rt_box, args, true), QORE_PARAM_NO_ARG, "box");
+    }
     if (variant == 1) {
         // a function that uses the type of the class of this namespace, which is not added when the Program has it
         ns->addBuiltinVariant("dbg_rt_new", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
@@ -486,14 +529,30 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         // the class is added to the namespace that the Program has now
         QoreNamespace* added = root->findLocalNamespace(inner.c_str());
         assert(added);
-        added->addSystemClass(late);
+        if (fail_refresh) {
+            // the class is added and marked, but its marking event does not complete: the next event completes it
+            qore_dbg_fail_next_runtime_refresh();
+            try {
+                added->addSystemClass(late);
+            } catch (std::bad_alloc&) {
+            }
+            // the event is still pending here
+            if (!qore_root_ns_private::get(*root)->runtimeRefreshPending()) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the failed event is not pending");
+            }
+        } else {
+            added->addSystemClass(late);
+        }
         // a variant added twice to the namespace that the Program has: the function keeps the first one only
         for (int i = 0; i < 2; ++i) {
             added->addBuiltinVariant("dbg_rt_late2", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
                 late->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
         }
-        root->addNamespace(late_fns.release());
-        root->addNamespace(late_cns.release());
+        // with variant 4, no later event marks a declaration: the variants added above complete the failed event
+        if (!fail_refresh) {
+            root->addNamespace(late_fns.release());
+            root->addNamespace(late_cns.release());
+        }
     }
     return QoreValue();
 }
@@ -37257,6 +37316,15 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    // a static generic builtin class (qore#7540)
+    dbg_rt_box = new QoreClass("DbgRtBox", "::Qore::DbgRtBox");
+    dbg_rt_box->addTypeParameter("T");
+    qns.addSystemClass(dbg_rt_box);
+    qns.addBuiltinVariant("dbg_rt_box_unsafe", f_dbg_rt_box_unsafe, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_runtime_refresh_pending", f_dbg_runtime_refresh_pending, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo);
+    qns.addBuiltinVariant("dbg_program_local_derived_type_scans", f_dbg_program_local_derived_type_scans,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant");
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);

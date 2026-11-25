@@ -350,8 +350,14 @@ DLLLOCAL bool qore_type_owner_released(QoreTypeOwner* owner);
 //! (QoreParameterizedClassTypeInfo::upgradeUserTypeArgs(); qore#7540)
 /** @param marked_types the types of the declarations that became mortal; nothing is scanned if no derived type was
     made from one of them
+    @param all true to scan in any case (the completion of a marking event that did not complete)
 */
-DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types);
+DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types, bool all = false);
+
+#ifdef DEBUG
+//! Returns the number of scans of qore_upgrade_program_local_derived_types() (debug builds; qore#7540)
+DLLLOCAL int64 qore_dbg_program_local_derived_type_scans();
+#endif
 
 
 #ifdef DEBUG

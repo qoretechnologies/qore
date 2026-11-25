@@ -458,15 +458,50 @@ void QoreNamespace::setClassHandler(q_ns_class_handler_t class_handler) {
     priv->setClassHandler(class_handler);
 }
 
+//! A marking event of a declaration that a binary module adds to a namespace that a Program owns (qore#7540)
+/** Started when it is made (qore_root_ns_private::beginRuntimeMarking()); the declaration is marked before it is
+    published, and complete() completes the event once it is: if that does not happen (an allocation failed), the
+    event stays pending, and the next one on the root namespace completes it
+*/
+class RuntimeMarkingHelper {
+public:
+    //! the types of the declarations marked
+    type_vec_t marked_types;
+
+    DLLLOCAL RuntimeMarkingHelper(qore_ns_private& ns) : rns(ns.ownedByProgram() ? ns.getRoot() : nullptr) {
+        if (rns) {
+            full = rns->beginRuntimeMarking();
+            start = rns->runtimeVariantCount();
+        }
+    }
+
+    //! Returns true if the namespace is owned by a Program
+    DLLLOCAL explicit operator bool() const {
+        return rns;
+    }
+
+    //! Completes the event
+    DLLLOCAL void complete() {
+        if (rns) {
+            rns->completeRuntimeMarking(marked_types, start, full);
+        }
+    }
+
+private:
+    qore_root_ns_private* rns;
+    bool full = false;
+    size_t start = 0;
+};
+
 void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     // set sys and pub flags
     typed_hash_decl_private::get(*hd)->setSystemPublic();
-    // a hashdecl added to a namespace that a Program owns is owned by that Program (qore#7540)
-    type_vec_t marked_types;
-    if (priv->ownedByProgram() && typed_hash_decl_private::get(*hd)->setProgramLocal(marked_types)) {
-        qore_upgrade_program_local_derived_types(marked_types);
-        priv->getRoot()->refRuntimeVariantDecls();
+    // a hashdecl added to a namespace that a Program owns is owned by that Program (qore#7540); it is marked before it
+    // is published, and the marking event is completed after (RuntimeMarkingHelper)
+    RuntimeMarkingHelper rmh(*priv);
+    if (rmh) {
+        typed_hash_decl_private::get(*hd)->setProgramLocal(rmh.marked_types);
     }
     typed_hash_decl_private::get(*hd)->setNamespace(priv);
 #ifdef DEBUG
@@ -478,6 +513,7 @@ void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
 #else
     priv->hashDeclList.add(hd);
 #endif
+    rmh.complete();
 
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
@@ -498,10 +534,9 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
     }
     enum_priv->setNamespace(priv);
     // an enum added to a namespace that a Program owns is owned by that Program (qore#7540)
-    type_vec_t marked_types;
-    if (priv->ownedByProgram() && enum_priv->setProgramLocal(marked_types)) {
-        qore_upgrade_program_local_derived_types(marked_types);
-        priv->getRoot()->refRuntimeVariantDecls();
+    RuntimeMarkingHelper rmh(*priv);
+    if (rmh) {
+        enum_priv->setProgramLocal(rmh.marked_types);
     }
 
 #ifdef DEBUG
@@ -513,6 +548,7 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
 #else
     priv->enumList.add(enumdecl);
 #endif
+    rmh.complete();
 
     bool new_ns = false;
     qore_ns_private* enum_ns_priv = nullptr;
@@ -549,16 +585,16 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
 
     oc->setSystem();
+    // a class added to a namespace that a Program owns is owned by that Program (qore#7540): it is marked before it is
+    // published, and the marking event is completed after
+    RuntimeMarkingHelper rmh(*priv);
     if (qore_class_private::get(*oc)->setNamespaceConditional(priv)) {
         // generate builtin class signature
         std::string path;
         priv->getPath(path);
         qore_class_private::get(*oc)->finalizeBuiltin(path.c_str());
-        // a class added to a namespace that a Program owns is owned by that Program (qore#7540)
-        type_vec_t marked_types;
-        if (priv->ownedByProgram() && qore_class_private::get(*oc)->setProgramLocal(marked_types)) {
-            qore_upgrade_program_local_derived_types(marked_types);
-            priv->getRoot()->refRuntimeVariantDecls();
+        if (rmh) {
+            qore_class_private::get(*oc)->setProgramLocal(rmh.marked_types);
         }
     } else {
         assert(qore_class_private::get(*oc)->initialized);
@@ -573,6 +609,7 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
 #else
     priv->classList.add(oc);
 #endif
+    rmh.complete();
     // code in other threads can reach the class from now on, or when the module being initialized returns from its
     // initialization (issue #6422)
     qore_class_private::get(*oc)->systemClassCommitted();
@@ -894,6 +931,29 @@ void qore_root_ns_private::refRuntimeVariantDecls(size_t start) {
     }
 }
 
+#ifdef DEBUG
+//! makes the next completion of a marking event fail after the upgrade, as an allocation failure would
+static std::atomic<bool> dbg_fail_runtime_refresh{false};
+
+void qore_dbg_fail_next_runtime_refresh() {
+    dbg_fail_runtime_refresh.store(true, std::memory_order_relaxed);
+}
+#endif
+
+void qore_root_ns_private::completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full) {
+    bool all = full || !marked_types.empty();
+    if (all) {
+        qore_upgrade_program_local_derived_types(marked_types, full);
+    }
+#ifdef DEBUG
+    if (dbg_fail_runtime_refresh.exchange(false, std::memory_order_relaxed)) {
+        throw std::bad_alloc();
+    }
+#endif
+    refRuntimeVariantDecls(all ? 0 : start);
+    runtime_refresh_pending = false;
+}
+
 void qore_root_ns_private::releaseRuntimeVariants() {
     for (AbstractQoreFunctionVariant* v : runtime_variants) {
         v->deref();
@@ -963,6 +1023,8 @@ void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
     }
     qore_root_ns_private* rns = const_cast<qore_root_ns_private*>(getRoot());
     assert(rns);
+    // an event that does not complete (an allocation failed) is completed by the next one
+    bool full = rns->beginRuntimeMarking();
     type_vec_t marked_types;
     size_t old_variants = rns->runtime_variants.size();
     visit_namespace_tree(tree, [&](qore_ns_private& ns) {
@@ -991,14 +1053,11 @@ void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
         // the variants of the functions of the tree that the Program owns
         add_runtime_function_variants(ns, *rns);
     });
-    // the parameterized class types that the module made from the declarations before they were marked
-    if (!marked_types.empty()) {
-        qore_upgrade_program_local_derived_types(marked_types);
-    }
-    // every variant of the Program references the mortal declarations that it names, also a variant added before a
+    // the parameterized class types that the module made from the declarations before they were marked are upgraded,
+    // and every variant of the Program references the mortal declarations that it names, also a variant added before a
     // declaration that it names was marked; when no declaration was marked, only the variants added now can name one
     // that they do not reference yet
-    rns->refRuntimeVariantDecls(marked_types.empty() ? old_variants : 0);
+    rns->completeRuntimeMarking(marked_types, old_variants, full);
 }
 
 void qore_ns_private::addCommitNamespaceIntern(qore_ns_private* nns) {
@@ -1103,8 +1162,11 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
     }
 
     if (runtime_variant && function_has_variant(*fe->getFunction(), v)) {
-        getRoot()->addRuntimeVariant(v);
+        qore_root_ns_private* rns = getRoot();
+        rns->addRuntimeVariant(v);
         bv->refMortalDecls();
+        // a marking event that did not complete is completed now
+        rns->completePendingRuntimeMarking();
     }
 
     if (!new_function) {

@@ -38,7 +38,8 @@ code sub ref(string f) { return get_call_reference(f); }';
 }
 sub imp(Program q, string f = \"DbgRtNs::dbg_rt_new\") { q.importFunction(f); }
 sub impc(Program q, string c, *string n) { q.importClass(c, n); }
-object sub childsrc(string src) { Program c(PO_NEW_STYLE); c.parse(src, 'childsrc'); return c; }";
+object sub childsrc(string src) { Program c(PO_NEW_STYLE); c.parse(src, 'childsrc'); return c; }
+bool sub pending() { return dbg_runtime_refresh_pending(); }";
 
         const CallSource = "auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }";
     }
@@ -55,6 +56,10 @@ object sub childsrc(string src) { Program c(PO_NEW_STYLE); c.parse(src, 'childsr
         addTestCase("hashdecl, enum and generic hashdecl instance parameters", \declParamTest());
         addTestCase("functions added before the classes that they name", \lateClassTest());
         addTestCase("imported copies of a class added at run time and of a system class", \importClassTest());
+        addTestCase("a parameterized type made before the class became mortal is upgraded", \boxTest());
+        addTestCase("a class without derived types is marked without a scan of the parameterized types",
+            \unkeyedScanTest());
+        addTestCase("a marking event that did not complete is completed by the next one", \failedRefreshTest());
         set_return_value(main());
     }
 
@@ -128,6 +133,50 @@ object sub childsrc(string src) { Program c(PO_NEW_STYLE); c.parse(src, 'childsr
             checkImported(q, "DbgRtNs::dbg_rt_late2", "DbgRtLate");
             checkImported(q, "DbgRtNsF::dbg_rt_lateb", "DbgRtLateB");
         }, "late classes");
+    }
+
+    boxTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            int scans = call_function("dbg_program_local_derived_type_scans");
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p = getSource(1, 3);
+            # DbgRtBox<DbgRtClass> was made before the class became mortal: the attach upgrades it, with one scan
+            assertTrue(call_function("dbg_rt_box_unsafe"), "the type made before the attach is an unsafe receiver");
+            assertEq(scans + 1, call_function("dbg_program_local_derived_type_scans"), "one scan");
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_box");
+            delete p;
+            checkImported(q, "DbgRtNs::dbg_rt_box", "DbgRtBox");
+        }, "box");
+    }
+
+    unkeyedScanTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            int scans = call_function("dbg_program_local_derived_type_scans");
+            # variant 0: no type is derived from the class
+            Program p = getSource(1, 0);
+            assertEq(scans, call_function("dbg_program_local_derived_type_scans"), "no scan");
+        }, "unkeyed scan");
+    }
+
+    failedRefreshTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            # variant 4: the marking event of DbgRtLate, which dbg_rt_late names, fails after the class is marked; the
+            # variants added after it complete it
+            Program p = getSource(1, 4);
+            # the variants added after the failed event completed it
+            assertFalse(p.callFunction("pending"), "the failed marking event is completed");
+            p.callFunction("imp", q, "DbgRtNs::dbg_rt_late");
+            delete p;
+            # the declarations that nothing keeps are freed now: the variant's own references keep DbgRtLate
+            call_function("dbg_type_retirement_free");
+            checkImported(q, "DbgRtNs::dbg_rt_late", "DbgRtLate");
+        }, "failed refresh");
     }
 
     importClassTest() {
@@ -218,12 +267,14 @@ int sub mtx() { DbgImpMutex m(); m.lock(); m.unlock(); return 1; }", "q");
             # a child that inherits the class declares a subclass of it
             object s = p.callFunction("childsrc", "class Sub inherits DbgRtNs::DbgRtClass {}
 int sub mk() { Sub o(); return o instanceof DbgRtNs::DbgRtClass ? 1 : 0; }
-list<Sub> sub mkl() { return (new Sub(),); }");
+list<Sub> sub mkl() { return cast<list<Sub>>(()); }");
             l = s.callFunction("mkl");
             delete p;
             assertEq(1, s.callFunction("mk"), "an object of the subclass");
             delete s;
-            # the type of the list names the subclass and its parent after both Programs are deleted
+            # an empty list keeps no object of the classes: they are retired with their Programs, and the type of the
+            # list names the tombstone of the subclass, which names its parent's
+            assertEq(0, l.size(), "an empty list");
             assertEq("list<object<Sub>>", l.fullType(), "a list of the subclass");
             remove l;
         }, "subclass");

@@ -1498,6 +1498,12 @@ struct deferred_new_check_t {
     }
 };
 
+#ifdef DEBUG
+//! Makes the next completion of a marking event of a namespace that a Program owns fail after its upgrade, as an
+//! allocation failure would (qore#7540)
+DLLLOCAL void qore_dbg_fail_next_runtime_refresh();
+#endif
+
 class qore_root_ns_private : public qore_ns_private {
     friend class qore_ns_private;
     friend class QoreNamespace;
@@ -1513,6 +1519,10 @@ protected:
     std::vector<AbstractQoreFunctionVariant*> runtime_variants;
     //! the variants of runtime_variants, for the test of membership
     std::unordered_set<const AbstractQoreFunctionVariant*> runtime_variant_set;
+    //! true from the start of a marking event until its upgrade of the derived types and its refresh of
+    //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
+    //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
+    bool runtime_refresh_pending = false;
 
     //! Protects committed namespace containers during cold runtime module merges
     mutable QoreRWLock runtime_namespace_lock;
@@ -2700,6 +2710,36 @@ public:
 
     //! Releases the references of runtime_variants
     DLLLOCAL void releaseRuntimeVariants();
+
+    //! Starts a marking event (qore#7540); returns true if an earlier one did not complete, in which case the event
+    //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
+    //! write lock
+    DLLLOCAL bool beginRuntimeMarking() {
+        bool incomplete = runtime_refresh_pending;
+        runtime_refresh_pending = true;
+        return incomplete;
+    }
+
+    //! Completes a marking event: upgrades the derived types of the declarations marked (all of them if \a full) and
+    //! refreshes the references of runtime_variants (from \a start if nothing was marked and not \a full)
+    DLLLOCAL void completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full);
+
+    //! Completes a marking event that did not complete, if any (as the next event would)
+    DLLLOCAL void completePendingRuntimeMarking() {
+        if (runtime_refresh_pending) {
+            completeRuntimeMarking(type_vec_t(), 0, true);
+        }
+    }
+
+    //! Returns true if a marking event did not complete (runtime_refresh_pending)
+    DLLLOCAL bool runtimeRefreshPending() const {
+        return runtime_refresh_pending;
+    }
+
+    //! Returns the number of the variants of runtime_variants
+    DLLLOCAL size_t runtimeVariantCount() const {
+        return runtime_variants.size();
+    }
 
     DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {
         RuntimeNamespaceReadLocker rnl(*this);
