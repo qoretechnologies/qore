@@ -652,7 +652,11 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       context must not be restricted with sandbox restriction @ref Qore::PO_NO_FILESYSTEM which is checked at runtime
     - \c ssl_ca_path: a directory with CA certificates in PEM format named by the hash of their subject names; if
       set, the server's certificate is verified against these CA certificates instead of the default CA certificates
-      of the system; the same restrictions apply as with \c ssl_ca_file
+      of the system; the same restrictions apply as with \c ssl_ca_file; under a sandbox file-system policy, the
+      certificates of \c ssl_ca_file and \c ssl_ca_path are read when the client is created, into an in-memory
+      trust store, so that no file is read by its name when a certificate is verified (only the files with hashed
+      names of \c ssl_ca_path are read, each of which, or the file that it links to, the policy must allow to be
+      read)
     - \c ssl_trust_store: an @ref Qore::SSLTrustStore "SSLTrustStore" object: the server's certificate is verified
       against its CA certificates, which were read when it was created, instead of \c ssl_ca_file, \c ssl_ca_path and
       the default CA certificates of the system, on every connection path (HTTP/1.1, HTTP/2, HTTP/3); no file is read

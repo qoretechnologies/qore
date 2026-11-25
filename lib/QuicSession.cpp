@@ -1562,8 +1562,8 @@ static std::string quic_ticket_cache_key(const char* host, uint16_t port, int ss
         key += "|f" + std::to_string(sock->ssl_ca_file.size()) + ":" + sock->ssl_ca_file
             + "|p" + std::to_string(sock->ssl_ca_path.size()) + ":" + sock->ssl_ca_path;
         // a session resumed under other trust anchors would skip their verification (qoretechnologies/qore#7248)
-        if (sock->ssl_trust_store) {
-            key += "|t" + sock->ssl_trust_store->getId();
+        if (sock->getEffectiveTrustStore()) {
+            key += "|t" + sock->getEffectiveTrustStore()->getId();
         }
     }
     // the client identity is part of the session
@@ -1596,10 +1596,10 @@ int QuicSession::setupClientSslCtx(const char* host, int ssl_verify_mode, Except
 
     // the trust configuration of the socket, as with a TLS connection over TCP (see SSLSocketHelper::setVerifyMode())
     bool accept_all = sock_ && sock_->ssl_accept_all_certs;
-    if (sock_ && sock_->ssl_trust_store) {
+    if (sock_ && sock_->getEffectiveTrustStore()) {
         // an in-memory trust store: the session's own SSL_CTX takes a reference on the shared, immutable store; no
         // file is read and the environment is not consulted (qoretechnologies/qore#7248)
-        SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+        SSL_CTX_set1_cert_store(ssl_ctx_, sock_->getEffectiveTrustStore()->getStore());
     } else if (sock_ && (!sock_->ssl_ca_file.empty() || !sock_->ssl_ca_path.empty())) {
         // the configured CA certificates are trusted instead of the default CAs
         if (!SSL_CTX_load_verify_locations(ssl_ctx_,
@@ -1788,10 +1788,10 @@ int QuicSession::setupServerSslCtx(QoreSSLCertificate* cert, QoreSSLPrivateKey* 
                     "(verify_mode=0x%x, accept_all_certs=true)\n", ssl_verify_mode);
             } else {
                 SSL_CTX_set_verify(ssl_ctx_, ssl_verify_mode, nullptr);
-                if (sock_ && sock_->ssl_trust_store) {
+                if (sock_ && sock_->getEffectiveTrustStore()) {
                     // the in-memory trust store of the listener; the session's own SSL_CTX takes a reference on
                     // the shared, immutable store (qoretechnologies/qore#7248)
-                    SSL_CTX_set1_cert_store(ssl_ctx_, sock_->ssl_trust_store->getStore());
+                    SSL_CTX_set1_cert_store(ssl_ctx_, sock_->getEffectiveTrustStore()->getStore());
                 } else {
                     // Load system default CA certificates for client cert validation; OpenSSL reads the
                     // SSL_CERT_FILE and SSL_CERT_DIR environment variables

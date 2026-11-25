@@ -43,7 +43,9 @@
 #include <vector>
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 namespace {
 // A cache entry: the shared store and the number of objects that use it
@@ -119,27 +121,101 @@ public:
     }
 };
 
+#ifndef _Q_WINDOWS
+// the largest CA certificate file read under a sandbox policy
+constexpr size_t TRUST_STORE_MAX_FILE_SIZE = 64 * 1024 * 1024;
+
+// Reads a file that the sandbox policy allows through the opened-file check (the file read is the file checked;
+// qore#7518) into memory; returns a memory BIO, or nullptr (an exception is raised, or errno is set)
+BIO* trust_store_read_checked(const char* path, ExceptionSink* xsink) {
+    int fd = q_open_policy_checked(path, O_RDONLY | O_NONBLOCK, 0, xsink);
+    if (fd < 0) {
+        return nullptr;
+    }
+    // the descriptor is closed on every path, also if the buffer cannot grow; errno is kept
+    struct FdHolder {
+        int fd;
+        ~FdHolder() {
+            int err = errno;
+            close(fd);
+            errno = err;
+        }
+    } fd_holder{fd};
+    BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) {
+        errno = ENOMEM;
+        return nullptr;
+    }
+    char buf[16384];
+    size_t size = 0;
+    while (true) {
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            int err = errno;
+            BIO_free(bio);
+            errno = err;
+            return nullptr;
+        }
+        if (!n) {
+            break;
+        }
+        size += n;
+        if (size > TRUST_STORE_MAX_FILE_SIZE || BIO_write(bio, buf, (int)n) != (int)n) {
+            BIO_free(bio);
+            errno = size > TRUST_STORE_MAX_FILE_SIZE ? EFBIG : ENOMEM;
+            return nullptr;
+        }
+    }
+    return bio;
+}
+#endif
+
 // Reads every certificate of a PEM file; returns -1 if an exception was raised
 int trust_store_read_file(const char* path, X509ListHolder& certs, ExceptionSink* xsink) {
     if (q_check_path(path)) {
         xsink->raiseException("SSLTRUSTSTORE-ERROR", "the path contains a NUL character");
         return -1;
     }
+    bool policy;
     {
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
             return -1;
         }
+        policy = smh;
     }
-    BIO* bio = BIO_new_file(path, "r");
+    // test hook: a concurrent change of the file system after the path was checked
+    if (policy) {
+        q_dbg_fs_swap_point(path);
+    }
+    BIO* bio;
+#ifndef _Q_WINDOWS
+    if (policy) {
+        bio = trust_store_read_checked(path, xsink);
+        if (!bio && *xsink) {
+            return -1;
+        }
+    } else
+#endif
+    bio = BIO_new_file(path, "r");
     if (!bio) {
         ERR_clear_error();
         xsink->raiseErrnoException("SSLTRUSTSTORE-ERROR", errno, "cannot read CA certificate file '%s'", path);
         return -1;
     }
     size_t before = certs.certs.size();
-    while (X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr)) {
-        certs.certs.push_back(c);
+    while (true) {
+        // a slot is made before the certificate is owned, so that it is freed if the list cannot grow
+        certs.certs.push_back(nullptr);
+        X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+        if (!c) {
+            certs.certs.pop_back();
+            break;
+        }
+        certs.certs.back() = c;
     }
     // the end of the file is reported as an error by PEM_read_bio_X509()
     ERR_clear_error();
@@ -151,37 +227,126 @@ int trust_store_read_file(const char* path, X509ListHolder& certs, ExceptionSink
     return 0;
 }
 
-// Reads every certificate of the PEM files of a directory, in the order of their names
-int trust_store_read_dir(const char* dir, X509ListHolder& certs, bool ignore_empty, ExceptionSink* xsink) {
+// true if a file name is that of a certificate in an OpenSSL hashed directory: 8 hex digits, '.', a decimal number
+bool trust_store_is_hashed_name(const std::string& n) {
+    if (n.size() < 10 || n[8] != '.') {
+        return false;
+    }
+    // OpenSSL looks up lowercase hexadecimal names
+    for (size_t i = 0; i < 8; ++i) {
+        if (!isdigit((unsigned char)n[i]) && (n[i] < 'a' || n[i] > 'f')) {
+            return false;
+        }
+    }
+    for (size_t i = 9; i < n.size(); ++i) {
+        if (!isdigit((unsigned char)n[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Reads every certificate of the PEM files of a directory, in the order of their names; with hashed_only, only the
+// files that an OpenSSL hashed directory lookup reads
+int trust_store_read_dir(const char* dir, X509ListHolder& certs, bool ignore_empty, ExceptionSink* xsink,
+        bool hashed_only = false) {
     if (q_check_path(dir)) {
         xsink->raiseException("SSLTRUSTSTORE-ERROR", "the path contains a NUL character");
         return -1;
     }
+    bool policy;
+    std::string base(dir);
+    DIR* d;
     {
         QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
         if (smh && !smh->checkFilesystemAccess(dir, QSEC_READ, xsink)) {
             return -1;
         }
+        policy = smh;
+        // test hook: a concurrent change of the file system after the path was checked
+        if (policy) {
+            q_dbg_fs_swap_point(dir);
+        }
+#ifndef _Q_WINDOWS
+        if (policy) {
+            // the directory checked is listed (qore#7518): it is pinned and opened without following a link, and its
+            // files are named by its canonical path
+            QoreSandboxPinnedPath pin;
+            int rc = q_sandbox_pin_path(*smh.get(), dir, QSEC_READ, false, pin, xsink);
+            if (rc == -1) {
+                return -1;
+            }
+            int dfd = -1;
+            if (!rc) {
+                dfd = pin.alias ? -1 : openat(pin.dirfd, pin.leaf.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW
+                    | O_CLOEXEC);
+                if (pin.alias) {
+                    errno = ENOTDIR;
+                }
+            }
+            d = dfd >= 0 ? fdopendir(dfd) : nullptr;
+            if (!d && dfd >= 0) {
+                int err = errno;
+                close(dfd);
+                errno = err;
+            }
+            base = pin.canon;
+        } else
+#endif
+        d = opendir(dir);
     }
-    DIR* d = opendir(dir);
     if (!d) {
         xsink->raiseErrnoException("SSLTRUSTSTORE-ERROR", errno, "cannot read CA certificate directory '%s'", dir);
         return -1;
     }
     std::vector<std::string> names;
-    while (struct dirent* e = readdir(d)) {
-        if (e->d_name[0] != '.') {
-            names.push_back(e->d_name);
+    {
+        // the directory is closed on every path, also if the list cannot grow
+        struct DirHolder {
+            DIR* d;
+            ~DirHolder() {
+                closedir(d);
+            }
+        } dir_holder{d};
+        while (struct dirent* e = readdir(d)) {
+            if (e->d_name[0] != '.' && (!hashed_only || trust_store_is_hashed_name(e->d_name))) {
+                names.push_back(e->d_name);
+            }
         }
     }
-    closedir(d);
     std::sort(names.begin(), names.end());
     for (auto& n : names) {
-        std::string path = std::string(dir) + "/" + n;
+        std::string path = (base == "/" ? std::string() : base) + "/" + n;
         struct stat st;
         if (stat(path.c_str(), &st) || !S_ISREG(st.st_mode)) {
             continue;
         }
+#ifndef _Q_WINDOWS
+        if (policy) {
+            // the file read is the file checked: a file in the directory, or a link to one elsewhere, that the policy
+            // denies is denied (qore#7518)
+            BIO* bio = trust_store_read_checked(path.c_str(), xsink);
+            if (!bio) {
+                if (*xsink) {
+                    return -1;
+                }
+                continue;
+            }
+            while (true) {
+                // a slot is made before the certificate is owned, so that it is freed if the list cannot grow
+                certs.certs.push_back(nullptr);
+                X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+                if (!c) {
+                    certs.certs.pop_back();
+                    break;
+                }
+                certs.certs.back() = c;
+            }
+            ERR_clear_error();
+            BIO_free(bio);
+            continue;
+        }
+#endif
         // every file is checked: a file in the directory, or a symbolic link to one elsewhere, can be denied to the
         // caller (the policy check resolves the path)
         {
@@ -195,8 +360,15 @@ int trust_store_read_dir(const char* dir, X509ListHolder& certs, bool ignore_emp
             ERR_clear_error();
             continue;
         }
-        while (X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr)) {
-            certs.certs.push_back(c);
+        while (true) {
+            // a slot is made before the certificate is owned, so that it is freed if the list cannot grow
+            certs.certs.push_back(nullptr);
+            X509* c = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+            if (!c) {
+                certs.certs.pop_back();
+                break;
+            }
+            certs.certs.back() = c;
         }
         ERR_clear_error();
         BIO_free(bio);
@@ -211,6 +383,23 @@ int trust_store_read_dir(const char* dir, X509ListHolder& certs, bool ignore_emp
 QoreObject* trust_store_object(QoreSSLTrustStore* ts) {
     return new QoreObject(QC_SSLTRUSTSTORE, getProgram(), ts);
 }
+}
+
+QoreSSLTrustStore* QoreSSLTrustStore::fromCaLocations(const char* ca_file, const char* ca_path, ExceptionSink* xsink) {
+    X509ListHolder holder;
+    if (ca_file && trust_store_read_file(ca_file, holder, xsink)) {
+        return nullptr;
+    }
+    // the files of the directory that OpenSSL reads for its CA path: those of its hashed names
+    if (ca_path && trust_store_read_dir(ca_path, holder, true, xsink, true)) {
+        return nullptr;
+    }
+    if (holder.certs.empty()) {
+        xsink->raiseException("SSLTRUSTSTORE-ERROR", "the CA locations (file: '%s', path: '%s') have no PEM "
+            "certificate", ca_file ? ca_file : "", ca_path ? ca_path : "");
+        return nullptr;
+    }
+    return get(holder.certs.data(), holder.certs.size(), xsink);
 }
 
 QoreSSLTrustStore* QoreSSLTrustStore::get(X509* const* certs, size_t count, ExceptionSink* xsink) {

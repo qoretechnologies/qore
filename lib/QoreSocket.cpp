@@ -4170,6 +4170,8 @@ QoreSocket* qore_socket_ops::createAcceptedSocketImpl(QoreSocket* b, int descrip
     s->priv->ssl_ca_file = b->priv->ssl_ca_file;
     s->priv->ssl_ca_path = b->priv->ssl_ca_path;
     s->priv->setSslTrustStore(b->priv->ssl_trust_store);
+    s->priv->setSslCaTrustStore(b->priv->ssl_ca_trust_store, b->priv->ssl_ca_file_read.c_str(),
+        b->priv->ssl_ca_path_read.c_str());
     // the placement of the fields of the HTTP messages read (qore#6761)
     s->priv->http_fields_at_top_level.store(b->priv->http_fields_at_top_level.load(std::memory_order_relaxed),
         std::memory_order_relaxed);
@@ -6205,7 +6207,7 @@ int SSLSocketHelper::setIntern(ExceptionSink* xsink, const char* mname, int sd, 
     // set verification mode
     if (qs.ssl_verify_mode != SSL_VERIFY_NONE
             && setVerifyMode(qs.ssl_verify_mode, qs.ssl_accept_all_certs, qs.client_target)) {
-        sslError(xsink, mname, qs.ssl_trust_store ? "SSL_set1_verify_cert_store" : "SSL_CTX_load_verify_locations", true,
+        sslError(xsink, mname, qs.getEffectiveTrustStore() ? "SSL_set1_verify_cert_store" : "SSL_CTX_load_verify_locations", true,
             SslCall::Setup);
         assert(*xsink);
         return -1;
@@ -7005,10 +7007,11 @@ int SSLSocketHelper::setVerifyMode(int mode, bool accept_all_certs, const std::s
         (int)accept_all_certs, target.c_str());
     int rc = 0;
     if (!accept_all_certs) {
-        if (qs.ssl_trust_store) {
+        if (QoreSSLTrustStore* ts = qs.getEffectiveTrustStore()) {
             // an in-memory trust store: the connection takes a reference of its own on the shared, immutable store;
-            // no file is read and the environment is not consulted (qoretechnologies/qore#7248)
-            if (qs.ssl_trust_store->applyTo(ssl)) {
+            // no file is read and the environment is not consulted (qoretechnologies/qore#7248); that of the CA
+            // locations read under a sandbox policy otherwise (qore#7518)
+            if (ts->applyTo(ssl)) {
                 rc = -1;
             }
         } else if (!qs.ssl_ca_file.empty() || !qs.ssl_ca_path.empty()) {

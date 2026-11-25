@@ -1,0 +1,285 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - CA certificate files read through descriptors (opened-file check, pinned directory listing)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The CA certificates that sandboxed code gives are read from the files that the sandbox file-system policy checked:
+# a component of a path that is replaced by a link to a directory outside of the allowed directory after the check
+# does not make a CA file or directory there trusted (qore#7518); under a policy, the CA locations of a socket or an
+# HTTP client are read when they are set, into a trust store.  The replacement is made with dbg_fs_swap_on_open()
+# (debug builds) between the check and the read.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ../../TestCertificates.qm
+
+%exec-class SandboxCaLocationsPinnedTest
+
+class SandboxCaLocationsPinnedTest inherits QUnit::Test {
+    private {
+        string dir;
+        string allowed;
+        string real;
+        string link;
+        string outside;
+        Program sandbox;
+        string inside_id;
+        string outside_id;
+    }
+
+    const SandboxCode = '
+string sub from_file(string path) {
+    return SSLTrustStore::fromFile(path).getId();
+}
+
+string sub from_dir(string path) {
+    return SSLTrustStore::fromDirectory(path).getId();
+}
+
+sub socket_ca(*string file, *string path) {
+    Socket s();
+    s.setSslCaLocations(file, path);
+}
+
+sub client_ca(hash<auto> opts) {
+    HTTPClient hc({"url": "https://localhost:1"} + opts);
+}
+
+*string sub client_ca_file(hash<auto> opts) {
+    HTTPClient hc({"url": "https://localhost:1"} + opts);
+    hash<auto> h = hc.getHttpConfig();
+    return h.ssl_trust_store ? "store" : h.ssl_ca_file;
+}
+
+# the result of an HTTP request that verifies the server certificate with the CA locations of the client
+string sub client_verify(int port, string file) {
+    HTTPClient hc({"url": "https://localhost:" + port, "ssl_ca_file": file, "ssl_verify_cert": True,
+        "connect_timeout": 10s, "timeout": 10s});
+    try {
+        hc.get("/");
+        return "verified";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# the result of a TLS connection that verifies the server certificate with the given trust settings
+string sub verify(int port, *string file, *string path, *string after, *SSLTrustStore store) {
+    Socket s();
+    if (store) {
+        s.setSslTrustStore(store);
+    }
+    s.setSslCaLocations(file, path);
+    switch (after) {
+        case "clear-store": s.setSslTrustStore(); break;
+        case "reset-ca": s.setSslCaLocations(); break;
+    }
+    s.setSslVerifyMode(SSL_VERIFY_PEER);
+    try {
+        s.connectINETSSL("localhost", port, 10s);
+        s.close();
+        return "verified";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+';
+
+    constructor() : QUnit::Test("sandbox CA locations pinned", "1.0", \ARGV) {
+        addTestCase("a CA file is read from the file checked", \fileTest());
+        addTestCase("a CA directory is read from the directory checked", \dirTest());
+        addTestCase("CA locations set under a policy are read when they are set", \setTest());
+        addTestCase("the CA locations read under a policy verify the server certificate", \verifyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("q7518c-");
+        allowed = dir + DirSep + "a";
+        real = allowed + DirSep + "r";
+        link = allowed + DirSep + "l";
+        outside = dir + DirSep + "o";
+        mkdir(allowed);
+        mkdir(real);
+        mkdir(outside);
+
+        string other_pem = ReadOnlyFile::readTextFile(get_script_dir() + "/../classes/SSLTrustStore/other-ca.pem");
+        # the same file names inside and outside, with different certificates
+        writeFile(real + DirSep + "ca.pem", CertPem);
+        writeFile(outside + DirSep + "ca.pem", other_pem);
+        inside_id = new SSLTrustStore(new SSLCertificate(CertPem)).getId();
+        outside_id = new SSLTrustStore(new SSLCertificate(other_pem)).getId();
+        assertTrue(inside_id != outside_id, "the certificates differ");
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.setNetworkDefaultPolicy(True);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link needs dbg_fs_swap_on_open()");
+        }
+        unlink(link);
+        symlink(real, link);
+    }
+
+    tearDown() {
+        call_function("dbg_fs_swap_on_open", "", "");
+    }
+
+    fileTest() {
+        arm();
+        # the file read is the file checked: the file outside is denied, or the file inside is read
+        try {
+            assertEq(inside_id, sandbox.callFunction("from_file", link + DirSep + "ca.pem"));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+    }
+
+    dirTest() {
+        arm();
+        # the directory read is the directory checked: the directory outside is denied, or the one inside is read
+        try {
+            assertEq(inside_id, sandbox.callFunction("from_dir", link));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+    }
+
+    setTest() {
+        # under a policy, the files are read when the locations are set: a file without a certificate is an error
+        # then, not when a connection is verified
+        string empty = real + DirSep + "empty.pem";
+        writeFile(empty, "");
+        assertThrows("SSLTRUSTSTORE-ERROR", \sandbox.callFunction(), ("socket_ca", empty));
+        assertThrows("SSLTRUSTSTORE-ERROR", \sandbox.callFunction(), ("client_ca", {"ssl_ca_file": empty}));
+        # a CA path gives the certificates of the files with OpenSSL hashed names
+        string hashed = real + DirSep + "h";
+        mkdir(hashed);
+        writeFile(hashed + DirSep + "ca.pem", CertPem);
+        assertThrows("SSLTRUSTSTORE-ERROR", \sandbox.callFunction(), ("socket_ca", NOTHING, hashed),
+            "a directory without hashed names has no CA certificate");
+        writeFile(hashed + DirSep + "0123abcd.0", CertPem);
+        sandbox.callFunction("socket_ca", NOTHING, hashed);
+        sandbox.callFunction("client_ca", {"ssl_ca_path": hashed});
+        sandbox.callFunction("socket_ca", real + DirSep + "ca.pem");
+        sandbox.callFunction("client_ca", {"ssl_ca_file": real + DirSep + "ca.pem"});
+        # the file read when it is set is the file checked
+        arm();
+        try {
+            sandbox.callFunction("socket_ca", link + DirSep + "ca.pem");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+        # without a policy, the CA locations are not read when they are set: no error is raised
+        Socket s();
+        s.setSslCaLocations(empty);
+    }
+
+    verifyTest() {
+        string ca = real + DirSep + "ca.pem";
+        string other = outside + DirSep + "ca.pem";
+        # a CA file inside the allowed directory with the other certificate
+        string other_inside = real + DirSep + "other.pem";
+        writeFile(other_inside, ReadOnlyFile::readTextFile(other));
+        SSLTrustStore other_store = SSLTrustStore::fromFile(other);
+
+        assertEq("verified", verifyWith(ca), "the CA file verifies the server certificate");
+        assertEq("SOCKET-SSL-ERROR", verifyWith(other_inside), "another CA does not verify it");
+        # the trust store of the CA locations is used when no trust store is set
+        assertEq("verified", verifyWith(ca, NOTHING, "clear-store"), "clearing the trust store keeps the CA file");
+        # the CA locations set without arguments use the default CAs again, which do not have the test certificate
+        assertEq("SOCKET-SSL-ERROR", verifyWith(ca, NOTHING, "reset-ca"), "the CA locations are cleared");
+        # a trust store that is set takes precedence over the CA locations
+        assertEq("SOCKET-SSL-ERROR", verifyWith(ca, NOTHING, NOTHING, other_store), "the trust store set is used");
+
+        # an HTTP client verifies the server certificate with the CA locations read into its connection's trust store
+        assertEq("verified", clientVerifyWith(ca), "an HTTP client verifies with the CA file");
+        assertNeq("verified", clientVerifyWith(other_inside), "an HTTP client does not verify with another CA");
+
+        # an HTTP client reports the CA file as set, not the trust store that it was read into
+        assertEq(ca, sandbox.callFunction("client_ca_file", {"ssl_ca_file": ca}));
+    }
+
+    # runs a TLS server with the test certificate that answers one HTTP request, and requests it from the sandbox
+    private string clientVerifyWith(string file) {
+        Socket srv();
+        srv.bind("127.0.0.1:0");
+        srv.listen();
+        srv.setCertificate(CertPem);
+        srv.setPrivateKey(KeyPem);
+        int port = srv.getSocketInfo().port;
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                *Socket c = srv.acceptSSL(10s);
+                if (c) {
+                    on_exit c.close();
+                    c.readHTTPHeader(10s);
+                    c.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # a client that does not verify the certificate ends the handshake
+            }
+        }();
+        string rv = sandbox.callFunction("client_verify", port, file);
+        done.waitForZero();
+        srv.close();
+        return rv;
+    }
+
+    # runs a TLS server with the test certificate for one connection and verifies it from the sandbox
+    private string verifyWith(*string file, *string path, *string after, *SSLTrustStore store) {
+        Socket srv();
+        srv.bind("127.0.0.1:0");
+        srv.listen();
+        srv.setCertificate(CertPem);
+        srv.setPrivateKey(KeyPem);
+        int port = srv.getSocketInfo().port;
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                *Socket c = srv.acceptSSL(10s);
+                if (c) {
+                    c.close();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # a client that does not verify the certificate ends the handshake
+            }
+        }();
+        string rv = sandbox.callFunction("verify", port, file, path, after, store);
+        done.waitForZero();
+        srv.close();
+        return rv;
+    }
+
+    private arm() {
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", outside);
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

@@ -2344,6 +2344,15 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     QoreSSLTrustStore* ssl_trust_store = nullptr;
 
+    //! The trust store of the CA locations set under a sandbox policy, read when they were set (qore#7518)
+    /** Used when no trust store is set (@ref ssl_trust_store); @ref ssl_ca_file and @ref ssl_ca_path are then empty, so
+        that no file is read by its name when a certificate is verified; holds a reference
+    */
+    QoreSSLTrustStore* ssl_ca_trust_store = nullptr;
+    //! The CA locations read into @ref ssl_ca_trust_store, for reporting only
+    std::string ssl_ca_file_read;
+    std::string ssl_ca_path_read;
+
     //! Sets the in-memory trust store; takes a reference to the new one and releases the old one
     DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts) {
         if (ts) {
@@ -2353,6 +2362,44 @@ struct qore_socket_private : public QoreReferenceCounter {
             ssl_trust_store->deref();
         }
         ssl_trust_store = ts;
+    }
+
+    //! Sets the trust store of CA locations read under a sandbox policy, or clears it with nullptr (qore#7518)
+    /** Takes a reference to the new one and releases the old one; a store clears the CA locations to read by name
+    */
+    DLLLOCAL void setSslCaTrustStore(QoreSSLTrustStore* ts, const char* ca_file, const char* ca_path) {
+        // the names are set first: an allocation that fails leaves the slot unchanged
+        std::string file_read = ts && ca_file ? ca_file : "";
+        std::string path_read = ts && ca_path ? ca_path : "";
+        ssl_ca_file_read.swap(file_read);
+        ssl_ca_path_read.swap(path_read);
+        if (ts) {
+            ts->ref();
+        }
+        if (ssl_ca_trust_store) {
+            ssl_ca_trust_store->deref();
+        }
+        ssl_ca_trust_store = ts;
+        if (ts) {
+            ssl_ca_file.clear();
+            ssl_ca_path.clear();
+        }
+    }
+
+    //! Returns the trust store that verifies peer certificates, if any: the one set, otherwise that of the CA
+    //! locations read under a sandbox policy (qore#7518)
+    DLLLOCAL QoreSSLTrustStore* getEffectiveTrustStore() const {
+        return ssl_trust_store ? ssl_trust_store : ssl_ca_trust_store;
+    }
+
+    //! Returns the CA file to report: the one to read by name, or the one read under a sandbox policy
+    DLLLOCAL const std::string& getReportedCaFile() const {
+        return ssl_ca_trust_store ? ssl_ca_file_read : ssl_ca_file;
+    }
+
+    //! Returns the CA path to report: the one to read by name, or the one read under a sandbox policy
+    DLLLOCAL const std::string& getReportedCaPath() const {
+        return ssl_ca_trust_store ? ssl_ca_path_read : ssl_ca_path;
     }
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
@@ -2868,6 +2915,7 @@ public:
         freeQuicServerSslCtx();
 
         setSslTrustStore(nullptr);
+        setSslCaTrustStore(nullptr, nullptr, nullptr);
 
         // must be dereferenced and removed before deleting
         assert(!event_queue);

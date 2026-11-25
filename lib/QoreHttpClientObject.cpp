@@ -1651,7 +1651,7 @@ struct qore_httpclient_priv {
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                         || opts.ssl_ca_file != msock->socket->priv->ssl_ca_file
                         || opts.ssl_ca_path != msock->socket->priv->ssl_ca_path
-                        || opts.ssl_trust_store != msock->socket->priv->ssl_trust_store
+                        || opts.ssl_trust_store != msock->socket->priv->getEffectiveTrustStore()
                         || opts.client_cert != httpCertificate()
                         || opts.client_key != httpKey()) {
                     old_mgr = std::move(conn_mgr);
@@ -1677,7 +1677,7 @@ struct qore_httpclient_priv {
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
                 opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
                 opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
-                opts.ssl_trust_store = msock->socket->priv->ssl_trust_store;
+                opts.ssl_trust_store = msock->socket->priv->getEffectiveTrustStore();
                 opts.client_cert = httpCertificate();
                 opts.client_key = httpKey();
                 // Proxy URL from the existing connection info
@@ -1940,11 +1940,12 @@ struct qore_httpclient_priv {
         if (sock.ssl_verify_mode == SSL_VERIFY_PEER) {
             h->setKeyValueIntern("ssl_verify_cert", true);
         }
-        if (!sock.ssl_ca_file.empty()) {
-            h->setKeyValueIntern("ssl_ca_file", new QoreStringNode(sock.ssl_ca_file));
+        // the CA locations as set, also when they were read under a sandbox policy (qore#7518)
+        if (!sock.getReportedCaFile().empty()) {
+            h->setKeyValueIntern("ssl_ca_file", new QoreStringNode(sock.getReportedCaFile()));
         }
-        if (!sock.ssl_ca_path.empty()) {
-            h->setKeyValueIntern("ssl_ca_path", new QoreStringNode(sock.ssl_ca_path));
+        if (!sock.getReportedCaPath().empty()) {
+            h->setKeyValueIntern("ssl_ca_path", new QoreStringNode(sock.getReportedCaPath()));
         }
         // the trust store object, which cannot be serialized: a client that uses one is not serialized without it
         // (qoretechnologies/qore#7248)
@@ -4227,7 +4228,11 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         priv->socket->setSslVerifyMode(SSL_VERIFY_PEER);
     }
 
-    // the CA certificates that the server certificate is verified against instead of the default CAs
+    // the CA certificates that the server certificate is verified against instead of the default CAs; under a sandbox
+    // policy, they are read now, into a trust store, so that no file is read by its name when a connection is
+    // verified (qore#7518)
+    std::string policy_ca_file, policy_ca_path;
+    bool policy_ca = false;
     for (const char* key : {"ssl_ca_file", "ssl_ca_path"}) {
         n = opts->getKeyValue(key);
         if (n.isNothing()) {
@@ -4253,11 +4258,33 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
         if (smh && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
             return -1;
         }
+        if (smh) {
+            policy_ca = true;
+            (!strcmp(key, "ssl_ca_file") ? policy_ca_file : policy_ca_path) = path;
+            continue;
+        }
+        // CA locations to read by name replace any read under a sandbox policy
+        qore_socket_private::get(*priv->socket)->setSslCaTrustStore(nullptr, nullptr, nullptr);
         if (!strcmp(key, "ssl_ca_file")) {
             qore_socket_private::get(*priv->socket)->ssl_ca_file = path;
         } else {
             qore_socket_private::get(*priv->socket)->ssl_ca_path = path;
         }
+    }
+
+    if (policy_ca) {
+        QoreSSLTrustStore* ts = QoreSSLTrustStore::fromCaLocations(
+            policy_ca_file.empty() ? nullptr : policy_ca_file.c_str(),
+            policy_ca_path.empty() ? nullptr : policy_ca_path.c_str(), xsink);
+        if (!ts) {
+            return -1;
+        }
+        // the socket takes a reference of its own; it is used when no trust store is set, and the CA locations do not
+        // imply verification
+        qore_socket_private::get(*priv->socket)->setSslCaTrustStore(ts,
+            policy_ca_file.empty() ? nullptr : policy_ca_file.c_str(),
+            policy_ca_path.empty() ? nullptr : policy_ca_path.c_str());
+        ts->deref();
     }
 
     // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
@@ -7609,7 +7636,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
     opts.ssl_ca_file = msock->socket->priv->ssl_ca_file;
     opts.ssl_ca_path = msock->socket->priv->ssl_ca_path;
-    opts.ssl_trust_store = msock->socket->priv->ssl_trust_store;
+    opts.ssl_trust_store = msock->socket->priv->getEffectiveTrustStore();
     opts.client_cert = httpCertificate();
     opts.client_key = httpKey();
     opts.proxy_url = getConnMgrProxyUrl();
