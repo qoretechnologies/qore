@@ -1091,6 +1091,9 @@ private:
 
     // flag if the changed value was a container before the assignment
     bool before = false;
+    // recursive delta: change to recursive reference count; next to the flags above, in the padding before the
+    // pointers that follow, so that the helper, which the frames of the interpreters hold, is no larger
+    int rdt = 0;
 #ifndef NDEBUG
     //! the container changed through the weak reference that the lvalue holds, whose changes are allowed while it is
     //! shared until the helper is destroyed (see viewWeakContainer())
@@ -1122,13 +1125,17 @@ private:
     //! the number of the entries at the start of tvec that hold the helper's own locks of the lists and hashes of
     //! weak references (holdWeakLock()), which scanWeakContainerRemovals() does not walk; saturates (qore#7373)
     uint8_t weak_lock_count = 0;
+    //! true for the helper of an assignment (the for_assignment argument), whose store site has a retry (qore#7391)
+    /** Every store site that makes a helper for an assignment tests isBindPending() after a failed store and makes the
+        store again (see deferBinds()): the AST assignments (QoreAssignmentOperatorNode, QoreListAssignmentOperatorNode)
+        and the IR, JIT and AOT stores, which also enable their retry with enableBindRetry().  The retry of an AST
+        assignment thus costs its helper nothing.  Next to the flags above, in their padding (see rdt).
+    */
+    bool assignment_only = false;
     //! objects other than \a robj that a value needing a scan was removed from; each holds a weak reference
     std::vector<RObject*> removal_objects;
     //! the objects removed by this write, which it still holds while it scans; see removedValue()
     QoreRemovedValueTracker removed_objects;
-
-    // recursive delta: change to recursive reference count
-    int rdt = 0;
 
     //! the container that values are removed from; set by startContainerRemoval()
     const AbstractQoreNode* removal_container = nullptr;
@@ -1173,13 +1180,6 @@ private:
         }
     };
     std::unique_ptr<MemberLValue> member_lvalue;
-    //! true for the helper of an assignment (the for_assignment argument), whose store site has a retry (qore#7391)
-    /** Every store site that makes a helper for an assignment tests isBindPending() after a failed store and makes the
-        store again (see deferBinds()): the AST assignments (QoreAssignmentOperatorNode, QoreListAssignmentOperatorNode)
-        and the IR, JIT and AOT stores, which also enable their retry with enableBindRetry().  The retry of an AST
-        assignment thus costs its helper nothing.
-    */
-    bool assignment_only = false;
     //! called once, before the root of the lvalue (a variable, a member of self, a static class variable or a
     //! reference) is resolved and locked, when the keys and indices of the path to it have been evaluated (see the
     //! constructor with a root hook); a non-zero return value stops the resolution of the lvalue

@@ -335,6 +335,27 @@ sub share_points_of_moves() {
     printf("move into an untyped parameter that a static method returns: %y\n", gw);
 }
 
+# A weak reference still designates the sole owner's container after an untyped local mutates it (#7421).
+sub untyped_plus_equals() {
+    list<auto> l = (1,);
+    auto wl;
+    wl := l;
+    auto al = remove l;
+    al += 5;
+    printf("list += scalar: %y, %y\n", wl, al);
+    auto lr = (al += (6, 7));
+    printf("list += list: %y, %y, %y\n", wl, al, lr);
+
+    hash<auto> h = {"a": 1};
+    auto wh;
+    wh := h;
+    auto ah = remove h;
+    ah += {"b": 2};
+    printf("hash += hash: %y, %y\n", wh, ah);
+    auto hr = (ah += {"a": 3});
+    printf("hash += existing key: %y, %y, %y\n", wh, ah, hr);
+}
+
 #! runs a case by its name: each case is called by name, so that JIT and tiered execution run it as native code
 #! (a call through a call reference runs on the IR tier, and is compiled only when it returns)
 sub run_case(string name) {
@@ -350,6 +371,7 @@ sub run_case(string name) {
         case "foreach_variable": foreach_variable(); break;
         case "member_path": member_path(); break;
         case "moves": moves(); break;
+        case "untyped_plus_equals": untyped_plus_equals(); break;
         case "copy_on_write": copy_on_write(); break;
         case "share_points_of_moves": share_points_of_moves(); break;
     }
@@ -369,6 +391,7 @@ const CaseNames = (
     "moves",
     "copy_on_write",
     "share_points_of_moves",
+    "untyped_plus_equals",
 );
 
 # a case named on the command line runs alone

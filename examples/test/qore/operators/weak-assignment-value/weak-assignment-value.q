@@ -335,3 +335,15 @@ auto sub deferredLiteral() {
 }
 const Built = deferredLiteral();
 printf("deferred literal: %y %y\n", Built.nested, deferredLiteral().nested);
+
+# a declaration that assigns a literal weakly: the copy that the weak reference designates is a temporary of the
+# declaration's statement, released when it ends, in a local of top-level code, a function local and a typed local, as
+# a store into an existing local (qore#7630, qore#7318)
+auto top_literal := {"k": 5};
+printf("weak declaration: top level: %y\n", top_literal);
+sub declarationLiterals() {
+    auto local := {"k": 6};
+    hash<auto> typed := {"k": 7};
+    printf("weak declaration: local: %y typed local: %y\n", local, typed);
+}
+declarationLiterals();

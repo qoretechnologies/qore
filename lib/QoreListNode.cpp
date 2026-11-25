@@ -38,6 +38,7 @@
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/VarRefNode.h"
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
@@ -1081,6 +1082,11 @@ static QoreValue qore_list_eval_entry(const QoreValue& exp, ExceptionSink* xsink
     ValueEvalOptimizedRefHolder v(exp, xsink);
     if (*xsink) {
         return QoreValue();
+    }
+    // The argument list copies a designated container. Keep the call's original temporary in
+    // the caller's statement scope through the call and the rest of the argument evaluation.
+    if (v.isTemp() && qore_weak_shared(*v) && qore_call_returns_argument_temp(exp)) {
+        QoreStatementTempScope::hold(exp.getInternalNode(), v, xsink);
     }
     return v.takeReferencedValue();
 }
