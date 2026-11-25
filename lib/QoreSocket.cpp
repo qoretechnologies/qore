@@ -1046,7 +1046,10 @@ public:
             }
         }
         Http2SessionPtr session = priv->h2_session.get();
-        return session && (session->hasStreamData() || session->wantWrite());
+        // not output that the socket refused: the operation waits for the socket to become writable, and running it
+        // at once again and again would only repeat the refused write while the peer does not read
+        // (qoretechnologies/qore#7641)
+        return session && (session->hasStreamData() || session->wantWriteNow());
     }
 
 private:

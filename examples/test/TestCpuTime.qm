@@ -1,0 +1,136 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TestCpuTime.qm the CPU time that the test process has used
+
+/*  TestCpuTime.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module TestCpuTime {
+    version = "1.0";
+    desc    = "the CPU time that the test process has used";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** A test that checks that a server waits without running continuously measures the CPU time that its own process
+    uses over the wait.
+
+    @par Example:
+    @code{.py}
+%requires ../../TestCpuTime.qm
+
+hash<string, int> start = TestCpuTime::cpuSnapshot();
+usleep(6s);
+float used = TestCpuTime::cpuTimeSince(start);
+    @endcode
+*/
+public namespace TestCpuTime {
+#! Returns a snapshot of the CPU time that the threads of the process have used, for cpuTimeSince()
+/** On Linux, the CPU time of each thread in nanoseconds, from the first field of its
+    @c /proc/self/task/<tid>/schedstat, or, on a kernel without it, from the @c utime and @c stime fields of its
+    @c /proc/self/task/<tid>/stat (in clock ticks of 10 ms); elsewhere the CPU time of the process from ps(1)
+    (hundredths of a second on macOS), under the key @c "ps"
+
+    @throw CPU-TIME-ERROR the CPU time cannot be read
+*/
+public hash<string, int> sub cpuSnapshot() {
+    hash<string, int> rv();
+    if (is_readable("/proc/self/task")) {
+        foreach string path in (glob("/proc/self/task/*/schedstat")) {
+            string str;
+            try {
+                str = (new ReadOnlyFile(path)).read(-1);
+            } catch (hash<ExceptionInfo> ex) {
+                # the thread ended
+                continue;
+            }
+            *string ns = (str =~ x/^([0-9]+)/)[0];
+            if (ns) {
+                rv{path} = ns.toInt();
+            }
+        }
+        if (rv) {
+            return rv;
+        }
+        foreach string path in (glob("/proc/self/task/*/stat")) {
+            string str;
+            try {
+                str = (new ReadOnlyFile(path)).read(-1);
+            } catch (hash<ExceptionInfo> ex) {
+                # the thread ended
+                continue;
+            }
+            # the fields after the command name, which is in parentheses and can contain spaces: utime and stime are
+            # the 14th and 15th fields of the line, the 12th and 13th after the name
+            int i = str.rfind(")");
+            if (i < 0) {
+                continue;
+            }
+            list<string> fields = trim(str.substr(i + 1)).split(" ");
+            if (fields.size() > 12) {
+                rv{path} = (fields[11].toInt() + fields[12].toInt()) * 10000000;
+            }
+        }
+        if (rv) {
+            return rv;
+        }
+    }
+    return {"ps": psCpuTimeNs()};
+}
+
+#! Returns the CPU time in seconds that the process has used since the snapshot
+/** On Linux, the growth of each thread that exists at both times plus the whole time of each thread started since;
+    a thread that ended in between is not counted
+
+    @throw CPU-TIME-ERROR the CPU time cannot be read
+*/
+public float sub cpuTimeSince(hash<string, int> start) {
+    hash<string, int> now = cpuSnapshot();
+    int ns = 0;
+    foreach hash<auto> i in (now.pairIterator()) {
+        ns += i.value - (start{i.key} ?? 0);
+    }
+    return ns / 1000000000.0;
+}
+
+#! Returns the CPU time of the process from ps(1), which prints it as [[dd-]hh:]mm:ss[.ss], in nanoseconds
+/** Linux's ps prints whole seconds, which is why cpuSnapshot() does not use it there
+*/
+int sub psCpuTimeNs() {
+    string str = trim(backquote(sprintf("ps -o time= -p %d", getpid())));
+    if (str !~ /^[0-9]/) {
+        throw "CPU-TIME-ERROR", sprintf("cannot read the CPU time of process %d: %y", getpid(), str);
+    }
+    int days = 0;
+    if (str =~ /-/) {
+        (*string d, *string rest) = (str =~ x/^([0-9]+)-(.*)$/);
+        days = d.toInt();
+        str = rest;
+    }
+    float rv = 0.0;
+    foreach string part in (str.split(":")) {
+        rv = rv * 60.0 + part.toFloat();
+    }
+    return ((rv + days * 86400.0) * 1000000000.0).toInt();
+}
+}

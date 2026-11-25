@@ -2371,6 +2371,11 @@ bool Http2Session::wantWrite() const {
     return nghttp2_session_want_write(session) != 0 || send_offset < send_buffer.size();
 }
 
+bool Http2Session::wantWriteNow() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    return send_offset >= send_buffer.size() && nghttp2_session_want_write(session) != 0;
+}
+
 // nghttp2 callbacks
 
 int Http2Session::onFrameSendCallback(nghttp2_session* session,

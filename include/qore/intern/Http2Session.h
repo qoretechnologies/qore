@@ -1084,6 +1084,13 @@ public:
     */
     DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
 
+    //! Returns true if nghttp2 has frames to produce and no earlier output waits for the socket
+    /** Output in the send buffer that the socket refused can only progress once the socket becomes writable, which
+        the operations wait for (@ref SOCK_POLLOUT); only new frames are work that a pass can do at once
+        (qoretechnologies/qore#7641)
+    */
+    DLLLOCAL bool wantWriteNow() const;
+
     //! Returns true if any stream has outgoing DATA still to be sent
     //! (queued in @c pending_body_data or waiting on a registered
     //! @c pending_data_providers entry).

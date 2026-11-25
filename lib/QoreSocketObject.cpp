@@ -4888,8 +4888,10 @@ bool QoreSocketObject::hasPendingData() const {
     // Check H2/H3 session for pending data at the protocol level:
     // - hasStreamData(): CONNECT stream DATA received in a previous read cycle
     //   but not yet drained by the poll operation
-    // - wantWrite(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE)
-    //   OR bytes buffered in our send_buffer waiting to go out
+    // - wantWriteNow(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE) and no earlier output in our
+    //   send_buffer waits for the socket; output that the socket refused waits for the socket to become writable,
+    //   which the operation waits for (SOCK_POLLOUT), so running it at once would only repeat the refused write
+    //   while the peer does not read (qoretechnologies/qore#7641)
     // Without these checks, the SSL/TCP buffers appear empty so epoll never
     // triggers a re-poll, but the H2 session has actionable work.
     //
@@ -4900,7 +4902,7 @@ bool QoreSocketObject::hasPendingData() const {
     // inbound data waiting to be processed shows up in SSL_pending() /
     // buflen (checked above) — not in nghttp2's internal state.
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (h2 && (h2->hasStreamData() || h2->wantWrite())) {
+    if (h2 && (h2->hasStreamData() || h2->wantWriteNow())) {
         return true;
     }
     return false;
