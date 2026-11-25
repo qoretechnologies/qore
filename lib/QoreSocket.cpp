@@ -12814,7 +12814,8 @@ void EventStreamAction::execute(QoreValue output, ExceptionSink* xsink) {
             const BinaryNode* data = body_val.get<const BinaryNode>();
             buf.append(static_cast<const char*>(data->getPtr()), data->size());
         } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* data = body_val.get<const QoreStringNode>();
+            // a string value can be an inline short string (issue #7038), which has no QoreStringNode
+            QoreStringValueHelper data(body_val);
             buf.append(data->c_str(), data->size());
         }
     }

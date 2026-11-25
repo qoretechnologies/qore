@@ -52,6 +52,8 @@
 %requires ServerSentEventHandler
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+# AwsEventStream is an AWS module: credentials are removed unless live calls are enabled
+%requires ../../LiveProviderTest.qm
 %requires AwsEventStream
 %requires WebSocketUtil
 

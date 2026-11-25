@@ -1627,10 +1627,13 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
         if (ex.arg.typeCode() != NT_HASH) {
             return rv;
         }
-        if (exists ex.arg.status_code) {
-            rv.status = ex.arg.status_code.toInt();
+        # the argument can be a hash of a type that lacks these keys (such as the hash<ExceptionInfo> of a chained
+        # error), whose missing members cannot be read: they are read from an untyped copy
+        hash<auto> arg = {} + ex.arg;
+        if (exists arg.status_code) {
+            rv.status = arg.status_code.toInt();
         }
-        auto body = ex.arg.body;
+        auto body = arg.body;
         if (body.typeCode() == NT_LIST && body[0].typeCode() == NT_HASH) {
             body = body[0];
         }
@@ -1653,8 +1656,8 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
                 }
             }
         }
-        if (ex.arg.headers.typeCode() == NT_HASH && ex.arg.headers."retry-after".val()) {
-            int retry_after = ex.arg.headers."retry-after".toInt();
+        if (arg.headers.typeCode() == NT_HASH && arg.headers."retry-after".val()) {
+            int retry_after = arg.headers."retry-after".toInt();
             if (retry_after > 0) {
                 rv.retry_after_ms = retry_after * 1000;
             }
