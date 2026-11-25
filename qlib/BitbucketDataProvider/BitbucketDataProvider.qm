@@ -76,6 +76,15 @@ module BitbucketDataProvider {
                 "product with a different API.\n\n"
                 "Bitbucket is a trademark of Atlassian Pty Ltd.",
             "scheme": "bitbucket",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "bitbucket.org",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://support.atlassian.com/bitbucket-cloud/docs/api-request-limits/",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::BitbucketLogo,
             "logo_file_name": "bitbucket-logo.svg",
             "logo_mime_type": MimeTypeSvg,

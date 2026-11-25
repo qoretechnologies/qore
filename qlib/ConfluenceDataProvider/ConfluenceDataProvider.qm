@@ -79,6 +79,15 @@ module ConfluenceDataProvider {
 "
                 "Confluence is a trademark of Atlassian Pty Ltd.",
             "scheme": "confluence",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "atlassian.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.atlassian.com/cloud/confluence/rate-limiting/",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::ConfluenceLogo,
             "logo_file_name": "confluence-logo.svg",
             "logo_mime_type": MimeTypeSvg,
