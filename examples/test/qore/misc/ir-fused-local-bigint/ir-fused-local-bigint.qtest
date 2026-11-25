@@ -40,7 +40,7 @@ class IrFusedLocalBigIntTest inherits QUnit::Test {
 
     private checkOutput(string out, string mode) {
         list<string> lines = select out.split("\n"), $1;
-        assertEq(7, lines.size(), mode + ": all cases ran");
+        assertEq(11, lines.size(), mode + ": all cases ran");
         assertEq((), (select lines, !($1 =~ /^PASS /)), mode + ": every case gives the expected value");
     }
 
