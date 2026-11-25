@@ -1,0 +1,595 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires WebSocketHandler
+%requires FsUtil
+
+%exec-class SandboxTrustedProgramPrivateAccessTest
+
+#! A class of a Program whose sandbox trusts its code keeps the private access of trusted code (qore#7635)
+/** A host attaches a sandbox manager to a trusted Program to make its I/O interruptible, and allows it uncontrolled
+    APIs (SandboxManager::setUncontrolledApiPolicy()): its code is trusted (SandboxManager::isRestricted()), and a class
+    that it declares keeps the private access to the declarations of a trusted class (a module class) that #6843
+    refuses to a class of restricted code.  A Program with the default sandbox (uncontrolled APIs refused) keeps the
+    refusal, and its code cannot relax the policy of its own sandbox.
+*/
+
+#! a subclass of a module class that uses its private member (a lock of WebSocketHandler)
+const SubclassSource = "class H inherits WebSocketHandler::WebSocketHandler {
+    string f() {
+        rwl.readLock();
+        rwl.readUnlock();
+        return \"ok\";
+    }
+}
+string sub run() {
+    return (new H()).f();
+}
+";
+
+#! code of a tenant: a Program with the default sandbox, which runs the code given to it in other Programs
+const TenantSource = "auto sub parse_into(Program p, string src) {
+    try {
+        p.parse(src, \"tenant-src\");
+        return p.callFunction(\"run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub attach_and_parse(Program p, string src) {
+    try {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(src, \"tenant-src\");
+        return p.callFunction(\"run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub child_parse(string src) {
+    try {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.loadModule(\"WebSocketHandler\");
+        p.setSandboxManager(sm);
+        p.parse(src, \"tenant-child\");
+        return p.callFunction(\"run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub parse_pending(Program p, string src) {
+    try {
+        p.parsePending(src, \"tenant-pending\");
+        return \"pending\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
+#! a subclass whose private access is resolved at run time (through a value without a type)
+const RuntimeSource = "class H inherits WebSocketHandler::WebSocketHandler {
+    auto f() {
+        auto o = self;
+        return o.rwl.className();
+    }
+}
+auto sub run() {
+    return (new H()).f();
+}
+";
+
+#! a user module whose class uses a private member of a module class; the name is substituted for each case
+const PrivateUserModule = "%%new-style
+%%requires WebSocketHandler
+module %s {
+    version = \"1.0\";
+    desc = \"test\";
+    author = \"test\";
+}
+public namespace %s {
+public class H inherits WebSocketHandler::WebSocketHandler {
+    string f() { rwl.readLock(); rwl.readUnlock(); return \"ok\"; }
+}
+public string sub privuser_run() { return (new H()).f(); }
+}
+";
+
+#! code of a tenant that loads a user module into a Program, into a Program that it creates or into its own
+const TenantModuleSource = "auto sub load_into(Program p, string path) {
+    try {
+        p.loadModule(path);
+        return p.callFunction(\"privuser_run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub load_child(string path) {
+    try {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.loadModule(path);
+        return p.callFunction(\"privuser_run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub load_own(string path) {
+    try {
+        load_module(path);
+        return call_function(\"privuser_run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub call(code c, string src) {
+    return c(src);
+}
+";
+
+#! a trusted class (declared by the test's own Program, which no sandbox governs) with private declarations
+class TrustedBase {
+    private {
+        int priv_member = 1;
+        const PrivConst = "const";
+    }
+
+    private string privMethod() {
+        return "method";
+    }
+
+    private static string privStatic() {
+        return "static";
+    }
+}
+
+#! subclasses that each use one kind of private declaration of TrustedBase
+const PrivateUseSources = {
+    "member": "class S inherits TrustedBase { int f() { return priv_member; } } auto sub run() { return (new S()).f(); }",
+    "method": "class S inherits TrustedBase { string f() { return privMethod(); } } auto sub run() { return (new S()).f(); }",
+    "static method": "class S inherits TrustedBase { string f() { return TrustedBase::privStatic(); } } auto sub run() { return (new S()).f(); }",
+    "constant": "class S inherits TrustedBase { string f() { return PrivConst; } } auto sub run() { return (new S()).f(); }",
+};
+
+class SandboxTrustedProgramPrivateAccessTest inherits QUnit::Test {
+    constructor() : Test("SandboxTrustedProgramPrivateAccessTest", "1.0", \ARGV) {
+        addTestCase("a Program whose sandbox allows uncontrolled APIs keeps private access", \trustedTest());
+        addTestCase("a Program with the default sandbox is refused private access", \restrictedTest());
+        addTestCase("restricted code cannot relax the policy of its own sandbox", \relaxTest());
+        addTestCase("the decision is made when the class is committed", \commitTest());
+        addTestCase("a class committed as restricted stays restricted", \restrictedCommitTest());
+        addTestCase("restricted code parsing into a Program whose sandbox trusts its code is refused", \tenantParseTest());
+        addTestCase("restricted code cannot attach a sandbox that trusts its code and parse", \tenantAttachTest());
+        addTestCase("a Program that restricted code creates is restricted", \tenantChildTest());
+        addTestCase("pending code that restricted code parsed is refused at the host's commit", \tenantPendingTest());
+        addTestCase("every kind of private declaration follows the rule", \privateKindsTest());
+        addTestCase("an access resolved at run time follows the rule", \runtimeAccessTest());
+        addTestCase("a class of a Program whose sandbox trusts its code is a trusted declaration", \declSideTest());
+        addTestCase("a user module that restricted code loads is restricted", \userModuleTest());
+        addTestCase("trusted code acting for restricted code is refused", \actingForTenantTest());
+        addTestCase("trusted pending code committed in another thread keeps the access", \crossThreadTest());
+        addTestCase("code sandboxed without a manager is restricted", \unmanagedSandboxTest());
+        addTestCase("code sandboxed without a manager is restricted in a nested parse", \unmanagedNestedTest());
+        addTestCase("code sandboxed without a manager is restricted through trusted code", \unmanagedThroughTrustedTest());
+        addTestCase("a failed parse by trusted code does not make a Program restricted", \trustedFailedParseTest());
+        set_return_value(main());
+    }
+
+    #! returns a Program with the module loaded and the given sandbox
+    private Program getProgram(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("WebSocketHandler");
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! returns a sandbox that trusts its code, as a host's for its own Programs
+    private SandboxManager getTrustedSandbox() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    trustedTest() {
+        Program p = getProgram(getTrustedSandbox());
+        p.parse(SubclassSource, "trusted");
+        assertEq("ok", p.callFunction("run"), "the subclass uses the private member");
+    }
+
+    restrictedTest() {
+        Program p = getProgram(new SandboxManager());
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", sub () {
+            p.parse(SubclassSource, "restricted");
+        });
+    }
+
+    relaxTest() {
+        SandboxManager sm();
+        Program p = getProgram(sm);
+        p.parse("string sub relax(SandboxManager sm) {
+    try {
+        sm.setUncontrolledApiPolicy(True);
+        return \"relaxed\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}", "relax");
+        assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("relax", sm), "the restricted code's call is refused");
+        # the sandbox is unchanged: a subclass parsed in another Program that it governs is still refused
+        Program p2 = getProgram(sm);
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", sub () {
+            p2.parse(SubclassSource, "after-relax");
+        });
+    }
+
+    #! returns a Program with the tenant's code and the default sandbox
+    private Program getTenant() {
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.loadModule("WebSocketHandler");
+        t.setSandboxManager(new SandboxManager());
+        t.parse(TenantSource, "tenant");
+        return t;
+    }
+
+    #! asserts that restricted code was refused the private access
+    private assertRefused(auto result, string msg) {
+        assertEq(Type::String, result.type(), msg);
+        assertRegex("^PARSE-EXCEPTION: .*cannot use the private declarations", result, msg);
+    }
+
+    restrictedCommitTest() {
+        # a class refused as restricted is not accepted once the host relaxes the policy of the sandbox afterwards
+        SandboxManager sm();
+        Program p = getProgram(sm);
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", \p.parse(), (SubclassSource,
+            "restricted-commit"));
+        # an access resolved at run time by a class committed as restricted stays refused once the policy is relaxed
+        Program rp = getProgram(sm);
+        rp.parse(RuntimeSource, "restricted-runtime");
+        sm.setUncontrolledApiPolicy(True);
+        assertThrows("PRIVATE-MEMBER", \rp.callFunction(), "run");
+        Program p2 = getProgram(sm);
+        p2.parse(SubclassSource, "relaxed");
+        assertEq("ok", p2.callFunction("run"), "a Program that the relaxed sandbox governs has private access");
+    }
+
+    tenantParseTest() {
+        Program host = getProgram(getTrustedSandbox());
+        assertRefused(getTenant().callFunction("parse_into", host, SubclassSource),
+            "restricted code's class in a Program whose sandbox trusts its code");
+        # the host's own code in the same Program keeps the access
+        Program host2 = getProgram(getTrustedSandbox());
+        host2.parse(SubclassSource, "host");
+        assertEq("ok", host2.callFunction("run"));
+    }
+
+    tenantAttachTest() {
+        Program host(PO_NEW_STYLE);
+        host.loadModule("WebSocketHandler");
+        assertRefused(getTenant().callFunction("attach_and_parse", host, SubclassSource),
+            "a sandbox that restricted code attached does not make its code trusted");
+    }
+
+    tenantChildTest() {
+        assertRefused(getTenant().callFunction("child_parse", SubclassSource),
+            "a Program that restricted code creates keeps its sandbox");
+    }
+
+    tenantPendingTest() {
+        Program host = getProgram(getTrustedSandbox());
+        assertEq("pending", getTenant().callFunction("parse_pending", host, SubclassSource));
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", \host.parseCommit());
+    }
+
+    privateKindsTest() {
+        foreach hash<auto> i in (PrivateUseSources.pairIterator()) {
+            Program trusted(PO_NEW_STYLE);
+            trusted.importClass("TrustedBase");
+            trusted.setSandboxManager(getTrustedSandbox());
+            trusted.parse(i.value, "trusted-" + i.key);
+            auto v = trusted.callFunction("run");
+            assertTrue(v.val(), i.key + ": a class of trusted code uses it");
+
+            Program restricted(PO_NEW_STYLE);
+            restricted.importClass("TrustedBase");
+            restricted.setSandboxManager(new SandboxManager());
+            # a private constant is as if it were private:internal: it is not found
+            string err = i.key == "constant" ? "cannot resolve bareword 'PrivConst'" : "cannot use the private declarations";
+            assertThrows("PARSE-EXCEPTION", err, \restricted.parse(), (i.value, "restricted-" + i.key),
+                i.key + ": a class of restricted code is refused it");
+        }
+    }
+
+    runtimeAccessTest() {
+        Program trusted = getProgram(getTrustedSandbox());
+        trusted.parse(RuntimeSource, "runtime-trusted");
+        assertEq("RWLock", trusted.callFunction("run"));
+
+        Program restricted = getProgram(new SandboxManager());
+        restricted.parse(RuntimeSource, "runtime-restricted");
+        assertThrows("PRIVATE-MEMBER", \restricted.callFunction(), "run");
+    }
+
+    declSideTest() {
+        # the class of a host's trusted Program is a trusted declaration: a tenant's subclass has no private access to
+        # it (with any other sandbox, the class would be sandboxed code's, which a tenant's subclass can use)
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        host.setSandboxManager(getTrustedSandbox());
+        host.parse("public class HostBase { private { int p = 7; } }
+auto sub try_tenant(string src) {
+    try {
+        Program t(PO_NEW_STYLE);
+        t.setSandboxManager(new SandboxManager());
+        t.parse(src, \"tenant\");
+        return t.callFunction(\"run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}", "host");
+        assertRefused(host.callFunction("try_tenant", "class S inherits HostBase { int f() { return p; } } "
+            "auto sub run() { return (new S()).f(); }"), "a tenant's subclass of a class of a trusted Program");
+    }
+
+    #! writes a module of its own name for a case: a module is loaded once only by every Program of the process
+    private string writeModule(TmpDir tmp, string name) {
+        string path = tmp.path + DirSep + name + ".qm";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(PrivateUserModule, name, name));
+        f.close();
+        return path;
+    }
+
+    userModuleTest() {
+        TmpDir tmp("qore-7635-module-");
+
+        # the host's own trusted Program loads it with private access
+        Program host = getProgram(getTrustedSandbox());
+        host.loadModule(writeModule(tmp, "PrivUser7635Host"));
+        assertEq("ok", host.callFunction("privuser_run"));
+
+        # a tenant whose sandbox allows it to read the module file
+        SandboxManager tsm();
+        tsm.setFilesystemDefaultPolicy(True);
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.loadModule("WebSocketHandler");
+        t.setSandboxManager(tsm);
+        t.parse(TenantModuleSource, "tenant-module");
+        assertRefused(t.callFunction("load_into", getProgram(getTrustedSandbox()), writeModule(tmp, "PrivUser7635A")),
+            "into a Program whose sandbox trusts its code");
+        Program unsandboxed(PO_NEW_STYLE);
+        unsandboxed.loadModule("WebSocketHandler");
+        assertRefused(t.callFunction("load_into", unsandboxed, writeModule(tmp, "PrivUser7635B")),
+            "into a Program without a sandbox");
+        assertRefused(t.callFunction("load_child", writeModule(tmp, "PrivUser7635C")), "into a Program that it creates");
+        assertRefused(t.callFunction("load_own", writeModule(tmp, "PrivUser7635D")), "into its own Program");
+    }
+
+    actingForTenantTest() {
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.setSandboxManager(new SandboxManager());
+        t.parse(TenantModuleSource, "tenant-calls");
+        foreach bool system_policy in ((False, True)) {
+            Program target = getProgram(getTrustedSandbox());
+            code parse_run = auto sub (string src) {
+                try {
+                    target.parse(src, "via-host");
+                    return target.callFunction("run");
+                } catch (hash<ExceptionInfo> ex) {
+                    return ex.err + ": " + ex.desc;
+                }
+            };
+            if (system_policy) {
+                parse_run = SandboxManager::createSystemPolicyCall(parse_run);
+            }
+            auto v = t.callFunction("call", parse_run, RuntimeSource);
+            # the parse is of restricted code: its class has no private access
+            assertEq(Type::String, v.type());
+            assertRegex("^PRIVATE-MEMBER", v, sprintf("system policy call: %y", system_policy));
+        }
+    }
+
+    crossThreadTest() {
+        Program p = getProgram(getTrustedSandbox());
+        Counter c(1);
+        *hash<ExceptionInfo> err;
+        background sub () {
+            on_exit c.dec();
+            try {
+                p.parsePending(RuntimeSource, "bg-pending");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+        }();
+        c.waitForZero();
+        assertNothing(err);
+        p.parseCommit();
+        assertEq("RWLock", p.callFunction("run"));
+    }
+
+    #! returns a host Program that no manager governs, which a tenant marked sandboxed (by a parse in it)
+    private Program getUnmanagedSandboxed(int opts = 0) {
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.setSandboxManager(new SandboxManager());
+        t.parse("auto sub mark(Program u) {
+    try {
+        u.parse(\"syntax error here !!!\", \"bad\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}", "tenant-mark");
+        Program u(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS | opts);
+        assertEq("PARSE-EXCEPTION", t.callFunction("mark", u));
+        return u;
+    }
+
+    unmanagedSandboxTest() {
+        Program u = getUnmanagedSandboxed();
+        u.parse("auto sub do_parse(Program p, string src) {
+    try {
+        p.parse(src, \"u-src\");
+        return p.callFunction(\"run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+auto sub do_pending(Program p, string src) {
+    p.parsePending(src, \"u-pending\");
+    return \"pending\";
+}", "u");
+        assertRefused(u.callFunction("do_parse", getProgram(getTrustedSandbox()), SubclassSource),
+            "an access resolved when parsing");
+        auto v = u.callFunction("do_parse", getProgram(getTrustedSandbox()), RuntimeSource);
+        assertEq(Type::String, v.type());
+        assertRegex("^PRIVATE-MEMBER", v, "an access resolved at run time");
+
+        # pending code that it parsed and that the host commits
+        Program p = getProgram(getTrustedSandbox());
+        assertEq("pending", u.callFunction("do_pending", p, RuntimeSource));
+        p.parseCommit();
+        assertThrows("PRIVATE-MEMBER", \p.callFunction(), "run");
+
+        # also when called by the code of a Program whose sandbox trusts its code
+        Program g(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        g.setSandboxManager(getTrustedSandbox());
+        g.parse("auto sub go(Program u, Program p, string src) { return u.callFunction(\"do_parse\", p, src); }", "g");
+        assertRefused(g.callFunction("go", u, getProgram(getTrustedSandbox()), SubclassSource),
+            "called by trusted code");
+    }
+
+    unmanagedNestedTest() {
+        # the commit of code that it parsed runs its function, which parses more code in the same Program: the
+        # manager found for the nested parse is the target Program's own, which trusts its code
+        Program u = getUnmanagedSandboxed();
+        u.parse("Program gT;
+string nsrc;
+string st = \"not called\";
+int sub nest() {
+    try {
+        gT.parse(nsrc, \"nested\");
+        st = \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        st = ex.err + \": \" + ex.desc;
+    }
+    return 1;
+}
+auto sub setup(Program p, string s) {
+    gT = p;
+    nsrc = s;
+    gT.importFunction(\"nest\");
+}
+auto sub go(string src) {
+    gT.parse(src, \"outer\");
+    return st;
+}", "u-nested");
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.loadModule("WebSocketHandler");
+        p.setSandboxManager(getTrustedSandbox());
+        u.callFunction("setup", p, "class N inherits WebSocketHandler::WebSocketHandler { auto f() { auto o = self; "
+            "return o.rwl.className(); } } auto sub run2() { return (new N()).f(); }");
+        assertEq("ok", u.callFunction("go", "class Z { public { static int z = nest(); } }"), "the nested parse");
+        assertThrows("PRIVATE-MEMBER", \p.callFunction(), "run2");
+    }
+
+    unmanagedThroughTrustedTest() {
+        # its commit runs a function of another Program whose sandbox trusts its code, which parses in a third one
+        Program u = getUnmanagedSandboxed();
+        u.parse("auto sub go(Program p, string src) { p.parse(src, \"outer\"); return \"parsed\"; }", "u-through");
+        Program w(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+        w.loadModule("WebSocketHandler");
+        w.setSandboxManager(getTrustedSandbox());
+        w.parse("our string st = \"not called\";
+Program gQ;
+string nsrc;
+sub setup(Program q, string s) { gQ = q; nsrc = s; }
+int sub mk() {
+    try {
+        gQ.parse(nsrc, \"nested\");
+        st = \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        st = ex.err + \": \" + ex.desc;
+    }
+    return 1;
+}
+string sub gst() { return st; }
+sub imp(Program p) { p.importFunction(\"mk\"); }", "w");
+        Program q = getProgram(getTrustedSandbox());
+        w.callFunction("setup", q, "class N inherits WebSocketHandler::WebSocketHandler { auto f() { auto o = self; "
+            "return o.rwl.className(); } } auto sub run2() { return (new N()).f(); }");
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        p.loadModule("WebSocketHandler");
+        p.setSandboxManager(getTrustedSandbox());
+        w.callFunction("imp", p);
+        assertEq("parsed", u.callFunction("go", p, "class Z { public { static int z = mk(); } }"));
+        assertEq("ok", w.callFunction("gst"), "the nested parse");
+        assertThrows("PRIVATE-MEMBER", \q.callFunction(), "run2");
+    }
+
+    trustedFailedParseTest() {
+        # a failed parse by code whose sandbox trusts its code leaves the Program sandboxed, not restricted
+        Program a(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        a.setSandboxManager(getTrustedSandbox());
+        a.parse("auto sub bad(Program p) {
+    try {
+        p.parse(\"syntax error here !!!\", \"bad\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+auto sub go(Program p, Program c, string s) { return p.callFunction(\"do_parse\", c, s); }", "a");
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("auto sub do_parse(Program c, string s) {
+    try {
+        c.parse(s, \"n\");
+        return c.callFunction(\"run\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}", "p");
+        assertEq("PARSE-EXCEPTION", a.callFunction("bad", p));
+        assertEq("RWLock", a.callFunction("go", p, getProgram(getTrustedSandbox()), RuntimeSource), "called by A");
+        assertEq("RWLock", p.callFunction("do_parse", getProgram(getTrustedSandbox()), RuntimeSource),
+            "called by the host");
+
+        # and the classes of the Program itself keep the access
+        Program p2(PO_NEW_STYLE | PO_ALLOW_REPARSE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p2.loadModule("WebSocketHandler");
+        assertEq("PARSE-EXCEPTION", a.callFunction("bad", p2));
+        p2.parse(RuntimeSource, "after-bad");
+        assertEq("RWLock", p2.callFunction("run"), "a class of the Program itself");
+    }
+
+    commitTest() {
+        # a class committed while its Program's sandbox trusted its code keeps its access when the policy is tightened
+        SandboxManager sm = getTrustedSandbox();
+        Program p = getProgram(sm);
+        p.parse(SubclassSource, "commit");
+        sm.setUncontrolledApiPolicy(False);
+        assertEq("ok", p.callFunction("run"), "the committed class keeps the access it was committed with");
+        # an access resolved at run time uses the state committed with the class
+        Program rp = getProgram(sm);
+        sm.setUncontrolledApiPolicy(True);
+        rp.parse(RuntimeSource, "commit-runtime");
+        sm.setUncontrolledApiPolicy(False);
+        assertEq("RWLock", rp.callFunction("run"), "the committed class keeps its runtime access");
+    }
+}

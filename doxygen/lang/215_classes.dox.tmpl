@@ -732,9 +732,12 @@ while (i.next) {}  # parse exception: the call is i.next()
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
 
     @subsection sandboxed_class_private_access Private Access of Classes Declared by Sandboxed Code
-    A class declared in a @ref Qore::Program "Program" with a @ref sandbox_manager "sandbox manager" (or that sandboxed
-    code creates) has no private access to the private members, methods, static class variables and constants that a class
-    declared by trusted code (a module's code, or a Program without a sandbox manager) declares, on any object, also on
+    A class declared by restricted code (code in a @ref Qore::Program "Program" whose
+    @ref sandbox_manager "sandbox manager" does not trust its code, see
+    @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()", or code that such a sandbox governs
+    when it parses or loads the class in another Program) has no private access to the private members, methods,
+    static class variables and constants that a class declared by trusted code (a module's code, a Program without a
+    sandbox manager, or a Program whose sandbox manager allows uncontrolled APIs) declares, on any object, also on
     the objects of the class itself: for it they are as if they were <tt><b>private:internal</b></tt>.  An access that
     can be resolved when parsing raises a parse error; an access resolved at run time (through a value without a type,
     a member name computed at run time, the conversion of the object to a hash or its keys, a

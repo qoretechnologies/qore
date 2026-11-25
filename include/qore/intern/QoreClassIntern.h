@@ -3670,7 +3670,8 @@ public:
     // if the souorce program should be dereference when the class is destroyed
     bool deref_source_program = true;
 
-    //! true if sandboxed code declared the class: it was sandboxed code when the class was committed (qore#6843)
+    //! true if sandboxed code declared the class: when the class was committed, a sandbox that does not trust its code
+    //! governed its Program (qore#6843, qore#7635)
     /** Its code has no private access to the members and methods that a class that trusted code declared declares
         (see sandboxDeniesPrivateAccess()); set in parseCommit(), copied with the class
     */
@@ -5315,11 +5316,26 @@ public:
     */
     DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxedCode() const;
 
+    //! Returns true if the class was declared by code that a sandbox that does not trust its code governs (qore#7635)
+    /** As isSandboxedCode(), with the trust rule of SandboxManager::isRestricted(): a sandbox that allows uncontrolled
+        APIs trusts its code; fails closed.  Once the source Program has released the class, its state is not known
+        and isSandboxedCode()'s is used, which is true whenever this is.  It decides whether the class is declared by
+        sandboxed code for the private access to the declarations of trusted classes (isSandboxDeclared())
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isRestrictedCode() const;
+
     //! Returns true if sandboxed code declared the class (qore#6843)
     /** For a committed class, the state of its Program when it was committed (sandbox_ctx); for a class being parsed,
-        the state of its Program now (isSandboxedCode()); a builtin class is trusted
+        the state of its Program now (isRestrictedCode()) and the sandbox of the code that parses it, which is attached
+        to the Program only when the code is committed (qore_program_private::pendingCreatorSandboxIsRestricted()): a
+        class of a Program whose sandbox trusts its code (allows uncontrolled APIs) and that code that its sandbox
+        trusts parses is not declared by sandboxed code (qore#7635); a builtin class is trusted
     */
-    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared() const;
+    /** @param unknown the result when the state of a class being parsed cannot be told (another thread parses it,
+        or it is not of the current Program): true for the class whose code would use a declaration, false for the
+        class that declares it, so that the access is refused either way
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE bool isSandboxDeclared(bool unknown) const;
 
     //! Returns true if the code of \a class_ctx cannot use the private declarations of \a decl (qore#6843)
     /** A class that sandboxed code declared has no private access to the members, methods and static variables that
