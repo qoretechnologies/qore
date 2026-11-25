@@ -2985,6 +2985,22 @@ class HttpRawRequestScope {
     public {
         #! the most raw requests that can be current on a thread at once: requests dispatched in the dispatch of others
         const MaxDepth = 8;
+
+        #! the classes of the sockets of a request alone that the HTTP server gives a handler: the socket of an
+        #! HTTP/1.x request, or of an HTTP/2 or HTTP/3 stream (qore#7305)
+        const ServerViewClasses = {
+            "Http1HandlerSocket": True,
+            "Http2HandlerSocket": True,
+            "Http3HandlerSocket": True,
+        };
+    }
+
+    private:internal {
+        #! the classes of the sockets of a request alone that hosts registered (see
+        #! HttpServerDispatchCapability::registerStreamViewClass())
+        static hash<string, bool> host_view_classes;
+        #! protects host_view_classes
+        static Mutex host_view_lck();
     }
 
     private:internal {
@@ -3028,11 +3044,34 @@ class HttpRawRequestScope {
     }
 
     #! returns @ref True if the socket is a socket of the request alone (a view), not the socket of a connection
+    /** An allowlist: a socket of a class that the HTTP server gives as a socket of a request alone
+        (@ref ServerViewClasses), or of a class that a host registered for the sockets of a request alone that it
+        gives (HttpServerDispatchCapability::registerStreamViewClass()); a socket of any other class is treated as the
+        socket of a connection (see isConnectionSocket())
+    */
     static bool isStreamView(*Socket s) {
-        # a socket of the request alone is a view of a class of its own: the handler socket of an HTTP/2 or HTTP/3
-        # stream, the handler socket of an HTTP/1.x request (Http1HandlerSocket) or a socket of a host that
-        # dispatches requests itself; the socket of a connection is a Qore::Socket itself
-        return exists s && s.className() != "Socket";
+        if (!s) {
+            return False;
+        }
+        string cls = s.className();
+        if (ServerViewClasses{cls}) {
+            return True;
+        }
+        AutoLock al(host_view_lck);
+        return host_view_classes{cls} ?? False;
+    }
+
+    #! returns @ref True if the socket is an open socket that is not a socket of the request alone (see isStreamView())
+    /** A socket that is not open is the socket of no connection (a placeholder)
+    */
+    static bool isConnectionSocket(*Socket s) {
+        return exists s && !HttpRawRequestScope::isStreamView(s) && s.isOpen();
+    }
+
+    #! registers the name of a class of the sockets of a request alone that a host gives (see isStreamView())
+    static registerHostViewClass(string cls) {
+        AutoLock al(host_view_lck);
+        host_view_classes{cls} = True;
     }
 
     #! the raw request is no longer current
@@ -3210,6 +3249,28 @@ class HttpServerDispatchCapability {
             }
         }
         return new HttpRawRequestScope(cx, hdr, s, trailer_keep);
+    }
+
+    #! Registers a class of the sockets of a request alone that the host gives the handlers that it calls
+    /** For the capability of a host (AbstractHttpRequestHandler::claimHostDispatch()): a socket of the class is a
+        socket of its request alone (a view), not the socket of a connection, in the decisions about the socket that
+        restricted code gets (see @ref httpserver_handler_socket); a socket of another class than the handler sockets
+        of the HTTP server is the socket of a connection otherwise, unless it is not open.  The host registers only a
+        class whose sockets are views of a request alone, of its own code.
+
+        @param cls the name of the class
+
+        @throw HTTP-SERVER-ERROR the capability is the HTTP server's, or the caller is sandboxed (fails closed: also if
+        this cannot be decided)
+    */
+    registerStreamViewClass(string cls) {
+        if (path) {
+            throw "HTTP-SERVER-ERROR", "only the capability of a host registers the classes of its sockets";
+        }
+        if (HttpRawRequestScope::callerIsSandboxed()) {
+            throw "HTTP-SERVER-ERROR", "sandboxed code cannot register a class of the sockets of a request";
+        }
+        HttpRawRequestScope::registerHostViewClass(cls);
     }
 
     #! checks that the module that claimed the capability is the HttpServer module that is loaded (its record)
@@ -3477,7 +3538,7 @@ public class AbstractStreamRequest {
         # creates or declares, as the handler of a sandboxed Program does not get it either (qore#7305)
         # (restricted code only, as for the handler socket decisions: trusted code that a sandbox governs only for its
         # resource limits, interrupts or I/O policy gets the connection's socket, qore#7577)
-        if (raw.s && !HttpRawRequestScope::isStreamView(raw.s) && (HttpRawRequestScope::isRestricted(self)
+        if (HttpRawRequestScope::isConnectionSocket(raw.s) && (HttpRawRequestScope::isRestricted(self)
                 || HttpRawRequestScope::callerIsRestricted())) {
             throw "HTTP-HANDLER-ERROR", "a stream request of a class of a restricted Program, or that restricted code "
                 "creates, cannot serve an HTTP/1.x request on the socket of the connection; the handler gets a socket "
@@ -6036,7 +6097,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         # connection are served on threads of their own
         # the HTTP server gives the handler of a sandboxed Program a socket of its own request (qore#7305); the socket
         # of the connection, which a stream request needs, never reaches its code (qore#6843)
-        if (!HttpRawRequestScope::isStreamView(s) && HttpRawRequestScope::isRestricted(self)) {
+        if (HttpRawRequestScope::isConnectionSocket(s) && HttpRawRequestScope::isRestricted(self)) {
             throw "HTTP-HANDLER-ERROR", "a stream request handler of a class of a restricted Program cannot serve an "
                 "HTTP/1.x request on the socket of the connection, which is not given to the code of such a class";
         }

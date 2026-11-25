@@ -1189,9 +1189,11 @@ public namespace RestHandler {
                 args = cx.body - "action";
             }
             # the raw socket of an HTTP/1.1 request is given only to the code of a REST class of a Program that no
-            # restricted sandbox governs (qore#6843; qore#7305; qore#7577): a handler socket is a view of its own
-            # request
-            if (s.className() != "Socket" || !SandboxManager::isFromRestrictedProgram(self)) {
+            # restricted sandbox governs (qore#6843; qore#7305; qore#7577): a handler socket of the server is a view
+            # of its own request, and a socket that is not open is no connection's; an open socket of another class
+            # is the connection's
+            if (RestRequestSocketClasses{s.className()} || !s.isOpen()
+                    || !SandboxManager::isFromRestrictedProgram(self)) {
                 cx.socketobject = s;
             } else {
                 remove cx.socketobject;

@@ -50,6 +50,14 @@
 class ViewSocket inherits Socket {
 }
 
+#! a socket of a class of its own that is not a socket of a request alone: connected, it is the connection's
+class OtherSocket inherits Socket {
+}
+
+#! a socket of a class of its own that the test registers as a socket of a request alone, as a host does
+class RegisteredViewSocket inherits Socket {
+}
+
 #! a listener for the direct calls of a handler
 class TestListener inherits HttpListenerInterface {
     log(string fmt, ...) {
@@ -458,6 +466,10 @@ AbstractHttpRequestHandler sub adding_stream_handler() {
     return new TenantAddingStreamHandler();
 }
 
+string sub register_view(object cap) {
+    return attempt(sub () { cap.registerStreamViewClass('OtherSocket'); });
+}
+
 AbstractHttpRequestHandler sub late_stream_handler() {
     return new TenantLateStreamHandler();
 }
@@ -600,6 +612,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("the credential trailer fields come from the trusted options of the handler",
             \trailerKeepTest());
         addTestCase("the raw request is current only while the handler serves the request", \lateScopeTest());
+        addTestCase("a socket of a request alone is of an allowed class, or not open", \viewClassTest());
         set_return_value(main());
     }
 
@@ -1253,6 +1266,44 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq((), (select late,
             !$1.equalPartial("HTTP-SERVER-ERROR: a stream request can only be served in the dispatch")),
             "no raw request is current after handleRequest()");
+    }
+
+    viewClassTest() {
+        # a connected socket of a class that is neither a handler socket of the server nor registered by the host is
+        # the socket of a connection: a handler of restricted code is refused it, whatever its class name
+        Socket l();
+        l.bindINET("127.0.0.1", 0);
+        l.listen();
+        on_exit l.close();
+        int port = l.getSocketInfo().port;
+        OtherSocket other();
+        other.connect("127.0.0.1:" + port);
+        on_exit other.close();
+        Socket a1 = l.accept();
+        on_exit a1.close();
+        Program t = tenantProgram();
+        hash<auto> raw = rawContext(71, "hello");
+        hash<HttpFilteredRequestInfo> f = AbstractStreamRequest::filterRequest(raw, header());
+        assertThrows("HTTP-HANDLER-ERROR", "socket of the connection", \HttpRequestFilterTest::serve(),
+            (t.callFunction("stream_handler"), raw, header(), f.cx, f.hdr, other));
+        # a socket that is not open is no connection's: a placeholder or a socket of the host's own
+        raw = rawContext(72, "hello");
+        f = AbstractStreamRequest::filterRequest(raw, header());
+        hash<auto> rv = serve(t.callFunction("stream_handler"), raw, header(), f.cx, f.hdr, new OtherSocket());
+        assertEq(5, parse_json(rv.body).size);
+        # a class that the host registers with its capability is a socket of a request alone
+        RegisteredViewSocket view();
+        view.connect("127.0.0.1:" + port);
+        on_exit view.close();
+        Socket a2 = l.accept();
+        on_exit a2.close();
+        host().registerStreamViewClass("RegisteredViewSocket");
+        raw = rawContext(73, "hello");
+        f = AbstractStreamRequest::filterRequest(raw, header());
+        rv = serve(t.callFunction("stream_handler"), raw, header(), f.cx, f.hdr, view);
+        assertEq(5, parse_json(rv.body).size);
+        # restricted code that a host capability reaches by mistake registers no class
+        assertEq("HTTP-SERVER-ERROR", t.callFunction("register_view", host()));
     }
 
     #! the capability of the test to make the raw request of a direct call of a handler current, as a host does
