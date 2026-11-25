@@ -6625,7 +6625,10 @@ bool QoreFunction::parseOtherVariantMayMatch(const AbstractQoreFunctionVariant* 
 }
 
 const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& argTypeInfo,
-        const name_vec_t& argNames, const qore_class_private* class_ctx, QoreParseOptions po) const {
+        const name_vec_t& argNames, const qore_class_private* class_ctx, QoreParseOptions po, bool* matched) const {
+    if (matched) {
+        *matched = false;
+    }
     const QoreTypeInfo* rv = nullptr;
     bool found = false;
     const qore_class_private* last_class = nullptr;
@@ -6650,6 +6653,9 @@ const QoreTypeInfo* QoreFunction::parseRuntimeNamedReturnType(const type_vec_t& 
             if (!bind_named_call_args(sig, argTypeInfo, argNames, cb, failure)
                     && !qore_signature_takes_only_nothing(sig, argTypeInfo.size())) {
                 continue;
+            }
+            if (matched) {
+                *matched = true;
             }
             // the return type of a generic variant depends on its type arguments, which are not known here
             const UserVariantBase* uvb = v->getUserVariantBase();

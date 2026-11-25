@@ -29,3 +29,11 @@ t("parent class object typed", auto sub () { return OITC::PB::typedA(pa); });
 t("parent class object untyped", auto sub () { return OITC::PB::untypedA(pa); });
 t("parent class object call reference", auto sub () { return OITC::PB::refA(pa); });
 t("decorator", auto sub () { return (new OITC::PB(new OITC::PA())).m("k"); });
+
+foreach OITC::ParentLabel obj in ((new OITC::ParentLabel(), new OITC::ChildLabel(), new OITC::LeafLabel())) {
+    printf("%s\n", OITC::ChildLabel::labels(obj, obj).join(", "));
+}
+OITC::ParentLabel parent_label();
+OITC::ChildLabel child_label();
+printf("named families: %s %s\n", OITC::ChildLabel::parentNamed(parent_label),
+    OITC::ChildLabel::childNamed(child_label));
