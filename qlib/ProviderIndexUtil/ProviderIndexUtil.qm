@@ -123,11 +123,8 @@ if (!info.reloaded) {
     - @ref ProviderIndexUtil::ProviderIndexUtil::getIndexReadError() "getIndexReadError()" and the \c error of
       @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "reloadIndex()" give it the error code with a
       description that names no index file
-    - the \c path of the result of
-      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()" and
-      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndex() "writeDataProviderIndex()" is the name of
-      the file in the index directory, and an error of the index directory or of writing the index has a
-      description that names neither the directory nor the IDs of the process
+    - such code cannot write or change the index that the host published there (see
+      @ref providerindexutil_published_index)
     - the process-wide logger receives the module's diagnostics, which name the index directory, the files in it and
       the IDs of the process (for every caller, also while the module serves such code), so
       @ref ProviderIndexUtil::ProviderIndexUtil::setGlobalLogger() "setGlobalLogger()" raises
@@ -139,6 +136,41 @@ if (!info.reloaded) {
     the index as other code does.  Whether the process is in index build mode
     (@ref ProviderIndexUtil::ProviderIndexUtil::inBuildMode() "inBuildMode()") is given to such code, as it decides
     what its lookups find (see @ref sandbox_ambient_host_data).
+
+    @section providerindexutil_published_index Changing the Published Index
+
+    The index that the host published (the files in the configured index directory), the configured index directory,
+    the index build mode and the apps and actions cached in the index are the host's: every lookup of the process uses
+    them, and the files are also read by every other process that is configured with the same directory.  Only code
+    that may register process-wide functionality
+    (@ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()")
+    and that may read external information
+    (@ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), such as
+    the host's own code, may write, replace or hide them; the module writes nothing into the host's index directory for
+    code that may not name it (see @ref providerindexutil_external_info).  Sandboxed code is refused with
+    \c PROVIDER-INDEX-REGISTRATION-DENIED, and code restricted from external information
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"), also with file system access and process control, with
+    \c INVALID-FUNCTION-ACCESS, by:
+    - @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndex() "writeDataProviderIndex()" and
+      @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()",
+      which publish an index in the configured index directory
+    - \c ProviderIndex::createDataProviderIndex(), also with a directory, which becomes the configured index
+      directory, and \c ProviderIndex::prepareIndexWorker() and \c ProviderIndex::runIndexWorker()
+    - @ref ProviderIndexUtil::ProviderIndexUtil::setEnvironmentVariable() "setEnvironmentVariable()", which sets the
+      configured index directory, and
+      @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "setBuildMode()", in which the published index is not
+      read
+    - @ref ProviderIndexUtil::ProviderIndexUtil::addAppToCache() "addAppToCache()",
+      @ref ProviderIndexUtil::ProviderIndexUtil::addActionToCache() "addActionToCache()" and
+      @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "removeCachedApp()", which replace or hide the
+      indexed apps and actions for the process
+
+    Such code still reads the index: its lookups, and
+    @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "reloadIndex()", which reads the index that the host
+    published again.  It writes files that it names itself, such as
+    the output file of @ref ProviderIndexUtil::ProviderIndexUtil::dumpIndexYaml() "dumpIndexYaml()", with its own
+    access: the file system policy of its sandbox, or the file permissions of the process, protect the index directory
+    from what such code writes itself.
 
     @section providerindexutil_summaries Listing and Selecting Indexed Actions
 
@@ -192,6 +224,10 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
 
 
     @section providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - only code that may register process-wide functionality and read external information may write, replace or
+      hide the index that the host published, its directory, its build mode and its cached apps and actions (see
+      @ref providerindexutil_published_index; <a href="https://github.com/qoretechnologies/qore/issues/7611">issue
+      7611</a>)
     - code restricted from external information gets no index directory, no path of an index file and no IDs of the
       process (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "tryGetIndexDir()" and
       @ref ProviderIndexUtil::ProviderIndexUtil::getIndexPath() "getIndexPath()" refuse it; see

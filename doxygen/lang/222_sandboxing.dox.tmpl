@@ -966,8 +966,9 @@ authenticate();
       process (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "ProviderIndexUtil::tryGetIndexDir()" and
       the methods that return them raise \c INVALID-FUNCTION-ACCESS, and its errors and results leave them out), and
       such code may neither set nor get its process-wide logger, which receives the module's diagnostics that name
-      them; such code still looks up apps, actions, factories and schemes in the index (see
-      @ref providerindexutil_external_info "the ProviderIndexUtil module")
+      them, nor write, replace or hide the index that the host published (see
+      @ref providerindexutil_published_index); such code still looks up apps, actions, factories and schemes in the
+      index (see @ref providerindexutil_external_info "the ProviderIndexUtil module")
     - the process-wide logger of the data providers: such code neither gets
       (@ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" returns @ref nothing) nor
       sets it (\c INVALID-FUNCTION-ACCESS), as it receives the messages of every caller, which name host information

@@ -121,6 +121,12 @@
     @ref providerindexutil_external_info; <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>).
     @endparblock
 
+    @par Only the Host's Code Changes the Published Data Provider Index
+    Sandboxed code and code restricted from external information, also with file system access and process control,
+    cannot write, replace or hide the data provider index that the host published, its directory, its build mode or
+    its cached apps (see @ref providerindexutil_published_index;
+    <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>).
+
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
     while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps

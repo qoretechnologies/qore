@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the checks run in the Programs of a worker process that set their execution modes themselves, and in qcc executables of the worker
+# test-platform: macos - JIT and AOT code generation and qcc executables of calls into the Programs of preloaded modules, and the files of the published index directory
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class ProviderIndexWriteIntegrityTest
+
+#! Only the host's code may write, replace or hide the data provider index that the host published (qore#7611)
+/** The published index (the files in the configured index directory, QORE_PROVIDER_INDEX_DIR), the configured index
+    directory, the index build mode and the apps cached in the index are used by the whole process (and the files by
+    every process that reads the same directory): code that is sandboxed, or that may not read external information
+    (PO_NO_EXTERNAL_INFO), also with file system access and process control, cannot change them, and the published
+    index, its directory, the build mode and the cached app are unchanged afterwards; such code can still write the
+    published index as YAML to a file of its own; unrestricted code can change all of them.  The checks are in
+    provider-index-write-integrity/provider-index-write-integrity-worker.q (in Programs of each kind in each execution
+    mode, whose top-level code calls the methods), whose output must be one "ok" line per check, run by the
+    interpreter and as programs compiled with qcc.
+*/
+class ProviderIndexWriteIntegrityTest inherits QUnit::Test {
+    public {
+        #! the kinds of Programs of the worker
+        const Kinds = 5;
+        #! the execution modes of the worker's Programs
+        const Modes = 4;
+        #! the checks of each Program
+        const Cases = 17;
+        #! the checks of each Program that may change the index: the restored index
+        const UnrestrictedCases = 1;
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string dir = normalize_dir(get_script_dir());
+        string worker = dir + DirSep + "provider-index-write-integrity" + DirSep
+            + "provider-index-write-integrity-worker.q";
+        TmpDir tmp("qore-provider-index-write-integrity-");
+    }
+
+    constructor() : QUnit::Test("ProviderIndexWriteIntegrityTest", "1.0", \ARGV) {
+        addTestCase("interpreter", \testInterpreter());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! returns the environment of a run of the worker, with an index directory of its own
+    private string getPrefix(string label) {
+        string run_dir = tmp.path + DirSep + label;
+        mkdir(run_dir);
+        return (map sprintf("%s=%s ", $1.key, quote($1.value)), {
+            "LD_LIBRARY_PATH": libdir,
+            "DYLD_LIBRARY_PATH": libdir,
+            "QORE_LIBDIR": libdir,
+            # the index that the host publishes
+            "QORE_PROVIDER_INDEX_DIR": run_dir + DirSep + "index",
+            "Q7611_CHILD": dir + DirSep + "provider-index-write-integrity" + DirSep
+                + "provider-index-write-integrity-child.q",
+        }.pairIterator()).join("");
+    }
+
+    #! checks the output of the worker: one "ok" line per check; the other lines are the diagnostics of the index
+    #! workers that the worker's Programs run without a batch file, which they write to standard error
+    private checkOutput(string out, string label) {
+        list<string> lines = select out.split("\n"), $1 =~ /^[-a-z]+\/[a-z]+\/[a-z_]+=/;
+        list<string> failed = select lines, !regex($1, "=ok$");
+        assertEq((), failed, label + ": failed checks");
+        assertEq(Modes * (Kinds * Cases + UnrestrictedCases), lines.size(), label + ": number of checks");
+    }
+
+    testInterpreter() {
+        checkOutput(ExecModeHarness::run_any(getPrefix("interpreter") + quote(qore_bin) + " -b --enable-debug "
+            + quote(worker)), "interpreter");
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "provider-index-write-integrity" + opt;
+            ExecModeHarness::run_any(getPrefix("qcc-build" + opt) + quote(qcc_bin) + " " + opt + " -o " + quote(exe)
+                + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            checkOutput(ExecModeHarness::run_any(getPrefix("qcc" + opt) + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}

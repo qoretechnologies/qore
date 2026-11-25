@@ -12,6 +12,13 @@ our *string q_app;
 our *hash<auto> q_maps;
 # makes the index directory writable (True) or not (False); the host's code
 our *code q_set_writable;
+# publishes the host's index again, after the routing index was made corrupt; the host's code
+our *code q_restore_index;
+# the refusals of a change of the published index, which only the host's code may change (qore#7611)
+our hash<string, bool> q_denials = {
+    "INVALID-FUNCTION-ACCESS": True,
+    "PROVIDER-INDEX-REGISTRATION-DENIED": True,
+};
 our hash<auto> q_r;
 
 # the methods that return the index directory, paths under it or the environment of the index
@@ -33,14 +40,16 @@ try { q_r.reload_error = ProviderIndexUtil::reloadIndex().error; } catch (hash<E
 try { q_r.read_error = ProviderIndexUtil::getIndexReadError(); } catch (hash<ExceptionInfo> ex) { q_r.read_error = ex.err; }
 try { q_r.lookup_after = ProviderIndexUtil::tryGetAppInfo(q_app).desc; } catch (hash<ExceptionInfo> ex) { q_r.lookup_after = ex.err; }
 
-# writing the index (the same index, so that the index of the process stays valid)
+# writing the index (the same index, so that the index of the process stays valid); only code that may change the
+# published index may write it (qore#7611)
 try {
     q_r.write_path = ProviderIndexUtil::writeDataProviderIndexByApp(q_maps, (q_app,),
         *hash<auto> sub (string app) { return {}; }, 0s, {}).path;
 } catch (hash<ExceptionInfo> ex) {
-    q_r.write_path = ex.err + ": " + ex.desc;
+    q_r.write_path = q_denials{ex.err} ? ex.err : ex.err + ": " + ex.desc;
 }
 # the index is published again: it can be written as YAML
+q_restore_index();
 try { q_r.dump = ProviderIndexUtil::dumpIndexYaml().find(q_app) >= 0; } catch (hash<ExceptionInfo> ex) { q_r.dump = ex.err; }
 try { q_r.dump_dir = ProviderIndexUtil::dumpIndexYaml(q_index_dir).find(q_app) >= 0; } catch (hash<ExceptionInfo> ex) { q_r.dump_dir = ex.err; }
 # an exception of the caller's code is passed on as it is
@@ -49,7 +58,7 @@ try {
         *hash<auto> sub (string app) { throw "Q7597-CALLER", "q7597 caller description"; }, 0s, {});
     q_r.write_caller = "written";
 } catch (hash<ExceptionInfo> ex) {
-    q_r.write_caller = ex.err + ": " + ex.desc;
+    q_r.write_caller = q_denials{ex.err} ? ex.err : ex.err + ": " + ex.desc;
 }
 
 # the process-wide logger receives the module's diagnostics, which name the index directory
@@ -84,19 +93,19 @@ try {
         {});
     q_r.write_denied = "written";
 } catch (hash<ExceptionInfo> ex) {
-    q_r.write_denied = ex.err + ": " + ex.desc;
+    q_r.write_denied = q_denials{ex.err} ? ex.err : ex.err + ": " + ex.desc;
 }
 try {
     ProviderIndex::createDataProviderIndex();
     q_r.pi_denied = "created";
 } catch (hash<ExceptionInfo> ex) {
-    q_r.pi_denied = ex.err + ": " + ex.desc;
+    q_r.pi_denied = q_denials{ex.err} ? ex.err : ex.err + ": " + ex.desc;
 }
 try {
     ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, NOTHING,
         <ProviderIndex::ProviderIndexCreateOptions>{"workers": 1});
     q_r.pi_workers = "created";
 } catch (hash<ExceptionInfo> ex) {
-    q_r.pi_workers = ex.err == "INVALID-FUNCTION-ACCESS" ? ex.err : ex.err + ": " + ex.desc;
+    q_r.pi_workers = q_denials{ex.err} ? ex.err : ex.err + ": " + ex.desc;
 }
 try { q_r.writable_denied = ProviderIndexUtil::getWritableIndexDir(); } catch (hash<ExceptionInfo> ex) { q_r.writable_denied = ex.err == "INVALID-FUNCTION-ACCESS" ? ex.err : ex.err + ": " + ex.desc; }

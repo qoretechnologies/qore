@@ -486,16 +486,16 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @throw PROVIDER-INDEX-ERROR the output directory is unavailable
         @throw PROVIDER-INDEX-WORKER-ERROR a worker build was requested, but worker processes cannot be started
         @throw PROVIDER-INDEX-CANCELLED a worker build was stopped by cancelWorkers()
-        @throw INVALID-FUNCTION-ACCESS a worker build was requested by code that may not read external information
-            (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information
+            (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"): the index that the host published can be replaced
+            only by code that may read external information (see
+            @ref providerindexutil_published_index)
         @note The index is built in index build mode (see
             @ref ProviderIndexUtil::ProviderIndexUtil::setBuildMode() "ProviderIndexUtil::setBuildMode()"), so the
             index being replaced is never read; when the build finishes, the next index lookup reads the new index.
         @note With @ref ProviderIndexCreateOptions::workers "workers" set, providers are loaded and indexed in
             worker processes; see @ref runIndexWorker()
-        @note For code that may not read external information, the \c path of the result is the name of the file
-            in the index directory, and the errors of the index directory and of writing the index do not name it
-            (see @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "writeDataProviderIndexByApp()")
         @note An app or action that cannot be initialized does not fail the build: it is recorded in the index with its
             error (see
             @ref ProviderIndexUtil::ProviderIndexUtil::getIndexedFailures() "ProviderIndexUtil::getIndexedFailures()"), and is unavailable in it, while the other apps and actions are
@@ -515,13 +515,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
             *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{})
             [dom=PROCESS_CONTROL,FILESYSTEM] {
-        # the workers are started with the paths of a staging directory in the index directory, and their errors
-        # name them (qore#7597)
-        if (opts.workers > 0 && !SandboxManager::callerMayReadExternalInfo()) {
-            throw "INVALID-FUNCTION-ACCESS", "ProviderIndex::createDataProviderIndex(): a build with worker "
-                "processes uses the host's index directory and the ID of the process, which the calling code may "
-                "not read (PO_NO_EXTERNAL_INFO); build the index without workers";
-        }
+        # the index replaces the index that the host published, before anything is loaded or built (qore#7611)
+        checkPublishedIndexChange("ProviderIndex::createDataProviderIndex", "replace");
 
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
@@ -1401,6 +1396,10 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @param batch_path the path to the batch file, given to the worker command as its last argument
 
         @throw PROVIDER-INDEX-WORKER-ERROR the batch file cannot be read
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information: a worker enters index
+        build mode, in which the process does not read the index that the host published (see
+        @ref providerindexutil_published_index)
 
         @par Example:
         A worker command for an application whose own modules load provider modules:
@@ -1416,6 +1415,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         @since %ProviderIndex 1.2
     */
     static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # a worker enters build mode (qore#7611)
+        checkPublishedIndexChange("ProviderIndex::prepareIndexWorker", "enter the build mode of");
         getWorkerBatch(batch_path);
     }
 
@@ -1434,6 +1435,11 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         actions could not be initialized, which the build records, 1 if its discovery failed otherwise, in which case
         the build reports the failures, or 2 if the worker failed
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information: a worker enters index
+        build mode, in which the process does not read the index that the host published (see
+        @ref providerindexutil_published_index)
+
         @par Example:
         A worker command:
         @code{.py}
@@ -1448,6 +1454,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         @since %ProviderIndex 1.2
     */
     static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # a worker enters build mode (qore#7611)
+        checkPublishedIndexChange("ProviderIndex::runIndexWorker", "enter the build mode of");
         DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {

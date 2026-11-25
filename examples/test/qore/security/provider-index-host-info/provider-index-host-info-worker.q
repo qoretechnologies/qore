@@ -93,6 +93,8 @@ if (ProviderIndexUtil::tryGetAppInfo(App).desc != "q7597 app") {
 }
 string routing_path = ProviderIndexUtil::getIndexPath("routing");
 string data_path = ProviderIndexUtil::getIndexPath("data");
+#! the routing index of the published index, restored by restore_published(); the same index is written identically
+binary routing_data = ReadOnlyFile::readBinaryFile(routing_path);
 #! without MessagePack, the index is published with its canonical index file only, which is read instead of a
 #! routing index that cannot be read
 bool msgpack = ProviderIndexUtil::hasMessagePack();
@@ -115,6 +117,15 @@ sub restore_index() {
         chmod(data_path, 0644);
     }
 }
+
+#! publishes the index again after corrupt_index(), as the code of the Programs may not write it (qore#7611)
+code restore_published = sub () {
+    File f();
+    f.open2(routing_path, O_CREAT | O_WRONLY | O_TRUNC);
+    f.write(routing_data);
+    f.close();
+    restore_index();
+};
 
 #! what an error text names: the index directory and the IDs of the process, or neither
 auto sub classify(auto v) {
@@ -180,9 +191,11 @@ hash<auto> may_not_read = may_read + {
     "dump": "INVALID-FUNCTION-ACCESS",
     "reload_error": "generic",
     "read_error": "generic",
-    "write_path": basename(write_path),
-    "write_denied": "generic",
-    "pi_denied": "generic",
+    # only code that may read external information may change the published index (qore#7611)
+    "write_path": "INVALID-FUNCTION-ACCESS",
+    "write_caller": "INVALID-FUNCTION-ACCESS",
+    "write_denied": "INVALID-FUNCTION-ACCESS",
+    "pi_denied": "INVALID-FUNCTION-ACCESS",
     "pi_workers": "INVALID-FUNCTION-ACCESS",
     "writable_denied": "INVALID-FUNCTION-ACCESS",
     "logger_get": False,
@@ -194,6 +207,12 @@ hash<auto> may_not_read = may_read + {
 #! what sandboxed code gets in addition: the process-wide logger is not shared with it, whether it may read external
 #! information or not
 const Sandboxed = {
+    # sandboxed code may not change the published index (qore#6747, qore#7611)
+    "write_path": "PROVIDER-INDEX-REGISTRATION-DENIED",
+    "write_caller": "PROVIDER-INDEX-REGISTRATION-DENIED",
+    "write_denied": "PROVIDER-INDEX-REGISTRATION-DENIED",
+    "pi_denied": "PROVIDER-INDEX-REGISTRATION-DENIED",
+    "pi_workers": "PROVIDER-INDEX-REGISTRATION-DENIED",
     "logger_get": False,
     "logger_set": "PROVIDER-INDEX-REGISTRATION-DENIED",
     "dp_logger_get": False,
@@ -245,6 +264,7 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
         p.setGlobalVarValue("q_app", App);
         p.setGlobalVarValue("q_maps", maps);
         p.setGlobalVarValue("q_set_writable", set_writable);
+        p.setGlobalVarValue("q_restore_index", restore_published);
         p.setGlobalVarValue("q_r", {});
         corrupt_index();
         on_exit restore_index();

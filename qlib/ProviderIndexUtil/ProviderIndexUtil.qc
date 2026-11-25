@@ -591,6 +591,10 @@ bool build_mode = ProviderIndexUtil::setBuildMode(True);
 on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @endcode
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
+
         @note \c ProviderIndex::createDataProviderIndex()
         enters build mode itself; an embedder that loads provider modules before it, or that loads modules whose
         initialization looks up providers, should enter build mode first, or set the @ref ProviderIndexBuildEnvVar
@@ -599,8 +603,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         @since ProviderIndexUtil 1.2
     */
     static bool setBuildMode(bool build) [dom=PROCESS_CONTROL] {
-        # the index and its configuration are process-wide (qore#6747)
-        ProviderIndexUtil::checkChange("set the build mode of");
+        # in build mode, the published index is not read (qore#6747, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::setBuildMode", "set the build mode of");
         m.lock();
         on_exit m.unlock();
         bool rv = build_mode;
@@ -1736,12 +1740,16 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     #! Adds the given app and actions to the cache
     /** @param app the app info
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
+
         @note The app info replaces any indexed info of the app, and is kept when the index is reloaded with
         @ref reloadIndex()
     */
     static addAppToCache(hash<auto> app) [dom=PROCESS_CONTROL] {
-        # the index and its configuration are process-wide (qore#6747)
-        ProviderIndexUtil::checkChange("add an app to");
+        # the index and its configuration are process-wide (qore#6747, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::addAppToCache", "add an app to");
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
@@ -1766,12 +1774,16 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     /** @param action a registered action as a \c DataProvider::DataProviderActionInfo hash; it is cached as a
         \c DataProvider::DataProviderIndexedActionInfo hash, like an indexed action
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
+
         @note The action replaces any indexed action with the same name, and is kept when the index is reloaded with
         @ref reloadIndex()
     */
     static addActionToCache(hash<auto> action) [dom=PROCESS_CONTROL] {
-        # the index and its configuration are process-wide (qore#6747)
-        ProviderIndexUtil::checkChange("add an action to");
+        # the index and its configuration are process-wide (qore#6747, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::addActionToCache", "add an action to");
         if (!checkMetadataContext()) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action %y of app %y to the cache while the data "
                 "provider index is initializing", action.action, action.app);
@@ -1809,12 +1821,16 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @return @ref True if the app was in the cache and has been removed, @ref False if it was not in the cache
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
+
         @note A removed app's indexed metadata stays hidden when the index is reloaded with @ref reloadIndex(); only
         info and actions added again with @ref addAppToCache() and @ref addActionToCache() are cached for it
     */
     static bool removeCachedApp(string app) [dom=PROCESS_CONTROL] {
-        # the index and its configuration are process-wide (qore#6747)
-        ProviderIndexUtil::checkChange("remove an app from");
+        # the index and its configuration are process-wide (qore#6747, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::removeCachedApp", "remove an app from");
         while (True) {
             int gen = index_generation;
             # the app's actions are not restored: they are discarded
@@ -2738,6 +2754,35 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
         }
     }
 
+    #! Refuses a change of the published index to code that may not change it
+    /** The index that the host published (the files in the configured index directory), the configured index
+        directory, the index build mode and the apps and actions cached in the index are the host's, and are used by
+        the whole process; the files also by the other processes that read the same directory.  Only code that may
+        register process-wide functionality
+        (@ref Qore::SandboxManager::isProcessWideRegistrationAllowed() "SandboxManager::isProcessWideRegistrationAllowed()")
+        and that may read external information
+        (@ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()"), as the
+        host's code can, may write, replace or hide it (see @ref providerindexutil_published_index; qore#7611).
+
+        For the code of the modules that build the index (\c ProviderIndex).
+
+        @param method the qualified name of the public method that is called, for the error
+        @param what what the change does, for the error of sandboxed code
+
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information
+    */
+    static private checkPublishedIndexChange(string method, string what) {
+        ProviderIndexUtil::checkChange(what);
+        # the index directory is information about the host, which such code may not read (qore#7597); the module
+        # writes no files there for it, and changes nothing that the host published there (qore#7611)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            throw "INVALID-FUNCTION-ACCESS", sprintf("%s(): the data provider index that the host published in its "
+                "index directory, which the calling code may not read (PO_NO_EXTERNAL_INFO), can be changed only by "
+                "code that may read external information", method);
+        }
+    }
+
     #! Sets or clears the global logger
     /** @param logger the global data provider logger
 
@@ -2783,12 +2828,18 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @return information about the written index
 
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
+
         @note The index is written one app at a time, so the complete serialized index is never held in memory
 
         @see writeDataProviderIndexByApp()
     */
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
             hash<auto> summary, *bool write_canonical_yaml) [dom=PROCESS_CONTROL,FILESYSTEM] {
+        # the published index is the host's (qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::writeDataProviderIndex", "write");
         *hash<string, hash<string, hash<auto>>> actioninfomap = h.actioninfomap;
         hash<auto> maps = h ? (h - ("actioninfomap", "top_actioninfomap")) : {};
         return writeDataProviderIndexByApp(maps, keys actioninfomap, *hash<string, hash<auto>> sub (string app) {
@@ -2832,11 +2883,9 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
 
         @throw PROVIDER-INDEX-ERROR the index directory cannot be written to, or
         the metadata cache or routing index cannot be written when no canonical index file is written
-
-        @note For code that may not read external information, the \c path of the result is the name of the file in
-        the index directory, and an error raised while the index is written has a description that names neither
-        the index directory nor the files in it, nor the IDs of the process; an exception raised by
-        \a get_app_actions is passed on as it is (see @ref providerindexutil_external_info)
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
 
         @par Example:
         @code{.py}
@@ -2850,35 +2899,10 @@ hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp(ma
     static hash<ProviderIndexInfo> writeDataProviderIndexByApp(hash<auto> maps0, *list<string> action_apps,
             code get_app_actions, date delta, hash<auto> summary, *bool write_canonical_yaml)
             [dom=PROCESS_CONTROL,FILESYSTEM] {
-        if (SandboxManager::callerMayReadExternalInfo()) {
-            return writeDataProviderIndexByAppIntern(maps0, action_apps, get_app_actions, delta, summary,
-                write_canonical_yaml);
-        }
-        # the result and the errors name the index directory and the files in it, which the calling code may not
-        # read (qore#7597); an exception raised by the caller's code is passed on as it is, and the errors of the
-        # check of the index directory have their own description for such code
-        tryGetIndexDirIntern(True, True);
-        bool caller_error;
-        code get_actions = auto sub (string app) {
-            try {
-                return get_app_actions(app);
-            } catch (hash<ExceptionInfo> ex) {
-                caller_error = True;
-                rethrow;
-            }
-        };
-        try {
-            hash<ProviderIndexInfo> rv = writeDataProviderIndexByAppIntern(maps0, action_apps, get_actions, delta,
-                summary, write_canonical_yaml);
-            rv.path = basename(rv.path);
-            return rv;
-        } catch (hash<ExceptionInfo> ex) {
-            if (caller_error) {
-                rethrow;
-            }
-            throw ex.err, "the data provider index cannot be written; the description of the error names the host's "
-                "index directory, so it is given only to code that may read external information";
-        }
+        # the published index is the host's; its result and errors name the index directory (qore#7597, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::writeDataProviderIndexByApp", "write");
+        return writeDataProviderIndexByAppIntern(maps0, action_apps, get_app_actions, delta, summary,
+            write_canonical_yaml);
     }
 
     #! Writes the data provider index; see writeDataProviderIndexByApp()
@@ -5230,10 +5254,17 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
             version < 5 ? digest("sha256", app).toHex() : sha256);
     }
 
-    #! Sets the environment variable
+    #! Sets the configured index directory: the environment variable (@ref ProviderIndexEnvVar)
+    /** @param dir the index directory; the process reads the index published there
+
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
+    */
     static setEnvironmentVariable(string dir) [dom=PROCESS_CONTROL,FILESYSTEM] {
-        # the index and its configuration are process-wide (qore#6747)
-        ProviderIndexUtil::checkChange("set the index directory of");
+        # the index and its configuration are process-wide (qore#6747, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::setEnvironmentVariable",
+            "set the index directory of");
         setenv(ProviderIndexEnvVar, dir);
         ENV{ProviderIndexEnvVar} = dir;
     }
@@ -5272,9 +5303,10 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
     }
 
     #! Verifies that index files can be written to the configured index directory, as before an index is built
-    /** For the code that builds an index (\c ProviderIndex); unlike @ref getWritableIndexDir(), it also serves code
-        that may not read external information, as it returns nothing, and the text of its errors names neither the
-        directory nor the IDs of the process for such code (qore#7597)
+    /** For the code that builds an index (\c ProviderIndex), after it checked that the caller may replace the
+        published index (see checkPublishedIndexChange()); unlike @ref getWritableIndexDir(), it returns nothing,
+        and the text of its errors names neither the directory nor the IDs of the process for code that may not read
+        external information (qore#7597)
 
         @throw PROVIDER-INDEX-ERROR the environment variable is not set, or the directory cannot be created, or the
         directory is not readable, writable, and traversable by the current user
