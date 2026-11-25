@@ -458,10 +458,57 @@ void QoreNamespace::setClassHandler(q_ns_class_handler_t class_handler) {
     priv->setClassHandler(class_handler);
 }
 
+//! A marking event of a declaration that a binary module adds to a namespace that a Program owns (qore#7540)
+/** Started when it is made (qore_root_ns_private::beginRuntimeMarking()); the declaration is marked before it is
+    published, and complete() completes the event once it is: if that does not happen (an allocation failed), the
+    event stays pending, and the next one on the root namespace completes it
+*/
+class RuntimeMarkingHelper {
+public:
+    //! the types of the declarations marked
+    type_vec_t marked_types;
+    //! the declarations marked, which reference the binary module declarations that they name at once (qore#7649)
+    std::vector<QoreTypeOwner*> marked_owners;
+
+    DLLLOCAL RuntimeMarkingHelper(qore_ns_private& ns) : rns(ns.ownedByProgram() ? ns.getRoot() : nullptr) {
+        if (rns) {
+            full = rns->beginRuntimeMarking();
+            start = rns->runtimeVariantCount();
+        }
+    }
+
+    //! Returns true if the namespace is owned by a Program
+    DLLLOCAL explicit operator bool() const {
+        return rns;
+    }
+
+    //! Completes the event
+    DLLLOCAL void complete() {
+        if (rns) {
+            // as in markProgramLocal(): a declaration of a Program references the binary module declarations that it
+            // names from its first batch, which a declaration marked now has only at its Program's teardown, possibly
+            // after the module is deleted; taken before the rest of the event (qore#7540, qore#7649)
+            qore_type_owner_take_module_refs(marked_owners);
+            rns->completeRuntimeMarking(marked_types, start, full);
+        }
+    }
+
+private:
+    qore_root_ns_private* rns;
+    bool full = false;
+    size_t start = 0;
+};
+
 void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
     // set sys and pub flags
     typed_hash_decl_private::get(*hd)->setSystemPublic();
+    // a hashdecl added to a namespace that a Program owns is owned by that Program (qore#7540); it is marked before it
+    // is published, and the marking event is completed after (RuntimeMarkingHelper)
+    RuntimeMarkingHelper rmh(*priv);
+    if (rmh) {
+        typed_hash_decl_private::get(*hd)->setProgramLocal(rmh.marked_types, rmh.marked_owners);
+    }
     typed_hash_decl_private::get(*hd)->setNamespace(priv);
 #ifdef DEBUG
     if (priv->hashDeclList.add(hd))
@@ -472,6 +519,7 @@ void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
 #else
     priv->hashDeclList.add(hd);
 #endif
+    rmh.complete();
 
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
@@ -491,6 +539,11 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
         enum_priv->setSystemPublic();
     }
     enum_priv->setNamespace(priv);
+    // an enum added to a namespace that a Program owns is owned by that Program (qore#7540)
+    RuntimeMarkingHelper rmh(*priv);
+    if (rmh) {
+        enum_priv->setProgramLocal(rmh.marked_types, rmh.marked_owners);
+    }
 
 #ifdef DEBUG
     if (priv->enumList.add(enumdecl)) {
@@ -501,6 +554,7 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
 #else
     priv->enumList.add(enumdecl);
 #endif
+    rmh.complete();
 
     bool new_ns = false;
     qore_ns_private* enum_ns_priv = nullptr;
@@ -537,11 +591,17 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
     qore_root_ns_private::OptionalRuntimeNamespaceWriteGuard runtime_ns_guard(priv->getRoot());
 
     oc->setSystem();
+    // a class added to a namespace that a Program owns is owned by that Program (qore#7540): it is marked before it is
+    // published, and the marking event is completed after
+    RuntimeMarkingHelper rmh(*priv);
     if (qore_class_private::get(*oc)->setNamespaceConditional(priv)) {
         // generate builtin class signature
         std::string path;
         priv->getPath(path);
         qore_class_private::get(*oc)->finalizeBuiltin(path.c_str());
+        if (rmh) {
+            qore_class_private::get(*oc)->setProgramLocal(rmh.marked_types, rmh.marked_owners);
+        }
     } else {
         assert(qore_class_private::get(*oc)->initialized);
     }
@@ -555,6 +615,7 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
 #else
     priv->classList.add(oc);
 #endif
+    rmh.complete();
     // code in other threads can reach the class from now on, or when the module being initialized returns from its
     // initialization (issue #6422)
     qore_class_private::get(*oc)->systemClassCommitted();
