@@ -1289,6 +1289,18 @@ auto sub dtorThrowLoop(int n) {
     return n;
 }
 
+# A request in a handler that a return runs, which no loop or later handler takes, ends the function: the return goes
+# on with its value, also an object (#6949), which is not released when the request leaves the handler's block (#7022)
+auto sub endsFunctionObject(int n) {
+    on_exit {
+        on_exit {
+            push log, "inner";                      ### ends_function_object
+        }
+        push log, "outer";
+    }
+    return new ReturnMarker();
+}
+
 # The return in the handler is in a try statement, which gives its value to the block (qore_try_give_return())
 auto sub outerPendingTry(int n) {
     on_exit {

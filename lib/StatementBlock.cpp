@@ -406,6 +406,53 @@ private:
 
 constinit thread_local void* qore_pending_return_snapshot_tls = nullptr;
 
+namespace {
+//! A handler that runs, in the chain of the current thread: a break or a continue that leaves a block in its body goes
+//! on as the handler's request (#7022)
+struct HandlerRun {
+    //! the return slot of the function that runs the handler
+    const QoreValue* slot;
+    //! the block that declares the handler
+    const StatementBlock* block;
+    //! the handler is the last of its exit: the normal end of a later one does not replace its request
+    bool last;
+    HandlerRun* previous;
+};
+constinit thread_local HandlerRun* qore_handler_run_tls = nullptr;
+
+//! Adds a handler that runs to the chain of the thread, and removes it on every way out
+class HandlerRunHelper {
+public:
+    DLLLOCAL HandlerRunHelper(const QoreValue& slot, const StatementBlock* block, bool last)
+            : run{&slot, block, last, qore_handler_run_tls} {
+        qore_handler_run_tls = &run;
+    }
+
+    DLLLOCAL ~HandlerRunHelper() {
+        assert(qore_handler_run_tls == &run);
+        qore_handler_run_tls = run.previous;
+    }
+
+private:
+    HandlerRun run;
+};
+}
+
+bool StatementBlock::requestTakenInFunction(int rc, const QoreValue& return_value) const {
+    assert(rc == RC_BREAK || rc == RC_CONTINUE);
+    if (loopTakesRequest(rc)) {
+        return true;
+    }
+    // the request goes on as one of each handler around the block: a later handler of a handler that is not the last
+    // takes it, or a loop or switch statement around the block that declares the handler
+    for (const HandlerRun* r = qore_handler_run_tls; r && r->slot == &return_value; r = r->previous) {
+        if (!r->last || r->block->loopTakesRequest(rc)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void qore_replacing_return_notify(QoreValue& slot) {
     PendingReturnSnapshot::replacing(slot);
 }
@@ -541,6 +588,7 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
                             before_request.capture(return_value);
                         }
                         nrc_before_request = nrc;
+                        HandlerRunHelper handler_run(return_value, this, std::next(i) == e);
                         int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
                         if (hrc != RC_BREAK && hrc != RC_CONTINUE) {
                             before_request.reset();
@@ -570,12 +618,15 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
             }
         }
     }
-    // a request in the last handler run leaves the block with a break or a continue: it abandons the return of the
-    // block or of its handlers, whose value is released here, when the return is abandoned, as compiled code releases
-    // it (an object or a value that owns one at once: #5992), so that the handlers of the blocks around it, which the
-    // request passes, do not run with it as a pending return; the snapshots that observe the slot without a
-    // replacement keep the data of an enclosing pending return, which resumes (#7022)
-    if ((nrc == RC_BREAK || nrc == RC_CONTINUE) && own_return && !return_value.isNothing()) {
+    // a request in the last handler run leaves the block with a break or a continue: if something in the function
+    // takes it (a loop or switch statement, or a later handler), it abandons the return of the block or of its
+    // handlers, whose value is released here, when the return is abandoned, as compiled code releases it (an object
+    // or a value that owns one at once: #5992), so that the handlers of the blocks around it, which the request
+    // passes, do not run with it as a pending return; the snapshots that observe the slot without a replacement keep
+    // the data of an enclosing pending return, which resumes; a request that ends the function leaves the return,
+    // which goes on with its value (#6949, #7022)
+    if ((nrc == RC_BREAK || nrc == RC_CONTINUE) && own_return && !return_value.isNothing()
+            && requestTakenInFunction(nrc, return_value)) {
         releaseAbandonedReturn(return_value, xsink);
     }
     if (ast_on_exit_count > 0) {
@@ -754,6 +805,9 @@ LocalVar* find_local_var(const char* name, bool& in_closure, bool include_top_le
 
 int StatementBlock::parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start) {
     QORE_TRACE("StatementBlock::parseInitIntern");
+    // a handler's body starts with no target of a break or a continue (OnBlockExitStatement), as the top block of a
+    // function does
+    request_targets = parse_context.pflag & (PF_BREAK_OK | PF_CONTINUE_OK);
 
     AbstractStatement* ret = nullptr;
 

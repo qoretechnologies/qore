@@ -271,6 +271,20 @@ protected:
     //! true once the block has been parse-initialized; the analysis of the code that calls the function, method or
     //! closure of the block reads it (issue #5940)
     bool parse_initialized = false;
+    //! the requests that a loop or switch statement around the block takes in its function, before the body of a
+    //! handler or the function's top block: PF_BREAK_OK and PF_CONTINUE_OK of the parse context (#7022)
+    unsigned char request_targets = 0;
+
+    //! True if a loop or switch statement around the block takes the request (RC_BREAK or RC_CONTINUE) before the body
+    //! of a handler or the top block of its function (#7022)
+    DLLLOCAL bool loopTakesRequest(int rc) const {
+        return request_targets & (rc == RC_BREAK ? PF_BREAK_OK : PF_CONTINUE_OK);
+    }
+
+    //! True if a break or a continue that leaves the block is taken in its function: by a loop or switch statement,
+    //! or by the later handler of a handler around it; otherwise it ends the function, and a return that it left goes
+    //! on with its value (#6949), as compiled code decides (QoreIRLowering::inlineHandlerRequestEndsFunction(); #7022)
+    DLLLOCAL bool requestTakenInFunction(int rc, const QoreValue& return_value) const;
 
     // start must be the element before the start position
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start);
