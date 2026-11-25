@@ -54,6 +54,15 @@ module FreshsalesDataProvider {
                 "This integration supports full CRUD operations on core CRM objects "
                 "and polling-based triggers for new records.",
             "scheme": "freshsalesrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "myfreshworks.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.freshworks.com/crm/pricing-compare/",
+                "effective_date": 2026-11-25,
+            },
             "logo": FreshsalesLogo,
             "logo_file_name": "freshsales-logo.svg",
             "logo_mime_type": MimeTypeSvg,

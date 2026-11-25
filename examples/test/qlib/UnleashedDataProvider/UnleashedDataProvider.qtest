@@ -527,6 +527,18 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             UnleashedDataProvider::AppName, "new-customer");
         assertTrue(exists newCustomerAction, "new-customer action should exist");
         assertEq(DPAT_EVENT, newCustomerAction.action_code);
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-credit-note", "get-customer", "get-product", "get-sales-order");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(DataProviderActionCatalog::getAppAction(
+            UnleashedDataProvider::AppName, "create-customer")));
     }
 
     #! Integration tests - require UNLEASHED_API_ID and UNLEASHED_API_KEY

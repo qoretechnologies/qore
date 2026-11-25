@@ -621,6 +621,7 @@ public class OpenApi3Test inherits QUnit::Test {
                         "type": "object",
                         "properties": {
                             "code": {"$ref": "#/components/schemas/Currency", "type": "string"},
+                            "xmlCode": {"$ref": "#/components/schemas/Currency", "xml": {"name": "ISOCode"}},
                         },
                     },
                 },
@@ -628,6 +629,10 @@ public class OpenApi3Test inherits QUnit::Test {
         });
         assertEq("string", sibling_schema.components.schemas.Holder.properties.code.type,
             "the sibling is ignored and the reference decides the type");
+        assertEq("ISOCode", cast<SchemaObject>(sibling_schema.components.schemas.Holder.properties.xmlCode).xml.name,
+            "an XML override belongs to the referencing property");
+        assertNothing(sibling_schema.components.schemas.Currency.xml,
+            "the XML override leaves the shared component available to other references");
 
         # ... but a reference that names nothing is still an error, whatever it is written beside
         hash<auto> bad = base;

@@ -344,6 +344,7 @@ assert(RestSchemaActionSet::getConstructionCount() > before);
         @param eager @ref True to build output types at construction, @ref False to honor each set's option
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
+        @throw SANDBOX-REGISTRATION-ERROR the caller is sandboxed code or acts for it
 
         @par Example:
         @code{.py}
@@ -356,7 +357,10 @@ DataProviderActionCatalog::getActions("Stripe");
         @since RestSchemaActions 1.0
     */
     static setEagerResponseTypes(bool eager) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        # the setting is process-wide: sandboxed code does not change it for every other caller (qore#7394)
+        SandboxManager::checkProcessWideRegistration("change how action sets build output types");
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot change how action sets build output types from a context with "
                 "restricted process control";
         }
@@ -432,8 +436,12 @@ DataProviderActionCatalog::getActions("Stripe");
             "short_desc": info.short_desc,
             "desc": info.desc,
             "action_code": DPAT_API,
-            "mutates_state": !RestSchemaReadOnlyHttpMethods{op.getMethod()},
+            # the manifest's own value when it gives one, otherwise the method's (qore#7454)
+            "mutates_state": info.mutates_state ?? !RestSchemaReadOnlyHttpMethods{op.getMethod()},
         };
+        if (info.read_only_options) {
+            rv.read_only_options = info.read_only_options;
+        }
         if (info.groups) {
             rv.groups = info.groups;
         }

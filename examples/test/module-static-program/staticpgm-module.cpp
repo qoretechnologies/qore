@@ -212,6 +212,9 @@ static void staticpgm_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     qph.reset(new QoreProgramHelper(PO_NEW_STYLE, module_xsink));
     (*qph)->setScriptPath("staticpgm module global Program context");
 #ifdef STATICPGM_CODE
+    if (getenv("QORE_STATICPGM_EXIT_MARKER")) {
+        std::atexit([]() { puts("staticpgmcode: process exit handler"); });
+    }
     // a test can give other code in a file: QORE_STATICPGM_CODE_FILE (see program-cleanup-at-exit.qtest)
     std::string code = staticpgm_code;
     if (const char* file = getenv("QORE_STATICPGM_CODE_FILE")) {

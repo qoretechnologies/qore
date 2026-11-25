@@ -18,6 +18,12 @@ module NamedConnectionTestProvider {
 
 const Url = "http://127.0.0.1:1";
 
+#! declares that the module gives its connections to the calling code, as a host's provider module that resolves names
+#! for its callers does: sandboxed code gets the connections of only such a module (qore#6844)
+public bool sub get_mod_caller_scoped() {
+    return True;
+}
+
 #! gives the connection with the given name
 /** - \c net: a REST connection
     - \c allowed, \c denied: REST connections to the URLs in the \c NCC_ALLOWED_URL and \c NCC_DENIED_URL environment
@@ -31,6 +37,7 @@ public ConnectionProvider::AbstractConnection sub get_mod_connection(string name
         # the targets of the sandbox case, which the test gives in the environment
         case "allowed":
         case "denied":
+            # live-provider-optin: NCC_ALLOWED_URL or NCC_DENIED_URL, the test's local servers on 127.0.0.1
             return new RestConnection(name, "named", getenv("NCC_" + name.upr() + "_URL"), {"monitor": False},
                 {"connect_timeout": 5000, "timeout": 5000});
     }

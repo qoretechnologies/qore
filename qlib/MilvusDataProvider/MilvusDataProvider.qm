@@ -69,6 +69,7 @@ module MilvusDataProvider {
             "desc": "Calls Milvus REST v2 `POST /v2/vectordb/collections/list` to "
                 "enumerate available collections.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Admin",),
             "options": {},
             "output_type": MilvusListCollectionsDataProvider::ResponseType,

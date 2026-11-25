@@ -7,6 +7,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires FsUtil
 %requires GcpAuth
 %requires AzureAuth
@@ -151,6 +152,7 @@ auto sub openai_request(object client, bool async) {
             *string path = i.value.path;
             if (i.key == "HOME") {
                 mkdir(tmp.path + DirSep + "home" + DirSep + ".config" + DirSep + "gcloud", 0755, True);
+                # live-provider-optin: a fake credential file in the test's own TmpDir, which HOME is set to
                 path = writeFile("home/.config/gcloud/application_default_credentials.json");
             }
             assertEq(path, GcpAuth::resolveCredentialLocation(), "host: " + i.key);
@@ -204,7 +206,8 @@ auto sub openai_request(object client, bool async) {
     #! the quota project of the environment is configuration of the host: read for code that may read it
     quotaTest() {
         AmbientCallers::EnvHelper env({"GOOGLE_CLOUD_QUOTA_PROJECT": "host-quota-project",
-            "GOOGLE_APPLICATION_CREDENTIALS": NOTHING, "CLOUDSDK_CONFIG": NOTHING, "HOME": tmp.path});
+            "GOOGLE_APPLICATION_CREDENTIALS": NOTHING, "CLOUDSDK_CONFIG": NOTHING, "HOME": tmp.path,
+            "QORE_GCP_ADC_DISABLED": NOTHING});
         assertEq("host-quota-project", GcpAuth::getQuotaProject(NOTHING), "host");
         foreach string kind in (keys pgms) {
             assertEq(AmbientCallers::may_read(kind) ? "host-quota-project" : NOTHING, pgms{kind}.callFunction("quota"),

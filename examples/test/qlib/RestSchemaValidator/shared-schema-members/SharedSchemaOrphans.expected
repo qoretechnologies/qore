@@ -1,0 +1,13 @@
+tenant changes: schema type: SANDBOX-REGISTRATION-ERROR; variant: SANDBOX-REGISTRATION-ERROR; variant field: SANDBOX-REGISTRATION-ERROR; caller type: SANDBOX-REGISTRATION-ERROR; caller field: SANDBOX-REGISTRATION-ERROR
+host code called back by the tenant: fields ["ver", "name"], default "v2"
+host code: fields ["ver", "name"], default "v2"
+orphan built before the document was destroyed, tenant: SCHEMA-DOCUMENT-DESTROYED, change: SCHEMA-DOCUMENT-DESTROYED
+orphan without a cached type, tenant: SCHEMA-DOCUMENT-DESTROYED, change: SCHEMA-DOCUMENT-DESTROYED
+orphan without a cached type, another tenant: SCHEMA-DOCUMENT-DESTROYED, change: SCHEMA-DOCUMENT-DESTROYED
+orphan without a cached type, host: SCHEMA-DOCUMENT-DESTROYED
+defaults that serialize alike: first is 0.1 + 0.2: True, second is 0.3: True
+deserialized: shared True, its schema objects shared True
+host type with its client: default "host-secret"
+tenant sees the default: null; changes the type: SANDBOX-REGISTRATION-ERROR
+the tenant releases the last reference: released; the document is destroyed: True
+its schema object's type: SCHEMA-DOCUMENT-DESTROYED (its caches were released)

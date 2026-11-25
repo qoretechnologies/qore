@@ -96,6 +96,14 @@ void pseudo_classes_init() {
     // + 2 pseudo classes with runtime type values outside the value type range
     po_list[NODE_ARRAY_LEN] = initPseudoCallrefClass();
     po_list[NODE_ARRAY_LEN + 1] = initPseudoClosureClass();
+
+    // the pseudo-classes belong to no binary module (qore#7533)
+    for (unsigned i = 0; i < NODE_ARRAY_LEN + 2; ++i) {
+        qore_class_private::setNotModuleDecl(*po_list[i]);
+    }
+    qore_class_private::setNotModuleDecl(*pseudo_buffer);
+    qore_class_private::setNotModuleDecl(*pseudo_char);
+    qore_class_private::setNotModuleDecl(*QC_PSEUDOVALUE);
 }
 
 void pseudo_classes_del() {
@@ -156,6 +164,30 @@ const QoreClass* qore_pseudo_find_class_by_path(const char* path) {
 
 const QoreClass* qore_pseudo_get_class(qore_type_t t) {
     return pseudo_get_class(t);
+}
+
+bool qore_pseudo_class_accepts_type(const QoreClass* qc, qore_type_t t) {
+    // a weak reference and a reference are not values of the class of their target: the dispatch by name gives the
+    // method their target (pseudo_classes_dispatch())
+    switch (t) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+        case NT_REFERENCE:
+            return false;
+        default:
+            break;
+    }
+    // the classes are compared by their private data, which a Program's copy of a class shares
+    const qore_class_private* qpriv = qore_class_private::get(*qc);
+    const QoreClass* vqc = pseudo_get_class(t);
+    return qore_class_private::get(*vqc) == qpriv || qpriv == qore_class_private::get(*QC_PSEUDOVALUE)
+        || vqc->getClass(qc->getID());
+}
+
+void qore_raise_pseudo_receiver_type_error(const QoreValue& v, const char* class_name, ExceptionSink* xsink) {
+    xsink->raiseException("RUNTIME-TYPE-ERROR", "a pseudo-method of class %s cannot be called on a value of type "
+        "'%s'", class_name, v.getFullTypeName());
 }
 
 const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
@@ -256,6 +288,20 @@ QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, c
         return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<true>(policy, v, name, args,
             rc_get_current_ref(), xsink);
     }, policy, name, args, xsink);
+}
+
+QoreValue pseudo_classes_eval_named(const QoreValue n, const char* name, const QoreListNode* args, bool tmp_args,
+        const qore_class_private* class_ctx, const name_vec_t& arg_names, LexicalSemanticPolicy policy,
+        RuntimeConfig& rc, ExceptionSink* xsink) {
+    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
+        const QoreMethod* w = qore_class_private::get(*qc)->runtimeFindPseudoMethod(v, name, xsink);
+        if (!w) {
+            assert(*xsink);
+            return QoreValue();
+        }
+        return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, v, args, tmp_args,
+            class_ctx, arg_names, policy);
+    });
 }
 
 int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink) {

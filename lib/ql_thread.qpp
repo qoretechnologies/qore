@@ -249,9 +249,11 @@ hashdecl CallStackInfo {
     string lang;
 
     //! the ID of the Program of the code that made the call (since 0.8.13.7)
-    /** For a call that the initialization of a module makes (also the init closure of its module declaration), the
-        module's Program, however the module is loaded
-        (since %Qore 3.0; issue #7289)
+    /** The code of a function, a closure or a method runs with its own Program as the Program of the calls that it
+        makes, in every execution mode: the body of a plain function or of a closure created outside a class with the
+        Program that defined it (the Program of the closure), a method with the source Program of its class (since
+        %Qore 3.0; issue #7394).  For a call that the initialization of a module makes (also the init closure of its
+        module declaration), the module's Program, however the module is loaded (since %Qore 3.0; issue #7289)
     */
     *int programid;
 
@@ -389,16 +391,30 @@ list<int> thread_list() [flags=RET_VALUE_ONLY;dom=THREAD_INFO] {
 save_thread_data(h);
     @endcode
 
-    @note This function does not throw any exceptions, however if a value is removed from the thread-local data hash
-    by being overwritten with a new value, and the value is an object that goes out of scope, then such an object
-    could throw an exception in its destructor
+    @note If a value is removed from the thread-local data hash by being overwritten with a new value, and the value
+    is an object that goes out of scope, then such an object could throw an exception in its destructor
+
+    @note When thread-local data is released (by delete_all_thread_data() and at the end of a task of a thread pool),
+    the destructors of its values read the values not freed yet (the keys of the values freed before are gone) and
+    can save data in it; nothing can be saved while the values saved by those destructors are freed then (this
+    function raises \c DESTRUCTOR-ERROR), so that the release ends.  At the end of a task of a thread pool, the
+    release is repeated while data is left, and data saved during its last repetition is not saved (without an
+    exception)
+
+    @throw DESTRUCTOR-ERROR the function was called while the values saved during the release of thread-local data
+    are freed
 */
 nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     ReferenceHolder<QoreHashNode> thread_data(get_thread_data_ref(true), xsink);
     if (!*thread_data) {
         return QoreValue();
     }
-    qore_hash_private::get(**thread_data)->merge(*qore_hash_private::get(*data), xsink);
+    qore_hash_private* hp = qore_hash_private::get(**thread_data);
+    // nothing can be saved while the values saved during the release of the data are freed (qore#7265)
+    if (hp->checkClearingSave(xsink)) {
+        return QoreValue();
+    }
+    hp->merge(*qore_hash_private::get(*data), xsink);
 }
 
 //! Saves the data passed against the key passed as an argument in thread-local storage
@@ -410,11 +426,19 @@ nothing save_thread_data(hash<auto> data) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;do
 save_thread_data("key1", value);
     @endcode
 
-    @note Apart from \c HASH-KEY-ERROR, this function does not throw any exceptions, however if a value is removed
-    from the thread-local data hash by being overwritten with a new value, and the value is an object that goes out
-    of scope, then such an object could throw an exception in its destructor
+    @note If a value is removed from the thread-local data hash by being overwritten with a new value, and the value
+    is an object that goes out of scope, then such an object could throw an exception in its destructor
+
+    @note When thread-local data is released (by delete_all_thread_data() and at the end of a task of a thread pool),
+    the destructors of its values read the values not freed yet (the keys of the values freed before are gone) and
+    can save data in it; nothing can be saved while the values saved by those destructors are freed then (this
+    function raises \c DESTRUCTOR-ERROR), so that the release ends.  At the end of a task of a thread pool, the
+    release is repeated while data is left, and data saved during its last repetition is not saved (without an
+    exception)
 
     @throw HASH-KEY-ERROR a key has a NUL character, which a hash key cannot contain
+    @throw DESTRUCTOR-ERROR the function was called while the values saved during the release of thread-local data
+    are freed
 */
 nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS,OWN_PROGRAM_STATE;dom=THREAD_CONTROL] {
     // the key in the default encoding; a key with a NUL character raises HASH-KEY-ERROR
@@ -426,7 +450,12 @@ nothing save_thread_data(string key, auto value) [flags=NAMED_ARGS,OWN_PROGRAM_S
     if (!*data) {
         return QoreValue();
     }
-    qore_hash_private::get(**data)->setKeyValue(tmp.c_str(), value.refSelf(), xsink);
+    qore_hash_private* hp = qore_hash_private::get(**data);
+    // nothing can be saved while the values saved during the release of the data are freed (qore#7265)
+    if (hp->checkClearingSave(xsink)) {
+        return QoreValue();
+    }
+    hp->setKeyValue(tmp.c_str(), value.refSelf(), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -528,6 +557,13 @@ delete_all_thread_data();
     @endcode
 
     @note This function does not throw any exceptions, however if an object is deleted from the thread-local data hash, then it could throw an exception in its destructor
+
+    @note The destructors of the values can use the thread-local data: they read the values not freed yet (the keys
+    of the values freed before are gone), and they can save values, which are freed after the values that the data
+    had; while those are freed, nothing can be saved (save_thread_data() raises \c DESTRUCTOR-ERROR), so that the
+    release ends also when destructors save values again and again; the same holds at the end of a task of a
+    thread pool, where the release is repeated while data is left, and data saved during its last repetition is not
+    saved (without an exception)
 */
 nothing delete_all_thread_data() [dom=THREAD_CONTROL;flags=OWN_PROGRAM_STATE] {
     qore_program_private::get(*getProgram())->clearThreadData(xsink);
@@ -719,13 +755,54 @@ list<hash<CallStackInfo>> get_thread_call_stack() [dom=THREAD_CONTROL,THREAD_INF
 }
 
 //! Returns information about the code in the callstack according to the offset argument
-/** @param offset the offset in the call stack to retrieve
+/** @param offset the offset in the call stack to retrieve, from the innermost frame, as
+    @ref Qore::get_thread_call_stack() "get_thread_call_stack()" lists them: \c 0 is the frame of the call of this
+    function, \c 1 the frame of the call of the code that called it, and so on
 
     @return information about the code in the callstack according to the offset argument; if the call stack does not
-    have an entry at the given offset, @ref NOTHING is returned
+    have an entry at the given offset, or the offset is negative, @ref NOTHING is returned
+
+    @note before %Qore 3.0, @ref NOTHING was returned for any offset other than \c 0 (issue #7564)
 */
 *hash<CallStackInfo> get_parent_caller_location(int offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
+    if (offset < 0) {
+        return QoreValue();
+    }
     return qore_get_parent_caller_location(offset);
+}
+
+//! Returns the ID of the Program of the frame at the given offset of the call stack
+/** Gives only the \c programid of the frame that @ref Qore::get_thread_call_stack() "get_thread_call_stack()" lists at
+    the offset, without building a @ref CallStackInfo hash: code that only needs the Program of a frame, and calls it
+    frequently, uses it instead of @ref Qore::get_parent_caller_location() "get_parent_caller_location()"
+
+    @param offset the offset in the call stack, from the innermost frame, as
+    @ref Qore::get_thread_call_stack() "get_thread_call_stack()" lists them: \c 0 is the frame of the call of this
+    function, \c 1 the frame of the call of the code that called it, and so on
+
+    @return the ID of the Program of the frame at the given offset (see @ref Qore::Program::getProgramId()
+    "Program::getProgramId()"); @ref NOTHING if the call stack has no frame at the offset, the offset is negative, or
+    the frame has no Program
+
+    @par Example:
+    @code{.py}
+# the Program of the code that called the current function
+*int pgm_id = get_caller_program_id();
+    @endcode
+
+    @see get_parent_caller_location()
+
+    @since %Qore 3.0
+*/
+*int get_caller_program_id(int offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
+    if (offset < 0) {
+        return QoreValue();
+    }
+    uint64_t id;
+    if (!qore_get_caller_program_id(offset, id)) {
+        return QoreValue();
+    }
+    return static_cast<int64>(id);
 }
 
 //! Immediately runs all thread resource cleanup routines for the current thread and throws all associated exceptions
@@ -1566,7 +1643,8 @@ auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL;flags=MODULE_OWN
     // Program, the function only calls the code; called by trusted code, the deferral is suspended again
     // while sandboxed code that the cleanup calls runs (ProgramThreadCountContextHelper)
     std::optional<QoreCancelDeferralHelper> cdh;
-    if (!qore_program_is_sandboxed(getProgram())) {
+    // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
+    if (!qore_calling_code_is_sandboxed()) {
         cdh.emplace();
     }
     ReferenceHolder<QoreListNode> vargs(xsink);

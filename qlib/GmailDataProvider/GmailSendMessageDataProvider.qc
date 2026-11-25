@@ -264,6 +264,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "desc": "One or more `Bcc:` addresses for the email",
             },
             "subject": {
+                "metadata": {"message_role": "subject"},
                 "display_name": "Subject",
                 "type": StringType,
                 "short_desc": "The subject for the email",
@@ -271,6 +272,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "required": True,
             },
             "body": {
+                "metadata": {"message_role": "text"},
                 "display_name": "Message Body",
                 "type": StringType,
                 "short_desc": "The message body",
@@ -296,6 +298,7 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "allowed_values": BodyEncodingList,
             },
             "body-mime-type": {
+                "metadata": {"message_role": "selector"},
                 "display_name": "Body Mime Type",
                 "type": StringOrNothingType,
                 "short_desc": "The MIME type of the message body",

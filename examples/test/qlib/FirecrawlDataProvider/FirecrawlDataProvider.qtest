@@ -607,6 +607,23 @@ public class FirecrawlDataProviderTest inherits QUnit::Test {
         assertTrue(actionMap{"agent"} ?? False);
         assertTrue(actionMap{"get-agent-status"} ?? False);
         assertTrue(actionMap{"cancel-agent"} ?? False);
+        # the status actions only GET the job and POST /map only lists the URLs of a site: they declare that they are
+        # read-only (qore#7454)
+        foreach string name in ("map", "get-batch-scrape-status", "get-crawl-status", "get-extract-status",
+                "get-agent-status") {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("Firecrawl"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, info.mutates_state.typeCode(), name);
+            assertFalse(info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
+        # scrape and search can run browser actions on the page and save a browser profile (profile.saveChanges),
+        # so they are not read-only (qore#7454)
+        foreach string name in ("scrape", "search") {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("Firecrawl"), $1.action == name)[0];
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
 
         # Parsing actions
         assertTrue(actionMap{"parse"} ?? False);

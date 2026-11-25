@@ -498,6 +498,18 @@ public hashdecl RestSchemaActionInfo {
     #! The HTTP method
     string method;
 
+    #! Whether the action changes state, where its HTTP method does not say it (qore#7454)
+    /** Unset, an action is read-only when its method is \c GET, \c HEAD, \c OPTIONS or \c TRACE and changes state
+        otherwise (see @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo" \c mutates_state).  Set it
+        to @ref False for an operation with another method that only reads or computes - a search, a query, a
+        validation, an inference that stores nothing - as its documentation shows, never because of its name or
+        method alone; set it to @ref True for one that changes state although its method is read-only.
+    */
+    *bool mutates_state;
+
+    #! Option conditions copied to @ref DataProvider::DataProviderActionBaseInfo::read_only_options
+    *list<hash<DataProvider::DataProviderReadOnlyOption>> read_only_options;
+
     #! The OpenAPI path template, including any \c {variable} placeholders
     string path;
 

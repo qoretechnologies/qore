@@ -151,6 +151,7 @@ public namespace AmbientCallers {
         }
 
         constructor(hash<string, *string> vars) {
+            # live-provider-optin: saves the variables that a case sets to fake values, to restore them after it
             saved = map {$1: getenv($1)}, keys vars;
             set(vars);
         }

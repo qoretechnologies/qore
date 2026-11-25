@@ -33,6 +33,7 @@
 #define _QORE_INTERN_SYNCPARSEOPTIONS_H
 
 #include <qore/QoreParseOptions.h>
+#include <qore/Restrictions.h>
 #include "qore/intern/ParseWarnOptions.h"
 
 #include <atomic>

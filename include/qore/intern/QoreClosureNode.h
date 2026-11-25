@@ -133,6 +133,12 @@ struct QoreClosureTypeContext {
 
 class QoreClosureBase : public ResolvedCallReferenceNode {
 public:
+    //! returns true if the closure's own Program is not the one that compiled its code (qore#7202); the closure then
+    //! runs in the Program that compiled it (see UserClosureFunction::evalForeignClosure())
+    DLLLOCAL bool runsForeign() const {
+        return runs_foreign;
+    }
+
     QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
 
     //! calls the closure with a temporary argument list, whose values its parameters take over, as the AST
@@ -146,6 +152,19 @@ public:
 
     QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
         return dispatchValue(args, xsink);
+    }
+
+    //! Returns the class context of the code that created the closure, or nullptr if it has none
+    DLLLOCAL const qore_class_private* getClassContext() const {
+        return class_ctx;
+    }
+
+    //! Marks the closure as used for the update of a shared object; returns false if it was used already
+    /** A closure is run in an update scope once only (see SandboxManager::updateSharedObject()), so that code that
+        obtains it cannot run the update again (qore#6843)
+    */
+    DLLLOCAL bool takeSharedUpdate() const {
+        return !shared_update_used.exchange(true);
     }
 
     // A closure is user code; its declaration owns the argument filters, and its body owns its operations.
@@ -169,6 +188,11 @@ protected:
         the closure is created and never changed
     */
     bool module_init;
+    //! true if the closure's own Program is not the one that compiled its code (qore#7202); set when the closure is
+    //! created and never changed (see qore_closure_note_execution_program())
+    bool runs_foreign = false;
+    //! true once the closure has been run in an update scope of a shared object (see takeSharedUpdate())
+    mutable std::atomic<bool> shared_update_used{false};
 
     //! copies the type arguments and the receiver type of the code that creates the closure
     DLLLOCAL void captureTypeContext();
@@ -352,6 +376,7 @@ public:
         pgm->depRef();
         // a closure of library module code records the restrictions of the code that creates it (qore#6520)
         qore_capture_call_reference_origin(this, qore_closure_code_program(this));
+        runs_foreign = qore_closure_note_execution_program(this, pgm);
     }
 
     DLLLOCAL virtual ~QoreClosureNode() {
@@ -411,6 +436,7 @@ public:
         }
         // a closure of library module code records the restrictions of the code that creates it (qore#6520)
         qore_capture_call_reference_origin(this, qore_closure_code_program(this));
+        runs_foreign = qore_closure_note_execution_program(this, obj->getProgram());
     }
 
     DLLLOCAL ~QoreObjectClosureNode() {

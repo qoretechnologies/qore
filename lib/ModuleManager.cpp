@@ -1932,10 +1932,11 @@ QoreHashNode* QoreAbstractModule::getHashIntern(bool with_filename) const {
 
     qore_hash_private* ph = qore_hash_private::get(*h);
 
+    // the paths of the module are external information
     if (with_filename) {
         ph->setKeyValueIntern("filename", new QoreStringNode(filename));
+        ph->setKeyValueIntern("path", new QoreStringNode(path));
     }
-    ph->setKeyValueIntern("path", new QoreStringNode(path));
     ph->setKeyValueIntern("name", new QoreStringNode(name));
     ph->setKeyValueIntern("desc", new QoreStringNode(desc));
     ph->setKeyValueIntern("version", new QoreStringNode(*version_list));
@@ -3359,6 +3360,16 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
     const std::string feature_str(mod_info.name.c_str(), mod_info.name.size());
     const char* feature = feature_str.c_str();
 
+    // a module compiled against other builtin API metadata is out of date, as when it is loaded from a file (see
+    // loadBinaryModuleFromPath()); a statically registered module has no source to load instead (qore#7183)
+    if (aot_info.builtin_api_identity != qore_builtin_api_identity) {
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT static module '%s' for feature "
+            "'%s' was compiled against other builtin API metadata (builtin API identity '%s') than this Qore library "
+            "has ('%s'); rebuild the program with the qcc of this Qore installation", path, feature,
+            aot_info.builtin_api_identity.c_str(), qore_builtin_api_identity);
+        return -1;
+    }
+
     // lock-free fast path: module already committed to this program?
     if (qore_program_private::get(*tpgm)->hasCommittedFeature(feature)) {
         return 0;
@@ -3673,9 +3684,10 @@ public:
     @param desc the error description to append to
     @param search_paths the module directories that the feature was looked up in
     @param name the feature name
+    @param file_name_only name each file without its directory, for code restricted from external information
 */
 static void qore_append_unsupported_api_modules(QoreString& desc, const std::vector<const std::string*>& search_paths,
-        const char* name) {
+        const char* name, bool file_name_only = false) {
     std::string prefix = std::string(name) + "-api-";
     for (const std::string* dir : search_paths) {
         // the flat and split module forms, as searched by the loader
@@ -3728,8 +3740,8 @@ static void qore_append_unsupported_api_modules(QoreString& desc, const std::vec
                 if (supported) {
                     continue;
                 }
-                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d", path, major,
-                    minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
+                desc.sprintf("; found '%s' built for module API %u.%u: rebuild it for module API %d.%d",
+                    file_name_only ? base : path, major, minor, QORE_MODULE_API_MAJOR, QORE_MODULE_API_MINOR);
             }
         }
     }
@@ -4558,6 +4570,14 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         *not_found = true;
     }
 
+    // the directories of the module path are external information: code restricted from it is not given them
+    if (ctx_pgm && (ctx_pgm->getParseOptions64() & PO_NO_EXTERNAL_INFO)) {
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module "
+            "with this name could be found in the module path", name));
+        qore_append_unsupported_api_modules(**desc, search_paths, name, true);
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), desc.release());
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("feature '%s' is not builtin and no module with "
         "this name could be found in the module path: ", name));
     if (!ctx_prepended.empty()) {
@@ -5254,9 +5274,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // the module's own code is parsed under the mask in this block
         QoreModuleMaskAddedClearHelper mask_added_clear(userModule->getProgram());
 
-        // issue #3212: warning sink
+        // issue #3212: warning sink; the warnings go to the caller's warning sink, as those of a single-file module
+        // do (see loadUserModuleFromPath()), so that a module is accepted or refused the same in either form (#7324)
         qore_program_private::get(*userModule->getProgram())->parsePending(moduleCode, modulePath.c_str(), &xsink,
-            &xsink, warning_mask);
+            &wsink, warning_mask);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
             return nullptr;
@@ -5282,14 +5303,17 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             fileOpenPath += file->c_str();
 
             std::string fileCode = QoreDir::get_file_content(fileOpenPath);
-            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink, &xsink,
-                file_warning_mask);
+            qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink,
+                &wsink, file_warning_mask);
             if (xsink) {
                 xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
                 return nullptr;
             }
         }
-        userModule->getProgram()->parseCommit(&xsink);
+        // the warnings found when the module is committed are reported as well, under the warning mask that the .qm
+        // file left, as a single-file module's are under the mask that its file left: most of the QP_WARN_MODULES
+        // warnings are found only then (#7324)
+        userModule->getProgram()->parseCommit(&xsink, &wsink, file_warning_mask);
     }
     if (xsink) {
         xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
@@ -5421,21 +5445,11 @@ bool QoreModuleManager::checkAvailableOptionalModule(ExceptionSink& xsink, const
 }
 
 //! The checks of the loader for the optional modules of a module of a build tree (see qore_aot_check_module_sources())
-/** @param deps the files of the module's dependency file
+/** @param info the module's metadata record
+    @param deps the files of the module's dependency file
 */
-static QoreAOTModuleCheck qore_aot_check_module_optional_modules(const char* qmod, const std::set<std::string>& deps,
-        std::string& reason, std::string& dependency, std::string& error) {
-    QoreAOTModuleFileInfo info;
-    switch (qoreAOTReadModuleInfo(qmod, info, error)) {
-        case QoreAOTModuleInfoStatus::NONE:
-            // a module without metadata records no failed %try-module directive
-            return QoreAOTModuleCheck::CURRENT;
-        case QoreAOTModuleInfoStatus::INVALID:
-            error = "cannot read its module metadata: " + error;
-            return QoreAOTModuleCheck::ERROR;
-        case QoreAOTModuleInfoStatus::FOUND:
-            break;
-    }
+static QoreAOTModuleCheck qore_aot_check_module_optional_modules(const QoreAOTModuleFileInfo& info,
+        const std::set<std::string>& deps, std::string& reason, std::string& dependency, std::string& error) {
     if (info.unavailable_optional_modules.empty()) {
         return QoreAOTModuleCheck::CURRENT;
     }
@@ -5495,6 +5509,25 @@ QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& 
         return QoreAOTModuleCheck::ERROR;
     }
     const int64 qmod_mtime = qore_module_stat_mtime_ns(sb);
+
+    // a module compiled against other builtin API metadata than that of this libqore, which the loader loads the
+    // source of instead (see loadBinaryModuleFromPath(), qore#7183)
+    QoreAOTModuleFileInfo info;
+    std::string info_error;
+    QoreAOTModuleInfoStatus info_status = qoreAOTReadModuleInfo(qmod, info, info_error);
+    if (info_status == QoreAOTModuleInfoStatus::INVALID) {
+        // the loader refuses a module whose record it cannot read, such as one of another record version (written by
+        // another qcc), and loads its source instead: the module is compiled again
+        reason = "its module metadata cannot be read: " + info_error;
+        dependency = qmod;
+        return QoreAOTModuleCheck::STALE;
+    }
+    if (info_status == QoreAOTModuleInfoStatus::FOUND && info.builtin_api_identity != qore_builtin_api_identity) {
+        reason = "it was compiled against other builtin API metadata (builtin API identity '"
+            + info.builtin_api_identity + "') than the Qore library has ('" + qore_builtin_api_identity + "')";
+        dependency = qmod;
+        return QoreAOTModuleCheck::STALE;
+    }
 
     std::string depfile = std::string(qmod) + ".d";
     std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
@@ -5578,8 +5611,12 @@ QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& 
     if (stat(optional.c_str(), &osb) || !osb.st_size) {
         return QoreAOTModuleCheck::CURRENT;
     }
+    // a module without metadata records no failed %try-module directive
+    if (info_status == QoreAOTModuleInfoStatus::NONE) {
+        return QoreAOTModuleCheck::CURRENT;
+    }
     std::set<std::string> dep_set(deps.begin(), deps.end());
-    return qore_aot_check_module_optional_modules(qmod, dep_set, reason, dependency, error);
+    return qore_aot_check_module_optional_modules(info, dep_set, reason, dependency, error);
 #endif
 }
 
@@ -6934,6 +6971,18 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
     bool have_aot_info = aot_info_status == QoreAOTModuleInfoStatus::FOUND;
 
+    // an AOT module compiled against other builtin API metadata (a builtin class, function or constant whose
+    // functional domains, flags or signature have changed since) can have the old metadata built into its code, so it
+    // is out of date: the caller loads its source instead, or it is not loaded (qore#7183)
+    if (have_aot_info && aot_info.builtin_api_identity != qore_builtin_api_identity) {
+        xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was compiled against "
+            "other builtin API metadata (builtin API identity '%s') than this Qore library has ('%s'): the functional "
+            "domains, flags or signature of a builtin class, function or constant that it may use have changed since "
+            "it was compiled; rebuild the AOT module", path, aot_info.builtin_api_identity.c_str(),
+            qore_builtin_api_identity);
+        return nullptr;
+    }
+
     // until the module is mapped, its dependencies are found as its initialization finds them, and as a source
     // module finds them: with its own %prepend-module-path and %append-module-path directories (written by qcc in
     // its metadata) around the lists of the Program loading it; a dependency found without them is another module
@@ -7403,6 +7452,102 @@ void QoreModuleManager::delOrig(QoreAbstractModule* mi) {
     }
 }
 
+//! a module Program whose data is cleared at the end of the process
+struct QoreModuleProgramInfo {
+    //! the name of the module
+    std::string name;
+    //! the module's Program
+    QoreProgram* pgm;
+};
+
+struct QoreTeardownDependencies {
+    // module -> the modules left that it requires
+    std::map<std::string, std::vector<std::string>> required_mods;
+    // requiring module -> the modules left that it requires only because they were applied to its Program at run time
+    std::map<std::string, strset_t> runtime_required_mods;
+    // the native binary modules left
+    strset_t native_mods;
+};
+
+//! orders the given module Programs so that each comes before those of the modules that it requires (qore#7432)
+/** A module requires the modules that it requires directly or through other modules, user modules (loaded from source
+    or AOT modules) and binary modules alike, also those recorded at run time
+    (QoreModuleManager::getTeardownModuleDependencies()).  Dependencies outside a cycle always outlive it. Within a
+    cycle, prefer a module that no remaining module requires statically, as cleanup() does (qore#7451). Ties are
+    resolved in the given order.
+*/
+static void qore_order_module_programs_dependents_first(std::vector<QoreModuleProgramInfo>& mpgms,
+        const QoreTeardownDependencies& graph) {
+    const size_t n = mpgms.size();
+    // the index of each module of the list
+    std::map<std::string, size_t> index;
+    for (size_t i = 0; i < n; ++i) {
+        index.emplace(mpgms[i].name, i);
+    }
+    // requires[i][j]: module i requires module j, directly or through other modules
+    std::vector<std::vector<bool>> requires_mod(n, std::vector<bool>(n, false));
+    // Direct static dependencies break ties between mutually reachable modules.
+    std::vector<std::vector<bool>> requires_static(n, std::vector<bool>(n, false));
+    for (size_t i = 0; i < n; ++i) {
+        strset_t reached;
+        std::vector<std::string> todo{mpgms[i].name};
+        while (!todo.empty()) {
+            std::string name = std::move(todo.back());
+            todo.pop_back();
+            auto direct = graph.required_mods.find(name);
+            if (direct == graph.required_mods.end()) {
+                continue;
+            }
+            const auto runtime = graph.runtime_required_mods.find(name);
+            for (const std::string& d : direct->second) {
+                if (reached.insert(d).second) {
+                    todo.push_back(d);
+                }
+                auto target = index.find(d);
+                if (target != index.end()) {
+                    requires_mod[i][target->second] = true;
+                    if (name == mpgms[i].name && (runtime == graph.runtime_required_mods.end()
+                            || !runtime->second.count(d))) {
+                        requires_static[i][target->second] = true;
+                    }
+                }
+            }
+        }
+    }
+    std::vector<QoreModuleProgramInfo> ordered;
+    ordered.reserve(n);
+    std::vector<size_t> left(n);
+    for (size_t i = 0; i < n; ++i) {
+        left[i] = i;
+    }
+    while (!left.empty()) {
+        // a module is held back only by a module left that requires it and that it does not require: a module of the
+        // same cycle does not hold it back; such a module always exists
+        size_t pick = left.size();
+        for (size_t li = 0; li < left.size(); ++li) {
+            const size_t i = left[li];
+            bool held = false;
+            for (size_t lj = 0; lj < left.size() && !held; ++lj) {
+                const size_t j = left[lj];
+                held = j != i && requires_mod[j][i] && !requires_mod[i][j];
+            }
+            if (held) {
+                continue;
+            }
+            if (pick == left.size()) {
+                pick = li;  // deterministic fallback for an entirely static cycle
+            }
+            if (std::none_of(left.begin(), left.end(), [&](size_t j) { return i != j && requires_static[j][i]; })) {
+                pick = li;
+                break;
+            }
+        }
+        ordered.push_back(std::move(mpgms[left[pick]]));
+        left.erase(left.begin() + pick);
+    }
+    mpgms = std::move(ordered);
+}
+
 // deletes only user modules
 void QoreModuleManager::delUser() {
     //md_map.show("md_map");
@@ -7461,10 +7606,27 @@ void QoreModuleManager::delUser() {
     // This ensures static variable destructors run while all module programs are still alive, preventing
     // use-after-free when a shared class's static vars are destroyed by the last module to clear them
     // (which may not be the module that owns the class program)
+    // the user modules loaded from source and the AOT user modules (binary modules, deleted in cleanup()) are cleared
+    // together, each before the modules that it requires (qore#7432): a module's objects that its static variables
+    // hold can be objects of the classes of a module that it requires, whose destructors use the static variables of
+    // their own classes (see qore_order_module_programs_dependents_first() for cycles)
+    std::vector<QoreModuleProgramInfo> module_programs;
+    for (auto& i : map) {
+        if (i.second->isUser()) {
+            module_programs.push_back({i.first, static_cast<QoreUserModule*>(i.second)->getProgram()});
+        } else if (QoreProgram* aot_pgm = qore_aot_get_module_pgm(i.first)) {
+            module_programs.push_back({i.first, aot_pgm});
+        }
+    }
+    {
+        QoreTeardownDependencies graph;
+        getTeardownModuleDependencies(graph);
+        qore_order_module_programs_dependents_first(module_programs, graph);
+    }
     {
         ExceptionSink xsink;
-        for (QoreUserModule* um : user_modules) {
-            QoreProgram* pgm = um->getProgram();
+        for (const QoreModuleProgramInfo& mp : module_programs) {
+            QoreProgram* pgm = mp.pgm;
             pgm->waitForTermination();
             // a foreign thread that runs in the Program keeps its data (see qore_program_private::leaveForeignThreads())
             if (qore_program_private::get(*pgm)->leaveForeignThreads()) {
@@ -7481,6 +7643,7 @@ void QoreModuleManager::delUser() {
                 return;
             }
         }
+        // the AOT user modules that are not in the module map, if any (the data of a Program is cleared once)
         qore_aot_clear_all_module_namespace_data(xsink);
         qore_module_cleanup_drain_work();
         // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
@@ -7494,14 +7657,15 @@ void QoreModuleManager::delUser() {
         // module owns can hold objects of the classes of the modules that depend on it, which are deleted before
         // it in Phase 2 (a type that DataProvider creates and a RestSchemaValidator schema object caches through an
         // opaque reference refers to schema objects, for example); breaking the cycle only when the owning module
-        // is deleted would run the destructors of those objects after the programs of their classes are gone
-        for (QoreUserModule* um : user_modules) {
+        // is deleted would run the destructors of those objects after the programs of their classes are gone; in
+        // the order of the namespace data above
+        for (const QoreModuleProgramInfo& mp : module_programs) {
             // the targets of a Program that a foreign thread runs in are not destroyed under it
-            if (!qore_program_private::get(*um->getProgram())->leaveForeignThreads()) {
-                qore_program_private::get(*um->getProgram())->clearOpaqueTargets(&xsink);
+            if (!qore_program_private::get(*mp.pgm)->leaveForeignThreads()) {
+                qore_program_private::get(*mp.pgm)->clearOpaqueTargets(&xsink);
             }
         }
-        // AOT user modules are binary modules, deleted after all user modules in cleanup()
+        // the AOT user modules that are not in the module map, if any (the targets of the others are cleared)
         qore_aot_clear_all_module_opaque_targets(xsink);
         qore_module_cleanup_drain_work();
         // the cleanup stopped waiting for work handed over to other threads, which can still run in the Programs of
@@ -7694,6 +7858,68 @@ void QoreModuleManager::getModuleDependencies(const char* name, strset_t& deps) 
     deps.insert(binary_deps.begin(), binary_deps.end());
 }
 
+void QoreModuleManager::getTeardownModuleDependencies(QoreTeardownDependencies& graph) {
+    AutoLocker al(mutex);
+    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
+        std::vector<std::string>& req = graph.required_mods[i->first];
+        if (i->second->isUser()) {
+            const strset_t* deps = rmd_map.getDeps(i->first);
+            if (deps) {
+                req.assign(deps->begin(), deps->end());
+            }
+        } else if (getBinaryModuleDependencies(i, req)) {
+            graph.native_mods.insert(i->first);
+        }
+        // the requirements recorded at run time only; a user module's are in rmd_map too, while those of a binary
+        // module listed in its own dependencies (those an AOT module was compiled with) are not run time ones, even
+        // if they were also recorded at run time
+        const bool user = i->second->isUser();
+        for (const auto& ri : runtime_dep_map) {
+            if (ri.second.find(i->first) != ri.second.end()
+                    && (user || std::find(req.begin(), req.end(), ri.first) == req.end())) {
+                graph.runtime_required_mods[i->first].insert(ri.first);
+            }
+        }
+    }
+    // a user module requiring a binary module
+    for (md_map_t::iterator i = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); i != e; ++i) {
+        for (const std::string& user : i->second) {
+            auto ri = graph.required_mods.find(user);
+            if (ri != graph.required_mods.end()) {
+                ri->second.push_back(i->first);
+            }
+        }
+    }
+    // an AOT module requiring a user module applied to its Program at run time (issue #6501)
+    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
+        if (graph.required_mods.find(i->first) == graph.required_mods.end()) {
+            continue;
+        }
+        for (const std::string& aot : i->second) {
+            auto ri = graph.required_mods.find(aot);
+            if (ri != graph.required_mods.end()) {
+                ri->second.push_back(i->first);
+            }
+        }
+    }
+    // a user module requiring a user module applied to its Program at run time that requires it, a cycle that rmd_map
+    // does not record (see runtime_importer_map): a requirement at run time only, so that the cycle is broken at the
+    // module loaded, whose native modules it then requires in its place (qore#7310)
+    for (md_map_t::iterator i = runtime_importer_map.begin(), e = runtime_importer_map.end(); i != e; ++i) {
+        if (graph.required_mods.find(i->first) == graph.required_mods.end()) {
+            continue;
+        }
+        for (const std::string& importer : i->second) {
+            auto ri = graph.required_mods.find(importer);
+            if (ri != graph.required_mods.end()
+                    && std::find(ri->second.begin(), ri->second.end(), i->first) == ri->second.end()) {
+                ri->second.push_back(i->first);
+                graph.runtime_required_mods[importer].insert(i->first);
+            }
+        }
+    }
+}
+
 bool QoreModuleManager::deleteUnrequiredNativeModule() {
     // the modules that the binary modules left and the user modules left require
     strset_t required;
@@ -7868,70 +8094,11 @@ void QoreModuleManager::cleanup() {
     // %requires can hold objects of its classes in the constants of its Program, initialized when it is parsed, which
     // a module loaded later from its code cannot have given it.  So a cycle made by a run-time load is broken at the
     // module loaded, and every module required with %requires is still deleted after the modules that require it.
-    // module -> the modules left that it requires
-    std::map<std::string, std::vector<std::string>> required_mods;
-    // requiring module -> the modules left that it requires only because they were applied to its Program at run time
-    std::map<std::string, strset_t> runtime_required_mods;
-    // the native binary modules left
-    strset_t native_mods;
-    for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
-        std::vector<std::string>& req = required_mods[i->first];
-        if (i->second->isUser()) {
-            const strset_t* deps = rmd_map.getDeps(i->first);
-            if (deps) {
-                req.assign(deps->begin(), deps->end());
-            }
-        } else if (getBinaryModuleDependencies(i, req)) {
-            native_mods.insert(i->first);
-        }
-        // the requirements recorded at run time only; a user module's are in rmd_map too, while those of a binary
-        // module listed in its own dependencies (those an AOT module was compiled with) are not run time ones, even
-        // if they were also recorded at run time
-        const bool user = i->second->isUser();
-        for (const auto& ri : runtime_dep_map) {
-            if (ri.second.find(i->first) != ri.second.end()
-                    && (user || std::find(req.begin(), req.end(), ri.first) == req.end())) {
-                runtime_required_mods[i->first].insert(ri.first);
-            }
-        }
-    }
-    // a user module requiring a binary module
-    for (md_map_t::iterator i = binary_user_dep_map.begin(), e = binary_user_dep_map.end(); i != e; ++i) {
-        for (const std::string& user : i->second) {
-            auto ri = required_mods.find(user);
-            if (ri != required_mods.end()) {
-                ri->second.push_back(i->first);
-            }
-        }
-    }
-    // an AOT module requiring a user module applied to its Program at run time (issue #6501)
-    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
-        if (required_mods.find(i->first) == required_mods.end()) {
-            continue;
-        }
-        for (const std::string& aot : i->second) {
-            auto ri = required_mods.find(aot);
-            if (ri != required_mods.end()) {
-                ri->second.push_back(i->first);
-            }
-        }
-    }
-    // a user module requiring a user module applied to its Program at run time that requires it, a cycle that rmd_map
-    // does not record (see runtime_importer_map): a requirement at run time only, so that the cycle is broken at the
-    // module loaded, whose native modules it then requires in its place (qore#7310)
-    for (md_map_t::iterator i = runtime_importer_map.begin(), e = runtime_importer_map.end(); i != e; ++i) {
-        if (required_mods.find(i->first) == required_mods.end()) {
-            continue;
-        }
-        for (const std::string& importer : i->second) {
-            auto ri = required_mods.find(importer);
-            if (ri != required_mods.end()
-                    && std::find(ri->second.begin(), ri->second.end(), i->first) == ri->second.end()) {
-                ri->second.push_back(i->first);
-                runtime_required_mods[importer].insert(i->first);
-            }
-        }
-    }
+    QoreTeardownDependencies graph;
+    getTeardownModuleDependencies(graph);
+    auto& required_mods = graph.required_mods;
+    auto& runtime_required_mods = graph.runtime_required_mods;
+    auto& native_mods = graph.native_mods;
     // module -> the number of modules left that require it
     std::map<std::string, int> dependents;
     for (auto& i : required_mods) {
@@ -8196,7 +8363,8 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
     if (pgm && pgm != getProgram() && origin != QoreModuleCommandContext::MC_REPLAY) {
         static const QoreParseOptions restricting = QoreParseOptions(QDOM_ALL) & ~QoreParseOptions::POSITIVE_OPTIONS
             & ~QoreParseOptions(QDOM_IN_MODULE);
-        if (qore_program_is_sandboxed(getProgram())) {
+        // (code compiled in another Program than the one it runs in is that Program's code, qore#7202)
+        if (qore_calling_code_is_sandboxed()) {
             xsink->raiseException("RUNTIME-COMMAND-ERROR", new QoreStringNodeMaker("cannot issue a command for "
                 "module '%s' to another Program: sandboxed code can only issue module commands to its own Program",
                 mname));

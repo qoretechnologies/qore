@@ -141,6 +141,8 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         addTestCase("mixed file and memory streams", \testMixedStreams());
         addTestCase("sequential file streams on same connection", \testSequentialFileStreams());
         addTestCase("file streaming does not block non-streaming requests", \testFileStreamWithPing());
+        addTestCase("a file read that completes after the I/O thread's poll is sent",
+            \testReadCompletedAfterPoll());
 
         # Stress tests
         addTestCase("stress: rapid connect/disconnect with in-flight streams",
@@ -247,6 +249,36 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
                 sprintf("io_uring completions increased (%d -> %d)",
                     stats_before.completions, stats_after.completions));
         }
+    }
+
+    #! a file read that completes after the poll of the I/O thread returned is taken by the drain at the end of the
+    #! thread's iteration; the connection, which waits for nothing else, must still run and send the data (qore#7435)
+    testReadCompletedAfterPoll() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        *hash<auto> stats_before = get_io_uring_debug_stats();
+        if (!stats_before) {
+            testSkip("io_uring is not available");
+        }
+
+        # every completion is left to the drain at the end of the iteration
+        call_function("dbg_io_uring_defer_completions", True);
+        on_exit {
+            call_function("dbg_io_uring_defer_completions", False);
+        }
+
+        # a stalled response ends with SOCKET-TIMEOUT; a response of several reads normally takes milliseconds
+        RestClient rc = getClient(20s);
+        # several reads, each completed by the drain
+        int size = 4 * 65536 + 100;
+        hash<auto> resp = rc.get("/file-stream/" + size);
+        verifyBody(resp, size, "F", "a file stream whose reads complete after the poll");
+
+        *hash<auto> stats_after = get_io_uring_debug_stats();
+        assertTrue(stats_after.completions > stats_before.completions,
+            sprintf("the response was read with io_uring (%d -> %d completions)", stats_before.completions,
+                stats_after.completions));
     }
 
     testSmallFileStream() {

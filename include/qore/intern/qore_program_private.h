@@ -1449,6 +1449,10 @@ public:
     */
     std::atomic<bool> any_sandbox_manager{false};
 
+    //! true if the Program is a host Program: created with no Program running; its code is not restricted for time
+    //! zones (QoreTimeZoneManager::callerRestricted())
+    bool tz_host = false;
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
@@ -2423,9 +2427,78 @@ public:
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
-    // map for filenames
-    typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
-    //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
+
+    //! map of file names (or labels) to their statement maps
+    /** Iterates in insertion order, which getStatementFromIndex() relies on for its suffix match, and finds keys
+        through a hash index: AOT registration of a program that allows the debugger looks up and adds every
+        statement location of every function here, and a linear scan with strcmp() per lookup made that
+        O(statements x files), most of the startup time of a large AOT program on a slow CPU.
+
+        Keys are not copied; they must stay valid while they are in the map, as the strings that the Program owns
+        (file names, labels and runtime strings) do.
+    */
+    class name_section_sline_statement_map_t {
+    public:
+        typedef vector_map_t<const char*, section_sline_statement_map_t*> vmap_t;
+        typedef vmap_t::value_type value_type;
+        typedef vmap_t::iterator iterator;
+        typedef vmap_t::const_iterator const_iterator;
+
+        DLLLOCAL iterator find(const char* key) {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        DLLLOCAL const_iterator find(const char* key) const {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        //! adds the key with its value, or replaces the value of a key that is already in the map
+        DLLLOCAL std::pair<iterator, bool> insert(value_type vt) {
+            auto [i, created] = index.try_emplace(std::string_view(vt.first), vmap.size());
+            if (!created) {
+                iterator vi = vmap.begin() + i->second;
+                vi->second = vt.second;
+                return std::pair<iterator, bool>(vi, false);
+            }
+            return std::pair<iterator, bool>(vmap.append(std::move(vt)), true);
+        }
+
+        DLLLOCAL iterator begin() {
+            return vmap.begin();
+        }
+
+        DLLLOCAL const_iterator begin() const {
+            return vmap.begin();
+        }
+
+        DLLLOCAL iterator end() {
+            return vmap.end();
+        }
+
+        DLLLOCAL const_iterator end() const {
+            return vmap.end();
+        }
+
+        DLLLOCAL bool empty() const {
+            return vmap.empty();
+        }
+
+        DLLLOCAL size_t size() const {
+            return vmap.size();
+        }
+
+        DLLLOCAL void clear() {
+            index.clear();
+            vmap.clear();
+        }
+
+    private:
+        vmap_t vmap;
+        //! the position of each key in vmap
+        std::unordered_map<std::string_view, size_t> index;
+    };
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
             QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
@@ -2475,7 +2548,7 @@ public:
     DLLLOCAL static void dbgProgramDestroyed();
 #endif
 
-    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::pgm_deleted)
+    //! Marks the user variants of the Program's code when its deletion starts (UserVariantBase::FAST_CALL_BLOCK_PGM_DELETED)
     /** A variant can outlive its Program (a closure or a call reference stored in another Program, for example); the
         fast paths that evaluate its code without entering the Program (the native leaf of a closure) check the mark,
         so that the call path refuses the call with PROGRAM-ERROR, as for the AST interpreter (qore#5822)
@@ -5346,11 +5419,7 @@ public:
             // that load
             if (module_header_closed && (module_own_dom & QDOM_LOCALE_CONTROL)
                     && !(module_trusted_dom & QDOM_LOCALE_CONTROL) && !locale_control_restricted_after_header) {
-                if (*zone == '-' || *zone == '+') {
-                    QTZM.findCreateOffsetZone(zone, &xsink);
-                } else {
-                    QTZM.findLoadRegion(zone, &xsink);
-                }
+                findTimeZoneDirectiveZone(zone, &xsink);
                 if (xsink) {
                     mergeParseException(xsink);
                     return;
@@ -5373,6 +5442,34 @@ public:
         time_zone_trusted_only = false;
     }
 
+    //! returns the zone that the %set-time-zone directive with the given argument names in this Program
+    /** A UTC offset, a region, or a zoneinfo file path.  A path is refused in a restricted Program (one that a
+        sandbox governs or whose parse options restrict a functional domain, unless it is the host Program), which can
+        load regions only; the directive is processed while the Program is parsed, when the code that runs is the
+        caller of the parse, so the Program's own restrictions decide; otherwise the path is loaded subject to the
+        restrictions of that caller.
+
+        @param zone the argument of the directive
+        @param xsink for the exception if the zone cannot be found or created or the path is refused
+
+        @return the zone; nullptr for UTC or if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findTimeZoneDirectiveZone(const char* zone, ExceptionSink* xsink) {
+        if (*zone == '-' || *zone == '+') {
+            return QTZM.findCreateOffsetZone(zone, xsink);
+        }
+        if (*zone && QoreTimeZoneManager::isPathName(zone)) {
+            if ((pwo.parse_options & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a "
+                    "zoneinfo file path in a restricted Program; restricted code can load time zone regions only");
+                return nullptr;
+            }
+            return QTZM.findLoadRegionFromPath(zone, xsink, pgm);
+        }
+        // the zone is charged to the limits of this Program, not of the code that parses it
+        return QTZM.findLoadRegionForProgram(zone, pgm, xsink);
+    }
+
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
     /** @param zone a region name or a UTC offset (starting with \c + or \c -)
         @param xsink for the exception if the zone cannot be found or created
@@ -5382,8 +5479,7 @@ public:
         Also used by the AOT loader for the directive recorded in an AOT image (qore#6270)
     */
     DLLLOCAL int setTimeZoneDirective(const char* zone, ExceptionSink* xsink) {
-        const AbstractQoreZoneInfo *tz = (*zone == '-' || *zone == '+') ? QTZM.findCreateOffsetZone(zone, xsink)
-            : QTZM.findLoadRegion(zone, xsink);
+        const AbstractQoreZoneInfo *tz = findTimeZoneDirectiveZone(zone, xsink);
         if (*xsink) {
             assert(!tz);
             return -1;
@@ -7544,7 +7640,7 @@ public:
     DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
-        name_section_sline_statement_map_t::iterator it;
+        name_section_sline_statement_map_t::const_iterator it;
         if (statementByFileIndex.empty()) {
             return nullptr;
         }

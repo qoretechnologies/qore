@@ -664,6 +664,26 @@ public const string DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
 public const string DPAD_CREATE_OUTPUT = "create-output";
 #/@}
 
+#! Declares the option values for which one condition on a read-only action is satisfied
+/** See @ref DataProviderActionBaseInfo::read_only_options.  The path and values are data so that an index can
+    carry the same declaration as the registered action.
+
+    @since %DataProvider 3.12
+*/
+public hashdecl DataProviderReadOnlyOption {
+    #! Keys from the root of the configured action options to the value, for example <tt>("profile", "saveChanges")</tt>
+    list<string> path;
+
+    #! Exact typed values that allow read-only operation at this path
+    list<auto> values;
+
+    #! True if omission of the option, or an enclosing hash, also allows read-only operation
+    bool allow_missing = True;
+
+    #! Allow omission of an enclosing hash even when its terminal option is required if that hash is present
+    bool allow_missing_parent = False;
+}
+
 #! DataProvider action definition without its options and output type
 /** @see
     - @ref DataProviderActionInfo for a registered action
@@ -748,6 +768,15 @@ public hashdecl DataProviderActionBaseInfo {
     */
     *bool mutates_state;
 
+    #! Conditions under which an otherwise mutating action is read-only for a particular configuration
+    /** All conditions must match.  Only declare these when they account for every option-controlled change to
+        external state.  Set @ref DataProviderActionBaseInfo::mutates_state to True for callers without the configured
+        options.  See @ref DataProviderActionCatalog::actionMutatesState().
+
+        @since %DataProvider 3.12
+    */
+    *list<hash<DataProviderReadOnlyOption>> read_only_options;
+
     #! Message or event type
     /** if \c action_code is:
         - @ref DPAT_EVENT "DPAT_EVENT": this is the event type
@@ -814,6 +843,13 @@ public hashdecl DataProviderActionBaseInfo {
 
     #! Free-form metadata for the action
     *hash<auto> metadata;
+
+    #! Message formats this action can submit, keyed by destination/authorization variant and then format
+    /** See @ref DataProviderMessageFormat for the declaration and upgrade-checking contract. An absent
+        declaration or variant means unknown. Option labels are localized through the ordinary action
+        option projection. Variant names, format names, option paths and selector values are stable data.
+    */
+    *hash<auto> message_formats;
 
     #! Processor capability bitfield (DPC_* constants) for pipeline processor actions
     /** @since %DataProvider 3.3
@@ -2290,7 +2326,8 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static auto runWithCatalogLock(code c) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot hold the catalog lock from a context with restricted process control";
         }
         # test hooks are for trusted test code only
@@ -2464,7 +2501,8 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static setDeliveryTestHook(*code hook) [dom=PROCESS_CONTROL] {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot set a catalog test hook from a context with restricted process control";
         }
         # test hooks are for trusted test code only
@@ -3813,7 +3851,8 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
     static *hash<DataProviderAppInfo> deregisterDynamicApp(string name) [dom=PROCESS_CONTROL] {
         # sandboxed code would remove an app that it does not own from every caller
         DataProviderSandboxState::checkRegistration("application", name, True);
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", sprintf("Cannot remove app %y from a context with restricted process control",
                 name);
         }
@@ -3905,6 +3944,49 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         return True;
     }
 
+    #! Returns whether the action can change state with the given effective, resolved option values
+    /** Pass an empty hash for the action's defaults.  When option values are unknown, call the one-argument
+        variant.  Actions without conditions retain their static classification.
+
+        Each declared path must either be omitted when allowed or have one of its exact read-only values.
+        A non-hash along a path cannot establish read-only operation.  Consumers with unresolved expressions
+        must use the one-argument variant until all relevant option values are known.
+
+        @since %DataProvider 3.12
+    */
+    static bool actionMutatesState(hash<DataProviderActionInfo> action, hash<auto> options) {
+        if (!action.read_only_options) {
+            return actionMutatesState(action);
+        }
+        foreach hash<DataProviderReadOnlyOption> condition in (action.read_only_options) {
+            if (!condition.path || !matchesReadOnlyOption(condition, options)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private static bool matchesReadOnlyOption(hash<DataProviderReadOnlyOption> condition, hash<auto> options) {
+        auto value = options;
+        int depth = 0;
+        foreach string key in (condition.path) {
+            ++depth;
+            if (value.typeCode() != NT_HASH) {
+                return False;
+            }
+            if (!value.hasKey(key)) {
+                return condition.allow_missing || (condition.allow_missing_parent && depth < condition.path.size());
+            }
+            value = value{key};
+        }
+        foreach auto allowed in (condition.values) {
+            if (value === allowed) {
+                return True;
+            }
+        }
+        return False;
+    }
+
     #! Registers a data provider action
     /** Sandboxed code registers no action: an action's provider is decided by the declarations of the app it belongs
         to (see @ref dataprovider_external_io), so an action that sandboxed code added to an app that it does not own
@@ -3950,6 +4032,9 @@ map log("unavailable: %s: %s", $1.identity, $1.error), qualification.getReport()
         }
         DataProviderActionCatalog::checkProcessingAndBilling("ACTION-ERROR", sprintf("action %s/%s", action.app,
             action.action), action.processing, action.billing);
+        if (exists action.message_formats) {
+            DataProviderMessageFormat::validate(action);
+        }
         action.path = DataProviderActionCatalog::normalizePath(action.path);
 
         # check that all path variables are defined
@@ -6384,7 +6469,8 @@ DataProviderActionCatalog::checkSandboxAccess(app_name, True);
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL
     */
     static bool waitForLazyInitsQueued(int count, timeout timeout_ms) {
-        if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
+        if ((Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL)
+                || SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
             throw "PERMISSION-DENIED", "cannot wait for the catalog worker from a context with restricted process "
                 "control";
         }

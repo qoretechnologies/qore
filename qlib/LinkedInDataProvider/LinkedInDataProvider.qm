@@ -78,6 +78,15 @@ module LinkedInDataProvider {
                 "followers and analytics — use the **LinkedIn Organizations** application "
                 "instead.\n\n"
                 "LinkedIn is a trademark of LinkedIn Corporation",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "linkedin.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.linkedin.com/legal/api-terms-of-use",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "linkedin",
             "logo": LinkedInLogo,
             "logo_file_name": "linkedin-logo.svg",
@@ -99,6 +108,7 @@ module LinkedInDataProvider {
                 "The `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn "
                 "APIs take wherever a member has to be named.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Identity",),
             "output_type": LinkedInGetCurrentUserDataProvider::ResponseType,
         });
@@ -339,6 +349,7 @@ module LinkedInDataProvider {
                 "Timestamps are returned as dates: LinkedIn reports them as milliseconds since the "
                 "epoch and they are converted here.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Content Management",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInGetPostRequestDataType::Fields{"post",}, {

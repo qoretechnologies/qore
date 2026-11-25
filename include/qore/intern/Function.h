@@ -178,6 +178,30 @@ public:
         return str.c_str();
     }
 
+    //! appends the key of the signature as an abstract variant (MethodVariantBase::getAbstractSignature())
+    /** The key is made from the parameter types (with the path of a class, hashdecl or other named type) and the
+        \c const qualifiers of the parameters only, without the parameter names and default values: a declaration has
+        the same key whether its class was parsed or loaded from an AOT image (qore#7331).  As the key made from the
+        parse types of a signature that is not resolved yet, it has neither the default arguments nor the varargs of
+        the signature.
+
+        @return true if the key is made from the resolved types, false if from the parse types of a signature that
+        is not resolved yet, in which case it is made again when the signature has been resolved
+        (AbstractMethodMap::parseResolveSignatures())
+    */
+    DLLLOCAL virtual bool addAbstractSignatureKey(std::string& str) const {
+        for (unsigned i = 0; i < typeList.size(); ++i) {
+            if (i) {
+                str.append(",");
+            }
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
+            str.append(QoreTypeInfo::getPath(typeList[i]));
+        }
+        return true;
+    }
+
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         for (unsigned i = 0; i < typeList.size(); ++i) {
             if (isParamReadOnly(i)) {
@@ -646,13 +670,9 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL virtual ~UserSignature() {
-        // type-parameter types are cached by signature address, which the next signature allocated can reuse
-        qore_purge_derived_types(this, nullptr, nullptr);
-        for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
-            delete* i;
-        delete parseReturnTypeInfo;
-    }
+    // exported and defined in the library: it calls functions that are hidden there, so code built with the internal
+    // headers must not emit it
+    DLLEXPORT virtual ~UserSignature();
 
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
@@ -725,6 +745,28 @@ public:
     */
     DLLLOCAL int resolveTypes();
 
+    // documented in AbstractFunctionSignature
+    DLLLOCAL virtual bool addAbstractSignatureKey(std::string& str) const {
+        // a signature read from an AOT image has its parameter types and no parse types
+        if (types_resolved || parseTypeList.size() < typeList.size()) {
+            return AbstractFunctionSignature::addAbstractSignatureKey(str);
+        }
+        for (unsigned i = 0; i < parseTypeList.size(); ++i) {
+            if (i) {
+                str.append(",");
+            }
+            if (isParamReadOnly(i)) {
+                str.append("const ");
+            }
+            if (!parseTypeList[i] && typeList.size() > i && typeList[i]) {
+                str.append(QoreTypeInfo::getPath(typeList[i]));
+            } else {
+                str.append(QoreParseTypeInfo::getName(parseTypeList[i]));
+            }
+        }
+        return false;
+    }
+
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
         // a signature read from an AOT image has its parameter types and no parse types before it is resolved: its
         // abstract signature is made from its types, so that the variants of a method are told apart when they are
@@ -747,13 +789,9 @@ public:
         }
     }
 
-    // called at parse time to ensure types are resolved
-    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const {
-        if (const_cast<UserSignature*>(this)->resolve() && !err) {
-            err = -1;
-        }
-        return returnTypeInfo;
-    }
+    // called at parse time to ensure types are resolved; exported and defined in the library, as it calls the hidden
+    // resolve(), so code built with the internal headers must not emit it
+    DLLEXPORT virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const;
 
     DLLLOCAL const QoreProgramLocation* getParseLocation() const {
         return loc;
@@ -1720,9 +1758,25 @@ public:
         setProgram() is called only before the variant can be called
     */
     mutable std::atomic<bool> pgm_module_lifetime{false};
-    //! true once the deletion of \a pgm has started: a fast path that evaluates the variant's code without entering
-    //! the Program takes the call path then, which refuses the call (qore#5822)
-    mutable std::atomic<bool> pgm_deleted{false};
+    //! the reasons why the fast paths of native code take the call path for the variant: a bitmask of
+    //! FAST_CALL_BLOCK_* values, tested with one load by the fast paths (fastCallBlocked())
+    mutable std::atomic<uint8_t> fast_call_blocks{0};
+    //! fast_call_blocks: the deletion of \a pgm has started: a fast path that evaluates the variant's code without
+    //! entering the Program takes the call path then, which refuses the call (qore#5822)
+    static constexpr uint8_t FAST_CALL_BLOCK_PGM_DELETED = 1;
+    //! fast_call_blocks: a closure of the variant was created that runs in another Program than \a pgm: the call path
+    //! holds \a pgm before anything of the variant (its parameter types) is read (qore#7202); never cleared
+    static constexpr uint8_t FAST_CALL_BLOCK_RUNS_FOREIGN = 2;
+
+    //! returns true once the deletion of \a pgm has started (see FAST_CALL_BLOCK_PGM_DELETED)
+    DLLLOCAL bool pgmDeleted() const {
+        return fast_call_blocks.load(std::memory_order_acquire) & FAST_CALL_BLOCK_PGM_DELETED;
+    }
+
+    //! returns true if the fast paths of native code take the call path for the variant (see fast_call_blocks)
+    DLLLOCAL bool fastCallBlocked() const {
+        return fast_call_blocks.load(std::memory_order_acquire);
+    }
     //! the previous variant in its Program's list of variants; protected by the Program's user_variant_lock (see
     //! qore_program_private::registerUserVariant())
     mutable const UserVariantBase* uv_prev = nullptr;
@@ -2361,7 +2415,10 @@ public:
             ThreadFrameBoundaryHelper(!*n_xsink),
             uvb(n_uvb), argv(n_xsink), xsink(n_xsink), exec_pgm(getExecutionProgram(n_uvb, ceh)) {
         assert(xsink);
-        if (*xsink || uvb->setupCall(ceh, argv, xsink)) {
+        // (code compiled in another Program than the one it runs in holds the Program that compiled it while the
+        // call runs, qore#7202; the context releases it when it is left, see holdForeignCodeProgram())
+        if (*xsink || (exec_pgm != uvb->pgm && holdForeignCodeProgram(uvb->pgm, xsink))
+                || uvb->setupCall(ceh, argv, xsink)) {
             uvb = nullptr;
         }
     }
@@ -2488,8 +2545,41 @@ struct INode {
 typedef std::vector<INode> ilist_t;
 
 struct IList : public ilist_t {
-    DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
-        const_iterator aqfi, bool& internal_access, bool& stop) const;
+    //! returns the function of the first ancestor from \a aqfi on that the class context can access
+    /** @param class_ctx the class context of the call
+        @param last_class the class of the function returned last, updated with that of the function returned
+        @param aqfi the position to search from, updated with the position of the function returned, or \a aqfe
+        @param aqfe the end of the list
+        @param internal_access set if the class of the function returned is the class context; then the ancestors
+        that it inherits with private:internal access are accessible
+
+        @return the function found, or nullptr if no ancestor after \a aqfi is accessible (\a aqfi is then \a aqfe)
+
+        An inaccessible ancestor does not end the search: the ancestors after it are searched (qore#7381).  An ancestor
+        that the list's class inherits with private:internal access is accessible only when no other one comes before
+        it, as when the search ended at the first one: the private:internal access of an ancestor in the list is
+        relative to the list's class, not to the class context, so that a class context reached after another
+        private:internal ancestor does not gain access to those after it
+
+        Defined inline in Function.cpp, its only user: the run-time variant search calls it for every call whose
+        variant was not resolved at parse time; an entry that the context can access without the search is taken
+        without a call, and the search past inaccessible ancestors is getNextFunction()
+    */
+    DLLLOCAL inline QoreFunction* getFunction(const qore_class_private* class_ctx,
+        const qore_class_private*& last_class, const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
+
+    //! returns true if an ancestor before \a aqfi (after the function itself) has private:internal access
+    DLLLOCAL bool hasInternalBefore(const_iterator aqfi) const;
+
+private:
+    //! returns the function at \a aqfi, which the class context can access; updates \a last_class and
+    //! \a internal_access
+    DLLLOCAL QoreFunction* getFunctionAt(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator aqfi, bool& internal_access) const;
+
+    //! getFunction() for an ancestor at \a aqfi that the class context cannot access without the search
+    DLLLOCAL QoreFunction* getNextFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
 };
 
 //! variant filter of QoreFunction::runtimeFindVariant(): only user variants
@@ -2741,6 +2831,16 @@ public:
                 return;
             }
         }
+    }
+
+    //! removes the ancestors from the inheritance list, so that it can be built again
+    /** The list is built again when a parent class has created a method by resolving an abstract method after the
+        list was built (qore#7307)
+    */
+    DLLLOCAL void clearAncestors() {
+        assert(!ilist.empty());
+        assert(ilist.front().func == this);
+        ilist.erase(ilist.begin() + 1, ilist.end());
     }
 
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
@@ -3328,7 +3428,7 @@ protected:
     (refineInterpreterEffectSummary()); their Programs free that code with their namespaces when they are deleted, also
     while another thread reads it.  Each Program reached is held (qore_program_private::tryHoldForCompile()), which its
     teardown waits for without the hold being visible to its code (qore#5874).  A Program that its teardown has marked
-    (UserVariantBase::pgm_deleted, or qore_program_private::ptid, which refuses the hold) is not held, and its code is
+    (UserVariantBase::pgmDeleted(), or qore_program_private::ptid, which refuses the hold) is not held, and its code is
     not read: the function is called through the call path, which refuses the call (qore#5822).  The root function's
     Program is held as well (holdRoot()): the thread that reads its code need not be counted in it (the fast call path
     can run code of the current Program without entering it).  The holds are released with release() or when the
@@ -3438,9 +3538,18 @@ protected:
 
     ClassAccess access;
 
+    //! the variants of parent classes that implement abstract variants of the method with an access more restrictive
+    //! than their own, which the abstract declaration gives them in this method: the variant objects are shared with
+    //! the methods of their classes (qore#7277)
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, ClassAccess>> implemented_access;
+
     DLLLOCAL int checkFinalVariant(const MethodFunctionBase* m, const MethodVariantBase* v) const;
 
     DLLLOCAL void replaceAbstractVariantIntern(MethodVariantBase* variant);
+
+    //! returns the access of a variant of the method: the more restrictive of its own and of the abstract variant of
+    //! the method that it implements, if any (qore#7277)
+    DLLLOCAL ClassAccess getImplementedVariantAccess(const MethodVariantBase* v) const;
 
 public:
     DLLLOCAL MethodFunctionBase(const char* nme, const QoreClass* n_qc, bool n_is_static) : QoreFunction(nme),
@@ -3455,7 +3564,8 @@ public:
             has_final(old.has_final),
             is_abstract(old.is_abstract),
             has_private_internal_variants(old.has_private_internal_variants),
-            access(old.access) {
+            access(old.access),
+            implemented_access(old.implemented_access) {
         //printd(5, "MethodFunctionBase() copying old=%p -> new=%p %p %s::%s() %p %s::%s()\n",& old, this, old.qc, old.qc->getName(), old.getName(), qc, qc->getName(), old.getName());
 
         // set a pointer to the new function
@@ -3525,7 +3635,12 @@ public:
     // runtime version - assumes signatures are already resolved
     DLLLOCAL MethodVariantBase* runtimeHasVariantWithSignature(MethodVariantBase* v, bool relaxed_match = false) const;
 
-    DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant);
+    //! replaces the abstract variant that \a variant of a parent class implements
+    /** @param variant the concrete variant of a parent class
+        @param min_access the more restrictive of the access of the abstract variant and of the access of \a variant
+        in the method of its class: the variant has at least this access in this method (qore#7277)
+    */
+    DLLLOCAL void replaceAbstractVariant(MethodVariantBase* variant, ClassAccess min_access);
 
     DLLLOCAL void parseRollbackMethod();
 
@@ -3537,8 +3652,34 @@ public:
         return is_abstract;
     }
 
+    //! returns the abstract variants of the method that concrete variants of parent classes implement
+    /** they are no longer in the variant list (see replaceAbstractVariant()); the AOT image keeps them, so that its
+        loader resolves them again (qore#7277)
+    */
+    DLLLOCAL const VList& getReplacedAbstractVariants() const {
+        return pending_save;
+    }
+
     DLLLOCAL ClassAccess getAccess() const {
         return access;
+    }
+
+    //! returns true if a variant of a parent class has another access in this method (see getVariantAccess())
+    DLLLOCAL bool hasImplementedVariantAccess() const {
+        return !implemented_access.empty();
+    }
+
+    //! returns the access of the variant \a v in this method, whose own access is \a va: more restrictive for a
+    //! variant of a parent class that implements a more restrictive abstract variant of the method (qore#7277)
+    /** called only if hasImplementedVariantAccess() is true, so that ordinary calls do not search
+    */
+    DLLLOCAL ClassAccess getVariantAccess(const AbstractQoreFunctionVariant* v, ClassAccess va) const {
+        for (const std::pair<const AbstractQoreFunctionVariant*, ClassAccess>& i : implemented_access) {
+            if (i.first == v) {
+                return i.second;
+            }
+        }
+        return va;
     }
 
     //! returns true if the method inherits a public variant of an ancestor through a public path that none of its
@@ -3688,6 +3829,18 @@ public:
     */
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
+
+    //! evalClosure() for a closure whose own Program is not the one that compiled its code: runs it in the Program
+    //! that compiled it, which it holds before anything of the variant is read (qore#7202); out of line, so that the
+    //! other closures only test for it
+    DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
+        const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink,
+        bool tmp_args) const;
+
+    //! the call of evalClosure() and evalForeignClosure(); inlined into both, so that the call of a closure keeps one
+    //! frame on its path
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalClosureBody(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args) const;
 
     //! evalClosure() with arguments in source order with the names in \a arg_names, which are bound to the
     //! parameters of the closure's variant by name (M4 phase 3)

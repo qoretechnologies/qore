@@ -305,7 +305,6 @@ class TestInterpreterState {
         AutoLock al(lck);
         if (!read) {
             # the process environment itself: a compiled executable initializes its modules before it sets ENV
-            # live-provider-optin: ParentExecutableVar, set by the parent test process
             parent_executable = getenv(TestInterpreter::ParentExecutableVar);
             setenv(TestInterpreter::ParentExecutableVar, own);
             read = True;

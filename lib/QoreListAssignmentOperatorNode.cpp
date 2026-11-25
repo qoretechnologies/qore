@@ -130,9 +130,7 @@ int QoreListAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_cont
                 if (qore_program_ops(parse_context.pgm).getParseExceptionSink()) {
                     QoreStringNode* edesc = new QoreStringNode("lvalue for ListAssignment operator in position ");
                     edesc->sprintf("%d of list ListAssignment expects ", li.index() + 1);
-                    QoreTypeInfo::getThisType(prototypeInfo, *edesc);
-                    edesc->concat(", but right-hand side is ");
-                    QoreTypeInfo::getThisType(argInfo, *edesc);
+                    QoreTypeInfo::describeTypeComparison(*edesc, prototypeInfo, ", but right-hand side is ", argInfo);
                     qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc);
                     if (!err) {
                         err = -1;
