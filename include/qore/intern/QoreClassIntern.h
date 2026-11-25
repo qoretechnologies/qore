@@ -7002,12 +7002,13 @@ public:
     /** A class made with a type of its module (QoreClass(..., const QoreTypeInfo*)) is not marked and stays immortal:
         the types derived from that type cannot be orphaned when the class is freed (getTypeOwnerType() is nullptr)
     */
-    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types) {
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
         if (!sys || !owns_typeinfo || program_local.load(std::memory_order_relaxed)) {
             return false;
         }
         marked_types.push_back(getTypeInfo());
         marked_types.push_back(getOrNothingTypeInfo());
+        marked_owners.push_back(&type_owner);
         program_local.store(true, std::memory_order_release);
         return true;
     }

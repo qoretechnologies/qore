@@ -354,6 +354,16 @@ DLLLOCAL bool qore_type_owner_released(QoreTypeOwner* owner);
 */
 DLLLOCAL void qore_upgrade_program_local_derived_types(const type_vec_t& marked_types, bool all = false);
 
+//! Gives builtin declarations that became mortal at run time the references to the binary module declarations that
+//! they name now (qore#7540, qore#7533)
+/** A declaration of a Program takes them at its first QoreTypeOwnerBatch; one that a binary module added to a Program
+    at run time has none before its Program's teardown, which can come after the module that it names is deleted (at
+    process exit, a native module that no user module requires is deleted before the user modules' Programs).  A
+    failed allocation takes none: the declaration then takes them at its batch, as before.  The declaration must be
+    complete when its namespace is attached: a method or member added to it later is not walked for them
+*/
+DLLLOCAL void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners);
+
 #ifdef DEBUG
 //! Returns the number of scans of qore_upgrade_program_local_derived_types() (debug builds; qore#7540)
 DLLLOCAL int64 qore_dbg_program_local_derived_type_scans();
