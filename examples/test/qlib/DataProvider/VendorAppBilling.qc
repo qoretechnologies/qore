@@ -6,7 +6,7 @@ class VendorAppBillingTest inherits QUnit::Test {
     }
 
     # Check the catalog values a consumer sees after lazy action registration.
-    addVendor(string mod, string app, string recipient, string model, string source,
+    addVendor(string mod, string app, string recipient, string model, *string source,
             *hash<string, string> action_terms, *hash<string, string> action_sources, *string unit) {
         addTestCase(app, sub () {
             load_module(mod + "DataProvider");
@@ -15,8 +15,11 @@ class VendorAppBillingTest inherits QUnit::Test {
                 "locality": "external", "external_recipient": recipient,
             };
             hash<DataProviderBillingInfo> billing = <DataProviderBillingInfo>{
-                "model": model, "source": source, "effective_date": 2026-11-25,
+                "model": model, "effective_date": 2026-11-25,
             };
+            if (source) {
+                billing.source = source;
+            }
             if (unit) {
                 billing.unit = unit;
             }

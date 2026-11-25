@@ -63,6 +63,15 @@ module SharePointDataProvider {
                 "- **Change tracking**: react to new and modified documents and to new list items, using "
                 "delta queries that resume exactly where they left off\n\n"
                 "Microsoft and SharePoint are trademarks of the Microsoft group of companies",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "microsoft.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://learn.microsoft.com/en-us/graph/metered-api-list",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "sharepoint",
             "logo": SharePointLogo,
             "logo_file_name": "sharepoint-logo.svg",
@@ -99,6 +108,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/sites",
             "action": "list-sites",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Sites",
             "short_desc": "List or search SharePoint sites",
             "desc": "List the sites available. With no search term the tenant's root site and its "
@@ -125,6 +135,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/get-site",
             "action": "get-site",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Site",
             "short_desc": "Get site metadata",
             "desc": "Retrieve metadata for a SharePoint site",
@@ -142,6 +153,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/drives",
             "action": "list-drives",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Document Libraries",
             "short_desc": "List the document libraries in a site",
             "desc": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a "
@@ -157,6 +169,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/get-drive-info",
             "action": "get-drive-info",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Document Library Info",
             "short_desc": "Get document library metadata and quota",
             "desc": "Retrieve a document library's metadata, including its storage quota and owner",
@@ -176,6 +189,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/items",
             "action": "search-items",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Search Documents",
             "short_desc": "List or search documents and folders",
             "desc": "List the items in a folder of a document library, or search the whole library. "
@@ -224,6 +238,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/get-item",
             "action": "get-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Document",
             "short_desc": "Get document or folder metadata",
             "desc": "Retrieve metadata for a document or folder by ID or by path within the library",
@@ -245,6 +260,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/create-folder",
             "action": "create-folder",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Folder",
             "short_desc": "Create a new folder",
             "desc": "Create a new folder in a document library, optionally within a parent folder",
@@ -268,6 +284,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/upload-file",
             "action": "upload-file",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Upload Document",
             "short_desc": "Upload a document (up to 4 MB)",
             "desc": "Upload a document to a library using a simple upload. For files larger than 4 MB, "
@@ -291,6 +308,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/create-upload-session",
             "action": "create-upload-session",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Upload Session",
             "short_desc": "Create a resumable upload session",
             "desc": "Create a resumable upload session for uploading a large document (>4 MB) in "
@@ -314,6 +332,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/download-file",
             "action": "download-file",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Download Document",
             "short_desc": "Download a document",
             "desc": "Get the download URL and metadata for a document. Returns a pre-authenticated "
@@ -334,6 +353,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/delete-item",
             "action": "delete-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Delete Document",
             "short_desc": "Delete a document or folder",
             "desc": "Delete a document or folder from a library. The item is moved to the recycle bin",
@@ -352,6 +372,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/update-item",
             "action": "update-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Update Document",
             "short_desc": "Rename, move, or update a document or folder",
             "desc": "Update the metadata of a document or folder. Can be used to rename an item, move "
@@ -375,6 +396,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/copy-item",
             "action": "copy-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Copy Document",
             "short_desc": "Copy a document or folder",
             "desc": "Asynchronously copy a document or folder to a new location, optionally with a new "
@@ -401,6 +423,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/create-sharing-link",
             "action": "create-sharing-link",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create Sharing Link",
             "short_desc": "Create a sharing link for a document",
             "desc": "Create a sharing link (view, edit, or embed) for a document or folder",
@@ -428,6 +451,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/lists",
             "action": "list-lists",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Lists",
             "short_desc": "List the lists in a site",
             "desc": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded "
@@ -459,6 +483,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/get-list",
             "action": "get-list",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get List",
             "short_desc": "Get list metadata",
             "desc": "Retrieve metadata for a SharePoint list",
@@ -476,6 +501,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/create-list",
             "action": "create-list",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create List",
             "short_desc": "Create a new list",
             "desc": "Create a new list in a SharePoint site, optionally with its columns",
@@ -500,6 +526,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/delete-list",
             "action": "delete-list",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Delete List",
             "short_desc": "Delete a list",
             "desc": "Delete a SharePoint list and every item in it",
@@ -516,6 +543,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/columns",
             "action": "list-columns",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List Columns",
             "short_desc": "List the columns of a list",
             "desc": "List the columns of a SharePoint list, with their types and whether they can be "
@@ -543,6 +571,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/list-items",
             "action": "search-list-items",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Search List Items",
             "short_desc": "List or search the items in a list",
             "desc": "List the items in a SharePoint list, optionally filtered with an OData expression "
@@ -583,6 +612,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/get-list-item",
             "action": "get-list-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get List Item",
             "short_desc": "Get a list item and its column values",
             "desc": "Retrieve a list item with the values of all of its columns",
@@ -600,6 +630,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/create-list-item",
             "action": "create-list-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Create List Item",
             "short_desc": "Create an item in a list",
             "desc": "Create an item in a SharePoint list. Once a site and list have been chosen, the "
@@ -617,6 +648,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/update-list-item",
             "action": "update-list-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Update List Item",
             "short_desc": "Update an item's column values",
             "desc": "Update the column values of an item in a SharePoint list. Once a site and list "
@@ -634,6 +666,7 @@ module SharePointDataProvider {
             "app": SharePointDataProvider::AppName,
             "path": "/delete-list-item",
             "action": "delete-list-item",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Delete List Item",
             "short_desc": "Delete an item from a list",
             "desc": "Delete an item from a SharePoint list",

@@ -62,6 +62,14 @@ module EmpathicBuildingDataProvider {
             "display_name": "Haltian Empathic Building",
             "short_desc": "Haltian Empathic Building server",
             "desc": "Haltian Empathic Building server",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "haltian.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "ebrests",
             "logo": EmpathicBuildingLogo,
             "logo_file_name": "empathicbuilding-logo.svg",
