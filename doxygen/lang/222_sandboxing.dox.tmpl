@@ -1253,7 +1253,7 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     is outside the sandbox root.  The same holds for the \c SANDBOX-CONFIG-ERROR of an allowed path outside the root,
     which gives such code the path that it passed instead of its canonical form.
 
-    @subsection sandbox_fs_dir_cwd The Current Directory of Dir Objects
+    @subsection sandbox_fs_dir_cwd The Current Directory of Dir Objects and realpath()
 
     A @ref Qore::Dir "Dir" object starts in the current directory of the process, which code restricted from external
     information may not read (@ref Qore::getcwd() "getcwd()").  While the path of the object derives from that
@@ -1265,12 +1265,19 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
       @ref Qore::Dir::openFile() "Dir::openFile()"
     - the paths in the errors of the operations of the object, including the denials of the filesystem policy
 
-    An absolute path that the code gives to @ref Qore::Dir::chdir() "Dir::chdir()" replaces the current directory,
-    and the paths that derive from it are given as they are.  The form depends on the code that gets the path, not on
-    the code that made the object: the host gets the paths of the host from an object that restricted code made, and
-    restricted code gets relative paths from an object that the host lends it.  Code that is not restricted from
-    external information, including sandboxed code, which may call @ref Qore::getcwd() "getcwd()", gets the paths of
-    the host.
+    @ref Qore::realpath() "realpath()" gives such code its result in the same form for a relative path, and for an
+    absolute path whose resolution reaches more of the current directory than the path names (a link to it, ex:
+    \c "/proc/self/cwd"); the canonical form of any other absolute path is given as it is.
+
+    An absolute path given to @ref Qore::Dir::chdir() "Dir::chdir()" replaces the current directory, and the paths
+    that derive from it are given as they are; so is the name of a file that was opened by an absolute path.  The form
+    depends on the code that gets the path, not on the code that made the object: the host gets the paths of the host
+    from an object that restricted code made, and restricted code gets the paths that derive from the current
+    directory relative to it also from an object that the host lends it (but the absolute paths of a lent object that
+    the host changed to an absolute path).  Code that is not restricted from external information, including
+    sandboxed code, which may call @ref Qore::getcwd() "getcwd()", gets the paths of the host.  The C++ API
+    (\c QoreDir::dirname(), \c QoreFile::getFileName() and \c QoreFile::getFileNameStr()) returns the paths of the
+    host: C++ code that gives them to %Qore code applies this rule itself.
 
     A relative path is resolved against the current directory of the process when it is used, as every relative path
     is: if the process changes its current directory, a path that @ref Qore::Dir::path() "Dir::path()" returned to
@@ -1280,7 +1287,10 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     This hides the name of the directory, not the directory itself: code that may read the parent directories of the
     current directory can find it, from the depth that the relative paths show (\c "../..") and the names in the
     listings of the parents, as it can without a @ref Qore::Dir "Dir" object; a
-    @ref sandbox_filesystem "file-system policy" that denies those directories prevents it.
+    @ref sandbox_filesystem "file-system policy" that denies those directories prevents it.  The targets of symbolic
+    links are file-system data and are given as they are, by @ref Qore::readlink() "readlink()" and in the \c link
+    field of the listings of @ref Qore::Dir::listInfo() "Dir::listInfo()" and similar methods: a link to the current
+    directory, such as \c "/proc/self/cwd" on Linux, names it, unless a file-system policy denies reading it.
 
     @since %Qore 3.0
 

@@ -1717,6 +1717,17 @@ DLLLOCAL bool qore_caller_no_host_dirs();
 */
 DLLLOCAL std::string qore_path_relative_to_base(const char* path, const std::string& base);
 
+//! Gives the canonical form \a canon of the path \a arg that the code running on the thread gave the form for that
+//! code (realpath(); qore#7662)
+/** For code that is not given host directories that it did not give itself (qore_caller_no_host_dirs()), the result
+    is made relative to the process's current directory (qore_path_relative_to_base()) if \a arg is relative, or if
+    resolving the absolute path \a arg reached more of the current directory than \a arg names (a link to it, such as
+    \c "/proc/self/cwd"); otherwise it is left as it is.
+
+    @return 0 for OK, -1 if an exception has been raised (the current directory cannot be read: no host path is given)
+*/
+DLLLOCAL int qore_canonical_path_for_caller(const char* arg, QoreString& canon, ExceptionSink* xsink);
+
 //! Names the paths that derive from a host directory that the code did not give itself (the process's current
 //! directory that a Dir object starts in) relative to it in the messages built in its scope (qore#7662)
 /** While the scope is active, qore_msg_path() gives absolute paths relative to the base directory

@@ -290,16 +290,14 @@ QoreListNode* QoreDir::listReadable(ExceptionSink* xsink, int stat_filter, const
 }
 
 int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
-    QoreHostDirBaseMessageScopeHelper msg_scope(dir_msg_base(*priv, subdir));
+    // the policy checks, the directory is created at and the messages name the single path that the name gives in the
+    // directory, as priv->mkdir() creates it; it derives from the base directory of the object, if any (qore#7662)
+    std::string base;
+    std::string path = priv->getPath(subdir, base);
+    QoreHostDirBaseMessageScopeHelper msg_scope(std::move(base));
     // Check sandbox security restrictions
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
-        std::string path;
-        if (q_absolute_path(subdir)) {
-            path = subdir;
-        } else {
-            path = priv->getPath(subdir);
-        }
         if (!smh->checkFilesystemAccess(path.c_str(), QSEC_CREATE, xsink)) {
             return -1;
         }
@@ -322,16 +320,14 @@ int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
 }
 
 int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
-    QoreHostDirBaseMessageScopeHelper msg_scope(dir_msg_base(*priv, subdir));
+    // the policy checks, the directory is removed at and the messages name the single path that the name gives in
+    // the directory, as priv->rmdir() removes it; it derives from the base directory of the object, if any (qore#7662)
+    std::string base;
+    std::string path = priv->getPath(subdir, base);
+    QoreHostDirBaseMessageScopeHelper msg_scope(std::move(base));
     // Check sandbox security restrictions
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
-        std::string path;
-        if (q_absolute_path(subdir)) {
-            path = subdir;
-        } else {
-            path = priv->getPath(subdir);
-        }
         if (!smh->checkFilesystemAccess(path.c_str(), QSEC_DELETE, xsink)) {
             return -1;
         }

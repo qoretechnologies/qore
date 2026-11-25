@@ -229,10 +229,11 @@
     same exceptions with full paths (see @ref no-external-info "%no-external-info";
     <a href="https://github.com/qoretechnologies/qore/issues/7507">issue 7507</a>).
 
-    @par Code Restricted From External Information Gets Dir Paths Relative to the Current Directory
-    @ref Qore::Dir "Dir" paths, the names of files opened with it and its errors give code restricted with
-    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" a path that derives from the process's current directory
-    relative to it (ex: \c "./sub"), as it may not read that directory (see @ref sandbox_fs_dir_cwd;
+    @par Code Restricted From External Information Gets Dir and realpath() Paths Relative to the Current Directory
+    @ref Qore::Dir "Dir" paths, the names of files opened with it, its errors and @ref Qore::realpath() "realpath()"
+    give code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" a path that derives from the
+    process's current directory relative to it (ex: \c "./sub"), as it may not read that directory (see
+    @ref sandbox_fs_dir_cwd;
     <a href="https://github.com/qoretechnologies/qore/issues/7662">issue 7662</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own

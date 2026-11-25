@@ -1955,8 +1955,8 @@ ArrayList l();
     - the process's current directory that a @ref Qore::Dir "Dir" object starts in (since %Qore 3.0): the paths that
       derive from it (@ref Qore::Dir::path() "Dir::path()", the names of files opened with
       @ref Qore::Dir::openFile() "Dir::openFile()", the errors of the object's operations and the denials of a
-      @ref sandbox_filesystem "sandbox file-system policy" for them) are given relative to it; see
-      @ref sandbox_fs_dir_cwd
+      @ref sandbox_filesystem "sandbox file-system policy" for them) and the results of @ref Qore::realpath() "realpath()"
+      for relative paths are given relative to it; see @ref sandbox_fs_dir_cwd
 
     @par Known Limitation:
     The following still give paths of the host to code with this option:
@@ -1969,7 +1969,9 @@ ArrayList l();
       "SandboxManager::callWithSystemPolicy()") and returned
     - the process's current directory can be found by code that may read its parent directories: the depth of the
       directory shows in the relative paths of a @ref Qore::Dir "Dir" object above it (\c "../.."), and the names of
-      the directories in listings of the parents (see @ref sandbox_fs_dir_cwd)
+      the directories in listings of the parents, and the targets of symbolic links that @ref Qore::readlink()
+      "readlink()" and directory listings give, such as that of \c "/proc/self/cwd", unless a file-system policy denies
+      reading them (see @ref sandbox_fs_dir_cwd)
     .
     A debugger (@ref Qore::DebugProgram "DebugProgram", which needs the \c DEBUGGER functional domain) has full
     access to the code that it debugs, and is given the locations of its exceptions with their full paths.

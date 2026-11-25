@@ -1731,7 +1731,11 @@ string realpath = realpath(path);
 
     @param path the path to process
 
-    @return the corresponding absolute path with all relative references removed and all symbolic links resolved (if applicable for the current platform)
+    @return the corresponding absolute path with all relative references removed and all symbolic links resolved (if applicable for the current platform);
+    code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets the result
+    relative to the current directory of the process (ex: \c ".", \c "./sub", \c "../x") for a relative \a path, and
+    for an absolute \a path whose resolution reaches more of the current directory than \a path names (ex:
+    \c "/proc/self/cwd"); see @ref sandbox_fs_dir_cwd
 
     @throw REALPATH-ERROR if an error occurs calculating the return value then this exception is thrown
     @throw REALPATH-ERROR the path contains a NUL character; see @ref path_nul_characters
@@ -1764,10 +1768,16 @@ string realpath(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
          }
          return QoreValue();
       }
-      return new QoreStringNode(pin.canon.c_str(), path->getEncoding());
+      SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(pin.canon.c_str(), path->getEncoding()));
+      // the form for the caller: no current directory for code restricted from external information (qore#7662)
+      return qore_canonical_path_for_caller(path->c_str(), **rv, xsink) ? QoreValue() : rv.release();
    }
 #endif
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(path->getEncoding()));
-   return q_realpath(*path, **rv, xsink) ? 0 : rv.release();
+   if (q_realpath(*path, **rv, xsink)) {
+      return QoreValue();
+   }
+   // the form for the caller: no current directory for code restricted from external information (qore#7662)
+   return qore_canonical_path_for_caller(path->c_str(), **rv, xsink) ? QoreValue() : rv.release();
 }
 ///@}

@@ -203,7 +203,9 @@ public:
     DLLEXPORT int checkCreatePolicy(ExceptionSink* xsink) const;
 
     //! returns the current directory name or 0 if none is set
-    /** @return the current directory name or 0 if none is set
+    /** @return the current directory name or 0 if none is set; this is the path of the host, also when it derives from
+        the process's current directory: C++ code that gives it to %Qore code applies the rule of dirnameForCaller()
+        (qore#7662)
     */
     DLLEXPORT QoreStringNode* dirname() const;
 

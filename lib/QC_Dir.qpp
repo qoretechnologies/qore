@@ -41,6 +41,17 @@
 #include <memory>
 #include <sys/types.h>
 
+// returns true if a name that must name an entry of the directory contains a directory separator: on Windows, both
+// '\\' and '/' separate directories, so that a name with either would name a path that the methods do not expect
+// (such as an absolute one; qore#7662)
+static bool dir_name_has_sep(const char* name) {
+#ifdef _Q_WINDOWS
+    return strchr(name, '\\') || strchr(name, '/');
+#else
+    return strchr(name, QORE_DIR_SEP);
+#endif
+}
+
 // returns true if the sandbox policy, if any, allows the given directory entry to be read; an entry that it does not
 // allow to be read is left out of a listing instead of being revealed
 static bool dir_entry_readable(QoreSandboxManager* sm, const QoreString& path) {
@@ -350,8 +361,8 @@ bool Dir::chdir(string path) [flags=NAMED_ARGS] {
     While the path derives from the current directory of the process, which the object starts in, code restricted
     from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets it relative to that
     directory: \c "." for the directory itself, a path starting with \c "./" below it and one starting with \c ".."
-    otherwise; an absolute path that the code gave to chdir() and the paths that derive from it are given as they
-    are.  Such a relative path is resolved against the current directory of the process when it is used; see
+    otherwise; after an absolute path was given to chdir(), the path and the paths that derive from it are given as
+    they are, also when the host gave it to an object that it lends.  Such a relative path is resolved against the current directory of the process when it is used; see
     @ref sandbox_fs_dir_cwd
 
     @return the path of the Dir object or @ref nothing if no path is set
@@ -587,7 +598,7 @@ nothing Dir::mkdir(string subdir, softint mode = 0777) [flags=NAMED_ARGS] {
       return QoreValue();
    }
    // check if there is a path delimiter
-   if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
+   if (dir_name_has_sep(subdir->getBuffer()))
       xsink->raiseException("DIR-MKDIR-PARAMETER-ERROR", "only single, direct subdirectories are allowed");
    else
       d->mkdir(xsink, subdir->getBuffer(), (int)mode);
@@ -617,7 +628,7 @@ nothing Dir::rmdir(string subdir) [flags=NAMED_ARGS] {
       return QoreValue();
    }
    // check if there is a path delimiter
-   if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
+   if (dir_name_has_sep(subdir->getBuffer()))
       xsink->raiseException("DIR-RMDIR-PARAMETER-ERROR", "only direct subdirectories are allowed");
    else
       d->rmdir(subdir->getBuffer(), xsink);
@@ -1359,7 +1370,7 @@ File Dir::openFile(string filename, int flags = O_RDONLY, int mode = 0666, *stri
    if (q_check_path(*filename, "DIR-OPENFILE-PARAMETER-ERROR", xsink)) {
       return QoreValue();
    }
-   if (strchr(filename->getBuffer(), QORE_DIR_SEP))
+   if (dir_name_has_sep(filename->getBuffer()))
       return xsink->raiseException("DIR-OPENFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
@@ -1407,7 +1418,7 @@ Dir Dir::openDir(string subdir, *string encoding) [flags=NAMED_ARGS] {
       return QoreValue();
    }
    // check if there is a path delimiter in
-   if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
+   if (dir_name_has_sep(subdir->getBuffer()))
       return xsink->raiseException("DIR-OPENDIR-PARAMETER-ERROR", "only direct directory names without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : d->getEncoding();
@@ -1449,7 +1460,7 @@ bool Dir::removeFile(string filename) [flags=NAMED_ARGS] {
       return QoreValue();
    }
    // check if there is a path delimiter in
-   if (strchr(filename->getBuffer(), QORE_DIR_SEP))
+   if (dir_name_has_sep(filename->getBuffer()))
       return xsink->raiseException("DIR-REMOVEFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
    std::string cwd_base;
