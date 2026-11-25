@@ -110,6 +110,7 @@ static_assert(QORE_IR_MAX_OPCODE == 443,
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreDeleteOperatorNode.h>
 
+
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
 extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
@@ -537,6 +538,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
 static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK");
@@ -652,7 +654,6 @@ static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     }
     return evalAndRef(val.getInternalNode(), xsink);
 }
-
 
 static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     if (value.getType() == NT_LIST) {
@@ -3364,7 +3365,6 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
-
 
 static void updateLocalVarFromLvalue(
         IRLocalVarSet& instantiated_locals,
@@ -15560,10 +15560,14 @@ load_local_done:
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
-                            if (QoreTypeInfo::hasType(vti)
-                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                                QoreTypeInfo::acceptAssignment(vti,
-                                    "<lvalue>", entry, xsink, QLVTS_List);
+                            // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+                            // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+                            if (QoreTypeInfo::hasType(vti)) {
+                                if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                    QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+                                }
+                            } else if (entry.isPointer()) {
+                                strip_untyped_list_element(vti, entry, xsink);
                             }
                             if (xsink && *xsink) {
                                 entry.discard(xsink);
@@ -15625,10 +15629,14 @@ load_local_done:
                         {
                             const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
-                            if (QoreTypeInfo::hasType(vti)
-                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                                QoreTypeInfo::acceptAssignment(vti,
-                                    "<lvalue>", entry, xsink, QLVTS_List);
+                            // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+                            // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+                            if (QoreTypeInfo::hasType(vti)) {
+                                if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                    QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+                                }
+                            } else if (entry.isPointer()) {
+                                strip_untyped_list_element(vti, entry, xsink);
                             }
                             if (!(xsink && *xsink)) {
                                 new_l->setEntry(index, entry, xsink);
