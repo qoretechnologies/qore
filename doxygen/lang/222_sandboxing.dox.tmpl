@@ -1073,6 +1073,15 @@ authenticate();
     - the proxy of the environment is given without its user name and password
       (@ref HttpClientIo::get_proxy_url_from_environment() "get_proxy_url_from_environment()", also for
       @ref UrlDownloader::UrlDownloader "UrlDownloader")
+    - the connection and datasource provider modules of the environment (\c QORE_CONNECTION_PROVIDERS,
+      \c QORE_DATASOURCE_PROVIDERS) are used only if they resolve names for the calling code themselves
+      (@ref ConnectionProvider::get_connection() "get_connection()",
+      @ref ConnectionProvider::get_connections() "get_connections()",
+      @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
+      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()"; see @ref connectionprovider_caller_scoped and
+      @ref datasourceprovider_caller_scoped): the other modules give the host's connections and datasources, so a
+      lookup of a name that only they know fails as for an unknown name, without naming the host's modules or giving
+      their errors, and the lists leave their connections and datasources out
 
     For code that may not read external information, the host's environment is empty, as it is in that code itself:
     - environment variables expand to empty strings: @ref Util::substitute_env_vars() "substitute_env_vars()" (also for
@@ -1083,6 +1092,77 @@ authenticate();
       its file names whatever code logs through it)
     - the proxy of the environment is not used at all, and neither are the AWS region and the GCP quota project of the
       environment; such code gives them explicitly
+    - @ref Util::tmp_location() "tmp_location()" takes no directory from the environment (\c TMPDIR and the others):
+      it is the platform's default (\c /tmp), also for the temporary files and directories that library code creates
+      without a directory (ex: @ref FsUtil::TmpDir "TmpDir"), which such code places elsewhere by giving their
+      directory; @ref Util::TerminalColor::isColorDisabled() "TerminalColor::isColorDisabled()" does not read
+      \c NO_COLOR, @ref QUnit::Test::getEnv() "QUnit::Test::getEnv()" gives no values,
+      @ref EdifactUtil::EdifactDirectoryCache "EdifactDirectoryCache" takes no cache root from the environment and
+      expands no \c ~ (\c EDIFACT-CACHE-ERROR), and a @ref TelnetClient::TelnetClient "TelnetClient" that such code
+      created or calls sends the server no \c DISPLAY and \c PRINTER and the default terminal type instead of
+      \c TERM; the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" is empty as
+      described below
+    - the \c QUNIT_* options of the environment are not used for the tests of such code; the QLS directive links
+      (@ref QLS::DocumentLinks::expand() "DocumentLinks::expand()") expand no variables and
+      @ref QLS::DocumentLinks::getEnvModuleDirs() "DocumentLinks::getEnvModuleDirs()" is empty; the ONNX quantizer
+      (@ref QoreOnnxTools::OnnxQuantizer "OnnxQuantizer") uses \c python3 instead of \c QORE_ONNX_PYTHON; the
+      debugger's command line (\c DebugLinenoiseCmdLine) uses no init or history file of the home folder; the
+      failures of
+      @ref DataProvider::DataProvider::loadProvidersFromEnvironmentWithReport() "DataProvider::loadProvidersFromEnvironmentWithReport()"
+      name no module of \c QORE_DATA_PROVIDERS (the modules are loaded as for other code)
+    - the data provider index: \c ProviderIndexUtil gives no index directory (\c QORE_PROVIDER_INDEX_DIR), no path
+      of an index file, no value of \c QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES and no user and group IDs of the
+      process (@ref ProviderIndexUtil::ProviderIndexUtil::tryGetIndexDir() "ProviderIndexUtil::tryGetIndexDir()" and
+      the methods that return them raise \c INVALID-FUNCTION-ACCESS, and its errors and results leave them out), and
+      such code may neither set nor get its process-wide logger, which receives the module's diagnostics that name
+      them, nor write, replace or hide the index that the host published (see
+      @ref providerindexutil_published_index); such code still looks up apps, actions, factories and schemes in the
+      index (see @ref providerindexutil_external_info "the ProviderIndexUtil module")
+    - the process-wide logger of the data providers: such code neither gets
+      (@ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" returns @ref nothing) nor
+      sets it (\c INVALID-FUNCTION-ACCESS), as it receives the messages of every caller, which name host information
+      (ex: the modules of \c QORE_DATA_PROVIDERS, and the paths of the index when the host gives ProviderIndexUtil the
+      same logger)
+
+    Information about the host other than the environment is not used for such code either, as it may not read it
+    itself (@ref Qore::getcwd() "getcwd()", @ref Qore::gethostname() "gethostname()",
+    @ref Qore::getpid() "getpid()", @ref Qore::get_netif_list() "get_netif_list()"):
+    - the current working directory: @ref Util::normalize_dir() "normalize_dir()" and its UNIX and Windows variants
+      return a relative path without \a cwd normalized as a relative path (which names the same file),
+      @ref Util::get_relative_path() "get_relative_path()" without \a cwd raises \c INVALID-FUNCTION-ACCESS when the
+      result would depend on the current working directory, the \c file:// URI of a relative path
+      (@ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "getFileUri()", the
+      @ref FileLocationHandler::FileResourceInfo::effective_location "effective location" of a file resource) names
+      a virtual working directory that resolves like the real one, and the REPL's \c /pwd command is refused
+    - the hostname, the PID and the addresses of the network interfaces:
+      @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" uses the loopback address for a wildcard
+      bind address, and the SMTP client names \c localhost in its \c EHLO and \c HELO commands; the hostname in the
+      error pages of an @ref HttpServer::HttpServer "HttpServer" and the PID in the task IDs of the MCP and A2A server
+      handlers are left out for an object that such code created and while such code calls one of the host; the
+      \c %%h, \c %%P and \c %%E fields of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" are empty
+      for a layout that such code created or whose pattern it set, and in what such code gets from the layout's
+      format methods and from an appender whose layout such code set (when it created the appender or with
+      \c setLayout()), also from a layout of the host; an appender whose layout the host set formats them whatever
+      code logs through it, as the file names of the Logger file appenders are kept; the \c host field of the documents of
+      the ElasticSearch and OpenSearch logger appenders is left out for an appender that such code created
+
+    The host grants this information as it grants ambient data, with a policy barrier or a capability, and an object
+    that it lends lends nothing here.  Library code that uses this information for its own work and gives the caller
+    nothing of it (ex: the temporary file names of its own atomic writes, its own diagnostics that a host enables with
+    environment variables, and the environment variables with which the host restricts what the library does, such as
+    \c QORE_FILE_LOCATION_CONNECTIONS) is not affected.
+
+    The token of the virtual working directory of the \c file:// URIs is the same for all code of a process, so two
+    restricted callers of one process can tell that they share it.  An object of the host that restricted code can
+    reach (a logger and its appenders and layouts, for example) can also be changed by it: setting the layout of an
+    appender or the pattern of a layout makes it format no values of the host, also for the host.
+
+    This applies to every module that the code can call, whether the host loaded it into the code's %Program before
+    it restricted it, or the code requires it itself (also a module that the host's process had loaded before, which
+    is not parsed again for it).  It covers the functions and methods listed above; known limitations:
+    - the constant @ref Qore::Logger::LoggerLayoutPattern::HostName "LoggerLayoutPattern::HostName" gives the
+      hostname to any code that can use the \c logger_bin module, as constants have no check of the calling code
+      (<a href="https://github.com/qoretechnologies/qore/issues/7506">issue 7506</a>)
 
     @since %Qore 3.0
 

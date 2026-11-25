@@ -143,6 +143,24 @@
     limit is set (a body that a handler reads as a stream is not limited); set the
     @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
 
+    @par Library Code Gives Restricted Code No Other Host Information
+    @parblock
+    For code restricted from external information, the functions listed in @ref sandbox_ambient_host_data (ex:
+    @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()") use no environment,
+    working directory, hostname, PID or network interface for it, with the known limitations listed there
+    (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
+
+    \c ProviderIndexUtil gives such code no index directory, index file path or process IDs: its methods that return
+    them raise \c INVALID-FUNCTION-ACCESS, and neither it nor \c DataProvider gives or lets it set its logger (see
+    @ref providerindexutil_external_info; <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>).
+    @endparblock
+
+    @par Only the Host's Code Changes the Published Data Provider Index
+    Sandboxed code and code restricted from external information, also with file system access and process control,
+    cannot write, replace or hide the data provider index that the host published, its directory, its build mode or
+    its cached apps, or claim the modules of its apps (see @ref providerindexutil_published_index;
+    <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>).
+
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
     while the server waits for it, so that a very slow client can no longer hold a handler thread; a client that keeps
@@ -2975,6 +2993,8 @@
       refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
       two threads store into targets referring to each other, or hangs when the reference refers to the target's own
       object or variable: the references are bound with no lock held (issue #7391)
+    - the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
+      (\c %%E instead of \c %%E{NAME}) formats as an empty string instead of crashing the process.
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
