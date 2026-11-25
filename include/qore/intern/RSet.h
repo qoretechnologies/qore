@@ -201,6 +201,22 @@ public:
     int dbg_del_waiting = 0;
 #endif
 
+    //! The number of references released in the locking path (deref()), written under rlck; wraps around
+    /** A dereference that decided to delete the object tells the references counted at its decision that have been
+        released since from references taken since with it (qore_object_private::takeLastDeleteReference(),
+        takeCollectDeleteReference(), qore#7509): every release made since is made there, as the count was zero, or as
+        the object is in a recursive set or has a collection pending (see collect_pending)
+    */
+    unsigned locked_releases = 0;
+
+    //! The number of dereferences that have decided to collect the object and have not marked it yet
+    /** Raised under rlck while the decision's rsection is held, so while the object is in a committed recursive set,
+        whose releases are made in the locking path; tryFastDeref() leaves the releases to that path while it is not
+        zero, also once a change of the graph has taken the object out of its set, so that they are counted in
+        locked_releases (qore#7509).  Lowered under rlck when the dereference marks the object or abandons.
+    */
+    std::atomic<int> collect_pending{0};
+
     //! Whether the last scan rooted at this object had to assign a recursive set
     /** Chooses the mode of the next scan started here.  A scan that changes nothing can share the rsection of
         every object it enters with other scans, but a scan that finds it has to change a set has to walk the
@@ -868,7 +884,12 @@ public:
         @param initiator the object being dereferenced
         @param cleanup collects the members to release if the set is collected
     */
-    DLLLOCAL int canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup);
+    //! returns 1 if the set can be deleted, 0 if not, -1 if it has to be rescanned
+    /** @param decided if not null, set to the count of \a initiator with which the set is deleted
+        @param releases if not null, set to RObject::locked_releases of \a initiator, read with that count (qore#7509)
+    */
+    DLLLOCAL int canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup,
+            int* decided = nullptr, unsigned* releases = nullptr);
 
     //! Returns true if a verdict of "cannot delete" must be checked by a rescan
     /** Called with rwl held.  A reference from outside the set keeps it, unless the set has gained an edge between
@@ -1489,6 +1510,19 @@ public:
     DLLLOCAL void willDelete() {
         assert(!del);
         del = true;
+    }
+
+    //! the deletion that this dereference decided is abandoned, as another thread has taken a reference since
+    /** (qore_object_private::takeLastDeleteReference(), takeCollectDeleteReference()): the dereference does not delete
+        the object, so it does not wait as a deleter for the other dereferences, and a scan that it captured and has not
+    made is due again
+    */
+    DLLLOCAL void abandonDelete() {
+        del = false;
+        if (deferred_scan) {
+            deferred_scan = false;
+            o->deferred_scan.store(true, std::memory_order_release);
+        }
     }
 };
 

@@ -1,0 +1,13 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the onComplete() of an operation that the module cleanup counts takes a handle of its work and releases it twice
+# ("twice"), or never ("never"), in which case the cleanup waits for it until the grace period after its deadline and
+# then leaves the modules as they are, or hands itself over to code that it discards without running it ("drop"),
+# which releases the handle (qore#7239), or to code wrapped with AsyncIoController::wrapModuleCleanupWork() that runs
+# on another thread ("wrap") or raises an exception there ("wrap-throw") (qore#7339)
+
+%requires AaHandover
+%requires AbLater
+
+Holder::start(ARGV[0]);
+printf("started\n");

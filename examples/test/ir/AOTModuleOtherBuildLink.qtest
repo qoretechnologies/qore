@@ -63,6 +63,8 @@ class AOTModuleOtherBuildLinkTest inherits QUnit::Test {
             "the libqore", \splitExplicitPathTest());
         addTestCase("restricted code loads the module of the build of the libqore for a link in the module path",
             \restrictedCodeTest());
+        addTestCase("the module of the build of the libqore for a link in the module path is library code, whatever "
+            "the lengths of the paths", \ownModuleTrustTest());
         addTestCase("a link that does not lead into the qlib-qmod directory of a build is used as found",
             \notBuildLinkTest());
         addTestCase("a link into another build with indirect dependencies loads the modules of the build of the "
@@ -199,9 +201,11 @@ class AOTModuleOtherBuildLinkTest inherits QUnit::Test {
     }
 
     #! runs a script in a child qore with the libqore of a build and returns its output
-    private string runWith(string build, string code) {
-        return trim(run(sprintf("%s=%s QORE_MODULE_DIR=%s %s -ne %s", lib_path_var, q(build), q(src_qlib),
-            q(qore_bin), q(code))));
+    /** @param module_dir the module path of the child; the source tree's qlib directory by default
+    */
+    private string runWith(string build, string code, *string module_dir) {
+        return trim(run(sprintf("%s=%s QORE_MODULE_DIR=%s %s -ne %s", lib_path_var, q(build),
+            q(module_dir ?? src_qlib), q(qore_bin), q(code))));
     }
 
     #! returns the module's value and the physical path of the file it was loaded from with the libqore of a build
@@ -299,6 +303,65 @@ try {
 printf(\"%s\\n\", realpath(get_module_hash().Mod.filename));";
         assertEq("loaded\n" + realpath(b1 + "/qlib-qmod/Mod.qmod"), runWith(b1, code));
         assertEq("loaded\n" + realpath(b2 + "/qlib-qmod/Mod.qmod"), runWith(b2, code));
+    }
+
+    #! the module that the build of the libqore has for a link into another build is judged where the link is
+    /** Whether the module is library code is decided by where the search found the link, which is in the module path,
+        and not by the path of the module of the build, which the module path does not have (qore#7319): whatever the
+        lengths of the build directories' names and of the module path entry, also for a module in a directory of its
+        own and for a link into a build that was removed.  Library code is loaded by restricted code, which loads
+        native code only from the module path, and can run the closures that the initialization of a library module
+        created.
+    */
+    ownModuleTrustTest() {
+        # build directory names whose lengths put a directory separator of the path of the module of the build at
+        # the offset of the name after the module path entry in the path of the link
+        foreach list<string> names in ((("b1", "b2"), ("b12345678", "b23456789"), ("b123", "b2345"))) {
+            foreach bool split in ((False, True)) {
+                checkOwnModuleTrust(names[0], names[1], split);
+            }
+        }
+    }
+
+    #! checks that restricted code loads the module of the build of the libqore for a link into another build
+    /** With the source tree's qlib directory in the module path, then with a module path entry with "." components
+        that is longer than the path of the module of the build, then after the modules of the other build were
+        removed (the link remains).  The build directory names whose lengths put a directory separator at the offset
+        of the name after the module path entry are the regression check of the name that the search appended; the
+        long module path entry is not: a name read from the wrong path there can still be the right one.
+
+        @param n1 the name of the build of the libqore
+        @param n2 the name of the other build, which the link leads into
+        @param split True for a module in a directory of its own
+    */
+    private checkOwnModuleTrust(string n1, string n2, bool split) {
+        TmpDir tmp = initTree();
+        string name = split ? "Split" : "Mod";
+        if (split) {
+            writeSplitSource();
+        }
+        string b1 = makeBuild(n1, src_tree);
+        string b2 = makeBuild(n2, src_tree);
+        compileModule(b1, name, split);
+        compileModule(b2, name, split);
+        string rel = split ? "Split/Split.qmod" : "Mod.qmod";
+        link(b2, rel);
+        string code = sprintf("Program target(PO_NEW_STYLE);
+Program p(PO_NEW_STYLE | PO_NO_THREAD_CLASSES | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+p.parse(\"string sub t(Program target) { target.loadModule('%s'); return 'loaded'; }\", \"probe\");
+try {
+    printf(\"%%s\\n\", p.callFunction(\"t\", target));
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%%s: %%s\\n\", ex.err, ex.desc);
+}
+printf(\"%%s %%s\\n\", target.callFunction(\"%s::value\"), realpath(get_module_hash().%s.filename));", name,
+            name, name);
+        string expected = sprintf("loaded\n%s %s", n1, realpath(b1 + "/qlib-qmod/" + rel));
+        string label = sprintf("%s for a link into %s, %s", n1, n2, split ? "split module" : "module");
+        assertEq(expected, runWith(b1, code), label);
+        assertEq(expected, runWith(b1, code, src_qlib + strmul("/.", 60)), label + ", long module path entry");
+        assertEq(0, system(sprintf("rm -rf %s", q(b2 + "/qlib-qmod"))));
+        assertEq(expected, runWith(b1, code), label + ", other build removed");
     }
 
     notBuildLinkTest() {

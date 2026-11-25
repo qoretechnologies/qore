@@ -389,6 +389,21 @@ public:
     //! Submit a RST_STREAM frame to cancel a stream
     DLLLOCAL int submitRstStream(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink);
 
+    //! Releases the send state of a stream that the application has reset, before its RST_STREAM is sent
+    /** Called after submitRstStream() by Socket::resetHttp2Stream(), whose reset is only queued until the I/O thread
+        next writes the session's frames: nghttp2 keeps the stream until then, and onStreamCloseCallback() released
+        its buffered data only then.  The data not yet sent, the stream's pong, send limit and progress count are
+        released at once, and until nghttp2 closes the stream, the stream counts as gone: streamTakenBytes() and
+        waitForStreamDrain() return -1, streamSendFlushed() 0, sendStreamData() raises an exception as on a closed
+        stream, and the stream's data provider defers (qore#7532).  Nothing is done if nghttp2 has no such stream.
+        The other resets (client cancels, resetFailedInputStream()) do not call it: their stream's state is released
+        when nghttp2 closes the stream.
+
+        @param stream_id the stream
+        @param error_code the error code of the RST_STREAM, reported by a send on the stream
+    */
+    DLLLOCAL void releaseResetStream(int32_t stream_id, uint32_t error_code);
+
     //! Submit a GOAWAY frame for graceful shutdown
     DLLLOCAL int submitGoaway(uint32_t error_code, const char* opaque_data = nullptr,
         size_t len = 0, ExceptionSink* xsink = nullptr);
@@ -741,6 +756,19 @@ public:
         notifyStreamDrain();
     }
 
+#ifdef DEBUG
+    //! Resumes the streams deferred while dbg_http2_hold_stream_data() held them
+    /** A deferred stream is otherwise resumed only by its next send, which a connection that has stopped sending never
+        makes: its data and its end stayed unsent, and the peer's close waited for its timeout
+    */
+    DLLLOCAL static void dbgResumeHeldStreams();
+
+    //! Returns true if dbg_http2_hold_stream_reset() holds the RST_STREAM of a stream of this session
+    /** That is a stream with an RST_STREAM submitted by submitRstStream() that nghttp2 has not sent yet
+    */
+    DLLLOCAL bool dbgStreamResetHeld() const;
+#endif
+
     //! Returns true once @ref markClosed has been called.
     DLLLOCAL bool isSessionClosed() const {
         return session_closed_.load(std::memory_order_acquire);
@@ -764,6 +792,16 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
+
+    //! Returns True if this endpoint has not ended its side of the stream (it has not sent END_STREAM or RST_STREAM)
+    /** A client stream whose response ended while its request side is still open (an extended CONNECT tunnel or a
+        streamed request that the server answered whole) stays half-closed until the client ends it: it then counts
+        against the peer's limit of concurrent streams for the life of the connection (qore#7443)
+
+        @param stream_id the stream to check
+        @return True if the stream exists and its local side is open
+    */
+    DLLLOCAL bool isStreamLocalOpen(int32_t stream_id) const;
 
     //! Returns True if the request body received on the stream exceeded the maximum request body size
     /** @param stream_id the stream to check
@@ -1307,6 +1345,19 @@ private:
     */
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
 
+    //! the streams that the application has reset whose RST_STREAM nghttp2 has not sent yet: stream ID -> error code
+    /** Their send state was released by releaseResetStream(); an entry is removed when nghttp2 closes the stream
+        (onStreamCloseCallback()) (qore#7532)
+    */
+    std::unordered_map<int32_t, uint32_t> app_reset_unsent_streams;
+
+#ifdef DEBUG
+    //! the streams with an RST_STREAM submitted by submitRstStream() that nghttp2 has not closed yet
+    /** For dbg_http2_hold_stream_reset(), which holds the RST_STREAM of such a stream (qore#7532)
+    */
+    std::unordered_set<int32_t> dbg_rst_unsent_streams;
+#endif
+
     //! Returns true if the stream ID was used on this connection and the stream is no longer open
     /** Stream IDs are allocated in increasing order, so a stream that is not live and whose ID is not above the
         highest ID used by its initiator was opened and has closed (RFC 9113 section 5.1.1); no per-stream record
@@ -1396,6 +1447,9 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! A chunk read on the other paths that the stream's send limit refused, sent before anything more is read
+        //! (qore#7460)
+        SimpleRefHolder<BinaryNode> retained_chunk;
         //! Declared Content-Length from response headers (-1 if not declared)
         //! and cumulative bytes sent.  Used to detect short-stream bugs (the
         //! InputStream EOFs before the declared byte count) so the server
@@ -1429,6 +1483,10 @@ private:
             }
         }
     };
+    DLLLOCAL void processStreamInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
+    DLLLOCAL void resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
+        ExceptionSink* xsink);
+
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
@@ -1469,6 +1527,14 @@ public:
     DLLLOCAL bool hasActiveStreamInputStreams() const {
         return has_active_input_streams_.load(std::memory_order_acquire);
     }
+
+    //! Returns true if a pass of processStreamInputStreams() can make progress without a socket event (qore#7435)
+    /** A stream whose send buffer is full waits for the peer's credit, which arrives as a frame (a read event); one
+        whose InputStream is a monitored descriptor, or which has an io_uring read in flight, waits for that.  Asking
+        to be woken for writability for such streams only made the connection's operation run again and again while
+        the socket was writable.
+    */
+    DLLLOCAL bool needsInputStreamPass() const;
 
     //! Process one chunk from each active InputStream (called by I/O thread)
     /** @since %Qore 3.0

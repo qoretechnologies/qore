@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - kqueue registrations, descriptor holds and dup2() of connection attempts
 
 %modern
 

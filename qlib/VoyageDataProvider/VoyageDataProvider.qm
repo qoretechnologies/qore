@@ -60,6 +60,15 @@ module VoyageDataProvider {
                 "- **Search result reranking**: take initial search results and re-sort them by true "
                 "relevance to the user's query for higher-quality results",
             "scheme": "voyage",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "voyageai.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://docs.voyageai.com/docs/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": VoyageLogo,
             "logo_file_name": "voyage-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -71,6 +80,7 @@ module VoyageDataProvider {
             "app": VoyageDataProvider::AppName,
             "path": "/create-embeddings",
             "action": "create-embeddings",
+            "billing": <DataProviderBillingInfo>{"unit": "token"},
             "display_name": "Create Embeddings",
             "short_desc": "Convert text into numerical vectors for search and comparison",
             "desc": "Converts one or more text inputs into numerical vectors (embeddings) that capture "
@@ -83,6 +93,7 @@ module VoyageDataProvider {
                 "Supports batch processing (up to 1,000 texts per request) and configurable output "
                 "dimensions for balancing accuracy vs. storage cost",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 VoyageEmbeddingsRequestDataType::Fields{"model", "input"}, {
@@ -106,6 +117,7 @@ module VoyageDataProvider {
             "app": VoyageDataProvider::AppName,
             "path": "/rerank",
             "action": "rerank",
+            "billing": <DataProviderBillingInfo>{"unit": "token"},
             "display_name": "Rerank Documents",
             "short_desc": "Re-sort search results by relevance to a query",
             "desc": "Takes a search query and a list of documents, then re-sorts the documents by how "
@@ -119,6 +131,7 @@ module VoyageDataProvider {
                 "number of results returned, and `return_documents` to include the document text "
                 "in each result",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Reranking",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 VoyageRerankRequestDataType::Fields{"model", "query", "documents"}, {

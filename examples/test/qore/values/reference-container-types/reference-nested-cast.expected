@@ -1,0 +1,17 @@
+source before the casts: "list<reference<int>> integer"
+top level: RUNTIME-TYPE-ERROR
+list of list of int: RUNTIME-TYPE-ERROR
+list of list of string: RUNTIME-TYPE-ERROR
+list of list of softint: RUNTIME-TYPE-ERROR
+hash of list of int: RUNTIME-TYPE-ERROR
+list of hash of int: RUNTIME-TYPE-ERROR
+hash of hash of int: RUNTIME-TYPE-ERROR
+list of list of reference to string: RUNTIME-TYPE-ERROR
+hash of list of reference to string: RUNTIME-TYPE-ERROR
+reference to int of an auto variable holding an int: ["list<list<reference<int>>>", 9]
+source after a failed cast: "list<reference<int>> integer"
+list of list of reference: ["list<list<reference<int>>>", 100]
+list of list of optional reference: ["list<list<*reference<int>>>", 101]
+list of list of auto: ["list<list<auto>>", 102]
+list of list of reference to softint: RUNTIME-TYPE-ERROR
+conversion of a string: 4

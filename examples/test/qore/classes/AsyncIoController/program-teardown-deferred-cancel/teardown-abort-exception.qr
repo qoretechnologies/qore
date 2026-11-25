@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the exception raised by the release of one canceled operation of a Program is not active while the abort() of the
+# next one runs: it would make transaction helpers in abort() roll back (qore#6703)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+const Code = "
+class Op inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier();
+        Counter waiting;
+    }
+    constructor(Counter waiting) {
+        self.waiting = waiting;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return \"waiting\";
+    }
+    bool goalReached() {
+        return False;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        waiting.dec();
+        return <SocketPollInfo>{
+            \"events\": SOCK_POLLIN,
+            \"socket\": notifier,
+        };
+    }
+    abort() {
+        printf(\"abort: active exception: %y\\n\", active_exception());
+        flush();
+    }
+    destructor() {
+        throw \"RELEASE-ERROR\", \"raised when the operation is released\";
+    }
+}
+
+# the code of a Program that is only called (callFunction()) does not run its top-level statements
+our *Counter waiting;
+our *list<EventNotifier> notifiers;
+
+sub start() {
+    waiting = new Counter(2);
+    notifiers = (new EventNotifier(), new EventNotifier());
+    foreach EventNotifier n in (notifiers) {
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            \"sock\": n,
+            \"spop\": new Op(waiting),
+            \"owner\": \"teardown-abort-exception\",
+            \"to\": -1s,
+        });
+    }
+}
+
+bool sub wait_started() {
+    return !waiting.waitForZero(20s);
+}
+";
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-abort-exception");
+p.callFunction("start");
+printf("operations waiting: %y\n", p.callFunction("wait_started"));
+# the exceptions of the releases are reported after both operations have been canceled
+try {
+    delete p;
+} catch (hash<ExceptionInfo> ex) {
+    printf("teardown: %s\n", ex.err);
+}
+printf("done\n");

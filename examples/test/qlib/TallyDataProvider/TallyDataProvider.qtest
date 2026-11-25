@@ -160,6 +160,19 @@ public class TallyDataProviderTest inherits QUnit::Test {
     }
 
     actionCatalogTest() {
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-current-user", "get-form", "get-submission", "get-workspace");
+        list<hash<DataProviderActionInfo>> ro_actions = select DataProviderActionCatalog::getActions(
+            TallyDataProvider::TallyDataProvider::AppName), inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "create-form")));
+
         # test create-form action
         hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
             TallyDataProvider::TallyDataProvider::AppName, "create-form"

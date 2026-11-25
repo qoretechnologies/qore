@@ -201,6 +201,28 @@ void EnumList::assimilate(EnumList& n, qore_ns_private& ns,
     }
 }
 
+void EnumList::runtimeAssimilate(EnumList& n, qore_ns_private& ns) {
+    // the enums that are added; one that conflicts with a declaration of the namespace stays in the list that is
+    // merged, which is kept with the namespace that was added, as the other declarations of that namespace can use its
+    // type (qore_ns_private::runtimeAssimilate(), qore#7530)
+    std::vector<const char*> added;
+    for (hm_qen_t::iterator i = n.hm.begin(), e = n.hm.end(); i != e; ++i) {
+        if (!ns.classList.find(i->first) && !ns.hashDeclList.find(i->first) && !ns.enumList.find(i->first)
+            && !find(i->first)) {
+            added.push_back(i->first);
+        }
+    }
+    for (const char* name : added) {
+        hm_qen_t::iterator i = n.hm.find(name);
+        assert(i != n.hm.end());
+        QoreEnumDecl* ed = i->second;
+        n.hm.erase(i);
+        // "move" data to new list
+        hm[ed->getName()] = ed;
+        qore_enum_decl_private::get(*ed)->setNamespace(&ns);
+    }
+}
+
 QoreHashNode* EnumList::getInfo() {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
     for (auto& i : hm) {
@@ -224,19 +246,37 @@ QoreHashNode* EnumList::getInfo() {
 }
 
 bool EnumListIterator::isPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isPublic();
 }
 
 bool EnumListIterator::isUserPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isUserPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isUserPublic();
 }
 
 bool ConstEnumListIterator::isPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isPublic();
 }
 
 bool ConstEnumListIterator::isUserPublic() const {
-    return qore_enum_decl_private::get(*i->second)->isUserPublic();
+    assert(started && i < v.size());
+    return qore_enum_decl_private::get(*v[i].second)->isUserPublic();
+}
+
+std::vector<std::pair<const char*, QoreEnumDecl*>> EnumList::getInDeclarationOrder() const {
+    std::vector<std::pair<const char*, QoreEnumDecl*>> v;
+    v.reserve(hm.size());
+    for (auto& i : hm) {
+        v.emplace_back(i.first, i.second);
+    }
+    std::stable_sort(v.begin(), v.end(), [](const std::pair<const char*, QoreEnumDecl*>& a,
+            const std::pair<const char*, QoreEnumDecl*>& b) {
+        return qore_enum_decl_private::get(*a.second)->getDeclSeq()
+            < qore_enum_decl_private::get(*b.second)->getDeclSeq();
+    });
+    return v;
 }
 
 void EnumList::parseRemove(const char* name) {

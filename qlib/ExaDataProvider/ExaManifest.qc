@@ -225,6 +225,7 @@ public class ExaManifest {
             <RestSchemaActionInfo>{
                 "action": "search",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/search",
                 "display_name": "Search",
                 "short_desc": "Search the web and optionally return page contents",
@@ -334,6 +335,7 @@ public class ExaManifest {
             <RestSchemaActionInfo>{
                 "action": "answer",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/answer",
                 "display_name": "Answer a Question",
                 "short_desc": "Answer a question from the web, with citations",
@@ -389,6 +391,7 @@ public class ExaManifest {
             <RestSchemaActionInfo>{
                 "action": "contents",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/contents",
                 "display_name": "Get Contents",
                 "short_desc": "Fetch the text, highlights or a summary of pages",
@@ -470,6 +473,7 @@ public class ExaManifest {
             <RestSchemaActionInfo>{
                 "action": "find-similar",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/findSimilar",
                 "display_name": "Find Similar Links",
                 "short_desc": "Find pages similar to a URL",

@@ -538,7 +538,8 @@ list<auto> list(...) [flags=CONSTANT] {
 }
 
 //! Returns a hash of an object's members
-/** @note that if this function is called from outside the class' scope, the hash will only contain the object's public members
+/** The hash contains the members visible to the calling code, in the order of the @ref keys operator.
+    A call from outside the class hierarchy returns the public members.
 
     @param obj the object to process
 
@@ -550,7 +551,7 @@ hash<auto> h = hash(obj);
     @endcode
 */
 hash<auto> hash(object obj) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
-   return qore_object_private::get(*obj)->getRuntimeMemberHash(xsink);
+   return qore_object_private::get(*obj)->getRuntimeMemberHash(xsink, runtime_get_caller_class());
 }
 
 //! Returns a hash by taking even numbered list elements (starting with 0) and converting them to strings for the hash keys, and the odd numbered elements following the keys as the key value

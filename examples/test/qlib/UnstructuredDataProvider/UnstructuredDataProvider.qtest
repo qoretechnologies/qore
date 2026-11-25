@@ -115,6 +115,7 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("unstructured", "UNSTRUCTURED_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
+        addTestCase("effective processing and billing of each action", \processingBillingTest());
         addTestCase("provider hierarchy", \providerHierarchyTest());
         addTestCase("constructor requires an API key", \constructorOptionsTest());
         addTestCase("request and response types", \providerTypesTest());
@@ -151,6 +152,40 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
             OptionColumn);
     }
 
+    private processingBillingTest() {
+        string name = UnstructuredDataProvider::AppName;
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(name);
+        hash<DataProviderProcessingInfo> external = <DataProviderProcessingInfo>{
+            "locality": "external", "external_recipient": "unstructured.io",
+        };
+        hash<DataProviderBillingInfo> metered = <DataProviderBillingInfo>{
+            "model": "metered", "source": "https://unstructured.io/pricing", "effective_date": 2026-11-25,
+        };
+        assertEq(external, app.processing);
+        assertEq(metered, app.billing);
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(name)) {
+            hash<DataProviderProcessingInfo> processing = external;
+            hash<DataProviderBillingInfo> billing = metered;
+            switch (action.action) {
+                case "partition-file":
+                case "partition-text":
+                    billing.unit = "page";
+                    break;
+                case "run-workflow":
+                case AbstractDataProvider::GenericApiCallActionName:
+                    break;
+                case "get-connector-fields":
+                    processing = <DataProviderProcessingInfo>{"locality": "local"};
+                    billing.model = "included";
+                    break;
+                default:
+                    billing.model = "included";
+            }
+            assertEq(processing, DataProviderActionCatalog::getActionProcessing(name, action.action), action.action);
+            assertEq(billing, DataProviderActionCatalog::getActionBilling(name, action.action), action.action);
+        }
+    }
+
     private registrationTest() {
         DataProvider::AbstractDataProviderFactory f =
             DataProvider::DataProvider::getFactory("unstructured");
@@ -171,6 +206,12 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
         assertEq(("partition-file", "partition-text"),
             sort((map $1.action, partition_actions)));
         map assertEq(DPAT_API, $1.action_code, $1.action), partition_actions;
+        # partitioning returns the elements and stores nothing: the actions declare that they are read-only, which
+        # the catalogue reports as such (qore#7454)
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), partition_actions;
+        map assertFalse($1.mutates_state, $1.action), partition_actions;
+        map assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState($1), $1.action),
+            partition_actions;
         assertTrue(actions.size() > partition_actions.size(),
             "the platform actions are registered for the same app");
 
@@ -658,6 +699,10 @@ public class UnstructuredDataProviderTest inherits QUnit::Test {
             DataProvider::DataProviderActionCatalog::getActions("UnstructuredIo"),
             $1.action == "get-connector-fields")[0];
         assertEq(all_types.size(), action.options.connector_type.allowed_values.size());
+        # answered from the vendored API description: read-only (qore#7454)
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action));
     }
 
     private liveConnectionTest() {

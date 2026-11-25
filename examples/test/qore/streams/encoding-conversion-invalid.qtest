@@ -571,8 +571,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             ENCODING_ERRORS_LATIN1));
     }
 
-    #! the other names of the multi-byte encodings that Qore defines, and an encoding of a probed family (qore#6796,
-    #! #6665)
+    #! the other names of the multi-byte encodings that Qore defines (qore#6796, #6665, #6900)
     multiByteValidTest() {
         # an encoding of a multi-byte family whose definition Qore knows, by the names that iconv implementations know
         # for it, also with conversion flags, has the character functions of its definition where the platform's iconv
@@ -598,6 +597,10 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             # Apple's the user-defined area f0 - f9 of CP932
             ("SJIS//IGNORE", <41812042>, -1), ("Shift_JIS//TRANSLIT", <41f04042>, -1), ("MS932", <41f04042>, 3),
             ("SJIS-WIN", <41f04042>, 3),
+            # T.61 (ISO 6937): a C1 control character is a character, and a non-spacing diacritical mark is one with
+            # the letter that follows it (C2 65: e with acute accent); the double-byte family that probing found for
+            # glibc's T.61 refused the C1 control characters (qore#6900)
+            ("T.61", <41804142>, 4, True), ("T.61", <85c2659f>, 3, True), ("T.61", <41c2>, -1),
         );
         # the definition is found by the letters and digits of the name, as musl's iconv ignores all punctuation in
         # names: the Shift_JIS forms are selected by their name, whether or not the platform's iconv knows the
@@ -636,17 +639,11 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
                 assertEq(c[2], convert_encoding(binary_to_string(c[1], c[0]), "UTF-8"), c[0]);
             }
         }
-        # the input of a conversion from an encoding whose family was found by probing its conversions is left to
-        # iconv: glibc's T.61 looks like a double-byte encoding (its diacritic prefixes), and its family refuses the C1
-        # control characters, which are characters of T.61, which iconv converts (and so isEncodingValid() accepts)
+        # the conversion of T.61 text with a C1 control character and a letter with a diacritical mark
         if (converts("T.61")) {
-            string s = binary_to_string(<41804142>, "T.61");
-            assertTrue(s.isEncodingValid());
-            assertEq("A\u{80}AB", convert_encoding(s, "UTF-8"));
-        } else {
-            unavailable += "T.61";
+            assertEq("A\u{80}éB", convert_encoding(binary_to_string(<4180c26542>, "T.61"), "UTF-8"));
         }
-        if (unavailable.size() == defined.size() + 1) {
+        if (unavailable.size() == defined.size()) {
             testSkip("the iconv of the platform has none of the encodings: " + unavailable.join(", "));
         }
     }

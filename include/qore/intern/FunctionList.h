@@ -36,6 +36,7 @@
 #include <qore/common.h>
 
 #include "qore/intern/Function.h"
+#include "qore/intern/DeclSeq.h"
 
 #include <map>
 #include <string>
@@ -54,6 +55,8 @@ protected:
     QoreFunction* func;
     std::string name;
     qore_ns_private* ns;
+    //! the order in which the function was declared; a copy has the number of the entry that it is a copy of (issue #7171)
+    uint64_t decl_seq = qore_next_decl_seq();
 
     DLLLOCAL ~FunctionEntry() {
         func->deref();
@@ -77,6 +80,16 @@ public:
             return true;
         }
         return false;
+    }
+
+    //! returns the number that gives the order in which the function was declared
+    DLLLOCAL uint64_t getDeclSeq() const {
+        return decl_seq;
+    }
+
+    //! sets the number of the entry that this entry is a copy of
+    DLLLOCAL void setDeclSeq(uint64_t seq) {
+        decl_seq = seq;
     }
 
     DLLLOCAL qore_ns_private* getNamespace() const {
@@ -157,6 +170,9 @@ public:
 
     DLLLOCAL FunctionList(const FunctionList& old, qore_ns_private* ns, const QoreParseOptions& po);
 
+    //! returns the entries in the order in which their functions were declared (issue #7171)
+    DLLLOCAL std::vector<FunctionEntry*> getEntriesInDeclarationOrder() const;
+
     DLLLOCAL ~FunctionList() {
         del();
     }
@@ -200,6 +216,12 @@ public:
     DLLLOCAL QoreListNode* getList();
     DLLLOCAL void assimilate(FunctionList& fl, qore_ns_private* ns,
         std::vector<std::string>* pending_names = nullptr);
+    //! Merges the functions of a namespace that is added at run time (qore_ns_private::runtimeAssimilate())
+    /** No parse is running: a new function is added, and a function that the namespace has is kept as it is, the new
+        one being left in \a fl, which is kept with the namespace (qore_ns_private::retained_ns); no parse error is
+        raised (qore#7530)
+    */
+    DLLLOCAL void runtimeAssimilate(FunctionList& fl, qore_ns_private* ns);
 };
 
 #endif

@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A value that is not a list given to a softlist whose element type converts it (softint, softfloat, ...) is converted
+# in place, and the conversion releases the original value: the list built from it must use the converted value and
+# never touch the released one (qore#7300; a read of the freed value showed under valgrind)
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class SoftListConvertedElementTest
+
+class SoftListConvertedElementTest inherits QUnit::Test {
+    constructor() : Test("SoftListConvertedElementTest", "1.0") {
+        addTestCase("assignment of a literal", \literalAssignment());
+        addTestCase("assignment of a string made at runtime", \runtimeAssignment());
+        addTestCase("argument of a softlist parameter", \parameter());
+        addTestCase("argument of a softlist constructor", \constructorArg());
+        addTestCase("a value that the element type does not accept", \rejectedValue());
+        set_return_value(main());
+    }
+
+    literalAssignment() {
+        softlist<softint> li = "12";
+        assertEq((12,), li);
+        assertEq("list<softint>", li.fullType());
+
+        softlist<softfloat> lf = "1.5";
+        assertEq((1.5,), lf);
+
+        softlist<softnumber> ln = "2.25";
+        assertEq((2.25n,), ln);
+
+        softlist<softbool> lb = "1";
+        assertEq((True,), lb);
+
+        softlist<softdate> ld = "2026-11-22";
+        assertEq((2026-11-22,), ld);
+
+        softlist<softint> la;
+        la = "13";
+        assertEq((13,), la);
+    }
+
+    runtimeAssignment() {
+        string s = sprintf("%d", 12);
+        # each right-hand side is a new string that only the assignment references
+        softlist<softint> li = s + "";
+        assertEq((12,), li);
+
+        softlist<softfloat> lf = s + ".5";
+        assertEq((12.5,), lf);
+
+        softlist<softnumber> ln = s + ".25";
+        assertEq((12.25n,), ln);
+
+        softlist<softbool> lb = s + "";
+        assertEq((True,), lb);
+
+        softlist<softdate> ld = "2026-11-" + s;
+        assertEq((2026-11-12,), ld);
+
+        softlist<softint> la;
+        la = s + "3";
+        assertEq((123,), la);
+        # the string the new strings were made from is not changed
+        assertEq("12", s);
+    }
+
+    parameter() {
+        string s = sprintf("%d", 7);
+        assertEq((7,), SoftListConvertedElementTest::intList(s + ""));
+        assertEq((7.5,), SoftListConvertedElementTest::floatList(s + ".5"));
+        assertEq((7,), SoftListConvertedElementTest::intList("7"));
+    }
+
+    constructorArg() {
+        string s = sprintf("%d", 3);
+        softlist<softint> l(s + "");
+        assertEq((3,), l);
+        softlist<softint> l2 = new softlist<softint>(s + "4");
+        assertEq((34,), l2);
+    }
+
+    rejectedValue() {
+        string s = sprintf("%d", 5);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { softlist<softint> l = SoftListConvertedElementTest::any(new Mutex()); });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            softlist<softint> l = SoftListConvertedElementTest::any((s + "",));
+            l = SoftListConvertedElementTest::any(new Mutex());
+        });
+        # a value that is accepted after an error is converted as before
+        softlist<softint> l = s + "";
+        assertEq((5,), l);
+    }
+
+    static auto any(auto v) {
+        return v;
+    }
+
+    static list<int> intList(softlist<softint> l) {
+        return l;
+    }
+
+    static list<float> floatList(softlist<softfloat> l) {
+        return l;
+    }
+}

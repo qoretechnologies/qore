@@ -365,6 +365,34 @@ private:
     int pflag;
 };
 
+//! Scope of the parse of code that has an implicit index (\c $#) of its own, such as the body of a foreach statement
+//! (qore#7270)
+/** Counts the reads of \c $# in the code (QoreParseContext::implicit_element_reads); when the scope ends, they are
+    not counted for the code around it, as a \c $# in the code reads the index of the code's own statement or
+    operator.  Code that uses no such scope counts its reads for the code around it.
+*/
+class QoreParseImplicitElementScope {
+public:
+    DLLLOCAL QoreParseImplicitElementScope(QoreParseContext& parse_context) : parse_context(parse_context),
+            reads(parse_context.implicit_element_reads) {
+    }
+
+    DLLLOCAL ~QoreParseImplicitElementScope() {
+        parse_context.implicit_element_reads = reads;
+    }
+
+    //! returns true if a \c $# parsed in the scope so far reads the index of the statement or operator
+    DLLLOCAL bool readsImplicitElement() const {
+        assert(parse_context.implicit_element_reads >= reads);
+        return parse_context.implicit_element_reads != reads;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    //! the number of reads when the scope started
+    unsigned reads;
+};
+
 //! Sets one parse flag while in scope and restores only that flag: unlike QoreParseContextFlagHelper, it keeps the
 //! flags that the code parsed in its scope sets for the code around it (ex: PF_NARROWED_TYPE)
 class QoreParseContextFlagScope {
@@ -1641,6 +1669,13 @@ DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsin
 DLLLOCAL int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation);
 
 #ifdef DEBUG
+//! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, while \a hold is true
+//! (see dbg_program_cache_hold_reads())
+DLLLOCAL void qore_dbg_program_cache_hold_reads(bool hold);
+
+//! Debug-only: waits until \a count reads of the per-Program cache are held; false if not after \a timeout_ms
+DLLLOCAL bool qore_dbg_program_cache_wait_held(int count, int64 timeout_ms);
+
 //! Debug-only: reports that a read or write of the descriptor starts waiting for it (see dbg_fd_wait_notify())
 DLLLOCAL void qore_dbg_fd_wait(int fd);
 
@@ -1730,6 +1765,16 @@ DLLLOCAL void qore_aot_runtime_init_once();
 //! the number of lookups of single environment variables by the library (SystemEnvironment::isSet() and
 //! QoreEnvironmentValue), for tests (dbg_environment_lookups(); qore#7086)
 DLLLOCAL extern std::atomic<uint64_t> qore_env_lookup_count;
+
+//! the number of resolutions of the type of an AOT instanceof (qore_rt_instanceof_by_type_path()), for tests
+//! (dbg_aot_instanceof_resolves(); qore#7416)
+DLLLOCAL extern std::atomic<uint64_t> qore_aot_instanceof_resolve_count;
+
+#ifdef DEBUG
+//! debug builds: maps every type path to one set of the AOT instanceof type cache, so that tests can make paths share
+//! a set whatever the layout of the compiled code (dbg_aot_instanceof_one_set(); qore#7416)
+DLLLOCAL extern std::atomic<bool> qore_aot_instanceof_one_set;
+#endif
 
 static inline bool q_env_is_set(const char* name) {
     return SystemEnvironment::isSet(name);
@@ -1955,6 +2000,21 @@ DLLLOCAL void q_ds_append_masked_string(QoreString& str, const char* ds);
 */
 DLLLOCAL void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds);
 
+//! returns a copy of the options of a datasource with the value of each option that cannot be shown masked (qore#7070)
+/** The value of an option is shown only as in q_ds_masked_hash(): if \a driver is a driver already loaded that
+    registers the option with option flags without \ref QDBI_OPT_SENSITIVE, if its name names no credential, and only
+    as a string, if it can be shown in a datasource string; every other value is replaced with \ref QORE_DS_MASK
+    (fail-closed: an option of a driver that is not loaded, or that the driver registers without flags or does not
+    register, is masked); no module is loaded;
+    never raises an exception
+
+    @param driver the driver name, if any
+    @param opts the options, if any
+
+    @return a new hash with the keys of \a opts, owned by the caller
+*/
+DLLLOCAL QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts);
+
 //! appends the masked description of a datasource hash for a message (qore#6988)
 /** The description is made with q_ds_append_masked(QoreString&, const char*, const char*, int) from the \c "type",
     \c "host" and \c "port" keys of the hash (as in a datasource hash returned by parse_datasource()); a \c "type" or
@@ -1965,8 +2025,10 @@ DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
 
 //! the database name is shown in a masked datasource (see q_ds_masked_hash()); a db:// safe URL shows it (qore#7017)
 #define QDS_MASK_SHOW_DB (1 << 0)
-//! the character encoding and the option names are shown in a masked datasource, with every option value masked
-/** See q_ds_masked_hash(); a db:// safe URL and serialized SqlUtil data show them (qore#7016, qore#7017)
+//! the character encoding and the option names are shown in a masked datasource, with the option values that can be shown
+/** See q_ds_masked_hash(); a db:// safe URL and serialized SqlUtil data show them (qore#7016, qore#7017); only the
+    value of an option that the driver, already loaded, registers with option flags without declaring it sensitive,
+    and whose name names no credential, is shown (qore#7070)
 */
 #define QDS_MASK_SHOW_OPTIONS (1 << 1)
 
@@ -1980,8 +2042,13 @@ DLLLOCAL void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h);
     - \c "charset": the encoding, with \ref QDS_MASK_SHOW_OPTIONS only, if it is a valid encoding name
     - \c "host" and \c "port": as in q_ds_append_masked()
     - \c "options": with \ref QDS_MASK_SHOW_OPTIONS only: the option names, each with the value
-      \ref QORE_DS_MASK, as no driver declares which of its options hold secrets (qore#7070); if a name is not a
-      valid option name, the value of \c "options" is \ref QORE_DS_MASK instead
+      \ref QORE_DS_MASK, except an option that the driver, if it is already loaded, registers with option flags
+      without \ref QDBI_OPT_SENSITIVE and whose name names no credential, whose value is shown as a string if it is a
+      string, a number or a boolean whose string form has only printable ASCII characters and no separator of a
+      datasource string or of its option block (q_dbi_shown_option(); qore#7070; fail-closed: every option of a driver
+      that is not loaded, an option registered without flags or not registered, an option whose name names a
+      credential and a sensitive option are masked, and the driver is never loaded); if a name is not a valid option
+      name, the value of \c "options" is \ref QORE_DS_MASK instead
 
     The password is never in the hash.  Never raises an exception; values are read with QoreStringDataHelper, so
     inline short strings are read as well.
@@ -1993,7 +2060,7 @@ DLLLOCAL QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags);
 
 //! appends the masked description of a datasource hash with the given flags (qore#7016, qore#7017)
 /** The description has the form
-    <tt>driver:****</tt><tt>/</tt><tt>****</tt><tt>\@db[(charset)][%host[:port]][{opt=****,...}]</tt>, made from
+    <tt>driver:****</tt><tt>/</tt><tt>****</tt><tt>\@db[(charset)][%host[:port]][{opt=value,...}]</tt>, made from
     q_ds_masked_hash(); with no flags, it is identical to the description of q_ds_append_masked_hash().  A separate
     name, so that a call with flags never resolves to an overload of q_ds_append_masked().
 */
@@ -2759,6 +2826,133 @@ DLLLOCAL size_t q_find_last_path_sep(const QoreString& path);
 
 // reutrns the given file's mode or 0 if the stat() call fails
 DLLLOCAL int q_get_mode(const QoreString& path);
+
+class QoreSandboxManager;
+
+//! gets the canonical path of an open file and verifies that the path names that file now
+/** The path is taken from the descriptor (F_GETPATH on macOS, /proc/self/fd on Linux), not from the name it was
+    opened with: a name can reach a file other than the one it appears to name (ex: a descriptor alias such as
+    /dev/fd/N on macOS, which realpath() does not resolve).  The name is resolved with realpath() only where the
+    descriptor cannot be asked (no F_GETPATH and no procfs).
+
+    @param fd the descriptor of the open file
+    @param sbuf the status of the open file (fstat())
+    @param opened_path the path the file was opened with, or nullptr
+    @param canon the canonical path of the file
+
+    @return 0 for OK, -1 if the file has no path (a pipe, a socket, a removed file), the path cannot be determined
+    or it does not name the open file (it was replaced or moved)
+*/
+DLLLOCAL int q_get_open_file_path(int fd, const struct stat& sbuf, const char* opened_path, std::string& canon);
+
+//! checks the sandbox filesystem policy for the file actually opened by a name that the policy allowed
+/** The policy is checked for the canonical path of the open descriptor (q_get_open_file_path()) unless it is the name
+    that was checked before it was opened.  The exception names the file as given, not the file reached.
+
+    @param sm the sandbox manager whose policy applies
+    @param fd the descriptor opened
+    @param name the name it was opened with, which the policy allowed
+    @param access_mode the QSEC_* access requested
+    @param xsink exceptions are raised here: FILESYSTEM-ACCESS-DENIED if the file cannot be identified, or the error
+    of the policy check
+
+    @return 0 if the policy allows the access to the file opened, -1 if not (an exception has been raised)
+*/
+DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name, int access_mode,
+        ExceptionSink* xsink);
+
+//! opens a file descriptor (close-on-exec) for a name that the sandbox filesystem policy, if any, allowed
+/** With a policy, the file actually opened is checked too (q_check_opened_file_policy()), and O_TRUNC is applied only
+    once it is allowed; for code that opens a file by name outside of QoreFile
+
+    @param xsink a denial is raised here; if nullptr, the open fails with errno EACCES
+
+    @return the descriptor, or -1 for an error: errno is set, or an exception has been raised in xsink
+*/
+DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
+
+//! the directory of a path that the sandbox filesystem policy allowed, pinned for a name-based operation (qore#7518)
+/** The operation acts relative to dirfd on leaf with the *at() functions without following a link, so that it reaches
+    the object that the policy checked even if a component of the path is replaced afterwards
+*/
+struct QoreSandboxPinnedPath {
+    //! the descriptor of the directory holding the object
+    int dirfd = -1;
+    //! the name of the object in the directory
+    std::string leaf;
+    //! the canonical path of the object, which the policy allowed
+    std::string canon;
+    //! true if the name requires a directory: for an entry operation, the leaf keeps the trailing '/' for it; for an
+    //! operation on the object, the object was checked to be a directory
+    bool dir_required = false;
+    //! true for a descriptor alias (/dev/fd/N on macOS) read through a duplicate of its descriptor (dirfd; the leaf is
+    //! empty)
+    bool alias = false;
+
+    DLLLOCAL QoreSandboxPinnedPath() = default;
+    DLLLOCAL ~QoreSandboxPinnedPath();
+    QoreSandboxPinnedPath(const QoreSandboxPinnedPath&) = delete;
+    QoreSandboxPinnedPath& operator=(const QoreSandboxPinnedPath&) = delete;
+};
+
+//! resolves and pins a path for a name-based operation that the sandbox filesystem policy allows (qore#7518)
+/** The canonical path is resolved (for an entry operation, the directory holding the entry, whose last component is
+    not followed; otherwise the object that the name reaches), the directory holding it is opened without following
+    any link (a component that has become a link denies the operation), and the policy is checked for the canonical
+    path again with the access given
+
+    @param sm the sandbox manager whose policy applies; the caller has checked the name with it
+    @param name the name given, which errors name
+    @param mode the QSEC_* access of the operation
+    @param entry true for an operation on the directory entry itself (unlink, rmdir, rename, mkdir, symlink, lchown),
+    false for one on the object that the name reaches (chmod, chown); in the second case, a name that requires a
+    directory (it ends with '/', '.' or '..') must reach one (otherwise the error is ENOTDIR)
+    @param pin the pinned path
+    @param xsink for exceptions
+    @param lookup true for an entry operation that looks the name up as lstat() does: a name that requires a
+    directory, or '/', reaches the object that it names, which is pinned as for an operation on the object
+
+    @return 0 for OK, -1 if an exception has been raised, -2 for an error of the operating system (errno is set)
+*/
+//! a flag for the mode of q_sandbox_pin_path(): the operation only queries the object, whatever access is checked
+#define QSEC_PIN_QUERY (1 << 30)
+
+DLLLOCAL int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool entry,
+        QoreSandboxPinnedPath& pin, ExceptionSink* xsink, bool lookup = false);
+
+//! gets the status of a path that the sandbox policy allows, pinned against a concurrent change (qore#7518)
+/** @param follow true for the object that the name reaches (stat()), false for the entry itself (lstat())
+
+    @return 0 for OK, -1 for an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_stat(QoreSandboxManager& sm, const char* name, bool follow, struct stat& sbuf,
+        ExceptionSink* xsink);
+
+#ifdef Q_HAVE_STATVFS
+//! gets the file system status of a path that the sandbox policy allows, pinned against a concurrent change
+/** @return 0 for OK, -1 for an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_statvfs(QoreSandboxManager& sm, const char* name, struct statvfs& vfs,
+        ExceptionSink* xsink);
+#endif
+
+//! checks the access of a path that the sandbox policy allows, pinned against a concurrent change
+/** @param mode the QSEC_* access checked by the policy
+    @param amode the access checked for the object (R_OK, W_OK)
+
+    @return 0 for access, -1 for no access or an error (an exception is raised, or errno is set)
+*/
+DLLLOCAL int q_sandbox_pinned_access(QoreSandboxManager& sm, const char* name, int mode, int amode,
+        ExceptionSink* xsink);
+
+//! changes the mode of an entry of a pinned directory without following a link (see q_sandbox_pin_path())
+/** @return 0 for OK, -1 for an error (errno is set; ELOOP for a link)
+*/
+DLLLOCAL int q_fchmodat_nofollow(int dirfd, const char* leaf, int mode);
+
+//! test hook: a place where a concurrent change of the file system can replace the given name (see
+//! dbg_fs_swap_on_open() in a debug build; does nothing in other builds; qore#7498)
+DLLLOCAL void q_dbg_fs_swap_point(const char* name);
 //! returns the byte length of the next UTF-8 character, 0 for an invalid character (RFC 3629: also an overlong form,
 //! a surrogate or a code point above U+10FFFF) or minus the length of the character if the valid_len bytes are a
 //! valid start of it (qore#6604)
@@ -2772,6 +2966,13 @@ DLLLOCAL int64 get_ms_zero(const QoreValue& v);
 
 DLLLOCAL AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n);
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n);
+
+//! applies the element type of a list whose element type has no type (untyped or auto) to a pointer value
+/** as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment()): an untyped element (list, softlist,
+    list<any>) strips the complex type of a container, an auto element (list<auto>) keeps it; used by the IR
+    interpreter and native code, out of line so that a store of another value costs one test (qore#7573)
+*/
+DLLLOCAL void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry, ExceptionSink* xsink);
 
 // for IPv4/v6 only
 DLLLOCAL void* qore_get_in_addr(struct sockaddr *sa);

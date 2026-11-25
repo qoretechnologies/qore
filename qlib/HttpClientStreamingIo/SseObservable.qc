@@ -160,6 +160,14 @@ class SseNotifierPollOperation inherits Qore::AbstractPollOperation<auto> {
 } # namespace Priv
 
 public class SseObservable inherits DataProvider::DelayedObservable {
+    private:internal {
+        #! The maximum number of queued events delivered in one run of the async I/O controller thread
+        /** A stream that queues events faster than its observers handle them then lets the thread serve its other
+            operations between the runs, instead of keeping it until the stream ends
+        */
+        const MaxEventsPerDrain = 64;
+    }
+
     private {
         #! Connection manager
         HttpClientIo::HttpClientConnectionManager mgr;
@@ -413,15 +421,55 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             return;
         }
 
-        stream = mgr.acquireStream(url);
+        # stopEvents() can run in another thread at any time: it cancels the stream it finds recorded, so the stream
+        # is recorded under the lock it takes, and it is not started if the observable was stopped first
+        HttpClientIo::HttpClientStreamHandle new_stream = mgr.acquireStream(url);
+        bool stopped;
+        {
+            AutoLock al(m);
+            stopped = stop;
+            if (!stopped) {
+                stream = new_stream;
+            }
+        }
+        if (stopped) {
+            new_stream.cancel();
+            notifyClosed();
+            return;
+        }
 
         hash<auto> req_headers = {
             "Accept": "text/event-stream",
         } + (headers ?? {});
 
-        hash<auto> sse_info = stream.startSseStreamingWithNotifier(method, path, req_headers, body);
-        sse_queue = sse_info.queue;
-        notifier = sse_info.notifier;
+        hash<auto> sse_info;
+        try {
+            sse_info = new_stream.startSseStreamingWithNotifier(method, path, req_headers, body);
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(m);
+                stopped = stop;
+            }
+            if (!stopped) {
+                rethrow;
+            }
+            # the stream was cancelled by stopEvents() while it was started
+            notifyClosed();
+            return;
+        }
+        {
+            AutoLock al(m);
+            stopped = stop;
+            if (!stopped) {
+                sse_queue = sse_info.queue;
+                notifier = sse_info.notifier;
+            }
+        }
+        if (stopped) {
+            # stopEvents() cancelled the stream, which it found recorded, while it was started
+            notifyClosed();
+            return;
+        }
 
         startNotifierPoll();
     }
@@ -485,6 +533,17 @@ public class SseObservable inherits DataProvider::DelayedObservable {
     private startNotifierPoll() {
         # Pin @c m across this method: see @ref sse_lock_pin
         Mutex m_pin = m;
+        # stopEvents() can run in another thread after the caller's check of the stop flag: it cancels the stream
+        # and reports that the observable closed, so the observable then does not report that it connected
+        bool stopped_before;
+        {
+            AutoLock al(m);
+            stopped_before = stop;
+        }
+        if (stopped_before) {
+            notifyClosed();
+            return;
+        }
         notifyObservers(EVENT_SSE_CONNECTED, {});
 
         bool stopped_reentrantly;
@@ -655,16 +714,26 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             notifyClosed();
         }
 
+        int delivered = 0;
         while (True) {
             bool stopped;
+            *EventNotifier own_notifier;
             {
                 AutoLock al(m);
                 stopped = stop;
+                own_notifier = notifier;
             }
             if (stopped) {
                 notifyClosed();
                 terminate = True;
                 return True;
+            }
+
+            # the controller thread serves its other operations between batches: the notifier is signaled so that
+            # the poll operation runs again for the rest of the queue
+            if (delivered == MaxEventsPerDrain && own_notifier && !sse_queue.empty()) {
+                own_notifier.notify();
+                return False;
             }
 
             auto item = sse_queue.tryGet();
@@ -687,6 +756,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 return False;
             }
 
+            ++delivered;
             auto evt = item.value;
             # Reset idle deadline on any received event (including errors)
             last_event_us = clock_getmicros();

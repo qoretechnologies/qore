@@ -56,6 +56,15 @@ class CsvWriteDataTest inherits QUnit::Test {
             assertTrue(action.options.hasKey(opt), opt);
         }
         assertTrue(action.options.headers.preselected);
+        # the data is returned and nothing is written: the create action declares that it is read-only, which
+        # overrides the default of a create action (qore#7454)
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(action));
+        # the write action writes its output location and so changes state
+        hash<DataProviderActionInfo> write = DataProviderActionCatalog::getAppActionEx(CsvUtil::AppName, "write");
+        assertFalse(exists write.mutates_state);
+        assertTrue(DataProviderActionCatalog::actionMutatesState(write));
     }
 
     testWriteData() {

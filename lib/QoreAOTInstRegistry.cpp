@@ -1599,6 +1599,8 @@ static bool writeBackground(AOTInstWriteCtx& ctx) {
             return false;
         }
         ctx.writer.writeU8(bi->helper_uses_self);
+        // the callee of the expression (QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION, qore#7087)
+        ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_callee));
         ctx.writer.writeU32(static_cast<uint32_t>(bi->helper_params.size()));
         for (LocalVar* lv : bi->helper_params) {
             auto i = bi->helper_ir->local_var_slots.find(lv);
@@ -1626,6 +1628,7 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     std::unique_ptr<QoreIRFunction> helper_ir;
     std::vector<LocalVar*> helper_params;
     QoreBackgroundHelperSelf helper_uses_self = QBHS_NONE;
+    int helper_callee = QBH_CALLEE_UNKNOWN;
     if (kind == QoreIRBackgroundKind::Helper) {
         uint8_t self_mode = QoreAOTBinaryReader::readU8(ctx.ptr);
         if (self_mode > QBHS_HELD) {
@@ -1633,9 +1636,17 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
             return nullptr;
         }
         helper_uses_self = static_cast<QoreBackgroundHelperSelf>(self_mode);
+        // the callee of the expression (QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION, qore#7087)
+        helper_callee = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
         uint32_t num_params = QoreAOTBinaryReader::readU32(ctx.ptr);
         if (num_params != operands.size()) {
             ctx.error = "background helper parameter count differs from its operand count";
+            return nullptr;
+        }
+        // the callee is a parameter's index, QBH_CHECK_IN_THREAD or QBH_CALLEE_UNKNOWN
+        if (helper_callee < QBH_CHECK_IN_THREAD || (helper_callee >= 0
+                && static_cast<uint32_t>(helper_callee) >= num_params)) {
+            ctx.error = "invalid background helper callee " + std::to_string(helper_callee);
             return nullptr;
         }
         std::vector<uint32_t> param_slots;
@@ -1675,6 +1686,7 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
     bi->helper_ir = std::move(helper_ir);
     bi->helper_params = std::move(helper_params);
     bi->helper_uses_self = helper_uses_self;
+    bi->helper_callee = helper_callee;
     bi->result = QoreIRValue(result_id);
     bi->operands = operands;
     bi->exception_target = exc_target;
@@ -4280,6 +4292,10 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
         step.slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
         const char* name = ctx.reader.readStringRef(ctx.ptr);
         step.name = name ? name : "";
+        // a constant hash key of an image is in UTF-8; the code uses it in the process encoding (qore#6840)
+        if (step.kind == LVPathStepKind::HashKeyConst) {
+            qore_aot_key_to_process_encoding(step.name);
+        }
         step.operand_idx = QoreAOTBinaryReader::readU32(ctx.ptr);
         // Slice steps: read the SSA id vector that writeLValuePath
         // serialized for HashKeySlice / ListIndexSlice / ListRangeSlice.

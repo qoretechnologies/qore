@@ -1,5 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - redirects between HTTP listeners and UNIX socket paths including a missing peer
+# test-loopback: localhost - the host-name case test binds its server to localhost, which reserves the port on the other loopback family. Clients of IPv4 listeners use 127.0.0.1
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -30,6 +32,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../TestSocketDir.qm
 %requires Mime
 %requires Logger
 %requires HttpUtil
@@ -62,7 +65,7 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
         # /redirect-abs — redirect to absolute URL
         if (hdr.path == "redirect-abs") {
             return makeResponse(
-                {"Location": sprintf("http://localhost:%d/target", server_port),
+                {"Location": sprintf("http://127.0.0.1:%d/target", server_port),
                  "Content-Type": "text/plain"},
                 301, "redirecting");
         }
@@ -176,7 +179,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         string url_a;
         string url_b;
 
-        #! A server listening on all addresses, so that it can be reached with the host name \c localhost
+        #! A server bound to the host name \c localhost
         HttpServer server_c;
         RoutePeer peer_c();
         int port_c;
@@ -239,7 +242,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     testBasicRedirect() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
         });
@@ -254,7 +257,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     testRedirectChain() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
         });
@@ -267,7 +270,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     testMaxRedirects() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
             "max_redirects": 2,
@@ -280,7 +283,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     testAbsoluteRedirect() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
         });
@@ -295,7 +298,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     testCookieRedirect() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
             "logger": logger,
@@ -312,7 +315,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     test303SeeOther() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
         });
@@ -449,7 +452,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
     }
 
     testLimits() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
             "max_redirects": 3,
@@ -553,12 +556,11 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("skipping because UNIX socket URLs are not available on Windows");
 %endif
-        string path = sprintf("%s%sqore-io-redirect-%d-%s.sock", tmp_location(), DirSep, getpid(),
-            get_random_string(12));
+        TestSocketDir socket_dir();
+        string path = socket_dir.path + "/server.sock";
         string encoded = encode_url(path, True);
         # a socket that does not exist
-        string missing_encoded = encode_url(regex_subst(path, "\\.sock$", "-missing.sock"), True);
-        on_exit unlink(path);
+        string missing_encoded = encode_url(socket_dir.path + "/missing.sock", True);
         Socket server();
         server.bindUNIX(path);
         server.listen();
@@ -630,25 +632,25 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
             "protocol": "h1",
         });
         on_exit mgr.closeAll();
-        string url = "http://user:pass@localhost:" + port + "/base/path";
+        string url = "http://user:pass@127.0.0.1:" + port + "/base/path";
         hash<auto> resp = mgr.request(url, "GET", "/redirect/1");
         assertEq(200, resp.status_code);
-        assertEq("http://localhost:" + port + "/redirect/0", resp.effective_url);
+        assertEq("http://127.0.0.1:" + port + "/redirect/0", resp.effective_url);
         assertEq(1, resp.redirects.size());
         hash<HttpRedirectInfo> hop = resp.redirects[0];
-        assertEq("http://localhost:" + port + "/redirect/1", hop.request_url);
+        assertEq("http://127.0.0.1:" + port + "/redirect/1", hop.request_url);
         assertEq(302, hop.status_code);
         assertEq("/redirect/0", hop.location);
         assertEq("/redirect/0", hop.headers.location);
-        assertEq("http://localhost:" + port + "/redirect/0", hop.target_url);
+        assertEq("http://127.0.0.1:" + port + "/redirect/0", hop.target_url);
         # a response without redirects has no redirect information
         resp = mgr.request(url, "GET", "/redirect/0");
-        assertEq("http://localhost:" + port + "/redirect/0", resp.effective_url);
+        assertEq("http://127.0.0.1:" + port + "/redirect/0", resp.effective_url);
         assertNothing(resp.redirects);
     }
 
     testRedirectPassthru() {
-        string url = "http://localhost:" + port;
+        string url = "http://127.0.0.1:" + port;
         HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
             "protocol": "h1",
             "redirect_passthru": True,

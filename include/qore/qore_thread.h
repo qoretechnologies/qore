@@ -73,11 +73,20 @@ struct QoreRuntimeContext {
     const AbstractStatement* stmt;
     int64_t po;
     const QoreStackLocation* stack_loc;
+    //! the implicit index (\c $#) of the thread
+    /** The index of an element is set only while the per-element code of a foreach statement or operator that reads
+        \c $# runs; inside per-element code that does not read it, including binary-module code called from it, this
+        is the index of the enclosing code (qore#7270)
+    */
     int element;
 };
 
 //! fills a QoreRuntimeContext snapshot from thread-local storage
 /** @param rc output pointer for the runtime context snapshot
+
+    @note QoreRuntimeContext::element is the implicit index (\c $#) of an element only while the per-element code of
+    a foreach statement or operator that reads \c $# runs; inside per-element code that does not read it, including
+    binary-module code called from it, it is the index of the enclosing code (qore#7270)
  */
 DLLEXPORT void qore_get_runtime_context(QoreRuntimeContext* rc);
 
@@ -132,10 +141,33 @@ DLLEXPORT void set_thread_resource(const ResolvedCallReferenceNode* rcr, const Q
  */
 DLLEXPORT int remove_thread_resource(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink);
 
-//! Returns a CallStackInfo hash for the caller's location, if available, otherwise returns nullptr
-/** @param offset the call stack entry offset
+//! Returns a CallStackInfo hash for the entry of the current thread's call stack at the given offset, if any
+/** @param offset the offset of the entry in the call stack, as in the list that get_thread_call_stack() returns:
+    \c 0 is the location of the current call, \c 1 (the default) that of the caller of the current function, and so
+    on
+
+    @return a CallStackInfo hash for the entry at \a offset, or nullptr if the call stack has no entry at that offset
+    or if the current thread has no %Qore thread data (a thread that is not registered with %Qore); the caller owns
+    the reference
+
+    @note Before %Qore 3.0 (issue 7564), any offset other than \c 0, also the default, returned nullptr; a module
+    that calls it with the default or another non-zero offset now gets a hash, which it must dereference
 */
 DLLEXPORT QoreHashNode* qore_get_parent_caller_location(size_t offset = 1);
+
+//! Gets the ID of the Program of the entry of the current thread's call stack at the given offset, if any
+/** Gives only the Program ID of the entry that get_thread_call_stack() lists at \a offset (\c 0 is the location of
+    the current call, \c 1 that of the caller of the current function, and so on), without building a CallStackInfo
+    hash; nothing is allocated
+
+    @param offset the offset of the entry in the call stack
+    @param id set to the Program ID (a qore_program_id_t value) of the entry if it has one
+
+    @return true if the call stack has an entry at \a offset with a Program, and \a id is set; false if not
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_get_caller_program_id(size_t offset, uint64_t& id);
 
 #if 0
 //! save a resource against a thread for thread resource handling using the thread resource id

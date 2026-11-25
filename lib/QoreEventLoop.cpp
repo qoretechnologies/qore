@@ -218,6 +218,11 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
         info.udata = udata;
         info.regs[key] = {events, udata};
         setAttached(info, wait, st);
+#ifdef DEBUG
+        if (dbg_after_register) {
+            dbg_after_register(fd);
+        }
+#endif
         return 0;
     }
 
@@ -251,6 +256,11 @@ int QoreEventLoop::addRegistration(int fd, uint64_t key, int events, void* udata
     if (info.always_ready && (!existed || prev.events != events)) {
         setArmed(info, true);
     }
+#ifdef DEBUG
+    if (dbg_after_register) {
+        dbg_after_register(fd);
+    }
+#endif
     return 0;
 }
 

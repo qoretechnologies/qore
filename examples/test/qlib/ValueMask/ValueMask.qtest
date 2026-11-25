@@ -263,7 +263,7 @@ class ValueMaskTest inherits QUnit::Test {
         assertEq("invalid", ValueMask::timezoneIssue("Mars/Base").code);
         assertEq("invalid", ValueMask::timezoneIssue("../../etc/passwd").code, "a region name only");
         assertEq("invalid", ValueMask::timezoneIssue("").code);
-        assertThrows("FILE-OPEN2-ERROR", \ValueMask::parseDate(), ("02.11.2026", "DD.MM.YYYY",
+        assertThrows("TZINFO-ERROR", \ValueMask::parseDate(), ("02.11.2026", "DD.MM.YYYY",
             "Mars/Base"));
     }
 
@@ -476,7 +476,7 @@ class ValueMaskTest inherits QUnit::Test {
         assertThrows("VALUE-MASK-ERROR", "invalid time mask", \ValueMask::formatDate(), (2026-01-01, "DD.MM.YYYY",
             NOTHING, "time"));
         # a time zone that does not exist
-        assertThrows("FILE-OPEN2-ERROR", \ValueMask::formatDate(), (2026-01-01, "DD.MM.YYYY", "Mars/Base"));
+        assertThrows("TZINFO-ERROR", \ValueMask::formatDate(), (2026-01-01, "DD.MM.YYYY", "Mars/Base"));
     }
 
     formatNumbers() {

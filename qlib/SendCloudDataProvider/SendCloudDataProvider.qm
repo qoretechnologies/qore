@@ -60,6 +60,15 @@ module SendCloudDataProvider {
                 "- Service point lookup across carriers\n"
                 "- Brand and sender-address management\n"
                 "- Triggers for parcel status changes and return updates",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "sendcloud.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.sendcloud.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "sendcloudrest",
             "logo": SendCloudDataProvider::SendCloudLogo,
             "logo_file_name": "sendcloud-logo.svg",
@@ -143,6 +152,7 @@ module SendCloudDataProvider {
             "short_desc": "Get a single parcel by ID",
             "desc": "Retrieve detailed information about a specific SendCloud parcel by its numeric ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetParcelDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () { return SendCloudGetParcelDataProvider::ResponseType; },
             "options": DataProviderActionCatalog::getActionOptionFromFields(SendCloudGetParcelRequestDataType::Fields),
@@ -153,6 +163,7 @@ module SendCloudDataProvider {
             "app": SendCloudDataProvider::AppName,
             "path": "/create-parcel",
             "action": "create-parcel",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Parcels",
             "display_name": "Create Parcel",
             "short_desc": "Create a new parcel",
@@ -216,6 +227,7 @@ module SendCloudDataProvider {
             "desc": "Retrieve the shipping label URL(s) for an announced parcel. The label is available as a "
                 "normal-printer PDF and a label-printer PDF.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetParcelLabelDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudGetParcelLabelDataProvider::ResponseType;
@@ -235,6 +247,7 @@ module SendCloudDataProvider {
             "desc": "Download a specific parcel document (such as the shipping label, CN22/CN23 customs "
                 "declaration, or commercial invoice) as binary PDF data.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetParcelDocumentsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudGetParcelDocumentsDataProvider::ResponseType;
@@ -354,6 +367,7 @@ module SendCloudDataProvider {
             "short_desc": "Get the authenticated user",
             "desc": "Retrieve information about the currently authenticated SendCloud user (account owner).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetUserDataProvider::ProviderInfo,
             # no `options`: SendCloudGetUserRequestDataType.Fields is empty, so
             # getActionOptionFromFields() would return NOTHING and reject the registration
@@ -432,6 +446,7 @@ module SendCloudDataProvider {
             "desc": "Search for carrier service points (pickup/drop-off locations) near a location; supports "
                 "postal-code or lat/long search origins and radius/weight filters.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudSearchServicePointsDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudSearchServicePointsDataProvider::ResponseType;
@@ -511,6 +526,7 @@ module SendCloudDataProvider {
             "short_desc": "Get a single return by ID",
             "desc": "Retrieve detailed information about a specific return by its numeric ID.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "data_provider_info": SendCloudGetReturnDataProvider::ProviderInfo,
             "get_output_type": AbstractDataProviderType sub () {
                 return SendCloudGetReturnDataProvider::ResponseType;
@@ -524,6 +540,7 @@ module SendCloudDataProvider {
             "app": SendCloudDataProvider::AppName,
             "path": "/create-return",
             "action": "create-return",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Returns",
             "display_name": "Create Return",
             "short_desc": "Create a new return",

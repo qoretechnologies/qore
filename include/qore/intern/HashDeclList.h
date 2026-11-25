@@ -98,6 +98,11 @@ public:
 
     DLLLOCAL void assimilate(HashDeclList& n, qore_ns_private& ns,
         std::vector<std::string>* pending_names = nullptr);
+    //! Merges the hashdecls of a namespace that is added at run time (qore_ns_private::runtimeAssimilate())
+    /** No parse is running: a declaration that conflicts with one of the namespace is not added, but left in \a n,
+        which is kept with the namespace (qore_ns_private::retained_ns), and no parse error is raised (qore#7530)
+    */
+    DLLLOCAL void runtimeAssimilate(HashDeclList& n, qore_ns_private& ns);
     DLLLOCAL QoreHashNode* getInfo();
 
     DLLLOCAL bool empty() const {

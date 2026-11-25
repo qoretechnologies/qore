@@ -41,14 +41,29 @@ typedef std::map<int, void*> dbi_method_list_t;
 struct DbiOptInfo {
     const char* desc = nullptr;
     const QoreTypeInfo *typeInfo = nullptr;
+    //! the option flags (QDBI_OPT_SENSITIVE)
+    int flags = 0;
+    //! true if the driver registered the option with the variant of registerOption() with option flags, which
+    //! decides whether the option is sensitive; an option registered without flags counts as undeclared (qore#7070)
+    bool declared = false;
 
     DLLLOCAL DbiOptInfo() {
     }
 
-    DLLLOCAL DbiOptInfo(const char* d, const QoreTypeInfo* t) : desc(d), typeInfo(t) {
+    DLLLOCAL DbiOptInfo(const char* d, const QoreTypeInfo* t, int f = 0, bool decl = false) : desc(d), typeInfo(t),
+            flags(f), declared(decl) {
+    }
+
+    //! returns true if the value of the option is sensitive (qore#7070)
+    DLLLOCAL bool isSensitive() const {
+        return flags & QDBI_OPT_SENSITIVE;
     }
 };
 typedef std::map<const char*, DbiOptInfo, ltcstrcase> dbi_opt_map_t;
+
+//! returns true if the name of a DBI option can name a credential or a connection string or URL that can embed one
+//! (qore#7070); the value of such an option is never shown in a masked form of a datasource
+DLLLOCAL bool q_dbi_option_name_is_sensitive(const char* key);
 
 struct dbi_driver_stmt {
     q_dbi_stmt_prepare_t prepare = nullptr;
@@ -524,6 +539,8 @@ struct qore_dbi_private {
             QoreHashNode* h = new QoreHashNode(autoTypeInfo);
             h->setKeyValue("desc", new QoreStringNode(i->second.desc), 0);
             h->setKeyValue("type", new QoreStringNode(QoreTypeInfo::getName(i->second.typeInfo)), 0);
+            h->setKeyValue("sensitive", i->second.isSensitive(), 0);
+            h->setKeyValue("showable", isShowable(i->first, i->second), 0);
             h->setKeyValue("value", f.opt.get(ds, i->first), 0);
 
             rv->setKeyValue(i->first, h, 0);
@@ -538,10 +555,32 @@ struct qore_dbi_private {
             QoreHashNode* h = new QoreHashNode(autoTypeInfo);
             h->setKeyValue("desc", new QoreStringNode(i->second.desc), 0);
             h->setKeyValue("type", new QoreStringNode(QoreTypeInfo::getName(i->second.typeInfo)), 0);
+            h->setKeyValue("sensitive", i->second.isSensitive(), 0);
+            h->setKeyValue("showable", isShowable(i->first, i->second), 0);
 
             rv->setKeyValue(i->first, h, 0);
         }
         return rv;
+    }
+
+    //! returns true if the value of the option can be shown in a masked description of a datasource
+    /** Fail-closed: only an option that the driver registers with option flags (the variant of
+        qore_dbi_method_list::registerOption() with flags, which decides whether the option is sensitive) without
+        @ref QDBI_OPT_SENSITIVE can be shown; an option registered without flags, and an option that the driver does
+        not register (such as an option of a driver with @ref DBI_CAP_OPTION_PASSTHRU), is treated as sensitive
+        (qore#7070)
+    */
+    DLLLOCAL bool isOptionShowable(const char* opt) const {
+        dbi_opt_map_t::const_iterator i = omap.find(opt);
+        return i != omap.end() && isShowable(opt, i->second);
+    }
+
+    //! returns true if the value of an option with the given name and information can be shown (qore#7070)
+    /** The option must be registered with option flags, not sensitive, and its name must name no credential (see
+        q_dbi_option_name_is_sensitive()); the value itself must still be one that can be shown
+    */
+    DLLLOCAL static bool isShowable(const char* name, const DbiOptInfo& info) {
+        return info.declared && !info.isSensitive() && !q_dbi_option_name_is_sensitive(name);
     }
 
     DLLLOCAL static qore_dbi_private* get(const DBIDriver& d) {

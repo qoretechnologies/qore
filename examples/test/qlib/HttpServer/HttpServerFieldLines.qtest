@@ -83,11 +83,20 @@ class HttpServerFieldLinesTest inherits QUnit::Test {
         socket.connect(sprintf("127.0.0.1:%d", port), 30s);
         on_exit socket.close();
 
-        # lines that end with LF are accepted
-        socket.send("POST /lf HTTP/1.1\nHost: localhost\nContent-Length: 2\r\n\r\nok");
+        # lines that end with CRLF are accepted
+        socket.send("POST /crlf HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\nok");
         hash<auto> hdr = socket.readHTTPHeader(30s);
         assertEq(200, hdr.status_code);
-        assertEq("path=/lf body=ok", socket.recv(int(hdr."content-length"), 30s));
+        assertEq("path=/crlf body=ok", socket.recv(int(hdr."content-length"), 30s));
+        assertEq(calls + 1, handler.calls);
+
+        # a line that ends with a bare LF is refused: the request is answered with 400, and the connection is closed
+        Socket lf_socket();
+        lf_socket.connect(sprintf("127.0.0.1:%d", port), 30s);
+        on_exit lf_socket.close();
+        lf_socket.send("POST /lf HTTP/1.1\nHost: localhost\nContent-Length: 2\r\n\r\nok");
+        hdr = lf_socket.readHTTPHeader(30s);
+        assertEq(400, hdr.status_code);
         assertEq(calls + 1, handler.calls);
     }
 

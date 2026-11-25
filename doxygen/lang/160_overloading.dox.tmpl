@@ -205,7 +205,8 @@ total(strs);    # calls total(list<string>), which gets a list<string>
     - a parent class variant that returns @ref nothing allows any return type, as it promises no value to a call
     - the variants of all methods that calls of the class select before the parent class method are checked: with
       @ref multiple_inheritance_order "multiple inheritance", also the variants of a parent class listed before the
-      class that declares the parent class method
+      class that declares the parent class method. When an inherited variant implements an abstract method and is
+      installed on the child class's method, its return type is checked in that position, before inherited overloads
     - in a class that inherits an instantiation of a generic class, the type arguments are substituted in the return
       types of the generic class's methods (<tt>T get()</tt> of <tt>Box&lt;int&gt;</tt> returns \c int); a generic child class that passes its own type parameter to the parent class must return it where the parent class
       method returns the type parameter, as an instantiation can bind it to any type

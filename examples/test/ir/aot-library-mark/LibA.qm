@@ -1,0 +1,34 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LibA.qm - test module: a library module whose initialization loads modules by name and by path (qore#7361)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module LibA {
+    version = "1.0";
+    desc = "test library module whose initialization loads a module by name and a module by its path";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        LibA::State::init_closure = string sub () { return "A init closure ran"; };
+        # a module of the module path, by name: library code
+        load_module("LibD");
+        # a module outside the module path, by its path: not library code
+        *string path = ENV.LIBMARK_C_PATH;
+        if (path) {
+            load_module(path);
+        }
+    };
+}
+
+#! The public definitions of the test module
+public namespace LibA {
+#! The module's state
+public class State {
+    public {
+        #! the closure that the module's initialization created
+        static *code init_closure;
+    }
+}
+}

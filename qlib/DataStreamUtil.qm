@@ -640,50 +640,54 @@ bool yaml = ds_is_yaml_type(http_get_field(hdr, "content-type"));
                 rethrow;
             }
         }
-        # Boundary-scan slow path.
+        # Boundary-scan slow path: the candidate splits after each stream are found one at a time, nearest first, and
+        # the scan for the next one continues after the last one tried, so that the buffer is scanned once in all;
+        # collecting every candidate up to the end of the buffer for each stream made a body of many streams take
+        # time quadratic in its size (qore#7323)
         list<string> out = ();
+        int size = data.size();
         int pos = 0;
-        while (pos < data.size()) {
-            list<int> cands = ();
+        while (pos < size) {
+            # the offset that the scan for the next candidate split starts at
             int p = pos + 2;
-            while (p + 1 < data.size()) {
-                bool is_magic = False;
-                # gzip magic
-                if (data[p] == 0x1f && data[p+1] == 0x8b) {
-                    is_magic = True;
-                }
-                # zlib (deflate) magic: 0x78 followed by 0x01/0x9c/0xda
-                if (data[p] == 0x78 && (data[p+1] == 0x01
-                        || data[p+1] == 0x9c || data[p+1] == 0xda)) {
-                    is_magic = True;
-                }
-                if (is_magic) {
-                    cands += p;
-                }
-                p++;
-            }
-            cands += data.size();
-            bool found = False;
-            foreach int c in (cands) {
+            while (True) {
+                int c = ds_next_compressed_stream_start(data, p);
                 try {
                     out += dce(data.substr(pos, c - pos), enc);
                     pos = c;
-                    found = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err != "ZLIB-ERROR") {
                         rethrow;
                     }
+                    if (c == size) {
+                        throw "ZLIB-ERROR",
+                            sprintf("could not decompose %d-byte buffer into "
+                                "concatenated compressed streams", size - pos);
+                    }
                     # candidate split is inside a deflate block — try next
+                    p = c + 1;
                 }
-            }
-            if (!found) {
-                throw "ZLIB-ERROR",
-                    sprintf("could not decompose %d-byte buffer into "
-                        "concatenated compressed streams", data.size() - pos);
             }
         }
         return out;
+    }
+
+    #! Returns the offset of the next gzip or zlib (deflate) stream header at or after the given offset, or the size of the buffer if there is none
+    /** a helper of ds_decode_content_streams(), not exported from the module
+    */
+    int sub ds_next_compressed_stream_start(binary data, int p) {
+        int size = data.size();
+        while (p + 1 < size) {
+            int b = data[p];
+            int n = data[p + 1];
+            # gzip magic, or zlib (deflate) magic: 0x78 followed by 0x01/0x9c/0xda
+            if ((b == 0x1f && n == 0x8b) || (b == 0x78 && (n == 0x01 || n == 0x9c || n == 0xda))) {
+                return p;
+            }
+            ++p;
+        }
+        return size;
     }
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data

@@ -670,13 +670,9 @@ public:
         std::vector<uint8_t>&& paramFlags = std::vector<uint8_t>(),
         QoreProgram* localOwnerPgm = nullptr);
 
-    DLLLOCAL virtual ~UserSignature() {
-        // type-parameter types are cached by signature address, which the next signature allocated can reuse
-        qore_purge_derived_types(this, nullptr, nullptr);
-        for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
-            delete* i;
-        delete parseReturnTypeInfo;
-    }
+    // exported and defined in the library: it calls functions that are hidden there, so code built with the internal
+    // headers must not emit it
+    DLLEXPORT virtual ~UserSignature();
 
     DLLLOCAL void setFirstParamType(const QoreTypeInfo* typeInfo) {
         assert(!typeList.empty());
@@ -793,13 +789,9 @@ public:
         }
     }
 
-    // called at parse time to ensure types are resolved
-    DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const {
-        if (const_cast<UserSignature*>(this)->resolve() && !err) {
-            err = -1;
-        }
-        return returnTypeInfo;
-    }
+    // called at parse time to ensure types are resolved; exported and defined in the library, as it calls the hidden
+    // resolve(), so code built with the internal headers must not emit it
+    DLLEXPORT virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const;
 
     DLLLOCAL const QoreProgramLocation* getParseLocation() const {
         return loc;
@@ -2767,8 +2759,22 @@ struct IList : public ilist_t {
         reached through private:internal inheritance is accessible only to the code of the classes whose
         private:internal inheritance it is reached through (INode::owners), not to the code of the other classes of
         the hierarchy (qore#7410)
+
+        Defined inline in Function.cpp, its only user: the run-time variant search calls it for every call whose
+        variant was not resolved at parse time; an entry that the context can access without the search is taken
+        without a call, and the search past inaccessible ancestors is getNextFunction()
     */
-    DLLLOCAL QoreFunction* getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+    DLLLOCAL inline QoreFunction* getFunction(const qore_class_private* class_ctx,
+        const qore_class_private*& last_class, const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
+
+private:
+    //! returns the function at \a aqfi, which the class context can access; updates \a last_class and
+    //! \a internal_access
+    DLLLOCAL QoreFunction* getFunctionAt(const qore_class_private* class_ctx, const qore_class_private*& last_class,
+        const_iterator aqfi, bool& internal_access) const;
+
+    //! getFunction() for an ancestor at \a aqfi that the class context cannot access without the search
+    DLLLOCAL QoreFunction* getNextFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
         const_iterator& aqfi, const_iterator aqfe, bool& internal_access) const;
 };
 

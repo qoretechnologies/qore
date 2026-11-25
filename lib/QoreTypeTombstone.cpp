@@ -55,6 +55,7 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/QoreTypeDeclPin.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -79,6 +80,8 @@ struct QoreTombstoneRegistry {
     std::map<std::string, size_t> fp_ids;
     //! true once library cleanup has freed the tombstones
     bool freed = false;
+    //! making a tombstone takes leaf locks only; a child of fork() gets the lock free (qore#7549)
+    QoreForkStdMutex fork_handler{m, QFLR_TYPE_TOMBSTONES, "type_tombstones"};
 };
 
 static QoreTombstoneRegistry& tombstone_registry() {
@@ -86,6 +89,10 @@ static QoreTombstoneRegistry& tombstone_registry() {
     static QoreTombstoneRegistry* r = new QoreTombstoneRegistry;
     return *r;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] static QoreTombstoneRegistry& tombstone_registry_init = tombstone_registry();
 
 //! the deepest nesting of declarations and types followed when a tombstone is made; deeper ones are not tombstoned
 /** A declaration whose tombstone cannot be made is kept until library cleanup (QoreTypeOwner::type_owner_unfreeable),
@@ -215,7 +222,19 @@ public:
         fp += "|b";
         if (p->scl) {
             for (BCNode* n : *p->scl) {
-                if (failed || !n->sclass) {
+                // a parent class is kept alive by the list of the class's ancestors (BCSMList::append() references
+                // it), not by the edge: a class whose hierarchy was not initialized (such as one that is circular or
+                // inherits a class whose hierarchy is invalid) has edges to parent classes that its list does not
+                // hold, and a parse rollback may have freed them already, so the edge is compared with the list
+                // without reading the parent class (qore#7464): with the canonical class of each entry, which the
+                // entry's reference keeps alive, as the edge holds the canonical class (BCNode::setClassPointer())
+                // and an entry can be another QoreClass of the class (one imported into the Program, as the AOT
+                // loader adds it with qore_class_private::addBaseClass())
+                if (failed || !n->sclass
+                    || std::none_of(p->scl->sml.begin(), p->scl->sml.end(),
+                        [n](const class_virt_pair_t& i) {
+                            return qore_class_private::get(*i.first)->cls == n->sclass;
+                        })) {
                     failed = true;
                     break;
                 }
@@ -841,6 +860,8 @@ QoreClass* QoreTombstoneBuilder::tombClass(const QoreClass* qc, int depth) {
     QoreClass* t = new QoreClass(p->name.c_str(), p->path.c_str());
     qore_class_private* tp = qore_class_private::get(*t);
     tp->sys = true;
+    // a tombstone belongs to no binary module (qore#7533)
+    tp->not_module_decl = true;
     tp->committed = true;
     r.classes[fp] = t;
     r.tombs.insert(t);
@@ -950,6 +971,8 @@ TypedHashDecl* QoreTombstoneBuilder::tombHashDecl(const TypedHashDecl* hd, int d
     TypedHashDecl* t = new TypedHashDecl(p->name.c_str(), p->path.c_str());
     typed_hash_decl_private* tp = typed_hash_decl_private::get(*t);
     tp->sys = true;
+    // a tombstone belongs to no binary module, nor do its concrete declarations, which copy the flag (qore#7533)
+    tp->setNotModuleDecl();
     tp->parse_init_done = true;
     tp->type_params = p->type_params;
     r.hashdecls[fp] = t;
@@ -999,6 +1022,8 @@ QoreEnumDecl* QoreTombstoneBuilder::tombEnum(const QoreEnumDecl* ed) {
     QoreEnumDecl* t = new QoreEnumDecl(p->getName(), p->getPath(), p->getBaseTypeInfo());
     qore_enum_decl_private* tp = qore_enum_decl_private::get(*t);
     tp->sys = true;
+    // a tombstone belongs to no binary module (qore#7533)
+    tp->setNotModuleDecl();
     tp->parse_init_done = true;
     for (const QoreEnumMember* m : p->getMembers()) {
         t->addMember(m->getName(), m->getValue().refSelf());
@@ -1054,6 +1079,12 @@ const QoreTypeInfo* qore_type_tombstone(const QoreTypeInfo* ti, bool& ok) {
     ok = !b.failed;
     return ok ? rv : ti;
 }
+
+#ifdef DEBUG
+std::mutex* qore_type_tombstone_dbg_fork_lock() {
+    return &tombstone_registry().m;
+}
+#endif
 
 bool qore_is_type_tombstone(const void* decl) {
     QoreTombstoneRegistry& r = tombstone_registry();

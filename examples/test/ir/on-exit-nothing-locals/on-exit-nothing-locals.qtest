@@ -72,6 +72,11 @@ class OnExitNothingLocalsTest inherits QUnit::Test {
         string child = expected("on-exit-child-program");
         assertTrue(child.find("  wrapArgs: threw X, then -1\n") >= 0, "call_function_args in a child Program");
         assertTrue(child.find("  wrapDirect: threw X, then null\n") >= 0, "a saved NOTHING in a child Program");
+        # a scoped switch to a callee's tenant that raises an exception restores the host tenant (NOTHING) as well as
+        # one with a value, and the handler raises no exception of its own, which would be chained to the callee's
+        # (#5951)
+        assertTrue(out.find("tenant restore: TENANT-PROBE: 100000000042, chained: none; tenant after: null; "
+            "TENANT-PROBE: 100000000042, chained: none; tenant after: 7; \n") >= 0, "tenant restore");
     }
 
     #! runs the script in every execution mode, on the IR tier and with synchronous JIT compilation, and checks that it

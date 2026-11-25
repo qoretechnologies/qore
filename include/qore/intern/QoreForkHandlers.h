@@ -104,6 +104,9 @@ enum QoreForkLockRank : int {
     QFLR_THREAD_COUNTERS = 400,
     //! module locks whose holders check for cancellation (QFR_MODULE_CANCELLABLE): take the thread list
     QFLR_MODULE_CANCELLABLE = 450,
+    //! the lock of the entries of threads into the quiescent waits of type retirement (debug builds only; see
+    //! QoreTypeQuiescentWaitHelper): its holders count an entry, or read the counts of threads in the thread list
+    QFLR_TYPE_WAIT_ENTRY = 470,
     //! the thread list (thread_list.lck): taken when threads start and exit; takes the condition waker lock and the
     //! stack lock
     QFLR_THREAD_LIST = 500,
@@ -111,9 +114,21 @@ enum QoreForkLockRank : int {
     QFLR_COND_WAKER = 510,
     //! the thread stack lock (stack_lck): held only while a thread is created and its stack size set
     QFLR_STACK = 520,
+    //! the registry of the tombstones of retired declarations: making a tombstone creates declarations and types,
+    //! which takes leaf locks (the complex types, the class IDs, the debug registries of types and declarations)
+    QFLR_TYPE_TOMBSTONES = 900,
     //! leaf locks: caches and registries whose critical sections take no other registered lock (but the ones below),
     //! also the leaf locks of modules (QFR_MODULE_LEAF)
     QFLR_LEAF = 1000,
+    //! the registry of the generic caches by the types their keys name: taken with the complex types lock held, its
+    //! holders take only the locks of the caches themselves (not registered)
+    QFLR_GENERIC_CACHE_REGISTRY = 1020,
+    //! the registry of the armed epoch holds of type retirement (QoreTypeEpochHold): taken with the JIT's background
+    //! queue lock held; its holders take no other lock
+    QFLR_TYPE_EPOCH_HOLDS = 1030,
+    //! the debug registries of the live types and declarations (debug builds only): taken whenever a type or a
+    //! declaration is created or destroyed, also with the locks above held; their holders take no other lock
+    QFLR_TYPE_DEBUG_REGISTRIES = 1040,
     //! the LLVM target initialization lock (see qore_llvm_initialize_targets()): held while LLVM registers its
     //! targets, which takes no registered lock; it ranks after the leaf locks so that their holders may compile
     QFLR_LLVM_TARGET_INIT = 1100,

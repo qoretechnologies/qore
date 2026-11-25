@@ -23,10 +23,16 @@
     and its copy-on-write check took that reference for an owner.  The AST interpreter changes the container that the
     weak reference designates, in place.  The program covers the element and key stores through typed and untyped
     locals, a loop, a container that the weak assignment made unique, a freed container, and the other changes of the
-    container through the local, which raise in every mode (\c push, \c +=, \c splice: qore#7297).  Every mode must
-    print the output of the AST.
+    container through the local, which change the container as well (\c push, \c +=, \c splice: qore#7297).  Every
+    mode must print the output of the AST.
 
-    The program is in \c weak-reference-container-store/.
+    The store holds its own reference to the container until it is done; \c weak-reference-container-store-dtor
+    makes that reference the last one, so that releasing it destroys the container and the destructor of an element
+    throws: IR, JIT and tiered execution raised that exception after the store's exception handling, so that it escaped
+    the try block whose last statement the store is (qore#7355).  It covers a list element, a constant and a dynamic
+    hash key, and a store outside a try block, whose exception the caller catches.
+
+    The programs are in \c weak-reference-container-store/.
 */
 class WeakReferenceContainerStoreTest inherits QUnit::Test {
     private {
@@ -34,7 +40,7 @@ class WeakReferenceContainerStoreTest inherits QUnit::Test {
         string dir = get_script_dir() + "/weak-reference-container-store";
 
         const Modes = ("ast", "ir", "jit", "tiered");
-        const Programs = ("weak-reference-container-store",);
+        const Programs = ("weak-reference-container-store", "weak-reference-container-store-dtor");
     }
 
     constructor() : QUnit::Test("WeakReferenceContainerStoreTest", "1.0", \ARGV) {

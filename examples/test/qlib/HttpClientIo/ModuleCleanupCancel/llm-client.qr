@@ -1,0 +1,11 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# the onComplete() of an operation that the module cleanup counts posts a task to an asynchronous LLM call whose
+# executor runs it on a thread of its own: the task runs as the work of the cleanup, which waits for it before it
+# deletes the data of AbLater (qore#7339)
+
+%requires AaLlmPost
+%requires AbLater
+
+printf("started\n");
+flush();

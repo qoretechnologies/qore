@@ -1,0 +1,17 @@
+constant: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+after constant: null
+dynamic a: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+after dynamic: null
+initialized: {a: 4}
+constant: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+after constant: null
+dynamic z: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+after dynamic: null
+initialized z: INVALID-MEMBER
+initialized: {a: 1}
+generic: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+generic value: null
+member: HASHDECL-IMPLICIT-CONSTRUCTION-ERROR
+member value: null
+ordinary: {a: 2}
+ordinary outer hash: 1

@@ -1,0 +1,350 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# HttpClientStreamCancelSubmitH2.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpClientIo
+%exec-class HttpClientStreamCancelSubmitH2Test
+
+#! A logger that runs a hook once, when a message matching a pattern is logged
+/** HttpClientStreamHandle logs "submitting async request" and "starting [SSE ]streaming request" after its last
+    check of the stream's state and before it submits the request; HttpClientConnection logs "waitForReady()" when a
+    request starts to wait for its connection.
+*/
+class HookLogger inherits LoggerWrapper {
+    private {
+        Mutex m();
+        *string pattern;
+        *code<nothing()> hook;
+    }
+
+    #! Arms the hook: it runs once, for the next message matching @p pattern
+    arm(string pattern, code<nothing()> hook) {
+        AutoLock al(m);
+        self.pattern = pattern;
+        self.hook = hook;
+    }
+
+    #! The streams and connections log through this method
+    log(int level, string message, ...) {
+        *code<nothing()> run;
+        {
+            AutoLock al(m);
+            if (hook && regex(message, pattern)) {
+                run = hook;
+                remove hook;
+            }
+        }
+        if (run) {
+            run();
+        }
+    }
+}
+
+#! An HTTP/2 server with prior knowledge (h2c) that reports the frames of the requests it receives
+/** A request whose HEADERS frame ends its stream (a request without a body) is answered with 204 No Content; any
+    other request (one with a body) is never answered.  The server can hold its SETTINGS frame, which keeps the client's
+    connection from becoming ready, until @ref sendSettings() is called.
+*/
+class H2ProbeServer {
+    public {
+        int port;
+        #! Receives {"conn": <connection>, "type": <type>, "stream": <stream ID>} for each request event:
+        #! "answered" (a request without a body), "held" (a request with a body) and "reset" (RST_STREAM), and
+        #! {"conn": <connection>, "type": "closed"} when the client closes a connection
+        Queue events();
+    }
+
+    private {
+        Socket listener();
+        Counter running();
+        Mutex m();
+        bool stopping;
+        int conns;
+        #! Receives a value when the server may send its SETTINGS frame
+        Queue settings_gate();
+        bool hold_settings;
+    }
+
+    const Preface = binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+    const FrameHeaders = 1;
+    const FrameRstStream = 3;
+    const FrameSettings = 4;
+    const FramePing = 6;
+    const FlagEndStream = 0x1;
+    const FlagAck = 0x1;
+    const FlagEndHeaders = 0x4;
+
+    #! The time the server waits for data
+    const Wait = 30s;
+
+    constructor(bool hold_settings = False) {
+        self.hold_settings = hold_settings;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    #! Lets the server send its SETTINGS frame
+    sendSettings() {
+        settings_gate.push(True);
+    }
+
+    #! Ends the accept loop and waits until the connections, which the client must have closed, have been served
+    stop() {
+        {
+            AutoLock al(m);
+            stopping = True;
+        }
+        # a held SETTINGS frame is released
+        settings_gate.push(True);
+        # the accept loop ends with the next connection
+        try {
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (True) {
+            Socket conn;
+            try {
+                conn = listener.accept(60s);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            int id;
+            {
+                AutoLock al(m);
+                if (stopping) {
+                    conn.close();
+                    return;
+                }
+                id = ++conns;
+            }
+            running.inc();
+            background serve(conn, id);
+        }
+    }
+
+    private static binary frame(int type, int flags, int stream, *binary payload) {
+        int len = payload ? payload.size() : 0;
+        binary rv = parse_hex_string(sprintf("%06x%02x%02x%08x", len, type, flags, stream & 0x7fffffff));
+        if (payload) {
+            rv += payload;
+        }
+        return rv;
+    }
+
+    private serve(Socket conn, int id) {
+        on_exit {
+            conn.close();
+            running.dec();
+        }
+        try {
+            binary preface = conn.recvBinary(Preface.size(), Wait);
+            if (preface != Preface) {
+                return;
+            }
+            if (hold_settings) {
+                settings_gate.get(Wait);
+            }
+            conn.send(frame(FrameSettings, 0, 0));
+            while (True) {
+                binary hdr = conn.recvBinary(9, Wait);
+                int len = (hdr[0] << 16) | (hdr[1] << 8) | hdr[2];
+                int type = hdr[3];
+                int flags = hdr[4];
+                int stream = ((hdr[5] & 0x7f) << 24) | (hdr[6] << 16) | (hdr[7] << 8) | hdr[8];
+                *binary payload = len ? conn.recvBinary(len, Wait) : NOTHING;
+                switch (type) {
+                    case FrameSettings:
+                        if (!(flags & FlagAck)) {
+                            conn.send(frame(FrameSettings, FlagAck, 0));
+                        }
+                        break;
+                    case FramePing:
+                        if (!(flags & FlagAck)) {
+                            conn.send(frame(FramePing, FlagAck, 0, payload));
+                        }
+                        break;
+                    case FrameHeaders:
+                        if (flags & FlagEndStream) {
+                            # ":status: 204" is entry 9 of the HPACK static table
+                            conn.send(frame(FrameHeaders, FlagEndStream | FlagEndHeaders, stream, <89>));
+                            events.push({"conn": id, "type": "answered", "stream": stream});
+                        } else {
+                            events.push({"conn": id, "type": "held", "stream": stream});
+                        }
+                        break;
+                    case FrameRstStream:
+                        events.push({"conn": id, "type": "reset", "stream": stream});
+                        break;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            events.push({"conn": id, "type": "closed"});
+        }
+    }
+}
+
+class HttpClientStreamCancelSubmitH2Test inherits QUnit::Test {
+    constructor() : Test("HTTP/2 HttpClientStreamHandle cancellation during request submission", "1.0", \ARGV) {
+        addTestCase("HTTP/2: a stream cancelled while submitAsync() submits its request ends the request",
+            \testSubmitAsync());
+        addTestCase("HTTP/2: a stream cancelled while startStreaming() submits its request ends the request",
+            \testStartStreaming());
+        addTestCase("HTTP/2: a stream cancelled while startSseStreaming() submits its request ends the request",
+            \testStartSseStreaming());
+        addTestCase("HTTP/2: a stream cancelled while startStreaming() waits for its connection sends no request",
+            \testCancelDuringReadinessWait());
+        addTestCase("HTTP/2: a stream cancelled while startSseStreaming() fails to submit its request releases its "
+            "reservation", \testCancelDuringFailedSseSubmission());
+        set_return_value(main());
+    }
+
+    #! Creates an HTTP/2 (h2c) connection manager whose requests do not end on their own while a test runs
+    private static HttpClientConnectionManager getManager(HookLogger logger) {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "request_timeout": 3600s,
+            "idle_timeout": 3600s,
+        });
+        mgr.setLogger(logger);
+        return mgr;
+    }
+
+    #! Checks that a request cancelled while it was submitted does not run on
+    /** The cancel reaches the request either before its HEADERS frame was written, which drops it, or after, which
+        resets its stream.  A request sent afterwards on the same connection orders the check: a cancelled request
+        that the server received must have its stream reset; a request left running is never reset.
+    */
+    private checkRequestEnded(H2ProbeServer server, HttpClientConnectionManager mgr) {
+        assertEq(204, mgr.acquireStream("http://127.0.0.1:" + server.port).request("GET", "/after").status_code,
+            "a request sent after the cancellation is answered");
+        hash<string, bool> held;
+        hash<string, bool> reset;
+        while (True) {
+            hash<auto> e = server.events.get(60s);
+            if (e.type == "answered") {
+                break;
+            }
+            if (e.type == "held") {
+                held{e.stream} = True;
+            } else if (e.type == "reset") {
+                reset{e.stream} = True;
+            }
+        }
+        assertLe(1, held.size(), "the cancelled request was sent at most once");
+        # the reset of a cancelled request that was sent can follow the request sent afterwards
+        while ((select keys held, !reset{$1}).size()) {
+            hash<auto> e = server.events.get(60s);
+            if (e.type == "reset") {
+                reset{e.stream} = True;
+            }
+        }
+        foreach string stream in (keys held) {
+            assertTrue(reset{stream}, "the stream of the cancelled request that was sent is reset");
+        }
+    }
+
+    testSubmitAsync() {
+        H2ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        assertEq("h2", stream.getConnection().getProtocol());
+        logger.arm("submitting async request:", sub () { stream.cancel(); });
+        hash<auto> result = stream.submitAsync("POST", "/held", {"Content-Type": "text/plain"}, "body");
+        *string err;
+        try {
+            result.future.get(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertRegex("^HTTP(CLIENT|2)-CANCELLED$", err ?? "", "the request's Future is rejected as cancelled");
+        checkRequestEnded(server, mgr);
+    }
+
+    testStartStreaming() {
+        H2ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        logger.arm("starting streaming request:", sub () { stream.cancel(); });
+        assertThrows("HTTPCLIENT-CANCELLED", "cancelled while its request was submitted",
+            \stream.startStreaming(), ("POST", "/held", {"Content-Type": "text/plain"}, False, "body"));
+        checkRequestEnded(server, mgr);
+    }
+
+    testStartSseStreaming() {
+        H2ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        logger.arm("starting SSE streaming request:", sub () { stream.cancel(); });
+        assertThrows("HTTPCLIENT-CANCELLED", "cancelled while its request was submitted",
+            \stream.startSseStreaming(), ("POST", "/held", {"Content-Type": "text/plain"}, binary("body")));
+        checkRequestEnded(server, mgr);
+    }
+
+    #! Cancels the stream while startStreaming() waits for its connection, which the server keeps from becoming
+    #! ready until then
+    testCancelDuringReadinessWait() {
+        H2ProbeServer server(True);
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        assertFalse(stream.getConnection().isReady(), "the connection waits for the server's SETTINGS frame");
+        logger.arm("waitForReady\\(\\)", sub () {
+            stream.cancel();
+            server.sendSettings();
+        });
+        assertThrows("HTTPCLIENT-CANCELLED", "cancelled during connection setup",
+            \stream.startStreaming(), ("POST", "/held", {"Content-Type": "text/plain"}, False, "body"));
+        checkRequestEnded(server, mgr);
+    }
+
+    #! startSseStreaming() fails to submit its request after the stream was cancelled; the reservation is released
+    testCancelDuringFailedSseSubmission() {
+        H2ProbeServer server();
+        on_exit server.stop();
+        HookLogger logger();
+        HttpClientConnectionManager mgr = getManager(logger);
+        on_exit mgr.closeAll();
+
+        HttpClientStreamHandle stream = mgr.acquireStream("http://127.0.0.1:" + server.port);
+        HttpClientConnection conn = stream.getConnection();
+        assertTrue(conn.waitForReady(60s));
+        assertEq(1, conn.getPendingStreamCount(), "the stream holds a reservation");
+        # the connection refuses the request once it is draining, as after a GOAWAY
+        logger.arm("starting SSE streaming request:", sub () {
+            stream.cancel();
+            conn.setDraining();
+        });
+        assertThrows("HTTPCLIENT-STATE-ERROR", \stream.startSseStreaming(), ("GET", "/held"));
+        assertEq(0, conn.getPendingStreamCount(), "the reservation of the cancelled stream is released");
+    }
+}

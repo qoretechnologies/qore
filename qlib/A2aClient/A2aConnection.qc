@@ -33,6 +33,11 @@ public namespace A2aClient {
     @see @ref A2aClient::A2aClient "A2aClient::constructor()" for more information on the above options
 */
 public class A2aConnection inherits ConnectionProvider::HttpBasedConnection {
+    #! The client creates its connections with HttpClientIo and the creator's proof (qore#7262)
+    private bool hasBoundClient() {
+        return True;
+    }
+
     public {
         #! Real options for creating the A2A client
         hash<auto> real_opts;
