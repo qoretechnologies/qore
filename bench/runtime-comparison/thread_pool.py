@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-from run import HERE, ROOT, CommandFailed, digest, parse_qore, run_bounded, summarize
+from run import HERE, ROOT, CommandFailed, digest, main_guard, parse_qore, run_bounded, summarize
 
 
 SCENARIOS = [(f"{context}-{count}-{batch}", int(context == "sandbox"), count, batch)
@@ -70,7 +70,10 @@ def main():
         command = list(map(str, command))
         commands.append({"label": label, "argv": command, "library_path": env[loader]})
         (output / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
-        returncode, stdout, stderr = run_bounded(command, env=env, timeout=timeout, cwd=ROOT)
+        try:
+            returncode, stdout, stderr = run_bounded(command, env=env, timeout=timeout, cwd=ROOT)
+        except subprocess.TimeoutExpired:
+            raise CommandFailed(f"{label} did not end within {timeout} s; its command is in {output / 'commands.json'}")
         (output / (label + ".stdout")).write_text(stdout)
         (output / (label + ".stderr")).write_text(stderr)
         if returncode:
@@ -133,7 +136,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
-        sys.exit(str(error))
+    main_guard(main)

@@ -12,10 +12,9 @@ import random
 import shutil
 import statistics
 import subprocess
-import sys
 import tempfile
 
-from run import HERE, ROOT, CommandFailed, digest, parse_qore, reference, run_bounded, summarize
+from run import HERE, ROOT, CommandFailed, digest, main_guard, parse_qore, reference, run_bounded, summarize
 
 NAMES = ("same_program", "cross_program")
 
@@ -88,7 +87,10 @@ def main():
         command = [str(qore), "--exec-mode=ir", str(output / "program_calls.qr"), *map(str, arguments)]
         metadata["commands"].append({"mode": mode, "label": label, "command": command})
         (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-        returncode, stdout, stderr = run_bounded(command, env=environments[mode], timeout=timeout, cwd=ROOT)
+        try:
+            returncode, stdout, stderr = run_bounded(command, env=environments[mode], timeout=timeout, cwd=ROOT)
+        except subprocess.TimeoutExpired:
+            raise CommandFailed(f"{label} did not end within {timeout} s; its command is in {output / 'metadata.json'}")
         (output / (label + ".stdout")).write_text(stdout)
         (output / (label + ".stderr")).write_text(stderr)
         if returncode:
@@ -122,7 +124,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
-        sys.exit(str(error))
+    main_guard(main)

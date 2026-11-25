@@ -28,6 +28,9 @@ PROCESS_CALLS |= {("os", name) for name in ("system", "popen", "fork", "forkpty"
                                             "spawnle", "spawnlp", "spawnvp", "execv", "execve", "execl", "execle",
                                             "execlp", "execvp", "posix_spawn", "posix_spawnp")}
 
+#: the modules that start processes in other ways, which the harness does not use
+OTHER_PROCESS_MODULES = ("asyncio", "multiprocessing", "pty", "concurrent")
+
 #: the one function that may start a process: run.py's run_bounded()
 BOUNDED = ("run.py", "run_bounded")
 
@@ -43,6 +46,15 @@ def process_calls(path):
     def visit(node, function):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             function = node.name
+        if isinstance(node, ast.ImportFrom) and node.module in ("subprocess", "os"):
+            for alias in node.names:
+                if (node.module, alias.name) in PROCESS_CALLS or alias.name == "*":
+                    found.append((function, node.lineno, "from %s import %s" % (node.module, alias.name)))
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [node.module] if isinstance(node, ast.ImportFrom) else [alias.name for alias in node.names]
+            for name in names:
+                if name and name.split(".")[0] in OTHER_PROCESS_MODULES:
+                    found.append((function, node.lineno, "import " + name))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Name) and (node.func.value.id, node.func.attr) in PROCESS_CALLS:
             found.append((function, node.lineno, node.func.value.id + "." + node.func.attr))
@@ -91,9 +103,13 @@ class RuntimeComparisonBenchTest(unittest.TestCase):
                              "        return subprocess.check_output(['x'], timeout=1)\n"
                              "    os.system('x')\n"
                              "def safe(run):\n"
-                             "    return run.run_bounded(['x'], timeout=1)\n")
+                             "    return run.run_bounded(['x'], timeout=1)\n"
+                             "from subprocess import Popen as P, TimeoutExpired\n"
+                             "import multiprocessing.pool, pty\n")
             self.assertEqual([(None, 2, "subprocess.run"), ("inner", 5, "subprocess.check_output"),
-                              ("outer", 6, "os.system")], process_calls(probe))
+                              ("outer", 6, "os.system"), (None, 9, "from subprocess import Popen"),
+                              (None, 10, "import multiprocessing.pool"), (None, 10, "import pty")],
+                             process_calls(probe))
 
     def test_qore_scripts(self):
         scripts = sorted(BENCH.glob("*.qr"))

@@ -17,13 +17,14 @@ including its loop and per-invocation work, not an isolated call latency.  Lower
 
 `run.py` runs these modes:
 
-|!Mode|!What runs
-|`qore-ast`|`qore --exec-mode=ast kernels.qr`
-|`qore-ir`|`qore --exec-mode=ir kernels.qr`
-|`qore-jit`|`qore --exec-mode=jit kernels.qr`
-|`qore-aot`|an executable that `qcc -O3` compiles from `kernels.qr`
-|`java-int`|`RuntimeBench` under JMH with `-Xint` (interpreter only)
-|`java-jit`|`RuntimeBench` under JMH with HotSpot C2
+| Mode | What runs |
+|---|---|
+| `qore-ast` | `qore --exec-mode=ast kernels.qr` |
+| `qore-ir` | `qore --exec-mode=ir kernels.qr` |
+| `qore-jit` | `qore --exec-mode=jit kernels.qr` |
+| `qore-aot` | an executable that `qcc -O3` compiles from `kernels.qr` |
+| `java-int` | `RuntimeBench` under JMH with `-Xint` (interpreter only) |
+| `java-jit` | `RuntimeBench` under JMH with HotSpot C2 |
 
 Before any timing, every mode prints the results of every kernel for counts 0, 1, 17, 1024 and 4096 and seeds 0, 7 and
 65535, and `run.py` compares them with an independent Python reference (`reference()`); a mismatch stops the run.
@@ -73,23 +74,27 @@ executable against both libraries.  The two libraries must be ABI-compatible wit
 
 ## Other scripts
 
-|!Script|!Measures|!Check
-|`program_calls.py` / `program_calls.qr`|typed calls in the same Program and across Programs (IR), ns/call|`program_calls.py --check-only`
-|`thread_pool.py` / `thread_pool.qr`|end-to-end task cost of a thread pool with and without a submitting sandbox (IR, AOT)|`thread_pool.py --check-only`
-|`mixed_workloads.qr`|four synthetic processing workloads: CSV report, object orders, callback pipeline, text index|`mixed_reference.validate_checks()`
-|`short_callbacks.qr`|batched short callbacks (integer and float, zero and one argument)|`short_callbacks.py <check output>`
-|`opaque_callbacks.qr`|callbacks the compiler cannot see through|`opaque_callbacks.py <check output>`
-|`ordinary_params.qr`|ordinary (non-native) function entries with int, float, string, list, hash and object parameters|`qore ordinary_params.qr check`
-|`ShortCallbackBench.java`, `OpaqueCallbackBench.java`|the Java counterparts of the two callback scripts|-
+| Script | Measures | Check |
+|---|---|---|
+| `program_calls.py` / `program_calls.qr` | typed calls in the same Program and across Programs (IR), ns/call | `program_calls.py --check-only` |
+| `thread_pool.py` / `thread_pool.qr` | end-to-end task cost of a thread pool with and without a submitting sandbox (IR, AOT) | `thread_pool.py --check-only` |
+| `mixed_workloads.qr` | four synthetic processing workloads: CSV report, object orders, callback pipeline, text index | `mixed_reference.validate_checks()` |
+| `short_callbacks.qr` | batched short callbacks (integer and float, zero and one argument) | `short_callbacks.py <check output>` |
+| `opaque_callbacks.qr` | callbacks the compiler cannot see through | `opaque_callbacks.py <check output>` |
+| `ordinary_params.qr` | ordinary (non-native) function entries with int, float, string, list, hash and object parameters | `qore ordinary_params.qr check` |
+| `ShortCallbackBench.java`, `OpaqueCallbackBench.java` | the Java counterparts of the two callback scripts | - |
 
-Each Qore script takes `check` or `NAME COUNT WARMUP SAMPLES MS SEED` (see the script) and prints one record per
-window.  The Qore scripts are `%modern`, run in one process and start no processes of their own.
+Each Qore script takes `check`, which prints its results for the reference check, or the arguments of one timed
+job, and prints one record per window: `NAME COUNT WARMUP SAMPLES MS SEED` for most of them, `NAME COUNT WARMUP SAMPLES
+MS` for `program_calls.qr` and `NAME SANDBOXED COUNT BATCH WARMUP SAMPLES MS` for `thread_pool.qr`; `kernels.qr` also
+takes `startup`, which `run.py` times as process start-up.  The Qore scripts are `%modern`, run in one process and start no processes of their own.
 
 ## Child processes
 
 Every process that the Python scripts start (`qore`, `qcc`, the AOT executables, `java`, `javac`, `git`) goes through
-`run.run_bounded()`: it runs in a process group of its own with a timeout, and when the timeout passes or the run is
-interrupted, the whole group is killed, so that a JVM that JMH forks ends too.  No script runs itself as an interpreter.
+`run.run_bounded()`: it runs in a process group (and session) of its own with a timeout, and when the timeout passes or
+the run is interrupted (Ctrl-C, or SIGTERM or SIGHUP, which `run.main_guard()` turns into an exception), the whole group
+is killed, so that a JVM that JMH forks ends too.  No script runs itself as an interpreter.
 `examples/test/runner/test_runtime_comparison_bench.py` runs the harness's tests and checks these rules; it runs with
 the other runner tests (`python3 -B -W error -m unittest discover -s examples/test/runner -p "test_*.py"`).
 

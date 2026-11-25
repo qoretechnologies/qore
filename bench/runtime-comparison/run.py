@@ -73,11 +73,38 @@ def run_bounded(command, *, env=None, timeout, cwd=None):
             # the leader is not reaped yet, so its process group ID still belongs to this command
             try:
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
+                # the group is gone, or (macOS) holds only the exited leader, which wait() reaps
                 pass
             process.wait()
             raise
     return process.returncode, stdout, stderr
+
+
+class Terminated(BaseException):
+    """The harness received SIGTERM or SIGHUP"""
+
+    def __init__(self, signum):
+        super().__init__(f"terminated by signal {signum}")
+        self.signum = signum
+
+
+def raise_terminated(signum, frame):
+    raise Terminated(signum)
+
+
+def main_guard(main):
+    """Runs a script's main function: SIGTERM and SIGHUP raise Terminated, so that run_bounded() ends the process
+    group of the command it is running (its children are in a session of their own and do not get the signal), and
+    the harness's own errors end the script with their message"""
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, raise_terminated)
+    try:
+        main()
+    except Terminated as error:
+        sys.exit(128 + error.signum)
+    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
+        sys.exit(str(error))
 
 
 def digest(path):
@@ -293,7 +320,10 @@ def main():
         commands.append({"label": label, "argv": command})
         (output / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
         start = time.perf_counter_ns()
-        returncode, stdout, stderr = run_bounded(command, env=environment or env, timeout=timeout, cwd=ROOT)
+        try:
+            returncode, stdout, stderr = run_bounded(command, env=environment or env, timeout=timeout, cwd=ROOT)
+        except subprocess.TimeoutExpired:
+            raise CommandFailed(f"{label} did not end within {timeout} s; its command is in {output / 'commands.json'}")
         elapsed = (time.perf_counter_ns() - start) / 1e6
         (output / (label + ".stdout")).write_text(stdout)
         (output / (label + ".stderr")).write_text(stderr)
@@ -433,7 +463,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
-        sys.exit(str(error))
+    main_guard(main)

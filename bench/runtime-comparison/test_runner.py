@@ -5,6 +5,7 @@
 
 import fcntl
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -265,26 +266,56 @@ class BoundedRunTest(unittest.TestCase):
         with self.assertRaises(OSError):
             run.run_bounded([str(run.HERE / "no-such-command")], timeout=60)
 
-    def test_timeout_ends_process_group(self):
-        # the command starts a grandchild that holds an exclusive lock on a file and signals that it holds it; both
-        # then block forever reading a pipe whose write end each of them also holds, so the grandchild does not end
-        # when the command ends; after the timeout, taking the lock succeeds only because the grandchild has ended
-        grandchild = ("import fcntl, os, sys; f = open(sys.argv[1], 'w'); fcntl.flock(f, fcntl.LOCK_EX); "
-                      "open(sys.argv[2], 'w').close(); os.read(int(sys.argv[3]), 1)")
-        child = ("import os, subprocess, sys; r, w = os.pipe(); "
-                 "p = subprocess.Popen([sys.executable, '-c', sys.argv[1], sys.argv[2], sys.argv[3], str(r)], "
-                 "pass_fds=(r, w)); os.read(r, 1)")
+    def test_timeout(self):
+        # a command that never ends (it waits for input on a pipe that it holds open itself) times out
+        with self.assertRaises(subprocess.TimeoutExpired):
+            run.run_bounded([sys.executable, "-c", "import os; r, w = os.pipe(); os.read(r, 1)"], timeout=1)
+
+    def test_termination_ends_process_group(self):
+        # a harness script (run.main_guard()) runs a command whose child, a grandchild of the script, holds an
+        # exclusive lock on a file, sends SIGTERM to the script once it holds it, and blocks forever reading a pipe
+        # whose write end it holds itself; the script must end, with the status of SIGTERM, and take the grandchild
+        # with it: afterwards, taking the lock succeeds only because the grandchild has ended
+        grandchild = ("import fcntl, os, signal, sys; f = open(sys.argv[1], 'w'); fcntl.flock(f, fcntl.LOCK_EX); "
+                      "os.kill(int(sys.argv[2]), signal.SIGTERM); r, w = os.pipe(); os.read(r, 1)")
+        child = ("import os, subprocess, sys; "
+                 "subprocess.Popen([sys.executable, '-c', sys.argv[1], sys.argv[2], sys.argv[3]]); "
+                 "r, w = os.pipe(); os.read(r, 1)")
+        script = ("import os, sys; sys.path.insert(0, sys.argv[1]); import run\n"
+                  "def main():\n"
+                  "    run.run_bounded([sys.executable, '-c', sys.argv[2], sys.argv[3], sys.argv[4], str(os.getpid())],"
+                  " timeout=600)\n"
+                  "    print('not terminated')\n"
+                  "run.main_guard(main)\n")
         with tempfile.TemporaryDirectory() as directory:
-            lock, ready = Path(directory) / "lock", Path(directory) / "ready"
-            with self.assertRaises(subprocess.TimeoutExpired):
-                run.run_bounded([sys.executable, "-c", child, grandchild, lock, ready], timeout=3)
-            self.assertTrue(ready.exists(), "the grandchild did not take the lock before the timeout")
+            lock = Path(directory) / "lock"
+            returncode, stdout, stderr = run.run_bounded(
+                [sys.executable, "-c", script, run.HERE, child, grandchild, lock], timeout=600)
+            self.assertEqual((128 + signal.SIGTERM, ""), (returncode, stdout), stderr)
+            self.assertTrue(lock.exists(), "the grandchild did not take the lock")
             # a blocking lock attempt in a bounded child: it returns at once when the grandchild has ended, and times
             # out (failing the test) when it still holds the lock
             take = "import fcntl, sys; fcntl.flock(open(sys.argv[1], 'w'), fcntl.LOCK_EX); print('locked')"
             self.assertEqual((0, "locked\n", ""), run.run_bounded([sys.executable, "-c", take, lock], timeout=60))
             with open(lock, "w") as handle:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def test_main_guard(self):
+        # main_guard() ends a script with the message of a harness error, and lets other exceptions through; it
+        # installs signal handlers, which this test restores
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            self.addCleanup(signal.signal, signum, signal.getsignal(signum))
+        for error, code in ((ValueError("bad value"), "bad value"), (run.CommandFailed("failed"), "failed")):
+            with self.subTest(error=error), self.assertRaises(SystemExit) as context:
+                def fail(error=error):
+                    raise error
+                run.main_guard(fail)
+            self.assertEqual(code, context.exception.code)
+        with self.assertRaises(KeyError):
+            run.main_guard(lambda: {}["missing"])
+        with self.assertRaises(SystemExit) as context:
+            run.main_guard(lambda: run.raise_terminated(signal.SIGHUP, None))
+        self.assertEqual(128 + signal.SIGHUP, context.exception.code)
 
 
 if __name__ == "__main__":
