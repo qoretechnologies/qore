@@ -735,6 +735,11 @@ public:
     template <typename F>
     DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
         assert(size() == other.size());
+        // the members of a hardened hash keep keyed hashes, which a hash that is not hardened cannot find
+        // (qore#7557); the comparison of any other hash is the code of before
+        if (!hm.fastFind()) [[unlikely]] {
+            return membersEqualHardened(other, value_equal);
+        }
         const HashMember* m = member_list.front();
         // the hashes have as many members (the callers check it), so the walk ends at the end of both lists; it counts
         // the members instead of testing both lists' ends, which costs a test less per member (qore#7272)
@@ -752,29 +757,36 @@ public:
             }
         }
         for (; m; m = m->next) {
-            // the key is searched with the hash that the member keeps (qore#7265); a hardened map finds it with any
-            // hash, and only a member of a hardened map that a map that is not hardened does not find is searched
-            // again with its member hash (findCrossKind(), qore#7557)
+            // the key is searched with the hash that the member keeps (qore#7265), its member hash, which finds it
+            // in a hash that is not hardened and in a hardened one, which finds a key with any hash (qore#7557)
             const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
                 qore_hash_lookup_key::stored_hash_t()));
-            if (!found) [[unlikely]] {
-                // a key that is not found when this hash is not hardened is the result
-                if (hm.fastFind() || !(found = findCrossKind(*m, other))) {
-                    return false;
-                }
-            }
-            if (!value_equal(m->val, found->val)) {
+            if (!found || !value_equal(m->val, found->val)) {
                 return false;
             }
         }
         return true;
     }
 
-    //! returns the member of \a other with the key of \a m, a member of this hash, that a search of \a other with
-    //! the hash of \a m did not find: the hash of \a m is the keyed hash if this hash is hardened, which a key map
-    //! that is not hardened cannot find, so \a other is searched with the member hash of the key then (qore#7557)
-    QORE_HASH_NOINLINE DLLLOCAL const HashMember* findCrossKind(const HashMember& m,
-            const qore_hash_private& other) const;
+    //! membersEqual() for this hash, which has no buckets or is hardened (qore#7557): looks up the key of each member
+    //! in \a other, with the member hash of the key if \a other is not hardened (a hardened hash finds a key with
+    //! any hash), in the order of the members of this hash, as membersEqual() does
+    /** not inline, so that membersEqual() is the code of before qore#7557 for hashes that are not hardened
+    */
+    template <typename F>
+    QORE_HASH_NOINLINE DLLLOCAL bool membersEqualHardened(const qore_hash_private& other, F& value_equal) const {
+        bool rehash = other.hm.fastFind();
+        for (const HashMember* m = member_list.front(); m; m = m->next) {
+            const HashMember* found = rehash
+                ? other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size()))
+                : other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
+                    qore_hash_lookup_key::stored_hash_t()));
+            if (!found || !value_equal(m->val, found->val)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
 

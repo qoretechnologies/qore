@@ -235,14 +235,6 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
-const HashMember* qore_hash_private::findCrossKind(const HashMember& m, const qore_hash_private& other) const {
-    if (!hm.isHardened() || other.hm.isHardened()) {
-        // the hash of m finds its key in other if other has it
-        return nullptr;
-    }
-    return other.findMember(qore_hash_lookup_key(m.key.data(), m.key.size()));
-}
-
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     assert(m->val.isNothing());
     assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
