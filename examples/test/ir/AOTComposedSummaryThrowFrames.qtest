@@ -12,6 +12,7 @@
 %requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
+%requires json
 %exec-class AOTComposedSummaryThrowFramesTest
 
 #! an exception raised in a callee whose summary another summary composed has the callee's frame (qore#7632)
@@ -89,7 +90,7 @@ class AOTComposedSummaryThrowFramesTest inherits QUnit::Test {
     summaries() {
         TmpDir dir("qore-aot-composed-summary-index-");
         run((qcc_bin, "-O3", "-c", "--output-dir=" + dir.path, probe));
-        string index = run((qcc_bin, "--dump-index-json", dir.path + "/probe.qo"));
+        hash<auto> index = parse_json(run((qcc_bin, "--dump-index-json", dir.path + "/probe.qo")));
         # composed: a division and a modulo by a nonzero constant
         checkSummary(index, "quarterOuter(int)", "int", True);
         checkSummary(index, "remainderOuter(int)", "int", True);
@@ -102,15 +103,14 @@ class AOTComposedSummaryThrowFramesTest inherits QUnit::Test {
     }
 
     #! checks that the function at \a path has a summary of the \a kind ("int" or "float") if \a composed, or none
-    private checkSummary(string index, string path, string kind, bool composed) {
-        string pattern = "\"qore_path\": \"" + quote_regex(path) + "\"[^\n]*\"" + kind + "_expression_nodes\": "
-            + (composed ? "\\[\\{" : "\\[\\]");
-        assertRegex(pattern, index, sprintf("%s summary: %y", path, composed));
-    }
-
-    #! returns the pattern that matches \a str literally
-    private static string quote_regex(string str) {
-        return "\\Q" + str + "\\E";
+    /** A function has several records under its path in the symbol index (the definition, its native body and its
+        fast entry); only the fast-entry record (\c "qore_fast_v1" in the native records) carries the summary.
+    */
+    private checkSummary(hash<auto> index, string path, string kind, bool composed) {
+        list<auto> fast = select index.native ?? (), $1.qore_path == path && $1.abi_kind == "qore_fast_v1";
+        assertEq(1, fast.size(), sprintf("%s fast-entry records", path));
+        *list<auto> nodes = fast[0]{kind + "_expression_nodes"};
+        assertEq(composed, boolean(nodes), sprintf("%s %s summary: %y", path, kind, nodes));
     }
 
     private string getAst() {
