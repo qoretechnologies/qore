@@ -2555,7 +2555,9 @@ DLLLOCAL bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker&
 /** For sandboxed code, the innermost sandboxed Program on the thread's Program context stack; for trusted code, the
     outermost Program of the stack (the Program whose code made the call).  Fails closed: nullptr if the calling code
     is sandboxed but no sandboxed Program is on the stack (a sandbox inherited by the thread), so that nothing is
-    cached for it
+    cached for it.  Code compiled in a sandboxed Program that runs in another Program, and the code that it calls, use
+    the cache of the Program that compiled it; nullptr if another sandboxed Program is on the stack as well, as the
+    innermost of the two is not known then (qore#7202)
 */
 DLLLOCAL QoreProgram* qore_caller_cache_program();
 
