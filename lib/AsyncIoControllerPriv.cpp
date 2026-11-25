@@ -5234,8 +5234,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                         "the key '%s' is in use by an operation of other code", uh.c_str());
                     return nullptr;
                 case KeyCollision::Replace:
-                    // an operation of this thread was replaced above
-                    cancel_displaced = displaced_key.thread_idx != t.thread_idx;
+                    cancel_displaced = true;
                     break;
                 default:
                     break;
@@ -5249,6 +5248,10 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // the key token: the reservation, or the one of the operation of this thread that is replaced
         pinfo.key_token = key_token ? key_token : (inherited_key_token ? inherited_key_token
             : key_registry.adopt(uh, t.thread_idx, app_id, spop_obj));
+        // an operation that takes over the token of the one it replaced on this thread is the key's owner now
+        if (!key_token && pinfo.key_token) {
+            key_registry.update(uh, pinfo.key_token, app_id, spop_obj);
+        }
         pinfo.continue_poll_in_flight = step_in_flight;
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
@@ -5421,8 +5424,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 spop_obj, cmd.submit_key_token, displaced_key);
             cmd.submit_key_collision = collision == KeyCollision::Refuse || collision == KeyCollision::TakeOther
                 ? collision : KeyCollision::None;
-            // an operation of the submission's own thread is replaced by the thread when it admits the submission
-            cancel_displaced = collision == KeyCollision::Replace && displaced_key.thread_idx != target->thread_idx;
+            cancel_displaced = collision == KeyCollision::Replace;
             uint64_t key_token = cmd.submit_key_token;
             try {
                 // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O
@@ -11557,10 +11559,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.app_pgm_id = cmd.submit_app_id;
                     // the key token: the reservation of the submission, or the one of the operation of this thread
                     // that it replaces (qore#7624); the reservation passes to the operation
-                    pinfo.key_token = cmd.submit_key_token ? cmd.submit_key_token : (inherited_key_token
+                    const bool key_reserved = cmd.submit_key_token != 0;
+                    pinfo.key_token = key_reserved ? cmd.submit_key_token : (inherited_key_token
                         ? inherited_key_token : key_registry.adopt(cmd.key, t.thread_idx, cmd.submit_app_id,
                             cmd.submit_spop_obj));
                     cmd.submit_key_token = 0;
+                    // an operation that takes over the token of the one it replaced on this thread is the key's owner now
+                    if (!key_reserved && pinfo.key_token) {
+                        key_registry.update(cmd.key, pinfo.key_token, cmd.submit_app_id, cmd.submit_spop_obj);
+                    }
                     pinfo.continue_poll_in_flight = step_in_flight;
                     pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
                     pinfo.sock = cmd.submit_sock;               // ownership transferred
