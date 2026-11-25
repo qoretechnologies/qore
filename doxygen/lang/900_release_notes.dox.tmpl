@@ -2896,6 +2896,19 @@
       keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
       (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
+    - an HTTP/2 stream that the application resets with @ref Qore::Socket::resetHttp2Stream()
+      "Socket::resetHttp2Stream()" (as @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" does for a connection
+      that it stops) releases its buffered data when the call returns, where the stream kept it until the I/O thread
+      next sent the session's frames (<a href="https://github.com/qoretechnologies/qore/issues/7532">issue 7532</a>)
+    - the Doxygen search indexes of the documentation of a user module leave out the imported modules that its pages
+      do not link to, which made up 29% of their size
+      (<a href="https://github.com/qoretechnologies/qore/issues/6376">issue 6376</a>)
+    - @ref qoreocrutilsintro "QoreOcrUtils" document OCR keeps the readable text of a PDF document and reports blank,
+      partially readable and unreadable pages one by one, also when the optional PDF reader is not available
+      (<a href="https://github.com/qoretechnologies/qore/issues/6764">issue 6764</a>)
+    - the tests that create UNIX socket files use short private directories, so they pass with a \c TMPDIR whose
+      path is too long for a UNIX socket name (<a href="https://github.com/qoretechnologies/qore/issues/7462">issue
+      7462</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
