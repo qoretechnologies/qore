@@ -187,7 +187,7 @@ class AddingRestHandler inherits RestHandler {
 #! a trusted authenticator that declares the keys of the platform's authorization context
 class TrustedAuth inherits AbstractAuthenticator {
     *list<string> getPlatformContextKeys() {
-        return ("group_namespace", "sandboxed", "user_flags", "socket", "obj");
+        return ("group_namespace", "sandboxed", "user_flags", "socket", "obj", "nested", "listed", "plain");
     }
 }
 
@@ -282,9 +282,11 @@ class TenantStreamHandler inherits AbstractHttpRequestHandler {
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
-        platform_seen = cx{'group_namespace', 'sandboxed', 'user_flags'} + {
+        platform_seen = cx{'group_namespace', 'sandboxed', 'user_flags', 'plain'} + {
             'socket': cx.hasKey('socket'),
             'obj': cx.hasKey('obj'),
+            'nested': cx.hasKey('nested'),
+            'listed': cx.hasKey('listed'),
         };
         factory_seen = {
             'authorization': hdr.hasKey('authorization'),
@@ -320,9 +322,11 @@ class TenantPlatformRestClass inherits AbstractRestClass {
     }
 
     hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
-        return RestHandler::makeResponse(200, cx{'group_namespace', 'sandboxed', 'user_flags'} + {
+        return RestHandler::makeResponse(200, cx{'group_namespace', 'sandboxed', 'user_flags', 'plain'} + {
             'socket': cx.hasKey('socket'),
             'obj': cx.hasKey('obj'),
+            'nested': cx.hasKey('nested'),
+            'listed': cx.hasKey('listed'),
         });
     }
 }
@@ -891,18 +895,19 @@ l50Xb2GWQesIt9k5jF5IOw==
     platformKeysTest() {
         Program t = tenantProgram();
         hash<auto> pcx = rawContext(1, "hello") + {"group_namespace": 42, "sandboxed": True, "user_flags": 2,
-            "obj": new Mutex()};
+            "obj": new Mutex(), "nested": {"a": {"b": new Mutex()}}, "listed": (1, (2, new Mutex())),
+            "plain": {"a": (1, "two")}};
         # the keys that a trusted authenticator declares are kept for restricted code; never the server's objects
-        # or an object
+        # or a value that holds an object at any depth
         object h = t.callFunction("stream_handler_auth", new TrustedAuth());
         h.handleRequest(new TestListener(), new Socket(), pcx, header(), NOTHING);
-        assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "socket": False, "obj": False},
-            h.platform_seen);
+        assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "plain": {"a": (1, "two")},
+            "socket": False, "obj": False, "nested": False, "listed": False}, h.platform_seen);
         # an authenticator of restricted code declares none
         h = t.callFunction("stream_handler_auth", t.callFunction("tenant_auth"));
         h.handleRequest(new TestListener(), new Socket(), rawContext(1, "hello") + {"group_namespace": 42,
             "sandboxed": True, "user_flags": 2}, header(), NOTHING);
-        assertEq({"socket": False, "obj": False}, h.platform_seen);
+        assertEq({"socket": False, "obj": False, "nested": False, "listed": False}, h.platform_seen);
         # the REST class of restricted code of a trusted REST handler with the trusted authenticator
         RestHandler rest(new TrustedAuth());
         rest.addClass(t.callFunction("platform_class"));
@@ -910,8 +915,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             "orig_path": "/platform", "raw_path": "/platform"}, header() + {"method": "GET", "path": "platform",
             "accept": MimeTypeJson}, NOTHING);
         assertEq(200, rv.code);
-        assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "socket": False, "obj": False},
-            parse_json(rv.body));
+        assertEq({"group_namespace": 42, "sandboxed": True, "user_flags": 2, "plain": {"a": (1, "two")},
+            "socket": False, "obj": False, "nested": False, "listed": False}, parse_json(rv.body));
     }
 
     restrictedRequestTest() {

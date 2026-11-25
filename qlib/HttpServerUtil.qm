@@ -177,7 +177,12 @@ module HttpServerUtil {
     @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" gets what the HTTP server gives it.
     A stream request of a class of a restricted %Program that a trusted handler creates without filtering the request
     for it is refused (\c HTTP-SERVER-ERROR): a trusted handler that creates the stream requests of restricted code
-    filters its requests (setFilterRequests() or setHostsCode()).
+    filters its requests (setFilterRequests() or setHostsCode()).  The refusal recognizes the request context that
+    the HTTP server made by the server's objects in it
+    (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys") and its header information; a
+    context that trusted code made or stripped itself is used as given, so such code filters it with
+    @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" before it gives
+    it to restricted code.
     @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" is the one filter
     of the credentials of a request, which a platform that hands a request to the code of a tenant applies as well,
     with the options of its own authentication (@ref HttpServer::HttpRequestFilterOptions "HttpRequestFilterOptions"):
@@ -2285,9 +2290,10 @@ public class AbstractAuthenticator {
     /** The code that a restricted sandbox governs gets the request context filtered (see
         @ref httpserverutil_request_credentials); the keys returned here, which the authentication of the platform
         sets (for example the identity and the authorization flags of the user), are kept for it.  The server's
-        objects, the keys of the request that the filter handles itself and values that are objects are not kept in
-        any case.  Only the keys of an authenticator of trusted code are kept: an authenticator of a class of a
-        restricted %Program names none.
+        objects, the keys of the request that the filter handles itself and values that are objects or hold one are
+        not kept in any case.  The keys must hold plain data and no credentials (such as an authentication token):
+        the code that a restricted sandbox governs gets them.  Only the keys of an authenticator of trusted code are
+        kept: an authenticator of a class of a restricted %Program names none.
 
         @return the keys of the request context that this authenticator sets; by default none
 
@@ -2815,7 +2821,8 @@ thread_local int http_request_handoff_seq;
 #! Hands the raw request of a request to the stream request that a request handler creates for it (qore#6843)
 /** Not public: only the code of this module uses it.  A request handler creates it with
     AbstractHttpRequestHandler::withholdRequestCredentials() while it dispatches a request to the code that serves
-    it, which gets the request filtered, and the HTTP server with AbstractHttpRequestHandler::pushRawRequest(); the
+    it, which gets the request filtered, and trusted host code that gives a handler the request filtered with
+    AbstractHttpRequestHandler::pushRawRequest(); the
     first stream request created on the thread for the request (with its ID and method, which the filter does not
     change) takes the raw request, which then is no longer handed to another one.  The handoffs of a thread end in
     the reverse order of their creation; one that does not fails closed: no raw request is handed on the thread any
@@ -2940,7 +2947,8 @@ public hashdecl HttpRequestFilterOptions {
         (@ref HttpServer::AbstractAuthenticator::getPlatformContextKeys() "AbstractAuthenticator::getPlatformContextKeys()").
         The keys of @ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys", the keys that the
         filter handles itself (\c hdr, \c header-info, \c peer-info, \c trailers, \c url and the paths) and
-        values that are objects are not kept in any case
+        values that are objects or hold one at any depth are not kept in any case.  The keys must hold plain data
+        and no credentials (such as an authentication token): the code that a restricted sandbox governs gets them
     */
     *softlist<string> platform_context_keys;
 }
@@ -3211,7 +3219,8 @@ public class AbstractStreamRequest {
         }
         # the platform's authorization context: data only, never the server's objects or what is filtered here
         foreach string key in (opts.platform_context_keys) {
-            if (cx.hasKey(key) && !rv.hasKey(key) && !inlist(key, ServerContextKeys) && cx{key}.typeCode() != NT_OBJECT) {
+            if (cx.hasKey(key) && !rv.hasKey(key) && !inlist(key, ServerContextKeys)
+                    && !AbstractStreamRequest::holdsObject(cx{key})) {
                 rv{key} = cx{key};
             }
         }
@@ -3275,6 +3284,42 @@ public class AbstractStreamRequest {
             "hdr": rhdr,
             "withheld": (keys withheld) ?? (),
         };
+    }
+
+    #! Returns @ref True if the value is an object or a hash or list that holds one at any depth
+    /** The keys of the platform's authorization context and the keys that a REST handler names
+        (@ref HttpServer::HttpRequestFilterOptions::platform_context_keys "HttpRequestFilterOptions.platform_context_keys",
+        @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()") are kept only with
+        values that hold no object
+
+        @param v the value
+
+        @return @ref True if the value is an object or holds one at any depth
+
+        @since HttpServerUtil 1.6
+    */
+    static bool holdsObject(auto v) {
+        switch (v.typeCode()) {
+            case NT_OBJECT:
+                return True;
+            case NT_HASH: {
+                foreach string k in (keys v) {
+                    if (AbstractStreamRequest::holdsObject(v{k})) {
+                        return True;
+                    }
+                }
+                return False;
+            }
+            case NT_LIST: {
+                foreach auto e in (v) {
+                    if (AbstractStreamRequest::holdsObject(e)) {
+                        return True;
+                    }
+                }
+                return False;
+            }
+        }
+        return False;
     }
 
     #! returns @ref True if the request context has the server's objects or header information that the filter does
@@ -5584,8 +5629,8 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             reference<*object> handoff) {
         hash<HttpRequestFilterOptions> opts = getRequestFilterOptions();
         hash<HttpFilteredRequestInfo> rv = AbstractStreamRequest::filterRequest(cx, hdr, opts);
-        # the HTTP server handed the raw request already (pushRawRequest()) when it gave the handler the request
-        # filtered: the handler keeps it rather than handing the request that it got
+        # the code that dispatched the request handed the raw request already (pushRawRequest()) when it gave the
+        # handler the request filtered: the handler keeps it rather than handing the request that it got
         if (!HttpRequestHandoff::isActiveFor(cx, hdr)) {
             # the credential trailer fields that the handler opts in to receive, as for the header fields
             *hash<string, bool> trailer_keep;
@@ -5628,8 +5673,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         return opts;
     }
 
-    #! Hands the raw request to the stream request that the handler creates for it in the HTTP server's dispatch
-    /** @internal for the HTTP server, which gives a handler the request filtered: the first stream request created
+    #! Hands the raw request to the stream request that the handler creates for it in a dispatch of the request
+    /** @internal for trusted host code that gives a handler the request filtered (the HTTP server's own dispatch
+        uses it once it filters the request for the handler classes of restricted code; until then trusted host code
+        that dispatches requests to handlers itself can use it): the first stream request created
         for the same request (the same \c id in the context and \c method in the header fields, which the filter does
         not change) on the thread while the returned object exists serves the request with the raw request; the
         handler keeps it (see withholdRequestCredentials()).  Only trusted code can hand a raw request: a caller that

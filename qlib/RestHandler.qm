@@ -2118,7 +2118,7 @@ public namespace RestHandler {
             # the keys that the handler names: data only, never the server's objects
             foreach string key in (rest_context_keys) {
                 if (cx.hasKey(key) && !rcx.hasKey(key) && !inlist(key, AbstractStreamRequest::ServerContextKeys)
-                        && cx{key}.typeCode() != NT_OBJECT) {
+                        && !AbstractStreamRequest::holdsObject(cx{key})) {
                     rcx{key} = cx{key};
                 }
             }
@@ -2133,7 +2133,9 @@ public namespace RestHandler {
             @ref RestHandlerContextKeys; trusted code that adds keys to the request context for the REST classes
             before they are dispatched names them here; the server's objects
             (@ref HttpServer::AbstractStreamRequest::ServerContextKeys "ServerContextKeys") and values that are
-            objects are not given in any case.  Only trusted code can set them: restricted callers are refused.
+            objects or hold one at any depth are not given in any case.  The keys must hold plain data and no
+            credentials: the REST classes of restricted code get them.  Only trusted code can set them: restricted
+            callers are refused.
 
             @param names the names of more keys of the request context that the REST classes get
 

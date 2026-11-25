@@ -115,7 +115,8 @@ DLLLOCAL bool qore_object_program_is_sandboxed(const QoreObject* obj);
 //! (qore#6843)
 /** The sandboxes are those of qore_object_program_is_sandboxed(); a sandbox does not trust its code if it refuses
     uncontrolled APIs (QoreSandboxManager::trustsUncontrolledApis(); for a composition, if any member refuses them), as
-    for SandboxManager::isRestricted().  Fails closed: true if the sandboxes cannot be resolved
+    for SandboxManager::isRestricted().  Fails closed: true if the sandboxes cannot be resolved, and for a Program
+    marked sandboxed (qore_program_is_sandboxed()) whose sandboxes are gone or that has none
 */
 DLLLOCAL bool qore_object_program_is_restricted(const QoreObject* obj);
 //! Returns true and the ID of the Program of the class of the object in \a id if a sandbox governs that Program

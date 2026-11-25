@@ -76,6 +76,7 @@ bool sub sandboxed() {
         addTestCase("a sandbox that does not trust its code", \restrictedTest());
         addTestCase("a policy changed at run time", \laterTest());
         addTestCase("a Program created by other code", \creatorTest());
+        addTestCase("a deleted Program", \deletedTest());
         set_return_value(main());
     }
 
@@ -158,6 +159,27 @@ bool sub sandboxed() {
         Program t = getProgram(permissiveManager());
         inner = t.callFunction("make_program", t.callFunction("permissive"));
         assertFalse(SandboxManager::isFromRestrictedProgram(inner.callFunction("make")));
+    }
+
+    deletedTest() {
+        # the sandboxes of a deleted Program are gone: an object of its class fails closed
+        Program p = getProgram(new SandboxManager());
+        object o = p.callFunction("make");
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "before the Program is deleted");
+        delete p;
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "after the Program is deleted");
+        # also for a Program that a sandbox that allows everything governed: it cannot be told trusted any more
+        p = getProgram(permissiveManager());
+        o = p.callFunction("make");
+        assertFalse(SandboxManager::isFromRestrictedProgram(o), "before the Program is deleted");
+        delete p;
+        assertTrue(SandboxManager::isFromRestrictedProgram(o), "after the Program is deleted");
+        # a trusted Program has no sandbox before or after
+        Program t(PO_NO_CHILD_PO_RESTRICTIONS);
+        t.parse(Source, "trusted");
+        o = t.callFunction("make");
+        delete t;
+        assertFalse(SandboxManager::isFromRestrictedProgram(o), "a deleted trusted Program");
     }
 
     #! returns a sandbox that allows everything, with which a host only interrupts and limits its trusted code

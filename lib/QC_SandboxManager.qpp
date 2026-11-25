@@ -1677,7 +1677,8 @@ static bool SandboxManager::isFromSandboxedProgram(object obj) [flags=RET_VALUE_
     requests and REST classes of a tenant (see @ref httpserverutil_request_credentials).
 
     It is evaluated at each call, so a policy tightened after the object was created counts, and it fails closed:
-    @ref True if the sandboxes cannot be resolved.  A Program that sandboxed code creates is governed by its creator's
+    @ref True if the sandboxes cannot be resolved, and for a Program that a sandbox governed whose sandboxes are gone
+    (it was deleted).  A Program that sandboxed code creates is governed by its creator's
     sandbox as well, so a sandbox that allows uncontrolled APIs, which such code gives the Program, does not make it
     trusted.
 
