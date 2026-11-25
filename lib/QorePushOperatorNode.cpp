@@ -49,6 +49,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QorePushOperatorNode::evalImplInternal(bool&
     if (*xsink)
         return QoreValue();
 
+    // the operand is referenced before the lvalue is taken: if it is the lvalue's own value, the lvalue's list is then
+    // copied before it is changed, so the value pushed is the one that the operand had, not the changed list
+    res.ensureReferencedValue();
+
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
     LValueHelper val(left, xsink);
     if (!val)
