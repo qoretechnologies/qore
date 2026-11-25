@@ -2617,6 +2617,9 @@ struct QoreModuleLoadFrame {
     qore_program_id_t owner_pgm_id;
     //! the frame of the enclosing load in this thread, if any
     QoreModuleLoadFrame* prev;
+    //! the canonical directory of library code of a library module loaded into a container of code that is not
+    //! trusted, beneath which the module reads its resources when it is initialized (qore#7518); empty otherwise
+    std::string library_root = std::string();
 };
 
 //! the innermost module load in progress in this thread
@@ -2665,6 +2668,14 @@ public:
         }
     }
 
+    //! sets the directory of library code beneath which a library module loaded into a container reads its resources
+    void setLibraryRoot(const char* dir) {
+        if (char* canon = realpath(dir, nullptr)) {
+            frame.library_root = canon;
+            free(canon);
+        }
+    }
+
 private:
     QoreModuleLoadFrame frame;
 };
@@ -2684,6 +2695,54 @@ bool qore_module_load_is_library() {
 
 bool qore_module_load_is_trusted() {
     return module_load_frame && module_load_frame->trusted;
+}
+
+//! lists the source files of a separated library module as library code: without a sandbox policy (qore#7518)
+static QoreListNode* list_library_module_sources(const char* dir, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    DIR* d = opendir(dir);
+    if (!d) {
+        xsink->raiseErrnoException("DIR-READ-ERROR", errno, "cannot list the sources of module directory '%s'", dir);
+        return nullptr;
+    }
+    std::set<std::string> names;
+    {
+        ON_BLOCK_EXIT(closedir, d);
+        while (struct dirent* e = readdir(d)) {
+            size_t len = strlen(e->d_name);
+            if (len > 3 && (!strcmp(e->d_name + len - 3, ".qc") || !strcmp(e->d_name + len - 3, ".ql"))) {
+                std::string path = std::string(dir) + "/" + e->d_name;
+                struct stat sb;
+                if (!stat(path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+                    names.insert(e->d_name);
+                }
+            }
+        }
+    }
+    for (const std::string& n : names) {
+        rv->push(new QoreStringNode(n), xsink);
+    }
+    return rv.release();
+}
+
+//! checks a module path given by code that a sandbox governs against the policy of that code (qore#7518)
+/** @return 0 if allowed or no policy applies, -1 if denied (an exception is raised)
+*/
+static int check_module_source_policy(const char* path, ExceptionSink& xsink) {
+    if (!q_source_read_policy_applies()) {
+        return 0;
+    }
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    return smh && !smh->checkFilesystemAccess(path, QSEC_READ, &xsink) ? -1 : 0;
+}
+
+bool qore_module_load_is_untrusted() {
+    return module_load_frame && !module_load_frame->trusted;
+}
+
+const char* qore_module_load_library_root() {
+    return module_load_frame && !module_load_frame->trusted && !module_load_frame->library_root.empty()
+        ? module_load_frame->library_root.c_str() : nullptr;
 }
 
 bool qore_module_load_untrusted_aot_init() {
@@ -4193,6 +4252,10 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     xsink.assimilate(binary_xsink);
                 }
             }
+        } else if (!isTrustedModulePath(raw_path) && check_module_source_policy(raw_path, xsink)) {
+            // under a sandbox policy, a path that the policy denies is denied before anything about it is told
+            // (qore#7518)
+            return nullptr;
         } else if (QoreDir::folder_exists(modulePath, xsink)) {
             if (!has_separated_module_main(raw_path, name)) {
                 xsink.raiseException("LOAD-MODULE-ERROR", "cannot load separated user module '%s' from directory "
@@ -5159,11 +5222,13 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
+    // a module in a directory of library code is read as library code, also into a container (qore#7518)
+    const bool sep_library_file = isTrustedModulePath(path, &trusted_path, found_in);
+    const bool trusted = !untrusted_container && sep_library_file;
     // the files that were found to be library code are the files that are read; the module keeps the path that it was
     // found by in a directory of the process-wide module path (its script path, its file names and its errors are those
     // of that path), and otherwise the canonical path judged (qore#7319)
-    const char* open_path = trusted ? trusted_path.c_str() : path;
+    const char* open_path = sep_library_file ? trusted_path.c_str() : path;
     if (trusted && !(found_in && found_in->process_path)) {
         path = open_path;
     }
@@ -5178,6 +5243,10 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // a library module loaded into a container reads its resources beneath its directory
+    if (sep_library_file && !trusted) {
+        load_frame.setLibraryRoot(trusted_path.c_str());
+    }
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
@@ -5282,7 +5351,21 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     moduleOpenPath += QORE_DIR_SEP_STR;
     moduleOpenPath += feature;
     moduleOpenPath += ".qm";
-    std::string moduleCode = QoreDir::get_file_content(moduleOpenPath.c_str());
+    std::string moduleCode;
+    // the sources of a module that is not read as library code are read with the file-system policy of the code
+    // that loads it: the files read are the files that the policy checked (qore#7518); a module read from a
+    // directory of library code (also into a container) reads its own files as library code
+    if (!sep_library_file && q_source_read_policy_applies()) {
+        if (q_read_policy_checked_source(moduleOpenPath.c_str(), moduleCode, &xsink)) {
+            if (!xsink) {
+                xsink.raiseErrnoException("LOAD-MODULE-ERROR", errno, "cannot read '%s'", moduleOpenPath.c_str());
+            }
+            xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature, path);
+            return nullptr;
+        }
+    } else {
+        moduleCode = QoreDir::get_file_content(moduleOpenPath.c_str());
+    }
 
     // the module's sources are parsed from memory, so apply the default a file-based module gets from parseFile()
     if (qore_program_private::get(*userModule->getProgram())->applyModernSourceDefault(modulePath.c_str(), &xsink)) {
@@ -5307,7 +5390,9 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         }
 
         QoreDir moduleDir(&xsink, QCS_DEFAULT, open_path);
-        ReferenceHolder<QoreListNode> fileList(moduleDir.listModuleSources(&xsink), &xsink);
+        // the directory of a library module is listed as library code, also in a container (qore#7518)
+        ReferenceHolder<QoreListNode> fileList(sep_library_file ? list_library_module_sources(open_path, &xsink)
+            : moduleDir.listModuleSources(&xsink), &xsink);
         if (xsink) {
             xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
                 qore_msg_path(path).c_str());
@@ -5326,7 +5411,21 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
             fileOpenPath += QORE_DIR_SEP_STR;
             fileOpenPath += file->c_str();
 
-            std::string fileCode = QoreDir::get_file_content(fileOpenPath);
+            std::string fileCode;
+            // each source file read is a file that the policy checked, also one that is a link (qore#7518)
+            if (!sep_library_file && q_source_read_policy_applies()) {
+                if (q_read_policy_checked_source(fileOpenPath.c_str(), fileCode, &xsink)) {
+                    if (!xsink) {
+                        xsink.raiseErrnoException("LOAD-MODULE-ERROR", errno, "cannot read '%s'",
+                            fileOpenPath.c_str());
+                    }
+                    xsink.appendLastDescription(" (while loading user module \"%s\" from path \"%s\")", feature,
+                        path);
+                    return nullptr;
+                }
+            } else {
+                fileCode = QoreDir::get_file_content(fileOpenPath);
+            }
             qore_program_private::get(*userModule->getProgram())->parsePending(fileCode, filePath.c_str(), &xsink,
                 &wsink, file_warning_mask);
             if (xsink) {
@@ -6458,11 +6557,14 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     const bool untrusted_container = mpgm && qore_caller_is_untrusted();
     // a module from the process-wide module path is library code: it is initialized with no sandbox provenance
     std::string trusted_path;
-    const bool trusted = !untrusted_container && isTrustedModulePath(path, &trusted_path, found_in);
+    // a module in a directory of library code is read as library code, also when it is loaded into a container of
+    // code that is not trusted, where it is not library code (qore#7518)
+    const bool library_file = isTrustedModulePath(path, &trusted_path, found_in);
+    const bool trusted = !untrusted_container && library_file;
     // the file that was found to be library code is the file that is read; the module keeps the path that it was
     // found by in a directory of the process-wide module path (its script path, its file name and its errors are those
     // of that path), and otherwise the canonical path judged (qore#7319)
-    const char* open_path = trusted ? trusted_path.c_str() : nullptr;
+    const char* open_path = library_file ? trusted_path.c_str() : nullptr;
     if (trusted && !(found_in && found_in->process_path)) {
         path = open_path;
     }
@@ -6477,6 +6579,15 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     }
     // recorded on the module when it is registered
     QoreModuleLoadFrameHelper load_frame(feature, trusted, tenant_chosen, owner, owner_pgm_id);
+    // a library module loaded into a container reads its resources beneath its directory of library code
+    if (library_file && !trusted) {
+        std::string dir(trusted_path);
+        size_t sep = dir.find_last_of("/\\");
+        if (sep != std::string::npos) {
+            dir.resize(sep ? sep : 1);
+            load_frame.setLibraryRoot(dir.c_str());
+        }
+    }
     // library code loaded by code that is not trusted does not take what that code chose (see below); checked before
     // the barrier is set
     const bool untrusted_loader = trusted && qore_caller_is_untrusted();
@@ -6576,6 +6687,14 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     td = mi->getFileName();
     //printd(5, "QoreModuleManager::loadUserModuleFromPath() normalized path: '%s'\n", td);
 
+    // under a sandbox policy, a module that is not read as library code is checked before anything about it is
+    // told: a missing file that the policy denies is denied (qore#7518)
+    if (!open_path && q_source_read_policy_applies()) {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        if (smh && !smh->checkFilesystemAccess(td, QSEC_READ, &xsink)) {
+            return nullptr;
+        }
+    }
     if (!QoreDir::file_exists(open_path ? open_path : td)) {
         xsink.raiseException("LOAD-MODULE-ERROR", "cannot load user module '%s'; the module doesn't exist",
             qore_msg_path(td).c_str());

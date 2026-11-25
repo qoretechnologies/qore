@@ -2871,6 +2871,22 @@ DLLLOCAL int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const ch
 */
 DLLLOCAL int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink);
 
+//! returns true if the file-system policy of a sandbox applies to the sources that the code on this thread reads by
+//! name (\c %include, modules loaded by path): a sandbox governs the code, and no library module is being loaded
+DLLLOCAL bool q_source_read_policy_applies();
+
+//! opens a source for reading with the file-system policy of the calling code (qore#7518)
+/** The file opened is the file that the policy checked; it must be a regular file
+
+    @return the stream, or nullptr: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL FILE* q_open_policy_checked_source(const char* fn, ExceptionSink* xsink);
+
+//! reads a source with the file-system policy of the calling code into \a out (see q_open_policy_checked_source())
+/** @return 0 for OK, -1 for an error: an exception has been raised (a denial), or errno is set
+*/
+DLLLOCAL int q_read_policy_checked_source(const char* fn, std::string& out, ExceptionSink* xsink);
+
 //! the directory of a path that the sandbox filesystem policy allowed, pinned for a name-based operation (qore#7518)
 /** The operation acts relative to dirfd on leaf with the *at() functions without following a link, so that it reaches
     the object that the policy checked even if a component of the path is replaced afterwards

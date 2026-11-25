@@ -538,6 +538,15 @@ public:
 //! QoreModuleManager::isTrustedModulePath())
 DLLLOCAL bool qore_module_load_is_trusted();
 
+//! returns true if a module that is not library code is being loaded on this thread: one that code which is not
+//! trusted chose outside of the module path (its own files are read with the file-system policy of that code)
+DLLLOCAL bool qore_module_load_is_untrusted();
+
+//! returns the canonical directory of library code of a library module that is being loaded into a container of
+//! code that is not trusted on this thread, or nullptr (qore#7518)
+DLLLOCAL const char* qore_module_load_library_root();
+
+
 class QoreModuleDefContextHelper : public QoreModuleDefContext {
 protected:
     QoreModuleDefContext* old;
