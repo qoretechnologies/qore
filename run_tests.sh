@@ -723,6 +723,11 @@ fi
 # QORE_TEST_ALLOW_BUILD_MISMATCH=1, with which the run goes on and says so.  Each program and git command it runs is
 # limited to BUILD_CHECK_WAIT seconds by the timeout command (a libqore that hangs in its initialization cannot hold up
 # the run), and git never fetches (GIT_NO_LAZY_FETCH: a partial clone would fetch a missing object from the network).
+# The files are compared by their size and mtime (core.checkStat=minimal, core.trustctime=false), not by their owner,
+# inode and ctime: a CI job runs chown -R on the tree before the tests, which would make git read every file (qore#7615).
+# A git command that the time limit killed ends the run with the exit code 75 (EX_TEMPFAIL), and a BUILD CHECK FAILED
+# message that says that it is no mismatch (the host is slow or stalled: run the tests again); with
+# QORE_TEST_ALLOW_BUILD_MISMATCH=1 the run goes on.
 
 # The files that the build is made from, as git pathspecs from the root of the tree (decided from the inputs of
 # CMakeLists.txt): not the tests and the documentation of the binary modules; under examples/, the C and C++ sources and
@@ -865,6 +870,14 @@ BUILD_MISMATCH=""
 build_mismatch() {
     BUILD_MISMATCH="$BUILD_MISMATCH  $*
 "
+}
+
+# Why the tree could not be compared with the build in time, or nothing: not a mismatch (qore#7615)
+BUILD_CHECK_ERROR=""
+# Returns 0 if the exit code is that of a command that the time limit of run_build_check() ended: 124, or 137 where
+# the timeout command passes on the kill (BusyBox)
+build_check_killed() {
+    [ "$1" -eq 124 ] || [ "$1" -eq 137 ]
 }
 
 # Checks that the qore next to the given file (qcc, or a .qmod directory: the first argument names it) is the build's,
@@ -1235,7 +1248,15 @@ check_build_matches_tree() {
             return
         fi
         BUILD_TREE_HASH=`tree_git rev-parse --verify -q "HEAD^{commit}" 2>/dev/null`
-        if ! tree_git cat-file -e "$BUILD_HASH^{commit}" 2>/dev/null; then
+        tree_git cat-file -e "$BUILD_HASH^{commit}" 2>/dev/null
+        build_cat_file_rc=$?
+        if build_check_killed $build_cat_file_rc; then
+            BUILD_CHECK_ERROR="git was killed after $BUILD_CHECK_WAIT s (QORE_TEST_BUILD_CHECK_WAIT) while it looked for"
+            BUILD_CHECK_ERROR="$BUILD_CHECK_ERROR the build's commit in the tree's repository: not a mismatch, the host or"
+            BUILD_CHECK_ERROR="$BUILD_CHECK_ERROR its file system is slow or stalled"
+            return
+        fi
+        if [ $build_cat_file_rc -ne 0 ]; then
             build_mismatch "the build's commit $BUILD_HASH is not in the tree's repository (the tree is at" \
                 "${BUILD_TREE_HASH:-an unknown commit})"
             return
@@ -1246,13 +1267,24 @@ check_build_matches_tree() {
         if [ "$build_errors" != /dev/null ]; then
             BUILD_CHECK_FILES="$BUILD_CHECK_FILES $build_errors"
         fi
+        # core.checkStat=minimal, core.trustctime=false: a file is compared by its size and mtime, not by its owner,
+        # inode and ctime.  A CI job runs chown -R on the tree before the tests, which changes the owner and the ctime
+        # of every file, so that git's stat data of the index matched none and git read and hashed all of them (155
+        # MB in 10,773 files), which took longer than the time limit on a loaded runner (qore#7615)
         set -f
-        build_changes=`tree_git diff --name-only --no-renames "$BUILD_HASH" -- $BUILD_INPUT_PATHSPECS 2>"$build_errors"`
+        build_changes=`tree_git -c core.checkStat=minimal -c core.trustctime=false diff --name-only --no-renames \
+            "$BUILD_HASH" -- $BUILD_INPUT_PATHSPECS 2>"$build_errors"`
         build_diff_rc=$?
         set +f
         build_diff_errors=`cat "$build_errors" 2>/dev/null`
         if [ "$build_errors" != /dev/null ]; then
             rm -f "$build_errors"
+        fi
+        if build_check_killed $build_diff_rc; then
+            BUILD_CHECK_ERROR="git was killed after $BUILD_CHECK_WAIT s (QORE_TEST_BUILD_CHECK_WAIT) while it compared"
+            BUILD_CHECK_ERROR="$BUILD_CHECK_ERROR the tree with it: not a mismatch, the host or its file system is slow or"
+            BUILD_CHECK_ERROR="$BUILD_CHECK_ERROR stalled"
+            return
         fi
         if [ $build_diff_rc -ne 0 ]; then
             build_mismatch "the tree cannot be compared with the build's commit $BUILD_HASH: $build_diff_errors"
@@ -1431,6 +1463,19 @@ QMOD_LINKS_EOF
 # Checks that the build matches the tree (see above); ends the run on a mismatch, unless it is allowed
 check_build() {
     check_build_matches_tree
+    # a comparison that did not finish in time says nothing about the build: it ends the run with a code of its own
+    # (75, EX_TEMPFAIL: run again), which is no mismatch (qore#7615)
+    if [ -n "$BUILD_CHECK_ERROR" ]; then
+        echo "*** BUILD CHECK FAILED: the tree could not be compared with the build's commit ${BUILD_HASH:-unknown}:" \
+            "$BUILD_CHECK_ERROR ***"
+        if [ "$QORE_TEST_ALLOW_BUILD_MISMATCH" = 1 ]; then
+            echo "*** the tests run all the same: QORE_TEST_ALLOW_BUILD_MISMATCH=1 ***"
+        else
+            echo "*** run the tests again, or with a larger QORE_TEST_BUILD_CHECK_WAIT; QORE_TEST_ALLOW_BUILD_MISMATCH=1" \
+                "runs them without the comparison. Exiting. ***"
+            exit 75
+        fi
+    fi
     check_build_parts
     if [ -z "$BUILD_MISMATCH" ]; then
         return

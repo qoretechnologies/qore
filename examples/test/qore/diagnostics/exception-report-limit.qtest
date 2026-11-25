@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# test-exec-mode: children - syntax checks run in child processes of the same interpreter
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%exec-class ExceptionReportLimitTest
+
+class ExceptionReportLimitTest inherits QUnit::Test {
+    constructor() : Test("Exception report limit", "1.0", \ARGV) {
+        addTestCase("syntax errors in text reports", \reportTest());
+        addTestCase("change the limit during execution", \runtimeTest());
+        set_return_value(main());
+    }
+
+    private static string quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    runtimeTest() {
+        string src = "setenv(\"QORE_EXCEPTION_REPORT_LIMIT\", \"1\"); on_exit throw \"SECOND\", \"later\"; "
+            "throw \"FIRST\", \"earlier\";";
+        string report = backquote("QORE_EXCEPTION_REPORT_LIMIT=10 " + quote(TestInterpreter::qore_interpreter())
+            + " -e " + quote(src) + " 2>&1");
+        assertTrue(report.find("FIRST: earlier") >= 0);
+        assertTrue(report.find("maximum exception count reached (1)") >= 0);
+        assertTrue(report.find("SECOND: later") < 0);
+    }
+
+    reportTest() {
+        string src;
+        for (int i = 0; i < 13; ++i) {
+            src += sprintf("missing_%d();\n", i);
+        }
+        foreach list<auto> row in (((NOTHING, 10), ("", 10), ("0", 10), ("-1", 10), ("2x", 10),
+                ("4294967296", 10), ("1", 1), ("12", 12), ("13", 13), ("20", 13))) {
+            (*string value, int expected) = row;
+            string env = exists value ? "QORE_EXCEPTION_REPORT_LIMIT=" + quote(value) + " "
+                : "unset QORE_EXCEPTION_REPORT_LIMIT; ";
+            int status;
+            string report = backquote(env + quote(TestInterpreter::qore_interpreter()) + " -e "
+                + quote(src) + " 2>&1", \status);
+            assertEq(2, status);
+            list<string> errors = select report.split("\n"), $1 =~ /^PARSE-EXCEPTION:/;
+            assertEq(expected, errors.size(), sprintf("%y", value));
+            assertEq(expected < 13, report.find(sprintf("maximum exception count reached (%d)", expected)) >= 0);
+        }
+    }
+}

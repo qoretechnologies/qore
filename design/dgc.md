@@ -1540,7 +1540,12 @@ locally and adds them with relaxed atomic operations when it ends, so accounting
 per node. The columns: scans that ran; scans deferred because the root had real references; scans skipped because
 another thread had just scanned the root; passes abandoned on a lock conflict (`restarts`); passes restarted to
 take the r-sections exclusively; graph nodes entered (objects, closure-bound variables and containers); total time,
-time blocked waiting for another thread, and the longest single scan. The table is written to `<path>.<pid>` at
+time blocked waiting for another thread, and the longest single scan; and the nodes of each committed graph that
+are not in a sealed component (`unsealed`: the root's component and every component that cannot be recorded in a
+closed region, counted by `assignRegions()`). The nodes entered depend on which closed regions were current, and so
+on the order of the scans made by other threads, and include abandoned and restarted passes; the unsealed nodes are
+fixed by the graph, so a test that checks how a scan's work grows with a part of the graph compares them
+(`examples/test/qlib/HttpServer/scan-size/HttpServerScanSize.qtest`). The table is written to `<path>.<pid>` at
 exit — every process of a cluster inherits the variable, and each writes its own file — and read at any time with
 `get_scan_stats()`. Root names are copied when a row is claimed and never freed, because a class name is freed with
 its Program while the table lives as long as the process.

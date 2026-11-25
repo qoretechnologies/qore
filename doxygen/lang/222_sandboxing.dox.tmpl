@@ -117,6 +117,11 @@ Program p(opts);
     - <b>No resource limits</b>: Cannot limit the number of threads
     - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
     - <b>No SSRF prevention</b>: Cannot block specific IP ranges
+    - <b>Code as it was parsed</b>: parse options restrict code when it is parsed, and the code keeps the restrictions
+      that were in effect then.  Restricting code that is already parsed is not supported: a restricting option set
+      with @ref Qore::Program::setParseOptions() "Program::setParseOptions()" after code was parsed must not be relied
+      on to restrict that code, including calls that it makes at run time.  Code that must run restricted belongs in a
+      new @ref Qore::Program "Program" created (or given its restrictions) before the code is parsed
     - <b>The Program's own code</b>: parse options restrict the code parsed in the %Program.  They are not a run-time
       boundary for module code: a module that the host gave the %Program, or that another %Program loaded already and
       the %Program imports, is a capability, and its code runs in the module's %Program with the module's own options

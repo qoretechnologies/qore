@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - SQLite driver loading and in-memory database initialization for unsupported check descriptions
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+%try-module oracle
+%define NoOracle
+%endtry
+%try-module sqlite3
+%define NoSqlite
+%endtry
+
+%exec-class CheckConstraintAlignmentTest
+
+class CheckConstraintAlignmentTest inherits QUnit::Test {
+    constructor() : Test("CheckConstraintAlignment", "1.0", \ARGV) {
+        addTestCase("PostgreSQL named checks", \pgsql());
+        addTestCase("Oracle named checks", \oracle());
+        addTestCase("SQLite rejects check descriptions", \sqlite());
+        set_return_value(main());
+    }
+
+    pgsql() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "CheckConstraintAlignment");
+        on_exit PgsqlRunSchema::teardown();
+        runChecks(new Datasource(ENV.QORE_DB_CONNSTR_PGSQL), True);
+    }
+
+    oracle() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_ORACLE) {
+            testSkip("QORE_DB_CONNSTR_ORACLE is not set");
+        }
+        string conn = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "CheckConstraintAlignment");
+        on_exit OracleRunSchema::teardown();
+        runChecks(new Datasource(conn), False);
+    }
+
+    private AbstractTable desired(Datasource ds, string name, hash<auto> desc) {
+        AbstractTable t = AbstractTable::getTable(ds, name);
+        t.setupTable(desc);
+        return t;
+    }
+
+    sqlite() {
+%ifdef NoSqlite
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        assertThrows("DESCRIPTION-ERROR", "not supported", \desired(), (ds, "t",
+            {"columns": {"qty": {"qore_type": Type::Int}}, "check_constraints": {}}));
+    }
+
+    private runChecks(Datasource ds, bool pg) {
+        on_exit ds.rollback();
+        string name = "ck_" + get_random_string(8).lwr();
+        hash<auto> desc = {"columns": {"qty": {"qore_type": Type::Int}, "id": {"qore_type": Type::Int}},
+            "check_constraints": {"ck_qty": "qty > 0"}};
+        AbstractTable t = desired(ds, name, desc);
+        map ds.execRaw($1), (new Database(ds)).getAlignSql({"tables": {name: desc}});
+        ds.commit();
+        on_exit {
+            ds.execRaw("drop table " + name + (pg ? "" : " purge"));
+            ds.commit();
+        }
+        AbstractTable live = AbstractTable::getTable(ds, name);
+        assertEq((), live.getAlignSql(t));
+        hash<auto> exported = live.getDescriptionHash();
+        assertEq("qty > 0", exported.check_constraints.ck_qty);
+        assertEq((), live.getAlignSql(desired(ds, name, exported)));
+
+        desc.check_constraints.ck_qty = "qty >= 0";
+        t = desired(ds, name, desc);
+        list<auto> sql = live.getAlignSql(t);
+        assertEq(2, sql.size(), "one drop and one add for a changed check");
+        map ds.execRaw($1), sql;
+        ds.commit();
+        assertEq((), AbstractTable::getTable(ds, name).getAlignSql(t));
+        ds.execRaw("alter table " + name + " add constraint ck_special check (id > -2) "
+            + (pg ? "not valid" : "disable"));
+        if (pg) {
+            ds.execRaw("alter table " + name + " add constraint ck_local check (id < 20) no inherit");
+        }
+        ds.commit();
+        live = AbstractTable::getTable(ds, name);
+
+        # A declaration with the same name does not replace a check with special attributes.
+        desc.check_constraints.ck_special = "id > 10";
+        list<string> notices;
+        hash<auto> opts = {"info_callback": sub (string msg, int action, string type, string object_name,
+                *string table, *string new_name, *string info) {
+            if (type == "check constraint" && info) {
+                notices += object_name;
+            }
+        }};
+        assertEq((), live.getAlignSql(desired(ds, name, desc), opts));
+        assertTrue(inlist("ck_special", notices));
+        hash<auto> conflicting = desc;
+        delete conflicting.check_constraints.ck_special;
+        conflicting.unique_constraints = {"ck_special": {"columns": ("qty",)}};
+        assertThrows("ALIGN-TABLE-ERROR", "preserved check", \live.getAlignSql(), desired(ds, name, conflicting));
+        assertThrows("DESCRIPTION-ERROR", "nonempty SQL expression", \desired(),
+            (ds, name, desc + {"check_constraints": {"ck_blank": "  "}}));
+
+        if (pg) {
+            assertTrue(inlist("ck_local", notices));
+        }
+        hash<auto> without_id = desc;
+        delete without_id.columns.id;
+        assertThrows("ALIGN-TABLE-ERROR", "preserved check", \live.getAlignSql(), desired(ds, name, without_id));
+
+        desc.check_constraints = {};
+        sql = live.getAlignSql(desired(ds, name, desc));
+        assertEq(1, sql.size(), "only the ordinary check is removed");
+        map ds.execRaw($1), sql;
+        ds.commit();
+        live = AbstractTable::getTable(ds, name);
+        assertTrue(live.getConstraints().hasKey("ck_special"));
+        assertFalse(live.getConstraints().hasKey("ck_qty"));
+        exported = live.getDescriptionHash();
+        assertEq({}, exported.check_constraints, "a table with only special checks still opts in on export");
+        assertEq((), live.getAlignSql(desired(ds, name, exported)));
+        delete desc.check_constraints;
+        assertTrue(live.getAlignSql(desired(ds, name, desc)).size() >= 1, "omitting the key retains legacy SQL");
+    }
+}

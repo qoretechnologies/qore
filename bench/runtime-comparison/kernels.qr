@@ -1,0 +1,576 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%modern
+
+# Keep these kernels equivalent to RuntimeBench.java and reference() in run.py.
+# Values stay small enough that integer overflow is not part of the workload.
+int sub step(int value) {
+    return (value * 33 + 17) & 65535;
+}
+
+code<int(int)> sub makeClosure(bool captured) {
+    int increment = 17;
+    if (captured) {
+        return int sub (int value) { return (value * 33 + increment) & 65535; };
+    }
+    return int sub (int value) { return (value * 33 + 17) & 65535; };
+}
+
+int sub wideStep(int value) {
+    return ((value * 33 + 17) & 65535) | 1125899906842624;
+}
+int sub affineStep(int value) {
+    return value + 17;
+}
+int sub branchIntStep(int value) {
+    if (value > 32767) { return value - 32767; }
+    return value + 17;
+}
+float sub floatStep(float value) {
+    return 65535.0 - value;
+}
+# Exercise a whole-body float comparison/select callback; older compilers use
+# generic dispatch. Polymorphic dispatch and temporary hashes remain controls.
+float sub branchFloatStep(float value) {
+    return value > 32767.0 ? value - 32767.0 : value + 17.0;
+}
+float sub taggedFloatStep(float value) {
+    return -9.0e307 - value;
+}
+
+final class Stepper {
+    int next(int value) {
+        return (value * 33 + 17) & 65535;
+    }
+}
+
+# Three runtime receiver types prevent this from being a final-method benchmark.
+class DynamicStep {
+    public { int calls = 0; }
+    private:internal { int increment = 17; }
+    int next(int value) { return (value * 33 + 17) & 65535; }
+    # A real object-field read, not a forwarding leaf or a disabled fast path.
+    int fieldNext(int value) { return (value * 33 + increment) & 65535; }
+    int effectNext(int value) { ++calls; return (value * 33 + increment) & 65535; }
+    # Context-using nested call deliberately excludes the native leaf companion.
+    int viaContext(int value) { return self.next(value); }
+}
+class DynamicStepB inherits DynamicStep {
+    private:internal { int increment = 19; }
+    int next(int value) { return (value * 33 + 19) & 65535; }
+    int fieldNext(int value) { return (value * 33 + increment) & 65535; }
+    int effectNext(int value) { ++calls; return (value * 33 + increment) & 65535; }
+}
+class DynamicStepC inherits DynamicStep {
+    private:internal { int increment = 23; }
+    int next(int value) { return (value * 33 + 23) & 65535; }
+    int fieldNext(int value) { return (value * 33 + increment) & 65535; }
+    int effectNext(int value) { ++calls; return (value * 33 + increment) & 65535; }
+}
+
+# Exactly representable double recurrences, independently checked with integers.
+class DynamicFloatStep {
+    private:internal { float limit = 65535.0; }
+    float next(float value) { return 65535.0 - value; }
+    float fieldNext(float value) { return limit - value; }
+}
+class DynamicFloatStepB inherits DynamicFloatStep {
+    private:internal { float limit = 65537.0; }
+    float next(float value) { return 65537.0 - value; }
+    float fieldNext(float value) { return limit - value; }
+}
+class DynamicFloatStepC inherits DynamicFloatStep {
+    private:internal { float limit = 65541.0; }
+    float next(float value) { return 65541.0 - value; }
+    float fieldNext(float value) { return limit - value; }
+}
+
+int sub indirectCall(int count, int seed, code<int(int)> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = callback(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub wideIndirectCall(int count, int seed, code<int(int)> callback) {
+    int value = seed | 1125899906842624;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += value & 65535;
+    }
+    return sum;
+}
+
+int sub floatIndirectCall(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+# Consume callback results directly, independently advancing the native argument.
+int sub intIndirectResult(int count, int seed, code<int(int)> callback) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int(callback(seed));
+        seed = 65535 - seed;
+    }
+    return sum;
+}
+
+int sub floatIndirectResult(int count, int seed, code<float(float)> callback) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int(callback(value));
+        value = 65535.0 - value;
+    }
+    return sum;
+}
+
+int sub taggedFloatIndirectCall(int count, int seed, code<float(float)> callback) {
+    float value = seed & 1 ? -3.0e307 : -6.0e307;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = callback(value);
+        sum += value < -4.5e307 ? 6 : 3;
+    }
+    return sum;
+}
+
+int sub monomorphicCall(int count, int seed, DynamicStep receiver) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+# Same retained receiver as monomorphicCall, but with a nullable Qore contract.
+# Timed inputs are strong objects; NOTHING transitions are covered by regressions.
+int sub optionalMethodCall(int count, int seed, *DynamicStep receiver) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub polymorphicCall(int count, int seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        DynamicStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+# Same selection and targets, without a per-iteration receiver local. Keep the
+# original kernel: this decomposition is not itself a runtime optimization.
+int sub polymorphicExpressionCall(int count, int seed, DynamicStep a, DynamicStep b, DynamicStep c) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub monomorphicFloatCall(int count, int seed, DynamicFloatStep receiver) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = receiver.next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub optionalFloatMethodCall(int count, int seed, *DynamicFloatStep receiver) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = receiver.next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub polymorphicFloatCall(int count, int seed,
+        DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        DynamicFloatStep receiver = i % 3 == 0 ? a : i % 3 == 1 ? b : c;
+        value = receiver.next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub polymorphicFloatExpressionCall(int count, int seed,
+        DynamicFloatStep a, DynamicFloatStep b, DynamicFloatStep c) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub dispatchControl(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        int increment = i % 3 == 0 ? 17 : i % 3 == 1 ? 19 : 23;
+        seed = (seed * 33 + increment) & 65535;
+        sum += seed;
+    }
+    return sum;
+}
+
+# Keep the recurrence boxed: the dynamic receiver's return type is not a native local contract.
+int sub boxedIntMethodCall(int count, int seed, auto a, auto b, auto c) {
+    auto value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub boxedFloatMethodCall(int count, int seed, auto a, auto b, auto c) {
+    auto value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+# Historical fallback names are retained for evidence continuity. These targets
+# need a live object-field read and can now use guarded scalar-member entries.
+int sub boxedIntMethodFallback(int count, int seed, auto a, auto b, auto c) {
+    auto value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+int sub boxedFloatMethodFallback(int count, int seed, auto a, auto b, auto c) {
+    auto value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).fieldNext(value);
+        sum += int(value);
+    }
+    return sum;
+}
+
+# Observable stores exclude the pure member companion. Reset between invocations
+# and consume all counters so the side effects are part of the checked result.
+int sub boxedIntMethodEffect(int count, int seed, auto a, auto b, auto c) {
+    a.calls = 0;
+    b.calls = 0;
+    c.calls = 0;
+    auto value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        value = (i % 3 == 0 ? a : i % 3 == 1 ? b : c).effectNext(value);
+        sum += int(value);
+    }
+    return sum + a.calls + b.calls + c.calls;
+}
+
+# Consume an unknown method result directly; there is no native result assignment.
+int sub dynamicIntResultCall(int count, int seed, auto a, auto b, auto c) {
+    int value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int((i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value));
+        value = 65535 - value;
+    }
+    return sum;
+}
+
+int sub dynamicIntResultFallback(int count, int seed, auto a, auto b, auto c) {
+    int value = seed;
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int((i % 3 == 0 ? a : i % 3 == 1 ? b : c).viaContext(value));
+        value = 65535 - value;
+    }
+    return sum;
+}
+
+int sub dynamicFloatResultCall(int count, int seed, auto a, auto b, auto c) {
+    float value = float(seed);
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += int((i % 3 == 0 ? a : i % 3 == 1 ? b : c).next(value));
+        value = 65535.0 - value;
+    }
+    return sum;
+}
+
+int sub arithmetic(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub directCall(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = step(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+int sub methodCall(int count, int seed, Stepper receiver) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = receiver.next(seed);
+        sum += seed;
+    }
+    return sum;
+}
+
+list<int> sub makeData(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    return data;
+}
+
+int sub listRead(list<int> data, int seed) {
+    int sum = 0;
+    for (int i = 0; i < data.size(); ++i) {
+        sum += data[i] ^ seed;
+    }
+    return sum;
+}
+
+int sub listBuild(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        sum += data[i];
+    }
+    return sum;
+}
+
+int sub listMutate(int count, int seed) {
+    list<int> data = ();
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        push data, seed;
+    }
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        data[i] += 1;
+        sum += data[i];
+    }
+    return sum;
+}
+
+int sub temporaryList(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        list<int> pair = (seed, seed + 1);
+        sum += pair[seed & 1];
+    }
+    return sum;
+}
+
+int sub temporaryHash(int count, int seed) {
+    int sum = 0;
+    for (int i = 0; i < count; ++i) {
+        seed = (seed * 33 + 17) & 65535;
+        hash<string, int> pair = {"left": seed, "right": seed + 1};
+        string key = seed & 1 ? "right" : "left";
+        sum += pair{key};
+    }
+    return sum;
+}
+
+int sub dispatch(string name, int count, int seed, list<int> data, Stepper receiver,
+        code<int(int)> callback, DynamicStep a, DynamicStep b, DynamicStep c,
+        code<int(int)> wideCallback, code<float(float)> floatCallback, code<float(float)> taggedCallback,
+        code<float(float)> branchCallback, code<int(int)> affineCallback, code<int(int)> branchIntCallback,
+        code<int(int)> closureCallback, code<int(int)> capturedCallback,
+        DynamicFloatStep fa, DynamicFloatStep fb, DynamicFloatStep fc) {
+    switch (name) {
+        case "arithmetic": return arithmetic(count, seed);
+        case "direct_call": return directCall(count, seed);
+        case "method_call": return methodCall(count, seed, receiver);
+        case "indirect_call": return indirectCall(count, seed, callback);
+        case "closure_call": return indirectCall(count, seed, closureCallback);
+        case "closure_capture": return indirectCall(count, seed, capturedCallback);
+        case "indirect_wide": return wideIndirectCall(count, seed, wideCallback);
+        case "indirect_affine": return indirectCall(count, seed, affineCallback);
+        case "indirect_affine_wide": return wideIndirectCall(count, seed, affineCallback);
+        case "indirect_branch_int": return indirectCall(count, seed, branchIntCallback);
+        case "indirect_float": return floatIndirectCall(count, seed, floatCallback);
+        case "indirect_int_result": return intIndirectResult(count, seed, callback);
+        case "indirect_float_result": return floatIndirectResult(count, seed, floatCallback);
+        case "indirect_branch_float": return floatIndirectCall(count, seed, branchCallback);
+        case "indirect_tagged_float": return taggedFloatIndirectCall(count, seed, taggedCallback);
+        case "polymorphic_call": return polymorphicCall(count, seed, a, b, c);
+        case "polymorphic_expression_call": return polymorphicExpressionCall(count, seed, a, b, c);
+        case "monomorphic_call": return monomorphicCall(count, seed, a);
+        case "optional_method_call": return optionalMethodCall(count, seed, a);
+        case "polymorphic_float_call": return polymorphicFloatCall(count, seed, fa, fb, fc);
+        case "polymorphic_float_expression_call": return polymorphicFloatExpressionCall(count, seed, fa, fb, fc);
+        case "monomorphic_float_call": return monomorphicFloatCall(count, seed, fa);
+        case "optional_float_method_call": return optionalFloatMethodCall(count, seed, fa);
+        case "boxed_float_method_call": return boxedFloatMethodCall(count, seed, fa, fb, fc);
+        case "boxed_int_method_call": return boxedIntMethodCall(count, seed, a, b, c);
+        case "boxed_int_method_fallback": return boxedIntMethodFallback(count, seed, a, b, c);
+        case "boxed_float_method_fallback": return boxedFloatMethodFallback(count, seed, fa, fb, fc);
+        case "boxed_int_method_effect": return boxedIntMethodEffect(count, seed, a, b, c);
+        case "dynamic_int_result_call": return dynamicIntResultCall(count, seed, a, b, c);
+        case "dynamic_int_result_fallback": return dynamicIntResultFallback(count, seed, a, b, c);
+        case "dynamic_float_result_call": return dynamicFloatResultCall(count, seed, fa, fb, fc);
+        case "dispatch_control": return dispatchControl(count, seed);
+        case "list_read": return listRead(data, seed);
+        case "list_build": return listBuild(count, seed);
+        case "list_mutate": return listMutate(count, seed);
+        case "temporary_list": return temporaryList(count, seed);
+        case "temporary_hash": return temporaryHash(count, seed);
+    }
+    throw "BENCH-ARGUMENT-ERROR", "unknown kernel: " + name;
+}
+
+int sub integerArg(int index, int minimum, int maximum) {
+    if (index >= ARGV.size() || ARGV[index] !~ /^\d+$/) {
+        throw "BENCH-ARGUMENT-ERROR", "missing or invalid integer argument";
+    }
+    int value = ARGV[index].toInt();
+    if (value < minimum || value > maximum) {
+        throw "BENCH-ARGUMENT-ERROR", "integer argument outside supported range";
+    }
+    return value;
+}
+
+sub main() {
+    if (ARGV.size() == 1 && ARGV[0] == "startup") {
+        printf("ready\n");
+        return;
+    }
+    if (ARGV.size() == 1 && ARGV[0] == "check") {
+        Stepper receiver();
+        code<int(int)> callback = \step();
+        code<int(int)> closureCallback = makeClosure(False);
+        code<int(int)> capturedCallback = makeClosure(True);
+        code<int(int)> wideCallback = \wideStep();
+        code<int(int)> affineCallback = \affineStep();
+        code<int(int)> branchIntCallback = \branchIntStep();
+        code<float(float)> floatCallback = \floatStep();
+        code<float(float)> taggedCallback = \taggedFloatStep();
+        code<float(float)> branchCallback = \branchFloatStep();
+        DynamicStep a();
+        DynamicStepB b();
+        DynamicStepC c();
+        DynamicFloatStep fa();
+        DynamicFloatStepB fb();
+        DynamicFloatStepC fc();
+        foreach int count in ((0, 1, 17, 1024, 4096)) {
+            list<int> data = makeData(count, 7);
+            foreach int seed in ((0, 7, 65535)) {
+                foreach string name in (("arithmetic", "direct_call", "method_call", "indirect_call",
+                        "indirect_wide", "indirect_float", "indirect_int_result", "indirect_float_result",
+                        "indirect_tagged_float", "indirect_branch_float",
+                        "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
+                        "polymorphic_call", "polymorphic_expression_call", "monomorphic_call",
+                        "optional_method_call", "polymorphic_float_call", "polymorphic_float_expression_call",
+                        "monomorphic_float_call", "optional_float_method_call",
+                        "boxed_float_method_call", "dynamic_int_result_call", "dynamic_int_result_fallback",
+                        "boxed_int_method_call", "boxed_int_method_fallback", "boxed_float_method_fallback",
+                        "boxed_int_method_effect",
+                        "dynamic_float_result_call",
+                        "dispatch_control", "list_read",
+                        "list_build", "list_mutate", "temporary_list", "temporary_hash",
+                        "closure_call", "closure_capture")) {
+                    printf("CHECK\t%s\t%d\t%d\t%d\n", name, count, seed,
+                        dispatch(name, count, seed, data, receiver, callback, a, b, c,
+                            wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback,
+                            closureCallback, capturedCallback, fa, fb, fc));
+                }
+            }
+        }
+        return;
+    }
+    if (ARGV.size() != 6) {
+        throw "BENCH-ARGUMENT-ERROR", "expected: startup | check | KERNEL COUNT WARMUP SAMPLES MS SEED";
+    }
+    string name = ARGV[0];
+    int count = integerArg(1, 1, 1000000);
+    int warmup = integerArg(2, 0, 1000);
+    int samples = integerArg(3, 1, 1000);
+    int duration_us = integerArg(4, 1, 60000) * 1000;
+    int seed = integerArg(5, 0, 65535);
+    list<int> data = makeData(count, 7);
+    Stepper receiver();
+    code<int(int)> callback = \step();
+    code<int(int)> closureCallback = makeClosure(False);
+    code<int(int)> capturedCallback = makeClosure(True);
+    code<int(int)> wideCallback = \wideStep();
+    code<int(int)> affineCallback = \affineStep();
+    code<int(int)> branchIntCallback = \branchIntStep();
+    code<float(float)> floatCallback = \floatStep();
+    code<float(float)> taggedCallback = \taggedFloatStep();
+    code<float(float)> branchCallback = \branchFloatStep();
+    DynamicStep a();
+    DynamicStepB b();
+    DynamicStepC c();
+    DynamicFloatStep fa();
+    DynamicFloatStepB fb();
+    DynamicFloatStepC fc();
+    for (int sample = -warmup; sample < samples; ++sample) {
+        int checksum = 0;
+        int calls = 0;
+        int start = clock_get_monotonic_us();
+        int elapsed;
+        do {
+            seed = (seed + 1) & 65535;
+            checksum ^= dispatch(name, count, seed, data, receiver, callback, a, b, c,
+                wideCallback, floatCallback, taggedCallback, branchCallback, affineCallback, branchIntCallback,
+                closureCallback, capturedCallback, fa, fb, fc);
+            ++calls;
+            elapsed = clock_get_monotonic_us() - start;
+        } while (elapsed < duration_us);
+        # Emit warmup checksums too: every computed result is observable.
+        printf("%s\t%s\t%d\t%d\t%d\t%d\n", sample < 0 ? "WARMUP" : "SAMPLE",
+            name, elapsed, calls, count, checksum);
+    }
+}
+
+# Explicit entry call for both interpreter and single-source AOT execution.
+main();

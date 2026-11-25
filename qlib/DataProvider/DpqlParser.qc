@@ -642,7 +642,7 @@ public class DpqlParser {
         record must not descend into it (DPQL validation does not).  The arguments evaluated for each item are:
         - \c map (<tt>map body, source[, filter]</tt>): the body and the filter
         - \c hash_map (<tt>hash_map key, value, source[, filter]</tt>): the key, the value and the filter
-        - \c select (<tt>select source, predicate</tt>): the predicate
+        - \c select (<tt>select source, predicate</tt>) and \c count_if: the predicate
         - \c first, \c any and \c count with two arguments (<tt>first predicate, source</tt>): the predicate; with
           one argument, it is the source
         - \c all, \c takewhile and \c takeuntil (<tt>all predicate, source</tt>): the predicate
@@ -684,6 +684,7 @@ scoped = map DpqlParser::isItemScopedArg(exp, $#), exp.args;
             case DP_OP_HASH_MAP:
                 return pos != 2;
             case DP_OP_SELECT:
+            case DP_FUNC_COUNT_IF:
                 return pos == 1;
             case DP_OP_FIRST:
             case DP_OP_ANY:

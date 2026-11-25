@@ -53,6 +53,7 @@ class AlignUniqueToPrimaryKeyTest inherits QUnit::Test {
         addTestCase("PostgreSQL", \pgsqlTest());
         addTestCase("MySQL", \mysqlTest());
         addTestCase("Oracle", \oracleTest());
+        addTestCase("Oracle remove primary key", \oracleRemovePrimaryKeyTest());
         addTestCase("SQL Server", \mssqlTest());
         set_return_value(main());
     }
@@ -131,6 +132,36 @@ class AlignUniqueToPrimaryKeyTest inherits QUnit::Test {
 
     oracleTest() {
         check(getDs("oracle"), "oracle");
+    }
+
+    oracleRemovePrimaryKeyTest() {
+        Datasource ds = getDs("oracle");
+        on_exit dropTables(ds, ("aupk_c", "aupk_b"));
+        dropTables(ds, ("aupk_c", "aupk_b"));
+        foreach string index_kind in ("implicit", "drop explicit", "keep explicit") {
+            hash<auto> target = getSchema({}, False);
+            create(ds, target);
+            string sql = "alter table aupk_b add constraint aupk_pk primary key (k)";
+            if (index_kind != "implicit") {
+                ds.exec("create index aupk_ix on aupk_b (k)");
+                sql += " using index aupk_ix";
+            }
+            ds.exec(sql);
+            if (index_kind == "implicit") {
+                ds.exec("alter table aupk_c add constraint aupk_fk foreign key (k) references aupk_b (k)");
+            }
+            ds.commit();
+            bool keep = index_kind == "keep explicit";
+            if (keep) {
+                target.tables.aupk_b.indexes = {"aupk_ix": {"columns": ("k",)}};
+            }
+            create(ds, target);
+            AbstractTable b = (new Table(ds, "aupk_b")).getTable();
+            assertTrue(b.getPrimaryKey().empty(), index_kind);
+            assertEq(keep ? ("aupk_ix",) : (), b.getIndexes().keys(), index_kind);
+            assertEq((), (new Database(ds)).getAlignSql(target), index_kind);
+            dropTables(ds, ("aupk_c", "aupk_b"));
+        }
     }
 
     mssqlTest() {

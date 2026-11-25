@@ -1107,8 +1107,9 @@ public namespace RestHandler {
     hash<HttpServer::HttpHandlerResponseInfo> sub rest_refuse_connection_socket(object obj) {
         return <HttpServer::HttpHandlerResponseInfo>{
             "code": 500,
-            "body": sprintf("the REST request is refused: %s of a sandboxed Program would get the connection's socket "
-                "(see HttpServer::AbstractHttpRequestHandler::setHandlerSocketView())", obj.className()),
+            "body": sprintf("the REST request is refused: %s of a sandboxed Program would get the connection's socket; "
+                "a trusted handler that hands its requests to code that is not trusted calls "
+                "HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() in its constructor", obj.className()),
             "close": True,
         };
     }

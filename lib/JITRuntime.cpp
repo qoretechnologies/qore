@@ -7333,7 +7333,9 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         const QoreTypeInfo* element_type, ExceptionSink* xsink) {
     if (list_val.getType() == NT_LIST) {
         QoreListNode* l = list_val.get<QoreListNode>();
-        if (l->reference_count() > 1) {
+        // a list pushed into itself (push l, l) is the value that the operand had: the list is copied first, also
+        // when the operand did not take a reference of its own (qore#7622)
+        if (l->reference_count() > 1 || push_val.getInternalNode() == l) {
             ReferenceHolder<QoreListNode> copy(l->copy(), xsink);
             qore_list_private::pushCanonical(**copy, push_val.refSelf(), xsink);
             if (xsink && *xsink) {
