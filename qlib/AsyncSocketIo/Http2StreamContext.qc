@@ -80,7 +80,8 @@ public class Http2StreamContext inherits AbstractStreamContext {
     constructor(Socket sock, int stream_id, Queue data_queue,
             bool uses_frame_state = False, *code<nothing()> wake_callback) {
         @assert(sock, "socket cannot be null");
-        @assert(sock.isOpen(), "socket must be open");
+        # the socket may be closed already: the client can end the connection before the handler sets up its stream,
+        # whose frames queued before the close (the close code, for example) are still read (qore#7542)
         @assert(stream_id > 0, "stream_id must be positive");
         self.sock = sock;
         self.stream_id = stream_id;

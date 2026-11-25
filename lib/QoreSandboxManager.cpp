@@ -2244,14 +2244,18 @@ bool qore_object_program_is_sandboxed(const QoreObject* obj) {
 }
 
 bool qore_object_program_is_restricted(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
+    return qore_program_is_restricted(obj->getProgram());
+}
+
+bool qore_program_is_restricted(const QoreProgram* pgm) {
     if (!pgm) {
         return false;
     }
     try {
         // evaluated now: the policy of a sandbox can be tightened after the Program started; a composition trusts
         // its code only if every member does
-        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+        ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*const_cast<QoreProgram*>(pgm))
+            ->getSandboxManagerRef(), nullptr);
         if (!sm) {
             // a Program marked sandboxed whose sandboxes are gone (it was deleted) or that has none (it was marked
             // sandboxed without a manager) cannot be told trusted: fails closed

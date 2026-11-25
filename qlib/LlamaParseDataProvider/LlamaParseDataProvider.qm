@@ -65,6 +65,15 @@ module LlamaParseDataProvider {
                 "backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported "
                 "RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
             "scheme": "llamaparse",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "llamaindex.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://www.llamaindex.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": LlamaParseLogo,
             "logo_file_name": "llamaparse-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -76,8 +85,16 @@ module LlamaParseDataProvider {
         DataProviderActionCatalog::registerLazyAppActions(LlamaParseDataProvider::AppName, sub () {
             # every action generated from the vendored LlamaIndex Cloud API description; see
             # LlamaParseManifest for what is exported and why
-            map DataProviderActionCatalog::registerAction($1),
-                LlamaParseSchema::getActionSet().getActionInfoList(LlamaParseDataProvider::AppName);
+            RestSchemaActionSet actions = LlamaParseSchema::getActionSet();
+            foreach hash<DataProviderActionInfo> action in (actions.getActionInfoList(LlamaParseDataProvider::AppName)) {
+                if (inlist(action.action, ("parse-file", "extract-from-document", "classify-document",
+                        "split-document", "create-batch"))) {
+                    action.billing = <DataProviderBillingInfo>{"unit": "credit"};
+                } else if (actions.getOperationEx(action.action).getMethod().upr() == "GET") {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
+                DataProviderActionCatalog::registerAction(action);
+            }
 
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": LlamaParseDataProvider::AppName,
@@ -111,6 +128,7 @@ module LlamaParseDataProvider {
                 "app": LlamaParseDataProvider::AppName,
                 "path": "/parse-document",
                 "action": "parse-document",
+                "billing": <DataProviderBillingInfo>{"unit": "credit"},
                 "display_name": "Parse Document and Wait",
                 "short_desc": "Parse a document and wait for the extracted content",
                 "desc": "Submits a document to LlamaParse, waits for parsing to finish, and returns the "

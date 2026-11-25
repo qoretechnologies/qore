@@ -84,6 +84,7 @@ auto sub open_pool(string host) {
         addTestCase("the policy is that of the code that chose the connection", \testChooser());
         addTestCase("each open is checked with the current policy", \testReopen());
         addTestCase("a driver checks an address that its connection reached", \testConnectAddress());
+        addTestCase("a driver opens a local path pinned against a concurrent change", \testPinnedPath());
         set_return_value(main());
     }
 
@@ -237,6 +238,72 @@ auto sub open_pool(string host) {
         SandboxManager fs_only = allowAll();
         fs_only.addFilesystemDeniedPath("/qore-test-denied");
         assertEq("NETWORK-ACCESS-DENIED", call(sandboxed(fs_only), "open_select", "dbinotargetprobe", "127.0.0.1"));
+    }
+
+    testPinnedPath() {
+        TmpDir dir("dbi-sandbox-pin");
+        string allowed = dir.path + "/allowed";
+        string real = allowed + "/r";
+        string link = allowed + "/l";
+        string outside = dir.path + "/outside";
+        mkdir(allowed);
+        mkdir(real);
+        mkdir(outside);
+        writeFile(real + "/test.db", "inside\n");
+        writeFile(outside + "/test.db", "outside\n");
+        symlink(real, link);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        Program p = sandboxed(sm);
+        assertEq("inside\n|ro|slash", call(p, "open_select", "dbipinprobe", "", 0, "content", link + "/test.db"));
+        # a file outside of the policy is denied
+        assertEq("FILESYSTEM-ACCESS-DENIED", call(p, "open_select", "dbipinprobe", "", 0, "content",
+            outside + "/test.db"));
+        # without a sandbox, the path is opened as given
+        Datasource ds({"type": "dbipinprobe", "db": outside + "/test.db"});
+        ds.open();
+        on_exit ds.close();
+        assertEq("outside\n|ro|slash", ds.select("content"));
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        # the link to the directory checked is replaced by one to the directory outside after the path is pinned:
+        # the driver opens the file checked
+        call_function("dbg_fs_swap_on_open", link + "/*", outside);
+        on_exit call_function("dbg_fs_swap_on_open", "", "");
+        assertEq("inside\n|ro|slash", call(p, "open_select", "dbipinprobe", "", 0, "content", link + "/test.db"));
+        assertEq("SYMBOLIC-LINK", hlstat(link).type);
+        assertEq(outside, readlink(link), "the link was replaced after the check");
+        unlink(link);
+        symlink(real, link);
+
+        # the file itself replaced by a link to the file outside after the path is pinned: it is not opened
+        call_function("dbg_fs_swap_on_open", real + "/test.db", outside + "/test.db");
+        assertEq("DBIPINPROBE-ERROR", call(p, "open_select", "dbipinprobe", "", 0, "content", real + "/test.db"));
+        assertEq("SYMBOLIC-LINK", hlstat(real + "/test.db").type, "the file was replaced after the check");
+        unlink(real + "/test.db");
+        writeFile(real + "/test.db", "inside\n");
+
+        # a file created with a file that belongs to it, in the directory checked, when the link to it is replaced
+        SandboxManager smw();
+        smw.setNetworkDefaultPolicy(False);
+        smw.setFilesystemDefaultPolicy(False);
+        smw.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE);
+        Program pw = sandboxed(smw);
+        call_function("dbg_fs_swap_on_open", link + "/*", outside);
+        assertEq("created\n", call(pw, "open_select", "dbipinprobe", "", 0, "content", link + "/test.new"));
+        assertEq("created\n", ReadOnlyFile::readTextFile(real + "/test.new"), "the file is created inside");
+        assertEq("journal\n", ReadOnlyFile::readTextFile(real + "/test.new-journal"), "the journal is inside");
+        assertFalse(exists hlstat(outside + "/test.new"), "nothing is created outside");
+        assertFalse(exists hlstat(outside + "/test.new-journal"), "no journal is created outside");
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
     }
 
     testLocalOnly() {

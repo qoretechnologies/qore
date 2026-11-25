@@ -2491,21 +2491,27 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         # the attributes of a sequence are in pg_sequence since PostgreSQL 10; before, in the sequence relation,
         # which has only its current value since.  The sequence was described with the default attributes, as the
         # columns read from the relation (start, increment and max) did not exist in any version
+        # Only a dependency from the sequence to a table column establishes ownership. A nextval()
+        # column default has a dependency in the other direction and does not own the sequence.
+        string catalog = " from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
+            "left join pg_catalog.pg_depend d on d.classid = 'pg_catalog.pg_class'::regclass and d.objid = c.oid "
+            "and d.objsubid = 0 and d.refclassid = 'pg_catalog.pg_class'::regclass and d.refobjsubid > 0 "
+            "and d.deptype in ('a', 'i') left join pg_catalog.pg_class t on t.oid = d.refobjid "
+            "left join pg_catalog.pg_namespace ns on ns.oid = t.relnamespace "
+            "left join pg_catalog.pg_attribute a on a.attrelid = t.oid and a.attnum = d.refobjsubid ";
+        string owner = "d.deptype, ns.nspname as owner_schema, t.relname as owner_table, a.attname as owner_column";
+        string match = "where c.relkind = 'S' and c.relname = %v and n.nspname = %v";
         *hash<auto> row;
         if (pgsql_get_server_version_num(ds) >= 100000) {
             row = ds.selectRow("select s.seqstart as start, s.seqincrement as increment, s.seqmax as max, "
-                "s.seqmin as min, s.seqcycle as cycle from pg_catalog.pg_sequence s "
-                "join pg_catalog.pg_class c on c.oid = s.seqrelid "
-                "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
-                "where c.relname = %v and n.nspname = %v", on.name, schema);
+                "s.seqmin as min, s.seqcycle as cycle, pg_catalog.format_type(s.seqtypid, null) as data_type, "
+                + owner + catalog + "join pg_catalog.pg_sequence s on s.seqrelid = c.oid " + match, on.name, schema);
         } else {
-            if (!ds.selectRow("select c.relname from pg_class c "
-                    "join pg_namespace n on n.oid = c.relnamespace "
-                    "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", on.name, schema)) {
+            row = ds.selectRow("select 'bigint' as data_type, " + owner + catalog + match, on.name, schema);
+            if (!row) {
                 return;
             }
-            # qualified, so it cannot resolve to a same-named sequence in another schema on the search path
-            row = ds.selectRow(sprintf("select start_value as start, increment_by as increment, max_value as max, "
+            row += ds.selectRow(sprintf("select start_value as start, increment_by as increment, max_value as max, "
                 "min_value as min, is_cycled as cycle from %s.%s", on.sql_schema ?? pgsql_quote_identifier(schema),
                 pgsql_quote_identifier(on.name)));
         }
@@ -2524,7 +2530,13 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         if (min == (ascending ? 1 : -9223372036854775807 - 1)) {
             remove min;
         }
-        return new PgsqlSequence(on.sql_name, row.start, row.increment, max, min, row.cycle);
+        PgsqlSequence seq(on.sql_name, row.start, row.increment, max, min, row.cycle);
+        seq.data_type = row.data_type;
+        seq.ownership = row.owner_column.val()
+            ? <SqlSequenceOwnershipInfo>{"kind": row.deptype == "i" ? "identity" : "owned", "schema": row.owner_schema,
+                "table": row.owner_table, "column": row.owner_column}
+            : <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+        return seq;
     }
 
     private *AbstractView getViewImpl(string name) {

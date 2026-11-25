@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# classes of abstract-private-internal-edge.qtest in a module, loaded from the source and as a qcc -m .qmod
+
+%modern
+
+module AbstractInternalEdge {
+    version = "1.0";
+    desc = "abstract declarations and classes reached through the private:internal inheritance of a parent class";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AIE {
+public class Secret {
+    string m() { return "Secret::m"; }
+}
+public class Iface {
+    abstract string m();
+}
+public class K2 inherits private:internal Secret {}
+public class K3 inherits K2 {}
+# abstract: Secret is reached through the private:internal inheritance of K2 only
+public class J2 inherits K2, Iface {}
+public class J1 inherits K2 { abstract string m(); }
+public class J3 inherits K3, Iface {}
+# implemented: Secret is also reached publicly, or the class inherits it itself
+public class P1 inherits K2, Secret, Iface {}
+public class P6 inherits private:internal Secret, Iface {}
+}

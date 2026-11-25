@@ -406,6 +406,18 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertEq("files", batch.input_files.getAttributes().element_ref_data);
         assertEq("conversations", actions.getOperationEx("import-dataset-from-playground").getRequestFields()
             .conversation_ids.getAttributes().element_ref_data);
+        hash<RestSchemaReferenceDataInfo> workflows = MistralManifest::ReferenceData."workflow-ids";
+        assertEq("list-workflows", workflows.action);
+        assertEq(("workflows",), workflows.records_path);
+        assertEq("id", workflows.value_field);
+        assertEq("name", workflows.display_field);
+        foreach string action in (("archive-workflows", "unarchive-workflows")) {
+            assertEq(workflows.name, actions.getOperationEx(action).getRequestFields()
+                .workflow_ids.getAttributes().element_ref_data, action);
+        }
+        assertEq(workflows.name, actions.getOperationEx("add-workflow-tags").getRequestFields()
+            .workflow_identifier.getAttributes().ref_data);
+        assertEq("list-workflow-registrations", MistralManifest::ReferenceData.workflows.action);
         assertEq("workflow-runs", actions.getOperationEx("batch-cancel-workflow-executions").getRequestFields()
             .execution_ids.getAttributes().element_ref_data);
     }

@@ -704,7 +704,11 @@ public namespace RestHandler {
             only the keys in @ref HttpServer::AbstractStreamRequest::ContextKeys "AbstractStreamRequest::ContextKeys"
             (with the keys of its \c "header-info" hash in
             @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "AbstractStreamRequest::HeaderInfoKeys") and in
-            @ref RestContextKeys
+            @ref RestContextKeys; a call context that the REST handler filtered for the REST class (it has none of the
+            server's objects, see @ref rest_request_credentials) also gives the keys that the filter kept: the
+            platform's authorization context and the keys of
+            @ref RestHandler::RestHandler::setRestContextKeys() "RestHandler::setRestContextKeys()", without the
+            values that hold an object
 
             @return a copy of the call context with the keys in the lists that it has
 
@@ -714,6 +718,17 @@ public namespace RestHandler {
             hash<auto> rv = HttpServer::AbstractStreamRequest::filterContext(cx);
             foreach string key in (RestContextKeys) {
                 if (cx.hasKey(key)) {
+                    rv{key} = cx{key};
+                }
+            }
+            # a call context filtered for the REST class has none of the server's objects
+            foreach string key in (HttpServer::AbstractStreamRequest::ServerContextKeys) {
+                if (cx.hasKey(key)) {
+                    return rv;
+                }
+            }
+            foreach string key in (keys cx) {
+                if (!rv.hasKey(key) && !HttpServer::AbstractStreamRequest::holdsObject(cx{key})) {
                     rv{key} = cx{key};
                 }
             }
@@ -1189,10 +1204,10 @@ public namespace RestHandler {
                         mn, rh.getMaskedLogString(args));
                 }
 
-                # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided
+                # a class of a restricted Program never gets the connection's socket of an HTTP/1.x request: decided
                 # when the class is handed the request, whatever the handler hosted when the request started
                 # (qore#7305)
-                if (SandboxManager::isFromSandboxedProgram(cls) && !RestRequestSocketClasses{s.className()}
+                if (SandboxManager::isFromRestrictedProgram(cls) && !RestRequestSocketClasses{s.className()}
                         && s.isOpen()) {
                     return rest_refuse_connection_socket(cls);
                 }
@@ -1315,9 +1330,9 @@ public namespace RestHandler {
                         && cx.hdr."_qore_orig_content_type" == MimeTypeOctetStream) {
                     sb = cx."orig-request-body";
                 }
-                # a stream handler of a sandboxed Program never gets the connection's socket of an HTTP/1.x request
+                # a stream handler of a restricted Program never gets the connection's socket of an HTTP/1.x request
                 # (qore#7305)
-                if (SandboxManager::isFromSandboxedProgram(rsh) && !RestRequestSocketClasses{s.className()}
+                if (SandboxManager::isFromRestrictedProgram(rsh) && !RestRequestSocketClasses{s.className()}
                         && s.isOpen()) {
                     return rest_refuse_connection_socket(rsh);
                 }
@@ -2235,9 +2250,9 @@ public namespace RestHandler {
                 }
             }
 
-            # a class of a sandboxed Program never gets the connection's socket of an HTTP/1.x request: decided when
+            # a class of a restricted Program never gets the connection's socket of an HTTP/1.x request: decided when
             # the class is handed the request, whatever the handler hosted when the request started (qore#7305)
-            if (SandboxManager::isFromSandboxedProgram(rcls) && !RestRequestSocketClasses{s.className()}
+            if (SandboxManager::isFromRestrictedProgram(rcls) && !RestRequestSocketClasses{s.className()}
                     && s.isOpen()) {
                 return rest_refuse_connection_socket(rcls);
             }

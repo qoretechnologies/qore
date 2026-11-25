@@ -1094,6 +1094,9 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options, ExceptionSink* xsink)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
+    // a Program created with no Program running is a host Program, whose code is not restricted for time zones
+    // (QoreTimeZoneManager::callerRestricted())
+    tz_host = !qore_thread_current_program_if_any();
     // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
@@ -3585,6 +3588,20 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
             const QoreClass* oc = qore_root_ns_private::runtimeFindClass(*from_pgm.RootNS,
                 new_name ? new_name : path, tcns);
             if (oc) {
+                // A method reference can resolve names in its creator's Program. The builtin frame records
+                // the calling Program, provided a Qore call made it directly (see thread_capability_call_refusal()).
+                const QoreStackLocation* frame = get_runtime_stack_location();
+                const QoreProgram* caller = frame ? frame->getProgram() : nullptr;
+                const QoreStackLocation* previous = frame ? frame->getNext() : nullptr;
+                const bool owns_classes = caller && frame->getCallType() == CT_BUILTIN
+                    && frame->getCallName() == "Program::importClass" && (!previous || previous->getCallType() == CT_USER)
+                    && qore_class_private::get(*c)->declaredBy(caller) && qore_class_private::get(*oc)->declaredBy(caller);
+                if (!owns_classes && (qore_program_code_is_untrusted(caller) || qore_caller_is_sandboxed()
+                        || qore_caller_is_untrusted() || qore_caller_restricts_domain(QDOM_ALL))) {
+                    xsink->raiseException("CLASS-IMPORT-ERROR", "only the declaring Program or trusted code may "
+                        "relate these classes by injection");
+                    return;
+                }
                 injectedClass = qore_class_private::get(*oc);
             }
             //printd(5, "qore_program_private::importClass() this: %p path: '%s' new_name: '%s' oc: %p\n", this, path,

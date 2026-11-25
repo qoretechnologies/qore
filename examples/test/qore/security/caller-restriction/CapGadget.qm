@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-capability.qtest: a class of another module than the lent object's, which a
+#! factory method of a lent object creates by the name that its caller gives; it is not lent (qore#7052)
+
+%modern
+
+module CapGadget {
+    version = "1.0";
+    desc = "capability provenance probe: a class of another module (qore#7052)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CapGadget {
+    #! an object whose methods report whether their caller is restricted from the network
+    public class Gadget {
+        #! returns True if the calling code is restricted from the network
+        public bool probe() {
+            return SandboxManager::isCallerRestricted(DOM_NETWORK);
+        }
+    }
+}

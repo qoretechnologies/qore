@@ -1,0 +1,14 @@
+string::strlen on int: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+string::upr on int: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+list::first on int: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+hash::keys on int: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+int::abs on string: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+hash::keys on string: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+string::strlen on nothing: EXCEPTION PSEUDO-METHOD-DOES-NOT-EXIST
+size of a list as string: 3
+size of a string as list: 5
+size of a hash as list: 2
+typeCode of an int as string: 1
+strlen of a string: 5
+upr of a string: "HELLO"
+abs of an int: 1234567

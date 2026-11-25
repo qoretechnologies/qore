@@ -83,13 +83,20 @@ class TenantHandler inherits AbstractHttpRequestHandler {
 
     constructor(Program p) : AbstractHttpRequestHandler(NOTHING, True) {
         self.p = p;
+        # the handler hands its requests to the code of a tenant: the request is filtered for it (qore#6843)
+        setFilterRequests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        # the context of the server has objects that are not request metadata
+        withheld = sort(keys (cx - AbstractStreamRequest::ContextKeys))
+            + sort(map "header-info." + $1, keys (cx."header-info" - AbstractStreamRequest::HeaderInfoKeys));
+        return AbstractHttpRequestHandler::handleRequest(listener, s, cx, hdr, body);
     }
 
     private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
             hash<auto> hdr, *data body) {
-        # the context of the server has objects that are not request metadata
-        withheld = sort(keys (cx - AbstractStreamRequest::ContextKeys))
-            + sort(map "header-info." + $1, keys (cx."header-info" - AbstractStreamRequest::HeaderInfoKeys));
         return p.callFunction("make_request", listener, self, s, cx, hdr, body);
     }
 }

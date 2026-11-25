@@ -132,8 +132,8 @@ public class MistralManifest {
                 "records_path": ("data",),
                 "options_from": {"agent_id": "agent_id"},
             },
-            "workflows": <RestSchemaReferenceDataInfo>{
-                "name": "workflows",
+            "workflow-ids": <RestSchemaReferenceDataInfo>{
+                "name": "workflow-ids",
                 "action": "list-workflows",
                 "value_field": "id",
                 "display_field": "name",
@@ -7869,7 +7869,7 @@ public class MistralManifest {
                 "groups": ("Workflows",),
                 "fields": {
                     "workflow_ids": <RestSchemaFieldOverlayInfo>{
-                        "element_ref_data": "workflows",
+                        "element_ref_data": "workflow-ids",
                     },
                 },
             },
@@ -7884,7 +7884,7 @@ public class MistralManifest {
                 "groups": ("Workflows",),
                 "fields": {
                     "workflow_ids": <RestSchemaFieldOverlayInfo>{
-                        "element_ref_data": "workflows",
+                        "element_ref_data": "workflow-ids",
                     },
                 },
             },
@@ -7899,7 +7899,7 @@ public class MistralManifest {
                 "groups": ("Workflows",),
                 "fields": {
                     "workflow_identifier": <RestSchemaFieldOverlayInfo>{
-                        "ref_data": "workflows",
+                        "ref_data": "workflow-ids",
                         "supports_custom_values": True,
                     },
                     "tags": <RestSchemaFieldOverlayInfo>{
