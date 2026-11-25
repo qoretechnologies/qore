@@ -427,6 +427,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
