@@ -5350,7 +5350,11 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
             : QORE_IR_INLINE_UNCHECKED;
     }
 
-    if (!variant || inst->has_ref_args || !method) {
+    // a callee with reference parameters is inlined as well: its parameters are bound on the runtime stack
+    // (QORE_IR_INLINE_BOXED_PARAMS, as QoreIRFunction::direct_params_eligible excludes them), where its body reads
+    // and writes the referenced lvalues through them as a call does, and the caller reloads its locals after the call
+    // (has_ref_args; issue #7271)
+    if (!variant || !method) {
         return reject();
     }
     if (reject_copy_method && !strcmp(method->getName(), "copy")) {
@@ -5556,6 +5560,15 @@ static const QoreProgramLocation* qore_ir_call_frame_location(const QoreIRInstru
     return sig ? sig->getParseLocation() : nullptr;
 }
 
+//! The inline call state of a call of a function with reference parameters whose callee is native code (issue #7271)
+/** The callee would be inlined but for its native code: the payload is readable, as for an eligible state, and the
+    state is positive, so that a call with arguments whose last use is the call takes the path that gives them to the
+    call (irCallDirectGiven()), where tryExecuteInterpreterInlineIRFunction() declines to inline it and the fast call
+    path makes the call (qore_rt_call_fast_consume_args()), which binds the parameters as the generic call path does.
+    The decision is made once for the call site, so that the generic call path of other calls tests nothing for it.
+*/
+static constexpr int8_t QORE_IR_INLINE_NATIVE_REF_CALL = 3;
+
 static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, int nargs, const QoreIRFunction* caller_ir) {
     auto reject = [&]() -> int8_t {
@@ -5580,7 +5593,9 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     if (!caller_pgm) {
         caller_pgm = getProgram();
     }
-    if (!inst->variant || inst->has_ref_args || !caller_pgm) {
+    // a callee with reference parameters is inlined as well (see ensureInterpreterResolvedInlineIRCallState(); issue
+    // #7271)
+    if (!inst->variant || !caller_pgm) {
         return reject();
     }
     // Resolve from the variant rather than from the instruction's own cache: the payload is
@@ -5591,7 +5606,10 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     // takes and enters the Program that defined it, as the call path does (see
     // tryExecuteInterpreterInlineIRFunction()); a call with an explicit Program of its own that did not define the
     // function is made from that Program, which only the call path enters (see QoreFunction::evalFunction())
-    if (!uvb || !uvb->pgm || (inst->pgm && inst->pgm != uvb->pgm) || uvb->hasCachedFunction()
+    // a callee with reference parameters that is native code takes the fast call path
+    // (QORE_IR_INLINE_NATIVE_REF_CALL)
+    const bool native_ref_callee = uvb && inst->has_ref_args && uvb->hasCachedFunction();
+    if (!uvb || !uvb->pgm || (inst->pgm && inst->pgm != uvb->pgm) || (uvb->hasCachedFunction() && !native_ref_callee)
             || !uvb->isStaticallyFastCallEligible()) {
         return reject();
     }
@@ -5632,9 +5650,10 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     // a class, and when the callee's body does not observe it
     inst->cached_switches_context = !(caller_ir && qore_ir_function_runs_without_context(*caller_ir))
         && !qore_ir_body_is_context_free(inst->variant, *callee_ir);
-    int8_t eligible_state = callee_ir->direct_params_eligible
-        && nargs >= static_cast<int>(sig->numParams())
-        && qore_ir_callee_single_variant(inst->func)
+    int8_t eligible_state = native_ref_callee ? QORE_IR_INLINE_NATIVE_REF_CALL
+        : callee_ir->direct_params_eligible
+            && nargs >= static_cast<int>(sig->numParams())
+            && qore_ir_callee_single_variant(inst->func)
         ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
@@ -7016,7 +7035,10 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
 
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
-        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
+        // a callee with reference parameters keeps the payload: its calls take the fast call path
+        // (QORE_IR_INLINE_NATIVE_REF_CALL)
+        inst->inline_ir_state.store(inst->has_ref_args ? QORE_IR_INLINE_NATIVE_REF_CALL : QORE_IR_INLINE_INELIGIBLE,
+            std::memory_order_release);
         return false;
     }
     // the function runs in the Program that defined it (see qore_get_function_pgm_context()), which is kept for the
