@@ -344,7 +344,8 @@ protected:
     //! closure of the block reads it (issue #5940)
     bool parse_initialized = false;
     //! the requests that a loop or switch statement around the block takes in its function, before the body of a
-    //! handler or the function's top block: PF_BREAK_OK and PF_CONTINUE_OK of the parse context (#7022)
+    //! handler or the function's top block: PF_BREAK_OK and PF_CONTINUE_OK of the parse context (#7022); a switch
+    //! statement takes a continue with %broken-loop-statement (#7606)
     unsigned char request_targets = 0;
 
     //! True if a loop or switch statement around the block takes the request (RC_BREAK or RC_CONTINUE) before the body
