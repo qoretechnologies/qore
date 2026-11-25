@@ -1,0 +1,82 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! a library module (found in the module path), for SandboxSerializationCallers.qtest (qore#7146)
+module SandboxSerializationLib {
+    version = "1.0";
+    desc = "sandbox serialization caller test library module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public class SslSecret inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        string priv = "LIB-STATE";
+    }
+
+    string getPriv() {
+        return priv;
+    }
+
+    #! the class formats and serializes its own objects
+    string fmtSelf() {
+        return sprintf("%y", self);
+    }
+
+    hash<SerializationInfo> serSelf() {
+        return Serializable::serializeToData(self);
+    }
+
+    hash<SerializationInfo> serSelfMethod() {
+        return self.serializeToData();
+    }
+
+    #! the same calls on the values that the caller gives it
+    static string fmt(auto v) {
+        return sprintf("%y", v);
+    }
+
+    static hash<SerializationInfo> serAuto(auto v) {
+        return Serializable::serializeToData(v);
+    }
+
+    static hash<SerializationInfo> serObject(object v) {
+        return Serializable::serializeToData(v);
+    }
+
+    static hash<SerializationInfo> serMethod(Serializable v) {
+        return v.serializeToData();
+    }
+
+    static check(auto v) {
+        throw "BAD-VALUE", sprintf("bad value: %y", v);
+    }
+
+    static object deser(hash<SerializationInfo> h) {
+        return Serializable::deserialize(h);
+    }
+
+    #! a call reference that the class gives its caller
+    static code serRef() {
+        return \Serializable::serializeToData();
+    }
+
+    static code fmtClosure() {
+        return string sub (auto v) { return sprintf("%y", v); };
+    }
+}
+
+#! library functions that format and serialize the values that their caller gives them
+public string sub ssl_fmt(auto v) {
+    return sprintf("%y", v);
+}
+
+public hash<SerializationInfo> sub ssl_ser(auto v) {
+    return Serializable::serializeToData(v);
+}

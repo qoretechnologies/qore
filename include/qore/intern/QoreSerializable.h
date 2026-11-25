@@ -146,14 +146,55 @@ enum qore_stream_type : unsigned char {
 };
 }
 
-//! Returns true if the calling code may not serialize, format or set by deserialization the non-public state of the
-//! classes that trusted code declared (qore#7146)
-/** The class context of the calling code (in a builtin method, of the code that called it) decides: a class that
-    trusted code declared serializes for itself, a class that sandboxed code declared does not; code outside a class
-    in a trusted Program that is not a library module serializes for itself; other code (library code, which acts
-    for its caller) is restricted if a sandbox governs its caller (qore_caller_is_sandboxed(), which fails closed)
+class qore_class_private;
+
+//! Returns the class context of the code that serializes, deserializes or formats (qore#7146)
+/** In the frame of a builtin (Serializable::serialize(), sprintf(), ...), the class context of the code that called it;
+    otherwise the class context of the running code.  Only a class that trusted code declared is returned, as only
+    such a class's own objects are given with their state (see QoreSerializationCaller)
 */
-DLLLOCAL bool qore_sandbox_serialization_restricted();
+DLLLOCAL const qore_class_private* qore_serialization_caller_class();
+
+//! Returns true if the calling code itself is trusted, for the trusted serialization APIs (Program::deserialize(),
+//! Program::serialize(), qore#7146)
+/** The code of a class that trusted code declared, or the code of a trusted Program outside a class that is not a
+    library module's; library code outside a class acts for its caller, which is trusted if no sandbox governs it
+*/
+DLLLOCAL bool qore_serialization_calling_code_trusted();
+
+//! Decides for each object whether the code that serializes, deserializes or formats it gets the non-public state that
+//! the classes declared by trusted code declare (qore#7146)
+/** The code of a class that trusted code declared gets the state of the objects of the classes that it has private
+    access to (its own hierarchy); for any other object, the state is withheld if sandboxed code is in the chain of
+    callers (qore_caller_is_sandboxed(), which fails closed), so that trusted code that formats or serializes a value
+    for a sandboxed caller does not give it the state of another class's object.  The trusted APIs give all state.
+*/
+class QoreSerializationCaller {
+public:
+    //! the calling code (see qore_serialization_caller_class())
+    DLLLOCAL QoreSerializationCaller() : class_ctx(qore_serialization_caller_class()) {
+    }
+
+    //! for a trusted API: all state is given
+    DLLLOCAL explicit QoreSerializationCaller(bool unrestricted) : unrestricted(unrestricted) {
+    }
+
+    //! returns true if the protected non-public state of an object of class \a cls is withheld
+    DLLLOCAL bool restricts(const qore_class_private& cls);
+
+    //! returns true if all state is given (a trusted API)
+    DLLLOCAL bool isUnrestricted() const {
+        return unrestricted;
+    }
+
+private:
+    //! the class context of the calling code, if it is a class that trusted code declared
+    const qore_class_private* class_ctx = nullptr;
+    //! qore_caller_is_sandboxed(), when it is needed: -1 = not known yet
+    int8_t chain_sandboxed = -1;
+    //! true for a trusted API
+    bool unrestricted = false;
+};
 
 class QoreInternalSerializationContext {
 public:
@@ -167,12 +208,17 @@ public:
     cset_t cset;
 
     int64 flags;
-    //! true if the code that serializes may not get the non-public state of the classes that trusted code declared
-    //! (see qore_sandbox_serialization_restricted(), qore#7146); decided once for the whole serialization
-    bool restricted;
+    //! the code that serializes, which decides for each object whether it gets the non-public state of the classes
+    //! that trusted code declared (qore#7146)
+    QoreSerializationCaller caller;
 
     DLLLOCAL QoreInternalSerializationContext(ExceptionSink* xsink, int64 flags) : index(xsink), svars(xsink),
-            flags(flags), restricted(qore_sandbox_serialization_restricted()) {
+            flags(flags) {
+    }
+
+    //! for a trusted API (Program::serialize()): all state is given
+    DLLLOCAL QoreInternalSerializationContext(ExceptionSink* xsink, int64 flags, bool unrestricted) : index(xsink),
+            svars(xsink), flags(flags), caller(unrestricted) {
     }
 
     DLLLOCAL int serializeObject(const QoreObject& obj, std::string& index_str, ExceptionSink* xsink);
@@ -201,7 +247,9 @@ public:
         svars->setKeyValue(str, v, xsink);
     }
 
-    DLLLOCAL int serializeStaticVars(const QoreClass& cls, ExceptionSink* xsink);
+    //! serializes the static variables of \a cls; \a restricted: its protected non-public static variables are
+    //! withheld (qore#7146)
+    DLLLOCAL int serializeStaticVars(const QoreClass& cls, bool restricted, ExceptionSink* xsink);
 };
 
 class ObjectIndexMap : public oimap_t {
@@ -219,12 +267,19 @@ class QoreInternalDeserializationContext {
 public:
     ObjectIndexMap oimap;
     int64 flags;
-    //! true if the code that deserializes may not set the non-public state of the classes that trusted code declared
-    //! (see qore_sandbox_serialization_restricted(), qore#7146); decided once for the whole deserialization
-    bool restricted;
+    //! the code that deserializes, which decides for each object whether it may set the non-public state of the
+    //! classes that trusted code declared (qore#7146)
+    QoreSerializationCaller caller;
+    //! for Program::deserialize(): the Program of the trusted calling code, whose classes the names of the data must
+    //! not name in the target Program as classes of sandboxed code (qore#7146)
+    QoreProgram* caller_pgm = nullptr;
 
-    DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags, bool restricted) : oimap(xsink),
-            flags(flags), restricted(restricted) {
+    DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags) : oimap(xsink), flags(flags) {
+    }
+
+    //! for Program::deserialize(): all state is set
+    DLLLOCAL QoreInternalDeserializationContext(ExceptionSink* xsink, int64 flags, QoreProgram* caller_pgm)
+            : oimap(xsink), flags(flags), caller(true), caller_pgm(caller_pgm) {
     }
 
     DLLLOCAL QoreValue deserializeContainer(const char* index_str, ExceptionSink* xsink);
@@ -238,6 +293,13 @@ friend class QoreInternalDeserializationContext;
 
 public:
     DLLLOCAL static QoreHashNode* serializeToData(QoreValue val, int64 flags, ExceptionSink* xsink);
+
+    //! Serializes \a val for trusted code with all state (Program::serializeToData(), qore#7146)
+    DLLLOCAL static QoreHashNode* serializeToDataTrusted(QoreValue val, int64 flags, ExceptionSink* xsink);
+
+    //! Serializes \a val for trusted code with all state to \a stream (Program::serialize(), qore#7146)
+    DLLLOCAL static void serializeTrusted(const QoreValue val, OutputStream& stream, int64 flags,
+            ExceptionSink* xsink);
 
     DLLLOCAL static void serialize(const QoreObject& self, OutputStream& stream, int64 flags, ExceptionSink* xsink);
 
@@ -328,8 +390,21 @@ protected:
     DLLLOCAL static QoreValue deserializeData(const QoreValue val, QoreInternalDeserializationContext& context,
             ExceptionSink* xsink);
 
-    DLLLOCAL static QoreValue deserializeIntern(ExceptionSink* xsink, const QoreHashNode& h, int64 flags,
-            bool restricted);
+    DLLLOCAL static QoreValue deserializeIntern(ExceptionSink* xsink, const QoreHashNode& h,
+            QoreInternalDeserializationContext& context);
+
+    DLLLOCAL static QoreHashNode* serializeToDataIntern(const QoreValue val, QoreInternalSerializationContext& context,
+            ExceptionSink* xsink);
+
+    //! Raises DESERIALIZATION-ERROR if \a cname names a class with protected non-public state in the Program of the
+    //! code that calls Program::deserialize() (qore#7146)
+    /** Called for a name that names a class that sandboxed code declared in the target Program: such a class would get
+        the state that the data has for the caller's class
+
+        @return 0 if OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int checkProgramDeserializeClass(QoreProgram* caller_pgm, const char* cname,
+            ExceptionSink* xsink);
 
     DLLLOCAL static int deserializeStaticClassVars(ExceptionSink* xsink, const QoreHashNode& svars,
             QoreInternalDeserializationContext& context);

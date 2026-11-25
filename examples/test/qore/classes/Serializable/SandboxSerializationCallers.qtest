@@ -1,0 +1,194 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+# a library module, loaded by name from the module path
+%requires SandboxSerializationLib
+# a module loaded by path
+%requires ./SandboxSerializationModule.qm
+
+%exec-class SandboxSerializationCallersTest
+
+#! the host's function that formats the value that its caller gives it
+string sub host_fmt(auto v) {
+    return sprintf("%y", v);
+}
+
+#! the host's function that serializes the value that its caller gives it
+hash<SerializationInfo> sub host_ser(auto v) {
+    return Serializable::serializeToData(v);
+}
+
+#! Verifies that trusted code that formats or serializes a value for a sandboxed caller gives the caller the
+#! non-public state only of the objects of its own class hierarchy, whatever the form of the call (qore#7146)
+class SandboxSerializationCallersTest inherits QUnit::Test {
+    public {
+        #! the code of the sandboxed Program
+        const SandboxedSource = "%modern
+
+object sub make(string cls) {
+    switch (cls) {
+        case \"SsTrusted\": return new SsTrusted();
+        case \"SslSecret\": return new SslSecret();
+    }
+    throw \"UNKNOWN\", cls;
+}
+
+auto sub call(code c, auto arg) {
+    return c(arg);
+}
+
+string sub fmt_self() {
+    return (new SslSecret()).fmtSelf();
+}
+
+hash<SerializationInfo> sub ser_self() {
+    return (new SslSecret()).serSelf();
+}
+
+hash<SerializationInfo> sub ser_self_method() {
+    return (new SslSecret()).serSelfMethod();
+}
+
+auto sub lib(string func, string cls) {
+    switch (func) {
+        case \"fmt\": return SslSecret::fmt(make(cls));
+        case \"serAuto\": return SslSecret::serAuto(make(cls));
+        case \"serObject\": return SslSecret::serObject(make(cls));
+        case \"serMethod\": return SslSecret::serMethod(make(cls));
+        case \"serRef\": return SslSecret::serRef()(make(cls));
+        case \"fmtClosure\": return SslSecret::fmtClosure()(make(cls));
+        case \"SsValidator::toData\": return SsValidator::toData(make(cls));
+    }
+    throw \"UNKNOWN\", func;
+}
+
+string sub check(string func, string cls) {
+    try {
+        switch (func) {
+            case \"SslSecret::check\": SslSecret::check(make(cls)); break;
+            case \"SsValidator::check\": SsValidator::check(make(cls)); break;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc;
+    }
+    throw \"NO-EXCEPTION\", func;
+}
+
+object sub lib_deser(hash<SerializationInfo> h) {
+    return SslSecret::deser(h);
+}
+";
+    }
+
+    private {
+        Program p;
+    }
+
+    constructor() : Test("Sandbox serialization callers", "1.0", \ARGV) {
+        p = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        # the Program inherits the classes and functions of the modules that the host loaded
+        p.parse(SandboxedSource, "sandboxed");
+
+        addTestCase("own class", \ownClassTest());
+        addTestCase("other classes", \otherClassTest());
+        addTestCase("exceptions", \exceptionTest());
+        addTestCase("host code", \hostCodeTest());
+        addTestCase("deserialize", \deserializeTest());
+        set_return_value(main());
+    }
+
+    #! returns the member values of all objects in the serialized data, as one hash
+    static hash<auto> members(hash<SerializationInfo> h) {
+        hash<auto> rv = {};
+        foreach hash<auto> oh in (h._index.iterator()) {
+            if (!oh.hasKey("_class_data")) {
+                continue;
+            }
+            foreach hash<auto> ch in (oh._class_data.iterator()) {
+                rv += ch;
+            }
+        }
+        return rv;
+    }
+
+    #! returns the text of formatted output, or the member values of serialized data
+    static string text(auto v) {
+        return v.typeCode() == NT_STRING ? v : sprintf("%y", members(v));
+    }
+
+    ownClassTest() {
+        # the class formats and serializes its own objects with their state, also for a sandboxed caller
+        assertRegex("LIB-STATE", p.callFunction("fmt_self"));
+        assertEq("LIB-STATE", members(p.callFunction("ser_self")).priv);
+        assertEq("LIB-STATE", members(p.callFunction("ser_self_method")).priv);
+        foreach string func in ("fmt", "serAuto", "serObject", "serMethod", "serRef", "fmtClosure") {
+            assertRegex("LIB-STATE", text(p.callFunction("lib", func, "SslSecret")), func);
+        }
+        assertRegex("LIB-STATE", p.callFunction("check", "SslSecret::check", "SslSecret"));
+    }
+
+    otherClassTest() {
+        # the objects of another class: public state only, whatever the form of the call
+        foreach string func in ("fmt", "serAuto", "serObject", "serMethod", "serRef", "fmtClosure",
+                "SsValidator::toData") {
+            string str = text(p.callFunction("lib", func, "SsTrusted"));
+            assertRegex("PUB", str, func);
+            assertNRegex("PRIV-STATE", str, func);
+        }
+        # the functions of a library module have no class: the library's own objects too
+        foreach code c in (\ssl_fmt(), \ssl_ser()) {
+            foreach string cls in ("SsTrusted", "SslSecret") {
+                string str = text(p.callFunction("call", c, cls == "SsTrusted" ? new SsTrusted() : new SslSecret()));
+                assertRegex("PUB", str, cls);
+                assertNRegex("PRIV-STATE|LIB-STATE", str, cls);
+            }
+        }
+    }
+
+    exceptionTest() {
+        foreach string func in ("SslSecret::check", "SsValidator::check") {
+            string desc = p.callFunction("check", func, "SsTrusted");
+            assertRegex("bad value", desc, func);
+            assertNRegex("PRIV-STATE", desc, func);
+        }
+        string desc = p.callFunction("check", "SsValidator::check", "SslSecret");
+        assertNRegex("LIB-STATE", desc);
+    }
+
+    hostCodeTest() {
+        # host code that sandboxed code calls through call references
+        foreach code c in (\host_fmt(), \host_ser(), \SsValidator::toData(), string sub (auto v) {
+                return sprintf("%y", v); }) {
+            string str = text(p.callFunction("call", c, new SsTrusted()));
+            assertRegex("PUB", str);
+            assertNRegex("PRIV-STATE", str);
+        }
+        # the trusted API that the host calls for a sandboxed caller: all state
+        assertEq("PRIV-STATE", members(p.callFunction("call", hash<SerializationInfo> sub (auto v) {
+            return p.serializeToData(v); }, new SsTrusted())).priv);
+
+        # the host's own calls, without sandboxed code: all state
+        assertRegex("PRIV-STATE", host_fmt(new SsTrusted()));
+        assertEq("PRIV-STATE", members(host_ser(new SsTrusted())).priv);
+        assertRegex("LIB-STATE", ssl_fmt(new SslSecret()));
+        assertRegex("PRIV-STATE", SslSecret::fmt(new SsTrusted()));
+    }
+
+    deserializeTest() {
+        # the class deserializes its own objects for a sandboxed caller
+        object o = p.callFunction("lib_deser", Serializable::serializeToData(new SslSecret()));
+        assertEq("LIB-STATE", o.getPriv());
+        # but not the objects of another class
+        assertThrows("DESERIALIZATION-ERROR", "SsTrusted", \p.callFunction(), ("lib_deser",
+            Serializable::serializeToData(new SsTrusted())));
+    }
+}

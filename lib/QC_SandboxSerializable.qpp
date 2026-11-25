@@ -51,18 +51,18 @@ static void SandboxSerializable_deserializer(QoreObject& self, const QoreHashNod
 }
 
 //! Marks a class whose non-public members sandboxed code may serialize and set by deserialization
-/** The @ref Qore::Serializable "Serializable" API applies the member access of classes to sandboxed code: when code
-    that a sandbox governs serializes an object, the non-public members (\c private, \c private:hierarchy and
-    \c private:internal) that a class declared by trusted code declares are left out, as are its non-public static
-    variables, and its \c serializeMembers() method is not called; deserialization by such code into a class declared
-    by trusted code that declares non-transient non-public members is refused with a \c DESERIALIZATION-ERROR
-    exception, as is a change of such a class's non-public static variables.  The same rule applies when such code
-    formats an object with \c %%y and the other formats that show an object's members (see
+/** The @ref Qore::Serializable "Serializable" API applies the member access of classes to sandboxed code: when an
+    object is serialized for code that a sandbox governs, the non-public members (\c private, \c private:hierarchy
+    and \c private:internal) and static variables that a class declared by trusted code declares are left out and its
+    \c serializeMembers() method is not called; deserialization by such code into such a class is refused with a
+    \c DESERIALIZATION-ERROR exception when the class's hierarchy has non-transient non-public members, when the data
+    sets a non-public member or static variable, or when the class has a \c deserializeMembers() method.  Formatting
+    an object with \c %%y and the other formats that show an object's members follows the same rule (see
     @ref sandbox_serialization).
 
     A class declared by trusted code that inherits this class directly declares that its non-public state may be
-    serialized by and set by deserialization from sandboxed code; the rule above then does not apply to the members
-    and static variables that the class itself declares.  The declaration is not inherited: a subclass that declares
+    serialized by and set by deserialization from sandboxed code; the rule above then does not apply to the members,
+    static variables and serialization methods that the class itself declares.  The declaration is not inherited: a subclass that declares
     non-public members of its own must inherit this class directly too, so that a class is never opened by a base
     class whose author did not know its members.  This class inherits @ref Qore::Serializable "Serializable", so a
     class that inherits it is serializable.

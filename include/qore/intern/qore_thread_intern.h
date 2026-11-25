@@ -643,6 +643,11 @@ DLLLOCAL bool qore_builtin_caller_is_sandboxed();
 //! is not the innermost one
 DLLLOCAL QoreProgram* qore_builtin_caller_program();
 
+//! Returns true if the innermost frame of the thread is the frame of a builtin function or method (qore#7146)
+/** In such a frame, the class context of the code that called the builtin is runtime_get_caller_class()
+*/
+DLLLOCAL bool qore_innermost_frame_is_builtin();
+
 #ifdef DEBUG
 //! Debug-only: like qore_find_thread_sandbox_manager_ref(), and sets @a pgm_id to the ID of the Program the manager
 //! was found on (0 if none); for the unit tests

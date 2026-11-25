@@ -117,3 +117,53 @@ public class SsOptInSub2 inherits SsOptIn, SandboxSerializable {
         return sub_priv;
     }
 }
+
+#! a class whose only non-public member is transient and has no initializer
+public class SsTransient inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        transient *string token;
+    }
+
+    *string getToken() {
+        return token;
+    }
+}
+
+#! a class whose hook reads a non-public static variable
+public class SsHookStatic inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        static string key = "STATIC-SECRET";
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"pub": pub, "k": key};
+    }
+}
+
+#! a class with public members only and a deserialization hook
+public class SsDeserHook inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        pub = members.pub + "-HOOK";
+    }
+}
+
+#! a trusted API that formats and serializes the values that its caller gives it
+public class SsValidator {
+    static check(auto v) {
+        throw "BAD-VALUE", sprintf("bad value: %y", v);
+    }
+
+    static hash<SerializationInfo> toData(auto v) {
+        return Serializable::serializeToData(v);
+    }
+}

@@ -102,10 +102,11 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par Sandboxed Code Serializes and Deserializes Only the Public State of Trusted Classes
-    Sandboxed code no longer gets the non-public members of classes declared by trusted code from serialization or
-    \c %%y and cannot deserialize such classes, unless a class inherits @ref Qore::SandboxSerializable
-    "SandboxSerializable"; a trusted host uses @ref Qore::Program::deserialize() "Program::deserialize()" (parse define
-    \c QORE_HAS_PROGRAM_DESERIALIZE) for data that it gives a sandboxed Program (see @ref sandbox_serialization).
+    Serialization and \c %%y give code with sandboxed callers the public members only of classes declared by trusted
+    code outside its own class hierarchy, and it cannot set their non-public state by deserialization, unless a class
+    inherits @ref Qore::SandboxSerializable "SandboxSerializable"; trusted hosts use @ref Qore::Program::serialize()
+    "Program::serialize()" and @ref Qore::Program::deserialize() "Program::deserialize()" (see
+    @ref sandbox_serialization).
 
     @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
     REST classes and stream requests whose sandbox does not trust their code get the request context without the

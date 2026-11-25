@@ -46,6 +46,7 @@
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/BinaryInputStream.h"
 #include "qore/intern/StringInputStream.h"
+#include "qore/intern/BinaryOutputStream.h"
 #include "qore/ParseOptionMap.h"
 #include "qore/intern/ql_debug.h"
 
@@ -53,17 +54,17 @@
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
-// returns -1 and raises SANDBOX-ACCESS-ERROR if the calling code may not deserialize into the Program with the full
-// state of the classes that trusted code declared (qore#7146)
-static int qore_program_check_trusted_deserialize(QoreProgram* p, ExceptionSink* xsink) {
+// returns -1 and raises SANDBOX-ACCESS-ERROR if the calling code may not serialize or deserialize for the Program with
+// the full state of the classes that trusted code declared (qore#7146)
+static int qore_program_check_trusted_serialization(QoreProgram* p, const char* api, ExceptionSink* xsink) {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return -1;
     }
-    if (qore_sandbox_serialization_restricted()) {
-        xsink->raiseException("SANDBOX-ACCESS-ERROR", "Program::deserialize() can only be called by trusted code: "
-            "sandboxed code, and code that acts for it, cannot set the non-public state of classes declared by trusted "
-            "code");
+    if (!qore_serialization_calling_code_trusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "Program::%s() can only be called by trusted code: sandboxed "
+            "code, and code that acts for it, cannot get or set the non-public state of classes declared by trusted "
+            "code", api);
         return -1;
     }
     return 0;
@@ -3266,7 +3267,10 @@ auto val = pgm.deserialize(bin);
     initializers of @ref transient "transient" members) runs in this %Program, which governs it with its sandbox.  The
     rule that keeps sandboxed code from setting the non-public members of classes declared by trusted code (see
     @ref sandbox_serialization) is not applied: the data is the trusted calling code's, as when it deserializes in its
-    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.
+    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.  A class name of the
+    data that names a class declared by sandboxed code in this %Program and a class with non-public state declared by
+    trusted code in the calling code's %Program is refused, as the sandboxed code's class would get that state; the
+    classes of the data must otherwise be the ones that this %Program sees by their names.
 
     @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
@@ -3283,7 +3287,7 @@ auto val = pgm.deserialize(bin);
     @since %Qore 3.0
  */
 auto Program::deserialize(binary binary_data, *int flags) [flags=NAMED_ARGS] {
-    if (qore_program_check_trusted_deserialize(p, xsink)) {
+    if (qore_program_check_trusted_serialization(p, "deserialize", xsink)) {
         return QoreValue();
     }
     ReferenceHolder<BinaryInputStream> stream(new BinaryInputStream(binary_data), xsink);
@@ -3305,7 +3309,10 @@ auto val = pgm.deserialize(str);
     initializers of @ref transient "transient" members) runs in this %Program, which governs it with its sandbox.  The
     rule that keeps sandboxed code from setting the non-public members of classes declared by trusted code (see
     @ref sandbox_serialization) is not applied: the data is the trusted calling code's, as when it deserializes in its
-    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.
+    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.  A class name of the
+    data that names a class declared by sandboxed code in this %Program and a class with non-public state declared by
+    trusted code in the calling code's %Program is refused, as the sandboxed code's class would get that state; the
+    classes of the data must otherwise be the ones that this %Program sees by their names.
 
     @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
@@ -3322,7 +3329,7 @@ auto val = pgm.deserialize(str);
     @since %Qore 3.0
  */
 auto Program::deserialize(string string_data, *int flags) [flags=NAMED_ARGS] {
-    if (qore_program_check_trusted_deserialize(p, xsink)) {
+    if (qore_program_check_trusted_serialization(p, "deserialize", xsink)) {
         return QoreValue();
     }
     ReferenceHolder<StringInputStream> stream(new StringInputStream(string_data), xsink);
@@ -3344,7 +3351,10 @@ auto val = pgm.deserialize(h);
     initializers of @ref transient "transient" members) runs in this %Program, which governs it with its sandbox.  The
     rule that keeps sandboxed code from setting the non-public members of classes declared by trusted code (see
     @ref sandbox_serialization) is not applied: the data is the trusted calling code's, as when it deserializes in its
-    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.
+    own %Program, so a trusted host can give a sandboxed %Program values with all of their state.  A class name of the
+    data that names a class declared by sandboxed code in this %Program and a class with non-public state declared by
+    trusted code in the calling code's %Program is refused, as the sandboxed code's class would get that state; the
+    classes of the data must otherwise be the ones that this %Program sees by their names.
 
     @param flags optional @ref qore_deserialization_flags "deserialization flags" as a bitfield
 
@@ -3361,10 +3371,78 @@ auto val = pgm.deserialize(h);
     @since %Qore 3.0
  */
 auto Program::deserialize(hash<SerializationInfo> serialization_info, *int flags) [flags=NAMED_ARGS] {
-    if (qore_program_check_trusted_deserialize(p, xsink)) {
+    if (qore_program_check_trusted_serialization(p, "deserialize", xsink)) {
         return QoreValue();
     }
     return QoreSerializable::deserializeForProgram(xsink, p, *serialization_info, flags);
+}
+
+//! Serializes a value of this %Program with all of its state for trusted code and returns the serialized data as a binary object
+/** @par Example:
+    @code{.py}
+binary bin = pgm.serialize(val);
+    @endcode
+
+    The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" would serialize it
+    for trusted code that no sandboxed code calls: with the non-public members and static variables of the classes
+    declared by trusted code, which @ref Qore::Serializable "Serializable" withholds when sandboxed code is in the
+    chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
+    for example the arguments of a call that the %Program makes through the host, that it delivers with
+    @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
+    code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+
+    @param value the value to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
+    @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_SERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+binary Program::serialize(auto value, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "serialize", xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<BinaryOutputStream> stream(new BinaryOutputStream, xsink);
+    QoreSerializable::serializeTrusted(value, **stream, flags, xsink);
+    return *xsink ? QoreValue() : stream->getData(xsink);
+}
+
+//! Serializes a value of this %Program with all of its state for trusted code and returns the serialization data
+/** @par Example:
+    @code{.py}
+hash<SerializationInfo> h = pgm.serializeToData(val);
+    @endcode
+
+    The value is serialized as @ref Qore::Serializable::serialize() "Serializable::serialize()" would serialize it
+    for trusted code that no sandboxed code calls: with the non-public members and static variables of the classes
+    declared by trusted code, which @ref Qore::Serializable "Serializable" withholds when sandboxed code is in the
+    chain of callers (see @ref sandbox_serialization).  A trusted host uses it for the values of a sandboxed %Program,
+    for example the arguments of a call that the %Program makes through the host, that it delivers with
+    @ref Qore::Program::deserialize() "Program::deserialize()"; the host must not give the serialized data to sandboxed
+    code.  The %Program is the one that the value comes from; the value is serialized in the calling code's context.
+
+    @param value the value to serialize
+    @param flags optional @ref qore_serialization_flags "serialization flags" as a bitfield
+
+    @throw SERIALIZATION-ERROR the value cannot be serialized
+    @throw SANDBOX-ACCESS-ERROR the calling code is sandboxed or acts for sandboxed code (see
+    @ref sandbox_serialization); only trusted code can call this method
+
+    @note Code that also runs with older versions of %Qore can test for this method with the
+    \c QORE_HAS_PROGRAM_SERIALIZE parse define (see @ref conditional_parsing)
+
+    @since %Qore 3.0
+ */
+hash<SerializationInfo> Program::serializeToData(auto value, *int flags) [flags=NAMED_ARGS] {
+    if (qore_program_check_trusted_serialization(p, "serializeToData", xsink)) {
+        return QoreValue();
+    }
+    return QoreSerializable::serializeToDataTrusted(value, flags, xsink);
 }
 
 //! Sets the sandbox manager for the program to enforce security restrictions
