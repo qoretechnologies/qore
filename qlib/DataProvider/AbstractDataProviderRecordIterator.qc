@@ -340,6 +340,18 @@ public const string DP_FUNC_FLOOR = "floor";
 #! Returns the smallest integer not less than the argument
 public const string DP_FUNC_CEIL = "ceil";
 
+#! Returns the sum of numeric list elements
+public const string DP_FUNC_SUM = "sum";
+
+#! Returns the arithmetic mean of numeric list elements
+public const string DP_FUNC_AVG = "avg";
+
+#! Returns the smallest numeric, date, or string list element
+public const string DP_FUNC_MIN = "min";
+
+#! Returns the largest numeric, date, or string list element
+public const string DP_FUNC_MAX = "max";
+
 #! Returns the first non-NOTHING argument
 public const string DP_FUNC_COALESCE = "coalesce";
 

@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DpqlListFunctionsTest
+
+public class DpqlListFunctionsTest inherits QUnit::Test {
+    constructor() : Test("DPQL list functions", "1.0") {
+        addTestCase("design-mode registry signatures", \metadataTests());
+        addTestCase("numeric types and exact aggregation", \numericTests());
+        addTestCase("extrema, paths and absent values", \pathTests());
+        addTestCase("incompatible inputs name the function and type", \errorTests());
+        set_return_value(main());
+    }
+
+    auto evaluate(string src, auto rows) {
+        hash<DpqlParseResult> parsed = DataProvider::parseDpqlExpressionWithInfo(src);
+        assertTrue(parsed.success, sprintf("%s: %y", src, parsed.diagnostics));
+        return AbstractDataProvider::evalGenericExpressionValue({"rows": rows}, parsed.expression);
+    }
+
+    checkValue(auto expected, string src, auto rows) {
+        auto result = evaluate(src, rows);
+        assertEq(expected.typeCode(), result.typeCode(), src);
+        assertEq(expected, result, src);
+    }
+
+    metadataTests() {
+        foreach string name in ((DP_FUNC_SUM, DP_FUNC_AVG, DP_FUNC_MIN, DP_FUNC_MAX)) {
+            hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{name};
+            assertEq(DET_Function, info.type);
+            assertEq(1, AbstractDataProvider::getRequiredArgCount(info));
+            assertEq(2, info.args.size());
+            auto types = info.return_type.getReturnTypeHash(True);
+            assertTrue(types.hasKey("number"));
+            assertEq(name != DP_FUNC_SUM, types.hasKey("nothing"));
+            assertEq(name == DP_FUNC_MIN || name == DP_FUNC_MAX, types.hasKey("date"));
+        }
+    }
+
+    numericTests() {
+        checkValue(6, "sum(@rows)", (1, 2, 3));
+        checkValue(3, "avg(@rows)", (2, 4));
+        checkValue(1.5n, "avg(@rows)", (1, 2));
+        checkValue(2.5, "avg(@rows)", (2, 3.0));
+        checkValue(9007199254740994.375n, "sum(@rows)", (9007199254740993, 1.125, 0.25n));
+        checkValue(9007199254740994.375n, "sum(@rows)", (0.25n, 1.125, 9007199254740993));
+        checkValue(0.15n, "round(avg(@rows), 2)", (0.1n, 0.2));
+        checkValue(9223372036854775808n, "sum(@rows)", (MAXINT, 1));
+        checkValue(MAXINT, "avg(@rows)", (MAXINT, MAXINT));
+        checkValue(-1.0, "min(@rows)", (-1, 4.5));
+        checkValue(4n, "max(@rows)", (4, 0.5n));
+    }
+
+    pathTests() {
+        list<auto> rows = ({"line": {"amount": 1.1n}}, NOTHING, {}, {"line": {"amount": 2.2n}});
+        checkValue(3.3n, "round(sum(@rows, 'line.amount'), 2)", rows);
+        checkValue(1.65n, "round(avg(@rows, 'line.amount'), 2)", rows);
+        checkValue("a", "min(@rows)", ("b", NOTHING, "a"));
+        checkValue(2026-03-02, "max(@rows, 'dates[0]')",
+            ({"dates": (2026-03-01,)}, {"dates": (2026-03-02,)}));
+        foreach string name in ((DP_FUNC_SUM, DP_FUNC_AVG, DP_FUNC_MIN, DP_FUNC_MAX)) {
+            auto expected = name == DP_FUNC_SUM ? 0 : NOTHING;
+            checkValue(expected, name + "(@rows)", ());
+            checkValue(expected, name + "(@rows)", (NOTHING, NULL));
+            checkValue(expected, name + "(@rows, 'unknown')", rows);
+        }
+    }
+
+    errorTests() {
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sum.*string", \evaluate(), ("sum(@rows)", ("5",)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "avg.*bool", \evaluate(), ("avg(@rows)", (True,)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "min.*date", \evaluate(), ("min(@rows)", ("a", 2026-03-02)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "max.*int", \evaluate(), ("max(@rows)", (2026-03-02, 1)));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sum.*hash", \evaluate(), ("sum(@rows)", {}));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "sum.*int", \evaluate(),
+            ("sum(@rows.values, @rows.path)", {"values": (1,), "path": 4}));
+    }
+}
