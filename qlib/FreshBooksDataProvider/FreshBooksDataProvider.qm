@@ -57,6 +57,15 @@ module FreshBooksDataProvider {
                 "This integration supports clients, invoices, expenses, estimates, items, "
                 "and services.",
             "scheme": "freshbooks",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "freshbooks.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.freshbooks.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": FreshBooksLogo,
             "logo_file_name": "freshbooks-logo.svg",
             "logo_mime_type": MimeTypeSvg,

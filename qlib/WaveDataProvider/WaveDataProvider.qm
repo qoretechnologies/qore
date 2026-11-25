@@ -55,6 +55,15 @@ module WaveDataProvider {
                 "This integration enables managing customers, invoices, products, accounts, and transactions "
                 "through Wave's GraphQL API.",
             "scheme": "wave",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "waveapps.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "unknown",
+                "source": "https://www.waveapps.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": WaveLogo,
             "logo_file_name": "wave-logo.svg",
             "logo_mime_type": MimeTypeSvg,
