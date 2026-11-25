@@ -1340,6 +1340,52 @@ auto sub tryInHandler(int n) {
     return -7;
 }
 
+# A try statement in the only handler, with no loop: the request ends the function, and the return goes on (#7022)
+auto sub tryLastHandler(int n) {
+    on_exit {
+        try {
+            {
+                on_exit {
+                    push log, "inner";              ### try_last_handler
+                }
+                return new ReturnMarker();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+        push log, "after try";
+    }
+    return -7;
+}
+
+# A function called in a handler: the request in it is one of the called function, which no loop or handler of it
+# takes, so its return goes on; the handlers of the caller do not take it (#7022)
+auto sub tryCallee() {
+    try {
+        {
+            on_exit {
+                push log, "callee";                 ### try_callee
+            }
+            return new ReturnMarker();
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        push log, ex.err;
+    }
+    push log, "callee after";
+    return 1;
+}
+
+auto sub tryCalled(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        auto v = tryCallee();
+        push log, v instanceof ReturnMarker ? "callee returned the marker" : sprintf("callee returned %y", v);
+    }
+    return -7;
+}
+
 # The return in the handler is in a try statement, which gives its value to the block (qore_try_give_return())
 auto sub outerPendingTry(int n) {
     on_exit {

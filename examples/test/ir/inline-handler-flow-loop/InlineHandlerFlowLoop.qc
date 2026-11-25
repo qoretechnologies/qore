@@ -36,7 +36,7 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "mixedHandlersLoop", "mixedInHandler", "abandonedReturn", "abandonedObject", "outerPendingReturn", "eagerOuter",
             "innerLoopPending", "unchangedObject", "nrcLost", "dtorThrow", "abandonTiming", "abandonedNested",
             "abandonedNestedTry", "outerPendingTry", "dtorThrowLoop", "endsFunctionObject", "onErrorAfterExit",
-            "tryInHandler");
+            "tryInHandler", "tryLastHandler", "tryCalled");
 
         #! Expected return values and destructor order when a debugger request abandons a return (#7022).
         const AbandonedResults = {
@@ -71,6 +71,11 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "onErrorAfterExit": "RESULT:{<ReturnMarker object>: {}} LOG:[\"released\"]",
             # the request passes the try statement in the handler, and a later handler takes it
             "tryInHandler": "RESULT:-7 LOG:[\"released\", \"last\"]",
+            # a try statement in the only handler: the request ends the function, whose return goes on with the
+            # object (#6949)
+            "tryLastHandler": "RESULT:{<ReturnMarker object>: {}} LOG:[\"released\"]",
+            # a request in a function called in a handler is one of the called function, whose return goes on
+            "tryCalled": "RESULT:-7 LOG:[\"callee returned the marker\", \"released\", \"last\"]",
             "outerPendingTry": "RESULT:-7 LOG:[\"last\"]",
             "outerPendingTry/string": "RESULT:restored LOG:[\"last\"]",
             "outerPendingTry/object": "RESULT:null LOG:[\"released\", \"last\"]",
@@ -94,6 +99,8 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             ("endsFunctionObject", "break", "ends_function_object", 1),
             ("onErrorAfterExit", "break", "on_error_after_exit", 1),
             ("tryInHandler", "break", "try_in_handler", 1),
+            ("tryLastHandler", "break", "try_last_handler", 1),
+            ("tryCalled", "break", "try_callee", 1),
             ("outerPendingTry", "break", "outer_pending_try", 1),
             ("outerPendingTry/string", "break", "outer_pending_try", 1),
             ("outerPendingTry/object", "break", "outer_pending_try", 1),

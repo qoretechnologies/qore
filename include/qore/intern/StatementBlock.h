@@ -99,6 +99,10 @@ public:
         qore_handler_run_tls = run.previous;
     }
 
+    // a copy would leave the chain with an entry of a dead object
+    QoreHandlerRunHelper(const QoreHandlerRunHelper&) = delete;
+    QoreHandlerRunHelper& operator=(const QoreHandlerRunHelper&) = delete;
+
 private:
     QoreHandlerRun run;
 };
@@ -122,6 +126,10 @@ public:
             qore_handler_run_tls = run.previous;
         }
     }
+
+    // a copy would leave the chain with an entry of a dead object
+    QoreTryReturnSlotHelper(const QoreTryReturnSlotHelper&) = delete;
+    QoreTryReturnSlotHelper& operator=(const QoreTryReturnSlotHelper&) = delete;
 
 private:
     QoreHandlerRun run{};
