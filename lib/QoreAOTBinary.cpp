@@ -2982,17 +2982,9 @@ const AbstractQoreZoneInfo* qore_aot_date_zone(const char* name, QoreProgram* pg
             return QTZM.findLoadRegion(name, xsink);
         }
         if ((pgm->getParseOptions64() & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
-            // the Program's own zone: the path of its %set-time-zone directive, which sandboxes that grant a budget
-            // let it load (qore#7566); the global lookup would give a restricted Program a zone that other code
-            // loaded from that path, without any check, and tell it that the path was loaded
-            const AbstractQoreZoneInfo* own = pgm->currentTZ();
-            if (own && !strcmp(AbstractQoreZoneInfo::getRegionName(own), name)) {
-                return own;
-            }
             xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the time zone of a date literal is the zoneinfo file "
                 "path '%s', which cannot be loaded in a restricted Program; restricted code can load time zone "
-                "regions only, and a path only as the time zone of its own Program (see SandboxManager::"
-                "setTimeZonePathLimits())", name);
+                "regions only", name);
             return nullptr;
         }
         // a zone that is loaded already is found by its exact name without access to the file; otherwise the file is
