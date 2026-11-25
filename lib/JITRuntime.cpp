@@ -13500,12 +13500,17 @@ extern "C" DLLEXPORT void qore_rt_push_native_inline_call_frame_aot(void* storag
     qore_rt_push_native_call_frame_aot_impl(storage, thread_data, ctx, target_slot, call_loc, true);
 }
 
+//! the table of the frame names of AOT-compiled code and its lock, a leaf lock that a child of fork() gets free
+//! (qore#7554); not function-local statics, whose guard a child could inherit held, and whose handler would be
+//! registered at the first use
+static std::mutex native_call_names_lock;
+static std::unordered_map<std::string, std::unique_ptr<const std::string>> native_call_names;
+static QoreForkStdMutex native_call_names_fork_handler(native_call_names_lock, QFLR_LEAF, "native_call_names");
+
 //! Returns the frame name for a name given by AOT-compiled code, which lives for the rest of the process
 static const std::string* qore_rt_intern_native_call_name(const char* name) {
-    static std::mutex lck;
-    static std::unordered_map<std::string, std::unique_ptr<const std::string>> names;
-    std::lock_guard<std::mutex> lock(lck);
-    std::unique_ptr<const std::string>& rv = names[name];
+    std::lock_guard<std::mutex> lock(native_call_names_lock);
+    std::unique_ptr<const std::string>& rv = native_call_names[name];
     if (!rv) {
         rv = std::make_unique<const std::string>(name);
     }

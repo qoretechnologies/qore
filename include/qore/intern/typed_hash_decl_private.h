@@ -571,7 +571,7 @@ public:
         releases the references
     */
     DLLLOCAL void getTypeOwnerCachedDecls(std::vector<QoreTypeOwner*>& owners) const {
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             typed_hash_decl_private* p = get(*i.second);
             p->ref();
@@ -657,7 +657,7 @@ public:
     */
     DLLLOCAL void setNotModuleDecl() {
         not_module_decl = true;
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             get(*i.second)->not_module_decl = true;
         }
@@ -721,7 +721,11 @@ public:
         // C++ modules may instantiate a generic before attaching it to a namespace. Namespace
         // publication (under parse ownership) must bind every cached instance as one operation;
         // cancellation cannot leave only part of the declaration family attached.
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (parameterized_base) {
+            // a concrete declaration holds no cache, and its lock is a stripe that its generic's loop below holds
+            return;
+        }
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             get(*i.second)->setNamespace(n);
         }
@@ -745,7 +749,11 @@ public:
         // Concrete generic declarations are owned by this cache, not by HashDeclList. They can
         // also survive in hash values after namespace teardown. Cleanup must finish even when
         // the Program has been cancelled, so this traversal is deliberately not cancellable.
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (parameterized_base) {
+            // a concrete declaration holds no cache, and its lock is a stripe that its generic's loop below holds
+            return;
+        }
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             get(*i.second)->namespaceDeleted(n);
         }
@@ -1115,7 +1123,11 @@ protected:
             return 0;
         }
     };
-    mutable std::mutex parameterized_hashdecl_cache_lock;
+    //! the lock of the cache: a stripe of a lock array that the fork handlers acquire before fork() (qore#7554)
+    /** See qore_cache_stripe_lock(); it is held only around a read or a change of the cache itself, and a concrete
+        declaration never holds a cache (its generic does), so no holder takes the lock of another declaration
+    */
+    DLLLOCAL std::mutex& cacheLock() const;
     mutable std::map<parameterized_hashdecl_key_t, TypedHashDecl*, parameterized_hashdecl_key_less_t>
         parameterized_hashdecl_cache;
     //! The registration of parameterized_hashdecl_cache by the types of its keys (issue #5765)
@@ -1130,7 +1142,7 @@ protected:
     private:
         const typed_hash_decl_private& hd;
     };
-    //! created with the first concrete declaration, under parameterized_hashdecl_cache_lock; unregistered by the
+    //! created with the first concrete declaration, under cacheLock(); unregistered by the
     //! destructor
     mutable std::unique_ptr<ParameterizedHashDeclCache> parameterized_hashdecl_registration;
     const TypedHashDecl* parameterized_base = nullptr;

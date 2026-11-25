@@ -7941,6 +7941,9 @@ static const QoreClass* getStackClass() {
 
 //! serializes the API's member additions with the marking of classes as reachable (issue #6422)
 static std::mutex qore_class_member_add_lock;
+//! a child of fork() gets the lock free (qore#7554); its holders add a member, which takes leaf locks
+static QoreForkStdMutex qore_class_member_add_fork_handler(qore_class_member_add_lock, QFLR_CLASS_MEMBER_ADD,
+    "class_member_add");
 
 //! the builtin classes committed into a namespace during the module initialization running in this thread, which
 //! become reachable when it returns (QoreModuleInitClassesHelper), or nullptr outside a module's initialization

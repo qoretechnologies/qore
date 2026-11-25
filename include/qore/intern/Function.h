@@ -1832,7 +1832,10 @@ protected:
     //! True if self is actually referenced in the function body
     mutable std::atomic<bool> uses_self{true};
     //! Specialized IR functions keyed by concrete receiver and method type arguments
-    mutable std::mutex specialized_ir_mutex;
+    /** The lock of the cache is a stripe of a lock array that the fork handlers acquire before fork() (qore#7554; see
+        qore_cache_stripe_lock()): it is held only around a read or a change of the cache itself
+    */
+    DLLLOCAL std::mutex& specializedIRMutex() const;
     /** Looked up by a QoreGenericSpecializationView of the call, so a call of a cached specialization makes no key
     */
     /** The IR is shared with the calls that run it: a call holds it while it runs, so an entry can be removed while
@@ -1852,7 +1855,7 @@ protected:
     private:
         const UserVariantBase& v;
     };
-    //! created with the first specialization, under specialized_ir_mutex; unregistered by the destructor
+    //! created with the first specialization, under specializedIRMutex(); unregistered by the destructor
     mutable std::unique_ptr<SpecializedIRCache> specialized_ir_registration;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;

@@ -1955,7 +1955,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
         "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
         "dbg_finish_hold", "type_wait_entry", "type_epoch_holds", "type_tombstones", "generic_cache_registry",
-        "type_owner_registry", "type_info_registry",
+        "type_owner_registry", "type_info_registry", "cache_stripes", "function_call_names", "ir_inline_sites",
+        "native_call_names", "class_member_add",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -26393,7 +26394,10 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
 
 //! Debug-only: creates a child process with fork() while another thread holds a process-wide lock of type retirement
 /** The other thread holds the lock named (see qore_type_dbg_fork_lock(): \c "type_wait_entry", \c "type_epoch_holds",
-    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry" or \c "type_info_registry"), as a
+    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry", \c "type_info_registry", the name
+    of the fork handler of any other lock that is a std::mutex (\c "function_call_names", \c "ir_inline_sites",
+    \c "native_call_names" or \c "class_member_add", for example) or \c "cache_stripe:<n>", a stripe of the locks of
+    the caches of generics that belong to one object each (qore#7554)), as a
     thread does that enters a quiescent wait, arms an epoch hold, makes a tombstone, registers a generic cache entry or
     creates a type or a declaration at the moment of fork().  It holds the lock until the prepare handlers reach the
     fork handler of the same name, which then waits for it, or, if no such handler is registered, until fork() has
@@ -26416,7 +26420,8 @@ static QoreValue f_dbg_fork_while_type_lock_held(const QoreListNode* params, Run
         return QoreValue();
     }
     ForkHoldTest t;
-    t.target = name->c_str();
+    // the handler of a stripe of the locks of the per-object caches of generics is the one of all stripes
+    t.target = !strncmp(name->c_str(), "cache_stripe:", 13) ? "cache_stripes" : name->c_str();
     std::thread holder([&t, lock]() {
         std::unique_lock<std::mutex> held(*lock);
         std::unique_lock<std::mutex> ul(t.m);

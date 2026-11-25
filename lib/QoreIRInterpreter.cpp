@@ -537,6 +537,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
@@ -26562,6 +26563,8 @@ namespace {
 struct QoreIRInlineSiteRegistry {
     std::mutex lck;
     std::unordered_map<std::atomic<int8_t>*, const void*> sites;
+    //! a leaf lock that a child of fork() gets free (qore#7554)
+    QoreForkStdMutex fork_handler{lck, QFLR_LEAF, "ir_inline_sites"};
 };
 
 QoreIRInlineSiteRegistry& qore_ir_inline_sites() {
@@ -26569,6 +26572,10 @@ QoreIRInlineSiteRegistry& qore_ir_inline_sites() {
     static QoreIRInlineSiteRegistry* reg = new QoreIRInlineSiteRegistry;
     return *reg;
 }
+
+// created during static initialization, so that its fork handler is not registered while another registered lock is
+// held (see design/fork-handlers.md)
+[[maybe_unused]] static QoreIRInlineSiteRegistry& qore_ir_inline_sites_init = qore_ir_inline_sites();
 
 bool qore_ir_dpgm_attached(const void* dpgm_addr) {
     return static_cast<const std::atomic<qore_debug_program_private*>*>(dpgm_addr)->load(
@@ -26683,9 +26690,13 @@ void QoreIRFunction::initGuardProfiles() {
     }
 }
 
+std::mutex& TypeProfile::extendedMutex() const {
+    return qore_cache_stripe_lock(this);
+}
+
 void TypeProfile::recordNewTypeInfo(const TypeProfileTypeKey& key) {
     auto add = [this, &key] () {
-        std::lock_guard<std::mutex> lock(extended_mutex);
+        std::lock_guard<std::mutex> lock(extendedMutex());
         if (!extended_type_counts) {
             extended_type_counts = std::make_unique<std::unordered_map<TypeProfileTypeKey, uint32_t,
                 TypeProfileTypeKeyHash>>();

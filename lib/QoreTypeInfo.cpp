@@ -1218,7 +1218,22 @@ std::mutex* qore_type_dbg_fork_lock(const char* name) {
     if (!strcmp(name, "type_info_registry")) {
         return &type_info_registry().m;
     }
-    return qore_thread_type_dbg_fork_lock(name);
+    if (std::mutex* m = qore_thread_type_dbg_fork_lock(name)) {
+        return m;
+    }
+    // a stripe of the locks of the per-object caches of generics (qore#7554)
+    static const char stripe_prefix[] = "cache_stripe:";
+    if (!strncmp(name, stripe_prefix, sizeof(stripe_prefix) - 1)) {
+        const char* num = name + sizeof(stripe_prefix) - 1;
+        char* end = nullptr;
+        unsigned long i = strtoul(num, &end, 10);
+        return end == num || *end ? nullptr : qore_cache_stripe_dbg_lock(i);
+    }
+    // the mutex of any other fork handler of a std::mutex
+    if (QoreForkStdMutex* sm = dynamic_cast<QoreForkStdMutex*>(qore_fork_find_handler(name))) {
+        return &sm->dbgMutex();
+    }
+    return nullptr;
 }
 #endif
 
