@@ -235,6 +235,14 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
+const HashMember* qore_hash_private::findCrossKind(const HashMember& m, const qore_hash_private& other) const {
+    if (!hm.isHardened() || other.hm.isHardened()) {
+        // the hash of m finds its key in other if other has it
+        return nullptr;
+    }
+    return other.findMember(qore_hash_lookup_key(m.key.data(), m.key.size()));
+}
+
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     assert(m->val.isNothing());
     assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
@@ -375,6 +383,16 @@ size_t qore_hash_keyed_bytes(const char* str, size_t len) {
     // the key was created before the first map was hardened (harden()), and a thread reads a hardened map only
     // after it was made visible to it, which orders the creation of the key before this read
     return static_cast<size_t>(qore_siphash13(qore_hash_process_key[0], qore_hash_process_key[1], str, len));
+}
+
+HashMember* qore_hash_member_map::findSlow(const char* str, size_t len) const {
+    assert(!fastFind());
+    return count ? findKeyed(str, len) : nullptr;
+}
+
+HashMember* qore_hash_member_map::findSlow(const char* str) const {
+    assert(!fastFind());
+    return count ? findKeyed(str, strlen(str)) : nullptr;
 }
 
 HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {

@@ -80,8 +80,8 @@ struct DLLLOCAL qore_hash_lookup_key {
     }
 
     //! a key with the hash that a member of a key map keeps: the member hash, or the keyed hash of a hardened map
-    /** for a search of the key map that the member is in, or of another map of the same kind (see
-        qore_hash_member_map::sameKind())
+    /** for a search of the key map that the member is in, of another map in the same hardened state, or of a
+        hardened map, which finds a key with any hash
     */
     DLLLOCAL qore_hash_lookup_key(const char* str, size_t len, size_t hash, stored_hash_t) : str(str), len(len),
             hash(hash) {
@@ -320,38 +320,36 @@ public:
         return buckets && !getLimit();
     }
 
-    //! true if the members of both maps keep hashes of the same kind, so that the hash that a member of one keeps
-    //! finds its key in the other
-    DLLLOCAL bool sameKind(const qore_hash_member_map& other) const {
-        return isHardened() == other.isHardened();
-    }
-
     //! returns the hash of the key of \a len bytes at \a str in this map: the hash that its member keeps
     DLLLOCAL size_t hashOf(const char* str, size_t len) const {
         return isHardened() ? qore_hash_keyed_bytes(str, len) : qore_hash_lookup_key::hashBytes(str, len);
     }
 
-    //! returns the member with the key \a k, or nullptr
-    /** The bucket of the hash of \a k is searched first: it is the bucket of the key in a map that is not hardened.
-        In a hardened map it is another bucket, whose members cannot match unless one has the key (it then is the
-        member of the key), and the key is searched with its keyed hash after it; the search of a map that is not
-        hardened is therefore the same as before qore#7557 but for one test when the key is not found.
+    //! true if find() can search the map: it has buckets and is not hardened (its insert limit is not 0); else
+    //! findSlow() searches it
+    /** the test replaces the test of the member count that came before qore#7557, so that a search costs no test more
     */
+    DLLLOCAL bool fastFind() const {
+        return getLimit() != 0;
+    }
+
+    //! returns the member with the key \a k, or nullptr, in a map that has buckets and is not hardened (fastFind())
     DLLLOCAL HashMember* find(const qore_hash_lookup_key& k) const {
-        if (!count) {
-            return nullptr;
-        }
+        assert(fastFind());
         for (HashMember* m = buckets[k.hash & getMask()]; m; m = m->bucket_next) {
             if (m->matches(k)) {
                 return m;
             }
         }
-        // the map has buckets (it has members), so it is hardened if its insert limit is 0
-        if (!getLimit()) [[unlikely]] {
-            return findKeyed(k.str, k.len);
-        }
         return nullptr;
     }
+
+    //! returns the member with the key \a str of \a len bytes, or nullptr, in a map that find() cannot search: a map
+    //! without buckets, which has no members, or a hardened map, which is searched with the keyed hash of the key
+    QORE_HASH_NOINLINE DLLLOCAL HashMember* findSlow(const char* str, size_t len) const;
+
+    //! as findSlow(const char*, size_t) for the key \a str, whose length is only computed if the map has members
+    QORE_HASH_NOINLINE DLLLOCAL HashMember* findSlow(const char* str) const;
 
     //! inserts \a m, whose key the map does not have and whose hash is the member hash of its key (or, in a map that
     //! is not hardened, any hash: debug functions simulate shared hashes so); throws std::bad_alloc, with nothing
@@ -697,25 +695,26 @@ public:
     }
 
     //! returns the member with the key \a key, or nullptr
-    /** An empty hash is not searched, so that its key is not hashed (qore#7194)
+    /** A hash without buckets is not searched, so that its key is not hashed (qore#7194); neither is a hardened hash,
+        whose search hashes the key with its keyed hash (qore_hash_member_map::findSlow(), qore#7557)
     */
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key) const {
-        return hm.empty() ? nullptr : hm.find(qore_hash_lookup_key(key));
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key)) : hm.findSlow(key);
     }
 
     //! returns the member with the key \a key of \a len bytes, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const char* key, size_t len) const {
-        return hm.empty() ? nullptr : hm.find(qore_hash_lookup_key(key, len));
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, len)) : hm.findSlow(key, len);
     }
 
     //! returns the member with the key \a key, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) const {
-        return hm.empty() ? nullptr : hm.find(key);
+        return hm.fastFind() ? hm.find(key) : hm.findSlow(key.str, key.len);
     }
 
     //! returns the member with the key \a key, whose hash is \a hash, or nullptr
     QORE_HASH_FIND_INLINE DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) const {
-        return hm.empty() ? nullptr : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
+        return hm.fastFind() ? hm.find(qore_hash_lookup_key(key, strlen(key), hash)) : hm.findSlow(key);
     }
 
     //! Returns true if each member of this hash has a member of \a other with the same key whose value is equal to
@@ -734,10 +733,8 @@ public:
 
         @return true if every member of this hash has a member of \a other with the same key and an equal value
     */
-    // not inline, as before qore#7557 (when the compiler did not inline it), so that the comparison of the keys is
-    // inlined into its loop
     template <typename F>
-    QORE_HASH_NOINLINE DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
+    DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
         assert(size() == other.size());
         const HashMember* m = member_list.front();
         // the hashes have as many members (the callers check it), so the walk ends at the end of both lists; it counts
@@ -752,29 +749,30 @@ public:
                 return false;
             }
         }
-        return !m || membersEqualByKey(m, other, value_equal);
-    }
-
-    //! the rest of membersEqual(): looks up the key of \a m and of each member after it in \a other
-    /** not inline, so that the comparison of the members in the same order compiles as it did before qore#7557
-    */
-    template <typename F>
-    QORE_HASH_NOINLINE DLLLOCAL bool membersEqualByKey(const HashMember* m, const qore_hash_private& other,
-            F& value_equal) const {
-        // the key is searched with the hash that the member keeps (qore#7265), which finds it in a map of the same
-        // kind, and in a hardened map, which hashes the key itself when the hash does not find it; only a member of a
-        // hardened map is searched in a map that is not hardened with its member hash (qore#7557)
-        bool rehash = hm.isHardened() && !other.hm.isHardened();
         for (; m; m = m->next) {
-            size_t hash = rehash ? qore_hash_lookup_key::hashBytes(m->key.data(), m->key.size()) : m->hash;
-            const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), hash,
+            // the key is searched with the hash that the member keeps (qore#7265); a hardened map finds it with any
+            // hash, and only a member of a hardened map that a map that is not hardened does not find is searched
+            // again with its member hash (findCrossKind(), qore#7557)
+            const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
                 qore_hash_lookup_key::stored_hash_t()));
-            if (!found || !value_equal(m->val, found->val)) {
+            if (!found) [[unlikely]] {
+                found = findCrossKind(*m, other);
+                if (!found) {
+                    return false;
+                }
+            }
+            if (!value_equal(m->val, found->val)) {
                 return false;
             }
         }
         return true;
     }
+
+    //! returns the member of \a other with the key of \a m, a member of this hash, that a search of \a other with
+    //! the hash of \a m did not find: the hash of \a m is the keyed hash if this hash is hardened, which a key map
+    //! that is not hardened cannot find, so \a other is searched with the member hash of the key then (qore#7557)
+    QORE_HASH_NOINLINE DLLLOCAL const HashMember* findCrossKind(const HashMember& m,
+            const qore_hash_private& other) const;
 
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
 
