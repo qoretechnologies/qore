@@ -3099,12 +3099,6 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallStatic:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
-        case QoreIROpcode::CallMethod: {
-            const QoreValue& expr = static_cast<const QoreIRExprInstruction*>(inst)->expr;
-            // A self call with lowered operands evaluates its arguments from the IR, even on virtual dispatch.
-            return !inst->operands.empty() && expr.hasNode() && qore_get_self_function_call_node(expr.getInternalNode())
-                ? nullptr : &expr;
-        }
 
         // CallDirect, CallStaticDirect, DotEvalMethodDirect, and InvokeDotEvalMethodDirect have expr fields,
         // but they pre-evaluate all arguments into IR operands. The expr args are only used by AOT serialization,
