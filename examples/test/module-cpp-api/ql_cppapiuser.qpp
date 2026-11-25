@@ -1265,8 +1265,7 @@ list<int> cpp_api_blocked_fault_signals() [flags=RET_VALUE_ONLY] {
     offset in seconds east at \a epoch
 
     @throw PARSE-SET-TIME-ZONE-ERROR \a name is not a valid UTC offset
-    @throw FILE-OPEN2-ERROR the zoneinfo file for the region cannot be opened
-    @throw TZINFO-ERROR the zoneinfo file for the region cannot be read
+    @throw TZINFO-ERROR the region is unknown or its zoneinfo file cannot be read
 */
 hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_VALUE_ONLY] {
     const AbstractQoreZoneInfo* zone = find_create_timezone(name->c_str(), xsink);

@@ -1449,6 +1449,10 @@ public:
     */
     std::atomic<bool> any_sandbox_manager{false};
 
+    //! true if the Program is a host Program: created with no Program running; its code is not restricted for time
+    //! zones (QoreTimeZoneManager::callerRestricted())
+    bool tz_host = false;
+
     //! true if \c sandbox_manager adds to the sandbox of the Program's callers instead of governing its code alone
     /** Set when code that a sandbox governs sets the manager with Program::setSandboxManager() (see
         setOwnSandboxManager()): the walk of the thread's sandbox stack visits the manager and goes on to the callers,
@@ -5415,11 +5419,7 @@ public:
             // that load
             if (module_header_closed && (module_own_dom & QDOM_LOCALE_CONTROL)
                     && !(module_trusted_dom & QDOM_LOCALE_CONTROL) && !locale_control_restricted_after_header) {
-                if (*zone == '-' || *zone == '+') {
-                    QTZM.findCreateOffsetZone(zone, &xsink);
-                } else {
-                    QTZM.findLoadRegion(zone, &xsink);
-                }
+                findTimeZoneDirectiveZone(zone, &xsink);
                 if (xsink) {
                     mergeParseException(xsink);
                     return;
@@ -5442,6 +5442,34 @@ public:
         time_zone_trusted_only = false;
     }
 
+    //! returns the zone that the %set-time-zone directive with the given argument names in this Program
+    /** A UTC offset, a region, or a zoneinfo file path.  A path is refused in a restricted Program (one that a
+        sandbox governs or whose parse options restrict a functional domain, unless it is the host Program), which can
+        load regions only; the directive is processed while the Program is parsed, when the code that runs is the
+        caller of the parse, so the Program's own restrictions decide; otherwise the path is loaded subject to the
+        restrictions of that caller.
+
+        @param zone the argument of the directive
+        @param xsink for the exception if the zone cannot be found or created or the path is refused
+
+        @return the zone; nullptr for UTC or if an exception was raised
+    */
+    DLLLOCAL const AbstractQoreZoneInfo* findTimeZoneDirectiveZone(const char* zone, ExceptionSink* xsink) {
+        if (*zone == '-' || *zone == '+') {
+            return QTZM.findCreateOffsetZone(zone, xsink);
+        }
+        if (*zone && QoreTimeZoneManager::isPathName(zone)) {
+            if ((pwo.parse_options & PO_NO_FILESYSTEM) || QoreTimeZoneManager::programRestricted(pgm)) {
+                xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a "
+                    "zoneinfo file path in a restricted Program; restricted code can load time zone regions only");
+                return nullptr;
+            }
+            return QTZM.findLoadRegionFromPath(zone, xsink, pgm);
+        }
+        // the zone is charged to the limits of this Program, not of the code that parses it
+        return QTZM.findLoadRegionForProgram(zone, pgm, xsink);
+    }
+
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
     /** @param zone a region name or a UTC offset (starting with \c + or \c -)
         @param xsink for the exception if the zone cannot be found or created
@@ -5451,8 +5479,7 @@ public:
         Also used by the AOT loader for the directive recorded in an AOT image (qore#6270)
     */
     DLLLOCAL int setTimeZoneDirective(const char* zone, ExceptionSink* xsink) {
-        const AbstractQoreZoneInfo *tz = (*zone == '-' || *zone == '+') ? QTZM.findCreateOffsetZone(zone, xsink)
-            : QTZM.findLoadRegion(zone, xsink);
+        const AbstractQoreZoneInfo *tz = findTimeZoneDirectiveZone(zone, xsink);
         if (*xsink) {
             assert(!tz);
             return -1;

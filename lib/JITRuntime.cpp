@@ -7984,6 +7984,13 @@ static const AbstractQoreZoneInfo* qore_rt_resolve_date_zone(const char* zone_na
         return nullptr;
     }
 
+    // the zone of a date literal was loaded when the code was parsed (also from a zoneinfo path that the code's
+    // %set-time-zone directive named): it is found by its name without access to a file
+    if (*zone_name != '+' && *zone_name != '-') {
+        if (const AbstractQoreZoneInfo* loaded = QTZM.findLoadedZone(zone_name)) {
+            return loaded;
+        }
+    }
     ExceptionSink xsink;
     const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
         ? QTZM.findCreateOffsetZone(zone_name, &xsink)
