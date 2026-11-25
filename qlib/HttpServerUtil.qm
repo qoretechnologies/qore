@@ -164,6 +164,8 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" preserves the user name and optional
+      password from the bind address (issue #7595)
     - added @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", through which
       the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request is set up without the
       connection's socket (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
@@ -1383,9 +1385,9 @@ public string sub http_get_url_from_bind(softstring bind, *string host) {
         h.host = "[" + h.host + "]";
     }
 
-    string login = h.password ? (h.password + ":") : "";
-    if (h.username) {
-        login += sprintf("%s@", h.password);
+    string login = "";
+    if (exists h.username) {
+        login = h.username + (exists h.password ? ":" + h.password : "") + "@";
     }
 
     return sprintf("%s://%s%s%s", h.protocol ? h.protocol : "http", login, h.host,

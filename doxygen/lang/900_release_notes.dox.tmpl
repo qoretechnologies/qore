@@ -3259,6 +3259,8 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" preserves the user name and optional
+      password when formatting a bind address (issue #7595)
     - @ref httpserverutilintro "HttpServerUtil" and @ref httpserverintro "HttpServer" modules: a stream handler that
       wants an HTTP/1.x request body with a \c Content-Length as a stream gets it in bounded binary parts, each byte
       once, instead of the whole body twice, held in memory (see @ref http1_7 and @ref httputil1_6; issue #7308)
