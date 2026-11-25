@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module that the trusted test loads itself, whose class has a private member (see
+# ../capability-helper-module-sandbox.qtest)
+
+%modern
+
+module CapTrustedBase {
+    version = "1.0";
+    desc = "a trusted class with a private member for capability-helper-module-sandbox.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CapTrustedBase {
+    #! a class declared by trusted code
+    public class Base {
+        private {
+            int secret = 42;
+        }
+    }
+}

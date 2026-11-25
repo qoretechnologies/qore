@@ -2689,6 +2689,13 @@ public:
     //! Returns a ref'd pointer to the sandbox manager set with QoreProgram::setSandboxManager(), or nullptr
     DLLLOCAL QoreSandboxManager* getOwnSandboxManagerRef();
 
+    //! Returns references to both managers of the sandbox of the code that created the Program, read together
+    /** \c creator_sandbox_manager and \c creator_policy_manager under one lock, so that a concurrent
+        addCreatorSandbox() cannot give a mismatched pair; the caller must call deref() on each pointer returned that
+        is not nullptr
+    */
+    DLLLOCAL void getCreatorSandboxRefs(QoreSandboxManager*& creator, QoreSandboxManager*& policy);
+
     //! Sets the Program's own sandbox manager for Program::setSandboxManager()
     /** The manager and \c own_manager_additive are changed together under \c sm_lock, after the check that code that
         is not trusted does not replace a manager, so that concurrent setters cannot combine one setter's manager with
