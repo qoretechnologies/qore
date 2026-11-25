@@ -385,7 +385,7 @@ public:
         ++count;
     }
 
-    //! inserts \a m, a copy of a member of a map of the same kind with no fewer buckets than this map, whose key
+    //! inserts \a m, a copy of a member of a map of the same kind with no more buckets than this map, whose key
     //! this map does not have, without checking the length of its chain: the chain is not longer than the chain of
     //! the member in that map (qore#7557); throws std::bad_alloc, with nothing changed, if the bucket array cannot
     //! grow
@@ -426,16 +426,20 @@ public:
     */
     QORE_HASH_NOINLINE DLLLOCAL void reserve(size_t n);
 
-    //! makes this map, which has no members, hash its keys as \a src does, for a copy of the members of \a src
+    //! makes this map, which has buckets but no members, hash its keys as \a src, which has members, does, for a
+    //! copy of the members of \a src
     /** a copy of a hardened map is hardened, so that it takes the keyed hashes of the members
+
+        @return true if this map has no fewer buckets than \a src, so that the chain of a copied member is not longer
+        than in \a src and insertCopy() can take it; else the copied members take insert(), which checks the chains
+        (and hashes the keys again in a hardened map)
     */
-    DLLLOCAL void copyKind(const qore_hash_member_map& src) {
-        assert(!count);
-        if (src.isHardened()) {
-            // the map has buckets: reserve() made them for the members of src
-            assert(buckets);
-            setLimit(0);
+    DLLLOCAL bool copyKind(const qore_hash_member_map& src) {
+        assert(!count && buckets && src.buckets);
+        if (!src.limit) [[unlikely]] {
+            limit = 0;
         }
+        return mask >= src.mask;
     }
 
     //! returns the index of the bucket of \a m, which is in the map (for debug functions)
@@ -730,8 +734,10 @@ public:
 
         @return true if every member of this hash has a member of \a other with the same key and an equal value
     */
+    // not inline, as before qore#7557 (when the compiler did not inline it), so that the comparison of the keys is
+    // inlined into its loop
     template <typename F>
-    DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
+    QORE_HASH_NOINLINE DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
         assert(size() == other.size());
         const HashMember* m = member_list.front();
         // the hashes have as many members (the callers check it), so the walk ends at the end of both lists; it counts
@@ -1207,8 +1213,7 @@ public:
         the hashes of the members of \a src
 
         @return true if the chains of the buckets of the copy need no check (createMemberKnownAbsent()): its key map
-        is hardened, or it has no fewer buckets than the key map of \a src, so that the chain of a member is not
-        longer than in \a src
+        has no fewer buckets than the key map of \a src, so that the chain of a member is not longer than in \a src
     */
     DLLLOCAL bool reserveForCopy(const qore_hash_private& src) {
         assert(member_list.empty());
@@ -1217,8 +1222,7 @@ public:
             return true;
         }
         hm.reserve(src.hm.size());
-        hm.copyKind(src.hm);
-        return hm.isHardened() || hm.bucket_count() >= src.hm.bucket_count();
+        return hm.copyKind(src.hm);
     }
 
     DLLLOCAL QoreHashNode* plusEquals(const QoreHashNode* h, ExceptionSink* xsink) const {

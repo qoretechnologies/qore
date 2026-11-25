@@ -126,6 +126,20 @@ class HashKeyHardeningTest inherits QUnit::Test {
         assertFalse(exists h.k1);
         assertEq(N / 2 - 1, h.size());
 
+        # a copy of the hardened hash after the removals has fewer buckets than the hash, so its inserts check the
+        # chains and hash the keys again; it is hardened too
+        hash<auto> small = h;
+        small.extra = 1;
+        hash<auto> small_info = mapInfo(small);
+        assertTrue(small_info.hardened, "a smaller copy of a hardened hash is hardened");
+        assertLt(mapInfo(h).buckets, small_info.buckets + 1, "the copy has no more buckets than the hash");
+        assertLe(MaxChain, small_info.max_chain);
+        for (int i = 3; i < N; i += 2) {
+            assertEq(i, small{"k" + i}, "k" + i);
+        }
+        assertFalse(exists small.k0);
+        assertEq(N / 2, small.size());
+
         # further inserts, with and without the shared hash, hash their keys with the keyed hash
         for (int i = 0; i < N; ++i) {
             if (i % 2) {
