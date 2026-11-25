@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class TlsDescriptorsTest
+
+#! libqore accesses its thread-local variables through TLS descriptors on x86_64 (issue #7006)
+/** libqore is also loaded with dlopen(), so it cannot use the initial-exec TLS model; with the general-dynamic
+    model, every access of a thread-local variable called __tls_get_addr() (a relocation of type
+    R_X86_64_DTPMOD64 for each variable).  It is built with TLS descriptors instead (QORE_TLS_DESCRIPTORS), whose
+    relocations are of type R_X86_64_TLSDESC.
+*/
+class TlsDescriptorsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TLS descriptors", "1.0") {
+        addTestCase("libqore accesses its thread-local variables through TLS descriptors", \testRelocations());
+        set_return_value(main());
+    }
+
+    testRelocations() {
+        hash<auto> info = get_qore_library_info();
+        if (info.PlatformOS != "Linux" || info.PlatformCPU != "x86_64") {
+            testSkip(sprintf("TLS descriptors are checked on x86_64 Linux, not %s %s", info.PlatformOS,
+                info.PlatformCPU));
+        }
+        string readelf = trim(backquote("command -v readelf 2>/dev/null || true"));
+        if (!readelf) {
+            testSkip("readelf is not available");
+        }
+        *string lib = findLibqore();
+        if (!lib) {
+            testSkip("libqore is not loaded from a shared library");
+        }
+        int rc;
+        string relocs = backquote(sprintf("%s -rW '%s' 2>&1", readelf, lib), \rc);
+        assertEq(0, rc, "readelf reads the relocations of " + lib + ": " + relocs);
+        list<string> dtpmod = (select relocs.split("\n"), $1 =~ /R_X86_64_DTPMOD64/);
+        assertEq((), dtpmod, "no thread-local variable is accessed through __tls_get_addr() in " + lib);
+        assertGt(0, (select relocs.split("\n"), $1 =~ /R_X86_64_TLSDESC/).size(),
+            "thread-local variables are accessed through TLS descriptors in " + lib);
+    }
+
+    #! returns the path of the libqore shared library mapped in this process, if any
+    private *string findLibqore() {
+        foreach string line in (ReadOnlyFile::readTextFile("/proc/self/maps").split("\n")) {
+            *string path = (line =~ x/(\/[^ ]*\/libqore\.so[^ ]*)$/)[0];
+            if (path && is_file(path)) {
+                return path;
+            }
+        }
+    }
+}

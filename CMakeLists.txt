@@ -2799,6 +2799,23 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# The thread-local variables of libqore are accessed through TLS descriptors on x86_64 (issue #7006).  libqore is a
+# shared library that is also loaded with dlopen() (the Python module loads it so), so it cannot use the initial-exec
+# TLS model; with the general-dynamic model of -fPIC, every access of a thread-local variable called
+# __tls_get_addr(), about 5% of the instructions of code that runs mostly in the library (AOT-compiled modules).  A
+# TLS descriptor (-mtls-dialect=gnu2, the default on aarch64) resolves to a few instructions when the library's TLS
+# block is in the static TLS area, as it is when the library is linked, and keeps working when it is loaded with
+# dlopen().  glibc and musl support them on x86_64; macOS uses its own thread-local variable scheme.  It is a target
+# option, not part of CMAKE_CXX_FLAGS, so it does not change the AOT identity (qcc-format-config.txt).
+option(QORE_TLS_DESCRIPTORS "access libqore's thread-local variables through TLS descriptors on x86_64" ON)
+if (QORE_TLS_DESCRIPTORS AND NOT APPLE AND NOT WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"
+        AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    check_cxx_compiler_flag(-mtls-dialect=gnu2 QORE_HAVE_TLS_DIALECT_GNU2)
+    if (QORE_HAVE_TLS_DIALECT_GNU2)
+        target_compile_options(libqore PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-mtls-dialect=gnu2>)
+    endif()
+endif()
+
 # warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions
 # that nothing calls were never reported (ten were found by a manual sweep, qore#6163); a static function whose only
 # caller is itself is still not reported by the compilers, only by a sweep
