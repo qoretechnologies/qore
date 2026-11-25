@@ -55,6 +55,15 @@ module MistralDataProvider {
                 "- Evaluate AI responses and manage workflow executions\n\n"
                 "Preview APIs depend on account permissions. Inference calls consume your Mistral quota.",
             "scheme": "mistral",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "mistral.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://mistral.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::MistralLogo,
             "logo_file_name": "mistral-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -64,7 +73,15 @@ module MistralDataProvider {
         # the actions are built from the vendored API description the first time that the catalog is asked for
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(MistralDataProvider::AppName, sub () {
-            (MistralSchema::getActionSet()).registerActions(MistralDataProvider::AppName);
+            RestSchemaActionSet actions = MistralSchema::getActionSet();
+            foreach hash<DataProviderActionInfo> action in (actions.getActionInfoList(MistralDataProvider::AppName)) {
+                if (action.action == "create-embeddings") {
+                    action.billing = <DataProviderBillingInfo>{"unit": "token"};
+                } else if (inlist(action.action, ("list-models", "get-model", "list-datasets", "get-dataset"))) {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
+                DataProviderActionCatalog::registerAction(action);
+            }
         });
     };
 }

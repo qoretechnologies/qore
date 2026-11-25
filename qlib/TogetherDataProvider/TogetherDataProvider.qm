@@ -56,6 +56,15 @@ module TogetherDataProvider {
                 "**Usage charges apply** to inference, training, and provisioned resources. "
                 "Connection pings only read the authenticated model catalog.",
             "scheme": "together",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "together.xyz",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://www.together.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": TogetherLogo,
             "logo_file_name": "together-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -71,6 +80,9 @@ module TogetherDataProvider {
                     # an output type built on first use comes from the callback
                     if (!action.output_type && !action.get_output_type) {
                         action.output_type = AbstractDataProviderTypeMap."nothing";
+                    }
+                    if (inlist(action.action, ("list-models", "list-endpoints", "get-batch", "list-batches"))) {
+                        action.billing = <DataProviderBillingInfo>{"model": "included"};
                     }
                     DataProviderActionCatalog::registerAction(action);
                 }

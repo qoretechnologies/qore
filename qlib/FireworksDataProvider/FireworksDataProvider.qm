@@ -54,6 +54,15 @@ module FireworksDataProvider {
                 "- Fine-tune models and evaluate their quality\n"
                 "- Inspect account usage, limits, and billing",
             "scheme": "fireworks",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "fireworks.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://fireworks.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::FireworksLogo,
             "logo_file_name": "fireworks-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -80,7 +89,12 @@ module FireworksDataProvider {
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(FireworksDataProvider::AppName, sub () {
             foreach RestSchemaActionSet aset in (FireworksSchema::getActionSets()) {
-                aset.registerActions(FireworksDataProvider::AppName);
+                foreach hash<DataProviderActionInfo> action in (aset.getActionInfoList(FireworksDataProvider::AppName)) {
+                    if (inlist(action.action, ("get-model", "list-models", "list-datasets", "get-dataset", "list-deployments"))) {
+                        action.billing = <DataProviderBillingInfo>{"model": "included"};
+                    }
+                    DataProviderActionCatalog::registerAction(action);
+                }
             }
 
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
