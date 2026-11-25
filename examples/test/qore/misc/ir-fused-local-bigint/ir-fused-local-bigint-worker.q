@@ -38,6 +38,47 @@ int sub add_assign_source(int count) {
     return sum;
 }
 
+# a sum of the distances from a large counter (an int += of a value computed from it); the base gave 0
+int sub wide_counter_sum(int count) {
+    int sum = 0;
+    for (int i = Big; i < Big + count; ++i) {
+        sum += i - Big;
+    }
+    return sum;
+}
+
+# the same local is assigned a different large int in each iteration and read by the fused += as its source
+int sub rewritten_wide_source(int count) {
+    int total = 0;
+    for (int i = 0; i < count; ++i) {
+        int v = Big + i;
+        total += v;
+    }
+    return total;
+}
+
+# the target of the fused += is a large int that each iteration replaces
+int sub rewritten_wide_target(int count) {
+    int last = 0;
+    for (int i = 0; i < count; ++i) {
+        int acc = Big * (i + 1);
+        acc += i;
+        last = acc;
+    }
+    return last;
+}
+
+# the counter and the bound are large parameters, the counter is advanced with += (AddAssignLocalInt and
+# BranchIfLtLocalInt both on large locals): the base gave 0
+int sub wide_param_sum(int start, int limit) {
+    int s = 0;
+    for (int i = start; i < limit; i += 1) {
+        s = s + (i - start);
+    }
+    return s;
+}
+int sub wide_param_loop(int start) { return wide_param_sum(start, start + 20); }
+
 const Checks = (
     ("counter_return", Big + 1, Big),
     ("counter_break", Big + 1, Big),
@@ -46,6 +87,10 @@ const Checks = (
     ("negative_counter", -Big + 4, 4),
     ("add_assign_target", 5, Big + 15),
     ("add_assign_source", 3, Big * 3),
+    ("wide_counter_sum", 20, 190),
+    ("wide_param_loop", Big, 190),
+    ("rewritten_wide_source", 20, Big * 20 + 190),
+    ("rewritten_wide_target", 20, Big * 20 + 19),
 );
 
 foreach list<auto> c in (Checks) {
