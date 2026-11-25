@@ -249,9 +249,11 @@ hashdecl CallStackInfo {
     string lang;
 
     //! the ID of the Program of the code that made the call (since 0.8.13.7)
-    /** For a call that the initialization of a module makes (also the init closure of its module declaration), the
-        module's Program, however the module is loaded
-        (since %Qore 3.0; issue #7289)
+    /** The code of a function, a closure or a method runs with its own Program as the Program of the calls that it
+        makes, in every execution mode: the body of a plain function or of a closure created outside a class with the
+        Program that defined it (the Program of the closure), a method with the source Program of its class (since
+        %Qore 3.0; issue #7394).  For a call that the initialization of a module makes (also the init closure of its
+        module declaration), the module's Program, however the module is loaded (since %Qore 3.0; issue #7289)
     */
     *int programid;
 

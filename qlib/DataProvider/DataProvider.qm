@@ -1780,6 +1780,10 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       @ref DataProvider::AbstractTimestampWatchDataProvider::getEventName() "AbstractTimestampWatchDataProvider::getEventName()"
       and @ref DataProvider::AbstractTimestampWatchDataProvider::getWatchRecordTimestamp() "getWatchRecordTimestamp()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - @ref DataProvider::DataProviderActionCatalog::deregisterDynamicApp() "DataProviderActionCatalog::deregisterDynamicApp()"
+      refuses code restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" also when it calls the
+      method through library code, such as a library function that it gives a call reference to the method
+      (<a href="https://github.com/qoretechnologies/qore/issues/7394">issue 7394</a>)
     - @ref DataProvider::DataProviderActionCatalog::actionMutatesState() "actionMutatesState()" can classify
       an action with its configured options using the producer's read-only conditions (issue 7470)
     - added @ref DataProvider::DataProvider::setModuleHostHooks() "DataProvider::setModuleHostHooks()" and

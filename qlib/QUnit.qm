@@ -391,6 +391,11 @@ namespace Priv {
         the process or install a signal handler when a restricted Program is in the call stack.
     */
     bool sub callersMayControlProcess() {
+        # the code that calls the library, through the call chain, which a call made through library code does not hide
+        # (qore#7394)
+        if (SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)) {
+            return False;
+        }
         # frame n here is frame n of the call stack, as both calls are made from this function
         int frames = get_thread_call_stack().size();
         for (int n = 0; n < frames; ++n) {

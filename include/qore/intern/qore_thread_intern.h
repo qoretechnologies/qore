@@ -2971,6 +2971,63 @@ private:
     QoreProgram* pgm;
 };
 
+//! Sets the call Program context of the thread to its current Program, as CodeContextHelperBase does for the body of
+//! user code without a class or an object, if it is not that already (qore#7394)
+/** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls()); if it is nullptr, it is
+    looked up and returned in it
+    @param old set to the call Program context replaced, if it was replaced
+
+    @return true if the call Program context was replaced
+*/
+DLLLOCAL bool qore_set_function_call_program_context(void*& thread_data_ptr, QoreProgram*& old);
+
+//! Restores the call Program context that qore_set_function_call_program_context() replaced
+/** @param thread_data_ptr the current thread's data, as qore_set_function_call_program_context() returned it
+    @param old the call Program context that it replaced
+*/
+DLLLOCAL void qore_restore_function_call_program_context(void* thread_data_ptr, QoreProgram* old);
+
+//! Sets the call Program context of the body of a plain function that a fast call path runs in another Program
+/** A call of user code runs the body of a plain function with the call Program context of the Program it runs in
+    (CodeContextHelperBase, qore#7394); the fast call paths that run the body without that call (the runtime
+    fast-call helpers, the native cross-module calls of AOT code and the inline calls of the IR interpreter) set it
+    with this helper when the call entered another Program, and restore the caller's when it is destroyed, also on an
+    exceptional exit.  It takes the call Program context as CodeContextHelperBase does: the current Program, which
+    the call has entered, written only if the thread does not have it already.  A call within one Program keeps the
+    caller's, which is that Program already, as the code of the caller runs with it (that is the rule this enforces),
+    so that the fast calls within a Program make no thread-local lookup for it.  The helper is a local of the runtime:
+    native code does not know its size (see CalleeContextHelper, which it does)
+*/
+class QoreFunctionCallProgramContextHelper {
+public:
+    //! \a exec_pgm is the Program that the call entered, \a caller_pgm the one it was made from
+    /** @param thread_data_ptr the current thread's data, if the caller has it (CalleeContextHelper::getThreadData()),
+        so that neither the switch nor the restore makes a thread-local lookup; otherwise nullptr
+    */
+    DLLLOCAL QoreFunctionCallProgramContextHelper(QoreProgram* exec_pgm, QoreProgram* caller_pgm,
+            void* thread_data_ptr = nullptr) : td(thread_data_ptr) {
+        if (exec_pgm && exec_pgm != caller_pgm) {
+            switched = qore_set_function_call_program_context(td, old);
+        }
+    }
+
+    //! restores the caller's call Program context, also on an exceptional exit
+    DLLLOCAL ~QoreFunctionCallProgramContextHelper() {
+        if (switched) {
+            qore_restore_function_call_program_context(td, old);
+        }
+    }
+
+    QoreFunctionCallProgramContextHelper(const QoreFunctionCallProgramContextHelper&) = delete;
+    QoreFunctionCallProgramContextHelper& operator=(const QoreFunctionCallProgramContextHelper&) = delete;
+
+private:
+    //! the current thread's data
+    void* td;
+    QoreProgram* old = nullptr;
+    bool switched = false;
+};
+
 class ModuleReExportHelper {
 protected:
     QoreAbstractModule* m;
@@ -3397,11 +3454,19 @@ public:
     DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
             ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info);
 
+    //! as the first constructor; \a user_code is true for the body of user code (CT_USER)
+    /** The body of user code that has neither a class nor an object (a plain function, a closure created outside a
+        class) runs with the call Program context of the Program that it runs in, as a method runs with that of its
+        class (qore#7394); builtin code keeps the call Program context of its caller, which is the code that called it
+    */
+    DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+            ExceptionSink* xsink, bool ref_obj, bool user_code);
+
     DLLLOCAL ~CodeContextHelperBase();
 
 private:
     DLLLOCAL void init(const char* code, QoreObject* obj, const qore_class_private* c, bool ref_obj,
-            QoreClassSourceProgramInfo* spgm_info);
+            QoreClassSourceProgramInfo* spgm_info, bool user_code = false);
 };
 
 //! Runs the body of a plain function or a static method in its own object and class context
@@ -3473,6 +3538,12 @@ public:
 
     CalleeContextHelper(const CalleeContextHelper&) = delete;
     CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+    //! returns the current thread's data, which the helper got when it was created (for
+    //! QoreFunctionCallProgramContextHelper)
+    DLLLOCAL void* getThreadData() const {
+        return td;
+    }
 
     //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
     //! AST interpreter releases them (issue #5882); the destructor restores the caller's
@@ -4530,7 +4601,7 @@ class CodeContextHelper : public CodeContextHelperBase {
 public:
     DLLLOCAL CodeContextHelper(ExceptionSink* xs, int t, const char* c, QoreObject* obj = nullptr,
             const qore_class_private* cls = nullptr, bool ref_obj = true) :
-        CodeContextHelperBase(c, obj, cls, xs, ref_obj) {
+        CodeContextHelperBase(c, obj, cls, xs, ref_obj, t == CT_USER) {
     }
 };
 
