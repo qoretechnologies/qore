@@ -2977,7 +2977,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // overloads share the same QoreFunction family.
     ir_func->source_qf = source_qf;
     ir_func->source_variant = uvb->getAbstractFunctionVariant();
-    if (!(uvb->getParseOptions(pgm->getParseOptions()) & PO_ALLOW_DEBUGGER)) {
+    const bool private_locals = !(uvb->getParseOptions(pgm->getParseOptions()) & PO_ALLOW_DEBUGGER);
+    if (private_locals) {
         ir_func->aot_private_root_scope = statements->getLVList();
     }
     // the parse-time type checks of the lowering are made in the class context of the code, as in
@@ -3111,7 +3112,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
     }
     // Classify locals as IR-only vs AST-visible for optimization
-    ir_func->computeIROnlyLocals(sig && sig->selfid && !ir_func->emit_debug_statements);
+    ir_func->computeIROnlyLocals(sig && sig->selfid && private_locals);
     // a read of a plain local that the statement writes later is released after its last use (qore#5712)
     ir_func->releasePlainLocalReadsBeforeWrites();
     if (sig) {
