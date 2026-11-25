@@ -82,6 +82,11 @@ def ar_members(data):
     return members
 
 
+def depfile_prerequisite(path):
+    """Return the canonical path with qcc's depfile escaping."""
+    return str(path.resolve()).replace("\\", "\\\\").replace(" ", "\\ ")
+
+
 class AotPrefixMapsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,11 +134,14 @@ class AotPrefixMapsTest(unittest.TestCase):
                       f"--file-prefix-map={source}={mapped_prefix}",
                       "--file-prefix-map=/literal/source=/must-not-change-literals", *extra,
                       f"--depfile={output}/module.d", "-o", artifact, source if split else module)
-        self.assertIn(str(module).replace(" ", "\\ "), (output / "module.d").read_text())
+        self.assertIn(depfile_prerequisite(module), (output / "module.d").read_text())
         index = json.loads(self.run_tool(QCC, "--dump-index-json", artifact))
         self.assertEqual(mapped_prefix + "/ReproProbe.qm", index["source"])
-        self.assertNotIn(str(source), json.dumps(index))
-        self.assertNotIn(str(source).encode(), artifact.read_bytes())
+        index_json = json.dumps(index)
+        artifact_bytes = artifact.read_bytes()
+        for path in {source, source.resolve()}:
+            self.assertNotIn(str(path), index_json)
+            self.assertNotIn(str(path).encode(), artifact_bytes)
         self.env["QORE_MODULE_DIR"] = str(output)
         result = self.run_tool(QORE, "-l", "ReproProbe", "-e",
             'printf("%d\\n%s\\n%s\\n", repro_value(41), repro_literal(), repro_location());')
@@ -616,7 +624,7 @@ try {
                 self.run_tool(QCC, "-m", f"--file-prefix-map={source}=/usr/src/qore-test",
                               f"--depfile={output}/{module.stem}.d",
                               "-o", output / (module.stem + ".qmod"), module)
-            self.assertIn(str(output / "ReproProvider.qmod"),
+            self.assertIn(depfile_prerequisite(output / "ReproProvider.qmod"),
                           (output / "ReproConsumer.d").read_text())
             source.rename(source.with_suffix(".hidden"))
             deployed = output.with_suffix(".deployed")
@@ -673,11 +681,18 @@ public namespace ReproResource {
         self.assertEqual("deployed value\n", self.run_tool(QORE, "-l", "ReproResource",
             "-e", 'printf("%s\\n", ReproResource::Value);', cwd=self.root))
 
-    def test_cmake_forwards_quoted_and_configuration_maps(self):
+    def test_cmake_qmod_configuration_flags(self):
         source = self.root / "source with spaces"
         source.mkdir()
         module = source / "ReproProbe.qm"
-        module.write_text(HEADER + FUNCTIONS)
+        module.write_text(HEADER + FUNCTIONS + """
+public int sub debug_count() {
+    int count = 0;
+    @assert(++count == 1);
+    @debug(count += 10);
+    return count;
+}
+""")
         (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.20)
 project(AotPrefixMapFixture NONE)
 include("{ROOT}/cmake/QoreMacros.cmake")
@@ -687,18 +702,24 @@ set(QORE_AOT_LINK_SOURCE_MODULES OFF)
 set(QORE_USER_MODULES_DIR share/qore-modules)
 set(QORE_AOT_MODULES_DIR lib/qore-modules)
 set(QORE_QMOD_INSTALL_COMPONENT runtime)
-set(CMAKE_BUILD_TYPE RelWithDebInfo)
 set(CMAKE_CXX_FLAGS [=[-O2 "-ffile-prefix-map={source}=/base"]=])
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO [=[-g "-ffile-prefix-map={source}=/configuration"]=])
 qore_user_module_aot_rules(ReproProbe 0 "{module}" "{module}")
 ''')
         build = self.root / "build"
         cmake = os.environ.get("CMAKE_EXECUTABLE", "cmake")
-        self.run_tool(cmake, "-S", source, "-B", build)
-        self.run_tool(cmake, "--build", build)
         artifact = build / "qlib-qmod/ReproProbe.qmod"
-        self.assertEqual("/configuration/ReproProbe.qm",
-                         json.loads(self.run_tool(QCC, "--dump-index-json", artifact))["source"])
+        self.env["QORE_MODULE_DIR"] = str(artifact.parent)
+        for config, count in (("RelWithDebInfo", "0"), ("Debug", "11"), ("Release", "0")):
+            with self.subTest(config=config):
+                self.run_tool(cmake, "-S", source, "-B", build, f"-DCMAKE_BUILD_TYPE={config}")
+                self.run_tool(cmake, "--build", build, "--config", config)
+                if config == "RelWithDebInfo":
+                    self.assertEqual("/configuration/ReproProbe.qm",
+                                     json.loads(self.run_tool(QCC, "--dump-index-json", artifact))["source"])
+                for flags in ([], ["--enable-debug"]):
+                    self.assertEqual(count, self.run_tool(QORE, *flags, "-l", "ReproProbe", "-e",
+                                                         'printf("%d", debug_count());'))
 
     def test_invalid_maps_and_incremental_modes_fail_before_emission(self):
         for mapping in ("missing-separator", "=empty"):

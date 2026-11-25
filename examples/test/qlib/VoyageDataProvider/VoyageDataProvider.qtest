@@ -185,6 +185,14 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq(True, action.options.return_documents.preselected);
         # verify output type
         assertTrue(action.output_type instanceof VoyageDataProvider::VoyageRerankResponseDataType);
+
+        # embeddings and reranking are stateless inference: the actions declare that they are read-only (qore#7454)
+        foreach string name in ("create-embeddings", "rerank") {
+            action = DataProviderActionCatalog::getAppAction(VoyageDataProvider::VoyageDataProvider::AppName, name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     createEmbeddingsTest() {

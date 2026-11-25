@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# LibD.qm - test module: a module of the module path that a library module's initialization loads by name (qore#7361)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module LibD {
+    version = "1.0";
+    desc = "test library module loaded by name by the initialization of another library module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        LibD::State::own = string sub () { return "D init closure ran"; };
+    };
+}
+
+#! The public definitions of the test module
+public namespace LibD {
+#! The module's state
+public class State {
+    public {
+        #! the closure that the module's initialization created
+        static *code own;
+    }
+}
+
+#! Runs the closure of the module's initialization as deferred module initialization, as library code
+public string sub runOwn() {
+    try {
+        return call_module_init_closure(State::own);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

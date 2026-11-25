@@ -468,7 +468,7 @@ public class WebSocketCloseHandshakeTest inherits QUnit::Test {
     #! Connects a client over HTTP/2 or HTTP/3; its messages, and NOTHING when it closes, are pushed to the queue
     private WebSocketClient tlsConnect(string protocol, int port, Queue queue, *hash<auto> opts) {
         hash<auto> conn_opts = protocol == "h2"
-            ? {"url": "wss://localhost:" + port, "http_version": "2.0"}
+            ? {"url": "wss://127.0.0.1:" + port, "http_version": "2.0"}
             : {"url": "wss://127.0.0.1:" + port, "http3_mode": "required"};
         WebSocketClient wsc(sub (*data msg) {
             queue.push(msg);

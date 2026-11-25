@@ -1,0 +1,165 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  QC_SendRateMonitor.cpp
+
+  Qore Programming Language
+
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+  Note that the Qore library is released under a choice of three open-source
+  licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+  information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_SendRateMonitor.h"
+
+//! Measures the average rate at which a peer takes data while a sender waits for it
+/** A sender reports the bytes that the peer has taken so far with @ref update(); the object tells it when the peer
+    has taken less than the minimum rate over a sliding window.  Only the time that the sender spends waiting for the
+    peer counts, and only the bytes taken in that time, so that a connection with nothing to send is never below the
+    rate.  One object is kept for a connection or stream, across its sends, so that a peer cannot start a new window
+    with each message.
+
+    @par Example:
+    @code{.py}
+SendRateMonitor monitor(1024, 60s);
+    @endcode
+
+    @since %Qore 3.0
+*/
+qclass SendRateMonitor [arg=QoreSendRateMonitor* m; ns=Qore];
+
+//! Creates the object
+/** @param min_rate the minimum average rate in bytes per second; 0 disables the check
+    @param window the length of the sliding window; must be positive unless \a min_rate is 0
+
+    @throw SEND-RATE-ERROR \a min_rate is negative, or \a window is not positive with a non-zero \a min_rate
+*/
+SendRateMonitor::constructor(int min_rate, timeout window) [flags=NAMED_ARGS] {
+    if (min_rate < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the minimum rate " QLLD " is negative", min_rate);
+        return;
+    }
+    if (min_rate > 0 && window <= 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the window of a minimum rate must be positive; got " QLLD " ms",
+            (int64)window);
+        return;
+    }
+    self->setPrivate(CID_SENDRATEMONITOR, new QoreSendRateMonitor(min_rate, window));
+}
+
+//! Copies the object, with its current state
+/** @return a new object with the same settings and the same state of the window
+*/
+SendRateMonitor::copy() {
+    self->setPrivate(CID_SENDRATEMONITOR, new QoreSendRateMonitor(*m));
+}
+
+//! Records the state of the send on the monotonic clock
+/** @param total_bytes the bytes that the peer has taken so far; a negative value means that the count is not known,
+    which is no progress
+    @param waiting @ref True if the sender waits for the peer from now on
+
+    @return @ref True if the peer took less than the minimum rate over a whole window of waiting
+*/
+bool SendRateMonitor::update(int total_bytes, bool waiting) [flags=NAMED_ARGS] {
+    return m->update(total_bytes, waiting, q_clock_getmicros_monotonic() / 1000);
+}
+
+//! Records the state of the send at a given time
+/** @param total_bytes the bytes that the peer has taken so far; a negative value means that the count is not known,
+    which is no progress
+    @param waiting @ref True if the sender waits for the peer from now on
+    @param now_ms the current time on a monotonic clock in milliseconds
+
+    @return @ref True if the peer took less than the minimum rate over a whole window of waiting
+*/
+bool SendRateMonitor::update(int total_bytes, bool waiting, int now_ms) [flags=NAMED_ARGS] {
+    return m->update(total_bytes, waiting, now_ms);
+}
+
+//! Forgets the state of the window
+/** The settings are kept; the next update starts a new window
+*/
+SendRateMonitor::reset() {
+    m->reset();
+}
+
+//! Makes the check allow for a transport that shows the peer's progress only in steps, such as TCP
+/** A TCP receiver opens its window in large steps, so a sender can see no progress for a long time from a peer that
+    reads steadily at a low rate.  After this call the check is a credit: each byte that the peer takes buys the time
+    that it takes at the minimum rate, and waiting uses it up.  The credit holds one step at the minimum rate (the
+    most seen from the peer in one update or one second, from 128 KiB to 8 MiB, for at most 10 minutes) and at least
+    one window.  A caller must act on a verdict of @ref True, also from the update that ends a wait.  A peer that stays
+    below the minimum rate always runs out of credit.
+
+    @since %Qore 3.0
+*/
+SendRateMonitor::enableProgressSteps() {
+    m->enableProgressSteps();
+}
+
+//! Sets the most waiting time that one update can charge to the peer when the check allows for progress in steps
+/** A sender that waits calls @ref update() at least every @ref getCheckInterval() milliseconds, so a longer time between
+    two updates is a delay of the sender itself, such as a stopped or overloaded process, and is not the peer's.
+
+    @param ms the most time in milliseconds that one update can charge; 0 means no limit
+
+    @throw SEND-RATE-ERROR \a ms is negative
+
+    @since %Qore 3.0
+*/
+SendRateMonitor::setMaxWaitCharge(int ms) {
+    if (ms < 0) {
+        xsink->raiseException("SEND-RATE-ERROR", "the maximum wait charge " QLLD " is negative", ms);
+        return QoreValue();
+    }
+    m->setMaxWaitCharge(ms);
+}
+
+//! Returns the minimum rate in bytes per second
+/** @return the minimum rate in bytes per second; 0 if the check is disabled
+*/
+int SendRateMonitor::getMinRate() [flags=CONSTANT] {
+    return m->get().getMinRate();
+}
+
+//! Returns the length of the window in milliseconds
+/** @return the length of the window in milliseconds
+*/
+int SendRateMonitor::getWindow() [flags=CONSTANT] {
+    return m->get().getWindowMs();
+}
+
+//! Returns the longest time in milliseconds that a waiting sender should wait before it calls @ref update() again
+/** @return the longest time to wait between updates in milliseconds, at least 1
+*/
+int SendRateMonitor::getCheckInterval() [flags=CONSTANT] {
+    return m->get().getCheckIntervalMs();
+}
+
+//! Returns @ref True if the check is enabled
+/** @return @ref True if a minimum rate and a window are set
+*/
+bool SendRateMonitor::enabled() [flags=CONSTANT] {
+    return m->get().enabled();
+}

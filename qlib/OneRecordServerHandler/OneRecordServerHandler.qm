@@ -175,6 +175,18 @@ module OneRecordServerHandler {
     }
     @endcode
 
+    @subsection onerecordserverhandlerrestricted Handlers Constructed by Restricted Code
+
+    Code restricted from the @ref Qore::Functional-Domains "NETWORK" functional domain may construct a handler, but
+    may not create the connection manager that delivers notifications to subscribers.  The handler creates it only
+    when a subscription with a callback URL is created; a handler that cannot create it refuses the subscription with
+    HTTP status 501.  A host that lets such code construct a handler creates the manager in its own context, with
+    @ref OneRecordServerHandler::OneRecordServerHandler::getNotificationConnectionManagerOptions()
+    "getNotificationConnectionManagerOptions()", and gives it to the handler with
+    @ref OneRecordServerHandler::OneRecordServerHandler::setNotificationConnectionManager()
+    "setNotificationConnectionManager()".  The callback URLs come from the subscribers, so the sandbox that governs
+    the delivering code still applies to every connection.
+
     @section onerecordserverhandlerrelnotes OneRecordServerHandler Release Notes
 
     @subsection onerecordserverhandlerv1_0 OneRecordServerHandler v1.0

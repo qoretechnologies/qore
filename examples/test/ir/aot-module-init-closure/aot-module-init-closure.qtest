@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes
+# test-platform: macos - the loading of qcc-compiled modules and the initialization of their native code
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class AotModuleInitClosureTest
+
+#! A closure created by the initialization of a library module qualifies as a module-init closure, also for a module
+#! compiled with qcc (qore#7335)
+/** use.q checks which closures qualify (is_module_init_closure()) and can run as deferred module initialization
+    (call_module_init_closure()): the closure that InitA's initialization created and the closure that the initializer
+    of one of its static variables created qualify; a closure that InitA's code creates after its initialization, a
+    closure that InitA's code creates during the initialization of InitB, and the closures of the loading Program
+    and of a Program with a SandboxManager that loads InitA after it do not.  The output must be the same with the
+    modules loaded from source and as modules compiled by qcc at -O0 and -O3, alone in a directory of the module
+    path, in the ast, ir, jit and tiered modes, and on the IR tier of the tiered mode with the modules loaded from
+    source.
+*/
+class AotModuleInitClosureTest inherits QUnit::Test {
+    public {
+        #! the execution modes
+        const Modes = ("ast", "ir", "jit", "tiered");
+
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+
+        #! the environment of a run in which every function is compiled at its first call
+        const CompileEnv = "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1";
+
+        #! the modules of the test
+        const Modules = ("InitA", "InitB");
+
+        #! the output of use.q
+        const Expected = "init closure qualifies: True
+init closure run: \"init closure ran\"
+static closure qualifies: True
+late closure qualifies: False
+late closure run: MODULE-INIT-CLOSURE-ERROR
+closure of another module's code qualifies: False
+closure of the module's own initialization qualifies: True
+the loader's closure qualifies: False
+child: init closure qualifies: True
+child: static closure qualifies: True
+child: late closure qualifies: False
+child: its closure qualifies: False
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the runs
+        string lib_env;
+        #! the module path of the runs, after the directory of the test's modules
+        string module_path;
+    }
+
+    constructor() : QUnit::Test("AotModuleInitClosureTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        module_path = ENV.QORE_MODULE_DIR ?? "";
+        addTestCase("closures of the initialization of a module from source or compiled by qcc", \closureTest());
+        addTestCase("the closures of a module that a library module's initialization loads by its path do not "
+            "qualify", \pathLoadTest());
+        set_return_value(main());
+    }
+
+    closureTest() {
+        TmpDir dir("qore-aot-module-init-closure-");
+        string src_dir = join_paths(dir.path, "src");
+        mkdir(src_dir);
+        foreach string m in (Modules) {
+            copy_file(get_script_dir() + "/" + m + ".qm", join_paths(src_dir, m + ".qm"));
+        }
+        string script = join_paths(dir.path, "use.q");
+        copy_file(get_script_dir() + "/use.q", script);
+
+        # the modules from source, then each compiled module alone in a directory of the module path
+        hash<string, string> dirs = {"source": src_dir};
+        foreach string opt in (OptLevels) {
+            string aot_dir = join_paths(dir.path, "aot" + opt);
+            mkdir(aot_dir);
+            foreach string m in (Modules) {
+                int rc;
+                string output = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s --module -o %s %s 2>&1", lib_env,
+                    modulePath(src_dir), qcc_bin, opt, join_paths(aot_dir, m + ".qmod"),
+                    join_paths(src_dir, m + ".qm")), \rc);
+                assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opt, m, output.substr(-2000)));
+            }
+            dirs{"qmod " + opt} = aot_dir;
+        }
+
+        foreach hash<auto> i in (dirs.pairIterator()) {
+            string env = sprintf("%s QORE_MODULE_DIR=%s", lib_env, modulePath(i.value));
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b "
+                    "--enable-debug --exec-mode=%s %s", env, CompileEnv, qore_bin, mode, script));
+                string label = sprintf("%s, %s", i.key, mode);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(Expected, r.stdout, label);
+            }
+            # the IR tier of the tiered mode is a tier of code that the run parses: the Program of a compiled module
+            # runs the module's code as native code, also a closure of the module when it is called, so only the
+            # modules loaded from source run on it
+            if (i.key == "source") {
+                assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered "
+                    "%s", env, qore_bin, script)), i.key + ", IR tier");
+            }
+        }
+    }
+
+    # StaleA, a library module from source or compiled by qcc, loads StaleC, compiled by qcc, by its path outside the
+    # module path in its initialization: the closure that StaleC's initialization creates does not qualify; the
+    # barrier under which a compiled StaleA is initialized names StaleA's Program, so the load of StaleC under it does
+    # not record StaleC's (qore#7335)
+    pathLoadTest() {
+        TmpDir dir("qore-aot-module-init-closure-path-");
+        string src_dir = join_paths(dir.path, "src");
+        mkdir(src_dir);
+        copy_file(get_script_dir() + "/StaleA.qm", join_paths(src_dir, "StaleA.qm"));
+        # outside the module path
+        string c_dir = join_paths(dir.path, "outside");
+        mkdir(c_dir);
+        copy_file(get_script_dir() + "/StaleC.qm", join_paths(c_dir, "StaleC.qm"));
+        string c_qmod = join_paths(c_dir, "StaleC.qmod");
+        int rc;
+        string output = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -O0 --module -o %s %s 2>&1", lib_env,
+            module_path, qcc_bin, c_qmod, join_paths(c_dir, "StaleC.qm")), \rc);
+        assertEq(0, rc, "qcc StaleC: " + output.substr(-2000));
+        string script = join_paths(dir.path, "stale.q");
+        copy_file(get_script_dir() + "/stale.q", script);
+
+        hash<string, string> dirs = {"source": src_dir};
+        foreach string opt in (OptLevels) {
+            string aot_dir = join_paths(dir.path, "aot" + opt);
+            mkdir(aot_dir);
+            output = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s --module -o %s %s 2>&1", lib_env,
+                modulePath(src_dir), qcc_bin, opt, join_paths(aot_dir, "StaleA.qmod"),
+                join_paths(src_dir, "StaleA.qm")), \rc);
+            assertEq(0, rc, sprintf("qcc %s StaleA: %s", opt, output.substr(-2000)));
+            dirs{"qmod " + opt} = aot_dir;
+        }
+
+        string expected = "A init closure qualifies: True\nC init closure qualifies: False\n";
+        foreach hash<auto> i in (dirs.pairIterator()) {
+            string env = sprintf("%s STALE_C_PATH=%s QORE_MODULE_DIR=%s", lib_env, c_qmod, modulePath(i.value));
+            foreach string mode in (Modes) {
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s %s -b "
+                    "--enable-debug --exec-mode=%s %s", env, CompileEnv, qore_bin, mode, script));
+                string label = sprintf("StaleA %s, %s", i.key, mode);
+                assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", label, r.out));
+                assertEq(expected, r.stdout, label);
+            }
+        }
+    }
+
+    #! returns the module path of a run with the test's modules in the given directory
+    private string modulePath(string dir) {
+        return module_path ? dir + ":" + module_path : dir;
+    }
+}

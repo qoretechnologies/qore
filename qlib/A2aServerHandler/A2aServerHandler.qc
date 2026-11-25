@@ -154,15 +154,18 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         hash<string, hash<A2aAgentExtension>> extension_map;
 
         #! Connection manager delivering push notifications to webhooks
-        /** Connections are reused across deliveries to the same webhook host; cookies are not kept
+        /** Connections are reused across deliveries to the same webhook host; cookies are not kept.  It is created
+            when a client first registers a push notification config (@ref getPushConnectionManager()), or set by the
+            host (@ref setPushConnectionManager()), never by the constructor: code restricted from the
+            @ref Qore::Functional-Domains "NETWORK" functional domain may not create a connection manager, and such
+            code may still construct a handler whose agent card offers no push notifications.
 
             @since A2aServerHandler 1.0
         */
-        HttpClientIo::HttpClientConnectionManager push_mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
-            "connect_timeout": PushNotificationTimeoutMs,
-            "request_timeout": PushNotificationTimeoutMs,
-            "enable_cookies": False,
-        });
+        *HttpClientIo::HttpClientConnectionManager push_mgr;
+
+        #! Serializes the creation and setting of @ref push_mgr
+        Mutex push_mgr_lock();
     }
 
     #! Creates the handler with a logger, agent card, and authenticator
@@ -874,6 +877,15 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         if (!params.pushNotificationConfig) {
             return makeJsonRpcError(A2A_ERR_INVALID_ARGUMENT, "Missing 'pushNotificationConfig' parameter");
         }
+        # a config is accepted only when its notifications can be delivered: the manager is created now, so a
+        # handler whose code may not create one, and that the host gave none, refuses the config instead of failing
+        # each delivery later
+        try {
+            getPushConnectionManager();
+        } catch (hash<ExceptionInfo> ex) {
+            return makeJsonRpcError(A2A_ERR_PUSH_NOTIFICATION_NOT_SUPPORTED, sprintf("push notifications cannot be "
+                "delivered by this agent: %s: %s", ex.err, ex.desc));
+        }
 
         AutoWriteLock al(rwl);
         if (!task_map{params.id}) {
@@ -1335,6 +1347,56 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         return value ? {A2aExtensionsHeader: value} : {};
     }
 
+    #! Returns the options of the connection manager that delivers push notifications
+    /** A host that builds the manager itself (@ref setPushConnectionManager()) uses these options, so that its
+        deliveries behave as the handler's own: the push notification timeout and no cookies.
+
+        @return the options of the push notification connection manager
+
+        @since A2aServerHandler 1.0
+    */
+    static hash<HttpClientIo::HttpClientConnectionManagerOptions> getPushConnectionManagerOptions() {
+        return <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "connect_timeout": PushNotificationTimeoutMs,
+            "request_timeout": PushNotificationTimeoutMs,
+            "enable_cookies": False,
+        };
+    }
+
+    #! Sets the connection manager that delivers push notifications
+    /** For a handler constructed by code that may not create a connection manager (code restricted from the
+        @ref Qore::Functional-Domains "NETWORK" functional domain): the host creates the manager in its own context
+        (with @ref getPushConnectionManagerOptions()) and gives it to the handler.  The webhook URLs come from the
+        agent's clients, so the sandbox that governs the delivering code still applies to every connection the
+        manager makes; the manager only lets the handler deliver at all.
+
+        @param mgr the connection manager
+
+        @throw A2A-SERVER-ERROR the handler already has a connection manager
+
+        @since A2aServerHandler 1.0
+    */
+    setPushConnectionManager(HttpClientIo::HttpClientConnectionManager mgr) {
+        AutoLock al(push_mgr_lock);
+        if (push_mgr) {
+            throw "A2A-SERVER-ERROR", "the handler already has a push notification connection manager";
+        }
+        push_mgr = mgr;
+    }
+
+    #! Returns the connection manager that delivers push notifications, creating it if the host set none
+    /** @throw PERMISSION-DENIED the calling code may not create a connection manager and the host set none
+
+        @since A2aServerHandler 1.0
+    */
+    private HttpClientIo::HttpClientConnectionManager getPushConnectionManager() {
+        AutoLock al(push_mgr_lock);
+        if (!push_mgr) {
+            push_mgr = new HttpClientIo::HttpClientConnectionManager(getPushConnectionManagerOptions());
+        }
+        return push_mgr;
+    }
+
     #! Sends push notifications for a task event
     private sendTaskPushNotification(string task_id, string event_type, hash<auto> event_data) {
         *list<hash<auto>> configs;
@@ -1372,8 +1434,8 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
                     hdr.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", url_info.username,
                         url_info.password ?? ""));
                 }
-                hash<auto> resp = push_mgr.request(config.url, "POST", get_http_request_target(config.url), hdr,
-                    body_cache{version});
+                hash<auto> resp = getPushConnectionManager().request(config.url, "POST",
+                    get_http_request_target(config.url), hdr, body_cache{version});
                 if (resp.status_code < 200 || resp.status_code >= 300) {
                     error("Push notification delivery failed for task %y to %y: HTTP status code %d received: "
                         "message: %s", task_id, get_safe_url(config.url), resp.status_code,

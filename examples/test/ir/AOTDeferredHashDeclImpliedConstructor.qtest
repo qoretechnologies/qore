@@ -251,7 +251,9 @@ int main(int argc, char** argv) {
         return 2;
     }
     qore_init(QL_GPL, \"UTF-8\", true);
-    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    // the objects are compiled with %allow-debugger, and main() constructs a DebugProgram subclass: the Program must
+    // allow the debugger domain, as an AOT object does not grant its Program the options it was compiled with
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS | PO_ALLOW_DEBUGGER);
     if (!pgm) {
         qore_cleanup();
         return 1;

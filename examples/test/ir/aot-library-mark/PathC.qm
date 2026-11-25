@@ -1,0 +1,42 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# PathC.qm - test module: a module loaded by its path, outside the module path, by the initialization of a library
+# module (qore#7361)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module PathC {
+    version = "1.0";
+    desc = "test module loaded by its path by the initialization of a library module; it is not library code";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        PathC::State::own = string sub () { return "C init closure ran"; };
+    };
+}
+
+#! The public definitions of the test module
+public namespace PathC {
+#! The module's state
+public class State {
+    public {
+        #! the closure that the module's initialization created
+        static *code own;
+    }
+}
+
+#! Returns True if the closure of the module's initialization qualifies as a module-init closure
+public bool sub ownQualifies() {
+    return is_module_init_closure(State::own);
+}
+
+#! Runs a closure as deferred module initialization, which only library code may do
+public string sub runInit(code c) {
+    try {
+        return call_module_init_closure(c);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

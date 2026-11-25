@@ -304,7 +304,8 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         }
         if (rt == NT_OBJECT) {
             QoreObject* r = rh->get<QoreObject>();
-            ReferenceHolder<QoreHashNode> rv(qore_hash_private::get(*l)->copy(true), xsink);
+            // a new value, which can be changed also when the hash was freed (qore#7199)
+            ReferenceHolder<QoreHashNode> rv(qore_hash_private::get(*l)->copyValue(true), xsink);
             SafeDerefHelper sdh(xsink);
             qore_object_private::get(*r)->mergeDataToHash(*rv, sdh, xsink);
             if (*xsink)

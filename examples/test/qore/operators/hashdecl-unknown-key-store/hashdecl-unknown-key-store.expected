@@ -1,0 +1,13 @@
+parameter, constant key: INVALID-MEMBER: 'z' is not a registered member of hashdecl 'HD'
+parameter, dynamic key: INVALID-MEMBER: 'z' is not a registered member of hashdecl 'HD'
+untyped parameter: INVALID-MEMBER: 'z' is not a registered member of hashdecl 'HD'
+known key: {a: 5}
+plain local, constant key: INVALID-MEMBER: 'y' is not a registered member of hashdecl 'HD'
+plain local, dynamic key: INVALID-MEMBER: 'y' is not a registered member of hashdecl 'HD'
+plain local: {a: 7}
+local, constant key: INVALID-MEMBER: 'y' is not a registered member of hashdecl 'HD'
+local, dynamic key: INVALID-MEMBER: 'y' is not a registered member of hashdecl 'HD'
+member, constant key: INVALID-MEMBER: 'z' is not a registered member of hashdecl 'HD'
+member, dynamic key: INVALID-MEMBER: 'y' is not a registered member of hashdecl 'HD'
+merge: HASHDECL-KEY-ERROR: cannot assign unknown key 'y' to hashdecl 'HD'
+unchanged: {a: 1}, {a: 1}, {a: 1}

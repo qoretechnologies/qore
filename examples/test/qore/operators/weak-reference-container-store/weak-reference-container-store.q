@@ -1,7 +1,8 @@
 %modern
 %allow-weak-references
 # writes through a local that holds a weak reference to a list or a hash change the container that the weak
-# reference designates, in every mode (qore#7299); every mode must print the output of the AST interpreter
+# reference designates, in every mode (qore#7299), as do remove and delete (qore#7306); every mode must print the
+# output of the AST interpreter
 
 sub lists() {
     list<int> src = (1, 2);

@@ -1,0 +1,33 @@
+# valgrind suppressions for the Qore tests
+#
+# run_tests.sh passes this file to every valgrind that a test starts (VALGRIND_OPTS); give it to a manual run with
+# --suppressions=examples/test/valgrind.supp.  An entry suppresses a report in a library that Qore uses, which is not
+# an error of Qore, and names the exact frames of the report, never a whole library: a report of Qore's own code is
+# never suppressed (see examples/test/qore/misc/valgrind-suppressions.qtest, which checks that a read of a value that
+# was never written and a use-after-free in Qore's code, and a value that was never written that Qore's code passes to
+# an LLVM call, are still reported).
+#
+# LLVM 21 (libLLVM.so.21.1, Ubuntu's build, arm64), with valgrind 3.22.0 (also with --expensive-definedness-checks=yes):
+# every optimized JIT compile reports "Conditional jump or move depends on uninitialised value(s)" in the two frames
+# below.  Both are reproduced by a program that makes only the calls of Qore's JIT (optimizeModule() and the code
+# emission of lib/QoreJIT.cpp) on a module of one function, with no Qore code:
+#   - buildModuleSimplificationPipeline(): the uninitialised bytes are the payload of PassBuilder::PGOOpt, an empty
+#     std::optional<PGOOptions> (found by marking each region of a zero-filled PassBuilder undefined with
+#     VALGRIND_MAKE_MEM_UNDEFINED); the source tests that the optional has a value before it reads it, and the arm64
+#     code reads the payload with the test in a conditional compare (ccmp), which memcheck does not track exactly (as
+#     in https://bugs.kde.org/show_bug.cgi?id=485276)
+#   - emitPatchableFunctionEntries(): the uninitialised value is a local variable of the function itself
+# The JIT runs in tests that check other code under valgrind whenever a Program compiles code (ex: tiered execution),
+# so that such a test failed with these reports (enum-decl-copy-outlives-original.qtest).
+{
+   llvm21-passbuilder-pgoopt-arm64-ccmp
+   Memcheck:Cond
+   fun:_ZN4llvm11PassBuilder33buildModuleSimplificationPipelineENS_17OptimizationLevelENS_18ThinOrFullLTOPhaseE
+   fun:_ZN4llvm11PassBuilder29buildPerModuleDefaultPipelineENS_17OptimizationLevelENS_18ThinOrFullLTOPhaseE
+}
+{
+   llvm21-asmprinter-patchable-function-entries
+   Memcheck:Cond
+   fun:_ZN4llvm10AsmPrinter28emitPatchableFunctionEntriesEv
+   fun:_ZN4llvm10AsmPrinter16emitFunctionBodyEv
+}

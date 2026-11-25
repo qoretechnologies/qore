@@ -356,6 +356,19 @@ AbstractHttpSocketHandler sub get_sse_handler(Queue to_host) {
 }
 ";
 
+        #! the class of the state of a handler socket, which the class of the handler socket of the module refers to
+        #! (qore#7305); a handler socket made without one has none
+        const StateStub = "
+class HandlerSocketState {
+    markStreamResponseStarted() {
+    }
+
+    bool isStreamResponseStarted() {
+        return False;
+    }
+}
+";
+
         #! a socket that stands for the listener's: the graceful end of a stream fails once the test releases it;
         #! with the class of the handler socket, a shutdown() whose graceful end fails while a close() is called
         const RaceSource = "
@@ -727,7 +740,7 @@ list<string> sub run_race() {
         *string cls = (src =~ x/(\nclass Http3HandlerSocket inherits Qore::Socket \{.*?\n\}\n)/s)[0];
         assertTrue(exists cls, "the class is found in the module");
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
-        p.parse("%modern\n" + cls + RaceSource, "race");
+        p.parse("%modern\n" + cls + StateStub + RaceSource, "race");
         # the graceful end is tried once, and the stream is cancelled
         assertEq(("shutdown: QUIC-HTTP3-ERROR", "end", "cancel", "closed"), p.callFunction("run_race"));
     }
@@ -763,7 +776,7 @@ list<string> sub run_race() {
             "    string getEncoding() {\n        auto o = target;\n        stolen = o.real;\n        return \"x\";\n"
             + "    }");
         string tenant_src = "%modern\n%requires HttpServer\n%requires HttpServerUtil\n"
-            "our auto target;\nour auto stolen;\n" + cls + "
+            "our auto target;\nour auto stolen;\n" + cls + StateStub + "
 class LookAlikeHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {

@@ -184,6 +184,8 @@ namespace Priv {
             "short_desc": "List available MCP tools",
             "desc": "List all tools available on the MCP server",
             "action_code": DPAT_API,
+            # the list, read, get, completion and ping requests of the MCP protocol only read (qore#7454)
+            "mutates_state": False,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -194,6 +196,7 @@ namespace Priv {
             "short_desc": "Read an MCP resource",
             "desc": "Read content from an MCP resource by URI",
             "action_code": DPAT_API,
+            "mutates_state": False,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -204,6 +207,7 @@ namespace Priv {
             "short_desc": "List available MCP resources",
             "desc": "List all resources available on the MCP server",
             "action_code": DPAT_API,
+            "mutates_state": False,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -214,6 +218,7 @@ namespace Priv {
             "short_desc": "Get an MCP prompt",
             "desc": "Get a prompt template from the MCP server with arguments",
             "action_code": DPAT_API,
+            "mutates_state": False,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -224,6 +229,7 @@ namespace Priv {
             "short_desc": "List available MCP prompts",
             "desc": "List all prompts available on the MCP server",
             "action_code": DPAT_API,
+            "mutates_state": False,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -234,6 +240,7 @@ namespace Priv {
             "short_desc": "Get autocompletion suggestions",
             "desc": "Get autocompletion suggestions for prompts or resources",
             "action_code": DPAT_API,
+            "mutates_state": False,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -244,6 +251,7 @@ namespace Priv {
             "short_desc": "Check server connectivity",
             "desc": "Ping the MCP server to verify connectivity",
             "action_code": DPAT_API,
+            "mutates_state": False,
         });
     }
 }

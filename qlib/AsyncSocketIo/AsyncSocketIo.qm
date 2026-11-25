@@ -116,7 +116,9 @@ module AsyncSocketIo {
     - new @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext",
       @ref AsyncSocketIo::AsyncHttp2ServerStream "AsyncHttp2ServerStream" and
       @ref AsyncSocketIo::NotifierPollOperation "NotifierPollOperation" classes for HTTP/2 and HTTP/3 streams and
-      event notifiers
+      event notifiers; @ref AsyncSocketIo::AbstractStreamContext::abort() "AbstractStreamContext::abort()" resets a
+      stream and releases the data not yet sent, for a connection that is dropped
+      (<a href="https://github.com/qoretechnologies/qore/issues/7325">issue 7325</a>)
 
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - initial release

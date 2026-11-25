@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes with a default encoding of their own, each in the execution mode it sets or compiled with qcc
+# test-platform: macos - AOT code generation and linking with qcc, and iconv encodings
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class AotNonAsciiTextTest
+
+#! Non-ASCII text that an escape gives in a string literal or a constant hash key, in each process encoding (#6840)
+/** The scanner encodes a character that an escape (<tt>\\u00e9</tt>) gives in the encoding of the parse.  qcc parses in
+    UTF-8, and a compiled program runs in the default encoding of its process: in a process whose encoding is not
+    UTF-8, a literal and a constant hash key of a compiled program had the UTF-8 bytes of the character with the
+    encoding of the process, so that a key that the program inserted at run time was not found.  Each child checks
+    reads, writes, exists, remove, hash literals, constants and the specialized hash operations of compiled code (an
+    integer expression, a map, a select and a map of two keys) with a key that it inserts at run time, in each
+    default encoding, in the default execution mode, in each execution mode, and compiled with qcc at -O0 and -O3.
+*/
+class AotNonAsciiTextTest inherits QUnit::Test {
+    private {
+        #! the script that each child runs
+        const Script = "%modern
+string k = binary_to_string(<e9>, \"ISO-8859-1\");
+hash<auto> h = {k: 1};
+printf(\"read: %y\\n\", h{\"\\u00e9\"});
+printf(\"truthy: %y\\n\", h{\"\\u00e9\"} ? True : False);
+string a = \"\\u00e9\";
+printf(\"value: %y %s\\n\", a == k, make_hex_string(binary(convert_encoding(a, \"UTF-8\"))));
+printf(\"computed: %y\\n\", h{a});
+hash<auto> w = {k: 1};
+w{\"\\u00e9\"} = 2;
+printf(\"write: %y %d\\n\", w{k}, w.size());
+printf(\"exists: %y\\n\", exists w{\"\\u00e9\"});
+printf(\"remove: %y %d\\n\", remove w{\"\\u00e9\"}, w.size());
+hash<auto> l = {\"\\u00e9\": 3, \"b\": 4};
+printf(\"literal: %y %y\\n\", l{k}, l.b);
+const C = \"\\u00e9\";
+printf(\"constant: %y\\n\", h{C});
+int sub ie(hash<auto> x) { return x{\"\\u00e9\"} + x.b; }
+printf(\"int expression: %y\\n\", ie({k: 5, \"b\": 6}));
+list<auto> sub mk(list<hash<auto>> v) { return map $1{\"\\u00e9\"}, v; }
+printf(\"map: %y\\n\", mk(({k: 7}, {k: 8})));
+list<auto> sub sel(list<hash<auto>> v) { return select v, $1{\"\\u00e9\"} > 7; }
+printf(\"select: %d\\n\", sel(({k: 7}, {k: 8})).size());
+list<auto> sub two(list<hash<auto>> v) { return map ($1{\"\\u00e9\"}, $1.b), v; }
+printf(\"two keys: %y\\n\", two(({k: 1, \"b\": 2},)));
+float sub fe(hash<auto> x) { return x{\"\\u00e9\"} + 0.5; }
+printf(\"float expression: %y\\n\", fe({k: 5.0}));
+string sub se(hash<auto> x) { return x{\"\\u00e9\"} + \"!\"; }
+printf(\"string expression: %y\\n\", se({k: \"a\"}));
+hash<auto> sub rm(hash<auto> x) { return {\"\\u00e9\": x.b, \"c\": x{\"\\u00e9\"}}; }
+hash<auto> r = rm({k: 1, \"b\": 2});
+printf(\"remap: %y %y\\n\", r{k}, r.c);
+printf(\"done\\n\");
+";
+
+        #! the lines that each child prints
+        const Expected = (
+            "read: 1",
+            "truthy: True",
+            "value: True c3a9",
+            "computed: 1",
+            "write: 2 1",
+            "exists: True",
+            "remove: 2 0",
+            "literal: 3 4",
+            "constant: 1",
+            "int expression: 11",
+            "map: [7, 8]",
+            "select: 1",
+            "two keys: [[1, 2]]",
+            "float expression: 5.5",
+            "string expression: \"a!\"",
+            "remap: 2 1",
+            "done",
+        );
+
+        #! the default encodings of the child processes
+        const Encodings = ("ISO-8859-1", "UTF-8");
+    }
+
+    constructor() : QUnit::Test("AotNonAsciiTextTest", "1.0", \ARGV) {
+        addTestCase("interpreted", \interpretedTest());
+        addTestCase("compiled with qcc", \compiledTest());
+        set_return_value(main());
+    }
+
+    interpretedTest() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        TmpDir tmp("qore-aot-non-ascii-text-");
+        string script = writeScript(tmp.path);
+        foreach string encoding in (Encodings) {
+            foreach *string mode in ((NOTHING,) + ExecModeHarness::ExecModes) {
+                string opts = mode ? "--exec-mode=" + mode : "";
+                string out = run(sprintf("QORE_CHARSET=%s %s %s %s", encoding, qore_bin, opts, script));
+                check(out, sprintf("%s %s", encoding, mode ?? "default"));
+            }
+        }
+    }
+
+    compiledTest() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        string qore_bin = TestInterpreter::qore_interpreter();
+        TmpDir tmp("qore-aot-non-ascii-text-");
+        string script = writeScript(tmp.path);
+        foreach string level in (("-O0", "-O3")) {
+            string exe = sprintf("%s%scheck%s", tmp.path, DirSep, level);
+            string out = run(sprintf("%s %s -o %s %s", qcc, level, exe, script));
+            if (!is_file(exe)) {
+                assertTrue(False, sprintf("qcc %s failed: %s", level, out));
+                continue;
+            }
+            foreach string encoding in (Encodings) {
+                out = run(sprintf("QORE_CHARSET=%s QORE_BINARY=%s %s", encoding, qore_bin, exe));
+                check(out, sprintf("%s qcc %s", encoding, level));
+            }
+        }
+    }
+
+    private string writeScript(string dir) {
+        string script = dir + DirSep + "check.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+        return script;
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private check(string out, string label) {
+        list<string> lines = (map $1, out.split("\n"), $1 != "" && $1 !~ /warning encountered|BINARY-MODULE|^next warning/);
+        assertEq(Expected, lines, label);
+    }
+}

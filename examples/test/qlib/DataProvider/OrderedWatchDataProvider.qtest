@@ -13,9 +13,13 @@
 class RecordingObserver inherits DataProvider::Observer {
     public {
         list<hash<auto>> events = ();
+        *string refuse_id;
     }
 
     update(string event_id, hash<auto> data_) {
+        if (refuse_id == data_.id && exists refuse_id) {
+            throw "OBSERVER-REFUSED", sprintf("refused item %y", refuse_id);
+        }
         push events, data_ + {"event_id": event_id};
     }
 
@@ -315,7 +319,7 @@ public class OrderedWatchDataProviderTest inherits QUnit::Test {
         RecordingObserver obs();
         provider.registerObserver(obs);
         provider.feed = ({"id": "c", "order_key": 30}, {"id": "b", "order_key": 20}, {"id": "a", "order_key": 10});
-        provider.fail_on = "b";
+        obs.refuse_id = "b";
 
         hash<WatchCycleInfo> info = provider.runCycle();
         assertEq(1, info.dispatched, "only the item before the failure was dispatched");
@@ -326,7 +330,7 @@ public class OrderedWatchDataProviderTest inherits QUnit::Test {
         assertEq(("a",), provider.post_success, "the post-success hook did not run for the failed item");
 
         # the failed item and everything after it is retried once the failure clears
-        provider.fail_on = NOTHING;
+        obs.refuse_id = NOTHING;
         assertEq(2, provider.runCycle().dispatched, "the failed item and its successors are retried");
         assertEq(("a", "b", "c"), obs.getIds(), "the retry preserves ascending order");
         assertEq(30, provider.cursor);

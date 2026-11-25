@@ -1,0 +1,33 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitFramesB.qm - test module: a module that the initialization of InitFramesA loads by its path (qore#7289)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires InitFramesProbe
+
+module InitFramesB {
+    version = "1.0";
+    desc = "test module loaded by the initialization of another module";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace InitFramesB {
+public class InitFramesB {
+    public {
+        #! the Program that the frame of a call that the initialization makes names
+        static int at_init = InitFramesProbe::Probe::callerPgm();
+    }
+
+    static int getAtInit() {
+        return at_init;
+    }
+
+    #! the Program that the frame of a call that the module's code makes names: the module's
+    static int later() {
+        return InitFramesProbe::Probe::callerPgm();
+    }
+}
+}

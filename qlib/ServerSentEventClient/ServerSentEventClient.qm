@@ -140,6 +140,9 @@ sse.observersReady();
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
+    - a successful ping of a @ref ServerSentEventClient::ServerSentEventConnection "ServerSentEventConnection" marks the
+      connection up with the status \c "OK"; the status stayed \c "not checked"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)

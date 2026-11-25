@@ -136,9 +136,9 @@ public class GeminiThinkingConfigDataType inherits HashDataType {
         const Fields = {
             "thinkingLevel": {
                 "display_name": "Thinking Level",
-                "short_desc": "Reasoning effort for Gemini 3 models",
-                "desc": "Choose reasoning depth for Gemini 3.x. Omit to use the model default. Supported levels "
-                    "depend on the model; `MINIMAL` does not fully disable thinking. Use `thinkingBudget` on 2.5.",
+                "short_desc": "Reasoning effort for Gemini 3 and 4 models",
+                "desc": "Choose reasoning depth for Gemini 3.x and 4.x. Omit to use the model default. Levels "
+                    "depend on the model. Gemini 4 maps MINIMAL to LOW. Hydrogen and Neon support XHIGH.",
                 "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "LOW",
                 "allowed_values": (
@@ -146,12 +146,13 @@ public class GeminiThinkingConfigDataType inherits HashDataType {
                     <AllowedValueInfo>{"value": "LOW", "display_name": "Low"},
                     <AllowedValueInfo>{"value": "MEDIUM", "display_name": "Medium"},
                     <AllowedValueInfo>{"value": "HIGH", "display_name": "High"},
+                    <AllowedValueInfo>{"value": "XHIGH", "display_name": "Extra High"},
                 ),
             },
             "thinkingBudget": {
                 "display_name": "Thinking Budget",
                 "short_desc": "Legacy reasoning token budget for Gemini 2.5",
-                "desc": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x; set `thinkingLevel` "
+                "desc": "Reasoning token budget for Gemini 2.5. Omitted on Gemini 3.x and 4.x; set `thinkingLevel` "
                     "instead. Numeric budgets have no exact thinking-level equivalent.",
                 "type": AbstractDataProviderTypeMap."*softint",
                 "example_value": 1024,
@@ -183,7 +184,7 @@ public class GeminiGenerationConfigDataType inherits HashDataType {
             "thinkingConfig": {
                 "display_name": "Thinking Config",
                 "short_desc": "Control reasoning depth and cost",
-                "desc": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+                "desc": "Use `thinkingLevel` for Gemini 3.x and 4.x or `thinkingBudget` for Gemini 2.5.",
                 "type": new GeminiThinkingConfigDataType(AutoHashOrNothingType),
             },
             "temperature": {
@@ -555,7 +556,7 @@ public class GeminiSimpleChatRequestDataType inherits HashDataType {
             "thinkingConfig": {
                 "display_name": "Thinking Config",
                 "short_desc": "Control reasoning depth and cost",
-                "desc": "Use `thinkingLevel` for Gemini 3.x or `thinkingBudget` for Gemini 2.5.",
+                "desc": "Use `thinkingLevel` for Gemini 3.x and 4.x or `thinkingBudget` for Gemini 2.5.",
                 "type": new GeminiThinkingConfigDataType(AutoHashOrNothingType),
             },
             "model": {

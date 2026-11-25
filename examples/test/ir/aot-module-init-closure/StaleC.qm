@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# StaleC.qm - test module: a module that the initialization of a library module loads by its path (qore#7335)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module StaleC {
+    version = "1.0";
+    desc = "test module loaded by its path, outside the module path";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        StaleC::State::own = string sub () { return "C own ran"; };
+    };
+}
+
+#! The public definitions of the test module
+public namespace StaleC {
+#! The module's state
+public class State {
+    public {
+        #! the closure that the module's initialization created
+        static *code own;
+    }
+}
+
+#! Returns True if the closure that the module's initialization created qualifies as a module-init closure
+public bool sub ownQualifies() {
+    return is_module_init_closure(State::own);
+}
+}

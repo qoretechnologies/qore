@@ -75,18 +75,58 @@ static QoreListNode* qore_take_call_function_args(const QoreListNode* args, size
     if (!args->is_unique()) {
         return args->copyListFrom(offset);
     }
-    QoreListNode* rv = new QoreListNode(autoTypeInfo);
     qore_list_private* lp = qore_list_private::get(*const_cast<QoreListNode*>(args));
+    QoreListNode* rv = lp->getCopy();
+    qore_list_private* rp = qore_list_private::get(*rv);
+    rp->reserve(n - offset);
     for (size_t i = offset; i < n; ++i) {
-        rv->push(lp->takeExists(i), xsink);
+        rp->pushIntern(lp->takeExists(i));
     }
     return rv;
+}
+
+// returns the list of arguments of call_function_args() if the call can take it over, else nullptr
+/* The list is taken from the argument list when nothing else holds either of them, so that the called code moves the
+   arguments that it has no parameter for into $argv, as a direct call does, and releases them in the same order
+   (qore#6052); the entry is compared and taken without the exported accessors, as this is done on every call
+*/
+static QoreListNode* qore_take_call_function_args_list(const QoreListNode* args, const QoreListNode* arguments) {
+    if (!arguments || !arguments->is_unique() || !args->is_unique()) {
+        return nullptr;
+    }
+    qore_list_private* lp = qore_list_private::get(*const_cast<QoreListNode*>(args));
+    if (lp->length < 2 || !lp->entry[1].isPointer() || lp->entry[1].getPtr() != arguments) {
+        return nullptr;
+    }
+    // the reference of the argument list is taken over
+    lp->takeExists(1);
+    return const_cast<QoreListNode*>(arguments);
 }
 
 #ifndef WARN_MODULES
 // needed so that the Qore default argument value in sinatures below will match a C++ value
 #define WARN_MODULES QP_WARN_MODULES
 #endif
+
+// Returns the path of the module being loaded as the calling code may see it: the location of the module on the
+// host is external information, so code restricted with PO_NO_EXTERNAL_INFO (the code of a module loaded by such
+// code has its restrictions) gets the last component of the path, the file name of the module, which identifies it
+// as well while it is loaded
+static QoreStringNode* q_module_context_path_for_caller(const char* path) {
+    if (!(runtime_get_parse_options() & PO_NO_EXTERNAL_INFO)) {
+        return new QoreStringNode(path);
+    }
+    const char* end = path + strlen(path);
+    while (end > path + 1 && (end[-1] == '/' || end[-1] == '\\')) {
+        --end;
+    }
+    const char* last = end;
+    while (last > path && last[-1] != '/' && last[-1] != '\\') {
+        --last;
+    }
+    return last == end ? new QoreStringNode(path, end - path, QCS_DEFAULT)
+        : new QoreStringNode(last, end - last, QCS_DEFAULT);
+}
 
 // the hardening options of the compilation of the library, from the macros that the compiler defined for it
 static QoreHashNode* qore_get_library_hardening_info() {
@@ -1049,9 +1089,15 @@ auto call_function(string name, ...) {
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
     }
-    // the arguments are given to the call, as call_function() with a call reference gives them (qore#6052)
-    ReferenceHolder<QoreListNode> vargs(qore_take_call_function_args(args, 1, xsink), xsink);
+    // the arguments are given to the call, as call_function() with a call reference gives them (qore#6052); an
+    // argument list that nothing else holds is given itself, without the name, which the holder keeps
     QoreProgram* call_pgm = q_get_runtime_call_program(runtime_cfg);
+    if (num_args(args) > 1 && args->is_unique()) {
+        QoreListNode* l = const_cast<QoreListNode*>(args);
+        ValueHolder name_holder(l->shift(), xsink);
+        return qore_program_private::get(*call_pgm)->callFunctionGivenArgs(name->c_str(), l, xsink);
+    }
+    ReferenceHolder<QoreListNode> vargs(qore_take_call_function_args(args, 1, xsink), xsink);
     if (!vargs) {
         return call_pgm->callFunction(name->c_str(), nullptr, xsink);
     }
@@ -1084,7 +1130,14 @@ auto result = call_function(call_ref, arg1, arg2);
 */
 auto call_function(code callable, ...) {
     // the arguments to pass: the call takes them over, and the called code moves the ones that it has no parameter for
-    // into $argv, as a direct call does, so that they are released in the same order (qore#6052)
+    // into $argv, as a direct call does, so that they are released in the same order (qore#6052); an argument list
+    // that nothing else holds is given to the call itself, without the code to call, which the holder keeps
+    if (num_args(args) > 1 && args->is_unique()) {
+        QoreListNode* l = const_cast<QoreListNode*>(args);
+        ValueHolder callable_holder(l->shift(), xsink);
+        ProgramCallContextHelper pch(callable->getProgram());
+        return qore_invoke_call_ref_given_args(callable, l, xsink);
+    }
     ReferenceHolder<QoreListNode> vargs(qore_take_call_function_args(args, 1, xsink), xsink);
 
     ProgramCallContextHelper pch(callable->getProgram());
@@ -1212,10 +1265,8 @@ auto call_function_args(string name, *softlist<auto> arguments) [flags=NAMED_ARG
     QoreProgram* call_pgm = q_get_runtime_call_program(runtime_cfg);
     // a list of arguments that nothing else holds is given to the call, as call_function() gives its arguments
     // (qore#6052)
-    if (arguments && arguments->is_unique() && args->is_unique()
-            && args->retrieveEntry(1).getInternalNode() == arguments) {
-        ReferenceHolder<QoreListNode> vargs(
-            qore_list_private::get(*const_cast<QoreListNode*>(args))->takeExists(1).get<QoreListNode>(), xsink);
+    if (QoreListNode* given = qore_take_call_function_args_list(args, arguments)) {
+        ReferenceHolder<QoreListNode> vargs(given, xsink);
         return qore_program_private::get(*call_pgm)->callFunctionGivenArgs(name->c_str(), *vargs, xsink);
     }
     return call_pgm->callFunction(name->c_str(), arguments, xsink);
@@ -1248,10 +1299,8 @@ auto call_function_args(code callable, *softlist<auto> arguments) [flags=NAMED_A
     // a list of arguments that nothing else holds is taken over by the call, and the called code moves the arguments
     // that it has no parameter for into $argv, as a direct call does, so that they are released in the same order
     // (qore#6052)
-    if (arguments && arguments->is_unique() && args->is_unique()
-            && args->retrieveEntry(1).getInternalNode() == arguments) {
-        ReferenceHolder<QoreListNode> vargs(
-            qore_list_private::get(*const_cast<QoreListNode*>(args))->takeExists(1).get<QoreListNode>(), xsink);
+    if (QoreListNode* given = qore_take_call_function_args_list(args, arguments)) {
+        ReferenceHolder<QoreListNode> vargs(given, xsink);
         return qore_invoke_call_ref_given_args(callable, *vargs, xsink);
     }
     return callable->invoke(arguments, xsink);
@@ -2498,8 +2547,10 @@ string parse_base64_url_string_to_string(string base64_url_string, *string encod
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
-    - \c filename: the path to the module's primary file
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module's primary file (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2530,8 +2581,10 @@ list<hash<auto>> getModuleList() [flags=DEPRECATED] {
 
 //! Returns a list of hashes describing the currently-loaded %Qore modules
 /** @return a list of hashes describing the currently-loaded %Qore modules; each element in the list is a hash with the following keys:
-    - \c filename: the path to the module
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2567,8 +2620,10 @@ list<hash<auto>> get_module_list() {
 
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
-    - \c filename: the path to the module
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -2599,8 +2654,10 @@ hash<string, hash<auto>> getModuleHash() [flags=DEPRECATED] {
 
 //! Returns a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names
 /** @return a hash of hashes describing the currently-loaded %Qore modules; the top-level hash keys are the module names; the values are hashes with the following keys:
-    - \c filename: the path to the module
-    - \c path: the path to the module itself (different from \c filename with split user modules)
+    - \c filename: the path to the module (not present in code restricted with
+      @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
+    - \c path: the path to the module itself (different from \c filename with split user modules; not present in
+      code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO")
     - \c name: the name of the module
     - \c desc: the description of the module
     - \c version: the version of the module
@@ -3264,7 +3321,8 @@ list<auto> l = splice(l2, 5);
     @see the @ref splice "splice operator"
 */
 list<auto> splice(list<auto> value, softint start) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    // a new value, which can be changed also when the list was freed under a weak reference (qore#7199)
+    ReferenceHolder<QoreListNode> lst(qore_list_private::get(*value)->copyValue(), xsink);
     ReferenceHolder<> holder(lst->splice(start), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
@@ -3286,7 +3344,8 @@ list<auto> l = splice(l2, 5, 7);
     @see the @ref splice "splice operator"
 */
 list<auto> splice(list<auto> value, softint start, softint length) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    // a new value, which can be changed also when the list was freed under a weak reference (qore#7199)
+    ReferenceHolder<QoreListNode> lst(qore_list_private::get(*value)->copyValue(), xsink);
     ReferenceHolder<> holder(lst->splice(start, length), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
@@ -3309,7 +3368,8 @@ list<auto> l = splice(l2, 5, 7, "hello");
     @see the @ref splice "splice operator"
 */
 list<auto> splice(list<auto> value, softint start, softint length, softlist<auto> replacement) [flags=NAMED_ARGS] {
-    ReferenceHolder<QoreListNode> lst(value->copy(), xsink);
+    // a new value, which can be changed also when the list was freed under a weak reference (qore#7199)
+    ReferenceHolder<QoreListNode> lst(qore_list_private::get(*value)->copyValue(), xsink);
     ReferenceHolder<> holder(lst->splice(start, length, replacement, xsink), xsink);
     return *xsink ? QoreValue() : lst.release();
 }
@@ -4183,8 +4243,23 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     @code{.py}
 hash<auto> h = get_qore_library_info();
     @endcode
+
+    @note this function reports the module directories, the build host and the compiler and linker flags of the
+    host's installation of the library, so it is external information: code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" cannot call it (since %Qore 3.0); the version and platform
+    of the library are also available as @ref system_and_build_constants "system and build constants" such as
+    @ref Qore::VersionString "VersionString" and @ref Qore::PlatformOS "PlatformOS", but the constants
+    @ref Qore::BuildHost "BuildHost", @ref Qore::Compiler "Compiler", @ref Qore::CFLAGS "CFLAGS" and
+    @ref Qore::LDFLAGS "LDFLAGS" still give build details to code with this restriction, as constants have no
+    @ref function_domains "functional domain"
+
+    @note the \c init and \c del closures of a user module's declaration have the restrictions of the module header,
+    which include @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", so a closure that calls this function needs
+    the module to declare the domain in its header (<tt>domains = "EXTERNAL_INFO";</tt>, see
+    @ref user_module_declarations "User Module Declarations"), as for the other external information functions;
+    code of the module after its declaration has the options of the module's own %Program
 */
-hash<auto> get_qore_library_info() [flags=CONSTANT] {
+hash<auto> get_qore_library_info() [flags=CONSTANT;dom=EXTERNAL_INFO] {
    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
    h->setKeyValue("PlatformOS", new QoreStringNode(qore_target_os), xsink);
@@ -4599,7 +4674,9 @@ code get_call_reference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 }
 
 //! Returns the path of the module currently being loaded, if any
-/** @return the path of the module currently being loaded, if any
+/** @return the path of the module currently being loaded, if any; for code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (since %Qore 3.0), only the last component of the path (the
+    file name of the module), as the location of the module on the host is external information
 
     @see
     - @ref Qore::get_module_context_path_ex()
@@ -4611,7 +4688,7 @@ code get_call_reference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (!str) {
         return QoreValue();
     }
-    return new QoreStringNode(str);
+    return q_module_context_path_for_caller(str);
 }
 
 //! Returns the name of the module currently being loaded
@@ -4634,7 +4711,9 @@ string get_module_context_name_ex() [flags=CONSTANT] {
 }
 
 //! Returns the path of the module currently being loaded
-/** @return the path of the module currently being loaded
+/** @return the path of the module currently being loaded; for code restricted with
+    @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (since %Qore 3.0), only the last component of the path (the
+    file name of the module), as the location of the module on the host is external information
 
     @throw NO-MODULE-CONTEXT Thrown if there is no module context
 
@@ -4649,7 +4728,7 @@ string get_module_context_path_ex() [flags=CONSTANT] {
         xsink->raiseException("NO-MODULE-CONTEXT", "no module context is currently set");
         return QoreValue();
     }
-    return new QoreStringNode(str);
+    return q_module_context_path_for_caller(str);
 }
 
 //! Returns the approximate memory size in bytes of any Qore value

@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the fixture runs in each interpreter mode and as a qcc executable
+# test-platform: macos - qcc links and runs the class constant initialization fixture at two optimization levels
+
+%modern
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class ClassConstantConstructionTest
+
+class ClassConstantConstructionTest inherits QUnit::Test {
+    private {
+        string source = quote(get_script_dir() + "/ClassConstantConstruction.q");
+    }
+
+    constructor() : QUnit::Test("Class constant construction", "1.0", \ARGV) {
+        addTestCase("class construction during constant initialization in each mode", \testModes());
+        addTestCase("qcc class constant initialization", \testQcc());
+        set_return_value(main());
+    }
+
+    private static string quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    # A switch case forces the constant before the inherited overloads are resolved (qore#7424).
+    private checkEarly(string command, int expected_status) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command);
+        assertEq(expected_status, result.rc, result.out);
+        assertTrue(result.out.find("ILLEGAL-CLASS-INSTANTIATION: cannot instantiate 'Combined' class") >= 0,
+            result.out);
+        assertTrue(result.out.find("uncommitted changes") >= 0, result.out);
+    }
+
+    private checkValue(string command) {
+        hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(command);
+        assertEq(0, result.rc, result.out);
+        assertEq("Combined\n", result.out, command);
+    }
+
+    private testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string cmd = quote(TestInterpreter::qore_interpreter()) + " --exec-mode=" + mode;
+            checkEarly(cmd + " --define=EARLY_CASE " + source, 2);
+            checkValue(cmd + " " + source);
+        }
+    }
+
+    private testQcc() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        foreach int opt in ((0, 3)) {
+            string exe = sprintf("%s/probe-%d", dir, opt);
+            string cmd = sprintf("%s -O%d -o %s", quote(TestInterpreter::qcc_compiler() ?? "qcc"), opt, quote(exe));
+            checkEarly(cmd + " --define=EARLY_CASE " + source, 1);
+            assertFalse(is_file(exe), "qcc rejected the early construction");
+            hash<ExecModeHarness::ModeRunResult> result = ExecModeHarness::run_command(cmd + " " + source);
+            assertEq(0, result.rc, result.out);
+            checkValue(quote(exe));
+        }
+    }
+}

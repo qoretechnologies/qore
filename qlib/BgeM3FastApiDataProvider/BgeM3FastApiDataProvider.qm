@@ -84,6 +84,7 @@ module BgeM3FastApiDataProvider {
                 "- On-prem multilingual semantic search\n"
                 "- Reranking candidate retrieval with sparse + dense fusion",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Embeddings",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BgeM3FastApiEmbeddingsRequestDataType::Fields{"texts",}, {
@@ -113,6 +114,7 @@ module BgeM3FastApiDataProvider {
                 "host memory pressure data.  Upstream routers can use the `pressure` "
                 "field to drive backoff escalation between local and cloud routing.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Admin",),
             "options": {},
             "output_type": BgeM3FastApiHealthDataProvider::ResponseType,
@@ -130,6 +132,7 @@ module BgeM3FastApiDataProvider {
                 "Prometheus, Loki, Alloy, or any other tool that consumes the "
                 "Prometheus text exposition format.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Admin",),
             "options": {},
             "output_type": BgeM3FastApiMetricsDataProvider::ResponseType,

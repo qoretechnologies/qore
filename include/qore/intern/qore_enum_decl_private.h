@@ -124,6 +124,15 @@ public:
         return sys && orig == this;
     }
 
+    //! An original builtin enum that is not one of the static system namespace (Qore::) or a tombstone: a binary
+    //! module's (qore#7533)
+    /** Decided by ownership, not by the module context of its creation: a binary module can create builtin
+        declarations after its initialization, with no module context or with that of a user module being parsed
+    */
+    DLLLOCAL bool isTypeOwnerModule() const {
+        return isTypeOwnerSystem() && !not_module_decl;
+    }
+
     //! A retired enum keeps its members, which name no declaration
     DLLLOCAL bool keepsTypeOwnerMembers() const {
         return true;
@@ -137,7 +146,15 @@ public:
     DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
     }
 
+    //! An enum names no declaration
+    DLLLOCAL void getTypeOwnerModuleSignatureNames(std::vector<QoreTypeOwner*>& names) const {
+    }
+
+    //! The original of a copy of a binary module's enum (see orig_ref)
     DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+        if (orig_ref) {
+            refs.push_back(&const_cast<qore_enum_decl_private*>(orig)->type_owner);
+        }
     }
 
     //! An enum has no cache of declarations (see QoreTypeOwner::getTypeOwnerCachedDecls())
@@ -293,6 +310,14 @@ public:
         return enumdecl.priv;
     }
 
+    //! Marks a builtin enum that belongs to no binary module (qore#7533)
+    /** An enum of the static system namespace (Qore::), marked when the namespace has been built, or a tombstone
+        enum, marked when it is created, before it is shared with another thread; see isTypeOwnerModule()
+    */
+    DLLLOCAL void setNotModuleDecl() {
+        not_module_decl = true;
+    }
+
     DLLLOCAL void setName(const char* n) {
         name = n;
     }
@@ -329,6 +354,13 @@ public:
         return instance_serial;
     }
 
+    //! Returns the number that gives the order in which the enum was declared
+    /** It is the serial number of the original declaration, which a copy shares (issue #7171).
+    */
+    DLLLOCAL uint64_t getDeclSeq() const {
+        return decl_seq;
+    }
+
 protected:
     // references
     mutable QoreReferenceCounter refs;
@@ -351,8 +383,13 @@ protected:
     // the module that defined this enum, if any
     std::string from_module;
 
-    // original declaration
+    // original declaration; only its address is used (isSystem()): the original can be freed with its Program while a
+    // copy in the namespace of another Program lives on, so nothing is read through it
     const qore_enum_decl_private* orig;
+
+    //! the order of declaration: the serial number of the original declaration, which a copy keeps by value (issue
+    //! #7171, #7347)
+    uint64_t decl_seq = instance_serial;
 
     // type information
     QoreEnumTypeInfo* typeInfo = nullptr;
@@ -368,10 +405,23 @@ protected:
 
     bool pub = false;
     bool sys = false;
+    //! a builtin enum that belongs to no binary module, which is freed after every Program
+    /** Set (setNotModuleDecl()) on the enums of the static system namespace (Qore::) when the namespace has been
+        built and on the tombstone enums when they are created, and kept by copies; every other original builtin enum,
+        whenever it is created, is a binary module's (isTypeOwnerModule(), qore#7533)
+    */
+    bool not_module_decl = false;
     //! copied into this Program by importing a module; never exported again
     bool mod_imported = false;
 
     bool parse_init_done = false;
+    //! true if a copy holds a reference to its original, a binary module's enum (qore#7533)
+    /** The module's namespace can be freed before the copy (at the end of the process, the modules are deleted before
+        a Program that holds itself is cleared), while the module's C++ code, which code of the copy's Program can
+        call then, makes values from the original's members (QoreValue::makeEnum()); the reference is released last
+        in the destructor
+    */
+    bool orig_ref = false;
 
     DLLLOCAL void assignModule() {
         const char* mod_name = get_module_context_name();

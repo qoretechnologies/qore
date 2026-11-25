@@ -88,7 +88,8 @@ class HttpClientCallerExemption {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        if ((ssl_ca_file || ssl_ca_path) && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        # the CA locations are read for the calling code, also when a lent object's method passes them on (qore#7052)
+        if ((ssl_ca_file || ssl_ca_path) && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", "the calling code may not give an HTTP client connection CA certificate "
                 "locations, as it is restricted from the FILESYSTEM functional domain";
         }

@@ -1,0 +1,219 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%require-types
+%strict-args
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ObjectScanCountTest
+
+#! the object counts of objects follow the values that their members hold (qore#7348)
+/** A write to a member of self by its bare name put the object on the lvalue helper's path twice, and gave the object
+    an object count of 1 for itself when its count was 0, whatever value it stored.  The removal of a member that needs
+    a scan from an object that holds no other one lowered the count of the container or object holding the object,
+    which counts an object whatever its members hold; the two errors hid each other.  The counts are read with
+    dbg_get_scan_count(), which debug builds have.
+*/
+class Held {
+}
+
+class Owner {
+    public {
+        string n;
+        *Held held;
+        hash<auto> h = {};
+    }
+
+    constructor(string x, bool bare) {
+        if (bare) {
+            n = x;
+        } else {
+            self.n = x;
+        }
+    }
+
+    setName(string x) {
+        n = x;
+    }
+
+    setHeld(*Held x) {
+        held = x;
+    }
+
+    setHashKey(auto v) {
+        h.k = v;
+    }
+
+    removeHashKey() {
+        remove h.k;
+    }
+
+    code getSetter() {
+        return sub (string x) { n = x; };
+    }
+
+    code getHashSetter() {
+        return sub (auto v) { h.k = v; };
+    }
+}
+
+class Counted {
+    public {
+        auto x;
+        auto peer;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Counted::destroyed;
+    }
+}
+
+class CountedHolder {
+    public {
+        hash<auto> h = {};
+    }
+
+    destructor() {
+        ++Counted::destroyed;
+    }
+}
+
+class Outer {
+    public {
+        Owner o("inner", False);
+        hash<auto> cx = {};
+    }
+}
+
+class ObjectScanCountTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ObjectScanCountTest", "1.0", \ARGV) {
+        addTestCase("a write in a constructor", \testConstructor());
+        addTestCase("a write in a method", \testMethod());
+        addTestCase("an object stored and removed", \testObject());
+        addTestCase("a key of a member hash", \testHashKey());
+        addTestCase("a write in a closure", \testClosure());
+        addTestCase("a member removed from an object held by an object", \testRemoveHeld());
+        addTestCase("a member removed from an object held by a hash", \testRemoveHeldInHash());
+        addTestCase("a cycle through an object whose member was removed", \testCycleAfterRemoval());
+        set_return_value(main());
+    }
+
+    private int scanCount(auto v) {
+        if (!exists_function("dbg_get_scan_count")) {
+            testSkip("dbg_get_scan_count() is available in debug builds only");
+        }
+        return call_function("dbg_get_scan_count", v);
+    }
+
+    testConstructor() {
+        Owner by_self("a", False);
+        assertEq(0, scanCount(by_self), "a string written through self");
+        Owner bare("a", True);
+        assertEq(0, scanCount(bare), "a string written by the bare name");
+    }
+
+    testMethod() {
+        Owner o("a", False);
+        o.setName("b");
+        assertEq(0, scanCount(o));
+        o.setName("c");
+        assertEq(0, scanCount(o), "a second write");
+    }
+
+    testObject() {
+        Owner o("a", True);
+        o.setHeld(new Held());
+        assertEq(1, scanCount(o), "an object stored");
+        o.setName("b");
+        assertEq(1, scanCount(o), "a string written while the object holds an object");
+        o.setHeld();
+        assertEq(0, scanCount(o), "the object removed");
+    }
+
+    testHashKey() {
+        Owner o("a", True);
+        o.setHashKey(1);
+        assertEq(0, scanCount(o), "an integer stored in the member hash");
+        assertEq(0, scanCount(o.h));
+        o.setHashKey(new Held());
+        assertEq(1, scanCount(o), "an object stored in the member hash");
+        assertEq(1, scanCount(o.h));
+        o.removeHashKey();
+        assertEq(0, scanCount(o), "the object removed from the member hash");
+        assertEq(0, scanCount(o.h));
+    }
+
+    testClosure() {
+        Owner o("a", False);
+        code set = o.getSetter();
+        set("b");
+        assertEq(0, scanCount(o), "a string written by the bare name in a closure");
+        code set_key = o.getHashSetter();
+        set_key(new Held());
+        assertEq(1, scanCount(o), "an object stored in the member hash in a closure");
+        set_key(2);
+        assertEq(0, scanCount(o), "the object replaced in a closure");
+        delete set;
+        delete set_key;
+    }
+
+    testRemoveHeld() {
+        Outer outer();
+        # the member o counts 1 whatever it holds
+        assertEq(1, scanCount(outer));
+        outer.o.held = new Held();
+        assertEq(1, scanCount(outer.o));
+        remove outer.o.held;
+        assertEq(0, scanCount(outer.o), "remove: the inner object");
+        assertEq(1, scanCount(outer), "remove: the outer object");
+        outer.o.held = new Held();
+        remove outer.o.("held", "n");
+        assertEq(0, scanCount(outer.o), "a slice: the inner object");
+        assertEq(1, scanCount(outer), "a slice: the outer object");
+        outer.o.held = new Held();
+        delete outer.o.held;
+        assertEq(0, scanCount(outer.o), "delete: the inner object");
+        assertEq(1, scanCount(outer), "delete: the outer object");
+        outer.o.held = new Held();
+        call_function("dbg_ref_remove_key", \outer.o, "held");
+        assertEq(0, scanCount(outer.o), "the reference helper API: the inner object");
+        assertEq(1, scanCount(outer), "the reference helper API: the outer object");
+        # a hash member holding an object is counted, and removing its object uncounts it once
+        outer.cx.k = new Held();
+        assertEq(2, scanCount(outer));
+        remove outer.cx.k;
+        assertEq(1, scanCount(outer), "the hash member without an object");
+    }
+
+    testRemoveHeldInHash() {
+        hash<auto> h = {"o": new Owner("a", False)};
+        assertEq(1, scanCount(h));
+        h.o.held = new Held();
+        remove h.o.held;
+        assertEq(0, scanCount(h.o));
+        assertEq(1, scanCount(h), "the hash still counts the object");
+        remove h.o;
+        assertEq(0, scanCount(h), "the object removed from the hash");
+    }
+
+    # the removal lowered the count of the hash holding the object, so the cycle closed through it later was not
+    # collected (in every build)
+    testCycleAfterRemoval() {
+        Counted::destroyed = 0;
+        {
+            CountedHolder a();
+            a.h.o = new Counted();
+            a.h.o.x = new Counted();
+            remove a.h.o.x;
+            a.h.o.peer = a;
+        }
+        assertEq(3, Counted::destroyed, "the removed object and the cycle are collected");
+    }
+}

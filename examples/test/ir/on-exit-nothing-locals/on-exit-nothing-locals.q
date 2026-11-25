@@ -336,7 +336,47 @@ string sub method_calls() {
     return r;
 }
 
+#! the context of a thread: a tenant that a scoped call switches to (the pattern of Qorus's group-scoped calls)
+class TenantContext {
+    public {
+        *int tenant;
+    }
+}
+
+our TenantContext tenant_ctx();
+
+#! raises an exception in the callee's tenant
+int sub tenant_callee() {
+    throw "TENANT-PROBE", sprintf("%y", tenant_ctx.tenant);
+}
+
+#! switches the thread to \a tenant for the call and restores the previous one when the call ends, also by an exception
+auto sub with_tenant(*int tenant, string f) {
+    *int saved = tenant_ctx.tenant;
+    on_exit tenant_ctx.tenant = saved;
+    tenant_ctx.tenant = tenant;
+    return call_function(f);
+}
+
+#! a call from the host tenant (NOTHING) to a callee's tenant that raises an exception: the host tenant is restored, and
+#! the handler's own exception, if any, would be chained to the callee's
+string sub tenant_restore() {
+    string r;
+    foreach *int host in ((NOTHING, 7)) {
+        tenant_ctx.tenant = host;
+        try {
+            with_tenant(100000000042, "tenant_callee");
+        } catch (hash<ExceptionInfo> ex) {
+            r += sprintf("%s: %s, chained: %s; ", ex.err, ex.desc, ex.next ? ex.next.err : "none");
+        }
+        r += sprintf("tenant after: %y; ", tenant_ctx.tenant);
+    }
+    tenant_ctx.tenant = NOTHING;
+    return r;
+}
+
 for (int i = 0; i < 3; ++i) {
+    printf("tenant restore: %s\n", tenant_restore());
     foreach bool fail in (False, True) {
         printf("exit object (fail=%y): %s\n", fail, exit_object_caught(fail));
         printf("exit object with a value (fail=%y): %s\n", fail, exit_object_value_caught(fail));

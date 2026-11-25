@@ -40,6 +40,41 @@
 // forward reference
 //class QoreVarRWLock;
 
+//! the lvalue lock holder of the reference bind in progress in the current thread, if any (see QoreReferenceBindScope)
+DLLLOCAL extern thread_local const void* qore_reference_bind_vl;
+//! the helper of the reference bind in progress in the current thread, if any
+DLLLOCAL extern thread_local void* qore_reference_bind_helper;
+
+//! tells the helper of the reference bind in progress that it resolves its lvalue under a lock of the outer assignment
+DLLLOCAL void qore_reference_bind_note_reused_lock();
+
+//! Marks the resolution of a reference's lvalue for binding it during a type check (qore#7380)
+/** Only the helper that binds the reference can reuse a lock that the assignment of this thread holds: code run during
+    the resolution (the key expression of a reference, a member gate) uses helpers of its own, which cannot.  A helper
+    that reuses the lock only reads: the assignment holds pointers into the data that the lock guards, so changing it
+    could free what they point to.
+*/
+class QoreReferenceBindScope {
+public:
+    DLLLOCAL QoreReferenceBindScope(const void* vl, void* helper) : prev(qore_reference_bind_vl),
+            prev_helper(qore_reference_bind_helper) {
+        qore_reference_bind_vl = vl;
+        qore_reference_bind_helper = helper;
+    }
+
+    DLLLOCAL ~QoreReferenceBindScope() {
+        qore_reference_bind_vl = prev;
+        qore_reference_bind_helper = prev_helper;
+    }
+
+    QoreReferenceBindScope(const QoreReferenceBindScope&) = delete;
+    QoreReferenceBindScope& operator=(const QoreReferenceBindScope&) = delete;
+
+private:
+    const void* prev;
+    void* prev_helper;
+};
+
 //! Read-write lock with a read path that takes no lock at all
 /** This lock guards every object's members, every global and closure-bound variable and the public QoreRWLock and
     QoreVarRWLock, so every member or variable read takes and releases its read lock.  Readers only increment and
@@ -99,6 +134,42 @@ public:
             write_cond.wait(l);
         }
         --write_waiting;
+    }
+
+    //! grabs the write lock for an lvalue, unless a reference bind of this thread already holds it
+    /** The type check of an assignment runs with the lock of the assignment's target held, and binding a reference
+        element reads and can write the referenced lvalue, which can be guarded by the same lock (qore#7380).  The
+        check for this thread comes only when the lock cannot be claimed, so an uncontended lock costs nothing more.
+
+        @param vl the lock holder of the helper resolving the lvalue; only the helper of the bind can reuse the lock
+
+        @return true if the lock was grabbed and must be released by the caller, false if it is already held by the
+        outer assignment of this thread, which releases it
+    */
+    DLLLOCAL bool wrlockUnlessHeldForBind(const void* vl) {
+        int tid = q_gettid();
+        assert(tid >= 0);
+        AutoLocker al(l);
+        if (tryClaimWriteIntern(tid)) {
+            return true;
+        }
+        if (vl == qore_reference_bind_vl && write_tid.load(std::memory_order_relaxed) == tid) {
+            qore_reference_bind_note_reused_lock();
+            return false;
+        }
+        assert(tid != write_tid);
+
+        ++write_waiting;
+        while (!tryClaimWriteIntern(tid)) {
+            write_cond.wait(l);
+        }
+        --write_waiting;
+        return true;
+    }
+
+    //! returns true if the helper of a reference bind resolves an lvalue guarded by a lock that this thread holds
+    DLLLOCAL bool heldForBind(const void* vl) const {
+        return vl == qore_reference_bind_vl && write_tid.load(std::memory_order_relaxed) == q_gettid();
     }
 
     //! tries to grab the write lock; does not block if unsuccessful; returns 0 if successful
@@ -438,6 +509,15 @@ public:
       assert(!locked);
       qore_var_rwlock_ops(l).wrlock();
       locked = true;
+   }
+
+   //! locks the object unless a reference bind of this thread already holds the lock; returns the locked flag
+   /** assumes that this object does not hold the lock; see qore_var_rwlock_priv::wrlockUnlessHeldForBind()
+   */
+   DLLLOCAL bool lockUnlessHeldForBind(const void* vl) {
+      assert(!locked);
+      locked = qore_var_rwlock_ops(l).wrlockUnlessHeldForBind(vl);
+      return locked;
    }
 
    //! unlocks the object and updates the locked flag, assumes that the lock is held

@@ -29,6 +29,10 @@ class TestConnectProxy {
         bool quit;
         Counter threads();
         Mutex m();
+        #! the data sent in answer to a CONNECT request, one send() each; see setConnectResponse()
+        list<string> connect_response = ("HTTP/1.1 200 Connection established\r\n\r\n",);
+        #! True if the tunnel is made after the response to CONNECT
+        bool connect_tunnel = True;
     }
 
     #! Creates the proxy and starts listening on a free port of 127.0.0.1
@@ -60,6 +64,18 @@ class TestConnectProxy {
     #! Returns True while the proxy's listening socket is open (until shutdown())
     bool isListening() {
         return listener.isOpen();
+    }
+
+    #! Sets the answer to the CONNECT requests received from now on
+    /** @param response the data sent, each string with a send() of its own (ex: interim responses before the final
+        one)
+        @param tunnel True if the tunnel to the target is made after the response; False if the connection is closed
+        after it
+    */
+    setConnectResponse(list<string> response, bool tunnel) {
+        AutoLock al(m);
+        connect_response = response;
+        connect_tunnel = tunnel;
     }
 
     #! Returns a copy of the requests received
@@ -172,9 +188,24 @@ class TestConnectProxy {
         }
         *list<*string> m = (req.line =~ x/^CONNECT ([^:]+):([0-9]+) /);
         if (m) {
+            list<string> response;
+            bool tunnel;
+            {
+                AutoLock al(self.m);
+                response = connect_response;
+                tunnel = connect_tunnel;
+            }
+            if (!tunnel) {
+                try {
+                    map s.send($1), response;
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection
+                }
+                return;
+            }
             Socket target();
             target.connectINET(host_map{m[0]} ?? m[0], m[1].toInt(), 5s);
-            s.send("HTTP/1.1 200 Connection established\r\n\r\n");
+            map s.send($1), response;
             relay(s, target);
             return;
         }

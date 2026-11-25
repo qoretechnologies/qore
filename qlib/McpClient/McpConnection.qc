@@ -35,6 +35,11 @@ public namespace McpClient {
     @see @ref McpClient::McpClient "McpClient::constructor()" for more information on the above options
 */
 public class McpConnection inherits ConnectionProvider::HttpBasedConnection {
+    #! The client creates its connections with HttpClientIo and the creator's proof (qore#7262)
+    private bool hasBoundClient() {
+        return True;
+    }
+
     public {
         #! Real options for creating the MCP client
         hash<auto> real_opts;

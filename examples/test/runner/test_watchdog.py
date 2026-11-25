@@ -1395,6 +1395,11 @@ THREADS_TEST = """\
 """
 
 
+# the line that the runner prints at the time limit if the CPU pressure of the last five minutes was 50% or more (qore#7353)
+STARVED = ("the machine was CPU-starved while the test ran (a task waited for a CPU %s%% of the last 5 minutes): this "
+           "timeout is probably not a hang; run the test alone, run fewer jobs at once, or raise TEST_TIMEOUT")
+
+
 def proc_stat(tid, comm, state, utime, stime):
     """Returns the content of a /proc/<pid>/task/<tid>/stat file with the given fields (3, 14 and 15)"""
     fields = [state] + ["0"] * 10 + [str(utime), str(stime)] + ["0"] * 37
@@ -1490,8 +1495,37 @@ class ThreadStatesTest(unittest.TestCase):
             "avg300=0.00 total=0",
             "pressure memory: some avg10=0.10 avg60=0.00 avg300=0.00 total=5 full avg10=0.05 avg60=0.00 "
             "avg300=0.00 total=2",
+            STARVED % "70.00",
             "cgroup cpu.stat: usage_usec 100 nr_throttled 7",
         ], lines, output)
+
+    def cpu_pressure_lines(self, cpu):
+        """The lines of the snapshot at the time limit of a test whose CPU pressure file has the content cpu"""
+        output = self.run_test({"100": (proc_stat(100, "qore", "R", 1, 0), "0")}, pressure={"cpu": cpu})
+        return self.snapshots(output), output
+
+    def test_a_machine_with_contended_cpus_is_reported_once_at_the_limit(self):
+        # qore#7353: the test of a run on a machine whose CPUs were contended for was starved, not hung
+        snapshots, output = self.cpu_pressure_lines(
+            "some avg10=10.00 avg60=20.00 avg300=50.00 total=1\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n")
+        self.assertIn(STARVED % "50.00", snapshots["at its time limit"], output)
+        # not in the snapshot before the abort: it is the same finding
+        self.assertNotIn(STARVED % "50.00", snapshots["before SIGABRT"], output)
+
+    def test_a_machine_with_idle_cpus_is_not_reported(self):
+        snapshots, output = self.cpu_pressure_lines(
+            "some avg10=99.00 avg60=99.00 avg300=49.99 total=1\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n")
+        for when, lines in snapshots.items():
+            with self.subTest(when=when):
+                self.assertEqual([], [line for line in lines if "CPU-starved" in line], output)
+
+    def test_the_full_line_and_a_missing_average_do_not_report_starvation(self):
+        # only the "some" line counts: "full" is the time that no task could run
+        snapshots, output = self.cpu_pressure_lines(
+            "some avg10=1.00 avg60=1.00 avg300=1.00 total=1\nfull avg10=90.00 avg60=90.00 avg300=90.00 total=0\n")
+        self.assertEqual([], [line for line in snapshots["at its time limit"] if "CPU-starved" in line], output)
+        snapshots, output = self.cpu_pressure_lines("some avg10=99.00 avg60=99.00 total=1\n")
+        self.assertEqual([], [line for line in snapshots["at its time limit"] if "CPU-starved" in line], output)
 
     @unittest.skipUnless(os.access("/sys/fs/cgroup/cpu.stat", os.R_OK), "no cgroup v2 cpu.stat in /sys/fs/cgroup")
     def test_without_qore_test_cgroup_the_test_s_own_cgroup_is_read(self):

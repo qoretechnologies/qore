@@ -1411,6 +1411,23 @@ static qore_offset_t DBCS_get_char_len(const char* p, size_t len) {
     return (B->trail[u[1]] & (1u << (c - 2))) ? 2 : 0;
 }
 
+// ISO 6937 (ISO 6937-2, T.61, ANSI X3.110 / NAPLPS): a non-spacing diacritical mark (column C, 0xc1 - 0xcf) and the
+// graphic character that follows it (0x20 - 0x7e: a basic letter, or the space, which gives the spacing form of the
+// mark) are one character, and every other byte is a character, also the C1 control characters (0x80 - 0x9f), which
+// the double-byte family that probing finds for these encodings refused (qore#6900); a byte or pair that the encoding
+// does not assign is refused by its conversion, as an undefined byte of a single-byte encoding
+static qore_offset_t ISO6937_get_char_len(const char* p, size_t len) {
+    assert(len);
+    const unsigned char* u = reinterpret_cast<const unsigned char*>(p);
+    if (u[0] < 0xc1 || u[0] > 0xcf) {
+        return 1;
+    }
+    if (len < 2) {
+        return -2;
+    }
+    return (u[1] >= 0x20 && u[1] <= 0x7e) ? 2 : 0;
+}
+
 // GB18030: as GBK, and four bytes when the second byte is a digit: 0x81 - 0xfe, 0x30 - 0x39, 0x81 - 0xfe, 0x30 - 0x39
 static qore_offset_t GB18030_get_char_len(const char* p, size_t len) {
     assert(len);
@@ -1707,6 +1724,26 @@ const struct {
     {"CN-BIG5", QORE_MULTIBYTE_FAMILY("Big5", DBCS_get_char_len<&big5_bytes>, 2, false)},
     {"MSCP949", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
     {"OSF100203B5", QORE_MULTIBYTE_FAMILY("UHC", DBCS_get_char_len<&uhc_bytes>, 2, false)},
+    // the encodings of ISO 6937 and its forms, whose non-spacing diacritical marks make two-byte characters with the
+    // following character, so that probing found a double-byte family for them (qore#6900); glibc's names
+    {"ISO6937", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO_6937:1992", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO-IR-156", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO_6937-2", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO_6937-2:1983", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO-IR-90", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"CSISO90", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"T.61", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"T.61-8BIT", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO-IR-103", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"CSISO103T618BIT", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"NAPLPS", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"CSISO99NAPLPS", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ANSI_X3.110", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ANSI_X3.110-1983", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"CSA_T500", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"CSA_T500-1983", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
+    {"ISO-IR-99", QORE_MULTIBYTE_FAMILY("ISO6937", ISO6937_get_char_len, 2, false)},
 };
 #undef QORE_MULTIBYTE_FAMILY
 
@@ -1893,8 +1930,10 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       and one of the families in multibyte_families gives the length of every sample character (EUC, double-byte
       encodings such as GBK, Big5, or CP949, GB18030, Shift_JIS), it gets the character functions of the family, and
       searches only match at character boundaries, as the second byte of a character can be an ASCII character; an
-      encoding whose definition Qore knows (EUC-JP, EUC-KR, EUC-CN, GBK, GB18030, Big5 and its forms, UHC, Johab, by
-      the names of named_multibyte_families in any spelling) then gets the bytes of its definition, and the input of
+      encoding whose definition Qore knows (by the names of named_multibyte_families in any spelling: EUC-JP, EUC-KR,
+      EUC-CN, GBK, GB18030, Big5 and its forms, UHC, Johab, and ISO 6937 and its forms (T.61, NAPLPS), whose
+      non-spacing diacritical marks make two-byte characters with the letters after them) then gets the bytes of its
+      definition, and the input of
       its conversions is checked with them (see defined_multibyte).
       Such an encoding stays ASCII-compatible, except for the Shift_JIS family (see multibyte_families).  Code points
       are decoded with iconv (QoreEncoding::getUnicode()).

@@ -597,6 +597,11 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
         checkRawHttpNegotiateUnsupported();
         HTTPClient sc(getConnectionOptions());
+        # the client connects outside HttpClientIo: code restricted from NETWORK that was lent the connection may
+        # connect only to the connection's own target, also if it changed the connection's members (qore#7262)
+        # the target only (scheme, host and port): the credentials and path, which the calling code can set, are not
+        # given to the check (qore#7236)
+        checkLentNetworkTarget(sc.getURL(UC_TARGET), sc.getProxyURL(UC_TARGET));
         if (connect) {
             sc.connect();
         }

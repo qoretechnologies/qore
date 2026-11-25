@@ -1,0 +1,8 @@
+list<reference<list>>: [1, 2]
+list<reference<*list>>: [1, 2, 3]
+list<reference<hash>>: {a: 1, b: 2}
+list<reference<*hash>>: {a: 1, b: 2, c: 3}
+assign list: [1, 2, 3]
+assign hash: {a: 1, b: 2, c: 3}
+weak list: [1, 2, 3, null, null, 9]
+weak hash: {a: 1, b: 2, c: 3, d: 4}

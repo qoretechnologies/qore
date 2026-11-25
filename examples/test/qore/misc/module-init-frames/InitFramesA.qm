@@ -1,0 +1,82 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# InitFramesA.qm - test module: what the initialization of a module sees, however the module is loaded (qore#7289)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires InitFramesProbe
+
+module InitFramesA {
+    version = "1.0";
+    desc = "test module: what the initialization of a module sees";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace InitFramesA {
+public class InitFramesA {
+    public {
+        #! the Program that the frame of a call that the initialization makes names
+        static int at_init = InitFramesProbe::Probe::callerPgm();
+        #! the sandbox state and the registration state of the code that loads the module, which is the caller of
+        #! the initialization
+        static bool sandboxed_at_init = SandboxManager::isSandboxed();
+        static bool registration_at_init = SandboxManager::isProcessWideRegistrationAllowed();
+        #! the module option, which the initialization reads
+        static *string opt_at_init = get_module_option("InitFramesA", "opt");
+        #! a closure that the initialization creates, which runs later
+        static code closure = int sub () { return InitFramesProbe::Probe::callerPgm(); };
+        #! the thread that the initialization starts reports the Program that the frame of its call names
+        static Queue thread_q();
+        static int thread_started = InitFramesA::startThread();
+        #! the initialization loads another module by its path: InitFramesB's values
+        static hash<auto> nested = InitFramesA::loadB();
+        #! after the nested load, the frames name this module's Program again
+        static int after_nested = InitFramesProbe::Probe::callerPgm();
+    }
+
+    #! the Program that the frame of a call that the module's code makes names: the module's
+    static int later() {
+        return InitFramesProbe::Probe::callerPgm();
+    }
+
+    #! the sandbox state of the module's code when its caller calls it
+    static bool sandboxedNow() {
+        return SandboxManager::isSandboxed();
+    }
+
+    static int startThread() {
+        background InitFramesA::threadMain();
+        return 1;
+    }
+
+    static threadMain() {
+        thread_q.push(InitFramesProbe::Probe::callerPgm());
+    }
+
+    static hash<auto> loadB() {
+        *string b = get_module_option("InitFramesA", "b-path");
+        if (!b) {
+            return {};
+        }
+        load_module(b);
+        return {
+            "at_init": call_static_method("InitFramesB::InitFramesB", "getAtInit") ?? -2,
+            "later": call_static_method("InitFramesB::InitFramesB", "later"),
+        };
+    }
+
+    #! what the initialization saw, against the module's own Program
+    static string report() {
+        int own = later();
+        return sprintf("init-frames=%s nested=%s restored=%s closure=%s thread=%s sandboxed=%y registration=%y opt=%y",
+            at_init == own ? "module" : "OTHER",
+            nested ? (nested.at_init == nested.later ? "module" : "OTHER") : "none",
+            after_nested == own ? "module" : "OTHER",
+            InitFramesA::closure() == own ? "module" : "OTHER",
+            thread_q.get(10s) == own ? "module" : "OTHER",
+            sandboxed_at_init, registration_at_init, opt_at_init);
+    }
+}
+}

@@ -292,7 +292,8 @@ RuntimeConfig::Impl* rc_get_tls_impl() {
 RuntimeConfig& rc_get_current_ref() {
     // Update fields not managed by helpers from TLS
     RuntimeConfig& tls_rc = rc_get_tls_ref();
-    if (!is_valid_qore_thread()) {
+    // the thread's data is looked up once for all the fields (qore#7336)
+    if (!rc_set_current_from_thread(tls_rc)) {
         // Shutdown or non-Qore threads: thread data is unavailable
         tls_rc.setProgram(nullptr);
         tls_rc.setThreadLocalProgramData(nullptr);
@@ -302,15 +303,6 @@ RuntimeConfig& rc_get_current_ref() {
         tls_rc.setReturnTypeInfo(nullptr);
         return tls_rc;
     }
-    tls_rc.setProgram(getProgram());
-    tls_rc.setThreadLocalProgramData(get_thread_local_program_data());
-    QoreObject* obj = nullptr;
-    const qore_class_private* cls = nullptr;
-    runtime_get_object_and_class(obj, cls);
-    tls_rc.setObject(obj);
-    tls_rc.setClass(cls);
-    tls_rc.setStackLocation(get_runtime_stack_location());
-    tls_rc.setReturnTypeInfo(getReturnTypeInfo());
     // closure_env is not directly accessible via getter - leave as nullptr
     // loc, stmt, po, element are managed by helpers - don't overwrite
     return tls_rc;

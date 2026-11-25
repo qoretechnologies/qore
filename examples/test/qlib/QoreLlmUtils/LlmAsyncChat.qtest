@@ -86,7 +86,7 @@ class AsyncStubServer {
     }
 
     string getUrl() {
-        return sprintf("http://localhost:%d", port);
+        return sprintf("http://127.0.0.1:%d", port);
     }
 
     #! Sets the replies of the following requests and forgets the requests read so far

@@ -1,0 +1,3 @@
+wc: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Socket::constructor()'; functional domain: NETWORK (restricted by PO_NO_NETWORK)
+c: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Socket::constructor()'; functional domain: NETWORK (restricted by PO_NO_NETWORK)
+d: INVALID-FUNCTION-ACCESS: parse options do not allow access to builtin method '::Qore::Socket::constructor()'; functional domain: NETWORK (restricted by PO_NO_NETWORK)

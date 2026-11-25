@@ -1,0 +1,36 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for lent.q: a connection whose client's constructor declares the network domain, as in
+#! security/caller-restriction/CapProbe.qm (qore#7052)
+
+%modern
+
+module LentMod {
+    version = "1.0";
+    desc = "a connection that is lent to restricted code (qore#7052)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace LentMod {
+#! a client: its constructor declares the network domain
+public class Client {
+    constructor() [dom=NETWORK] {
+    }
+}
+
+#! a connection that creates its client when it is used
+public class Conn {
+    #! creates the client: returns "client", or the error code of the exception raised
+    public string get() {
+        try {
+            Client c();
+            return "client";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+}

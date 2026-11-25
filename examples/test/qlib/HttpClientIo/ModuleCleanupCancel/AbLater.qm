@@ -1,0 +1,34 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose data the module cleanup deletes after the data of AaHandover: when the cleanup stops waiting for work
+# handed over to other threads, it leaves the modules as they are and does not delete it; see ModuleCleanupCancel.qtest
+# (qore#7239)
+
+%modern
+
+module AbLater {
+    version = "1.0";
+    desc = "a module whose data is deleted after the data of AaHandover";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AbLater {
+#! writes when the module cleanup deletes the data of this module
+class Reporter {
+    destructor() {
+        printf("later module data deleted\n");
+        flush();
+    }
+}
+
+#! the data of this module
+public class LaterHolder {
+    public {
+        static Reporter reporter();
+    }
+}
+}

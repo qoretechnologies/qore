@@ -70,6 +70,7 @@ module ChromaDataProvider {
                 "embedding via `/api/v2/.../collections/{id}/query`.  Returns ids, distances, "
                 "and metadata in Chroma's nested-list response format.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Vector Search",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ChromaQueryRequestDataType::Fields{"collection_id", "query_embeddings",}, {
