@@ -108,24 +108,22 @@ LoggerWrapper sub lib_fill() {
     return lib_cache ?? (lib_cache = new LoggerWrapper(new Logger("function-cache")));
 }
 
+#! a tenant's subclass that reads the private logger of a LoggerWrapper: refused when it is parsed (qore#6843)
+const LSubSource = "%modern
+%requires Logger
+class LSub inherits Logger::LoggerWrapper {
+    static bool read(Logger::LoggerWrapper w) {
+        return exists w.logger;
+    }
+}
+";
+
 #! the code of the tenants
 const TenantSource = "%modern
 %requires Logger
 %requires RestClientIo
 
-#! a subclass that reads and writes the logger of a LoggerWrapper
-class LSub inherits Logger::LoggerWrapper {
-    static string read(Logger::LoggerWrapper w) {
-        try {
-            return w.logger ? \"logger\" : \"nothing\";
-        } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
-        }
-    }
-}
-
-#! what the tenant may do with the object: \"owned\" or \"not owned\", the result of a read of its private logger with
-#! a subclass and of a change of its logger
+#! what the tenant may do with the object: \"owned\" or \"not owned\", and the result of a change of its logger
 string sub access(Logger::LoggerWrapper w) {
     string set;
     try {
@@ -134,8 +132,7 @@ string sub access(Logger::LoggerWrapper w) {
     } catch (hash<ExceptionInfo> ex) {
         set = ex.err;
     }
-    return sprintf(\"%s %s %s\", SandboxManager::isObjectOwnedByCaller(w) ? \"owned\" : \"not-owned\",
-        LSub::read(w), set);
+    return sprintf(\"%s %s\", SandboxManager::isObjectOwnedByCaller(w) ? \"owned\" : \"not-owned\", set);
 }
 
 string sub shared() {
@@ -240,8 +237,8 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
         const Err = "SANDBOX-OBJECT-ACCESS-ERROR";
 
         #! what a tenant may do with an object that it owns, and with one that it does not own
-        const Owned = "owned logger set";
-        const NotOwned = "not-owned " + Err + " " + Err;
+        const Owned = "owned set";
+        const NotOwned = "not-owned " + Err;
     }
 
     constructor() : QUnit::Test("sandbox object ownership", "1.0", \ARGV) {
@@ -250,7 +247,16 @@ class SandboxObjectOwnershipTest inherits QUnit::Test {
             addTestCase("lazy object of a tenant's service in " + mode, getLazyServiceTest(mode));
             addTestCase("transfer to a code-safety caller in " + mode, getCodeSafetyTransferTest(mode));
         }
+        addTestCase("a tenant subclass of a library class", \trustedClassTest());
         set_return_value(main());
+    }
+
+    #! a tenant's subclass of a class that trusted code declared cannot use its private declarations (qore#6843), such
+    #! as the logger of a LoggerWrapper: the owner rules apply to the public API of the class
+    trustedClassTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        assertThrows("PARSE-EXCEPTION", "cannot use the private declarations", \p.parse(), (LSubSource, "tenant"));
     }
 
     private code getTest(string mode) {
