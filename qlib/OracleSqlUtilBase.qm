@@ -6845,6 +6845,15 @@ group by p.index_name", schema.upr(), name.upr());
         return False;
     }
 
+    #! Returns whether the server supports changing a table's logging mode
+    bool supportsTableLogging() {
+        return True;
+    }
+
+    private string getSetLoggingSqlImpl(bool enabled) {
+        return sprintf("alter table %s %s", getSqlName(), enabled ? "logging" : "nologging");
+    }
+
     #! returns @ref True "True" if the database support tablespaces
     private bool supportsTablespacesImpl() {
         return True;
