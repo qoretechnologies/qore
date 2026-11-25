@@ -6908,6 +6908,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             bool handler_close, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # the run of the response's event source, if any
         *Priv::SseEventSourceRun sse_run = rv.sse_source;
+        # the bound of the data held for the client, which a socket handler's setup applies before it registers the
+        # connection (unless it has its own); applied below to a stream that its setup left without one.  It is set
+        # before the request context of the handler's setup is copied from the context, so that the setup gets it
+        cx.sse_max_buffer_size = listener.getSseMaxBufferSize();
         # the setup of the connection of a handler of restricted code gets the request without its credentials
         # (qore#7303)
         hash<auto> h_cx = cx;
@@ -6929,9 +6933,6 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         #   submitQuicStreamData()
         bool sse_is_http2 = cx."header-info".http2 ?? False;
         bool sse_is_http3 = cx."header-info".http3 ?? False;
-        # the bound of the data held for the client, which a socket handler's setup applies before it registers the
-        # connection (unless it has its own); applied below to a stream that its setup left without one
-        cx.sse_max_buffer_size = listener.getSseMaxBufferSize();
         # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
         # by the connection close anyway
         if (handler_close) {

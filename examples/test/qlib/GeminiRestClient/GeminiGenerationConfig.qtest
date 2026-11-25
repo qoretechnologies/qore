@@ -56,6 +56,7 @@ class CaptureVertexProvider inherits VertexAiRestClient::VertexAiLlmProvider {
 class GeminiGenerationConfigTest inherits QUnit::Test {
     constructor() : Test("Gemini generation config", "1.0", \ARGV) {
         addTestCase("Gemini 4 reasoning options on both providers", \gemini4Providers());
+        addTestCase("public maximum thinking level", \highestLevel());
         addTestCase("model family detection", \models());
         addTestCase("sampling and budget migration preserves other fields", \normalization());
         addTestCase("snake case aliases and empty configs", \aliases());
@@ -70,6 +71,17 @@ class GeminiGenerationConfigTest inherits QUnit::Test {
             \responseReferences());
         set_return_value(main());
     }
+
+    highestLevel() {
+        foreach string model in ("gemini-4-hydrogen", "gemini-4-neon") {
+            assertEq("XHIGH", GeminiBodyShape::highestThinkingLevel(model), model);
+        }
+        foreach string model in ("gemini-4-argon", "gemini-4-carbon", "gemini-3.7-flash") {
+            assertEq("HIGH", GeminiBodyShape::highestThinkingLevel(model), model);
+        }
+        assertEq("XHIGH", GeminiBodyShape::highestThinkingLevel("publishers/google/models/gemini-4-neon"));
+    }
+
 
     responseEnums() {
         # A strict boolean discriminator in alternative record shapes is legal JSON Schema.  The merged

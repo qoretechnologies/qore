@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-capability.qtest: a registry of connections that the host registers, which
+#! other code reaches through the library's functions, and a helper that acts on a connection that it is given; a
+#! connection that library code acts on is not lent to the code that calls the library (qore#7052)
+
+%modern
+%requires CapProbe
+
+module CapRegistry {
+    version = "1.0";
+    desc = "capability provenance probe: library code acting on lent objects (qore#7052)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace CapRegistry {
+    our CapProbe::Conn Registered;
+
+    #! registers a connection of the host
+    public nothing sub register(CapProbe::Conn c) {
+        Registered = c;
+    }
+
+    #! uses the registered connection for the caller
+    public string sub registered_get() {
+        return Registered.get();
+    }
+
+    #! uses a connection that the caller gives
+    public string sub helper_get(CapProbe::Conn c) {
+        return c.get();
+    }
+
+    #! creates a connection; the host gives restricted code a system-policy capability of it
+    public CapProbe::Conn sub make() {
+        return new CapProbe::Conn();
+    }
+}

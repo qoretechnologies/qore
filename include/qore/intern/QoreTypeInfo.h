@@ -129,13 +129,21 @@ public:
     DLLLOCAL virtual ~QoreTypeInfo() = default;
 #endif
 
-    //! Adds QTI_CTP_UNSAFE_RECEIVER to a known value (constructors of parameterized class types, after
-    //! unsafe_receiver is set; an unknown value takes it when it is set)
+    //! Adds QTI_CTP_UNSAFE_RECEIVER to a known value (after unsafe_receiver is set: the constructors of
+    //! parameterized class types and QoreParameterizedClassTypeInfo::upgradeUserTypeArgs(); an unknown value takes it
+    //! when it is set)
+    /** unsafe_receiver can be set after the type is made (qore#7540) while another thread sets the value
+        (setContainsTypeParameterCache()); each stores first and reads the other's variable after, sequentially
+        consistent, so that one of them adds the flag; the flag is added with a compare and swap, so that it is never
+        lost to a concurrent store of the value
+    */
     DLLLOCAL void setUnsafeReceiverCache() const {
-        signed char c = contains_type_parameter_cache.load(std::memory_order_relaxed);
-        if (c != -1) {
-            contains_type_parameter_cache.store(static_cast<signed char>(c | QTI_CTP_UNSAFE_RECEIVER),
-                std::memory_order_relaxed);
+        signed char c = contains_type_parameter_cache.load(std::memory_order_seq_cst);
+        while (c != -1 && !(c & QTI_CTP_UNSAFE_RECEIVER)) {
+            if (contains_type_parameter_cache.compare_exchange_weak(c,
+                    static_cast<signed char>(c | QTI_CTP_UNSAFE_RECEIVER), std::memory_order_seq_cst)) {
+                break;
+            }
         }
     }
 
@@ -147,8 +155,14 @@ public:
     }
 
     DLLLOCAL void setContainsTypeParameterCache(bool contains_type_parameter) const {
+        bool unsafe = unsafe_receiver.load(std::memory_order_seq_cst);
         contains_type_parameter_cache.store(static_cast<signed char>((contains_type_parameter ? 1 : 0)
-            | (unsafe_receiver ? QTI_CTP_UNSAFE_RECEIVER : 0)), std::memory_order_relaxed);
+            | (unsafe ? QTI_CTP_UNSAFE_RECEIVER : 0)), std::memory_order_seq_cst);
+        // unsafe_receiver can have been set since it was read, by an upgrade that found the value unknown; see
+        // setUnsafeReceiverCache()
+        if (!unsafe && unsafe_receiver.load(std::memory_order_seq_cst)) {
+            setUnsafeReceiverCache();
+        }
     }
 
     //! Returns true if the walk that references the declarations of the type is known to find none (issue #6126)
@@ -286,7 +300,9 @@ public:
     //! it as its receiver holds types read through it (issue #6419); one load, as it is tested for every call with a
     //! receiver
     DLLLOCAL static bool isUnsafeReceiver(const QoreTypeInfo* ti) {
-        return ti && ti->unsafe_receiver;
+        // relaxed: set when the type is made, or later, under the type lock, when a declaration that a type argument
+        // names becomes mortal (QoreParameterizedClassTypeInfo::upgradeUserTypeArgs(); qore#7540)
+        return ti && ti->unsafe_receiver.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL static const QoreTypeInfo* getHardReference(const QoreTypeInfo* ti);
@@ -896,6 +912,12 @@ public:
             str.sprintf("no value");
     }
 
+    //! Describes both types in a diagnostic, qualifying class names when their short forms collide.
+    DLLLOCAL static void describeTypeComparison(QoreString& str, const QoreTypeInfo* left, const char* separator,
+        const QoreTypeInfo* right);
+    DLLLOCAL static bool diagnosticNamesCollide(const QoreTypeInfo* left, const QoreTypeInfo* right);
+    DLLLOCAL static std::string diagnosticTypePath(const QoreTypeInfo* ti);
+
     // static version of method, checking for null pointer; inlined explicitly: the fast path of the parameters of
     // every call, whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
     DLLLOCAL QORE_INTERN_ALWAYS_INLINE static void acceptInputParam(const QoreTypeInfo* ti, int param_num,
@@ -1474,7 +1496,7 @@ protected:
     unsigned container_nesting = 0;
     //! true for a parameterized class type whose type arguments name user declarations: a call with it as its
     //! receiver holds types read through it (issue #6419; see QoreParameterizedClassTypeInfo::isUnsafeReceiver())
-    bool unsafe_receiver = false;
+    std::atomic<bool> unsafe_receiver{false};
     //! the instance serial number of the class, hashdecl or enum that made this type as its own type, otherwise 0
     /** Set by the constructors of the types of classes, hashdecls and enums, which are freed with their owners; see
         qore_get_type_identity_serial()
@@ -1711,7 +1733,7 @@ protected:
             bool& may_not_match, bool& may_need_filter, bool& t_no_match, bool& ok, qore_type_result_e& max_result,
             bool known_initial_assignment);
 
-    DLLLOCAL static void getNodeType(QoreString& str, const QoreValue& n);
+    DLLLOCAL void describeTypeMismatch(QoreString& str, const QoreValue& n) const;
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name);
 
@@ -1954,12 +1976,19 @@ public:
     //! Returns true if a type argument names a user declaration (or may: a type parameter): a call with the type as
     //! its receiver reads that declaration's types through the type (issue #6419)
     DLLLOCAL bool hasUserTypeArgs() const {
-        return user_type_args;
+        return user_type_args.load(std::memory_order_relaxed);
     }
 
+    //! Sets the flags of a type that a type argument names a user declaration of, if one does now (qore#7540)
+    /** A declaration that a binary module added to a Program at run time becomes mortal when it is attached to the
+        Program, after the types that the module made from it; the caller holds the type lock
+    */
+    DLLLOCAL void upgradeUserTypeArgs();
+
 protected:
-    //! true if a type argument names a user declaration; set when the type is made
-    bool user_type_args = false;
+    //! true if a type argument names a user declaration; set when the type is made, or later, under the type lock
+    //! (upgradeUserTypeArgs())
+    std::atomic<bool> user_type_args{false};
     //! the generic class; orphaned when it is retired (issue #6419)
     QoreOrphanablePtr<const QoreClass> base_class;
     //! the type arguments; orphaned when a declaration that one is the type of is retired (issue #6419)
@@ -4896,10 +4925,12 @@ public:
     //! Constructor for explicit union types
     /** @param members the member types as declared (without duplicates)
     */
+    /** @param path the name with the paths of the member types (getPathImpl(), qore#7331)
+    */
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
-            const QoreString& name, type_vec_t members, bool or_nothing = false)
+            const QoreString& name, const QoreString& path, type_vec_t members, bool or_nothing = false)
             : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
-            members(qore_orphanable_vec(members)) {
+            members(qore_orphanable_vec(members)), pname(path) {
         union_type = true;
     }
 
@@ -4944,9 +4975,17 @@ protected:
     //! compared by address only, and orphaned as the members are, so that the address of a freed declaration's type
     //! that a new type reuses is not taken for a member (issue #6419)
     orphanable_type_vec_t exact_members;
+    //! the name with the paths of the member types: the name has the names of the members, which are the same for
+    //! classes of the same name in different namespaces (qore#7331)
+    QoreString pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         concatName(str);
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        assert(!pname.empty());
+        return pname.c_str();
     }
 
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
@@ -5016,6 +5055,34 @@ public:
 
     //! References the declarations that the type refers to, in addition to those already referenced
     DLLLOCAL void add(const QoreTypeInfo* ti);
+
+    //! References the mortal declarations that the type names, also through the target of a reference type, in
+    //! addition to those already referenced (qore#7540)
+    /** The builtin declarations of a static namespace or of a module, which live as long as the code that names them,
+        are not referenced
+    */
+    DLLLOCAL void addMortal(const QoreTypeInfo* ti);
+
+    //! Appends to \a types the own types of the declarations that \a ti names (as addMortal() finds them) that are
+    //! not mortal (qore#7608)
+    /** The type of a class (QoreClass::getTypeInfo()), of a hashdecl or of an enum (not or-nothing) is appended: a
+        marking event reports these types of the declarations that it marks
+    */
+    DLLLOCAL static void getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& types);
+
+    //! References the given declarations, each of which must be mortal (QoreTypeOwner::isTypeOwnerSystem() is
+    //! false) and given once, when no declaration is referenced yet (qore#7607)
+    DLLLOCAL void addMortalDecls(const std::vector<const QoreClass*>& classes,
+            const std::vector<const TypedHashDecl*>& hashdecls, const std::vector<const QoreEnumDecl*>& enums);
+
+    //! Appends the declarations referenced to the vectors given (qore#7607)
+    DLLLOCAL void getDecls(std::vector<const QoreClass*>& classes, std::vector<const TypedHashDecl*>& hashdecls,
+            std::vector<const QoreEnumDecl*>& enums) const;
+
+    //! Returns true if no declaration is referenced
+    DLLLOCAL bool empty() const {
+        return !priv;
+    }
 
 private:
     qore_type_decl_refs_private* priv = nullptr;

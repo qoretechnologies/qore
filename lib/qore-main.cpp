@@ -528,6 +528,10 @@ void qore_cleanup() {
     // thread data are released below (qore#6045)
     // no thread can be started by that code: the threads have been waited for and are not waited for again
     qore_thread_start_closed.store(true, std::memory_order_release);
+#ifdef DEBUG
+    // the value that a test keeps to this point (dbg_keep_until_cleanup(); qore#7540)
+    qore_dbg_release_cleanup_holder();
+#endif
     qore_program_private::clearRemainingPrograms();
 
     // a Program that a foreign thread runs in was left as it is (see qore_program_private::leaveForeignThreads()): the
