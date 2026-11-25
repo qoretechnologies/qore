@@ -159,13 +159,13 @@ public class ExceptionDiagnosticsTest inherits QUnit::Test {
         assertRegex("errors\\.q:2(:[0-9]+)?: error: DIVISION-BY-ZERO: ", lines[0]);
         assertRegex("errors\\.q:3(:[0-9]+)?: error: DIVISION-BY-ZERO: ", lines[1]);
         assertEq("", run("--diag-format=text", path, False).out);
+        assertEq(r.out, run("", path, True, "").out);
         assertEq(r.out, run("", path, True, "text").out);
         assertEq(r.out, run("--diag-format=text", path, True, "legacy").out);
         r = run("--diag-format=legacy", path);
         assertEq(2, r.status, r.out);
         assertRegex("unhandled QORE System exception", r.out);
         assertRegex("unhandled QORE System exception", run("", path, True, "legacy").out);
-        assertRegex("unhandled QORE System exception", run("", path, True, "").out);
         path = writeSource("first.q", "%modern\nconst A = no_such_a();\nconst B = no_such_b();\n");
         r = run("--diag-format=text --only-first-exception", path);
         assertEq(1, (select split("\n", r.out), $1 =~ /: error: /).size(), r.out);

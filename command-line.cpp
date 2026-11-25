@@ -107,7 +107,7 @@ static bool only_first_except = false;
 
 // Text and legacy report diagnostics during a normal invocation. JSON parses without executing.
 enum class DiagnosticFormat { Text, Legacy, Json };
-static constexpr DiagnosticFormat DefaultDiagnosticFormat = DiagnosticFormat::Legacy;
+static constexpr DiagnosticFormat DefaultDiagnosticFormat = DiagnosticFormat::Text;
 static DiagnosticFormat diagnostic_format = DefaultDiagnosticFormat;
 static bool diagnostic_format_given = false;
 
@@ -217,7 +217,7 @@ static const char helpstr[] =
    "  -B, --show-build-options     show Qore build options and quit\n"
    "  -c, --charset=arg            sets default run-time encoding for strings and I/O (source is UTF-8)\n"
    "  -D, --define=arg             sets the value of a parse define\n"
-   "      --diag-format=FORMAT     parse diagnostics: text, legacy, or json (parse only)\n"
+   "      --diag-format=FORMAT     parse diagnostics: text (default), legacy, or json (parse only)\n"
    "      --code-frames            parse only and render parse diagnostics as code frames\n"
    "  -e, --exec=arg               execute program given on command-line\n"
    "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered\n"

@@ -189,7 +189,7 @@ qcc -o myapp build/aot/*.qo
     @anchor cli_parse_diagnostics
     <b>Diagnostic Command-Line Parameters</b>
 
-    With <tt>\--diag-format=text</tt>, the interpreter writes one line to stderr for each error or warning
+    By default (<tt>\--diag-format=text</tt>), the interpreter writes one line to stderr for each error or warning
     raised while parsing the program, including errors detected when the parse is committed.
     For example, a function missing a return value can produce a diagnostic of this form:
     @verbatim
@@ -205,7 +205,7 @@ example.q:4: error: MISSING-RETURN: ...
     In those modes the exit status is \c 2 on a parse error and \c 0 on a clean parse or warnings alone.
 
     |!Long Param|!Short|!Description
-    |<tt>\--diag-format=</tt><em>fmt</em>|n/a|Select \c text or \c legacy for reports on stderr, or \c json to parse only and write a JSON array to stdout. An explicit format takes precedence over \c QORE_DIAG_FORMAT
+    |<tt>\--diag-format=</tt><em>fmt</em>|n/a|Select \c text (default) or \c legacy for reports on stderr, or \c json to parse only and write a JSON array to stdout. An explicit format takes precedence over \c QORE_DIAG_FORMAT
     |<tt>\--code-frames</tt>|n/a|Parse only and render the collected diagnostics as code frames on stderr, with the offending source line and a caret span. Equivalent to the \c QORE_CODE_FRAMES environment variable
 
     @section diag_json_format JSON Diagnostic Format
