@@ -5309,7 +5309,8 @@ public:
 
     //! Returns true if the code of the class is restricted: a sandbox that does not trust its code governs the Program
     //! that defined it (see qore_program_is_restricted())
-    /** As isSandboxedCode(): a builtin class is trusted and the source Program is read when called; its sandboxes
+    /** The source Program is read when called, also for a builtin class (one without a source Program, as most are,
+        is not restricted), unlike isSandboxedCode(), which trusts every builtin class; its sandboxes
         are looked up without the lock of the class data, which takes no other lock.  Once the source Program has
         released the class, whether it was sandboxed then is used (isSandboxedCode()), which fails closed
     */
