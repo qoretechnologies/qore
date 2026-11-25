@@ -585,7 +585,14 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             });
         return err;
     }
-    return parseBindMethod(parse_context, qc, meth, readonly_receiver, nullptr, err);
+    err = parseBindMethod(parse_context, qc, meth, readonly_receiver, nullptr, err);
+    // A subclass may implement the name of an inherited pseudo-method with an unrelated return type (qore#7362); a
+    // pseudo-method call is always bound here, never deferred (qore#7411), so the receiver's type is known
+    if (m->isPseudo() && !QoreTypeInfo::getUniqueReturnClass(typeInfo)->isFinal()) {
+        parse_context.analysis.clear();
+        parse_context.typeInfo = returnTypeInfo = nullptr;
+    }
+    return err;
 }
 
 int QoreDotEvalOperatorNode::parseBindOrNothingNamedCall(QoreParseContext& parse_context, const QoreClass* nqc,
@@ -691,11 +698,6 @@ int QoreDotEvalOperatorNode::parseBindMethod(QoreParseContext& parse_context, co
             func)
         && !err) {
         err = -1;
-    }
-    // A subclass may implement the name of an inherited pseudo-method with an unrelated return type.
-    if (m->isPseudo() && !QoreTypeInfo::getUniqueReturnClass(typeInfo)->isFinal()) {
-        parse_context.analysis.clear();
-        parse_context.typeInfo = nullptr;
     }
     returnTypeInfo = parse_context.typeInfo;
 
