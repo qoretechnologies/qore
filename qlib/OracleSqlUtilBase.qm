@@ -392,6 +392,8 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" raises \c INDEX-OPTION-ERROR when a bitmap index is
+      declared unique (<a href="https://github.com/qoretechnologies/qore/issues/1611">issue 1611</a>)
     - a table of the user's own schema is named in messages, also in the \c TABLE-ERROR exceptions for a synonym or
       a table that cannot be found, without the schema, whose name is the user name
       (@ref OracleSqlUtilBase::OracleTable::getMessageName() "OracleTable::getMessageName()")
