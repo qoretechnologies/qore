@@ -67,6 +67,9 @@ public const string EVENT_SSE_DATA = "sse-data-event";
 public const string EVENT_SSE_CLOSED = "sse-closed-event";
 
 #! SSE connected event constant
+/** The data of the event of an @ref SseObservable that was started for a response gives the response: its
+    \c status_code, its \c headers and, if it has one, its \c status_message
+*/
 public const string EVENT_SSE_CONNECTED = "sse-connected-event";
 
 #! SSE heartbeat event constant (emitted for comment-only SSE messages like \c ":hb\\n\\n")
