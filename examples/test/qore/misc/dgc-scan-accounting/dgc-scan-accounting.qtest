@@ -37,7 +37,9 @@ class DgcScanAccountingTest inherits QUnit::Test {
         #! the accounting the worker's scans must produce, by scan root
         const ExpectedAccounting = {
             # 100 writes and the write that closes the cycle, rooted at the list's object, are all made; so is
-            # the write rooted at the peer; one scan restarts to take the locks exclusively
+            # the write rooted at the peer; one scan restarts to take the locks exclusively; the unsealed nodes are
+            # the root alone before the cycle is closed, then the root and its peer, in 101 scans (a leaf, which
+            # refers to nothing, is sealed)
             "AcctListRoot": {
                 "scans": 102,
                 "deferred": 0,
@@ -45,6 +47,7 @@ class DgcScanAccountingTest inherits QUnit::Test {
                 "restarts": 0,
                 "exclusive": 1,
                 "nodes": 409,
+                "unsealed": 203,
             },
             # the writes rooted at an object held by a local variable are deferred; the one made at the peer and
             # the one deferred scan replayed when the local releases the object run
@@ -55,6 +58,7 @@ class DgcScanAccountingTest inherits QUnit::Test {
                 "restarts": 0,
                 "exclusive": 0,
                 "nodes": 7,
+                "unsealed": 4,
             },
         };
     }
@@ -73,6 +77,7 @@ class DgcScanAccountingTest inherits QUnit::Test {
         addTestCase("no accounting when not enabled", \disabled());
         addTestCase("roots beyond the table's rows are counted together", \overflow());
         addTestCase("a scan waiting for another thread is reported", \scanWait());
+        addTestCase("the unsealed nodes do not depend on the current regions", \regions());
         set_return_value(main());
     }
 
@@ -117,6 +122,21 @@ class DgcScanAccountingTest inherits QUnit::Test {
         assertEq(1024, rows.total, "the table's rows, including the one for all other roots");
         assertEq(1100, rows.named_scans + rows.other_scans, "every scan counted");
         assertEq(1100 - 1023, rows.other_scans, "the roots without a row of their own");
+    }
+
+    #! a scan does not enter a current closed region, which changes the nodes it enters but not its unsealed nodes
+    regions() {
+        TmpDir tmp("qore-scan-accounting-");
+        hash<auto> rv = runWorker(tmp.path + DirSep + "stats", "regions");
+        hash<string, int> first = rv.accounting.AcctRegionFirst;
+        hash<string, int> second = rv.accounting.AcctRegionSecond;
+        assertEq(1, first.scans, "the write that stores the leaves is scanned");
+        assertEq(1, second.scans, "the next write is scanned");
+        # the first scan enters the ten leaves and records them in a closed region; the second does not enter them
+        assertGt(second.nodes + 10, first.nodes, sprintf("the first scan entered the leaves: %y", rv.accounting));
+        # the root and its peer each time: the leaves are sealed, whether they are entered or not
+        assertEq(2, first.unsealed, "the unsealed nodes of the scan that entered the region");
+        assertEq(2, second.unsealed, "the unsealed nodes of the scan that skipped the region");
     }
 
     #! one thread holds an object's lock; a scan in another thread that needs it waits and is reported
@@ -210,10 +230,12 @@ class DgcScanAccountingTest inherits QUnit::Test {
     private hash<string, hash<string, int>> parseFile(string path) {
         hash<string, hash<string, int>> rv = {};
         list<string> lines = File::readTextFile(path).split("\n");
-        assertRegex("^scan_root +scans +deferred +already +restarts +exclusive +nodes ", lines[0], "header");
+        assertRegex("^scan_root +scans +deferred +already +restarts +exclusive +nodes +total_ms +wait_ms +max_us "
+            "+unsealed$", lines[0], "header");
         foreach string line in (lines) {
-            *list<*string> f = (line =~ x/^(Acct[A-Za-z]+) +([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+) /);
-            if (f) {
+            # name, scans, deferred, already, restarts, exclusive, nodes, total_ms, wait_ms, max_us, unsealed
+            list<string> f = map $1, line.split(" "), $1.val();
+            if (f.size() == 11 && f[0] =~ /^Acct[A-Za-z]+$/) {
                 rv{f[0]} = {
                     "scans": f[1].toInt(),
                     "deferred": f[2].toInt(),
@@ -221,6 +243,7 @@ class DgcScanAccountingTest inherits QUnit::Test {
                     "restarts": f[4].toInt(),
                     "exclusive": f[5].toInt(),
                     "nodes": f[6].toInt(),
+                    "unsealed": f[10].toInt(),
                 };
             }
         }

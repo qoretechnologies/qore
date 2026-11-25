@@ -92,7 +92,7 @@ module MistralDataProvider {
 
     @section mistraldataproviderintro MistralDataProvider Introduction
 
-    The %MistralDataProvider module exposes 264 completed-response actions from the vendored official
+    The %MistralDataProvider module exposes 347 completed-response actions from the vendored official
     <a href="https://mistral.ai">Mistral AI</a> OpenAPI description. Request options, validation, and response types
     come from that description; the reviewed manifest adds presentation, finite choices and resource
     dropdowns. The schema is installed with the module and is never downloaded during an action call.
@@ -104,7 +104,12 @@ module MistralDataProvider {
     - Manage connectors and their credentials, evaluation datasets and workflow executions
     - Search observability data and inspect projects, evaluation runs, records, optimizations, trials and scorers
     - Manage audio agents and sessions, workflow deployments and schedules, and event triggers
-    - Configure RAG ingestion pipelines, report deployment metrics, and search documents in managed indexes
+    - Configure RAG ingestion pipelines, report deployment metrics, search documents in managed indexes and generate
+      their summaries
+    - Administer the organization with an admin API key: users, invitations, roles, workspaces, user groups, API keys,
+      spend and rate limits, usage, audit logs, SCIM synchronization and Vibe usage analytics
+    - Manage service accounts, webhooks, connector sharing and activation, and read the caller's identity,
+      organizations, workspaces, budget and subscription
 
     Preview operations require the corresponding account access. An authenticated connection ping
     verifies the API key with a model listing; individual models and batch inference can require billing.

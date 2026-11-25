@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires RestHandler
+
+%exec-class RestHandlerSandboxedPersistentStreamTest
+
+#! A trusted REST handler that hands a persistent stream to a stream handler of a sandboxed Program (qore#7620)
+/** A trusted handler that hands the requests of its HTTP/1.x connection to code that is not trusted calls
+    AbstractHttpRequestHandler::setHandlerSocketView() in its constructor (qore#7305): the stream handler then gets the
+    socket of its request, the session is persistent, and HttpListenerInterface::signalPersistentSessionClose() with the
+    handler runs its closed notification.  Without the call the request is refused, with a message that names the
+    method, as the stream handler would get the connection's socket.
+*/
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 20s;
+
+#! the source of the Program that declares the stream handler's class (a service's stream handler)
+const StreamSource = "%modern
+%requires RestHandler
+class SbxStream inherits RestHandler::AbstractRestStreamRequestHandler {
+    private { code closed_cb; }
+    constructor(hash<auto> cx, *hash<auto> ah, code closed_cb) : RestHandler::AbstractRestStreamRequestHandler(cx, ah) {
+        self.closed_cb = closed_cb;
+    }
+    *code getPersistentClosedNotification() {
+        return closed_cb;
+    }
+    bool isPersistent() {
+        return True;
+    }
+    private nothing recvImpl(hash<auto> v) {
+    }
+    private hash<auto> getResponseHeaderMessageImpl() {
+        return {\"code\": 200, \"body\": \"stream ok\"};
+    }
+    private auto sendImpl() {
+    }
+}
+object sub make_stream(hash<auto> cx, *hash<auto> ah, code closed_cb) {
+    return new SbxStream(cx, ah, closed_cb);
+}
+";
+
+#! the REST class whose stream handler is the sandboxed Program's
+class SqlClass inherits AbstractRestClass {
+    private {
+        Program pgm;
+        Queue closed;
+    }
+
+    constructor(Program pgm, Queue closed) {
+        self.pgm = pgm;
+        self.closed = closed;
+    }
+
+    string name() {
+        return "sqlutil";
+    }
+
+    AbstractRestStreamRequestHandler streamPostStream(hash<auto> cx, *hash<auto> ah) {
+        # the closed notification is trusted code
+        Queue q = closed;
+        code closed_cb = sub () { q.push(True); };
+        return pgm.callFunction("make_stream", cx, ah, closed_cb);
+    }
+
+    hash<HttpServer::HttpHandlerResponseInfo> getPing(hash<auto> cx, *hash<auto> ah) {
+        return RestHandler::makeResponse(200, "pong");
+    }
+}
+
+#! the trusted container class
+class Svc inherits AbstractRestClass {
+    constructor(Program pgm, Queue closed) {
+        addClass(new SqlClass(pgm, closed));
+    }
+
+    string name() {
+        return "services";
+    }
+}
+
+#! the trusted REST handler; keeps the listener and the connection key of the stream request, as a platform does
+class TrustedRestHandler inherits RestHandler {
+    public {
+        *HttpListenerInterface kept;
+        *string key;
+        Queue served();
+    }
+
+    constructor(Program pgm, Queue closed, bool socket_view) {
+        if (socket_view) {
+            # this handler hands its requests to code that is not trusted (qore#7305)
+            setHandlerSocketView();
+        }
+        addClass(new Svc(pgm, closed));
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data b) {
+        on_exit served.push(cx.raw_path);
+        if (cx.raw_path =~ /action=stream/) {
+            kept = listener;
+            key = cx.sock_key;
+        }
+        return RestHandler::handleRequest(listener, s, cx, hdr, b);
+    }
+
+    *code<bool(hash<auto>)> getPersistentQueueFilter() {
+        return bool sub (hash<auto> hdr) { return exists hdr."x-persistent"; };
+    }
+}
+
+class RestHandlerSandboxedPersistentStreamTest inherits QUnit::Test {
+    constructor() : Test("RestHandlerSandboxedPersistentStreamTest", "1.0", \ARGV) {
+        addTestCase("a handler that calls setHandlerSocketView(): the persistent session closes", \viewTest());
+        addTestCase("a handler that does not: the request is refused, naming the method", \refusedTest());
+        set_return_value(main());
+    }
+
+    #! returns the Program of the stream handler's class, which a sandbox that does not trust its code governs
+    private Program getStreamProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(StreamSource, "stream-program");
+        return p;
+    }
+
+    #! starts a server with the handler; returns the server and a connected client
+    private hash<auto> start(TrustedRestHandler h) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setHandler("rest", "/services", NOTHING, h);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        HTTPClient c({"url": "http://127.0.0.1:" + port, "timeout": HangGuard, "http_version": "1.1",
+            "headers": {"Accept": "application/x-yaml"}});
+        c.connect();
+        return {"server": server, "client": c};
+    }
+
+    #! sends the persistent stream request; returns the response
+    private hash<auto> sendStream(HTTPClient c) {
+        try {
+            return c.send("{a: 1}\n", "POST", "/services/sqlutil?action=stream;stream=stream",
+                {"X-Persistent": "1", "Content-Type": "application/x-yaml"}, False);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.arg.typeCode() == NT_HASH ? ex.arg : {"status_code": -1, "body": ex.desc};
+        }
+    }
+
+    viewTest() {
+        Queue closed();
+        TrustedRestHandler h(getStreamProgram(), closed, True);
+        hash<auto> env = start(h);
+        on_exit delete env.server;
+        HTTPClient c = env.client;
+        on_exit c.disconnect();
+        hash<auto> r = sendStream(c);
+        assertEq(200, r.status_code, "the stream request is served");
+        h.served.get(HangGuard);
+        # a request of the session: the persistent queue is registered before it is read
+        r = c.send(NOTHING, "GET", "/services/sqlutil/ping", {"X-Persistent": "1"});
+        assertEq(200, r.status_code, "the session's next request is served");
+        h.served.get(HangGuard);
+        # another thread closes the session with the handler that registered it; the call waits for its cleanup
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            h.kept.signalPersistentSessionClose(h.key, h);
+        }();
+        assertEq(0, done.waitForZero(HangGuard), "the close returned");
+        assertEq(1, closed.size(), "the session's closed notification ran");
+    }
+
+    refusedTest() {
+        Queue closed();
+        TrustedRestHandler h(getStreamProgram(), closed, False);
+        hash<auto> env = start(h);
+        on_exit delete env.server;
+        HTTPClient c = env.client;
+        on_exit c.disconnect();
+        hash<auto> r = sendStream(c);
+        assertEq(500, r.status_code, "the stream request is refused");
+        assertRegex("setHandlerSocketView\\(\\)", r.body, "the refusal names the method that the handler calls");
+        assertRegex("constructor", r.body, "and where it calls it");
+        h.served.get(HangGuard);
+        assertEq(0, closed.size(), "no session was started");
+    }
+}
