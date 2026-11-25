@@ -1,0 +1,786 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - async I/O callback workers, threads and thread pools that run host code for sandboxed code
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/aio-host-call-modules"
+%requires QUnit
+%requires AioHostCallLib
+
+%exec-class AsyncIoHostCallOwnershipTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! An operation that waits for an event of its notifier, which never comes
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+}
+
+#! An operation of the host's code that completes at once; its completion runs the given code and reports its result
+class HostCallbackOperation inherits AbstractPollOperation<auto> {
+    public {
+        Queue report();
+    }
+
+    private {
+        EventNotifier notifier;
+        bool done;
+        code callback;
+    }
+
+    constructor(EventNotifier notifier, code callback) {
+        self.notifier = notifier;
+        self.callback = callback;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        try {
+            report.push(callback());
+        } catch (hash<ExceptionInfo> ex) {
+            report.push(ex.err);
+        }
+    }
+}
+
+#! The host's references and resources, created when the host starts, before it serves a tenant
+class HostRefs {
+    public {
+        #! a reference that the host's code elevates with
+        static code cancel_by_key = \AsyncIoController::cancelByKey();
+        #! a capability registered when the host starts
+        static code cancel_cap = SandboxManager::createSystemPolicyCall(\AsyncIoController::cancelByKey());
+        #! a reference to host code that calls a tenant, which the host's code elevates with
+        static code call_tenant = \host_call_tenant();
+        #! a reference to module code that the host's code elevates with
+        static code module_cancel = \AioHostCallLib::Lib::cancelByKey();
+        #! the host's pool, shared by every caller
+        static ThreadPool pool(1, 1, 1);
+        #! the tenant that host_call_tenant() calls
+        static *Program reenter_tenant;
+        #! a Program of the host's that is not sandboxed, whose call references host code gets
+        static *Program other_host;
+    }
+}
+
+#! A host object whose method the tenant calls
+class HostApi {
+    bool cancelKey(string key) {
+        return AsyncIoController::cancelByKey(key);
+    }
+}
+
+#! a host function that the tenant calls (imported)
+bool sub host_cancel_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
+#! a host function that the tenant calls, which cancels by owner
+int sub host_cancel_owner(string owner) {
+    return AsyncIoController::cancelByOwner(owner);
+}
+
+#! a host function that the tenant calls, which cancels a timer
+bool sub host_cancel_timer(int id) {
+    return AsyncIoController::cancelTimer(id);
+}
+
+#! a host function that the tenant calls, which replaces the operation with the key
+hash<SocketPollResultInfo> sub host_replace(string key) {
+    EventNotifier n();
+    Queue rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+        "sock": n,
+        "spop": new WaitingOperation(n),
+        "owner": key + "-replacement",
+        "key": key,
+        "to": -1s,
+    }, True);
+    on_exit AsyncIoController::cancelByOwner(key + "-replacement");
+    return rq.get(HangGuard);
+}
+
+#! a host function that the tenant calls, which elevates explicitly with a reference created when the host started
+bool sub host_cancel_key_elevated(string key) {
+    return SandboxManager::callWithSystemPolicy(HostRefs::cancel_by_key, key);
+}
+
+#! a host function that the tenant calls, which elevates with a reference created while it serves the tenant
+/** The reference keeps the tenant's policy (callWithSystemPolicy() does not remove the provenance of a reference
+    created while serving sandboxed code), so the code does not elevate
+*/
+bool sub host_cancel_key_elevated_tenant_ref(string key) {
+    return SandboxManager::callWithSystemPolicy(\AsyncIoController::cancelByKey(), key);
+}
+
+#! a host function that gets a call reference of another Program of the host's (through a caller sandbox helper)
+code sub host_get_other_ref(auto unused) {
+    return HostRefs::other_host.getCallReference("other_cancel_key");
+}
+
+#! a host function that creates closures that hand work off in turn: a thread, a pool task, a closure
+hash<auto> sub host_make_handoff_closures(auto unused) {
+    return {
+        "thread": bool sub (string key) {
+            Queue q();
+            background sub () {
+                q.push(AsyncIoController::cancelByKey(key));
+            }();
+            return q.get(HangGuard);
+        },
+        "pool": bool sub (string key) {
+            Queue q();
+            HostRefs::pool.submit(sub () {
+                q.push(AsyncIoController::cancelByKey(key));
+            });
+            return q.get(HangGuard);
+        },
+        "closure": bool sub (string key) {
+            code c = bool sub () { return AsyncIoController::cancelByKey(key); };
+            return c();
+        },
+    };
+}
+
+#! host code that calls the tenant's code, which calls the host's code
+bool sub host_call_tenant(string key) {
+    return HostRefs::reenter_tenant.callFunction("cancel_direct", key);
+}
+
+#! a host function that the tenant calls, which elevates and calls the tenant back
+bool sub host_reenter_elevated(string key) {
+    return SandboxManager::callWithSystemPolicy(HostRefs::call_tenant, key);
+}
+
+#! a host function that the tenant calls, which delegates to module code
+bool sub host_cancel_key_via_module(string key) {
+    return AioHostCallLib::Lib::cancelByKey(key);
+}
+
+#! a host function that the tenant calls, which elevates and delegates to module code
+bool sub host_cancel_key_via_module_elevated(string key) {
+    return SandboxManager::callWithSystemPolicy(HostRefs::module_cancel, key);
+}
+
+#! a host function that the tenant calls, which delegates to module code in a thread that it starts
+bool sub host_cancel_key_via_module_in_thread(string key) {
+    Queue q();
+    background sub () {
+        q.push(AioHostCallLib::Lib::cancelByKey(key));
+    }();
+    return q.get(HangGuard);
+}
+
+#! a host function that the tenant calls, which hands the work off to a thread
+bool sub host_cancel_key_in_thread(string key) {
+    Queue q();
+    background sub () {
+        q.push(AsyncIoController::cancelByKey(key));
+    }();
+    return q.get(HangGuard);
+}
+
+#! a host function that the tenant calls, which hands the work off to a thread pool that it creates
+bool sub host_cancel_key_in_pool(string key) {
+    Queue q();
+    ThreadPool tp(1);
+    on_exit tp.stopWait();
+    tp.submit(sub () {
+        q.push(AsyncIoController::cancelByKey(key));
+    });
+    return q.get(HangGuard);
+}
+
+#! a host function that the tenant calls, which hands the work off to the host's shared pool
+bool sub host_cancel_key_in_shared_pool(string key) {
+    Queue q();
+    HostRefs::pool.submit(sub () {
+        q.push(AsyncIoController::cancelByKey(key));
+    });
+    return q.get(HangGuard);
+}
+
+#! the tenant's code: it acts on the operations of others only through the host's code
+const TenantSource = "%modern
+class TenantWaitingOperation inherits AbstractPollOperation<auto> {
+    private { object notifier; }
+    constructor(object n) { notifier = n; }
+    string getGoal() { return \"waiting\"; }
+    string getState() { return \"waiting\"; }
+    bool goalReached() { return False; }
+    *hash<SocketPollInfo> continuePoll() { return <SocketPollInfo>{\"events\": SOCK_POLLIN, \"socket\": notifier}; }
+}
+bool sub cancel_direct(string key) { return host_cancel_key(key); }
+bool sub cancel_host_via_module(string key) { return host_cancel_key_via_module(key); }
+bool sub cancel_host_via_module_elevated(string key) { return host_cancel_key_via_module_elevated(key); }
+bool sub cancel_host_via_module_in_thread(string key) { return host_cancel_key_via_module_in_thread(key); }
+bool sub cancel_own(string key) { return AsyncIoController::cancelByKey(key); }
+auto sub call(code c, auto arg) { return c(arg); }
+bool sub cancel_method(object o, string key) { return o.cancelKey(key); }
+int sub cancel_owner(string owner) { return host_cancel_owner(owner); }
+bool sub cancel_timer(int id) { return host_cancel_timer(id); }
+hash<SocketPollResultInfo> sub replace_key(string key) { return host_replace(key); }
+bool sub cancel_elevated(string key) { return host_cancel_key_elevated(key); }
+bool sub cancel_elevated_tenant_ref(string key) { return host_cancel_key_elevated_tenant_ref(key); }
+bool sub reenter_elevated(string key) { return host_reenter_elevated(key); }
+bool sub cancel_in_thread(string key) { return host_cancel_key_in_thread(key); }
+bool sub cancel_in_pool(string key) { return host_cancel_key_in_pool(key); }
+bool sub cancel_in_shared_pool(string key) { return host_cancel_key_in_shared_pool(key); }
+bool sub cancel_via_module(code c, string key) { return AioHostCallLib::Lib::call(c, key); }
+bool sub cancel_via_module_thread(code c, string key) {
+    return AioHostCallLib::Lib::callInThread(c, key, 60s);
+}
+auto sub get_via_module_thread(code c) { return AioHostCallLib::Lib::callInThread(c, NOTHING, 60s); }
+sub submit(object op, object n, string owner) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": op,
+        \"owner\": owner,
+        \"to\": 60s,
+    });
+}
+auto sub submit_own(object n, string key) {
+    return AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": new TenantWaitingOperation(n),
+        \"owner\": key,
+        \"key\": key,
+        \"to\": -1s,
+    });
+}
+";
+
+#! Host Program code that runs for sandboxed code acts for the sandboxed code's application (qore#7148)
+/** Library module code that sandboxed code calls acts for the calling tenant's application (qore#7010); the host's
+    Program code that runs for sandboxed code acts for that application as well, restricted to it: called directly (an
+    imported function, a call reference or a closure), as a method of a host object, through module code, or in the
+    callback of a tenant's operation, also when it hands the work off to a thread or a thread pool, and sandboxed code
+    that host code calls in the callback of another operation.  The host code in a thread that module code starts acts
+    for no application, as the module code there does.  Code that elevates explicitly acts for the host: with
+    SandboxManager::callWithSystemPolicy() and code that was not created while it served the tenant, or with a
+    capability of SandboxManager::createSystemPolicyCall(), unless sandboxed code is entered inside the elevation.
+*/
+class AsyncIoHostCallOwnershipTest inherits QUnit::Test {
+    private {
+        int serial;
+        list<auto> held;
+        Mutex held_lock();
+    }
+
+    constructor() : Test("AsyncIoHostCallOwnershipTest", "1.0") {
+        # one I/O thread: every operation runs on it, so a submission with the key of another operation always meets
+        # that operation (the key of an operation is unique only on its I/O thread: #7624; the count can be set only
+        # before the controller's first operation)
+        AsyncIoController::setMaxIoThreads(1);
+        addTestCase("an imported host function called by a tenant acts for the tenant", \directTest());
+        addTestCase("a call reference to host code called by a tenant acts for the tenant", \callRefTest());
+        addTestCase("a closure of the host called by a tenant acts for the tenant", \closureTest());
+        addTestCase("a method of a host object called by a tenant acts for the tenant", \methodTest());
+        addTestCase("host code that a tenant calls through module code acts for the tenant", \moduleTest());
+        addTestCase("module code that host code calls for a tenant acts for the tenant", \hostCallsModuleTest());
+        addTestCase("host code in a thread that module code starts for a tenant acts for no application",
+            \moduleThreadTest());
+        addTestCase("the threads and tasks that host code in a module's thread starts act for no application",
+            \moduleThreadHandOffTest());
+        addTestCase("a call reference that host code in a module's thread gets from another Program acts for no "
+            "application", \moduleThreadOtherProgramTest());
+        addTestCase("the work that closures created in a module's thread hand off later acts for no application",
+            \moduleThreadClosureHandOffTest());
+        addTestCase("a thread that host code called by a tenant starts acts for the tenant", \threadTest());
+        addTestCase("a thread pool task that host code called by a tenant submits acts for the tenant", \poolTest());
+        addTestCase("a task of the host's shared pool submitted for a tenant acts for the tenant", \sharedPoolTest());
+        addTestCase("a thread that host code in a tenant's callback starts acts for the tenant", \callbackThreadTest());
+        addTestCase("a pool task that host code in a tenant's callback submits acts for the tenant",
+            \callbackPoolTest());
+        addTestCase("a tenant that host code calls in the callback of the host's operation acts for the tenant",
+            \hostCallbackTenantTest());
+        addTestCase("a tenant that host code calls in another tenant's callback acts for itself",
+            \tenantCallbackTenantTest());
+        addTestCase("the work that a tenant called in another tenant's callback hands off acts for itself",
+            \tenantCallbackTenantHandOffTest());
+        addTestCase("the work that a host closure created for a tenant hands off in another tenant's callback acts for "
+            "the first tenant", \closureInOtherTenantCallbackTest());
+        addTestCase("host code called by a tenant cancels by owner only the tenant's operations", \ownerTest());
+        addTestCase("host code called by a tenant cancels only the tenant's timers", \timerTest());
+        addTestCase("host code called by a tenant does not replace the host's operation", \replaceTest());
+        addTestCase("host code that elevates with callWithSystemPolicy() acts for the host", \elevatedTest());
+        addTestCase("a callWithSystemPolicy() reference created while serving a tenant acts for the tenant",
+            \elevatedTenantRefTest());
+        addTestCase("a tenant called back inside an elevation acts for itself", \reenterElevatedTest());
+        addTestCase("a createSystemPolicyCall() capability of the host acts for the host", \capabilityTest());
+        addTestCase("host code in a tenant's callback that elevates with a capability acts for the host",
+            \callbackCapabilityTest());
+        addTestCase("host code in a tenant's callback that calls callWithSystemPolicy() acts for the tenant",
+            \callbackElevatedTest());
+        set_return_value(main());
+    }
+
+    #! a tenant: a sandboxed Program with the host's functions imported
+    private Program getTenant() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        foreach string f in (
+                "host_cancel_key", "host_cancel_owner", "host_cancel_timer", "host_replace",
+                "host_cancel_key_via_module", "host_cancel_key_via_module_in_thread",
+                "host_cancel_key_via_module_elevated",
+                "host_cancel_key_elevated", "host_cancel_key_elevated_tenant_ref", "host_reenter_elevated",
+                "host_cancel_key_in_thread", "host_cancel_key_in_pool", "host_cancel_key_in_shared_pool") {
+            p.importFunction(f);
+        }
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantSource, "tenant");
+        return p;
+    }
+
+    private auto hold(auto o) {
+        AutoLock al(held_lock);
+        push held, o;
+        return o;
+    }
+
+    private string getName(string test) {
+        return sprintf("%s-%d-%d", test, getpid(), ++serial);
+    }
+
+    #! submits an operation of the host's with the given key, which is also its owner
+    private Queue submitHost(string key) {
+        EventNotifier n();
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": hold(new WaitingOperation(n)),
+            "owner": key,
+            "key": key,
+            "to": -1s,
+        });
+    }
+
+    #! checks that the tenant's call through \a call does not cancel an operation of the host's
+    private refused(string name, code call) {
+        string key = getName(name);
+        Queue rq = submitHost(key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertFalse(call(key), "the tenant's cancellation through the host's code finds no operation");
+        assertEq(0, rq.size(), "the host's operation was not canceled");
+        # the host's own code is not restricted
+        assertTrue(AsyncIoController::cancelByKey(key), "the host cancels its operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    #! checks that the elevated call through \a call cancels an operation of the host's
+    private allowed(string name, code call) {
+        string key = getName(name);
+        Queue rq = submitHost(key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertTrue(call(key), "the elevated call cancels the host's operation");
+        assertTrue(rq.get(HangGuard).canceled, "the host's operation was canceled");
+    }
+
+    #! checks that host code that runs for the tenant through \a call cancels the tenant's own operation
+    private ownAllowed(Program tenant, string name, code call) {
+        string key = getName(name);
+        EventNotifier n();
+        auto rq = tenant.callFunction("submit_own", n, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertTrue(call(key), "the host's code cancels the tenant's operation");
+        assertTrue(rq.get(HangGuard).canceled, "the tenant's operation was canceled");
+    }
+
+    #! runs \a callback in the callback of an operation that the given tenant submits, and returns its result
+    private auto inTenantCallback(Program tenant, code callback) {
+        EventNotifier n();
+        n.notify();
+        HostCallbackOperation op(n, callback);
+        tenant.callFunction("submit", op, n, getName("tenant-op"));
+        return op.report.get(HangGuard);
+    }
+
+    #! runs \a callback in the callback of an operation of the host's, and returns its result
+    private auto inHostCallback(code callback) {
+        EventNotifier n();
+        n.notify();
+        HostCallbackOperation op(n, callback);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": getName("host-op"),
+            "to": HangGuard,
+        });
+        return op.report.get(HangGuard);
+    }
+
+    directTest() {
+        Program tenant = getTenant();
+        refused("direct", bool sub (string key) { return tenant.callFunction("cancel_direct", key); });
+        ownAllowed(tenant, "direct-own", bool sub (string key) { return tenant.callFunction("cancel_direct", key); });
+    }
+
+    callRefTest() {
+        Program tenant = getTenant();
+        refused("ref", bool sub (string key) { return tenant.callFunction("call", \host_cancel_key(), key); });
+    }
+
+    closureTest() {
+        Program tenant = getTenant();
+        code c = bool sub (string key) { return AsyncIoController::cancelByKey(key); };
+        refused("closure", bool sub (string key) { return tenant.callFunction("call", c, key); });
+        ownAllowed(tenant, "closure-own", bool sub (string key) { return tenant.callFunction("call", c, key); });
+    }
+
+    methodTest() {
+        Program tenant = getTenant();
+        HostApi api();
+        refused("method", bool sub (string key) { return tenant.callFunction("cancel_method", api, key); });
+        ownAllowed(tenant, "method-own", bool sub (string key) {
+            return tenant.callFunction("cancel_method", api, key);
+        });
+    }
+
+    moduleTest() {
+        Program tenant = getTenant();
+        refused("module", bool sub (string key) {
+            return tenant.callFunction("cancel_via_module", \host_cancel_key(), key);
+        });
+        ownAllowed(tenant, "module-own", bool sub (string key) {
+            return tenant.callFunction("cancel_via_module", \host_cancel_key(), key);
+        });
+    }
+
+    hostCallsModuleTest() {
+        Program tenant = getTenant();
+        # called directly, in a thread that the host's code starts, and in the callback of a tenant's operation
+        refused("host-module", bool sub (string key) { return tenant.callFunction("cancel_host_via_module", key); });
+        refused("host-module-thread", bool sub (string key) {
+            return tenant.callFunction("cancel_host_via_module_in_thread", key);
+        });
+        refused("host-module-callback", bool sub (string key) {
+            return inTenantCallback(tenant, bool sub () { return AioHostCallLib::Lib::cancelByKey(key); });
+        });
+        # in the callback of the host's own operation: the tenant that the host's code calls there comes first
+        refused("host-module-host-callback", bool sub (string key) {
+            return inHostCallback(bool sub () { return tenant.callFunction("cancel_host_via_module", key); });
+        });
+        # elevated: the module code acts for the host
+        allowed("host-module-elevated", bool sub (string key) {
+            return tenant.callFunction("cancel_host_via_module_elevated", key);
+        });
+        ownAllowed(tenant, "host-module-own", bool sub (string key) {
+            return tenant.callFunction("cancel_host_via_module", key);
+        });
+        ownAllowed(tenant, "host-module-thread-own", bool sub (string key) {
+            return tenant.callFunction("cancel_host_via_module_in_thread", key);
+        });
+    }
+
+    moduleThreadTest() {
+        Program tenant = getTenant();
+        refused("module-thread", bool sub (string key) {
+            return tenant.callFunction("cancel_via_module_thread", \host_cancel_key(), key);
+        });
+        # the work of the module's thread belongs to no application: not even the tenant's own operation is canceled
+        string key = getName("module-thread-own");
+        EventNotifier n();
+        auto rq = tenant.callFunction("submit_own", n, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertFalse(tenant.callFunction("cancel_via_module_thread", \host_cancel_key(), key),
+            "the host's code in the module's thread acts for no application");
+        assertEq(0, rq.size(), "the tenant's operation was not canceled");
+        assertTrue(tenant.callFunction("cancel_own", key), "the tenant cancels its own operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    moduleThreadHandOffTest() {
+        Program tenant = getTenant();
+        foreach code handoff in ((\host_cancel_key_in_thread(), \host_cancel_key_in_pool(),
+                \host_cancel_key_in_shared_pool())) {
+            refused("module-thread-handoff", bool sub (string key) {
+                return tenant.callFunction("cancel_via_module_thread", handoff, key);
+            });
+            # the work that the host's code in the module's thread hands off belongs to no application either
+            string key = getName("module-thread-handoff-own");
+            EventNotifier n();
+            auto rq = tenant.callFunction("submit_own", n, key);
+            on_exit AsyncIoController::cancelByOwner(key);
+            assertFalse(tenant.callFunction("cancel_via_module_thread", handoff, key),
+                "the work that the host's code in the module's thread hands off acts for no application");
+            assertEq(0, rq.size(), "the tenant's operation was not canceled");
+            assertTrue(tenant.callFunction("cancel_own", key), "the tenant cancels its own operation");
+            assertTrue(rq.get(HangGuard).canceled);
+        }
+    }
+
+    moduleThreadOtherProgramTest() {
+        Program other(PO_NO_CHILD_PO_RESTRICTIONS);
+        other.parse("%modern\nbool sub other_cancel_key(string key) { return AsyncIoController::cancelByKey(key); }\n",
+            "other-host");
+        HostRefs::other_host = other;
+        on_exit remove HostRefs::other_host;
+        Program tenant = getTenant();
+        code ref = tenant.callFunction("get_via_module_thread", \host_get_other_ref());
+        # the reference, run by the host's own code later, acts for no application: not for the tenant whose call
+        # started the module's thread
+        string key = getName("module-thread-other-program");
+        EventNotifier n();
+        auto rq = tenant.callFunction("submit_own", n, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertFalse(ref(key), "the reference acts for no application");
+        assertEq(0, rq.size(), "the tenant's operation was not canceled");
+        assertTrue(tenant.callFunction("cancel_own", key), "the tenant cancels its own operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    moduleThreadClosureHandOffTest() {
+        Program tenant = getTenant();
+        hash<auto> closures = tenant.callFunction("get_via_module_thread", \host_make_handoff_closures());
+        foreach hash<auto> i in (closures.pairIterator()) {
+            code c = i.value;
+            # run later by the host's own code: the work that the closure hands off acts for no application, not for
+            # the tenant whose call started the module's thread
+            string key = getName("module-thread-closure-" + i.key);
+            EventNotifier n();
+            auto rq = tenant.callFunction("submit_own", n, key);
+            on_exit AsyncIoController::cancelByOwner(key);
+            assertFalse(c(key), i.key + ": the work handed off acts for no application");
+            assertEq(0, rq.size(), i.key + ": the tenant's operation was not canceled");
+            assertTrue(tenant.callFunction("cancel_own", key), i.key + ": the tenant cancels its own operation");
+            assertTrue(rq.get(HangGuard).canceled);
+        }
+    }
+
+    threadTest() {
+        Program tenant = getTenant();
+        refused("thread", bool sub (string key) { return tenant.callFunction("cancel_in_thread", key); });
+        ownAllowed(tenant, "thread-own", bool sub (string key) {
+            return tenant.callFunction("cancel_in_thread", key);
+        });
+    }
+
+    poolTest() {
+        Program tenant = getTenant();
+        refused("pool", bool sub (string key) { return tenant.callFunction("cancel_in_pool", key); });
+        ownAllowed(tenant, "pool-own", bool sub (string key) { return tenant.callFunction("cancel_in_pool", key); });
+    }
+
+    sharedPoolTest() {
+        Program tenant = getTenant();
+        refused("shared-pool", bool sub (string key) { return tenant.callFunction("cancel_in_shared_pool", key); });
+        ownAllowed(tenant, "shared-pool-own", bool sub (string key) {
+            return tenant.callFunction("cancel_in_shared_pool", key);
+        });
+    }
+
+    callbackThreadTest() {
+        Program tenant = getTenant();
+        refused("callback-thread", bool sub (string key) {
+            return inTenantCallback(tenant, bool sub () {
+                Queue q();
+                background sub () {
+                    q.push(AsyncIoController::cancelByKey(key));
+                }();
+                return q.get(HangGuard);
+            });
+        });
+    }
+
+    callbackPoolTest() {
+        Program tenant = getTenant();
+        refused("callback-pool", bool sub (string key) {
+            return inTenantCallback(tenant, bool sub () {
+                Queue q();
+                HostRefs::pool.submit(sub () {
+                    q.push(AsyncIoController::cancelByKey(key));
+                });
+                return q.get(HangGuard);
+            });
+        });
+    }
+
+    hostCallbackTenantTest() {
+        Program tenant = getTenant();
+        refused("host-callback-tenant", bool sub (string key) {
+            return inHostCallback(bool sub () { return tenant.callFunction("cancel_direct", key); });
+        });
+    }
+
+    tenantCallbackTenantTest() {
+        Program a = getTenant();
+        Program b = getTenant();
+        # an operation of tenant a's
+        string key = getName("tenant-callback-tenant");
+        EventNotifier n();
+        auto rq = a.callFunction("submit_own", n, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        # tenant b, called by the host's code in a callback of tenant a's, does not act for tenant a
+        assertFalse(inTenantCallback(a, bool sub () { return b.callFunction("cancel_direct", key); }),
+            "tenant b does not cancel tenant a's operation");
+        assertEq(0, rq.size(), "tenant a's operation was not canceled");
+        # the host's code in the callback of tenant a's acts for tenant a
+        assertTrue(inTenantCallback(a, bool sub () { return AsyncIoController::cancelByKey(key); }),
+            "the host's code in tenant a's callback cancels tenant a's operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    tenantCallbackTenantHandOffTest() {
+        Program a = getTenant();
+        Program b = getTenant();
+        string key = getName("tenant-callback-tenant-handoff");
+        EventNotifier n();
+        auto rq = a.callFunction("submit_own", n, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        # tenant b, called by the host's code in a callback of tenant a's, hands the work off to a thread and to a pool
+        foreach string f in (("cancel_in_thread", "cancel_in_shared_pool")) {
+            assertFalse(inTenantCallback(a, bool sub () { return b.callFunction(f, key); }),
+                f + ": the work that tenant b hands off does not cancel tenant a's operation");
+            assertEq(0, rq.size(), f + ": tenant a's operation was not canceled");
+        }
+        assertTrue(a.callFunction("cancel_own", key), "tenant a cancels its own operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    closureInOtherTenantCallbackTest() {
+        Program a = getTenant();
+        Program b = getTenant();
+        # closures of the host's created while it serves tenant b
+        hash<auto> closures = b.callFunction("call", \host_make_handoff_closures(), NOTHING);
+        foreach hash<auto> i in (closures.pairIterator()) {
+            code c = i.value;
+            # run by the host's code in a callback of tenant a's: the work that they hand off acts for tenant b
+            string akey = getName("closure-other-callback-a-" + i.key);
+            EventNotifier an();
+            auto arq = a.callFunction("submit_own", an, akey);
+            on_exit AsyncIoController::cancelByOwner(akey);
+            assertFalse(inTenantCallback(a, bool sub () { return c(akey); }),
+                i.key + ": the work handed off does not cancel tenant a's operation");
+            assertEq(0, arq.size(), i.key + ": tenant a's operation was not canceled");
+            string bkey = getName("closure-other-callback-b-" + i.key);
+            EventNotifier bn();
+            auto brq = b.callFunction("submit_own", bn, bkey);
+            on_exit AsyncIoController::cancelByOwner(bkey);
+            assertTrue(inTenantCallback(a, bool sub () { return c(bkey); }),
+                i.key + ": the work handed off cancels tenant b's operation");
+            assertTrue(brq.get(HangGuard).canceled, i.key + ": tenant b's operation was canceled");
+        }
+    }
+
+    ownerTest() {
+        Program tenant = getTenant();
+        string key = getName("owner");
+        Queue rq = submitHost(key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertEq(0, tenant.callFunction("cancel_owner", key), "the host's operations with the owner are not canceled");
+        assertEq(0, rq.size());
+        # the tenant's own operation with the owner is canceled
+        string own = getName("owner-own");
+        EventNotifier n();
+        auto own_rq = tenant.callFunction("submit_own", n, own);
+        on_exit AsyncIoController::cancelByOwner(own);
+        assertEq(1, tenant.callFunction("cancel_owner", own), "the tenant's operation with the owner is canceled");
+        assertTrue(own_rq.get(HangGuard).canceled);
+    }
+
+    timerTest() {
+        Program tenant = getTenant();
+        int id = AsyncIoController::addTimerDelay(1h, sub () {});
+        on_exit AsyncIoController::cancelTimer(id);
+        assertFalse(tenant.callFunction("cancel_timer", id), "the host's timer is not canceled");
+        assertTrue(AsyncIoController::cancelTimer(id), "the host cancels its timer");
+    }
+
+    replaceTest() {
+        Program tenant = getTenant();
+        string key = getName("replace");
+        Queue rq = submitHost(key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        hash<SocketPollResultInfo> res = tenant.callFunction("replace_key", key);
+        assertTrue(res.canceled, "the replacement is not started");
+        assertEq("ASYNC-IO-KEY-ERROR", res.ex.err);
+        assertEq(0, rq.size(), "the host's operation was not replaced");
+    }
+
+    elevatedTest() {
+        Program tenant = getTenant();
+        allowed("elevated", bool sub (string key) { return tenant.callFunction("cancel_elevated", key); });
+    }
+
+    elevatedTenantRefTest() {
+        Program tenant = getTenant();
+        refused("elevated-tenant-ref", bool sub (string key) {
+            return tenant.callFunction("cancel_elevated_tenant_ref", key);
+        });
+    }
+
+    reenterElevatedTest() {
+        Program tenant = getTenant();
+        HostRefs::reenter_tenant = tenant;
+        on_exit remove HostRefs::reenter_tenant;
+        refused("reenter-elevated", bool sub (string key) { return tenant.callFunction("reenter_elevated", key); });
+    }
+
+    capabilityTest() {
+        Program tenant = getTenant();
+        code cap = SandboxManager::createSystemPolicyCall(\host_cancel_key());
+        allowed("capability", bool sub (string key) { return tenant.callFunction("call", cap, key); });
+    }
+
+    callbackCapabilityTest() {
+        Program tenant = getTenant();
+        allowed("callback-capability", bool sub (string key) {
+            return inTenantCallback(tenant, bool sub () { return HostRefs::cancel_cap(key); });
+        });
+    }
+
+    callbackElevatedTest() {
+        Program tenant = getTenant();
+        refused("callback-elevated", bool sub (string key) {
+            return inTenantCallback(tenant, bool sub () {
+                return SandboxManager::callWithSystemPolicy(HostRefs::cancel_by_key, key);
+            });
+        });
+    }
+}

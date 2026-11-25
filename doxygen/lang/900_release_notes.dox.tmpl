@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Host Code That Sandboxed Code Calls Acts for the Caller's Application
+    The host's code that sandboxed code calls, or that runs in its async I/O callbacks or in threads and thread pool
+    tasks started for it, acts only on the async I/O operations and timers of the caller's application unless it
+    elevates explicitly; embedding applications must check the host APIs that they export to sandboxed code (see
+    @ref sandbox_host_code_application; <a href="https://github.com/qoretechnologies/qore/issues/7148">issue 7148</a>).
+
     @par Operators Change the Container of a Weak Reference Held by Their Lvalue
     The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
     chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
