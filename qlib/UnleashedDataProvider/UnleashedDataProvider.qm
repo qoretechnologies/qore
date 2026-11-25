@@ -64,6 +64,16 @@ module UnleashedDataProvider {
                 "**Authentication:**\n"
                 "Unleashed uses API ID and API Key authentication via HMAC signature. Both credentials are required "
                 "and can be obtained from your Unleashed account settings under Integration > API Access.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "unleashedsoftware.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "unit": "request",
+                "source": "https://www.unleashedsoftware.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "unleashed",
             "logo": UnleashedLogo,
             "logo_file_name": "unleashed-logo.svg",

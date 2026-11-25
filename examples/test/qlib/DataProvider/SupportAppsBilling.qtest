@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class SupportAppsBillingTest
+
+class SupportAppsBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("SupportApps provider billing") {
+        addVendor("Gorgias", "Gorgias", "gorgias.com", "subscription",
+            "https://www.gorgias.com/pricing");
+        addVendor("Intercom", "Intercom", "intercom.io", "subscription",
+            "https://www.intercom.com/pricing");
+        addVendor("Segment", "Segment", "segmentapis.com", "included",
+            "https://www.twilio.com/en-us/pricing/customer-data");
+        addVendor("Unleashed", "UnleashedSoftware", "unleashedsoftware.com", "metered",
+            "https://www.unleashedsoftware.com/pricing/", NOTHING, NOTHING, "request");
+        set_return_value(main());
+    }
+}
