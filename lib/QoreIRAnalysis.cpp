@@ -4473,6 +4473,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         }
         // the phis that select the keys of the reads that are projected to phis of the members' values
         std::unordered_set<const QoreIRPhiInstruction*> candidate_finite_hash_selectors;
+        // the phi of the members' values made for each selector phi, which every read with the same key reuses
+        std::unordered_map<const QoreIRPhiInstruction*, QoreIRValue> candidate_finite_hash_member_phis;
         // a read with a key that a phi selects from literal keys of the hash on each of its edges (ex: h{key} after
         // string key = c ? "a" : "b"): the value is a phi of the members' values on the same edges, which the hash's
         // store dominates; the members are native scalars, owned by their slots in the interpreter, so the phi can
@@ -4528,6 +4530,12 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 return QoreIRValue();
             }
             const auto* selector_phi = static_cast<const QoreIRPhiInstruction*>(phi_pos->inst);
+            // another read with the same key already has the phi of the members' values: the phi does not depend on
+            // the read, whose own conditions are checked above
+            auto member_phi = candidate_finite_hash_member_phis.find(selector_phi);
+            if (member_phi != candidate_finite_hash_member_phis.end()) {
+                return member_phi->second;
+            }
             const auto& predecessors = cfg.predecessors[phi_pos->block];
             if (selector_phi->value_kind != QoreIRPhiValueKind::QoreValue
                     || predecessors.size() < 2 || predecessors.size() > 4
@@ -4613,6 +4621,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             QoreIRValue result = phi.result;
             candidate_aggregate_phis.push_back(std::move(phi));
             candidate_finite_hash_selectors.insert(selector_phi);
+            candidate_finite_hash_member_phis.emplace(selector_phi, result);
             return result;
         };
         auto local_paths = local_path_operations.find(local);
