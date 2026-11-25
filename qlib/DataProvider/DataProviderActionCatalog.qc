@@ -2113,13 +2113,11 @@ class MyProvider {
         @param method the name of the method of this class whose caller is identified
     */
     private:internal static int getDirectCallerProgramId(string method) {
-        # the innermost frames: the call of get_thread_call_stack(), the call of this method, and the call of the
-        # method, whose Program is that of the code that made the call; fails closed if the frame is not the one
-        # expected
-        list<hash<CallStackInfo>> cs = get_thread_call_stack();
-        *hash<CallStackInfo> frame = cs[2];
-        if (!frame || frame.function != "DataProviderActionCatalog::" + method
-                || cs[1].function != "DataProviderActionCatalog::getDirectCallerProgramId") {
+        # the innermost frames are the call of get_parent_caller_location(), the call of this method and the call of
+        # the method, whose Program is that of the code that made the call: only that frame is read; fails closed if
+        # it is not the call of the method (qore#7564)
+        *hash<CallStackInfo> frame = get_parent_caller_location(2);
+        if (!frame || frame.function != "DataProviderActionCatalog::" + method) {
             return 0;
         }
         return frame.programid ?? 0;
@@ -2148,8 +2146,11 @@ class MyProvider {
         string key = id.toString();
         *hash<auto> v = lazy_values{key};
         # only the code of the Program that registered the value can read it; fails closed if the calling code cannot
-        # be identified, and gives the same error as for an unknown ID
-        if (!v || v.owner != DataProviderActionCatalog::getDirectCallerProgramId("getLazyValue")) {
+        # be identified, and gives the same error as for an unknown ID; the frame of the call of this method is read
+        # here, as reading it costs much less than the call of a helper (see getDirectCallerProgramId())
+        *hash<CallStackInfo> frame = v ? get_parent_caller_location(1) : NOTHING;
+        if (!v || !frame || frame.function != "DataProviderActionCatalog::getLazyValue"
+                || v.owner != (frame.programid ?? 0)) {
             throw "DATA-PROVIDER-LAZY-VALUE-ERROR", sprintf("no lazy value is registered with ID %d for the calling "
                 "code", id);
         }
