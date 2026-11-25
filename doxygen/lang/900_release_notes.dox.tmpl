@@ -101,11 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
-    @par Sandboxed REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
+    @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
     The REST classes of a @ref RestHandler::RestHandler "RestHandler" and the code that serves a stream request get the
-    request context without the objects of the server and the credentials of the request when a sandbox governs
-    them, and trusted code when its handler opts in to the filter; a REST handler names more keys for its filtered
-    REST classes (see @ref httpserverutil_request_credentials and @ref rest_request_credentials).
+    request context without the objects of the server and the credentials of the request when a sandbox that does not
+    trust their code governs them, and trusted code when its handler opts in; the platform's authorization context is
+    kept, and a stream request of such code that a handler creates without the filter is refused (see
+    @ref httpserverutil_request_credentials and @ref rest_request_credentials).
 
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
@@ -1400,6 +1401,12 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par Restricted Programs
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
+    sandbox that does not trust its code governs the %Program of the class of an object, as
+    @ref Qore::SandboxManager::isRestricted() "isRestricted()" does for the calling code (see
+    @ref sandbox_restricts).
 
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
