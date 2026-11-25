@@ -36,6 +36,7 @@
 #include "qore/intern/QoreSandboxMemory.h"
 #include <iterator>
 #include <limits>
+#include <memory>
 
 #include <unordered_map>
 #include "qore/intern/xxhash.h"
@@ -140,6 +141,13 @@ public:
 #define QORE_HASH_NOINLINE __attribute__((noinline))
 #else
 #define QORE_HASH_NOINLINE
+#endif
+
+//! a function of a hash that is always inlined into its callers, as the copy loops need it (qore#7557)
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_HASH_ALWAYS_INLINE __attribute__((always_inline))
+#else
+#define QORE_HASH_ALWAYS_INLINE
 #endif
 
 //! The members of a hash in their order: a list linked through the members themselves (qore#7272)
@@ -304,7 +312,7 @@ public:
 
     //! the number of buckets (0 before the first member is inserted)
     DLLLOCAL size_t bucket_count() const {
-        return buckets ? mask + 1 : 0;
+        return buckets ? static_cast<size_t>(mask) + 1 : 0;
     }
 
     //! true if the map hashes its keys with the keyed hash (qore#7557)
@@ -427,13 +435,20 @@ public:
     //! returns the length of the longest chain of a bucket (for debug functions)
     DLLLOCAL size_t maxChain() const;
 
+    //! the largest number of buckets: the mask is 32 bits wide, so that the flag of a hardened map fits in the
+    //! space of the map before qore#7557 and a hash is as large as before (MaxBuckets members need far more memory
+    //! than any host has)
+    static constexpr size_t MaxBuckets = sizeof(size_t) > sizeof(uint32_t)
+        ? static_cast<size_t>(std::numeric_limits<uint32_t>::max()) + 1
+        : (std::numeric_limits<size_t>::max() >> 1) + 1;
+
 private:
     HashMember** buckets = nullptr;
     //! the number of buckets - 1, if the array is allocated
-    size_t mask = 0;
-    size_t count = 0;
+    uint32_t mask = 0;
     //! true if the keys are hashed with the keyed hash (qore#7557)
     bool hardened = false;
+    size_t count = 0;
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
     DLLLOCAL static size_t bucketsFor(size_t n) {
@@ -460,7 +475,8 @@ private:
     //! doubles the buckets, or allocates the first ones; not inline, so that insert() stays small
     QORE_HASH_NOINLINE DLLLOCAL void grow();
 
-    //! moves the members to a new bucket array of \a n buckets, a power of 2 that is at least the number of members
+    //! moves the members to a new bucket array of \a n buckets, a power of 2 that is at least the number of members;
+    //! throws std::bad_alloc, with nothing changed, if the array cannot be allocated or \a n is more than MaxBuckets
     QORE_HASH_NOINLINE DLLLOCAL void rehash(size_t n);
 
     //! returns the member with the key of \a len bytes at \a str in a hardened map, or nullptr
@@ -842,10 +858,36 @@ public:
         @param copy_layout the value that reserveForCopy() returned: true if the key map of this hash has no fewer
         buckets than the key map of the other hash, so that the chains of its buckets need no check (qore#7557)
     */
-    DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old, bool copy_layout);
+    /** inline (as before qore#7557, when the compiler inlined it into the copy loops), so that a copy of a hash
+        calls no function per member but to allocate it
+    */
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old, bool copy_layout) {
+        return addMemberKnownAbsent(new HashMember(old.key, old.hash), copy_layout);
+    }
 
     //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
-    DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m);
+    /** @param m the new member
+        @param copy_layout true if \a m is a copy of a member of a hash whose key map is of the same kind and has no
+        more buckets than the key map of this hash (see reserveForCopy()), so that the chains of its buckets need no
+        check (qore#7557); the hash of \a m is then the hash of its key in this hash, else its member hash (or any
+        hash that a debug function gives)
+    */
+    QORE_HASH_ALWAYS_INLINE DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m, bool copy_layout = false) {
+        assert(m->val.isNothing());
+        assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
+        assert(!copy_layout || m->hash == hm.hashOf(m->key.data(), m->key.size()));
+        // only the key map can fail to take the member (when its buckets grow); the member is deleted then
+        std::unique_ptr<HashMember> holder(m);
+        if (copy_layout) {
+            hm.insertCopy(m);
+        } else {
+            hm.insert(m);
+        }
+        holder.release();
+        member_list.push_back(m);
+        sbAdd(m);
+        return m;
+    }
 
     //! sets the value of a new member \a om, which has no value, without type checks; takes over the reference of \a v
     DLLLOCAL void setNewMemberValue(HashMember* om, QoreValue v) {

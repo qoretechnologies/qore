@@ -235,39 +235,15 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
-HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old, bool copy_layout) {
-    if (!copy_layout) {
-        // the key map can have fewer buckets than that of the other hash, so it checks the chains (qore#7557); the
-        // key maps are of the same kind (reserveForCopy()), and the member hash is what insert() takes in a map that
-        // is not hardened, which a hardened map replaces
-        return addMemberKnownAbsent(new HashMember(old.key, old.hash));
-    }
-    HashMember* m = new HashMember(old.key, old.hash);
-    assert(m->hash == hm.hashOf(m->key.data(), m->key.size()));
-    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
-    // only the key map can fail to take the member (when its buckets grow); the member is deleted then
-    std::unique_ptr<HashMember> holder(m);
-    hm.insertCopy(m);
-    holder.release();
-    member_list.push_back(m);
-    sbAdd(m);
-    return m;
-}
-
-HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
-    assert(m->val.isNothing());
-    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
-    // only the key map can fail to take the member (when its buckets grow); the member is deleted then
-    std::unique_ptr<HashMember> holder(m);
-    hm.insert(m);
-    holder.release();
-    member_list.push_back(m);
-    sbAdd(m);
-    return m;
-}
+// the flag of a hardened map is in the padding of the map, so that a hash is as large as before qore#7557: a larger
+// private part of a hash takes another allocation size, which changes the cost of the allocations of hashes
+static_assert(sizeof(void*) != 8 || sizeof(qore_hash_member_map) == 24, "the key map of a hash must stay 24 bytes");
 
 void qore_hash_member_map::reserve(size_t n) {
     if (n > bucket_count()) {
+        if (n > MaxBuckets) {
+            throw std::bad_alloc();
+        }
         rehash(bucketsFor(n));
     }
 }
@@ -420,7 +396,7 @@ void qore_hash_member_map::harden() {
         throw std::bad_alloc();
     }
 #endif
-    size_t n = mask + 1;
+    size_t n = bucket_count();
     HashMember** nb = new HashMember*[n]();
     // nothing can fail from here on
     for (size_t b = 0; b < n; ++b) {
@@ -453,16 +429,20 @@ size_t qore_hash_member_map::maxChain() const {
 }
 
 void qore_hash_member_map::grow() {
-    rehash(buckets ? (mask + 1) << 1 : MinBuckets);
+    rehash(buckets ? bucket_count() << 1 : MinBuckets);
 }
 
 void qore_hash_member_map::rehash(size_t n) {
     assert(n && !(n & (n - 1)));
     assert(n >= count);
+    // the mask is 32 bits wide
+    if (n > MaxBuckets) {
+        throw std::bad_alloc();
+    }
     HashMember** nb = new HashMember*[n]();
-    size_t nmask = n - 1;
+    uint32_t nmask = static_cast<uint32_t>(n - 1);
     if (buckets) {
-        for (size_t b = 0, e = mask + 1; b < e; ++b) {
+        for (size_t b = 0, e = bucket_count(); b < e; ++b) {
             for (HashMember* m = buckets[b]; m;) {
                 HashMember* next = m->bucket_next;
                 HashMember*& nbucket = nb[m->hash & nmask];
