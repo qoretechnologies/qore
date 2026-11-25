@@ -26,6 +26,10 @@
 %requires Util
 %requires FsUtil
 
+# a module whose code loads time zones for its callers, loaded by the test (the host Program)
+%append-module-path "${SCRIPT_DIR}/tz-modules"
+%requires TzMod
+
 %exec-class TimeZoneRegionSandboxTest
 
 class TimeZoneRegionSandboxTest inherits QUnit::Test {
@@ -83,12 +87,6 @@ code sub closure(string r) { return string sub () { return (new TimeZone(r)).reg
             "Kaliningrad", "Kirov", "Lisbon", "London", "Luxembourg", "Madrid", "Malta", "Minsk", "Monaco", "Moscow",
             "Oslo", "Riga", "Rome", "Samara", "Saratov", "Simferopol", "Sofia", "Stockholm", "Tallinn", "Tirane",
             "Ulyanovsk", "Vienna", "Vilnius", "Volgograd", "Warsaw", "Zurich"));
-
-        #! the file functions of a Program that may write files
-        const WriterCode = "
-nothing sub write_file(string p, binary b) { File f(); f.open2(p, O_CREAT | O_WRONLY | O_TRUNC); f.write(b); f.close(); }
-nothing sub remove_file(string p) { unlink(p); }
-";
     }
 
     private {
@@ -113,8 +111,8 @@ nothing sub remove_file(string p) { unlink(p); }
         addTestCase("invalid, escaping and missing regions raise the same error", \testInvalidRegions());
         addTestCase("files in the zoneinfo directory: symbolic links, FIFOs, large and unreadable files",
             \testZoneinfoFiles());
-        addTestCase("zoneinfo paths stay subject to the policy", \testPathsChecked());
-        addTestCase("a cached zoneinfo path stays subject to the policy", \testCachedPath());
+        addTestCase("restricted code cannot load zoneinfo paths", \testPathsChecked());
+        addTestCase("restricted code cannot load a cached zoneinfo path", \testCachedPath());
         addTestCase("a path load does not change a region", \testPathDoesNotChangeRegion());
         addTestCase("the local zone at startup is not read from the current directory", \testStartupLocalZone());
         addTestCase("%set-time-zone with a path in a restricted Program", \testDirective());
@@ -124,32 +122,18 @@ nothing sub remove_file(string p) { unlink(p); }
         addTestCase("the local zone named by a path", \testLocalZonePath());
         addTestCase("deserialized time zones never open files", \testDeserializeNoPath());
         addTestCase("a path zone is never another file's zone", \testPathZoneIdentity());
-        addTestCase("the path zone quota of a sandbox does not limit another sandbox or trusted code",
-            \testPathZoneQuota());
-        addTestCase("Programs created by sandboxed code and sandboxes of one domain share a quota",
-            \testPathZoneQuotaShared());
-        addTestCase("path zones are charged with their memory", \testPathZoneMemory());
-        addTestCase("the policy is checked for the file that was opened (/dev/fd)", \testDevFd());
-        addTestCase("spellings of a region share its data and are limited", \testRegionSpellings());
+        addTestCase("TZif files with too many transitions are refused", \testPathZoneMemory());
+        addTestCase("/dev/fd paths", \testDevFd());
+        addTestCase("spellings of a region in restricted code get the file's zone", \testRegionSpellings());
         addTestCase("long region names are refused", \testLongRegionNames());
-        addTestCase("restricted code is limited, trusted code is not", \testRestrictedQuota());
         addTestCase("files in the zoneinfo directory that are no zoneinfo files are no regions",
             \testNonZoneFiles());
-        addTestCase("%set-time-zone counts against the limits of its Program", \testDirectiveQuota());
-        addTestCase("Programs created by restricted code share its limit; no tenant blocks another",
-            \testRestrictedFamilyQuota());
         addTestCase("a date literal keeps a zone loaded from a path in every execution mode", \testLiteralZone());
-        addTestCase("a sandboxed path load that cannot open the file gets the policy error", \testSandboxedOpen());
-        addTestCase("a region beyond a limit is named by its path in the zoneinfo directory",
-            \testRegionFallbackName());
-        addTestCase("sandboxes that restricted code creates count against its tenant", \testNewManagerChildren());
-        addTestCase("%set-time-zone in a sandbox that restricted code created counts against its tenant",
-            \testNewManagerChildDirective());
-        addTestCase("region spellings in a sandbox that restricted code created are bounded by its tenant",
-            \testNewManagerChildSpellings());
-        addTestCase("a host that restricts itself is not limited and its Programs are tenants of their own",
-            \testSelfRestrictedHost());
         addTestCase("the policy applies to the file that a path reaches", \testPathPolicyTarget());
+        addTestCase("Programs and sandboxes that restricted code creates cannot load paths", \testRestrictedShapes());
+        addTestCase("%set-time-zone in a restricted Program", \testRestrictedDirectives());
+        addTestCase("the code of a module acts for its caller", \testModuleCalls());
+        addTestCase("a host that restricts itself is not restricted", \testHostUnrestricted());
         set_return_value(main());
     }
 
@@ -330,8 +314,8 @@ nothing sub remove_file(string p) { unlink(p); }
         foreach string r in (path_names) {
             assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("set_region", r),
                 "TimeZone::setRegion(" + r + ") under PO_NO_FILESYSTEM");
-            assertThrows("FILESYSTEM-ACCESS-DENIED", \p_sm.callFunction(), ("set_region", r),
-                "TimeZone::setRegion(" + r + ") under a SandboxManager");
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "restricted code can load time zone regions only",
+                \p_sm.callFunction(), ("set_region", r), "TimeZone::setRegion(" + r + ") under a SandboxManager");
         }
 
         # deserialized dates: regions of the same length as the serialized region
@@ -417,8 +401,15 @@ nothing sub remove_file(string p) { unlink(p); }
         assertUnknownRegion(sub () { p.callFunction("tz", subname + "/Big"); }, subname + "/Big",
             "a file larger than the maximum");
 
-        foreach string r in (map subname + "/" + $1, ("Real", "Inside", "InDir/Z", "AbsInDir/Z", "RealDir/Z")) {
-            assertEq(r, p.callFunction("tz", r), "inside of the directory: " + r);
+        # restricted code gets the zone of the canonical name of the file reached
+        hash<string, string> canonical = {
+            "Real": "Real", "Inside": "Real", "InDir/Z": "RealDir/Z", "AbsInDir/Z": "RealDir/Z", "RealDir/Z": "RealDir/Z",
+        };
+        foreach hash<auto> i in (canonical.pairIterator()) {
+            string r = subname + "/" + i.key;
+            assertEq(subname + "/" + i.value, p.callFunction("tz", r), "inside of the directory: " + r);
+            # trusted code gets the zone named as given
+            assertEq(r, (new TimeZone(r)).region(), r + " in trusted code");
             assertEq(0, (new TimeZone(r)).UTCOffset(), r + " is UTC");
         }
     }
@@ -430,20 +421,26 @@ nothing sub remove_file(string p) { unlink(p); }
         string path = dir + "/tz-path";
         copyFile(zoneinfo, path);
 
-        # PO_NO_FILESYSTEM refuses a path without opening it
-        Program nfs = tenant();
-        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("tz", path),
-            "TimeZone(path) under PO_NO_FILESYSTEM");
-        # the SandboxManager's file-system policy refuses it
-        Program p = tenant(0);
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", path),
-            "TimeZone(path) under a SandboxManager");
+        # restricted code cannot load a path: the same error with PO_NO_FILESYSTEM, a SandboxManager, a policy that
+        # allows reading the path and parse options that restrict another domain
+        list<Program> programs = (tenant(), tenant(0), tenantAllow(dir));
+        Program r(PO_NEW_STYLE | PO_NO_NETWORK);
+        r.parse(TenantCode, "restricted");
+        programs += r;
+        foreach Program p in (programs) {
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "restricted code can load time zone regions only",
+                \p.callFunction(), ("tz", path), "TimeZone(path) in restricted code");
+        }
         # the refused path was not read: removed, it cannot be loaded
         string gone = dir + "/tz-gone";
         copyFile(zoneinfo, gone);
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", gone), "TimeZone(path) refused");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \r.callFunction(), ("tz", gone), "TimeZone(path) refused");
         unlink(gone);
         assertThrows("FILE-OPEN2-ERROR", sub () { TimeZone t(gone); }, NOTHING, "the zone was not read");
+        # code that is not restricted loads it
+        Program u(PO_NEW_STYLE);
+        u.parse(TenantCode, "unrestricted");
+        assertEq(0, u.callFunction("offset", path), "an unrestricted Program loads a path");
     }
 
     testCachedPath() {
@@ -457,33 +454,16 @@ nothing sub remove_file(string p) { unlink(p); }
         date d = t.date("2026-01-15T10:00:00");
         binary data = Serializable::serialize(d);
 
-        Program nfs = tenant();
-        Program sm = tenant(0);
-        Program allowed = tenantAllow(dir);
-
-        # TimeZone(path)
-        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("tz", path),
-            "a cached path under PO_NO_FILESYSTEM");
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \sm.callFunction(), ("tz", path),
-            "a cached path under a SandboxManager");
-        assertEq(0, allowed.callFunction("offset", path), "a cached path that the policy allows");
-
-        # a deserialized date in the zone of the path: data never names a path, also not a cached one, also not for
-        # code that may read it or trusted code
-        foreach hash<auto> c in ({"p": nfs, "label": "PO_NO_FILESYSTEM"}, {"p": sm, "label": "a SandboxManager"},
-                {"p": allowed, "label": "a policy that allows the path"}) {
-            Program prog = c.p;
-            assertUnknownRegion(sub () { prog.callFunction("des", data); }, path,
-                "a date in a cached path's zone under " + c.label);
+        foreach Program p in ((tenant(), tenant(0), tenantAllow(dir))) {
+            # TimeZone(path) and the region APIs: restricted code cannot load a path, also a cached one
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("tz", path), "a cached path");
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("set_region", path),
+                "TimeZone::setRegion() of a cached path");
+            # a deserialized date in the zone of the path: data never names a path
+            assertUnknownRegion(sub () { p.callFunction("des", data); }, path, "a date in a cached path's zone");
         }
         assertUnknownRegion(auto sub () { return Serializable::deserialize(data); }, path,
             "a date in a cached path's zone in trusted code");
-
-        # the region APIs take the path as a path
-        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \nfs.callFunction(), ("set_region", path),
-            "TimeZone::setRegion() of a cached path under PO_NO_FILESYSTEM");
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \sm.callFunction(), ("set_region", path),
-            "TimeZone::setRegion() of a cached path under a SandboxManager");
         Program trusted(PO_NEW_STYLE);
         trusted.setTimeZoneRegion(path);
         assertEq(0, trusted.getTimeZone().UTCOffset(), "Program::setTimeZoneRegion() of a path in trusted code");
@@ -502,21 +482,18 @@ nothing sub remove_file(string p) { unlink(p); }
         chdir(cwd_dir);
         on_exit chdir(old_cwd);
 
-        # code that may read the current directory only
+        # restricted code that may read the current directory cannot load either path
         Program p = tenantAllow(cwd_dir);
-        # the path in the zoneinfo directory is checked as given and opened as given, not in the current directory
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("tz", zroot + "/" + region),
-            "a path in the zoneinfo directory is checked as given");
-        # a relative path is a path in the current directory
-        assertEq(14 * 3600, p.callFunction("offset", "./" + region), "a relative path is read from the current "
-            "directory");
-        # neither changes the region, in any Program
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("tz", zroot + "/" + region),
+            "a path in the zoneinfo directory");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("tz", "./" + region), "a relative path");
+        # trusted code reads the relative path from the current directory, and the path in the zoneinfo directory
+        # from there; neither changes the region, in any Program
+        assertEq(14 * 3600, (new TimeZone("./" + region)).UTCOffset(), "a relative path in trusted code");
+        assertEq(9 * 3600, (new TimeZone(zroot + "/" + region)).UTCOffset(), "the path in the zoneinfo directory");
         assertEq(9 * 3600, (new TimeZone(region)).UTCOffset(), "the region in trusted code");
         assertEq(9 * 3600, tenant().callFunction("offset", region), "the region in sandboxed code");
-        assertEq(9 * 3600, p.callFunction("offset", region), "the region in the code that read the path");
-        # trusted code reads the path in the zoneinfo directory
-        assertEq(9 * 3600, (new TimeZone(zroot + "/" + region)).UTCOffset(), "the path in the zoneinfo directory");
-        assertEq(14 * 3600, (new TimeZone(cwd_dir + "/" + region)).UTCOffset(), "the path in the current directory");
+        assertEq(9 * 3600, p.callFunction("offset", region), "the region in the other sandboxed code");
     }
 
     #! returns the directory of the zoneinfo file of the local time file with a trailing '/', if any
@@ -573,11 +550,12 @@ nothing sub remove_file(string p) { unlink(p); }
         # paths, relative and absolute, existing or not, are refused before anything is accessed
         foreach string zone in (path, "./tz-directive", "/no/such/zone", "../x") {
             foreach hash<auto> c in ({"opts": PO_NO_FILESYSTEM, "sm": NOTHING, "label": "PO_NO_FILESYSTEM"},
+                    {"opts": PO_NO_NETWORK, "sm": NOTHING, "label": "PO_NO_NETWORK"},
                     {"opts": PO_LOCKDOWN, "sm": NOTHING, "label": "PO_LOCKDOWN"},
                     {"opts": 0, "sm": deny, "label": "a SandboxManager"},
                     {"opts": 0, "sm": new SandboxManager(), "label": "a default SandboxManager"}) {
                 string rv = directiveResult(c.opts, c.sm, zone);
-                assertRegex("ILLEGAL-FILESYSTEM-ACCESS.*cannot name a zoneinfo file path", rv,
+                assertRegex("ILLEGAL-FILESYSTEM-ACCESS.*cannot name a zoneinfo file path in a restricted Program", rv,
                     sprintf("%%set-time-zone %s with %s", zone, c.label));
                 # the error does not depend on the file
                 assertEq(-1, rv.find(zone), "the error does not name the path");
@@ -602,8 +580,7 @@ nothing sub remove_file(string p) { unlink(p); }
         assertThrows("TZINFO-ERROR", "is not a regular file", sub () { TimeZone t(fifo); }, NOTHING,
             "a FIFO in trusted code");
         Program p = tenantAllow(dir);
-        assertThrows("TZINFO-ERROR", "is not a regular file", \p.callFunction(), ("tz", fifo),
-            "a FIFO in sandboxed code");
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("tz", fifo), "a FIFO in sandboxed code");
         assertThrows("TZINFO-ERROR", "is not a regular file", sub () { TimeZone t(dir); }, NOTHING, "a directory");
         # time zones still load
         assertEq(-3 * 3600, (new TimeZone("America/Sao_Paulo")).UTCOffset(), "a region after the FIFO");
@@ -644,7 +621,7 @@ nothing sub remove_file(string p) { unlink(p); }
             p.callFunction("tz", "./zone");
             assertTrue(False, "an exception is raised");
         } catch (hash<ExceptionInfo> ex) {
-            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "error code");
+            assertEq("ILLEGAL-FILESYSTEM-ACCESS", ex.err, "error code");
             assertTrue(ex.desc.find("'./zone'") >= 0, "the path is named as given: " + ex.desc);
             assertEq(-1, ex.desc.find(sub_dir), "the current directory is not shown: " + ex.desc);
         }
@@ -724,58 +701,27 @@ print(out.join(\"|\"));
         assertEq(0, (new TimeZone(path)).UTCOffset(), "the zone of the path is loaded by path");
     }
 
-    #! returns a Program with a SandboxManager that allows reading, writing, creating and deleting in the directory
-    static Program tenantWrite(string allowed) {
-        Program p(PO_NEW_STYLE);
-        SandboxManager sm();
-        sm.setFilesystemDefaultPolicy(False);
-        sm.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
-        p.setSandboxManager(sm);
-        p.parse(TenantCode + WriterCode, "tenant-write");
-        return p;
-    }
-
     testPathZoneIdentity() {
         if (!zoneinfo || !gmt14) {
             testSkip("no zoneinfo files to use");
         }
-        binary utc = ReadOnlyFile::readBinaryFile(zoneinfo);
-        binary plus14 = ReadOnlyFile::readBinaryFile(gmt14);
         # files that are loaded and removed free their inodes, which the file system can give to new files (ext4
-        # does): a new file never gets the zone of a removed one, in either direction
-        string tenant_dir = dir + "/ident-tenant";
+        # does): a new file never gets the zone of a removed one
         string app_dir = dir + "/ident-app";
-        mkdir(tenant_dir);
         mkdir(app_dir);
-        Program t = tenantWrite(tenant_dir);
         int n = 64;
         for (int i = 0; i < n; ++i) {
-            string path = sprintf("%s/z%d", tenant_dir, i);
-            t.callFunction("write_file", path, plus14);
-            assertEq(path + "|50400", t.callFunction("tzinfo", path), "the tenant's file");
-        }
-        for (int i = 0; i < n; ++i) {
-            t.callFunction("remove_file", sprintf("%s/z%d", tenant_dir, i));
+            string path = sprintf("%s/secret-%d", app_dir, i);
+            copyFile(gmt14, path);
+            assertEq(50400, (new TimeZone(path)).UTCOffset(), "a file");
+            unlink(path);
         }
         for (int i = 0; i < n; ++i) {
             string path = sprintf("%s/site-%d", app_dir, i);
             copyFile(zoneinfo, path);
             TimeZone tz(path);
-            assertEq(0, tz.UTCOffset(), "a new file of trusted code has its own data: " + path);
-            assertEq(path, tz.region(), "a new file of trusted code has its own name: " + path);
-            unlink(path);
-        }
-        # the other direction: trusted files removed, then files of the tenant
-        for (int i = 0; i < n; ++i) {
-            string path = sprintf("%s/secret-%d", app_dir, i);
-            copyFile(gmt14, path);
-            assertEq(50400, (new TimeZone(path)).UTCOffset(), "the trusted file");
-            unlink(path);
-        }
-        for (int i = 0; i < n; ++i) {
-            string path = sprintf("%s/y%d", tenant_dir, i);
-            t.callFunction("write_file", path, utc);
-            assertEq(path + "|0", t.callFunction("tzinfo", path), "a new file of the tenant has its own data and name");
+            assertEq(0, tz.UTCOffset(), "a new file has its own data: " + path);
+            assertEq(path, tz.region(), "a new file has its own name: " + path);
         }
 
         # the same path with other data is a new zone; dates in the old zone keep it
@@ -790,33 +736,6 @@ print(out.join(\"|\"));
         assertEq(0, (new TimeZone(path)).UTCOffset(), "the first data again");
     }
 
-    testPathZoneQuota() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
-        }
-        string a_dir = dir + "/quota-a";
-        string b_dir = dir + "/quota-b";
-        mkdir(a_dir);
-        mkdir(b_dir);
-        int max = 256;
-        for (int i = 0; i <= max; ++i) {
-            copyFile(zoneinfo, sprintf("%s/z%d", a_dir, i));
-        }
-        copyFile(zoneinfo, b_dir + "/z");
-        Program a = tenantAllow(a_dir);
-        for (int i = 0; i < max; ++i) {
-            a.callFunction("offset", sprintf("%s/z%d", a_dir, i));
-        }
-        assertThrows("TZINFO-ERROR", "the sandbox has loaded the maximum of time zones", \a.callFunction(),
-            ("offset", sprintf("%s/z%d", a_dir, max)), "the sandbox's quota is used up");
-        # zones that the Program loaded already are found
-        assertEq(0, a.callFunction("offset", a_dir + "/z0"), "a zone that the Program loaded");
-        # the quota of another sandbox and trusted code are not affected (the process limit is shared)
-        Program b = tenantAllow(b_dir);
-        assertEq(0, b.callFunction("offset", b_dir + "/z"), "another sandbox");
-        assertEq(0, (new TimeZone(sprintf("%s/z%d", a_dir, max))).UTCOffset(), "trusted code");
-    }
-
     testPathPolicyTarget() {
         if (!zoneinfo || !gmt14) {
             testSkip("no zoneinfo files to use");
@@ -829,61 +748,9 @@ print(out.join(\"|\"));
         copyFile(gmt14, other + "/zone");
         symlink(other + "/zone", allowed + "/link");
         copyFile(zoneinfo, allowed + "/zone");
-        Program p = tenantAllow(allowed);
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("offset", allowed + "/link"),
-            "a symbolic link to a file outside of the allowed directory");
-        assertEq(0, p.callFunction("offset", allowed + "/zone"), "a file in the allowed directory");
         # trusted code reads the file of the link; the zone is named as given, not by the path behind the link
         assertEq(allowed + "/link", (new TimeZone(allowed + "/link")).region(), "the zone is named as given");
-        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("offset", allowed + "/link"),
-            "the link after trusted code loaded its file");
-    }
-
-    #! returns a Program with a SandboxManager that may read the directory and create Programs that load time zones
-    static Program tenantParent(string allowed, *string domain) {
-        Program p(PO_NEW_STYLE);
-        SandboxManager sm();
-        sm.setFilesystemDefaultPolicy(False);
-        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
-        if (domain) {
-            sm.setIsolationDomain(domain);
-        }
-        p.setSandboxManager(sm);
-        p.parse(TenantCode + "
-int sub child_load(list<string> paths) {
-    Program c(PO_NEW_STYLE);
-    c.parse(\"int sub f(string p) { return (new TimeZone(p)).UTCOffset(); }\", \"child\");
-    int n = 0;
-    foreach string path in (paths) {
-        try {
-            c.callFunction(\"f\", path);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc !~ /has loaded the maximum of time zones/) {
-                rethrow;
-            }
-            break;
-        }
-        ++n;
-    }
-    return n;
-}
-int sub load_all(list<string> paths) {
-    int n = 0;
-    foreach string path in (paths) {
-        try {
-            (new TimeZone(path)).UTCOffset();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc !~ /has loaded the maximum of time zones/) {
-                rethrow;
-            }
-            break;
-        }
-        ++n;
-    }
-    return n;
-}
-", "tenant-parent");
-        return p;
+        assertEq(50400, (new TimeZone(allowed + "/link")).UTCOffset(), "the data of the file behind the link");
     }
 
     #! creates the given number of copies of a file in a new directory and returns their paths
@@ -901,30 +768,6 @@ int sub load_all(list<string> paths) {
             rv += path;
         }
         return rv;
-    }
-
-    testPathZoneQuotaShared() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
-        }
-        int max = 256;
-        # Programs that sandboxed code creates are governed by its sandbox and share its quota
-        list<string> paths = makeCopies("shared-children", zoneinfo, max + 10);
-        Program parent = tenantParent(dir + "/shared-children");
-        assertEq(200, parent.callFunction("child_load", paths[0..199]), "the first child");
-        assertEq(max - 200, parent.callFunction("child_load", paths[200..]), "the second child gets the rest");
-        assertEq(0, parent.callFunction("load_all", paths[max..]), "the parent gets nothing more");
-
-        # the sandboxes of one isolation domain share its quota
-        list<string> dpaths = makeCopies("shared-domain", zoneinfo, max + 10);
-        string domain = "tz-domain-" + get_random_string(8, 1);
-        Program a = tenantParent(dir + "/shared-domain", domain);
-        Program b = tenantParent(dir + "/shared-domain", domain);
-        assertEq(200, a.callFunction("load_all", dpaths[0..199]), "the first sandbox of the domain");
-        assertEq(max - 200, b.callFunction("load_all", dpaths[200..]), "the second sandbox of the domain");
-        # a sandbox of another domain is not limited
-        Program c = tenantParent(dir + "/shared-domain", domain + "-other");
-        assertEq(10, c.callFunction("load_all", dpaths[0..9]), "a sandbox of another domain");
     }
 
     #! returns a TZif version 1 file with the given number of transitions between two time types
@@ -961,41 +804,12 @@ int sub load_all(list<string> paths) {
         f.close();
         assertThrows("TZINFO-ERROR", "transitions; the maximum is 10000", sub () { TimeZone t(over); }, NOTHING,
             "too many transitions");
-
-        # zones with many transitions: the memory of the parsed zone counts, not the size of the file
+        # a zone with the maximum of transitions loads
         string big = dir + "/tz-big";
         f.open2(big, O_CREAT | O_TRUNC | O_WRONLY, 0644);
         f.write(makeTzif(10000));
         f.close();
         assertEq(3600, (new TimeZone(big)).UTCOffset() + 3600, "a zone with 10000 transitions loads");
-        list<string> paths = makeCopies("bytes", big, 256);
-        Program p = tenantParent(dir + "/bytes");
-        int n = p.callFunction("load_all", paths);
-        # each zone takes more than 128 KiB parsed, so the 32 MiB limit is reached before the 256 zone limit
-        assertGt(0, n, "zones are loaded");
-        assertLt(256, n, "the memory limit is reached before the number of zones");
-
-        # a sandbox memory limit: zones are charged to it, permanently
-        list<string> mpaths = makeCopies("memlimit", big, 64);
-        Program m(PO_NEW_STYLE);
-        SandboxManager sm();
-        sm.setFilesystemDefaultPolicy(False);
-        sm.addFilesystemAllowedPath(dir + "/memlimit", QSEC_READ);
-        sm.setMemoryLimit(4 * 1024 * 1024);
-        m.setSandboxManager(sm);
-        m.parse(TenantCode, "tenant-memlimit");
-        int loaded = 0;
-        try {
-            foreach string path in (mpaths) {
-                m.callFunction("offset", path);
-                ++loaded;
-            }
-            assertTrue(False, "the memory limit is reached");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq("SANDBOX-MEMORY-LIMIT", ex.err, "the memory limit is reached: " + ex.desc);
-        }
-        assertGt(0, loaded, "zones are loaded within the limit");
-        assertGt(loaded * 128 * 1024, sm.getMemoryUsage(), "the zones are charged to the sandbox");
     }
 
     testDevFd() {
@@ -1023,21 +837,13 @@ int sub load_all(list<string> paths) {
         p.setSandboxManager(sm);
         p.parse(TenantCode, "tenant-devfd");
 
-        bool rechecked;
         bool removed;
         bool trusted_loaded;
         for (int i = 3; i < 256; ++i) {
             string path = "/dev/fd/" + i;
-            try {
-                int off = p.callFunction("offset", path);
-                assertNeq(50400, off, "the tenant does not load the file outside: " + path);
-            } catch (hash<ExceptionInfo> ex) {
-                # the tenant learns nothing about descriptors it may not read
-                assertEq(-1, ex.desc.find("replaced or removed"), "a uniform error for the tenant: " + ex.desc);
-                if (ex.desc =~ /access to time zone path '\/dev\/fd\/[0-9]+' is not permitted/) {
-                    rechecked = True;
-                }
-            }
+            # restricted code cannot load a path: the same error for every descriptor
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "restricted code can load time zone regions only",
+                \p.callFunction(), ("offset", path), "the tenant: " + path);
             try {
                 TimeZone t(path);
                 if (t.UTCOffset() == 50400) {
@@ -1052,11 +858,6 @@ int sub load_all(list<string> paths) {
         }
         assertTrue(trusted_loaded, "trusted code loads the file through /dev/fd");
         assertTrue(removed, "a removed file is refused");
-        if (PlatformOS == "Darwin") {
-            # /dev/fd/N is not a symbolic link on macOS, so the policy check of the name allows it; the check of the
-            # file that was opened refuses it
-            assertTrue(rechecked, "the policy is checked for the file that was opened");
-        }
     }
 
     #! returns the spellings of a name with the case of its letters given by the bits of the numbers from 0
@@ -1090,30 +891,19 @@ int sub load_all(list<string> paths) {
             testSkip("the file system distinguishes the case of names");
         }
         Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
-        SandboxManager sm();
-        sm.setMemoryLimit(64 * 1024 * 1024);
-        p.setSandboxManager(sm);
+        p.setSandboxManager(new SandboxManager());
         p.parse(TenantCode, "tenant-spellings");
-        int named = 0;
-        int primary = 0;
+        # restricted code gets the zone of the file's canonical name for every spelling, so it adds no names
         foreach string sp in (caseSpellings(region, 300)) {
-            string rv = p.callFunction("tzinfo", sp);
-            assertEq("|-10800", rv.substr(rv.find("|")), "the data of the region: " + sp);
-            string name = rv.substr(0, rv.find("|"));
-            if (sp == region) {
-                # the region itself was loaded in another case already
-                assertEq(region, name, "the region");
-            } else if (name == sp) {
-                ++named;
-            } else {
-                assertEq(region, name, "a spelling beyond the quota gets the zone of the file: " + sp);
-                ++primary;
+            if (sp == region.lwr()) {
+                # loaded by trusted code above, so its own zone is cached
+                continue;
             }
+            assertEq(region + "|-10800", p.callFunction("tzinfo", sp), "a spelling in restricted code: " + sp);
         }
-        # each spelling counts against the quota of the sandbox; beyond it, the zone of the file is returned
-        assertLe(256, named, "at most 256 spellings get a zone of their own");
-        assertGt(0, primary, "spellings beyond the quota get the zone of the file");
-        assertGt(0, sm.getMemoryUsage(), "the zones are charged to the sandbox");
+        # trusted code gets a zone named as given
+        assertEq("america/argentina/BUENOS_AIRES", (new TimeZone("america/argentina/BUENOS_AIRES")).region(),
+            "a spelling in trusted code");
     }
 
     testLongRegionNames() {
@@ -1148,39 +938,12 @@ int sub load_all(list<string> paths) {
         copyFile(zoneinfo, subdir + "/Real");
         symlink(".", subdir + "/SelfLink01");
         string short_name = subname + "/" + strmul("SelfLink01/", 3) + "Real";
-        assertEq(short_name, p.callFunction("tz", short_name), "a name through the directory link");
+        # restricted code gets the zone of the file's canonical name
+        assertEq(subname + "/Real", p.callFunction("tz", short_name), "a name through the directory link");
+        assertEq(short_name, (new TimeZone(short_name)).region(), "trusted code gets the name as given");
         # fewer symbolic links than the walk follows, but longer than the limit
         string long_name = subname + "/" + strmul("SelfLink01/", 30) + "Real";
         assertUnknownRegion(sub () { p.callFunction("tz", long_name); }, long_name, "a name longer than the limit");
-    }
-
-    testRestrictedQuota() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
-        }
-        list<string> paths = makeCopies("restricted-quota", zoneinfo, 300);
-        # a Program restricted by its parse options and governed by no sandbox is limited
-        Program r(PO_NEW_STYLE | PO_NO_NETWORK);
-        r.parse(TenantCode, "restricted");
-        for (int i = 0; i < 256; ++i) {
-            r.callFunction("offset", paths[i]);
-        }
-        assertThrows("TZINFO-ERROR", "the tenant has loaded the maximum of time zones", \r.callFunction(),
-            ("offset", paths[256]), "a restricted Program is limited");
-        # a Program that is not restricted is not limited
-        Program t(PO_NEW_STYLE);
-        t.parse(TenantCode, "trusted");
-        foreach string path in (paths) {
-            assertEq(0, t.callFunction("offset", path), "an unrestricted Program: " + path);
-        }
-        # nor is trusted code that reloads a file whose data changes
-        string changing = dir + "/restricted-changing";
-        if (gmt14) {
-            for (int i = 0; i < 260; ++i) {
-                copyFile(i % 2 ? gmt14 : zoneinfo, changing);
-                assertEq(i % 2 ? 50400 : 0, (new TimeZone(changing)).UTCOffset(), "a changed file in trusted code");
-            }
-        }
     }
 
     testNonZoneFiles() {
@@ -1199,90 +962,6 @@ int sub load_all(list<string> paths) {
         if (!checked) {
             testSkip("no such file in the zoneinfo directory");
         }
-    }
-
-    testDirectiveQuota() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
-        }
-        list<string> paths = makeCopies("directive-quota", zoneinfo, 260);
-        # trusted code parses the code of a restricted Program: the directives count against that Program's limit
-        string src;
-        foreach string path in (paths) {
-            src += "%set-time-zone " + path + "\n";
-        }
-        src += "string sub r() { return TimeZone::get().region(); }\n";
-        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
-        assertThrows("TZINFO-ERROR", "has loaded the maximum of time zones", \p.parse(), (src, "directives"),
-            "the directives of a restricted Program are limited");
-
-        # region spellings in directives are charged as well (on a file system that does not distinguish case)
-        try {
-            TimeZone t("asia/kathmandu");
-        } catch (hash<ExceptionInfo> ex) {
-            return;
-        }
-        string rsrc;
-        foreach string sp in (caseSpellings("Asia/Kathmandu", 300)) {
-            rsrc += "%set-time-zone " + sp + "\n";
-        }
-        rsrc += "string sub r() { return TimeZone::get().region(); }\n";
-        Program p2(PO_NEW_STYLE | PO_NO_NETWORK);
-        p2.parse(rsrc, "region-directives");
-        # beyond the limit, the spelling gets the zone of the file, named by its path in the zoneinfo directory
-        assertEq("Asia/Kathmandu", p2.callFunction("r"), "region spellings in directives are limited");
-    }
-
-    #! returns a Program restricted by its parse options and governed by no sandbox that can create Programs
-    static Program restrictedParent() {
-        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
-        p.parse(TenantCode + "
-int sub child_load(list<string> paths) {
-    Program c(PO_NEW_STYLE);
-    c.parse(\"int sub f(string p) { return (new TimeZone(p)).UTCOffset(); }\", \"child\");
-    int n = 0;
-    foreach string path in (paths) {
-        try {
-            c.callFunction(\"f\", path);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc !~ /has loaded the maximum of time zones/) {
-                rethrow;
-            }
-            break;
-        }
-        ++n;
-    }
-    return n;
-}
-", "restricted-parent");
-        return p;
-    }
-
-    testRestrictedFamilyQuota() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
-        }
-        int max = 256;
-        list<string> paths = makeCopies("restricted-family", zoneinfo, 3 * max);
-        Program parent = restrictedParent();
-        int n1 = parent.callFunction("child_load", paths[0..max - 1]);
-        int n2 = parent.callFunction("child_load", paths[max..2 * max - 1]);
-        int n3 = parent.callFunction("child_load", paths[2 * max..]);
-        assertEq(max, n1 + n2 + n3, "the Programs created by restricted code share its limit");
-
-        # a sandboxed tenant of another domain is not affected: it deserializes a date in a region not loaded yet and
-        # loads another region
-        Program t(PO_NEW_STYLE | PO_NO_FILESYSTEM);
-        SandboxManager sm();
-        sm.setIsolationDomain("tz-family-" + get_random_string(8, 1));
-        t.setSandboxManager(sm);
-        t.parse(TenantCode, "tenant-other-domain");
-        string loaded = "Asia/Kolkata";
-        string fresh = "Asia/Tbilisi";
-        date d = (new TimeZone(loaded)).date("2026-01-15T10:00:00");
-        binary data = replaceRegion(Serializable::serialize(d), loaded, fresh.substr(0, loaded.size()));
-        assertEq(fresh, t.callFunction("des", data).info().zone.region(), "a date in a region not loaded yet");
-        assertEq("America/Guayaquil", t.callFunction("tz", "America/Guayaquil"), "another region");
     }
 
     testLiteralZone() {
@@ -1308,205 +987,152 @@ int sub child_load(list<string> paths) {
         }
     }
 
-    testSandboxedOpen() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
-        }
-        string d = dir + "/sandboxed-open";
-        mkdir(d);
-        copyFile(zoneinfo, d + "/zone");
-        symlink(d + "/zone", d + "/link");
-        Program p = tenantAllow(d);
-        # a missing file: the policy error, not the error of the open
-        assertThrows("FILESYSTEM-ACCESS-DENIED", "access to time zone path '" + regex_escape(d) + "/missing' is not "
-            "permitted", \p.callFunction(), ("tz", d + "/missing"), "a missing file");
-        # a symbolic link in the allowed directory to a file in it is followed
-        assertEq(0, p.callFunction("offset", d + "/link"), "a link to a file in the allowed directory");
-        assertEq(d + "/link", p.callFunction("tz", d + "/link"), "named as given");
-    }
 
-    testRegionFallbackName() {
-        *string root = ENV.QORE_TEST_ZONEINFO_ROOT;
-        if (!root || !zoneinfo) {
-            testSkip("QORE_TEST_ZONEINFO_ROOT is not set to the writable zoneinfo directory of a build configured "
-                "with -DZONEINFO_LOCATION");
-        }
-        string subname = "Qore" + get_random_string(10, 1);
-        string subdir = root + "/" + subname;
-        mkdir(subdir);
-        on_exit {
-            try {
-                remove_tree(subdir);
-            } catch (hash<ExceptionInfo> ex) {
-            }
-        }
-        copyFile(zoneinfo, subdir + "/Real");
-        symlink(".", subdir + "/S");
-        # trusted code loads the file by its path first, so its data is loaded with a path outside of any zoneinfo
-        # directory that the runtime knows by name
-        assertEq(0, (new TimeZone(subdir + "/Real")).UTCOffset(), "the file by its path");
 
-        # a tenant uses up its limit with other regions
-        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
-        p.setSandboxManager(new SandboxManager());
-        p.parse(TenantCode, "tenant-fallback");
-        int loaded = 0;
-        foreach string region in (TimeZoneRegions) {
-            try {
-                if (p.callFunction("tz", region) == region) {
-                    ++loaded;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-            }
-        }
-        assertGt(0, loaded, "regions are loaded");
-        assertGt(256, TimeZoneRegions.size(), "more regions than the limit");
-        # beyond the limit, another name of the file gets its zone named by its path in the zoneinfo directory,
-        # never by a path outside of it
-        string name = p.callFunction("tz", subname + "/S/Real");
-        assertTrue(name == subname + "/S/Real" || name == subname + "/Real",
-            "the zone is named by the region or by its path in the zoneinfo directory: " + name);
-        assertEq(-1, name.find(root), "the zone is not named by a host path: " + name);
-    }
-
-    #! returns a Program restricted by its parse options that creates Programs with sandboxes of its own
-    static Program restrictedManagerParent() {
+    #! returns a Program restricted by its parse options that creates Programs, also with sandboxes of their own
+    static Program restrictedCreator() {
         Program p(PO_NEW_STYLE | PO_NO_NETWORK);
         p.parse(TenantCode + "
-#! loads paths in a new Program with a new SandboxManager that may read the directory; returns the number loaded
-int sub sm_child_load(string dir, list<string> paths) {
+string sub child_tz(string name, bool new_manager) {
     Program c(PO_NEW_STYLE);
-    SandboxManager sm();
-    sm.setFilesystemDefaultPolicy(False);
-    sm.addFilesystemAllowedPath(dir, QSEC_READ);
-    c.setSandboxManager(sm);
-    c.parse(\"int sub f(string p) { return (new TimeZone(p)).UTCOffset(); } string sub r(string p) { return (new TimeZone(p)).region(); }\", \"child\");
-    int n = 0;
-    foreach string path in (paths) {
-        try {
-            c.callFunction(\"f\", path);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.desc !~ /has loaded the maximum of time zones/) {
-                rethrow;
-            }
-            break;
-        }
-        ++n;
+    if (new_manager) {
+        SandboxManager sm();
+        c.setSandboxManager(sm);
     }
-    return n;
+    c.parse(\"string sub tz(string n) { return (new TimeZone(n)).region(); }\", \"child\");
+    return c.callFunction(\"tz\", name);
 }
-#! returns the regions of the names in a new Program with a new SandboxManager
-list<string> sub sm_child_regions(list<string> names) {
-    Program c(PO_NEW_STYLE | PO_NO_FILESYSTEM);
-    c.setSandboxManager(new SandboxManager());
-    c.parse(\"string sub r(string p) { return (new TimeZone(p)).region(); }\", \"child\");
-    return map c.callFunction(\"r\", $1), names;
-}
-#! parses the source in a new Program with a new SandboxManager; returns the error or the Program's region
-string sub sm_child_parse(string src) {
+string sub child_parse(string src, bool new_manager) {
     try {
         Program c(PO_NEW_STYLE);
-        c.setSandboxManager(new SandboxManager());
+        if (new_manager) {
+            c.setSandboxManager(new SandboxManager());
+        }
         c.parse(src + \"\\nstring sub r() { return TimeZone::get().region(); }\", \"child\");
         return c.callFunction(\"r\");
     } catch (hash<ExceptionInfo> ex) {
         return ex.err + \": \" + ex.desc;
     }
 }
-", "restricted-manager-parent");
+", "restricted-creator");
         return p;
     }
 
-    #! returns a restricted Program whose children with sandboxes of their own used up the tenant's limit
-    Program exhaustedManagerParent(string name) {
-        int max = 256;
-        string d = dir + "/" + name;
-        list<string> paths = makeCopies(name, zoneinfo, 2 * max);
-        Program parent = restrictedManagerParent();
-        # each child has a sandbox of its own, which restricted code created: they all count against its tenant
-        int total = 0;
-        for (int c = 0; c < 4; ++c) {
-            total += parent.callFunction("sm_child_load", d, paths[c * 100..c * 100 + 99]);
-        }
-        assertEq(max, total, "the children with sandboxes of their own share the tenant's limit");
-        assertEq(0, parent.callFunction("sm_child_load", d, paths[400..410]), "the limit is reached");
-        return parent;
-    }
-
-    testNewManagerChildren() {
+    testRestrictedShapes() {
         if (!zoneinfo) {
             testSkip("no zoneinfo file to copy");
         }
-        exhaustedManagerParent("manager-children");
+        string path = dir + "/restricted-shapes";
+        copyFile(zoneinfo, path);
+        Program p = restrictedCreator();
+        # the Program itself, a Program that it creates, and one with a sandbox that it creates
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", \p.callFunction(), ("tz", path), "the restricted Program");
+        foreach bool new_manager in ((False, True)) {
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "restricted code can load time zone regions only",
+                \p.callFunction(), ("child_tz", path, new_manager), sprintf("a child (new sandbox: %y)", new_manager));
+            # regions load, by the canonical name of the file
+            assertEq("Pacific/Chatham", p.callFunction("child_tz", "Pacific/Chatham", new_manager),
+                sprintf("a region in a child (new sandbox: %y)", new_manager));
+        }
+        # an unrestricted Program that trusted code creates loads the path
+        Program u(PO_NEW_STYLE);
+        u.parse(TenantCode, "unrestricted");
+        assertEq(0, u.callFunction("offset", path), "an unrestricted Program");
     }
 
-    testNewManagerChildDirective() {
+    testRestrictedDirectives() {
         if (!zoneinfo) {
             testSkip("no zoneinfo file to copy");
         }
-        Program parent = exhaustedManagerParent("manager-directive");
-        # the directive in a child with a sandbox of its own counts against the tenant as well
-        string rv = parent.callFunction("sm_child_parse", "%set-time-zone Pacific/Chatham");
-        assertRegex("has loaded the maximum of time zones", rv, "%set-time-zone in a child with a new sandbox");
-    }
-
-    testNewManagerChildSpellings() {
-        if (!zoneinfo) {
-            testSkip("no zoneinfo file to copy");
+        string path = dir + "/restricted-directive";
+        copyFile(zoneinfo, path);
+        # trusted code parses the code of a restricted Program: a path is refused by the Program's restrictions
+        Program p(PO_NEW_STYLE | PO_NO_NETWORK);
+        assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "cannot name a zoneinfo file path in a restricted Program", \p.parse(),
+            ("%set-time-zone " + path + "\nstring sub r() { return TimeZone::get().region(); }", "directive"),
+            "a path in the directive of a restricted Program");
+        # a child of restricted code, also with a sandbox that it created
+        Program c = restrictedCreator();
+        foreach bool new_manager in ((False, True)) {
+            assertRegex("ILLEGAL-FILESYSTEM-ACCESS.*cannot name a zoneinfo file path in a restricted Program",
+                c.callFunction("child_parse", "%set-time-zone " + path, new_manager),
+                sprintf("a path in a child's directive (new sandbox: %y)", new_manager));
         }
-        # the probe uses another region, as a spelling that trusted code loads stays cached
+        # region spellings in directives get the zone of the file's canonical name (on a file system that does not
+        # distinguish case)
         try {
             TimeZone t("asia/thimphu");
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("the file system distinguishes the case of names");
+            return;
         }
-        Program parent = exhaustedManagerParent("manager-spellings");
-        # the region's file is loaded already, so a spelling beyond the limit gets the file's zone
-        TimeZone loaded("Asia/Yangon");
-        list<string> spellings = caseSpellings("Asia/Yangon", 64);
-        list<string> regions = parent.callFunction("sm_child_regions", spellings);
-        for (int i = 0; i < spellings.size(); ++i) {
-            if (spellings[i] != "Asia/Yangon") {
-                assertEq("Asia/Yangon", regions[i], "a spelling beyond the tenant's limit: " + spellings[i]);
-            }
+        foreach string sp in (caseSpellings("Asia/Kathmandu", 32)) {
+            assertEq("Asia/Kathmandu", c.callFunction("child_parse", "%set-time-zone " + sp, True),
+                "a region spelling in a child's directive: " + sp);
         }
     }
 
-    #! returns the Qore source of a list of strings
-    static string qoreList(list<string> l) {
-        return "(" + (map sprintf("%y", $1), l).join(", ") + ")";
-    }
-
-    testSelfRestrictedHost() {
+    testModuleCalls() {
         if (!zoneinfo) {
             testSkip("no zoneinfo file to copy");
         }
-        list<string> paths = makeCopies("self-restricted-host", zoneinfo, 300);
-        string script = dir + "/self-restricted-host.q";
+        string path = dir + "/module-calls";
+        copyFile(zoneinfo, path);
+        # the host Program loaded the module: its code loads the path for the host
+        assertEq(0, TzMod::load(path), "the module's code for the host");
+        # restricted code that calls the module's code cannot load a path through it
+        foreach int opts in ((PO_NO_NETWORK, PO_NO_FILESYSTEM)) {
+            Program p(PO_NEW_STYLE | opts);
+            p.loadModule("TzMod");
+            p.parse("int sub load(string n) { return TzMod::load(n); } string sub region(string n) { return "
+                "TzMod::region(n); }", "module-caller");
+            assertThrows("ILLEGAL-FILESYSTEM-ACCESS", "restricted code can load time zone regions only",
+                \p.callFunction(), ("load", path), sprintf("a path through the module's code (options: %x)", opts));
+            assertEq("Asia/Ho_Chi_Minh", p.callFunction("region", "Asia/Ho_Chi_Minh"), "a region through the module");
+        }
+        # an unrestricted Program that calls the module's code loads the path
+        Program u(PO_NEW_STYLE);
+        u.loadModule("TzMod");
+        u.parse("int sub load(string n) { return TzMod::load(n); }", "module-caller-unrestricted");
+        assertEq(0, u.callFunction("load", path), "an unrestricted Program through the module's code");
+        # spellings of a region through the module's code get the file's zone
+        try {
+            TimeZone t("asia/thimphu");
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        Program r(PO_NEW_STYLE | PO_NO_NETWORK);
+        r.loadModule("TzMod");
+        r.parse("string sub region(string n) { return TzMod::region(n); }", "module-caller-spellings");
+        foreach string sp in (caseSpellings("Asia/Samarkand", 32)) {
+            assertEq("Asia/Samarkand", r.callFunction("region", sp), "a spelling through the module: " + sp);
+        }
+    }
+
+    testHostUnrestricted() {
+        if (!zoneinfo) {
+            testSkip("no zoneinfo file to copy");
+        }
+        list<string> paths = makeCopies("host-unrestricted", zoneinfo, 300);
+        string script = dir + "/host-unrestricted.q";
         File f();
         f.open2(script, O_CREAT | O_TRUNC | O_WRONLY, 0644);
         f.write(sprintf("%%new-style
 %%no-network
-list<string> regions = %s;
-list<string> paths = %s;
 string code = \"string sub tz(string r) { return (new TimeZone(r)).region(); }\";
 Program a(PO_NEW_STYLE | PO_NO_FILESYSTEM);
 a.parse(code, \"a\");
-Program b(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+Program b(PO_NEW_STYLE);
 b.parse(code, \"b\");
 list<string> out = ();
-# A uses up its limit
-bool limited = False;
-foreach string r in (regions) {
-    try { a.callFunction(\"tz\", r); } catch (hash<ExceptionInfo> ex) { if (ex.desc =~ /maximum of time zones/) { limited = True; break; } }
+# A loads many regions; it cannot keep anyone from loading time zones
+foreach string r in (%s) {
+    try { a.callFunction(\"tz\", r); } catch (hash<ExceptionInfo> ex) {}
 }
-out += \"a:\" + (limited ? \"limited\" : \"unlimited\");
-# B and the host still load
 try { out += \"b:\" + b.callFunction(\"tz\", \"Indian/Mauritius\"); } catch (hash<ExceptionInfo> ex) { out += \"b:\" + ex.err; }
 try { out += \"host:\" + (new TimeZone(\"Indian/Reunion\")).region(); } catch (hash<ExceptionInfo> ex) { out += \"host:\" + ex.err; }
-# the host is not limited
+# the host is not restricted, whatever its own options: it loads paths
 int m = 0;
-foreach string p in (paths) {
+foreach string p in (%s) {
     try { TimeZone t(p); ++m; } catch (hash<ExceptionInfo> ex) { break; }
 }
 out += \"host-paths:\" + m;
@@ -1514,7 +1140,12 @@ print(out.join(\"|\"));
 ", qoreList(TimeZoneRegions), qoreList(paths)));
         f.close();
         string out = backquote(sprintf("'%s' '%s' 2>&1", qore_bin, script));
-        assertEq("a:limited|b:Indian/Mauritius|host:Indian/Reunion|host-paths:300", trim(out),
-            "a Program cannot keep another one or the host from loading time zones");
+        assertEq("b:Indian/Mauritius|host:Indian/Reunion|host-paths:300", trim(out),
+            "the host and its other Programs are not affected");
+    }
+
+    #! returns the Qore source of a list of strings
+    static string qoreList(list<string> l) {
+        return "(" + (map sprintf("%y", $1), l).join(", ") + ")";
     }
 }

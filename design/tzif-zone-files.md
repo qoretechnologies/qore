@@ -12,14 +12,13 @@ The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo 
 parsed from memory (`QoreZoneInfo::init()`):
 
 - A path (`findLoadRegionFromPath()`; `findLoadRegionOrPath()` passes names starting with `/` or `.` from
-  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is made absolute with the current directory once
-  and checked against `PO_NO_FILESYSTEM` and the file-system policy of the code that runs (`checkPathPolicy()`,
-  errors name the path as given) before anything else. `loadPath()` then, without the lock: opens exactly that path
-  with `O_NONBLOCK`, determines the canonical path of the open file (`F_GETPATH` on macOS, `/proc/self/fd/N` on
-  Linux, `realpath()` otherwise), verifies that it names the open file (`stat()` device and inode) and checks the
-  policy again for that path before anything is reported about the file; then the file must be regular and is
-  read. For code that a sandbox governs, the path is first resolved with `realpath()` and checked, the file is
-  opened with `O_NOFOLLOW`, and a failed open or an undeterminable canonical path gives the policy error.
+  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is refused for restricted code (see below);
+  otherwise it is made absolute with the current directory once and checked against `PO_NO_FILESYSTEM` and the
+  file-system policy of the code that runs (`checkPathPolicy()`, errors name the path as given) before anything
+  else. `loadPath()` then, without the lock: opens exactly that path with `O_NONBLOCK`, determines the canonical path
+  of the open file (`F_GETPATH` on macOS, `/proc/self/fd/N` on Linux, `realpath()` otherwise), verifies that it
+  names the open file (`stat()` device and inode) and checks the policy again for that path before anything is
+  reported about the file; then the file must be regular and is read.
 - Zones (`getZone()`): the data read from a file is identified by the device and inode of the file and the
   SHA-256 of the data (`ZoneIdentity`); `identity_map` holds one `QoreZoneInfo` per identity, never returned
   itself. Each name gets a `QoreAliasZoneInfo` named by the name as given (a path) or the region name, which shares
@@ -27,29 +26,19 @@ parsed from memory (`QoreZoneInfo::init()`):
   a path only when its identity is unchanged (a changed file gets a new zone; the old one is kept in
   `retired_zones`, as dates refer to it). New zones are inserted under the write lock; when another thread
   inserted the same data first, its zone is used.
-- Tenants and quotas (`QoreZoneCharger`, `checkCharge()`, `prepareCharge()`, `commitCharge()`). The rule:
-  1. A Program created with no Program running is a host Program (`qore_program_private::tz_host`); its code is
-     never charged, whatever its parse options.
-  2. A Program created by the host Program or by code that is not restricted is a tenant root with a quota of its
-     own (`qore_program_private::tz_quota`). A Program created by restricted code of a non-host Program shares that
-     code's tenant quota (`qore_tz_caller_tenant_quota()`), and so does a `SandboxManager` that such code creates
-     (`QoreSandboxMemoryAccount::tz_tenant_quota`, set in `qore_sandbox_manager_record_creator()`), so restricted
-     code can never obtain a fresh quota.
-  3. A new zone (the parsed data if new, plus the name's zone) loaded by restricted code is charged with its memory
-     to the tenant quota of the Program, to each member of the governing sandbox
-     (`QoreSandboxMemoryAccount::tz_path_zones`/`tz_path_bytes`) and the tenant quota that member carries, and to
-     the isolation domain (`domain_path_quota`): 256 zones / 32 MiB each. There is no process-wide pool.
-  The restrictions are those of the code that runs (`CallerMode`), or of the Program for the `%set-time-zone`
-  directive (`ProgramMode`: the Program's own parse options and sandbox managers, as the directive is processed
-  while other code parses the Program). Memory is checked against and charged to the thread's sandbox charge chain
-  (`qore_sb_check_alloc()`, `QoreSandboxCharge::add()`, released at shutdown); in `ProgramMode` it is charged to
-  the accounts of the Program's sandboxes directly. Everything that can fail is done before the maps refer to a new
-  zone; `commitCharge()` cannot fail. Exceptions are built after the lock is released. Each new name entry counts
-  against the limits, so the entries a tenant creates are bounded. When a limit is reached, another name of a
-  region whose file is loaded already gets the file's zone named by its path in the zoneinfo directory
-  (`region_identity_aliases`, one per file). On Windows, where the file is not identified by its handle, code that
-  a sandbox governs cannot load a path; trusted code's paths are made absolute, read without the lock and cached by
-  that path (at most 16384).
+- Restricted code (`QoreTimeZoneManager::callerRestricted()`, `programRestricted()`): code that a sandbox governs
+  or whose parse options restrict a functional domain, in any Program but a host Program (one created with no
+  Program running, `qore_program_private::tz_host`). The calling code is found past the code of modules, which acts
+  for its caller (`qore_caller_restricts_domain()`, `qore_get_calling_program()`). Restricted code can load regions
+  only: `findLoadRegionFromPath()` raises `ILLEGAL-FILESYSTEM-ACCESS` before anything else, and the
+  `%set-time-zone` directive refuses a path in a restricted Program (decided by the Program's own options and
+  sandbox managers, as the directive is processed while other code parses it). A region that restricted code loads
+  gets the zone of the canonical name of the file reached (the walked path with links resolved; on macOS the true
+  name from `F_GETPATH`), so the names that restricted code can add are bounded by the files of the zoneinfo
+  directory, and zone data is bounded by the identities of those files. Limits per tenant, which would let
+  restricted code load paths, are a follow-up (qore#7566). Every allocation is made before a map refers to a new
+  zone, and vectors grow geometrically. On Windows, the zone of a path that unrestricted code loads is read without
+  the lock and cached by its absolute path (at most 16384).
 - Date literals: the JIT rebuilds the zone of a literal by its name with `findLoadedZone()`, which finds a zone that
   was loaded when the code was parsed (a region, a path as given or the local zone) without file access.
 - The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
@@ -75,7 +64,7 @@ parsed from memory (`QoreZoneInfo::init()`):
   that is a symbolic link is read with `readlinkat()` and followed only inside of the directory (`..` cannot go
   above it, an absolute target must be in it, at most 40 links); the file must be regular. The zone of the file is
   named by its path in the zoneinfo directory (on macOS the true name from `F_GETPATH`, as the file system does not
-  distinguish case, so every spelling of a region reaches its file; spellings share its data and are charged). Every
+  distinguish case, so every spelling of a region reaches its file; spellings share its data). Every
   failure, also a file that is not a zoneinfo file, raises the same `TZINFO-ERROR`
   `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show whether a path exists.
   `checkRegion()` gives it for a region string with a NUL character, a `..` or empty component or a backslash. The

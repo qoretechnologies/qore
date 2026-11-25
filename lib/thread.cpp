@@ -8217,6 +8217,14 @@ static const QoreProgram* qore_get_nearest_non_module_program(ThreadData* td,
     return nullptr;
 }
 
+QoreProgram* qore_get_calling_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
+}
+
 bool qore_caller_restricts_terminal_io() {
     ThreadData* td = thread_data.get();
     // before the library is initialized, only the embedding application runs
