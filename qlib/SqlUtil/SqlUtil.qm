@@ -193,6 +193,8 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - @ref SqlUtil::AbstractTable::getAlignSql() "getAlignSql()" removes an Oracle primary key before dropping its
+      supporting index when both are absent from the template (<a href="https://github.com/qoretechnologies/qore/issues/1482">issue 1482</a>)
     - serialized objects keep no credentials of their datasource: the default serializer keeps its masked
       configuration, and a datasource is restored with a registered deserializer or the new
       @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()"; data of
