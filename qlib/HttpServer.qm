@@ -5680,8 +5680,29 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # the socket that the handler gets (qore#6953); that of an HTTP/1.1 request ends when the
                     # handler's code returns, before the server sends the response and reads the next request on the
                     # connection (qore#7305)
-                    hash<auto!> hrv = handler.handleRequest(hview,
-                        request_helper.handler_sock ?? http_handler_connection_socket(s), cx, hdr, body);
+                    # a handler whose class is of a restricted Program, which trusted code serves the request to, gets
+                    # the request without its credentials (fails closed); the rest of its context is its own, as
+                    # before.  The code of the handler's base class filters what it dispatches to restricted code in
+                    # the other cases: a trusted handler that asks for it, and a request that is served for restricted
+                    # code (of a server that restricted code runs, or of a listener that was added for it), which is
+                    # that code's own (qore#7303)
+                    bool filter_handler;
+                    try {
+                        filter_handler = !SandboxManager::isRestricted()
+                            && SandboxManager::isFromRestrictedProgram(handler);
+                    } catch (hash<ExceptionInfo> ex) {
+                        filter_handler = True;
+                    }
+                    hash<auto!> hrv;
+                    if (filter_handler) {
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr);
+                        hrv = handler.handleRequest(hview,
+                            request_helper.handler_sock ?? http_handler_connection_socket(s), filtered.cx,
+                            filtered.hdr, body);
+                    } else {
+                        hrv = handler.handleRequest(hview,
+                            request_helper.handler_sock ?? http_handler_connection_socket(s), cx, hdr, body);
+                    }
                     if (hrv.hasKey("raw_response")) {
                         delete hrv."raw_response";
                     }

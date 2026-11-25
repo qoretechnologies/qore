@@ -5586,6 +5586,13 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             if (trailers) {
                 cx.trailers = trailers;
             }
+            # the handleRequest() of a handler of restricted code gets the request without its credentials
+            # (qore#7303)
+            if (filtersRequestsFor() || hostsRestrictedCode()) {
+                hash<HttpFilteredRequestInfo> filtered = withholdCredentialsForDispatch(cx, hdr);
+                return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(filtered.cx, filtered.hdr,
+                    msg_body));
+            }
             return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
@@ -5645,6 +5652,56 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             handoff = new HttpRequestHandoff(cx, hdr, trailer_keep);
         }
         return rv;
+    }
+
+    #! Returns the request without its credentials for the handler's own code (qore#7303)
+    /** The server gives the handleRequest() of a handler of restricted code (see filtersRequestsFor()) the request
+        without its credentials, as the request filter withholds them (see
+        @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()", with the
+        options of this handler): the credential header fields (also in \c cx.hdr), the credential trailer fields,
+        those of the raw header fields and of the request URI in \c cx."header-info", the user information of the URL
+        and the credential query parameters of the paths, and the raw \c Authorization value (\c cx.auth).  The rest of
+        the context is the handler's, as before: the socket and the stream of its request, its own thread context
+        (\c cx.uctx); the code that the handler dispatches the request to gets it filtered further by the code of this
+        class (see withholdRequestCredentials()).
+
+        It returns only a copy of the request that it is given, so it is not restricted.
+
+        @param cx the raw request context
+        @param hdr the raw request header fields
+
+        @return the request without its credentials; \c withheld lists what was withheld
+
+        @since HttpServerUtil 1.6
+    */
+    final hash<HttpFilteredRequestInfo> withholdCredentialsForDispatch(hash<auto> cx, hash<auto> hdr) {
+        hash<HttpFilteredRequestInfo> filtered = filterRequestForHandler(cx, hdr);
+        # the raw Authorization value
+        hash<auto> rcx = cx - "auth";
+        # the parts of the context that hold the credentials of the request, as the filter has them
+        foreach string key in ("hdr", "trailers", "masked_path", "orig_path", "raw_path", "url") {
+            if (filtered.cx.hasKey(key)) {
+                rcx{key} = filtered.cx{key};
+            } else {
+                remove rcx{key};
+            }
+        }
+        if (cx."header-info".typeCode() == NT_HASH) {
+            hash<auto> info = cx."header-info";
+            foreach string key in ("headers-raw", "request-uri") {
+                if (filtered.cx."header-info".hasKey(key)) {
+                    info{key} = filtered.cx."header-info"{key};
+                } else {
+                    remove info{key};
+                }
+            }
+            rcx."header-info" = info;
+        }
+        return <HttpFilteredRequestInfo>{
+            "cx": rcx,
+            "hdr": filtered.hdr,
+            "withheld": filtered.withheld,
+        };
     }
 
     #! Returns the request filtered with the options of this handler (its authenticator and
