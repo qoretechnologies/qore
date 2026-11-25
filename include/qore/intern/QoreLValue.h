@@ -721,18 +721,16 @@ public:
     }
 
     DLLLOCAL void set(const QoreTypeInfo* typeInfo) {
-        if (typeInfo == bigIntTypeInfo || typeInfo == softBigIntTypeInfo)
+        if (typeInfo == bigIntTypeInfo || typeInfo == softBigIntTypeInfo) {
             set(QV_Int);
-        else if (typeInfo == floatTypeInfo || typeInfo == softFloatTypeInfo)
+        } else if (typeInfo == floatTypeInfo || typeInfo == softFloatTypeInfo) {
             set(QV_Float);
-        else if (typeInfo == boolTypeInfo || typeInfo == softBoolTypeInfo)
+        } else if (typeInfo == boolTypeInfo || typeInfo == softBoolTypeInfo) {
             set(QV_Bool);
-        // For complex types (hash, list, objects), check using QoreTypeInfo API functions
-        // since pointers may not match for wrapped types
-        else if (QoreTypeInfo::isHashType(typeInfo) || QoreTypeInfo::isListType(typeInfo))
+        } else {
+            // every other type (hash, list and object types too) is held as a node
             set(QV_Node);
-        else
-            set(QV_Node);
+        }
     }
 
     DLLLOCAL void set(valtype_t t) {
