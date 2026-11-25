@@ -700,7 +700,12 @@ public:
         // the initializers have changed
         code_init.store(-1, std::memory_order_relaxed);
         hier_code_init.store(-1, std::memory_order_relaxed);
-        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (parameterized_base) {
+            // a concrete declaration holds no cache, and its lock is a stripe that its generic's loop below holds
+            // (qore#7554)
+            return;
+        }
+        std::lock_guard<std::mutex> lock(cacheLock());
         for (auto& i : parameterized_hashdecl_cache) {
             typed_hash_decl_private* p = get(*i.second);
             HashDeclMemberInfo* imi = p->members.find(name);
