@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the compiled child program
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AssignmentStoredValueTest
+
+#! Tests the value of an assignment expression whose target converts the value assigned
+/** The child script (assignment-stored-value/assignment-stored-value.q) assigns values that the target converts (a
+    string to a softint element, a typed hash to an untyped element) to local, global and static variables, list
+    elements with a constant and a variable index, hash keys with a constant and a dynamic key, hashdecl and object
+    members, references and nested elements, and prints the value of each assignment and its type: it is the value
+    stored, in every execution mode, also when the value is an argument, a return value, a condition or an operand
+    (issue #7575: the IR interpreter and native code gave the value assigned for a list element with a constant index
+    and for a hash key); compound assignments, assignments whose value is not used and conversions that fail are checked
+    too.  It runs in every execution mode, and compiled with AOT at optimization levels 0 and 3, against the same
+    expected output.
+*/
+class AssignmentStoredValueTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-assignment-stored-value-");
+
+        #! the output of the child script
+        const ExpectedOutput = "local softint: 5 integer
+local hash: {a: 1} hash
+global softint: 6 integer
+global hash: {a: 1} hash
+list element: {a: 1} hash
+list element stored: {a: 1} hash
+list element variable index: {a: 1} hash
+list<softint> element: 50 integer
+list<softint> element stored: 50 integer
+list<*softint> element past the end: 53 integer
+list<softint> element variable index: 51 integer
+hash key: {a: 1} hash
+hash key stored: {a: 1} hash
+hash key dynamic: {a: 1} hash
+hash key dynamic stored: {a: 1} hash
+hash<string, softint> key: 7 integer
+hash<string, softint> key stored: 7 integer
+hash<string, softint> key dynamic: 17 integer
+hashdecl softint member: 8 integer
+hashdecl hash member: {a: 1} hash
+object softint member: 9 integer
+object hash member: {a: 1} hash
+static softint: 10 integer
+reference softint: 11 integer
+nested list: {a: 1} hash
+chained: 13 integer
+chained stored: 13 integer
+argument: 31 integer
+return hash key: 21 integer
+return list element: 22 integer
+condition: \"false\" string
+operator: 41 integer
+string operator: \"2x\" string
+hash<string, softint> +=: 3 integer
+hash<string, softint> dynamic +=: 5 integer
+list<softint> +=: 3 integer
+hash<string, softstring> +=: \"a5\" string
+statement hash key stored: 60 integer
+statement list element stored: 61 integer
+refused used: RUNTIME-TYPE-ERROR
+refused unused: RUNTIME-TYPE-ERROR
+refused list used: RUNTIME-TYPE-ERROR
+refused stored: null nothing
+refused list stored: null nothing
+";
+    }
+
+    constructor() : QUnit::Test("AssignmentStoredValue", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/assignment-stored-value/assignment-stored-value.q";
+
+        addTestCase("assignment values, in every mode", \testModes());
+        addTestCase("assignment values, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(ExpectedOutput, r.out, mode);
+        }
+    }
+
+    testAot() {
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/assignment-stored-value-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(ExpectedOutput, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}
