@@ -112,11 +112,6 @@ std::string makeOutputNamesSignature(const QoreListNode* output_names) {
     return rv;
 }
 
-void disableAutoProvider(const std::string& provider) {
-    std::lock_guard<std::mutex> lock(auto_provider_mutex);
-    unusable_auto_providers.insert(provider);
-}
-
 QoreBufferElementType onnxTypeToBufferElementType(ONNXTensorElementDataType type) {
     switch (type) {
         case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
@@ -1999,7 +1994,7 @@ void QoreOnnxModel::createSession(const OnnxSessionSource& src, Ort::SessionOpti
         }
 
         std::string provider = active_provider;
-        disableAutoProvider(provider);
+        qore_ml_onnx_record_auto_provider_failure(provider);
         markProviderError(provider, e.what());
         if (!allow_cpu_fallback || fail_on_provider_fallback) {
             xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
@@ -2210,7 +2205,7 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
         OnnxProviderDiagnostic& diag = providerDiagnostic(pref);
         if (std::find(available_providers.begin(), available_providers.end(), pref) != available_providers.end()) {
             if (isAutoProviderDisabled(pref)) {
-                diag.error = "provider was disabled after a previous session creation failure";
+                diag.error = "provider was disabled after a previous failure of trusted code";
                 continue;
             }
 
@@ -2226,12 +2221,12 @@ void QoreOnnxModel::autoDetectProvider(Ort::SessionOptions& opts) {
                 // Provider failed to initialize — try the next one
                 diag.error = "provider append failed";
                 xsink.clear();
-                disableAutoProvider(pref);
+                qore_ml_onnx_record_auto_provider_failure(pref);
                 active_provider = "CPUExecutionProvider";
                 auto_provider_selected = false;
             } catch (...) {
                 diag.error = "provider append raised an unknown C++ exception";
-                disableAutoProvider(pref);
+                qore_ml_onnx_record_auto_provider_failure(pref);
                 active_provider = "CPUExecutionProvider";
                 auto_provider_selected = false;
             }
@@ -6346,5 +6341,31 @@ void qore_ml_onnx_unregister_fork_handlers() {
     qore_unregister_fork_handler(auto_provider_fork_reg);
     auto_provider_fork_reg = nullptr;
 }
+
+bool qore_ml_onnx_record_auto_provider_failure(const std::string& provider) {
+    // a model of sandboxed code does not change the provider choice of the models of other code (qore#7672): the
+    // question is whether a sandbox governs the thread at all, also in a capability of trusted code that a sandboxed
+    // caller called (createSystemPolicyCall()), which suppresses the Policy check of onnxSandboxActive()
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
+        if (smh) {
+            return false;
+        }
+    }
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    unusable_auto_providers.insert(provider);
+    return true;
+}
+
+bool qore_ml_onnx_auto_provider_disabled(const std::string& provider) {
+    return isAutoProviderDisabled(provider);
+}
+
+#ifdef DEBUG
+void qore_ml_onnx_clear_auto_provider_failures() {
+    std::lock_guard<std::mutex> lock(auto_provider_mutex);
+    unusable_auto_providers.clear();
+}
+#endif
 
 #endif // HAVE_ONNXRUNTIME

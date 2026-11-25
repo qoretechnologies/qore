@@ -993,6 +993,26 @@ DLLLOCAL int qore_ml_onnx_register_fork_handlers(ExceptionSink* xsink);
 
 //! removes the fork handlers of the ONNX support's process-wide locks
 DLLLOCAL void qore_ml_onnx_unregister_fork_handlers();
+
+//! Records that an automatically selected execution provider failed, so that later models do not select it
+/** The record is process-wide: no later model of any code selects the provider automatically.  Only trusted code
+    makes it: a model of code that a sandbox governs (also trusted code in a capability that a sandboxed caller
+    called, see QoreSandboxManagerHelper::All) that fails on a provider, or whose provider cannot be appended, falls
+    back to CPU itself, but does not change the provider choice of the models of other code (qore#7672).
+
+    @param provider the name of the execution provider
+
+    @return true if the failure was recorded, false if the calling code is sandboxed
+*/
+DLLLOCAL bool qore_ml_onnx_record_auto_provider_failure(const std::string& provider);
+
+//! Returns true if trusted code recorded a failure of the given automatically selected provider
+DLLLOCAL bool qore_ml_onnx_auto_provider_disabled(const std::string& provider);
+
+#ifdef DEBUG
+//! Debug builds: forgets the recorded provider failures (for tests)
+DLLLOCAL void qore_ml_onnx_clear_auto_provider_failures();
+#endif
 #else
 //! without ONNX Runtime support, there are no process-wide locks
 static inline int qore_ml_onnx_register_fork_handlers(ExceptionSink*) {

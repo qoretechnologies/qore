@@ -304,6 +304,16 @@ list<string> OnnxIoBinding::getBoundOutputNames() [flags=RET_VALUE_ONLY] {
     getOutputInfo(), getProviderInfo(), getEffectiveProviderReport()) are also
     safe for concurrent use.
 
+    @par Automatic Execution Providers
+    When no \c providers are configured, the best available GPU execution provider is selected automatically
+    (CUDA on Linux, CoreML on macOS).  A provider that cannot be appended or that cannot create the session of a
+    model is not selected automatically again for later models in the process; the model itself falls back to CPU
+    when \c allow_cpu_fallback permits it.  Only trusted code makes this process-wide record: a provider failure
+    of a model of code that a sandbox governs, also of trusted code that a sandboxed caller called (such as a
+    capability made with @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()"),
+    does not change the provider choice of the models of other code.
+    @ref getEffectiveProviderReport() reports the failure in the diagnostic of the provider.
+
     @par Example:
     @code{.py}
 # Load an ONNX model
