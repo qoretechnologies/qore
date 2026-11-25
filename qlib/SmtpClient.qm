@@ -180,6 +180,8 @@ smtp.sendMessage(msg);@endcode
     @section smtpclient_relnotes SmtpClient Release Notes
 
     @subsection smtpclient_v2_2 SmtpClient 2.2
+    - the \c EHLO and \c HELO commands sent for code restricted from external information name \c localhost
+      instead of the hostname (see @ref sandbox_ambient_host_data)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - The \c ssl_verify_cert option is now honored for synchronous and asynchronous SMTP connections.
@@ -320,6 +322,14 @@ smtp.sendMessage(msg);@endcode
 public namespace SmtpClient {
 #! SMTP server app name
 public const AppName = "SMTP";
+
+#! Returns the name that the client gives in the \c EHLO and \c HELO commands
+/** The hostname, or \c "localhost" for code restricted from external information, which may not read the hostname
+    (qore#7586); RFC 5321 (section 4.1.4) does not let a server refuse a session for a name that does not match
+*/
+string sub smtp_helo_name() {
+    return SandboxManager::callerMayReadExternalInfo() ? gethostname() : "localhost";
+}
 
 #! 15 second read timeout
 public const DefaultReadTimeout = 15s;
@@ -1530,7 +1540,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         hash<auto> info = smtp.getInfo();
         setGoal("ping");
 
-        string hostname = gethostname();
+        string hostname = SmtpClient::smtp_helo_name();
         hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
 
         # --- configuration transforms ---
@@ -1741,7 +1751,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         string mstr = SmtpSendPollOperation::getData(message);
         bool smtputf8 = SmtpSendPollOperation::needsSmtpUtf8(sender, recipients, mstr);
 
-        string hostname = gethostname();
+        string hostname = SmtpClient::smtp_helo_name();
         hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
 
         # --- configuration transforms (same as SmtpPingPollOperation) ---

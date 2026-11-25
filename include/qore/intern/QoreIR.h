@@ -2701,11 +2701,18 @@ static inline QoreValue qore_ir_unique_container(const QoreValue& value, bool& c
         return value;
     }
     const AbstractQoreNode* node = value.getInternalNode();
-    if (!node || node->is_unique()) {
+    if (!node) {
+        return value;
+    }
+    if (node->is_unique()) {
+        // the weak reference designates it: it is pinned (qore#7318); the variable is its only holder
+        qore_weak_target_pin(value);
         return value;
     }
     copied = true;
-    return QoreValue(node->realCopy());
+    QoreValue rv(node->realCopy());
+    qore_weak_target_pin(rv);
+    return rv;
 }
 
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
@@ -4631,6 +4638,31 @@ inline P qore_ir_inst_cast(I* inst) {
     return rv;
 }
 
+//! returns the result of \a inst if it is a weak or opaque store, or UINT32_MAX
+/** The value of a weak or opaque assignment is held by the statement until its end, and a store that takes it does not
+    take its reference, so that the store copies the container that a weak reference designates as a share (qore#7342)
+*/
+inline uint32_t qore_ir_weak_store_result(const QoreIRInstruction* inst) {
+    if (!inst || !inst->result.isValid()) {
+        return UINT32_MAX;
+    }
+    AssignmentMode mode;
+    if (auto* l = qore_ir_inst_cast<const QoreIRLocalInstruction*>(inst)) {
+        mode = l->mode;
+    } else if (auto* v = qore_ir_inst_cast<const QoreIRVarInstruction*>(inst)) {
+        mode = v->mode;
+    } else if (auto* p = qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(inst)) {
+        mode = p->mode;
+    } else if (auto* lv = qore_ir_inst_cast<const QoreIRLValueInstruction*>(inst)) {
+        mode = lv->mode;
+    } else if (auto* iv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
+        mode = iv->mode;
+    } else {
+        return UINT32_MAX;
+    }
+    return mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque ? inst->result.id : UINT32_MAX;
+}
+
 class QoreIRBasicBlock {
 public:
     explicit QoreIRBasicBlock(std::string n_name) : name(std::move(n_name)) {
@@ -5397,7 +5429,7 @@ public:
 
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
-    void computeIROnlyLocals();
+    void computeIROnlyLocals(bool aot_method = false);
 
     //! Collects the locals that the on_exit, on_error and on_success handlers of the function reference
     /** as computeIROnlyLocals() does to keep them on the runtime stack: the handlers' statements and their IR
@@ -5589,6 +5621,9 @@ public:
     mutable std::mutex interpreter_analysis_mutex;
     mutable std::atomic<bool> interpreter_analysis_ready{false};
     mutable std::vector<uint32_t> interpreter_value_use_counts;
+    //! nonzero for the values that are the results of weak or opaque stores (qore_ir_weak_store_result()), which a
+    //! store does not take (qore#7342)
+    mutable std::vector<uint8_t> interpreter_weak_store_results;
     mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
     //! call arguments that the call consumes: their only use is a call in the block that defines them, so the value
     //! cannot be needed again (a later execution of the block recomputes it first)

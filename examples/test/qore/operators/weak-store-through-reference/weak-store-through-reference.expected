@@ -1,0 +1,54 @@
+top-level hash := hash<string, int>: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'hash': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+top-level hash after the error: {old: 1} hash
+top-level hash @= hash<string, int>: RUNTIME-TYPE-ERROR: the opaque assignment operator '@=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'hash': the lvalue's type converts the value to a copy of its own, so the opaque reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+top-level hash after the error: {old: 1} hash
+top-level hash := object: RUNTIME-TYPE-ERROR: <lvalue> expects type 'hash', but got an object of class 'WstObj' instead
+top-level hash after the error: {old: 1} hash
+top-level hash = hash<string, int> through reference: {a: 1} hash
+top-level auto := hash<string, int>: value: {a: 1} hash<string, int>
+top-level auto := hash<string, int>: target: {a: 1} hash<string, int>
+top-level auto follows the source: {a: 1, b: 2} hash<string, int>
+top-level auto @= list<int> through auto: value: [1, 2] list<int>
+top-level auto @= list<int> after a change of the source: [1, 2] list<int>
+top-level auto := object: target follows: 3
+top-level hash<string, int> := hash<string, int>: {a: 1} hash<string, int>
+top-level any := hash<string, int>: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'any': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+top-level any after the error: 1 integer
+top-level any := object: 1
+top-level reference<auto> := object: 1
+top-level auto = hash<string, int> through any: {a: 1} hash<string, int>
+top-level hash = hash<string, int> through any: {a: 1} hash
+top-level auto = list<int> through any: [1, 2] list<int>
+top-level list = list<int> through auto: [1, 2] list
+loop: refused: 50, target: {old: 1}
+any parameter := hash<string, int>: {} hash<string, int>
+any parameter into hash: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'hash': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+any parameter into hash after the error: {old: 1} hash
+auto parameter @= list<int>: [1, 2] list<int>
+any parameter = hash<string, int>: {a: 1} hash<string, int>
+any parameter = hash<string, int> into hash: {a: 1} hash
+function auto := hash<string, int>: {a: 1} hash<string, int>
+function auto follows the source: {a: 1, b: 2} hash<string, int>
+function hash := hash<string, int>: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'hash': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+function hash after the error: {old: 1} hash
+function list @= list<int>: RUNTIME-TYPE-ERROR: the opaque assignment operator '@=' cannot store a reference to a value of type 'list<int>' in an lvalue of type 'list': the lvalue's type converts the value to a copy of its own, so the opaque reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'list<int>'
+function list after the error: ["old"] list
+function auto := object: value: 1, target: 1
+function auto := object: target follows: 2
+function auto = hash<string, int> through any: {a: 1, b: 2} hash<string, int>
+function hash = hash<string, int> through any: {a: 1, b: 2} hash
+block auto @= hash<string, int>: value: {a: 1} hash<string, int>
+block auto @= hash<string, int>: target: {a: 1} hash<string, int>
+block reference<hash> := hash<string, int>: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'hash': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+block hash after the error: {old: 1} hash
+block auto = hash<string, int> through any: {a: 1} hash<string, int>
+reference slot auto = hash<string, int>: {a: 1} hash<string, int>
+reference slot hash = hash<string, int>: {a: 1} hash
+closure auto := hash<string, int>: {a: 1} hash<string, int>
+closure hash := hash<string, int>: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'hash': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+closure hash after the error: {old: 1} hash
+unbound reference := hash<string, int>: RUNTIME-TYPE-ERROR: <lvalue> expects type 'reference', but got type 'hash<string, int>' instead
+any := hash<string, int>: RUNTIME-TYPE-ERROR: the weak assignment operator ':=' cannot store a reference to a value of type 'hash<string, int>' in an lvalue of type 'any': the lvalue's type converts the value to a copy of its own, so the weak reference would designate that copy, a temporary, instead of the value assigned; declare the lvalue with a type that keeps the value as it is, such as 'auto', 'hash<auto>' or 'list<auto>', or the value's own type 'hash<string, int>'
+any after the error: 1 integer
+rebound: no reference: 1, reference: 0
+hot: through: 6000, refused: 3000, types: {hash<string, int>: 3000}

@@ -746,8 +746,8 @@ int main() {
     }
     // the v52 refusal, the three implicit element cases, the eight exit restoration cases and the six truncated tables
     // of v53 (qore#7379), and the typed ReleaseOwnedTemp checks (qore#7022)
-    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 201
-        : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 183 : 173);
+    constexpr unsigned expected_count = QORE_AOT_BINARY_VERSION >= QORE_AOT_EXIT_RESTORE_VERSION ? 200
+        : (QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 182 : 172);
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));

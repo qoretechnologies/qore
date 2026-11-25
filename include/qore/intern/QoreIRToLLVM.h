@@ -1253,6 +1253,9 @@ private:
     // register's last use is reached, enabling early release of DotEval base
     // cleanup allocas.
     std::unordered_map<uint32_t, int> operand_remaining_uses;
+    //! the values that are the results of weak or opaque stores (qore_ir_weak_store_result()): a store does not take
+    //! their references, which the statement holds until its end (qore#7342)
+    std::unordered_set<uint32_t> weak_store_results;
     //! the block defining each value, for decisions that are only safe when a value is used in the block defining it
     /** The use counts above are static: a value defined before a loop and used once in its body counts one use,
         but that use runs on every iteration.
@@ -2119,6 +2122,17 @@ private:
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node
     llvm::Value* emitHelperRef(llvm::Module& module, llvm::Value* val);
+    //! returns \a owned, or a copy of its own if it is a weakly shared list or hash (qore#7342): the tag, the node type
+    //! and the flags of the container are tested inline, and the copy is made out of line
+    llvm::Value* emitWeakShareCheck(llvm::Module& module, llvm::Function* func, llvm::Value* owned,
+            llvm::Value* xsink);
+    //! returns an i1 that is true if \a value is a weakly shared list or hash (the test of emitWeakShareCheck(), without
+    //! the reference count), which a store may have copied (qore#7342)
+    llvm::Value* emitWeakSharedTest(llvm::Module& module, llvm::Function* func, llvm::Value* value);
+    //! stores \a value in the local cache of \a key, which a store to the runtime stack gave the local, or reloads the
+    //! local from the runtime stack if the store may have copied it (a weakly shared container, qore#7342)
+    void retainOrReloadLocalCacheValue(const void* key, llvm::Value* value, llvm::Module& module,
+            llvm::Function* llvm_func);
 
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
@@ -2152,6 +2166,17 @@ private:
     bool irValueMayBeChar(uint32_t value_id) const;
     //! Returns true if the IR value can be NOTHING at runtime, as far as its facts show
     bool irValueMayBeNothing(uint32_t value_id) const;
+    //! Returns true if the IR value can be a list or a hash at runtime: it is boxed, and its type does not exclude both
+    bool irValueMayBeContainer(uint32_t value_id) const;
+    //! Emits the release of the reference of the operand's temporary after += on an lvalue without a value gave it
+    /** The result is then the operand itself, with a reference of its own; when the operand is an owned temporary
+        whose last use is the operation and that can be a list or a hash, qore_rt_add_assign_release_operand()
+        releases its slot's reference for a list or hash that a weak reference designates, so that the result holds
+        the only reference and a local that takes it moves it, as the AST interpreter gives the operand's reference to
+        the lvalue (qore#7342)
+    */
+    void emitAddAssignOperandRelease(const QoreIRInstruction* inst, llvm::Value* rhs, llvm::Value* result,
+        llvm::Function* llvm_func, llvm::Module& module);
     //! Returns the type path argument of the return type of a method that AOT-compiled code reads a member for
     //! directly (a getter, an assignment or a compound assignment that returns the member), or a null pointer
     //! when the return type accepts no value

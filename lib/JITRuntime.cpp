@@ -181,6 +181,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
     { "qore_rt_unique_container", reinterpret_cast<void*>(&qore_rt_unique_container) },
     { "qore_rt_unique_local_aot", reinterpret_cast<void*>(&qore_rt_unique_local_aot) },
+    { "qore_rt_weak_assignment_source", reinterpret_cast<void*>(&qore_rt_weak_assignment_source) },
+    { "qore_rt_weak_assignment_source_local_aot",
+        reinterpret_cast<void*>(&qore_rt_weak_assignment_source_local_aot) },
     { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
     { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
     { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
@@ -238,12 +241,32 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
     { "qore_rt_assign_local", reinterpret_cast<void*>(&qore_rt_assign_local) },
     { "qore_rt_assign_local_mode", reinterpret_cast<void*>(&qore_rt_assign_local_mode) },
+    { "qore_rt_local_holds_reference", reinterpret_cast<void*>(&qore_rt_local_holds_reference) },
+    { "qore_rt_local_holds_reference_aot", reinterpret_cast<void*>(&qore_rt_local_holds_reference_aot) },
+    { "qore_rt_assign_local_through", reinterpret_cast<void*>(&qore_rt_assign_local_through) },
+    { "qore_rt_assign_local_through_aot", reinterpret_cast<void*>(&qore_rt_assign_local_through_aot) },
+    { "qore_rt_assign_local_through_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_through_throwing) },
+    { "qore_rt_assign_local_through_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_through_aot_throwing) },
+    { "qore_rt_assign_local_foreach_through", reinterpret_cast<void*>(&qore_rt_assign_local_foreach_through) },
+    { "qore_rt_assign_local_foreach_through_aot", reinterpret_cast<void*>(&qore_rt_assign_local_foreach_through_aot) },
+    { "qore_rt_assign_local_foreach_through_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_through_throwing) },
+    { "qore_rt_assign_local_foreach_through_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_foreach_through_aot_throwing) },
     { "qore_rt_assign_local_no_coerce", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce) },
     { "qore_rt_assign_local_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_throwing) },
     { "qore_rt_assign_local_no_coerce_throwing",
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing) },
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
+    { "qore_rt_weak_source_container", reinterpret_cast<void*>(&qore_rt_weak_source_container) },
+    { "qore_rt_weak_share_copy", reinterpret_cast<void*>(&qore_rt_weak_share_copy) },
+    { "qore_rt_take_store_value", reinterpret_cast<void*>(&qore_rt_take_store_value) },
+    { "qore_rt_add_assign_release_operand", reinterpret_cast<void*>(&qore_rt_add_assign_release_operand) },
+    { "qore_rt_weak_share_param", reinterpret_cast<void*>(&qore_rt_weak_share_param) },
+    { "qore_rt_own_store_value", reinterpret_cast<void*>(&qore_rt_own_store_value) },
+    { "qore_rt_weak_share_borrowed_param", reinterpret_cast<void*>(&qore_rt_weak_share_borrowed_param) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_take_param", reinterpret_cast<void*>(&qore_rt_take_param) },
     { "qore_rt_take_param_aot", reinterpret_cast<void*>(&qore_rt_take_param_aot) },
@@ -1141,6 +1164,10 @@ extern "C" DLLEXPORT int64_t qore_rt_is_null_or_nothing(uint64_t val) {
 }
 
 // --- Refcount helpers ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_weak_assignment_source(uint64_t val, ExceptionSink* xsink) {
+    return toBits(qore_weak_assignment_source_borrowed(fromBits(val), xsink));
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_unique_container(uint64_t val) {
     bool copied = false;
@@ -2612,6 +2639,120 @@ static AssignmentMode qore_rt_store_mode(int32_t mode) {
     return m;
 }
 
+//! set by qore_rt_take_store_value() when the store to a local on the runtime stack that follows it takes the reference
+//! of the value that it is given (qore#7342); consumed by qore_rt_assign_local_impl(), which every store helper that the
+//! compiled code calls right after qore_rt_take_store_value() calls
+static thread_local bool qore_rt_store_takes_value = false;
+
+//! returns \a value; if \a slot_a or \a slot_b (each optional), a cleanup slot of the statement, holds it, the reference
+//! of the slot is given to the store to a local that the compiled code calls next, and the slot is cleared (qore#7342)
+/** The store then holds the only reference to a container that nothing else holds, which it takes as moved (David,
+    qore#7342: a share point copies a weakly shared container only when another strong holder holds it), as the AST
+    interpreter and the IR interpreter give the reference of a temporary to the store
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_take_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b) {
+    assert(!qore_rt_store_takes_value);
+    // only a list or hash that a weak reference designates, which a share copies and a move does not: any other value
+    // keeps the reference of its slot, as a store can convert it (a big integer stored natively, a container whose
+    // type a typed local strips) and release the node that the local cache of the compiled code keeps the bits of
+    QoreValue v = fromBits(value);
+    if (!v.isPlainPointer() || !qore_weak_designated_container(v.getPtr())) {
+        return value;
+    }
+    uint64_t nothing = toBits(QoreValue());
+    // both slots can hold the value, each with a reference of its own (the conversion's slot holds the operand as it
+    // is): the store takes one, and the other is released here, which the reference taken keeps from freeing it
+    ExceptionSink xsink;
+    for (uint64_t* slot : {slot_a, slot_b}) {
+        if (!slot || *slot != value) {
+            continue;
+        }
+        *slot = nothing;
+        if (!qore_rt_store_takes_value) {
+            qore_rt_store_takes_value = true;
+        } else {
+            fromBits(value).discard(&xsink);
+            assert(!xsink);
+        }
+    }
+    return value;
+}
+
+//! releases the reference of the operand's temporary when += on an lvalue without a value gave the operand (qore#7342)
+/** \a value is the result of the operation, which compiled code passes only when it is the operand itself: on an
+    lvalue without a value, += gives the value added with a reference of its own (qore_compound_assign_value()).  When
+    it is a list or hash that a weak reference designates and \a slot, the cleanup slot of the operand's temporary,
+    whose last use is the operation, holds it, the slot's reference is released and the slot cleared, so that the
+    result holds the reference that the temporary held, as the AST interpreter gives the operand's reference to the
+    lvalue (doPlusEqualsOnLValue()), and a local variable that takes it moves it as from an assignment.  Any other value
+    stays in its temporary until the end of the statement, as in the AST interpreter.  The result holds the container,
+    so releasing the slot's reference runs no destructor.
+*/
+extern "C" DLLEXPORT void qore_rt_add_assign_release_operand(uint64_t value, uint64_t* slot) {
+    QoreValue v = fromBits(value);
+    if (!slot || *slot != value || !v.isPlainPointer() || !qore_weak_designated_container(v.getPtr())) {
+        return;
+    }
+    *slot = toBits(QoreValue());
+    ExceptionSink xsink;
+    v.discard(&xsink);
+    assert(!xsink);
+}
+
+//! returns \a value with a reference that a store to a local of native code that keeps it in its cache owns (qore#7342)
+/** For a list or hash that a weak reference designates, the reference of \a slot_a or \a slot_b (each optional: the
+    cleanup slot of the store's conversion and that of the operand's temporary, whose last use is the store) that
+    holds it is taken and the slot cleared, and a second slot that holds it too is released, which the reference taken
+    keeps from freeing it: the local then holds the only reference to a container that nothing else holds, which it
+    takes as moved, as the interpreters give the reference of a temporary to the store (see qore_rt_take_store_value());
+    any other value is given a reference of its own, and its slots are released at the end of the statement
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_own_store_value(uint64_t value, uint64_t* slot_a, uint64_t* slot_b) {
+    QoreValue v = fromBits(value);
+    if (v.isPlainPointer() && qore_weak_designated_container(v.getPtr())) {
+        bool taken = false;
+        ExceptionSink xsink;
+        for (uint64_t* slot : {slot_a, slot_b}) {
+            if (!slot || *slot != value) {
+                continue;
+            }
+            *slot = toBits(QoreValue());
+            if (!taken) {
+                taken = true;
+            } else {
+                v.discard(&xsink);
+                assert(!xsink);
+            }
+        }
+        if (taken) {
+            return value;
+        }
+    }
+    return toBits(v.refSelf());
+}
+
+//! takes \a value, the argument that the fast entry of native code binds to a parameter, and returns it, or a copy of
+//! its own for a list or hash that a weak reference designates, as LocalVar::instantiateIntern() binds it (qore#7342)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_param(uint64_t value) {
+    QoreValue v = fromBits(value);
+    if (qore_weak_shared(v)) [[unlikely]] {
+        // releasing the argument's reference runs no destructor and raises nothing: the caller still holds it
+        return toBits(qore_weak_share_copy(v, nullptr));
+    }
+    return value;
+}
+
+//! returns a copy of its own of \a value, an argument that the fast entry of native code borrows for a parameter, for
+//! a list or hash that a weak reference designates, owned by the caller, or NOTHING for any other value (qore#7342)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_borrowed_param(uint64_t value) {
+    QoreValue v = fromBits(value);
+    if (qore_weak_shared(v)) [[unlikely]] {
+        // the reference taken here is released by the copy, which runs no destructor: the caller holds another
+        return toBits(qore_weak_share_copy(v.refSelf(), nullptr));
+    }
+    return toBits(QoreValue());
+}
+
 //! Makes the retries of a store to a local whose first round recorded reference elements to bind (qore#7391)
 /** The local holds a reference to a member or to a global or closure-bound variable, or is closure-bound: its lvalue is
     locked, and the first round of the store (qore_rt_assign_local_impl()) left its helper \a first pending, which is
@@ -2648,6 +2789,13 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD void qore_rt_assign_local_bind_retr
 static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
         bool check_types, bool normalize_weak_refs, const char* desc = "<lvalue>",
         AssignmentMode mode = AssignmentMode::Normal, QoreValue* converted = nullptr) {
+    // the reference of the value that the store takes from a cleanup slot of the statement (see
+    // qore_rt_take_store_value()), released here if the store does not take it
+    ValueHolder taken(xsink);
+    if (qore_rt_store_takes_value) {
+        qore_rt_store_takes_value = false;
+        taken = fromBits(value);
+    }
     if (!var || *xsink) {
         return;
     }
@@ -2667,8 +2815,14 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     // or to a global or closure-bound variable) is made again out of line after they have been bound with no lvalue
     // lock held; the first round resolves the local once (qore#7391)
     helper.enableBindRetry();
-    // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = val.needsRef() ? val.refSelf() : val;
+    // assign() takes ownership of the reference: the one taken from the cleanup slot if the value is still the one
+    // given (a weak reference normalized to its target is not), or a new one
+    QoreValue stored;
+    if (taken && toBits(*taken) == toBits(val)) {
+        stored = taken.release();
+    } else {
+        stored = val.needsRef() ? val.refSelf() : val;
+    }
     if (!helper.assign(stored, desc, check_types, mode)) {
         if (converted) {
             *converted = qore_rt_store_converted_value(helper, xsink);
@@ -2791,6 +2945,50 @@ extern "C" DLLEXPORT uint64_t qore_rt_assign_local_mode(LocalVar* var, uint64_t 
     return qore_rt_store_converted_result(converted, xsink);
 }
 
+//! Returns 1 if a local holds a reference on the current thread, 0 if it holds none or is not instantiated (qore#7617)
+/** A store to such a local assigns the referenced lvalue (see qore_rt_assign_local_through())
+*/
+extern "C" DLLEXPORT uint8_t qore_rt_local_holds_reference(const LocalVar* var) {
+    return var && var->isRef() ? 1 : 0;
+}
+
+extern "C" DLLEXPORT uint8_t qore_rt_local_holds_reference_aot(QoreAOTContext* ctx, int32_t idx) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_local_holds_reference(ctx->locals[idx]);
+}
+
+//! Assigns a value to the lvalue that a local holding a reference designates, as the AST interpreter does (qore#7617)
+/** The value assigned is the original value of the assignment: the referenced lvalue's type converts and checks it,
+    and a weak or opaque assignment refuses a value that the type converts to a copy (qore#7572), as
+    LValueHelper::assign() does; the local's own type, which the native store otherwise applies first, is not applied
+
+    @param mode the AssignmentMode of the store: Normal, Weak or Opaque; a Normal store assigns a weak reference as
+    its target, as the other Normal stores of a local do
+    @param desc the description of the lvalue in a type error
+
+    @return the value of the assignment, owned by the caller: the value that the referenced lvalue holds, with a weak
+    reference replaced by its target; no value if an exception was raised
+*/
+static uint64_t qore_rt_assign_local_through_impl(LocalVar* var, uint64_t value, int32_t mode, ExceptionSink* xsink,
+        const char* desc) {
+    AssignmentMode m = static_cast<AssignmentMode>(mode);
+    assert(m == AssignmentMode::Normal || m == AssignmentMode::Weak || m == AssignmentMode::Opaque);
+    QoreValue converted;
+    qore_rt_assign_local_impl(var, value, xsink, true, m == AssignmentMode::Normal, desc, m, &converted);
+    return qore_rt_store_converted_result(converted, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_assign_local_through(LocalVar* var, uint64_t value, int32_t mode,
+        ExceptionSink* xsink) {
+    return qore_rt_assign_local_through_impl(var, value, mode, xsink, "<lvalue>");
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_assign_local_through_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value,
+        int32_t mode, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_assign_local_through_impl(ctx->locals[idx], value, mode, xsink, "<lvalue>");
+}
+
 //! Coerces a value as an assignment to an lvalue of the given type does; see qore_rt_coerce_value()
 /** @param normalize_weak_refs true to assign a weak reference as its target, false to keep it as it is (the variable
     of a foreach loop, which is assigned each element as it is)
@@ -2835,7 +3033,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
         val.refSelf();
     }
     // the container that a weak assignment assigns, with a reference of its own, which the conversion cannot consume
-    // (qore#7237; see LValueHelper::assign())
+    // (qore#7237, qore#7572; see LValueHelper::assign())
     ValueHolder weak_source(xsink);
     if (weak && (val.getType() == NT_LIST || val.getType() == NT_HASH)) [[unlikely]] {
         weak_source = val.refSelf();
@@ -2847,9 +3045,10 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
         q_apply_no_narrow_container_type(ti, val, xsink);
     }
     if (weak_source && (!xsink || !*xsink)) [[unlikely]] {
-        int rc = qore_weak_assignment_conversion(*weak_source, val, desc, xsink);
+        int rc = qore_weak_assignment_conversion(*weak_source, val, true, ti, xsink);
         if (rc) {
-            // the copy is released, and the weak reference designates the container assigned, or nothing is assigned
+            // a copy is refused, as LValueHelper::assign() refuses it (qore#7572): it is released, and nothing is
+            // assigned, or the container assigned takes the place of a copy that only tagged it
             val.discard(xsink);
             val = rc > 0 ? weak_source.release() : QoreValue();
         }
@@ -2867,15 +3066,70 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_coerce_value_impl(const QoreTy
     return result;
 }
 
+//! returns the node that a hash or list value designates, also for an opaque reference, or nullptr
+static const AbstractQoreNode* qore_rt_container_node(const QoreValue& v) {
+    if (v.isOpaqueHash()) {
+        return v.getOpaqueHash();
+    }
+    if (v.isOpaqueList()) {
+        return v.getOpaqueList();
+    }
+    switch (v.getType()) {
+        case NT_HASH:
+        case NT_LIST:
+            return v.getInternalNode();
+        default:
+            return nullptr;
+    }
+}
+
+//! raises the error of a weak or opaque store of a local whose value the local's type converted to a copy (qore#7572)
+/** As LValueHelper::assign() refuses it: \a original is the value assigned, \a stored the value that the conversion of
+    the local's type (qore_rt_coerce_value()) gave; a weak reference read as the value assigned is compared by its
+    target, as the conversion reads it
+*/
+static void qore_rt_check_weak_store_conversion_impl(const QoreTypeInfo* ti, uint64_t original, uint64_t stored,
+        bool weak, ExceptionSink* xsink) {
+    // the conversion kept the value, as it does unless it copies a container: nothing to check
+    if (stored == original || *xsink) {
+        return;
+    }
+    QoreValue o = fromBits(original);
+    ValueHolder target(xsink);
+    if (qore_rt_is_weak_reference_type(o.getType())) {
+        target = qore_rt_take_weak_reference_target(o);
+        o = *target;
+    }
+    const AbstractQoreNode* node = qore_rt_container_node(o);
+    if (!node || qore_rt_container_node(fromBits(stored)) == node) {
+        return;
+    }
+    xsink->raiseException("RUNTIME-TYPE-ERROR", qore_weak_store_conversion_desc(weak,
+        QoreTypeInfo::getName(o.getTypeInfo()), QoreTypeInfo::getName(ti)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_check_weak_store_conversion(const QoreTypeInfo* ti, uint64_t original,
+        uint64_t stored, int32_t weak, ExceptionSink* xsink) {
+    qore_rt_check_weak_store_conversion_impl(ti, original, stored, weak, xsink);
+    return 0;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_check_weak_store_conversion_aot(QoreAOTContext* ctx, int32_t local_idx,
+        uint64_t original, uint64_t stored, int32_t weak, ExceptionSink* xsink) {
+    assert(ctx && local_idx >= 0 && local_idx < ctx->num_locals);
+    qore_rt_check_weak_store_conversion_impl(ctx->locals[local_idx]->getTypeInfoForLValue(), original, stored, weak,
+        xsink);
+    return 0;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     return qore_rt_coerce_value_impl(ti, value, cleanup_ptr, xsink, true);
 }
 
 //! Coerces the value of a weak assignment to a local as qore_rt_coerce_value() does
-/** A list or hash that the local's type only strips is kept, as the weak reference designates the container assigned,
-    and one that it converts to another container is refused with an exception (qore#7237; see
-    qore_weak_assignment_conversion())
+/** A list or hash that the local's type converts to a copy, also one that it only strips, is refused with an
+    exception, as the weak reference would designate the copy (qore#7572; see qore_weak_assignment_conversion())
 */
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_weak(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
@@ -3025,6 +3279,38 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
     if (xsink) {
         xsink.clear();
     }
+}
+
+//! the container that a weak assignment of \a value designates, owned by the caller (see
+//! qore_weak_source_container(), qore#7318)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_source_container(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    switch (v.getType()) {
+        // the source of a weak assignment, held weakly while its target was resolved (qore#7405): its container, as
+        // LValueHelper::assign() gives it, or a new empty one if another thread released it meanwhile (qore#7163)
+        case NT_WEAKREF_HASH: {
+            // the reference taken is released with the exception sink of the code: another thread can have released
+            // the container's last owner meanwhile
+            ValueHolder target(v.get<const WeakHashReferenceNode>()->lock(), xsink);
+            return toBits(qore_weak_source_container(*target));
+        }
+        case NT_WEAKREF_LIST: {
+            ValueHolder target(v.get<const WeakListReferenceNode>()->lock(), xsink);
+            return toBits(qore_weak_source_container(*target));
+        }
+        default:
+            return toBits(qore_weak_source_container(v));
+    }
+}
+
+//! takes \a value, a weakly designated container that the compiled code stores in a local variable, and returns it if
+//! nothing else holds it (a move), or a copy of its own (see qore_weak_shared_local(), qore#7342)
+extern "C" DLLEXPORT uint64_t qore_rt_weak_share_copy(uint64_t value, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    if (v.getInternalNode()->is_unique()) {
+        return value;
+    }
+    return toBits(qore_weak_share_copy(v, xsink));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink) {
@@ -8923,7 +9209,7 @@ static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, Except
 }
 
 static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key, const QoreValue& val,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, QoreValue* res = nullptr) {
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
         // a class on the private:internal path to the member uses it (issue #6800)
@@ -8949,16 +9235,23 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
             }
             return 0;
         },
-        [](LValueHelper& helper, QoreValue stored) -> int {
-            return helper.assign(stored);
+        [res](LValueHelper& helper, QoreValue stored) -> int {
+            if (helper.assign(stored)) {
+                return -1;
+            }
+            // the value of the assignment is the value stored, as the AST interpreter gives it (qore#7589)
+            if (res) {
+                *res = helper.getReferencedValue();
+            }
+            return 0;
         });
 }
 
 // JIT path: write hash{key} = value with copy-on-write support.
 // var: container LocalVar* (used to update the local when COW triggers).
-extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_impl(
         LocalVar* var, uint64_t hash_bits, const char* key,
-        uint64_t value_bits, ExceptionSink* xsink) {
+        uint64_t value_bits, ExceptionSink* xsink, QoreValue* res) {
     QoreValue hv = fromBits(hash_bits);
     QoreValue val = fromBits(value_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
@@ -8973,7 +9266,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         if (h->reference_count() > 1) {
             // a hash that the local designates through a weak reference is changed, not copied, as the AST
             // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
-            if (qore_weak_local_container_store(var, h, key, 0, val, xsink)) {
+            if (qore_weak_local_container_store(var, h, key, 0, val, xsink, res)) {
                 return *xsink ? toBits(QoreValue()) : value_bits;
             }
             // COW: transfer the unique copy's reference to the local — no
@@ -8989,8 +9282,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             h = stored.get<QoreHashNode>();
         }
         // an element that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
-        if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink)) {
-            qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        if (!(res ? qore_assign_through_element_reference(h->getKeyValue(key), val, xsink, *res)
+                : qore_assign_through_element_reference(h->getKeyValue(key), val, xsink))) {
+            // the value of the assignment is the value stored, which the value type of the hash can convert
+            // (qore#7589)
+            if (res) {
+                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, *res);
+            } else {
+                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+            }
         }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
@@ -9003,7 +9303,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             new_h->deref(xsink);
             return toBits(QoreValue());
         }
-        qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
+        if (res) {
+            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink, *res);
+        } else {
+            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
+        }
         if (!*xsink) {
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
         }
@@ -9013,16 +9317,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         }
         new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
-        qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink);
+        qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink,
+            res);
     }
     return value_bits;
 }
 
 // AOT path: same semantics but container is identified by its slot index in QoreAOTContext.
-extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_aot_impl(
         QoreAOTContext* ctx, uint32_t local_slot,
         uint64_t hash_bits, const char* key,
-        uint64_t value_bits, ExceptionSink* xsink) {
+        uint64_t value_bits, ExceptionSink* xsink, QoreValue* res) {
     QoreValue hv = fromBits(hash_bits);
     QoreValue val = fromBits(value_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
@@ -9044,7 +9349,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
                 ? ctx->locals[local_slot] : nullptr;
             // a hash that the local designates through a weak reference is changed, not copied, as the AST
             // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
-            if (qore_weak_local_container_store(var, h, key, 0, val, xsink)) {
+            if (qore_weak_local_container_store(var, h, key, 0, val, xsink, res)) {
                 return *xsink ? toBits(QoreValue()) : value_bits;
             }
             QoreValue stored = qore_rt_assign_local_transfer(var,
@@ -9055,8 +9360,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             h = stored.get<QoreHashNode>();
         }
         // an element that holds a reference is assigned through it, as the AST interpreter assigns it (qore#6661)
-        if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink)) {
-            qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+        if (!(res ? qore_assign_through_element_reference(h->getKeyValue(key), val, xsink, *res)
+                : qore_assign_through_element_reference(h->getKeyValue(key), val, xsink))) {
+            // the value of the assignment is the value stored, which the value type of the hash can convert
+            // (qore#7589)
+            if (res) {
+                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, *res);
+            } else {
+                qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink);
+            }
         }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
@@ -9071,7 +9383,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             new_h->deref(xsink);
             return toBits(QoreValue());
         }
-        qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
+        if (res) {
+            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink, *res);
+        } else {
+            qore_hash_private::setKeyValueCanonical(*new_h, key, val.refSelf(), xsink);
+        }
         if (!*xsink) {
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
         }
@@ -9081,15 +9397,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
         }
         new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
-        qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink);
+        qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink,
+            res);
     }
     return value_bits;
 }
 
 // JIT path: hash[dynamic_key] = value with COW (key is NaN-boxed QoreValue, converted to string)
-extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_dynamic_cow_impl(
         LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
-        uint64_t value_bits, ExceptionSink* xsink) {
+        uint64_t value_bits, ExceptionSink* xsink, QoreValue* res) {
     QoreValue key_val = fromBits(key_bits);
     // a list is a slice, which is not an lvalue
     if (qore_check_lvalue_key_not_slice(key_val, xsink)) {
@@ -9099,14 +9416,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    return qore_rt_hash_key_store_cow(var, hash_bits, key_str.c_str(), value_bits, xsink);
+    return qore_rt_hash_key_store_cow_impl(var, hash_bits, key_str.c_str(), value_bits, xsink, res);
 }
 
 // AOT path: hash[dynamic_key] = value with COW (key is NaN-boxed QoreValue, converted to string)
-extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_dynamic_cow_aot_impl(
         QoreAOTContext* ctx, uint32_t local_slot,
         uint64_t hash_bits, uint64_t key_bits,
-        uint64_t value_bits, ExceptionSink* xsink) {
+        uint64_t value_bits, ExceptionSink* xsink, QoreValue* res) {
     QoreValue key_val = fromBits(key_bits);
     // a list is a slice, which is not an lvalue
     if (qore_check_lvalue_key_not_slice(key_val, xsink)) {
@@ -9116,14 +9433,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    return qore_rt_hash_key_store_cow_aot(ctx, local_slot, hash_bits, key_str.c_str(), value_bits, xsink);
+    return qore_rt_hash_key_store_cow_aot_impl(ctx, local_slot, hash_bits, key_str.c_str(), value_bits, xsink, res);
 }
 
 // JIT path: list[index] = value with COW
 // var: container LocalVar* (used to update the local when COW triggers).
-extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_index_store_cow_impl(
         LocalVar* var, uint64_t list_bits, int64_t index,
-        uint64_t val_bits, ExceptionSink* xsink) {
+        uint64_t val_bits, ExceptionSink* xsink, QoreValue* res) {
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
@@ -9137,7 +9454,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         if (l->reference_count() > 1) {
             // a list that the local designates through a weak reference is changed, not copied, as the AST
             // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
-            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink)) {
+            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink, res)) {
                 return *xsink ? toBits(QoreValue()) : val_bits;
             }
             // COW: transfer the unique copy's reference to the local — no
@@ -9169,7 +9486,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // an element that holds a reference is assigned through it, as the AST interpreter assigns it, before the
         // value is checked against the element type (qore#6661)
         if (static_cast<size_t>(index) < l->size()
-                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)) {
+                && (res ? qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink, *res)
+                        : qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink))) {
             return *xsink ? toBits(QoreValue()) : val_bits;
         }
         // Apply element type coercion if the list has a typed value type
@@ -9187,6 +9505,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
+            // the value of the assignment is the value stored, which the element type can convert (qore#7589)
+            if (res && !*xsink) {
+                *res = l->retrieveEntry(index).refSelf();
+            }
         } else {
             entry.discard(xsink);
         }
@@ -9200,8 +9522,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // Use variable's declared type to derive proper element type
         // (e.g. softlist<bool> → list<bool>, not list<auto>)
         const QoreTypeInfo* varTI = var->getTypeInfo();
+        // an untyped declaration takes an untyped list, as the AST interpreter vivifies it, so that the local's
+        // assignment does not convert the list after the store (qore#7589)
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
-        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+        QoreListNode* new_l = qore_lvalue_vivifies_untyped_list(varTI)
+            ? new QoreListNode
+            : new QoreListNode(elemTI ? elemTI : autoTypeInfo);
         // a gap before the first element of a new list whose element type does not take NOTHING: setEntry() refuses
         // it (qore#6435)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -9228,6 +9554,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             new_l->deref(xsink);
             return toBits(QoreValue());
         }
+        if (res) {
+            *res = new_l->retrieveEntry(index).refSelf();
+        }
         new_l->deref(nullptr);
     }
     return val_bits;
@@ -9235,10 +9564,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
 
 // AOT path: list[index] = value with COW
 // ctx: QoreAOTContext, local_slot identifies the list's slot
-extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
+static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_index_store_cow_aot_impl(
         QoreAOTContext* ctx, uint32_t local_slot,
         uint64_t list_bits, int64_t index,
-        uint64_t val_bits, ExceptionSink* xsink) {
+        uint64_t val_bits, ExceptionSink* xsink, QoreValue* res) {
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
@@ -9258,7 +9587,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
                 ? ctx->locals[local_slot] : nullptr;
             // a list that the local designates through a weak reference is changed, not copied, as the AST
             // interpreter changes it: native code reads it with a reference of its own (qore#7198, qore#7299)
-            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink)) {
+            if (qore_weak_local_container_store(var, l, nullptr, index, val, xsink, res)) {
                 return *xsink ? toBits(QoreValue()) : val_bits;
             }
             QoreValue stored = qore_rt_assign_local_transfer(var,
@@ -9283,7 +9612,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         // an element that holds a reference is assigned through it, as the AST interpreter assigns it, before the
         // value is checked against the element type (qore#6661)
         if (static_cast<size_t>(index) < l->size()
-                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)) {
+                && (res ? qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink, *res)
+                        : qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink))) {
             return *xsink ? toBits(QoreValue()) : val_bits;
         }
         // Apply element type coercion if the list has a typed value type
@@ -9300,6 +9630,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
+            // the value of the assignment is the value stored, which the element type can convert (qore#7589)
+            if (res && !*xsink) {
+                *res = l->retrieveEntry(index).refSelf();
+            }
         } else {
             entry.discard(xsink);
         }
@@ -9314,8 +9648,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         assert(local_slot < (uint32_t)ctx->num_locals);
         LocalVar* var = ctx->locals[local_slot];
         const QoreTypeInfo* varTI = var->getTypeInfo();
+        // an untyped declaration takes an untyped list, as the AST interpreter vivifies it, so that the local's
+        // assignment does not convert the list after the store (qore#7589)
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
-        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+        QoreListNode* new_l = qore_lvalue_vivifies_untyped_list(varTI)
+            ? new QoreListNode
+            : new QoreListNode(elemTI ? elemTI : autoTypeInfo);
         // a gap before the first element of a new list whose element type does not take NOTHING: setEntry() refuses
         // it (qore#6435)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -9341,6 +9679,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         if (*xsink) {
             new_l->deref(xsink);
             return toBits(QoreValue());
+        }
+        if (res) {
+            *res = new_l->retrieveEntry(index).refSelf();
         }
         new_l->deref(nullptr);
     }
@@ -9532,10 +9873,139 @@ qore_rt_hashdecl_member_access_slot_guarded_throwing(uint64_t hash_val,
     return result;
 }
 
+//! returns a referenced value stored by a store with a result, or NOTHING after an exception, which releases it
+static uint64_t qore_rt_store_result(uint64_t rc, QoreValue& res, ExceptionSink* xsink) {
+    (void)rc;
+    if (*xsink) {
+        res.discard(xsink);
+        return toBits(QoreValue());
+    }
+    return toBits(res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
+        LocalVar* var, uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    return qore_rt_hash_key_store_cow_impl(var, hash_bits, key, value_bits, xsink, nullptr);
+}
+
+// as qore_rt_hash_key_store_cow(), but returns a reference to the value stored, which is the value of the
+// assignment (qore#7589)
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_result(
+        LocalVar* var, uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue res;
+    uint64_t rc = qore_rt_hash_key_store_cow_impl(var, hash_bits, key, value_bits, xsink,
+        &res);
+    return qore_rt_store_result(rc, res, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    return qore_rt_hash_key_store_cow_aot_impl(ctx, local_slot, hash_bits, key, value_bits, xsink, nullptr);
+}
+
+// as qore_rt_hash_key_store_cow_aot(), but returns a reference to the value stored, which is the value of the
+// assignment (qore#7589)
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot_result(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue res;
+    uint64_t rc = qore_rt_hash_key_store_cow_aot_impl(ctx, local_slot, hash_bits, key, value_bits, xsink,
+        &res);
+    return qore_rt_store_result(rc, res, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
+        LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    return qore_rt_hash_key_store_dynamic_cow_impl(var, hash_bits, key_bits, value_bits, xsink, nullptr);
+}
+
+// as qore_rt_hash_key_store_dynamic_cow(), but returns a reference to the value stored, which is the value of the
+// assignment (qore#7589)
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_result(
+        LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue res;
+    uint64_t rc = qore_rt_hash_key_store_dynamic_cow_impl(var, hash_bits, key_bits, value_bits, xsink,
+        &res);
+    return qore_rt_store_result(rc, res, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    return qore_rt_hash_key_store_dynamic_cow_aot_impl(ctx, local_slot, hash_bits, key_bits, value_bits, xsink,
+        nullptr);
+}
+
+// as qore_rt_hash_key_store_dynamic_cow_aot(), but returns a reference to the value stored, which is the value of the
+// assignment (qore#7589)
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot_result(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue res;
+    uint64_t rc = qore_rt_hash_key_store_dynamic_cow_aot_impl(ctx, local_slot, hash_bits, key_bits, value_bits, xsink,
+        &res);
+    return qore_rt_store_result(rc, res, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
+        LocalVar* var, uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    return qore_rt_list_index_store_cow_impl(var, list_bits, index, val_bits, xsink, nullptr);
+}
+
+// as qore_rt_list_index_store_cow(), but returns a reference to the value stored, which is the value of the
+// assignment (qore#7589)
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_result(
+        LocalVar* var, uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue res;
+    uint64_t rc = qore_rt_list_index_store_cow_impl(var, list_bits, index, val_bits, xsink,
+        &res);
+    return qore_rt_store_result(rc, res, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    return qore_rt_list_index_store_cow_aot_impl(ctx, local_slot, list_bits, index, val_bits, xsink, nullptr);
+}
+
+// as qore_rt_list_index_store_cow_aot(), but returns a reference to the value stored, which is the value of the
+// assignment (qore#7589)
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot_result(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue res;
+    uint64_t rc = qore_rt_list_index_store_cow_aot_impl(ctx, local_slot, list_bits, index, val_bits, xsink,
+        &res);
+    return qore_rt_store_result(rc, res, xsink);
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_cow_throwing(
         LocalVar* var, uint64_t hash_bits, const char* key,
         uint64_t value_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_hash_key_store_cow(var, hash_bits, key, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_cow_result_throwing(
+        LocalVar* var, uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_cow_result(var, hash_bits, key, value_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -9553,6 +10023,17 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_c
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_cow_aot_result_throwing(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, const char* key,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_cow_aot_result(ctx, local_slot, hash_bits, key, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_dynamic_cow_throwing(
         LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
@@ -9564,11 +10045,33 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_d
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_dynamic_cow_result_throwing(
+        LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_dynamic_cow_result(var, hash_bits, key_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_dynamic_cow_aot_throwing(
         QoreAOTContext* ctx, uint32_t local_slot, uint64_t hash_bits, uint64_t key_bits,
         uint64_t value_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_hash_key_store_dynamic_cow_aot(ctx, local_slot, hash_bits,
             key_bits, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_store_dynamic_cow_aot_result_throwing(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_store_dynamic_cow_aot_result(ctx, local_slot, hash_bits, key_bits,
+        value_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -9639,11 +10142,32 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store_cow_result_throwing(
+        LocalVar* var, uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_index_store_cow_result(var, list_bits, index, val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store_cow_aot_throwing(
         QoreAOTContext* ctx, uint32_t local_slot, uint64_t list_bits, int64_t index,
         uint64_t val_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_list_index_store_cow_aot(ctx, local_slot, list_bits,
             index, val_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_store_cow_aot_result_throwing(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t list_bits, int64_t index,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_index_store_cow_aot_result(ctx, local_slot, list_bits, index, val_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -10064,11 +10588,13 @@ extern "C" DLLEXPORT void qore_rt_list_set_value(uint64_t list_bits, int64_t ind
         qore_list_private* priv = qore_list_private::get(*l);
         // Track element type for correct list<T> type info at runtime
         priv->setListTypeFromNewElementType(val.getFullTypeInfo());
+        // a weakly shared container is stored as a copy of its own (qore#7342)
+        bool scan = qore_store_needs_scan(val);
         priv->getEntryReference(static_cast<size_t>(index)) = val;
         if (static_cast<size_t>(index) >= priv->length) {
             priv->length = static_cast<size_t>(index) + 1;
         }
-        if (needs_scan(val)) {
+        if (scan) {
             priv->incScanCount(1);
         }
     }
@@ -10088,11 +10614,13 @@ extern "C" DLLEXPORT void qore_rt_list_set_value_checked(uint64_t list_bits, int
     }
     QoreValue stored = value.release();
     priv->setListTypeFromNewElementType(stored.getFullTypeInfo());
+    // a weakly shared container is stored as a copy of its own (qore#7342)
+    bool scan = qore_store_needs_scan(stored);
     priv->getEntryReference(static_cast<size_t>(index)) = stored;
     if (static_cast<size_t>(index) >= priv->length) {
         priv->length = static_cast<size_t>(index) + 1;
     }
-    if (needs_scan(stored)) {
+    if (scan) {
         priv->incScanCount(1);
     }
 }
@@ -17166,6 +17694,30 @@ extern "C" DLLEXPORT void qore_rt_unique_local_aot(QoreAOTContext* ctx, int32_t 
     }
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_weak_assignment_source_local_aot(QoreAOTContext* ctx, int32_t idx,
+        ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    LocalVar* var = ctx->locals[idx];
+    // the step of an AOT body local: the lowering gives the step of a closure variable a path of its own
+    assert(!var || !var->closureUse());
+    LocalVarValue* lvar = var ? thread_try_find_lvar(var) : nullptr;
+    if (!lvar) {
+        return toBits(QoreValue());
+    }
+    switch (lvar->val.getType()) {
+        case NT_HASH:
+        case NT_LIST:
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+        case NT_REFERENCE:
+            // a node: QoreLValue::getValue() returns the value held, without a new node (qore#6094)
+            return toBits(qore_weak_assignment_source_borrowed(lvar->val.getValue(), xsink));
+        default:
+            return toBits(lvar->val.getReferencedValue());
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_clear_local(ctx->locals[idx], xsink);
@@ -17871,6 +18423,57 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_foreach
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+}
+
+// --- The store helpers of an assignment through a reference that a local holds (qore#7617) ---
+// See qore_rt_assign_local_through(); the "_throwing" variants throw QoreJITException for emitMaybeInvoke(), and the
+// "_foreach" variants describe a type error as the AST interpreter describes it for the variable of a foreach loop
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_local_through_throwing(LocalVar* var,
+        uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_assign_local_through(var, value, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return rv;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_local_through_aot_throwing(QoreAOTContext* ctx,
+        int32_t idx, uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_assign_local_through_aot(ctx, idx, value, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return rv;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_assign_local_foreach_through(LocalVar* var, uint64_t value, int32_t mode,
+        ExceptionSink* xsink) {
+    return qore_rt_assign_local_through_impl(var, value, mode, xsink, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_assign_local_foreach_through_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_assign_local_through_impl(ctx->locals[idx], value, mode, xsink, QORE_FOREACH_LVALUE_DESC);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_local_foreach_through_throwing(LocalVar* var,
+        uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_assign_local_foreach_through(var, value, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return rv;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_assign_local_foreach_through_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t value, int32_t mode, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_assign_local_foreach_through_aot(ctx, idx, value, mode, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return rv;
 }
 
 //! As qore_rt_store_closure_aot() and qore_rt_store_closure_eval_weak_aot() with the foreach description
@@ -18903,7 +19506,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         qore_hash_private* hp = qore_hash_private::get(*h);
-        const unsigned old_count = qore_hash_private::getScanCount(*h);
+        const bool old_needs_scan = qore_hash_private::needsScan(*h);
         ReferenceHolder<QoreHashNode> rvh(new QoreHashNode(autoTypeInfo), xsink);
         if (for_each_key([&](const QoreValue& key_val) -> bool {
             QoreHashKeyHelper mem(key_val, xsink);
@@ -18928,7 +19531,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         if (rvh->empty() && hp->checkRemovalValid(xsink)) {
             return QoreValue();
         }
-        if (old_count && !qore_hash_private::getScanCount(*h)) {
+        if (old_needs_scan && !qore_hash_private::needsScan(*h)) {
             lvh.setRemovalDelta(-1, lt == NT_WEAKREF_HASH);
         }
         lvh.removedValue(QoreValue(*rvh));
@@ -19094,7 +19697,7 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             }
         }
         if (needs_scan(*v)) {
-            if (!qore_list_private::getScanCount(*l)) {
+            if (!qore_list_private::needsScan(*l)) {
                 lvh.setRemovalDelta(-1, lt == NT_WEAKREF_LIST);
             }
         }
@@ -19350,7 +19953,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
 
     if (inst->unary_op == LVUnaryOp::EnsureUnique) {
         QoreValue value;
-        if (qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), value)) {
+        if (qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), value, xsink)) {
             return toBits(value);
         }
     }
@@ -19664,6 +20267,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             lvh.setWeakSourceResolution();
         }
         if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
+            // the source of a weak assignment whose path reached a step that an lvalue cannot take is read as the
+            // operators read it (qore#7351)
+            if (inst->unary_op == LVUnaryOp::EnsureUnique && !*xsink && lvh.finishWeakSourceRead(res)) [[unlikely]] {
+                return toBits(res);
+            }
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {
@@ -19683,23 +20291,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // the container of a variable that a weak reference is taken of (qore#5756)
                 if (lvh.getType() == NT_HASH || lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
+                    // the weak reference designates it: it is pinned, and the helper writes the change of its state
+                    // up the path (qore#7318)
+                    qore_weak_target_pin(lvh.getValue());
                 }
                 // the value of the variable as it is read, taken under the lock of the variable (qore#5847); a weak
-                // reference that the variable holds reads as its target
+                // reference to an object that the variable holds reads as its target; a list or a hash is held weakly
+                // while the target is resolved, and a weak reference to one is kept as it is: the store locks it
+                // (qore#7405)
                 res = lvh.getReferencedValue();
                 switch (res.getType()) {
-                    case NT_WEAKREF:
-                    case NT_WEAKREF_HASH:
-                    case NT_WEAKREF_LIST: {
+                    case NT_WEAKREF: {
                         ValueHolder weak_holder(res, xsink);
-                        // a list or hash is read with a new reference, or as a new empty one if it was freed (qore#7198)
-                        res = res.getType() == NT_WEAKREF
-                            ? QoreValue(weak_holder->get<const WeakReferenceNode>()->get()).refSelf()
-                            : res.getType() == NT_WEAKREF_HASH
-                            ? QoreValue(weak_holder->get<const WeakHashReferenceNode>()->lock())
-                            : QoreValue(weak_holder->get<const WeakListReferenceNode>()->lock());
+                        res = QoreValue(weak_holder->get<const WeakReferenceNode>()->get()).refSelf();
                         break;
                     }
+                    case NT_HASH:
+                    case NT_LIST:
+                        res = qore_weak_assignment_source(res, xsink);
+                        break;
                     default:
                         break;
                 }
@@ -20187,6 +20797,7 @@ static int qore_rt_lv_path_ternary_round(QoreIRLValuePathInstruction* inst, IRLV
                     lvh.removedValueThroughWeak(QoreValue(*removed_list));
                 }
             } else if (vt == NT_STRING) {
+                // note: safe; lvh.ensureUnique() above materializes any inline short string
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                 if (length_val.isNothing() && replacement_val.isNothing()) {
                     vs->splice(offset, xsink);

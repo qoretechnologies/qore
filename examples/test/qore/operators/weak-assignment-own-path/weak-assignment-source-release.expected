@@ -1,0 +1,8 @@
+hash released: {} exists: True
+hash released change: HASH-ERROR
+hash released after: {}
+list released: []
+list released change: LIST-ERROR
+list released after: []
+kept change: changed
+kept: {a: 1, b: 2} {a: 1, b: 2}

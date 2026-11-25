@@ -3484,6 +3484,33 @@ QoreValue qore_object_private::evalMember(QoreObject* obj, const std::string& me
     return obj->priv->evalMember(mem.c_str(), mem.size(), xsink);
 }
 
+bool qore_object_private::memberReadRunsNoCode(const char* mem) const {
+    const qore_class_private* cls = qore_class_private::get(*theclass);
+    size_t len = strlen(mem);
+    if (cls->findAccessorMember(mem, len)) {
+        return false;
+    }
+    if (!cls->memberGate) {
+        return true;
+    }
+    // the class context and the access check of evalMember()
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*theclass, class_ctx)) {
+        class_ctx = qore_class_private::runtimeGetMemberStorageContext(*theclass, mem, class_ctx);
+    }
+    const qore_class_private* member_class_ctx = nullptr;
+    if (checkMemberAccess(mem, len, class_ctx, member_class_ctx)) {
+        return false;
+    }
+    // memberGate() is run for a member that the object does not hold
+    QoreAutoVarRWReadLocker al(rml);
+    if (status == OS_DELETED) {
+        return true;
+    }
+    const QoreHashNode* odata = member_class_ctx ? getInternalData(member_class_ctx) : data;
+    return odata && qore_hash_private::get(*odata)->existsKey(mem);
+}
+
 bool qore_object_private::tryReadUniqueWeakMember(const std::string& name, QoreValue& result) {
     const qore_class_private* cls = qore_class_private::get(*theclass);
     // A gate, accessor or notification can run user code as part of ordinary lvalue navigation.

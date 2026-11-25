@@ -165,6 +165,10 @@ struct qore_fs_security_private {
         error means that the path cannot be resolved safely, and guessing at a canonical form
         that the containment checks would then trust could place a path outside the sandbox
         inside it.
+
+        Errors name the path as given, in the form for the code that the messages are built for: without its
+        directories in a scope of messages for code restricted from external information (qore_msg_path(), a module
+        load or the parse of a source for such code, qore#7507)
     */
     std::string canonicalize(const char* path, ExceptionSink* xsink) {
         if (!path || !*path) {
@@ -179,8 +183,9 @@ struct qore_fs_security_private {
         } else {
             std::unique_ptr<char, decltype(&free)> cwd(realpath(".", nullptr), &free);
             if (!cwd) {
+                int err = errno;
                 xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize relative path "
-                    "'%s': the current directory cannot be resolved: %s", path, strerror(errno));
+                    "'%s': the current directory cannot be resolved: %s", qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
             probe = cwd.get();
@@ -208,8 +213,8 @@ struct qore_fs_security_private {
             if (err != ENOENT && err != ENOTDIR) {
                 // the message names the path as given only, never a link target or a directory reached while
                 // resolving it (qore#7498)
-                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
-                    strerror(err));
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
+                    qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
 
@@ -219,15 +224,16 @@ struct qore_fs_security_private {
             struct stat sb;
             if (!lstat(probe.c_str(), &sb) && S_ISLNK(sb.st_mode)) {
                 if (++links > qore_sandbox_max_symlinks) {
-                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
-                        strerror(ELOOP));
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
+                        qore_msg_path(path).c_str(), strerror(ELOOP));
                     return "";
                 }
                 char buf[QORE_PATH_MAX + 1];
                 ssize_t len = readlink(probe.c_str(), buf, QORE_PATH_MAX);
                 if (len < 0) {
+                    int link_err = errno;
                     xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a link cannot be "
-                        "read: %s", path, strerror(errno));
+                        "read: %s", qore_msg_path(path).c_str(), strerror(link_err));
                     return "";
                 }
                 assert(len <= QORE_PATH_MAX);
@@ -239,7 +245,7 @@ struct qore_fs_security_private {
                 if (is_in_proc(probe)) {
                     xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a "
                         "descriptor whose file cannot be identified by a path, so the security policy cannot be "
-                        "applied to it", path);
+                        "applied to it", qore_msg_path(path).c_str());
                     return "";
                 }
                 if (*buf == '/') {
@@ -258,7 +264,7 @@ struct qore_fs_security_private {
             // is consumed; this is defensive only
             if (probe == "/") {
                 xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
-                    path, strerror(err));
+                    qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
 
@@ -291,8 +297,9 @@ struct qore_fs_security_private {
             std::string up = base + "/..";
             std::unique_ptr<char, decltype(&free)> real(realpath(up.c_str(), nullptr), &free);
             if (!real) {
+                int err = errno;
                 xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a parent "
-                    "directory cannot be resolved: %s", path, strerror(errno));
+                    "directory cannot be resolved: %s", qore_msg_path(path).c_str(), strerror(err));
                 return "";
             }
             base = real.get();
@@ -349,12 +356,13 @@ struct qore_fs_security_private {
         return pathStartsWith(canon_path, sandbox_root);
     }
 
-    //! applies the rules of the policy to a canonical path; errors name the path as given (\a path)
+    //! applies the rules of the policy to a canonical path; errors name the path as given (\a path), in the form for
+    //! the code that the messages are built for (qore_msg_path(), see canonicalize())
     bool checkRules(const std::string& canon, const char* path, int mode, ExceptionSink* xsink) const {
         // Check denied paths first (they always take precedence)
         if (isDenied(canon)) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-                "Access to '%s' denied by security policy (path is in denied list)", path);
+                "Access to '%s' denied by security policy (path is in denied list)", qore_msg_path(path).c_str());
             return false;
         }
 
@@ -362,7 +370,7 @@ struct qore_fs_security_private {
         if (!isInSandboxRoot(canon)) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
                 "Access to '%s' denied: path is outside sandbox root '%s'",
-                path, sandbox_root.c_str());
+                qore_msg_path(path).c_str(), qore_msg_path(sandbox_root.c_str()).c_str());
             return false;
         }
 
@@ -387,7 +395,7 @@ struct qore_fs_security_private {
 
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
             "Access to '%s' denied: %s access not permitted by security policy",
-            path, mode_str.c_str());
+            qore_msg_path(path).c_str(), mode_str.c_str());
         return false;
     }
 };
@@ -555,7 +563,8 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
         // (it gives "/dev/fd/<name of the file>"), and the file is identified by the descriptor that the open gives
         if (resolve_descriptor_alias(path, target)) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor "
-                "whose file cannot be identified by a path, so the security policy cannot be applied to it", path);
+                "whose file cannot be identified by a path, so the security policy cannot be applied to it",
+                qore_msg_path(path).c_str());
             return false;
         }
         // errors name the path as given, not the file reached
@@ -564,7 +573,7 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
         if (xsink2 || is_descriptor_alias(canon)) {
             xsink2.clear();
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
-                "cannot be resolved", path);
+                "cannot be resolved", qore_msg_path(path).c_str());
             return false;
         }
     }
@@ -585,7 +594,8 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
             if (fstat(pfd, &obuf) || stat(canon.c_str(), &cbuf) || obuf.st_dev != cbuf.st_dev
                     || obuf.st_ino != cbuf.st_ino) {
                 xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
-                    "cannot be identified by a path, so the security policy cannot be applied to it", path);
+                    "cannot be identified by a path, so the security policy cannot be applied to it",
+                    qore_msg_path(path).c_str());
                 return false;
             }
         }
@@ -1437,6 +1447,33 @@ void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
     qore_program_id_t id = qore_sandbox_caller_pgm_id();
     std::lock_guard<std::mutex> lck(untrusted_creators_lock);
     untrusted_creators[sm] = id;
+}
+
+int qore_sandbox_set_tz_path_limits(QoreSandboxManager* sm, int64 max_zones, int64 max_bytes,
+        ExceptionSink* xsink) {
+    assert(sm);
+    if (max_zones < 0 || max_bytes < 0) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "the time zone path limits cannot be negative; got: zones "
+            QLLD ", bytes " QLLD, max_zones, max_bytes);
+        return -1;
+    }
+    if (QoreSandboxComposition::members(sm)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "a composite sandbox has no time zone path limits of its own; "
+            "the limits of each of its sandboxes apply");
+        return -1;
+    }
+    QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+    // restricted code (also through the code of a module that acts for it) can only lower a limit: a budget that it
+    // could raise, also of a manager that it created, would let it pin memory that the host did not grant (qore#7566)
+    if ((max_zones > account->tz_max_zones.load() || max_bytes > account->tz_max_bytes.load())
+            && qore_caller_is_untrusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setTimeZonePathLimits(): restricted code can "
+            "only lower the time zone path limits of a sandbox");
+        return -1;
+    }
+    account->tz_max_zones.store(max_zones);
+    account->tz_max_bytes.store(max_bytes);
+    return 0;
 }
 
 int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink) {
@@ -2837,7 +2874,7 @@ static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mo
         QoreSandboxPinnedPath& pin, ExceptionSink* xsink) {
     if ((!query && (mode & (QSEC_WRITE | QSEC_CREATE | QSEC_DELETE))) || !q_is_literal_descriptor_alias(name)) {
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: a descriptor alias cannot be "
-            "changed under a security policy", name);
+            "changed under a security policy", qore_msg_path(name).c_str());
         return -1;
     }
     int fd;
@@ -2859,7 +2896,8 @@ static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mo
     std::string target;
     if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, nullptr, target)) {
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor whose "
-            "file cannot be identified by a path, so the security policy cannot be applied to it", name);
+            "file cannot be identified by a path, so the security policy cannot be applied to it",
+            qore_msg_path(name).c_str());
         return -1;
     }
     ExceptionSink xsink2;
@@ -2871,7 +2909,7 @@ static int pin_descriptor_alias(QoreSandboxManager& sm, const char* name, int mo
     if (xsink2 || is_descriptor_alias(canon)) {
         xsink2.clear();
         xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to cannot be "
-            "resolved", name);
+            "resolved", qore_msg_path(name).c_str());
         return -1;
     }
     pin.canon = canon;
@@ -2957,7 +2995,7 @@ int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool 
         // not a directory (ENOTDIR) is the error of the operation, as without a policy
         if (errno == ELOOP) {
             xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
-                "checked", name);
+                "checked", qore_msg_path(name).c_str());
             return -1;
         }
         return -2;

@@ -251,7 +251,8 @@ public:
     //! type of the call in \a parse_context; ns can be nullptr if the function is a method
     DLLLOCAL int parseFindCallVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
             QoreFunction* func, qore_ns_private* ns, QoreParseCallArgs& call_args,
-            bool infer_class_receiver_from_args = false, const char* receiver_inference_call_desc = nullptr);
+            bool infer_class_receiver_from_args = false, const char* receiver_inference_call_desc = nullptr,
+            bool dispatch_on_receiver = false);
 
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,

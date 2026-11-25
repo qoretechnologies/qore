@@ -632,6 +632,7 @@ struct BatchCalleeInfo {
     bool local_method_takes_args = false; //!< A locally lowered method with a parameter that takes its argument over
     bool guarded_method_entry = false; //!< Local owning entry that requires the declaring method context
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
+    bool receiver_context_fast_entry = false; //!< Exact-class dot calls install the receiver and use the method's AOT context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     //! True if the body of the JIT fast entry does not observe the object and class context it runs in, so that a
     //! direct native call need not switch to the callee's (QoreIRToLLVM::nativeCallNeedsFunctionContext())

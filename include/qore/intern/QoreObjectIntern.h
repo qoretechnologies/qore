@@ -742,6 +742,13 @@ public:
     //! returns the value of the member \a mem of \a len bytes as QoreObject::evalMember() (qore#7194)
     DLLLOCAL QoreValue evalMember(const char* mem, size_t len, ExceptionSink* xsink);
 
+    //! returns true if evalMember() reads the member \a mem without running Qore code: the class has no
+    //! memberGate() or the member is accessible in the current class context and the object holds it, and the
+    //! member has no accessors (qore#7351)
+    /** As evalMember() decides; the object's data is read under its lock
+    */
+    DLLLOCAL bool memberReadRunsNoCode(const char* mem) const;
+
     //! Reads a unique container from an ordinary stored member under the object lock (qore#7301).
     DLLLOCAL bool tryReadUniqueWeakMember(const std::string& name, QoreValue& result);
 

@@ -125,6 +125,12 @@
     when its handler opts in; an unfiltered stream request of such code is refused (see
     @ref httpserverutil_request_credentials and @ref rest_request_credentials).
 
+    @par A Weak Assignment That Would Reference a Converted Copy Is an Error
+    A @ref weak_assignment_operator "weak assignment (:=)" of a hash or a list to an lvalue whose type converts it to a
+    copy (ex: a <tt>hash&lt;string, int&gt;</tt> to a \c hash lvalue) is refused (see @ref weak_assignment_conversion;
+    <a href="https://github.com/qoretechnologies/qore/issues/7237">issue 7237</a>,
+    <a href="https://github.com/qoretechnologies/qore/issues/7572">issue 7572</a>).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or
@@ -136,6 +142,24 @@
     @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" (256 MiB) is answered with HTTP 413 when no
     limit is set (a body that a handler reads as a stream is not limited); set the
     @ref HttpServer::HttpServerOptionInfo::max_request_body_size "max_request_body_size" option to \c 0 for no limit.
+
+    @par Library Code Gives Restricted Code No Other Host Information
+    @parblock
+    For code restricted from external information, the functions listed in @ref sandbox_ambient_host_data (ex:
+    @ref Util::tmp_location() "tmp_location()", @ref Util::normalize_dir() "normalize_dir()") use no environment,
+    working directory, hostname, PID or network interface for it, with the known limitations listed there
+    (<a href="https://github.com/qoretechnologies/qore/issues/7586">issue 7586</a>).
+
+    \c ProviderIndexUtil gives such code no index directory, index file path or process IDs: its methods that return
+    them raise \c INVALID-FUNCTION-ACCESS, and neither it nor \c DataProvider gives or lets it set its logger (see
+    @ref providerindexutil_external_info; <a href="https://github.com/qoretechnologies/qore/issues/7597">issue 7597</a>).
+    @endparblock
+
+    @par Only the Host's Code Changes the Published Data Provider Index
+    Sandboxed code and code restricted from external information, also with file system access and process control,
+    cannot write, replace or hide the data provider index that the host published, its directory, its build mode or
+    its cached apps, or claim the modules of its apps (see @ref providerindexutil_published_index;
+    <a href="https://github.com/qoretechnologies/qore/issues/7611">issue 7611</a>).
 
     @par Streamed HTTP/2 and HTTP/3 Responses End for a Client That Takes Too Little Data
     A streamed HTTP/2 or HTTP/3 response that a handler thread sends is ended when its stream takes less than 1 KiB/s
@@ -150,6 +174,18 @@
     event connection (\c PERMISSION-DENIED), and the HTTP clients that it gets connect only to the target of the code
     that created the connection (see @ref sandbox_lent_connections;
     <a href="https://github.com/qoretechnologies/qore/issues/7262">issue 7262</a>).
+
+    @par A Value Given a Weakly Referenced Hash or List Holds a Copy of Its Own
+    A parameter, a list element, a hash key, an object member or a variable given a hash or a list that a
+    @ref weak_assignment_operator "weak reference" designates holds a copy of its own (a local variable only while
+    another holder holds it), so that a change through the weak reference no longer reaches it
+    (<a href="https://github.com/qoretechnologies/qore/issues/7342">issue 7342</a>).
+
+    @par A Weak Reference Made From an Expression Designates a Copy of Its Own
+    A @ref weak_assignment_operator "weak assignment" from a call or another expression that gives a hash or a list
+    designates a copy of it, which lives until the end of the statement, so that a change through the weak reference no
+    longer changes another holder of the value; one from a path whose steps have no type designates the path's own
+    container (<a href="https://github.com/qoretechnologies/qore/issues/7318">issue 7318</a>).
 
     @par A Weak Assignment From a Member, a Hash Key or a List Element Designates Its Own Container
     A @ref weak_assignment_operator "weak assignment" from a member, a hash key or a list element first gives a shared
@@ -2957,6 +2993,8 @@
       refer to (ex: <tt>o.r = (\\x,)</tt> with \c r declared as <tt>list<reference<int>></tt>) no longer deadlocks when
       two threads store into targets referring to each other, or hangs when the reference refers to the target's own
       object or variable: the references are bound with no lock held (issue #7391)
+    - the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
+      (\c %%E instead of \c %%E{NAME}) formats as an empty string instead of crashing the process.
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
@@ -3021,6 +3059,11 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/7459">issue 7459</a>)
     - @ref RestClient::AbstractRestConnection::getAsync() "RestConnection::getAsync(False, rtopts)" accepts
       string-valued runtime options when it adds the default \c skip_login flag (issue #7408).
+    - code that may not receive the host's secrets (sandboxed code, or code restricted from external information) no
+      longer gets the host's connections and datasources from the provider modules of the
+      @ref connectionprovider_caller_scoped "ConnectionProvider" and
+      @ref datasourceprovider_caller_scoped "DatasourceProvider" modules, only from provider modules that resolve names
+      for the calling code (<a href="https://github.com/qoretechnologies/qore/issues/6844">issue 6844</a>)
     - the frames of the calls that the initialization of a module makes name the module's
       @ref Qore::Program "Program" (@ref Qore::CallStackInfo "CallStackInfo" \c programid) also when the module is
       loaded at run time (@ref Qore::Program::loadModule() "Program::loadModule()",
@@ -3143,10 +3186,6 @@
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
-    - a @ref weak_assignment_operator "weak assignment" of a typed hash or list to an lvalue that strips the container's
-      type (ex: an element of an untyped list) designates the container assigned, not a copy that read as empty after
-      the statement; a type that converts it to another container raises an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/7237">issue 7237</a>)
     - the operators that change an lvalue's list or hash (+=, push, pop, splice, trim, ...) change the container that
       a @ref weak_assignment_operator "weak reference" held by the lvalue designates; they raised an error or replaced
       the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue 7297</a>,
@@ -3168,6 +3207,10 @@
       a @ref weak_assignment_operator "weak reference" from the list or hash that it designates, instead of removing
       the weak reference itself or nothing
       (<a href="https://github.com/qoretechnologies/qore/issues/7306">issue 7306</a>)
+    - fixed a @ref weak_assignment_operator "weak assignment" whose lvalue's path passes through its source
+      (<tt>h.w := h</tt>): the path copied the source, so that the weak reference and those to the containers below it
+      designated the freed originals; the source is no longer kept by the assignment
+      (<a href="https://github.com/qoretechnologies/qore/issues/7405">issue 7405</a>)
     - a variable that holds a @ref weak_assignment_operator "weak reference" can be given to a reference parameter of
       the plain type of its target (which raised \c RUNTIME-TYPE-ERROR) and keeps it; a target that the parameter's
       type would convert is refused instead of being replaced by a copy
@@ -4824,6 +4867,9 @@
       class's own method, as the untyped call does, on an object of a subclass that overrides the method, and no call
       calls it on an object of a parent class (<a href="https://github.com/qoretechnologies/qore/issues/7440">issue
       7440</a>)
+    - Calls and method references through a parent-typed object select a @ref private_access_class_identity
+      "private:internal method" of the calling class only for a receiver of that class or a subclass
+      (<a href="https://github.com/qoretechnologies/qore/issues/7463">issue 7463</a>)
     - no HTTP header is read on a @ref Qore::Socket "Socket" after a chunked body read stopped before its end
       (@ref Qore::Socket::unfinishedHttpChunkedBody() "unfinishedHttpChunkedBody()"), chunk sizes are checked alike,
       and a body read allocates memory as its data arrives, so that a body can neither be taken for another message

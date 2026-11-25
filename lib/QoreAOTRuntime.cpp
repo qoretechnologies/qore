@@ -6979,7 +6979,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                     for (const QoreValue& v : {xsink.getExceptionErr(), xsink.getExceptionDesc()}) {
                         if (v.getType() == NT_STRING) {
                             aot_slot_resolve_error += ": ";
-                            aot_slot_resolve_error += v.get<const QoreStringNode>()->c_str();
+                            QoreStringDataHelper str(v);
+                            aot_slot_resolve_error.append(str.c_str(), str.size());
                         }
                     }
                 }

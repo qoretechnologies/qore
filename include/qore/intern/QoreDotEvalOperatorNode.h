@@ -104,6 +104,11 @@ protected:
     DLLLOCAL int parseBindMethod(QoreParseContext& parse_context, const QoreClass* qc, const QoreMethod* meth,
             bool readonly_receiver, QoreParseCallArgs* call_args, int err);
 
+    //! Checks a call whose lexical method belongs to a subclass of the declared receiver.
+    //! The actual object selects the method and binds any named arguments.
+    DLLLOCAL int parseReceiverDispatch(QoreParseContext& parse_context, const QoreClass& receiver,
+            const QoreMethod& lexical, const QoreTypeInfo* receiver_type, bool readonly_receiver, int err);
+
     //! binds a named call of the method \a meth of the class \a nqc through a receiver that can have no value (*X);
     //! \a call_args as for parseBindMethod()
     DLLLOCAL int parseBindOrNothingNamedCall(QoreParseContext& parse_context, const QoreClass* nqc,
