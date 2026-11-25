@@ -1157,6 +1157,13 @@ public:
     }
     //! the innermost QoreCallerSandboxHelper that a sandboxed caller created on this thread, if any
     const QoreCallerSandboxHelper* sandboxed_caller = nullptr;
+    //! the Programs that compiled the code that runs on the thread in another Program, innermost last (qore#7202)
+    /** One entry per hold of such a Program (ProgramThreadCountContextHelper::holdForeignCodeProgram(),
+        QoreForeignCodeProgramHold) while the hold lasts: such code enters no Program context, and the code that it
+        calls clears QoreRuntimePoState::code_pgm, so only these entries tell that it is on the stack (see
+        qore_thread_sandboxed_entered_since()); only used by the thread itself
+    */
+    std::vector<const QoreProgram*> foreign_code_entries;
     // A Program switch which would otherwise hide a restriction on loading native code.
     const QoreCallerSandboxHelper* native_load_restriction = nullptr;
     // the budgets of the sandbox calls with a time limit that the thread is running (see
@@ -6870,6 +6877,7 @@ void ProgramThreadCountContextHelper::finishExitWork() {
     }
     if (exit_work & EXIT_FOREIGN_HOLD) {
         exit_work &= ~EXIT_FOREIGN_HOLD;
+        qore_thread_pop_foreign_code_entry(count_pgm);
         // a deletion of the Program that the code made while it held it is completed here (see
         // deferDerefIfRunning()); exceptions of the destructors that it runs go to the context's sink
         qore_program_private::decThreadCount(*count_pgm, count_tid, xsink);
@@ -6889,9 +6897,14 @@ int ProgramThreadCountContextHelper::holdForeignCodeProgram(QoreProgram* code_pg
         return -1;
     }
     int tid = q_gettid();
+    // the code is on the thread's stack while the hold lasts
+    if (qore_thread_push_foreign_code_entry(code_pgm, n_xsink)) {
+        return -1;
+    }
     // the variant keeps the Program allocated (UserVariantBase::setProgram()); entering it is refused once its
     // deletion has started, also by a thread that is not counted in it
     if (qore_program_private::get(*code_pgm)->incThreadCount(tid, n_xsink)) {
+        qore_thread_pop_foreign_code_entry(code_pgm);
         return -1;
     }
     count_pgm = code_pgm;
@@ -8074,7 +8087,10 @@ bool qore_builtin_caller_is_sandboxed() {
     if (!own || own->getCallType() != CT_BUILTIN) {
         return true;
     }
-    return qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm);
+    // code compiled in a sandboxed Program that runs in another Program is sandboxed code (qore#7202); its frame
+    // records the Program that it runs in
+    return qore_program_private::isSandboxed(own->getProgram()) || qore_program_private::isSandboxed(td->current_pgm)
+        || qore_program_private::isSandboxed(qore_foreign_calling_code_program());
 }
 
 QoreProgram* qore_builtin_caller_program() {
@@ -8317,8 +8333,45 @@ QoreThreadProgramMarker qore_thread_program_marker() {
     if (td) {
         marker.ctx = td->current_pgm_ctx;
         marker.sandboxed_caller = td->sandboxed_caller;
+        marker.foreign_entries = td->foreign_code_entries.size();
+        marker.code_pgm = td->runtime_po_state.code_pgm;
     }
     return marker;
+}
+
+int qore_thread_push_foreign_code_entry(const QoreProgram* code_pgm, ExceptionSink* xsink) {
+    assert(code_pgm);
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return 0;
+    }
+    try {
+        td->foreign_code_entries.push_back(code_pgm);
+    } catch (std::bad_alloc&) {
+        // fails closed: the code does not run
+        if (xsink) {
+            xsink->outOfMemory();
+        }
+        return -1;
+    }
+    return 0;
+}
+
+void qore_thread_pop_foreign_code_entry(const QoreProgram* code_pgm) {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
+    std::vector<const QoreProgram*>& entries = td->foreign_code_entries;
+    // the holds are released in the reverse order of their creation; the innermost entry of the Program otherwise
+    for (size_t i = entries.size(); i; --i) {
+        if (entries[i - 1] == code_pgm) {
+            assert(i == entries.size());
+            entries.erase(entries.begin() + (i - 1));
+            return;
+        }
+    }
+    assert(false);
 }
 
 bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) {
@@ -8331,6 +8384,23 @@ bool qore_thread_sandboxed_entered_since(const QoreThreadProgramMarker& marker) 
         return true;
     }
     if (qore_program_is_sandboxed(td->current_pgm)) {
+        return true;
+    }
+    // code compiled in a sandboxed Program that runs in another Program, entered since the marker and not left yet,
+    // also while it runs other code that it called (qore#7202); fails closed: the marker is not on the stack
+    const std::vector<const QoreProgram*>& entries = td->foreign_code_entries;
+    if (entries.size() < marker.foreign_entries) {
+        return true;
+    }
+    for (size_t i = marker.foreign_entries, e = entries.size(); i < e; ++i) {
+        if (qore_program_is_sandboxed(entries[i])) {
+            return true;
+        }
+    }
+    // and such code that runs now, if it is not the code that ran when the marker was taken: module code that the
+    // code of the scope calls runs for it with its Program (fails closed for any other path that sets it)
+    if (td->runtime_po_state.code_pgm != marker.code_pgm
+            && qore_program_is_sandboxed(td->runtime_po_state.code_pgm)) {
         return true;
     }
     // each Program context entered since the marker: the Program of each but the innermost is the Program that the
@@ -8354,6 +8424,12 @@ QoreProgram* qore_caller_cache_program() {
     }
     if (qore_program_is_sandboxed(td->current_pgm)) {
         return td->current_pgm;
+    }
+    // code compiled in a sandboxed Program that runs in another Program is that Program's code, as is the module code
+    // that it calls, unless a module initialization barrier hides it (qore#7202; see qore_caller_sandbox_state())
+    if ((td->module_init_barriers.empty() || td->module_init_barriers.back().lift)
+            && qore_program_is_sandboxed(td->runtime_po_state.code_pgm)) {
+        return const_cast<QoreProgram*>(td->runtime_po_state.code_pgm);
     }
     QoreProgram* outer = td->current_pgm;
     for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
@@ -8939,7 +9015,13 @@ QoreProgram* qore_get_calling_program() {
     if (!td) {
         return nullptr;
     }
-    return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    // code compiled in another Program than the one it runs in is the code of the Program that compiled it, also for
+    // the module code that it calls: it is the nearest code that is not a module's (qore#7202)
+    if (qore_foreign_code_counts(td, mib, nullptr)) {
+        return const_cast<QoreProgram*>(td->runtime_po_state.code_pgm);
+    }
+    return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, mib));
 }
 
 bool qore_caller_restricts_terminal_io() {
