@@ -376,6 +376,18 @@ public const string DP_FUNC_LEAST = "least";
 #! Returns the median of the numeric values in a list
 public const string DP_FUNC_MEDIAN = "median";
 
+#! Expands nested lists one level in source order
+public const string DP_FUNC_FLATTEN = "flatten";
+
+#! Returns the first element with the smallest key at a field path
+public const string DP_FUNC_MIN_BY = "min_by";
+
+#! Returns the first element with the largest key at a field path
+public const string DP_FUNC_MAX_BY = "max_by";
+
+#! Returns a linearly interpolated percentile on a scale from 0 to 100
+public const string DP_FUNC_PERCENTILE = "percentile";
+
 #! Returns the first non-NOTHING argument
 public const string DP_FUNC_COALESCE = "coalesce";
 

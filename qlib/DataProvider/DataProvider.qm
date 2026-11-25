@@ -1250,10 +1250,28 @@ auto has_2 = AbstractDataProvider::evalGenericExpressionValue(rec,
     |<tt>greatest(value, ...)</tt>|<tt>greatest(\@quote, \@minimum)</tt>|Higher charge
     |<tt>least(value, ...)</tt>|<tt>least(\@quote, \@cap)</tt>|Lower charge
     |<tt>median(list [, path])</tt>|<tt>median(\@lines, "amount")</tt>|Middle amount, averaging the central pair for an even count
+    |<tt>flatten(list)</tt>|<tt>flatten(\@invoices[*].lines)</tt>|All invoice lines in source order
+    |<tt>min_by(list, path)</tt>|<tt>min_by(\@quotes, "price")</tt>|First quote with the lowest price
+    |<tt>max_by(list, path)</tt>|<tt>max_by(\@lines, "dispute.amount")</tt>|First line with the largest dispute
+    |<tt>percentile(list, percentage [, path])</tt>|<tt>percentile(\@deliveries, 95, "delay_minutes")</tt>|95th percentile of recorded delays
+
+    The \c flatten function expands one level in source order. Empty sublists contribute zero elements.
+    Scalars, nulls, and deeper lists retain their positions as individual elements. For example,
+    <tt>sum(flatten(\@invoices[*].lines), "dispute.amount")</tt> totals disputes across all invoices.
+
+    Both \c min_by and \c max_by return the original element with the winning key. They compare numeric keys,
+    strings, or dates, skip missing and null keys, keep the first element on ties, and return @ref nothing if
+    no key qualifies. Numeric keys follow the same promotion rules as \c min and \c max.
+
+    The \c percentile function accepts a finite percentage from 0 to 100. Given N present numeric values, it
+    sorts them and linearly interpolates at zero-based rank <tt>(N - 1) * percentage / 100</tt>. Percentiles
+    0 and 100 give the endpoints, and 50 gives the same value and type as \c median. Missing and null values
+    are skipped. An empty set of values gives @ref nothing.
 
     The predicate of \c count_if reads the fields of each record or <tt>\@value</tt> for a scalar element.
-    Its result is zero for an empty list. The \c distinct function skips absent values and compares both type
-    and value. Its result contains the projected values. The \c sort function keeps the original elements.
+    Its result is zero for an empty list. The \c distinct function returns projected values in first-seen order,
+    skips absent values, and compares both type and value. For example, <tt>count distinct(\@lines, "carrier")</tt> counts the distinct carriers present on
+    an invoice. Its result is zero when every line lacks a carrier. The \c sort function keeps the original elements.
     Equal keys retain their input order, with missing or null keys last in both directions.
     The default order is ascending. Use an empty path to sort scalar values in descending order.
 
@@ -1801,7 +1819,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
     @section dataprovider_v3_13 DataProvider v3.13
     - added @ref dpql_list_functions "DPQL list functions" for grouping, sorting, selecting distinct values,
-      counting matches, and finding medians and scalar extrema
+      flattening nested lists, counting matches, selecting records by extreme keys, and computing percentiles
     - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event

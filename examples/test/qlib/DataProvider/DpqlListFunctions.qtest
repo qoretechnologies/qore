@@ -20,6 +20,9 @@ public class DpqlListFunctionsTest inherits QUnit::Test {
         addTestCase("list transformations and grouping", \listTests());
         addTestCase("scalar extrema and median", \scalarTests());
         addTestCase("list and scalar type errors", \listErrors());
+        addTestCase("flatten and distinct count across invoices", \invoiceTests());
+        addTestCase("original records with extreme keys", \keyedExtremaTests());
+        addTestCase("percentiles and median agreement", \percentileTests());
         set_return_value(main());
     }
 
@@ -49,10 +52,19 @@ public class DpqlListFunctionsTest inherits QUnit::Test {
     }
 
     roundTripTests() {
+        foreach hash<auto> pair in ({
+            DP_FUNC_FLATTEN: (1, 1), DP_FUNC_MIN_BY: (2, 2), DP_FUNC_MAX_BY: (2, 2), DP_FUNC_PERCENTILE: (2, 3),
+        }.pairIterator()) {
+            hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{pair.key};
+            assertEq(DET_Function, info.type, pair.key);
+            assertEq(pair.value[0], AbstractDataProvider::getRequiredArgCount(info), pair.key);
+            assertEq(pair.value[1], info.args.size(), pair.key);
+        }
         foreach string text in (("sum(@rows)", "avg(@rows, 'weight')", "min(@rows)", "max(@rows)",
                 "count_if(@rows, @active)", "distinct(@rows, 'carrier')", "sort(@rows, 'amount', 'desc')",
                 "group_by(@rows, 'postcode')", "join(@rows, ', ')", "greatest(@a, @b)", "least(@a, @b)",
-                "median(@rows, 'amount')")) {
+                "median(@rows, 'amount')", "percentile(@rows, 95, 'delay_minutes')", "flatten(@rows[*].lines)",
+                "min_by(@rows, 'price')", "max_by(@rows, 'dispute.amount')", "count distinct(@rows, 'carrier')")) {
             auto parsed = DataProvider::parseDpqlExpression(text);
             AbstractDataProvider::verifyGenericExpression(parsed);
             string serialized = DataProvider::serializeDpqlExpression(parsed);
@@ -129,6 +141,62 @@ public class DpqlListFunctionsTest inherits QUnit::Test {
             hash<DataProviderExpressionInfo> info = DataProviderGenericExpressions{pair.key};
             assertTrue(info.return_type.getReturnTypeHash(True).hasKey(pair.value), pair.key);
         }
+    }
+
+    invoiceTests() {
+        checkValue((1, 2, (3, 4), NULL, NOTHING, 5), "flatten(@rows)",
+            ((), (1, 2), ((3, 4),), NULL, NOTHING, 5));
+        checkValue((), "flatten(@rows)", ());
+        list<auto> invoices = ({"lines": ({"carrier": "A", "dispute": {"amount": 2.25n}},)},
+            {"lines": ()}, {"lines": ({"carrier": "B", "dispute": {"amount": 1.5n}}, {"carrier": "A"}, {})});
+        checkValue(3.75n, "sum(flatten(@rows[*].lines), 'dispute.amount')", invoices);
+        checkValue(2, "count distinct(flatten(@rows[*].lines), 'carrier')", invoices);
+        checkValue(0, "count distinct(@rows, 'carrier')", ({}, {"carrier": NULL}));
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "flatten.*hash", \evaluate(), ("flatten(@rows)", {}));
+    }
+
+    keyedExtremaTests() {
+        list<auto> quotes = ({}, {"id": "A", "q": {"price": 2n}}, {"id": "B", "q": {"price": 2}},
+            {"id": "C", "q": {"price": 3.5}}, {"id": "D", "q": {"price": 3.5n}}, {"q": {"price": NULL}});
+        checkValue(quotes[1], "min_by(@rows, 'q.price')", quotes);
+        checkValue(quotes[3], "max_by(@rows, 'q.price')", quotes);
+        list<auto> big = ({"k": 9007199254740992.0}, {"k": 9007199254740993});
+        checkValue(big[0], "max_by(@rows, 'k')", big);
+        push big, {"k": -1n};
+        checkValue(big[1], "max_by(@rows, 'k')", big);
+        checkValue({"k": 1.19}, "min_by(@rows, 'k')", ({"k": 1.19}, {"k": 1.19n}));
+        checkValue({"date": 2026-01-01}, "min_by(@rows, 'date')", ({"date": 2026-01-02}, {"date": 2026-01-01}));
+        checkValue({"id": "c"}, "max_by(@rows, 'id')", ({"id": "b"}, {"id": "c"}));
+        foreach string name in ((DP_FUNC_MIN_BY, DP_FUNC_MAX_BY)) {
+            checkValue(NOTHING, name + "(@rows, 'k')", ());
+            checkValue(NOTHING, name + "(@rows, 'k')", ({}, {"k": NULL}, NOTHING));
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", name + ".*string", \evaluate(),
+                (name + "(@rows, 'k')", ({"k": 1}, {"k": "one"})));
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", name + ".*int", \evaluate(),
+                (name + "(@rows.data, @rows.path)", {"data": (), "path": 7}));
+        }
+    }
+
+    percentileTests() {
+        list<auto> delays = ({"delay": 50}, {"delay": 10}, {"delay": 30}, {}, {"delay": NULL}, {"delay": 20});
+        checkValue(47, "percentile(@rows, 95, 'delay')", delays);
+        checkValue(10, "percentile(@rows, 0, 'delay')", delays);
+        checkValue(50, "percentile(@rows, 100, 'delay')", delays);
+        checkValue(2.5n, "percentile(@rows, 12.5)", (2, 6));
+        checkValue(3.0, "percentile(@rows, 25)", (2, 6.0));
+        checkValue(3n, "percentile(@rows, 25)", (2.0, 6n));
+        checkValue(9007199254740993.25n, "percentile(@rows, 25)", (9007199254740993, 9007199254740994));
+        checkValue(4n, "percentile(@rows, 95)", (4n,));
+        checkValue(NOTHING, "percentile(@rows, 95)", (NOTHING, NULL));
+        foreach list<auto> values in (((), (3,), (1, 4), (1, 3, 5), (1.0, 3n, 4), (1.0e308, 1.0e308))) {
+            checkValue(evaluate("median(@rows)", values), "percentile(@rows, 50)", values);
+        }
+        foreach auto bad in ((-1, 100.1n, "95", NOTHING, NULL, @nan@, @inf@n)) {
+            assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "percentile", \evaluate(),
+                ("percentile(@rows.values, @rows.p)", {"values": (), "p": bad}));
+        }
+        assertThrows("DATA-PROVIDER-EXPRESSION-ERROR", "percentile.*string", \evaluate(),
+            ("percentile(@rows, 95)", (7, "8")));
     }
 
     scalarTests() {
