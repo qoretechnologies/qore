@@ -12904,8 +12904,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // memory that an instruction needed and that no runtime helper or builtin call turned into an exception
     // (std::bad_alloc) fails the call of the function: the frame is left as on an exception that no handler in it
-    // catches, and the caller gets MEMORY-ALLOCATION-ERROR (qore#7466); the dispatch loop is not indented for the try
-    // block, which adds no instruction to the path that does not fail, though GCC allocates registers differently
+    // catches, and the caller gets MEMORY-ALLOCATION-ERROR (qore#7466); a try block of the same function does not
+    // catch it, as the dispatch of the instruction is left; the dispatch loop is not indented for the try block, which
+    // adds no instruction to the path that does not fail, though GCC allocates its registers differently
     try {
     while (block) {
         if (ip >= block->instructions.size()) {
@@ -23383,7 +23384,15 @@ weak_receiver_raised:
         if (!xsink) {
             throw;
         }
-        qore_raise_compiled_code_allocation_failure(xsink);
+        // the IR frame is unwound by its own code, which releases its values and runs its handlers: the exception is
+        // raised exactly where the native code would leave frames without their cleanup (qore#7466)
+        qore_raise_allocation_failure(xsink, "compiled code");
+        if (frame.unwinding_function) {
+            // the frame was already being unwound when the memory could not be allocated: its handlers are not run
+            // again
+            cleanupLocalCaches(false);
+            return false;
+        }
         unwindForException();
         cleanupLocalCaches(false);
         return exitAfterUnwind();
@@ -25412,7 +25421,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                     rc = lp->checkVal(right_holder, xsink);
                 }
                 if (!rc) {
-                    lp->pushIntern(right_holder);
+                    lp->pushHeld(right_holder, xsink);
                 }
             }
         }

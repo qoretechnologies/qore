@@ -5974,14 +5974,9 @@ void qore_raise_allocation_failure(ExceptionSink* xsink, const char* context) no
     abort();
 }
 
-void qore_raise_compiled_code_allocation_failure(ExceptionSink* xsink) noexcept {
-    // the frame of this function is below the frame of the boundary, which made the call while handling the exception
-    if (qore_native_frames_left(__builtin_frame_address(0))) {
-        // frames of native code were left with what they pushed on the thread's call stack: the exception is not
-        // raised over them (see the declaration); std::terminate() reports the std::bad_alloc that is handled
-        std::terminate();
-    }
-    qore_raise_allocation_failure(xsink, "compiled code");
+void qore_native_allocation_failure() noexcept {
+    // called while the std::bad_alloc is handled: the terminate handler reports it
+    std::terminate();
 }
 
 //! the terminate handler that was installed before qore_terminate_handler()

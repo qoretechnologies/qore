@@ -75,14 +75,16 @@ static __attribute__((noinline, cold)) void qore_rt_raise_allocation_failure(Exc
 }
 
 //! The handler of a runtime helper whose operation allocates the storage of a value (qore#7466)
-/** The helpers that native (JIT and AOT) code and the IR interpreter call to grow a list, a string or a hash, or to
-    make one, catch the std::bad_alloc of memory that cannot be allocated, raise MEMORY-ALLOCATION-ERROR and return
-    \a rv, as on any exception that they raise: the calling code checks the sink after the call, so that its own error
-    path releases its values, runs its handlers and branches to a try block of the same function.  A std::bad_alloc
-    that leaves a helper without this handler unwinds the frames of native code without their cleanup; the boundary
-    with the C++ code that called the native code then raises the exception only if no frame of native code that
-    pushed a frame of its own was left (see qore_raise_compiled_code_allocation_failure()).  A handler only: the code
-    of the helper that does not fail is unchanged.
+/** The generic helpers that native (JIT and AOT) code and the IR interpreter call for an operation that makes or grows
+    a value (the arithmetic of values of any type, lvalue path assignments, splice and unshift, joins, hash key stores
+    and the like) catch the std::bad_alloc of memory that cannot be allocated, raise MEMORY-ALLOCATION-ERROR and
+    return \a rv, as on any exception that they raise: the calling code checks the sink after the call, so that its
+    own error path releases its values, runs its handlers and branches to a try block of the same function.  The
+    helpers on the paths of most operations (list push and append, string append, +=) do not have this handler,
+    which costs a saved register and changes their code: they grow lists and strings with the sink, which raises
+    the exception without a std::bad_alloc (qore_list_private::pushHeld(), qore_string_private::check_char(size_t,
+    ExceptionSink*)).  A std::bad_alloc that leaves a helper ends the process at the boundary of the native code
+    (qore_native_allocation_failure()).
 */
 #define QORE_RT_CATCH_ALLOCATION_FAILURE(rv) catch (const std::bad_alloc&) { \
     qore_rt_raise_allocation_failure(xsink); \
@@ -964,7 +966,7 @@ extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_
     }
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink) try {
+extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue value = fromBits(left);
     QoreValue rhs = fromBits(right);
     // Converting a built-in scalar, date or binary cannot call back into the program and replace
@@ -979,7 +981,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64
         return toBits(QoreValue(value.getInt() + rhs.getInt()));
     }
     return qore_rt_result_or_nothing(qore_compound_assign_value(LVCompoundOp::AddAssign, value, rhs, xsink), xsink);
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
@@ -6947,20 +6949,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_by_type_path(const char*
     return qore_rt_create_empty_list_typed(element_type, xsink);
 }
 
-extern "C" DLLEXPORT void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, ExceptionSink* xsink) try {
+extern "C" DLLEXPORT void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue list_val = fromBits(list_bits);
     QoreValue value = fromBits(value_bits);
 
     QoreListNode* list = list_val.get<QoreListNode>();
     if (list) {
-        QoreValue ref_val = value.refSelf();
+        // the holder keeps the value until the list stores it: memory that cannot be allocated raises the exception
+        // and releases it (qore#7466)
+        ValueHolder ref_val(value.refSelf(), xsink);
         qore_list_private* priv = qore_list_private::get(*list);
         // Track element type to maintain correct list<T> type info at runtime,
         // matching AST mode's vtype/vcommon tracking in map/select operators.
-        priv->setListTypeFromNewElementType(ref_val.getFullTypeInfo());
-        priv->pushIntern(ref_val);
+        priv->setListTypeFromNewElementType((*ref_val).getFullTypeInfo());
+        priv->pushHeld(ref_val, xsink);
     }
-} QORE_RT_CATCH_ALLOCATION_FAILURE()
+}
 
 extern "C" DLLEXPORT void qore_rt_list_append_exact(uint64_t list_bits, uint64_t value_bits) {
     QoreListNode* list = fromBits(list_bits).get<QoreListNode>();
@@ -7009,16 +7013,16 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_push_typed(uint64_t list_bits, uint64_t val_bits,
-        const QoreTypeInfo* element_type, ExceptionSink* xsink) try {
+        const QoreTypeInfo* element_type, ExceptionSink* xsink) {
     return qore_rt_list_push_impl(fromBits(list_bits), fromBits(val_bits), element_type, xsink);
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_push(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink) {
     return qore_rt_list_push_typed(list_bits, val_bits, autoTypeInfo, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_push_in_place(uint64_t list_bits,
-        uint64_t val_bits, ExceptionSink* xsink) try {
+        uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue list_val = fromBits(list_bits);
     if (list_val.getType() != NT_LIST) {
         xsink->raiseException("PUSH-ERROR",
@@ -7028,7 +7032,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_in_place(uint64_t list_bits,
     }
     qore_list_private::pushCanonical(*list_val.get<QoreListNode>(), fromBits(val_bits).refSelf(), xsink);
     return xsink && *xsink ? toBits(QoreValue()) : list_bits;
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 static uint64_t qore_rt_list_push_native_in_place_unchecked(uint64_t list_bits,
         QoreValue value) {
@@ -7050,7 +7054,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_bool_in_place_unchecked(
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits,
-        const char* element_type_path, ExceptionSink* xsink) try {
+        const char* element_type_path, ExceptionSink* xsink) {
     QoreValue list_val = fromBits(list_bits);
     QoreValue push_val = fromBits(val_bits);
     if (!list_val.isNothing()) {
@@ -7064,7 +7068,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits,
     }
 
     return qore_rt_list_push_impl(list_val, push_val, element_type, xsink);
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_switch_regex_match(uint64_t regex_case_ptr, uint64_t switch_val_bits, ExceptionSink* xsink) {
     const CaseNodeRegex* regex_case = reinterpret_cast<const CaseNodeRegex*>(regex_case_ptr);
@@ -9126,7 +9130,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // (e.g. softlist<bool> → list<bool>, not list<auto>)
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
-        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+        // the new list is released if the element cannot be stored (qore#7466)
+        ReferenceHolder<QoreListNode> new_l_holder(new QoreListNode(elemTI ? elemTI : autoTypeInfo), xsink);
+        QoreListNode* new_l = *new_l_holder;
         // a gap before the first element of a new list whose element type does not take NOTHING: setEntry() refuses
         // it (qore#6435)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -9137,7 +9143,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             QoreTypeInfo::acceptAssignment(vti,
                 "<lvalue>", entry, xsink, QLVTS_List);
         }
-        if (!*xsink) {
+        // the list is grown before it takes the element, which memory that cannot be allocated leaves to be released
+        // here (qore#7466)
+        if (!*xsink && !qore_list_private::get(*new_l)->reserve(static_cast<size_t>(index) + 1, xsink)) {
             new_l->setEntry(index, entry, xsink);
         } else {
             entry.discard(xsink);
@@ -9146,10 +9154,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
         }
         if (*xsink) {
-            new_l->deref(xsink);
             return toBits(QoreValue());
         }
-        new_l->deref(nullptr);
     }
     return val_bits;
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
@@ -9232,7 +9238,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         LocalVar* var = ctx->locals[local_slot];
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
-        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+        // the new list is released if the element cannot be stored (qore#7466)
+        ReferenceHolder<QoreListNode> new_l_holder(new QoreListNode(elemTI ? elemTI : autoTypeInfo), xsink);
+        QoreListNode* new_l = *new_l_holder;
         // a gap before the first element of a new list whose element type does not take NOTHING: setEntry() refuses
         // it (qore#6435)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -9243,7 +9251,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             QoreTypeInfo::acceptAssignment(vti,
                 "<lvalue>", entry, xsink, QLVTS_List);
         }
-        if (!*xsink) {
+        // the list is grown before it takes the element, which memory that cannot be allocated leaves to be released
+        // here (qore#7466)
+        if (!*xsink && !qore_list_private::get(*new_l)->reserve(static_cast<size_t>(index) + 1, xsink)) {
             new_l->setEntry(index, entry, xsink);
         } else {
             entry.discard(xsink);
@@ -9252,10 +9262,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
         }
         if (*xsink) {
-            new_l->deref(xsink);
             return toBits(QoreValue());
         }
-        new_l->deref(nullptr);
     }
     return val_bits;
 } QORE_RT_CATCH_ALLOCATION_FAILURE(0)
@@ -11795,7 +11803,7 @@ static __attribute__((noinline)) uint64_t qore_rt_string_append_converted(QoreVa
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
-        uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) try {
+        uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     if (left.isNullOrNothing()) {
@@ -11844,10 +11852,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         return toBits(QoreValue());
     }
     return toBits(QoreValue(result.release()));
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
-        uint64_t* owner, uint64_t* cache, uint64_t right_bits, ExceptionSink* xsink) try {
+        uint64_t* owner, uint64_t* cache, uint64_t right_bits, ExceptionSink* xsink) {
     uint64_t left_bits = *owner;
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
@@ -11901,10 +11909,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     *cache = result_bits;
     left.discard(nullptr);
     return result_bits;
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
-        uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) try {
+        uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
     // the IR analysis marks an append in place only for a local freshly assigned a string node, never an enum value,
@@ -11929,7 +11937,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
         left_string->concat(*right_string, xsink);
     }
     return xsink && *xsink ? toBits(QoreValue()) : left_bits;
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 // Multi-string concatenation - concatenates N strings in a single pass
 // This is more efficient than chaining AddString operations for a + b + c + d patterns
@@ -13619,11 +13627,8 @@ static void execJITWithDeopt(std::optional<QoreJITStackLocation>& frame,
         // fast-call boundary so the normal cleanup path below still runs for
         // self, args, body locals, runtime location, and gate state.
     } catch (const std::bad_alloc&) {
-        // memory that the called code needed could not be allocated: the call fails with a Qore exception, which the
-        // caller can catch, and the cleanup below runs (qore#7466); every exec_fn runs its native code here
-        // (UserVariantBase::execCachedFunction() has no handler of its own) or in the IR interpreter, which handles it
-        qore_raise_compiled_code_allocation_failure(xsink);
-        result_bits = 0;
+        // native frames were left without their cleanup: the process ends (qore#7466)
+        qore_native_allocation_failure();
     }
 
     // Check for JIT guard failure or recompilation invalidation requesting deopt to AST; the check is also taken
@@ -16402,8 +16407,8 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     } catch (const std::bad_alloc&) {
-                        qore_raise_compiled_code_allocation_failure(&obe_xsink);
-                        rv_bits = 0;
+                        // native frames were left without their cleanup: the process ends (qore#7466)
+                        qore_native_allocation_failure();
                     }
                     fromBits(rv_bits).discard(&obe_xsink);
                 } else {
@@ -16421,8 +16426,8 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     } catch (const QoreJITException&) {
                         rv_bits = 0;
                     } catch (const std::bad_alloc&) {
-                        qore_raise_compiled_code_allocation_failure(&obe_xsink);
-                        rv_bits = 0;
+                        // native frames were left without their cleanup: the process ends (qore#7466)
+                        qore_native_allocation_failure();
                     }
                     fromBits(rv_bits).discard(&obe_xsink);
                     if (hf) {
@@ -18151,7 +18156,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_mode(
 // documented in QoreIRInterpreter.h
 QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
         LVCompoundOp compound_op, ValueHolder& rhs_holder,
-        ExceptionSink* xsink) try {
+        ExceptionSink* xsink) {
     const QoreValue rhs = *rhs_holder;
     QoreValue res;
     switch (compound_op) {
@@ -18268,7 +18273,7 @@ QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
         }
     }
     return res;
-} QORE_RT_CATCH_ALLOCATION_FAILURE(QoreValue())
+}
 
 QoreValue qore_compound_assign_value(LVCompoundOp op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
@@ -18326,13 +18331,13 @@ static uint64_t qore_rt_lv_path_compound_impl(QoreIRLValuePathInstruction* inst,
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
-        uint64_t rhs_bits, ExceptionSink* xsink) try {
+        uint64_t rhs_bits, ExceptionSink* xsink) {
     if (*xsink) {
         return toBits(QoreValue());
     }
     ValueHolder rhs_holder(fromBits(rhs_bits).refSelf(), xsink);
     return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 //! Applies a compound assignment to an lvalue path, taking over the caller's reference to the value
 /** As qore_rt_lv_path_compound(), except that the value's reference passes to this function in every case, as with
@@ -18342,14 +18347,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
 */
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_consume(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
-        uint64_t rhs_bits, ExceptionSink* xsink) try {
+        uint64_t rhs_bits, ExceptionSink* xsink) {
     // owns the value from here on, whatever happens
     ValueHolder rhs_holder(fromBits(rhs_bits), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
     return qore_rt_lv_path_compound_impl(inst, dyn_vals, rhs_holder, xsink);
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 //! Applies a compound assignment to a member of self; the value's reference is held by \a rhs_holder
 static uint64_t qore_rt_self_member_compound_impl(const char* member_name, int32_t compound_op,
@@ -18369,13 +18374,13 @@ static uint64_t qore_rt_self_member_compound_impl(const char* member_name, int32
 
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound(
         const char* member_name, int32_t compound_op, uint64_t rhs_bits,
-        ExceptionSink* xsink) try {
+        ExceptionSink* xsink) {
     if (*xsink) {
         return toBits(QoreValue());
     }
     ValueHolder rhs_holder(fromBits(rhs_bits).refSelf(), xsink);
     return qore_rt_self_member_compound_impl(member_name, compound_op, rhs_holder, xsink);
-} QORE_RT_CATCH_ALLOCATION_FAILURE(0)
+}
 
 //! As qore_rt_self_member_compound(), taking over the caller's reference to the value; see
 //! qore_rt_lv_path_compound_consume()
@@ -21293,10 +21298,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         try {
             result_bits = qore_aot_call_body(self_fn, ctx, xsink);
         } catch (const std::bad_alloc&) {
-            // memory that the called code needed could not be allocated: the call fails with a Qore exception, which
-            // the caller can catch (qore#7466)
-            qore_raise_compiled_code_allocation_failure(xsink);
-            result_bits = 0;
+            // native frames were left without their cleanup: the process ends (qore#7466)
+            qore_native_allocation_failure();
         }
     }
 
@@ -26137,8 +26140,8 @@ QoreValue qore_run_background_helper(const QoreBackgroundHelperCode& code, Excep
         } catch (const QoreJITException&) {
             result_bits = 0;
         } catch (const std::bad_alloc&) {
-            qore_raise_compiled_code_allocation_failure(xsink);
-            result_bits = 0;
+            // native frames were left without their cleanup: the process ends (qore#7466)
+            qore_native_allocation_failure();
         }
         // a helper is compiled without speculative guards, so it never requests a deoptimization; there is no other
         // tier to run it on

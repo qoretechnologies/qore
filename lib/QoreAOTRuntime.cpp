@@ -13044,8 +13044,8 @@ static void runAOTModuleDelClosure(const std::string& mod_name, const std::strin
             } catch (const QoreJITException&) {
                 // xsink is already populated at the raise site
             } catch (const std::bad_alloc&) {
-                // memory that the native code needed could not be allocated (qore#7466)
-                qore_raise_compiled_code_allocation_failure(&xsink);
+                // native frames were left without their cleanup: the process ends (qore#7466)
+                qore_native_allocation_failure();
             }
             for (int k = instantiated - 1; k >= 0; --k) {
                 LocalVar* lv = body_locals[k];
@@ -14238,8 +14238,8 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         } catch (const QoreJITException&) {
             raw_result = 0;
         } catch (const std::bad_alloc&) {
-            qore_raise_compiled_code_allocation_failure(&init_xsink);
-            raw_result = 0;
+            // native frames were left without their cleanup: the process ends (qore#7466)
+            qore_native_allocation_failure();
         }
         set_module_context_path(old_path);
         set_module_context_name(old_name);
@@ -14697,8 +14697,8 @@ static int executeInitFunctions(
                     } catch (const QoreJITException&) {
                         raw_result = 0;
                     } catch (const std::bad_alloc&) {
-                        qore_raise_compiled_code_allocation_failure(&xsink);
-                        raw_result = 0;
+                        // native frames were left without their cleanup: the process ends (qore#7466)
+                        qore_native_allocation_failure();
                     }
                 }
                 for (int k = instantiated - 1; k >= 0; --k) {
@@ -14713,8 +14713,8 @@ static int executeInitFunctions(
                 } catch (const QoreJITException&) {
                     raw_result = 0;
                 } catch (const std::bad_alloc&) {
-                    qore_raise_compiled_code_allocation_failure(&xsink);
-                    raw_result = 0;
+                    // native frames were left without their cleanup: the process ends (qore#7466)
+                    qore_native_allocation_failure();
                 }
             }
         }  // end shadow-context scope (init_ctx_helper destroyed here)

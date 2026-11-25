@@ -770,6 +770,21 @@ int QoreListNode::push(QoreValue val, ExceptionSink* xsink) {
     return priv->pushNative(val, xsink);
 }
 
+int qore_list_private::growOrRaise(size_t num, ExceptionSink* xsink) {
+    if (!xsink) {
+        grow(num);
+        return 0;
+    }
+    try {
+        grow(num);
+    } catch (const std::bad_alloc&) {
+        // the list keeps its entries (see grow())
+        qore_raise_allocation_failure(xsink, "the growth of a list");
+        return -1;
+    }
+    return 0;
+}
+
 int qore_list_private::pushCanonical(QoreListNode& list, QoreValue val, ExceptionSink* xsink) {
     if (list.priv->checkValid(xsink)) {
         // the value is owned by the list whatever the outcome, so a rejected value is released here

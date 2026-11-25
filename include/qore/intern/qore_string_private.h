@@ -555,6 +555,22 @@ public:
         }
     }
 
+    //! grows the string to hold \a i bytes, as check_char() does; memory that cannot be allocated raises
+    //! MEMORY-ALLOCATION-ERROR in \a xsink and returns -1, or, with no sink, fails with std::bad_alloc; the string is
+    //! then unchanged (qore#7466)
+    DLLLOCAL int check_char(size_t i, ExceptionSink* xsink) {
+        if (view_parent) {
+            materialize();
+        }
+        if (__builtin_expect(i >= allocated, 0)) {
+            return growOrRaise(i, xsink);
+        }
+        return 0;
+    }
+
+    //! the slow path of check_char(size_t, ExceptionSink*) (qore#7466)
+    DLLLOCAL int growOrRaise(size_t i, ExceptionSink* xsink) __attribute__((noinline, cold));
+
     //! grows the string to hold \a i bytes, as check_char() does, without ending the process if the memory cannot be
     //! allocated
     /** @return 0 for OK, -1 if the memory could not be allocated; the string is then unchanged

@@ -31,7 +31,6 @@
     information.
 */
 
-#include <exception>
 #include <qore/Qore.h>
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/JITRuntime.h"
@@ -4410,36 +4409,6 @@ void update_context_stack(Context* cstack) {
     td->context_stack = cstack;
 }
 
-bool qore_native_frames_left(const void* boundary) {
-    ThreadData* td = thread_data.get();
-    if (!td) {
-        return false;
-    }
-    // the frames that native code pushes on the thread's call stack are in the storage of their native frames
-    // (qore_rt_push_native_call_frame()): if the current location is in the part of the thread's stack below the
-    // boundary, which the exception has left, a native frame was left without popping it; the location is compared
-    // by its address only, as the memory of the frames left can already be overwritten
-    uintptr_t loc = reinterpret_cast<uintptr_t>(td->current_stack_location.load(std::memory_order_relaxed));
-    uintptr_t top = reinterpret_cast<uintptr_t>(boundary);
-    if (!loc || loc >= top) {
-        return false;
-    }
-#if defined(QORE_MANAGE_STACK) && defined(STACK_DIRECTION_DOWN)
-    // the lowest address of the thread's stack: the limit leaves the guard (and the initial thread's extra guard)
-    // below it
-    if (!td->stack_limit) {
-        // a thread without a stack limit runs no Qore code
-        return false;
-    }
-    size_t guard = QORE_STACK_GUARD + QORE_PRIMARY_THREAD_EXTRA_STACK_GUARD;
-    uintptr_t bottom = td->stack_limit > guard ? td->stack_limit - guard : 0;
-#else
-    // 8 MB below the boundary
-    uintptr_t bottom = top > (8u << 20) ? top - (8u << 20) : 0;
-#endif
-    return loc >= bottom;
-}
-
 // only called from the current thread, no locking needed
 const QoreStackLocation* get_runtime_stack_location() {
     return thread_data.get()->current_stack_location.load(std::memory_order_relaxed);
@@ -4547,11 +4516,8 @@ static void publish_popped_stack_location(ThreadData* td, const QoreStackLocatio
         // last-in, first-out: this must restore the current location's successor, or push a location already linked
         // to it (RuntimeConfigStackHelper), or leave it as it is.  A location destroyed while another one still
         // links to it would be reachable by a walk without any pop having waited for that walk.
-        // not while a C++ exception unwinds the frames: a std::bad_alloc that leaves frames of native code leaves
-        // the frames that they pushed, which are not read (see qore_native_frames_left(); qore#7466)
         const QoreStackLocation* cur = td->current_stack_location.load(std::memory_order_relaxed);
-        assert(!cur || std::uncaught_exceptions() || stack_loc == cur || stack_loc == cur->getNext()
-            || (stack_loc && stack_loc->getNext() == cur));
+        assert(!cur || stack_loc == cur || stack_loc == cur->getNext() || (stack_loc && stack_loc->getNext() == cur));
     }
 #endif
     if (stack_walk_heavy_barrier) {

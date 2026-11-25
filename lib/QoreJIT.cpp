@@ -2893,9 +2893,8 @@ bool QoreJIT::executeWithFallback(const QoreIRFunction& func, QoreValue& return_
             try {
                 result_bits = fn(xsink);
             } catch (const std::bad_alloc&) {
-                // memory that the native code needed could not be allocated: the call fails (qore#7466)
-                qore_raise_compiled_code_allocation_failure(xsink);
-                result_bits = 0;
+                // native frames were left without their cleanup: the process ends (qore#7466)
+                qore_native_allocation_failure();
             }
 
             // Reconstruct QoreValue from NaN-boxed bits

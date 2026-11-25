@@ -378,8 +378,7 @@ struct qore_list_private {
         if (stripVal(holder, xsink)) {
             return -1;
         }
-        pushIntern(holder.release());
-        return 0;
+        return pushHeld(holder, xsink);
     }
 
     DLLLOCAL int push(QoreValue val, ExceptionSink* xsink) {
@@ -392,8 +391,7 @@ struct qore_list_private {
         if (checkVal(holder, nullptr, xsink, policy)) {
             return -1;
         }
-        pushIntern(holder.release());
-        return 0;
+        return pushHeld(holder, xsink);
     }
 
     //! Public-list mutation checks with a source-bound conversion entry.
@@ -406,8 +404,7 @@ struct qore_list_private {
     DLLLOCAL int pushNative(QoreValue val, ExceptionSink* xsink) {
         ValueHolder holder(val, xsink);
         if (checkValNative(holder, xsink)) return -1;
-        pushIntern(holder.release());
-        return 0;
+        return pushHeld(holder, xsink);
     }
 
     DLLLOCAL int mergeNative(const QoreListNode* list, ExceptionSink* xsink) {
@@ -415,7 +412,9 @@ struct qore_list_private {
         if (checkValid(xsink)) {
             return -1;
         }
-        reserve(length + list->size());
+        if (reserve(length + list->size(), xsink)) {
+            return -1;
+        }
         ConstListIterator i(list);
         while (i.next()) {
             if (pushNative(i.getReferencedValue(), xsink)) return -1;
@@ -435,8 +434,7 @@ struct qore_list_private {
         if (checkVal(holder, vtype, xsink)) {
             return -1;
         }
-        pushIntern(holder.release());
-        return 0;
+        return pushHeld(holder, xsink);
     }
 
     DLLLOCAL int merge(const QoreListNode* list, ExceptionSink* xsink) {
@@ -444,7 +442,9 @@ struct qore_list_private {
         if (checkValid(xsink)) {
             return -1;
         }
-        reserve(length + list->size());
+        if (reserve(length + list->size(), xsink)) {
+            return -1;
+        }
         ConstListIterator i(list);
         while (i.next()) {
             if (push(i.getReferencedValue(), xsink))
@@ -458,7 +458,9 @@ struct qore_list_private {
         if (checkValid(xsink)) {
             return -1;
         }
-        reserve(length + list->size());
+        if (reserve(length + list->size(), xsink)) {
+            return -1;
+        }
         ConstListIterator i(list);
         size_t count = 0;
         while (i.next()) {
@@ -519,14 +521,30 @@ struct qore_list_private {
         initEntry(length, val);
     }
 
-    //! pushes the value of the holder, which keeps it if the list cannot grow (std::bad_alloc; qore#7466)
-    /** Not used by push(), whose callers are on the path of every list that code makes: holding the value until it is
-        stored adds instructions to each push
+    //! pushes the value of the holder; memory that cannot be allocated raises MEMORY-ALLOCATION-ERROR in \a xsink (if
+    //! there is one), leaves the list unchanged and releases the value with the holder (qore#7466)
+    /** The storage is grown before the value is taken from the holder, by the same test that pushIntern() makes, which
+        the compiler merges with it: the push that does not grow the list is unchanged
     */
-    DLLLOCAL void pushIntern(ValueHolder& holder) {
-        initEntry(length, *holder);
-        holder.release();
+    DLLLOCAL int pushHeld(ValueHolder& holder, ExceptionSink* xsink) {
+        if (__builtin_expect(length + 1 >= allocated, 0) && growOrRaise(length + 1, xsink)) {
+            return -1;
+        }
+        pushIntern(holder.release());
+        return 0;
     }
+
+    //! grows the storage for \a num entries, as reserve() does; memory that cannot be allocated raises
+    //! MEMORY-ALLOCATION-ERROR in \a xsink and returns -1, or, with no sink, fails with std::bad_alloc (qore#7466)
+    DLLLOCAL int reserve(size_t num, ExceptionSink* xsink) {
+        if (num < length || num < allocated) {
+            return 0;
+        }
+        return growOrRaise(num, xsink);
+    }
+
+    //! the slow path of pushHeld() and reserve(): grows the storage for \a num entries (qore#7466)
+    DLLLOCAL int growOrRaise(size_t num, ExceptionSink* xsink) __attribute__((noinline, cold));
 
     DLLLOCAL size_t checkOffset(ptrdiff_t offset) {
         if (offset < 0) {
