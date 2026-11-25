@@ -6219,6 +6219,10 @@ bool AsyncIoControllerPriv::cancelByKeyOnAllThreads(const std::string& uh, Excep
     bool rv = !kept_pinfos.empty();
     if (!kept_pinfos.empty()) {
         cancelTakenSubmits(kept_pinfos, uh, xsink);
+        // a child that a cancellation forked does not wait for the parent's threads (qore#7224)
+        if (forked()) {
+            return rv;
+        }
     }
     if (!completion) {
         return rv;
@@ -6493,6 +6497,10 @@ int AsyncIoControllerPriv::cancelByOwnerIntern(const std::string& owner_str, con
     if (!direct_pinfos.empty()) {
         // Deliver cancel results directly (I/O thread — we own the cache)
         cancelTakenSubmits(direct_pinfos, std::string(), xsink);
+        // a child that a cancellation forked does not take the controller's locks (qore#7224)
+        if (forked()) {
+            return count;
+        }
     }
 
     // Check autostop
@@ -6654,7 +6662,14 @@ size_t AsyncIoControllerPriv::cancelModuleCleanupUncounted(bool deadline, std::v
     }
     for (auto& pinfo : cancel_pinfos) {
         doCancelIntern(pinfo, xsink);
+        // a child that an abort() or a destructor forked does not touch the parent's operations (qore#7224)
+        if (forked()) {
+            return rv;
+        }
         pinfo.cleanup(xsink);
+        if (forked()) {
+            return rv;
+        }
     }
     return rv;
 }
@@ -6778,6 +6793,11 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     // is about to be torn down by the program's class-cleanup path (which
     // would crash in the worker's deref sequence at workerLoop+0x3c6).
     mark_program(xsink);
+    // the mark releases the items that it drops, whose destructors can fork: the child does not go on with the
+    // cancellation, which waits for the parent's threads and takes the controller's locks (qore#7224)
+    if (forked()) {
+        return;
+    }
 
     // Cancel cache operations whose callbacks belong to this program.
     // The cache is I/O-thread-only state, so we must send a synchronous command
@@ -7049,6 +7069,11 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
             // the Program's other operations are, and not after the Program is torn down (qore#6703); a dispatcher
             // created since the first mark is marked before the wait, so that no new step of the Program starts
             mark_program(xsink);
+            // the mark releases the items that it drops, whose destructors can fork: the child does not go on with the
+            // cancellation, which waits for the parent's threads and takes the controller's locks (qore#7224)
+            if (forked()) {
+                return;
+            }
 #ifdef DEBUG
             // a worker sends a step's result before it leaves the Program; a test that holds the result lets it go
             // now, as nothing else can end this wait; holding ends first, so that a step that ends later is not held
@@ -7101,6 +7126,11 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     // drains any items that were enqueued onto the lazily-created dispatcher
     // before the I/O thread observed the original mark.
     mark_program(xsink);
+    // the mark releases the items that it drops, whose destructors can fork: the child does not go on with the
+    // cancellation, which waits for the parent's threads and takes the controller's locks (qore#7224)
+    if (forked()) {
+        return;
+    }
 
     // Deliver cancel results while program type info is still valid.
     // The cleanup callback runs BEFORE ptid is set, so call_dispatcher
@@ -7117,6 +7147,11 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     ExceptionSink op_xsink;
     for (auto& pinfo : cancel_pinfos) {
         doCancelIntern(pinfo, &op_xsink);
+        // a child that the abort() forked does not release the parent's operation (qore#7224)
+        if (forked()) {
+            held_exceptions.add(op_xsink);
+            return;
+        }
         pinfo.cleanup(&op_xsink);
         // a forked child has no dispatcher or locks of its own, and does not cancel the parent's operations
         const bool in_child = forked();
@@ -11752,8 +11787,16 @@ void AsyncIoControllerPriv::cancelTakenSubmits(std::vector<PollInfo>& pinfos, co
     ExceptionSink op_xsink;
     for (auto& pinfo : pinfos) {
         doCancelIntern(pinfo, &op_xsink);
+        // a child that an abort() or a destructor forked does not touch the parent's operations (qore#7224)
+        if (forked()) {
+            held_exceptions.add(op_xsink);
+            return;
+        }
         pinfo.cleanup(&op_xsink);
         held_exceptions.add(op_xsink);
+        if (forked()) {
+            return;
+        }
     }
     pinfos.clear();
     if (!key.empty()) {
@@ -12026,6 +12069,10 @@ void AsyncIoControllerPriv::cancelHandedBack(PollInfo& pinfo, bool inline_on_com
         log(QORE_LOG_LEVEL_ERROR, "out of memory canceling a %s operation",
             pinfo.spop_obj ? pinfo.spop_obj->getClassName() : "poll");
     }
+    // a child that the abort() or the inline onComplete() forked does not release the parent's operation (qore#7224)
+    if (forked()) {
+        return;
+    }
     QoreModuleCleanupCountedWorkScope release_counted(cleanup_work, &pinfo.owner);
     pinfo.cleanup(xsink);
 }
@@ -12079,6 +12126,13 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         // cleanup canceled cannot start new asynchronous work (see checkModuleCleanupNewWork(), qore#7027)
         ModuleCleanupAsyncCallbackHelper canceled_work(async_io_module_cleanup_canceled(pinfo.sandbox_ctx));
         callAbort(pinfo.spop_obj, xsink);
+        // a child that the abort() forked does not touch the controller's state, whose locks can be held by threads
+        // that do not exist in it (see forked(), qore#7224): the operation belongs to the parent
+        if (forked()) {
+            pinfo.abort_called = true;
+            pinfo.completion_delivered = true;
+            return;
+        }
         // the streams that the abort ended are told, as after a poll step: a listener of a stream (a WebSocket or
         // server-sent events over HTTP/2 or HTTP/3) learns that its connection is gone at once, not at its next
         // heartbeat; no further step runs for a canceled operation (qoretechnologies/qore#7241)
