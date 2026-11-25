@@ -207,4 +207,80 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
     }
 }
 
+#! creates a Program of the given kind in the given mode that runs the given code
+Program sub tenant(bool restricted, bool sandboxed, Qore::ExecMode exec_mode, string code, string label) {
+    Program p(PO_MODERN);
+    p.setExecMode(exec_mode);
+    if (sandboxed) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        p.setSandboxManager(sm);
+    }
+    map p.loadModule($1), Modules;
+    if (restricted) {
+        p.setParseOptions(PO_NO_EXTERNAL_INFO);
+    }
+    p.parse(code, label);
+    return p;
+}
+
+#! discards the in-memory index state, so that the next lookup reads the published index first
+sub reset_index() {
+    ProviderIndexUtil::setBuildMode(True);
+    ProviderIndexUtil::setBuildMode(False);
+}
+
+# the test hook of the files that sandboxed code reads (debug builds only): code restricted from external
+# information may not set it, so it can neither get the paths of the index files nor hide the published index from
+# a sandboxed tenant that reads it first
+bool have_hook = (select Class::forName("ProviderIndexUtil::ProviderIndexUtil").getStaticVariants(),
+    $1.getMethod().getName() == "setIndexFileOpenTestHook").size() > 0;
+string hook_code = "our list<string> seen = (); our auto res;
+try {
+    ProviderIndexUtil::setIndexFileOpenTestHook(sub (string f) { seen += f; throw \"Q7611\", \"hidden\"; });
+    res = \"set\";
+} catch (hash<ExceptionInfo> ex) {
+    res = ex.err;
+}";
+string reader_code = "our auto res;
+try { res = ProviderIndexUtil::tryGetAppInfo(\"" + App + "\").desc; } catch (hash<ExceptionInfo> ex) { res = ex.err; }";
+# the claim of the modules of the indexed apps: code restricted from external information may not claim them, so
+# the host gets them
+string claim_code = "our auto res;
+try { res = ProviderIndexUtil::getAllAppModulesToLoad(); } catch (hash<ExceptionInfo> ex) { res = ex.err; }";
+
+foreach hash<auto> mode in (Modes.pairIterator()) {
+    string key = "tenants/" + mode.key;
+    if (!have_hook) {
+        push results, key + "/hook=skipped";
+        push results, key + "/hook_paths=skipped";
+        push results, key + "/sandboxed_lookup=skipped";
+    } else {
+        reset_index();
+        Program r = tenant(True, False, mode.value, hook_code, "restricted-hook");
+        r.run();
+        Program s = tenant(False, True, mode.value, reader_code, "sandboxed-reader");
+        s.run();
+        check(key + "/hook", "INVALID-FUNCTION-ACCESS", r.getGlobalVariable("res"));
+        check(key + "/hook_paths", (), r.getGlobalVariable("seen"));
+        check(key + "/sandboxed_lookup", AppInfo.desc, s.getGlobalVariable("res"));
+        # in case the hook was set
+        call_static_method("ProviderIndexUtil::ProviderIndexUtil", "setIndexFileOpenTestHook");
+    }
+}
+
+# an index whose app has a module to load
+const ClaimModule = "Q7611NoSuchModule";
+maps.appmap{App} = {ClaimModule: True};
+publish();
+foreach hash<auto> mode in (Modes.pairIterator()) {
+    string key = "tenants/" + mode.key;
+    reset_index();
+    Program r = tenant(True, False, mode.value, claim_code, "restricted-claim");
+    r.run();
+    check(key + "/claim", "INVALID-FUNCTION-ACCESS", r.getGlobalVariable("res"));
+    check(key + "/host_claim", (ClaimModule,), ProviderIndexUtil::getAllAppModulesToLoad());
+}
+
 map printf("%s\n", $1), results;

@@ -1947,11 +1947,18 @@ list<hash<auto>> actions = map ProviderIndexUtil::tryGetActionMetadata($1.app, $
     }
 
     #! Returns a list of all app modules that have not been returned by a call to this method yet and are not loaded
-    /** This reserves the pending modules for the caller. Callers restricted from process control and sandboxed callers
-        cannot mark the list as processed. Individual app lookups load their indexed dependencies on demand.
+    /** This reserves the pending modules for the caller: a later call returns nothing, so only the host's code may
+        claim them (see @ref providerindexutil_published_index). Callers restricted from process control cannot call
+        it. Individual app lookups load their indexed dependencies on demand.
+
+        @throw PROVIDER-INDEX-REGISTRATION-DENIED the calling code is sandboxed
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information; see
+        @ref providerindexutil_published_index
     */
     static *list<string> getAllAppModulesToLoad() [dom=PROCESS_CONTROL] {
-        ProviderIndexUtil::checkChange("claim the pending app modules of");
+        # the claim hides the pending modules from the host's later call (qore#6747, qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::getAllAppModulesToLoad",
+            "claim the pending app modules of");
         if (apps_loaded) {
             return;
         }
@@ -4971,10 +4978,15 @@ qore -l ProviderIndexUtil -e 'ProviderIndexUtil::dumpIndexYaml(NOTHING, NOTHING,
 
         @throw PERMISSION-DENIED the caller is restricted with @ref Qore::PO_NO_PROCESS_CONTROL, or a sandbox
         governs it
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information: the hook gets the paths of
+        the index files and decides whether sandboxed code reads the published index (see
+        @ref providerindexutil_published_index)
     */
     static setIndexFileOpenTestHook(*code hook) [dom=PROCESS_CONTROL] {
-        # the index and its configuration are process-wide (qore#6747)
-        ProviderIndexUtil::checkChange("set the test hook of");
+        # the index and its configuration are process-wide (qore#6747); the hook gets the paths of the index files
+        # and can hide the published index from sandboxed readers (qore#7611)
+        ProviderIndexUtil::checkPublishedIndexChange("ProviderIndexUtil::setIndexFileOpenTestHook",
+            "set the test hook of");
         if (Program::getCallerCapabilityMask() & PO_NO_PROCESS_CONTROL) {
             throw "PERMISSION-DENIED", "cannot set an index test hook from a context with restricted process control";
         }

@@ -36,6 +36,9 @@ class ProviderIndexWriteIntegrityTest inherits QUnit::Test {
         const Cases = 17;
         #! the checks of each Program that may change the index: the restored index
         const UnrestrictedCases = 1;
+        #! the checks of the tenants in each execution mode: a restricted tenant's test hook and a sandboxed reader,
+        #! and a restricted tenant's claim of the app modules and the host's
+        const TenantCases = 5;
     }
 
     private {
@@ -77,9 +80,12 @@ class ProviderIndexWriteIntegrityTest inherits QUnit::Test {
     #! workers that the worker's Programs run without a batch file, which they write to standard error
     private checkOutput(string out, string label) {
         list<string> lines = select out.split("\n"), $1 =~ /^[-a-z]+\/[a-z]+\/[a-z_]+=/;
-        list<string> failed = select lines, !regex($1, "=ok$");
+        # the checks of the test hook are skipped in a build without it (not a debug build)
+        list<string> failed = select lines, !regex($1, "=ok$")
+            && !regex($1, "^tenants/[a-z]+/(hook|hook_paths|sandboxed_lookup)=skipped$");
         assertEq((), failed, label + ": failed checks");
-        assertEq(Modes * (Kinds * Cases + UnrestrictedCases), lines.size(), label + ": number of checks");
+        assertEq(Modes * (Kinds * Cases + UnrestrictedCases + TenantCases), lines.size(),
+            label + ": number of checks");
     }
 
     testInterpreter() {

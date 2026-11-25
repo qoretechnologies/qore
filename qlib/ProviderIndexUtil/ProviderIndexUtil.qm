@@ -164,6 +164,10 @@ if (!info.reloaded) {
       @ref ProviderIndexUtil::ProviderIndexUtil::addActionToCache() "addActionToCache()" and
       @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "removeCachedApp()", which replace or hide the
       indexed apps and actions for the process
+    - @ref ProviderIndexUtil::ProviderIndexUtil::getAllAppModulesToLoad() "getAllAppModulesToLoad()", which claims
+      the modules of the indexed apps once for the process, so that a later call by the host gets none
+    - \c setIndexFileOpenTestHook() (debug builds only), whose hook gets the paths of the index files and decides
+      whether sandboxed code reads the published index
 
     Such code still reads the index: its lookups, and
     @ref ProviderIndexUtil::ProviderIndexUtil::reloadIndex() "reloadIndex()", which reads the index that the host
@@ -225,7 +229,8 @@ if (*hash<ProviderIndexFailureInfo> failure = ProviderIndexUtil::tryGetActionFai
 
     @section providerindexutil_v1_2 ProviderIndexUtil v1.2
     - only code that may register process-wide functionality and read external information may write, replace or
-      hide the index that the host published, its directory, its build mode and its cached apps and actions (see
+      hide the index that the host published, its directory, its build mode and its cached apps and actions, or
+      claim the modules of its apps (see
       @ref providerindexutil_published_index; <a href="https://github.com/qoretechnologies/qore/issues/7611">issue
       7611</a>)
     - code restricted from external information gets no index directory, no path of an index file and no IDs of the
