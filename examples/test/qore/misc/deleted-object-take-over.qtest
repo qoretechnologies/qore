@@ -20,6 +20,10 @@
     dbg_hold_program_take_over() holds the take-over after the binding, and dbg_hold_object_cleanup() holds the
     deletion once it has freed the private data, so the test runs only in debug builds.  Before the private data was
     detached from the object with its lock held, the take-over read the freed private data in that window.
+
+    That old read shows only under a memory checker (valgrind or ASan): a plain run of the old code passes, as the
+    destructor of a Program object removes its private data entry before the private data is freed, so the read of
+    the freed data still finds no entry and gives the same exception.  Check a change to this code under valgrind.
 */
 class DeletedObjectTakeOverTest inherits QUnit::Test {
     public {
