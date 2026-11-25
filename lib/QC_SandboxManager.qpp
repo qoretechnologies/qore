@@ -34,6 +34,7 @@
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxPollOps.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/CallReferenceNode.h"
 
 // checks the network policy that applies to the calling code against every address of a TCP destination, as a
 // connection made here would be checked (qore#6745)
@@ -1702,6 +1703,57 @@ bool untrusted = SandboxManager::isFromRestrictedProgram(handler);
 */
 static bool SandboxManager::isFromRestrictedProgram(object obj) [flags=RET_VALUE_ONLY] {
     return qore_object_program_is_restricted(obj);
+}
+
+//! Returns @ref True if a sandbox that does not trust its code governs the code of the given closure or call reference
+/** As isFromRestrictedProgram() decides for an object: the code is restricted when the %Program whose code a call of it
+    runs is governed by a sandbox that does not trust its code (one that refuses uncontrolled APIs, see isRestricted()):
+    the %Program that defines a closure, that declares the class of the method that a method reference calls (the
+    object's class, which a call dispatches on), or the %Program of a function reference; or when the code that
+    created the closure or call reference was restricted so.  It is evaluated at each call, and fails closed: a
+    %Program whose sandboxes are gone, or whose sandboxes cannot be combined, is restricted.
+
+    Library code that hands data to code that another component registered with it, such as a request dispatcher that
+    calls the callbacks of an application, uses it to give restricted code only what it may see, also when trusted code
+    registered the callback; unlike isRestricted(), it does not depend on the code that is running.
+
+    A reference to builtin code, which has no %Program, is restricted only when restricted code created it.
+
+    It reveals only whether the code of a callable that the caller holds is restricted, so it is not restricted
+    itself.
+
+    @param c the closure or call reference
+
+    @return @ref True if a sandbox that does not trust its code governs the code of the closure or call reference
+
+    @par Example:
+    @code{.py}
+bool restricted = SandboxManager::isCodeFromRestrictedProgram(callback);
+    @endcode
+
+    @see isFromRestrictedProgram()
+
+    @since %Qore 3.0
+*/
+static bool SandboxManager::isCodeFromRestrictedProgram(code c) [flags=RET_VALUE_ONLY] {
+    if (qore_program_is_restricted(qore_call_reference_code_program(c))) {
+        return true;
+    }
+    // a closure or call reference that restricted code created is that code's
+    QoreSandboxContext* creation = qore_get_call_reference_provenance(c);
+    if (!creation) {
+        return false;
+    }
+    bool restricted = false;
+    for (QoreSandboxManager* sm : {creation->manager, creation->policy_manager, creation->provenance_manager,
+            creation->provenance_policy_manager}) {
+        if (sm && !sm->trustsUncontrolledApis()) {
+            restricted = true;
+            break;
+        }
+    }
+    creation->deref();
+    return restricted;
 }
 
 //! Returns the ID of the Program of the class of the given object if a sandbox governs it
