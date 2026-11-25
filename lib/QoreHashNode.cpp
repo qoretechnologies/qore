@@ -262,9 +262,7 @@ static_assert(sizeof(void*) != 8 || sizeof(qore_hash_member_map) == 24, "the key
 
 void qore_hash_member_map::reserve(size_t n) {
     if (n > bucket_count()) {
-        if (n > MaxBuckets) {
-            throw std::bad_alloc();
-        }
+        // rehash() refuses more than MaxBuckets
         rehash(bucketsFor(n));
     }
 }

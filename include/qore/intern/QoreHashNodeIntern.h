@@ -413,8 +413,7 @@ public:
     DLLLOCAL void clear() {
         delete[] buckets;
         buckets = nullptr;
-        mask = 0;
-        limit = 0;
+        mask_limit = 0;
         count = 0;
     }
 
@@ -434,10 +433,10 @@ public:
     */
     DLLLOCAL bool copyKind(const qore_hash_member_map& src) {
         assert(!count && buckets && src.buckets);
-        if (!src.limit) [[unlikely]] {
-            limit = 0;
+        if (!src.getLimit()) [[unlikely]] {
+            setLimit(0);
         }
-        return mask >= src.mask;
+        return getMask() >= src.getMask();
     }
 
     //! returns the index of the bucket of \a m, which is in the map (for debug functions)
@@ -458,33 +457,33 @@ public:
 private:
     HashMember** buckets = nullptr;
     size_t count = 0;
-    //! the mask: the number of buckets - 1, if the array is allocated; with the insert limit after the member count,
-    //! so that a new map is initialized with as many stores as before qore#7557, when the mask was a word of its own
-    uint32_t mask = 0;
-    //! the number of members from which an insert takes the slow path (qore#7557): the number of buckets in a map
-    //! that is not hardened, where the buckets grow then, and 0 in a map without buckets and in a hardened map, whose
-    //! inserts all take the slow path
-    uint32_t limit = 0;
+    //! the mask (the number of buckets - 1, if the array is allocated) in the low 32 bits and the insert limit in the
+    //! high 32 bits (getMask(), getLimit()): one word after the member count, so that a new map is initialized with
+    //! the same stores as before qore#7557, when the mask was a word of its own
+    /** the insert limit is the number of members from which an insert takes the slow path (qore#7557): the number
+        of buckets in a map that is not hardened, where the buckets grow then, and 0 in a map without buckets and in
+        a hardened map, whose inserts all take the slow path and whose searches are made by findSlow()
+    */
+    uint64_t mask_limit = 0;
 
     //! the mask: the number of buckets - 1, if the array is allocated
     DLLLOCAL uint32_t getMask() const {
-        return mask;
+        return static_cast<uint32_t>(mask_limit);
     }
 
     //! the insert limit
     DLLLOCAL uint32_t getLimit() const {
-        return limit;
+        return static_cast<uint32_t>(mask_limit >> 32);
     }
 
     //! sets the mask and the insert limit
     DLLLOCAL void setMaskLimit(uint32_t new_mask, uint32_t new_limit) {
-        mask = new_mask;
-        limit = new_limit;
+        mask_limit = static_cast<uint64_t>(new_mask) | (static_cast<uint64_t>(new_limit) << 32);
     }
 
     //! sets the insert limit
     DLLLOCAL void setLimit(uint32_t new_limit) {
-        limit = new_limit;
+        setMaskLimit(getMask(), new_limit);
     }
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
@@ -755,14 +754,15 @@ public:
             // again with its member hash (findCrossKind(), qore#7557)
             const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
                 qore_hash_lookup_key::stored_hash_t()));
-            if (!found) [[unlikely]] {
-                found = findCrossKind(*m, other);
-                if (!found) {
+            if (!found || !value_equal(m->val, found->val)) {
+                // a value that differs, or a key that is not found in a hash that is not hardened, is the result
+                if (found || hm.fastFind()) {
                     return false;
                 }
-            }
-            if (!value_equal(m->val, found->val)) {
-                return false;
+                found = findCrossKind(*m, other);
+                if (!found || !value_equal(m->val, found->val)) {
+                    return false;
+                }
             }
         }
         return true;
