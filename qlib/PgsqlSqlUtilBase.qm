@@ -1380,8 +1380,18 @@ alter table draft_guard add constraint fk_draft foreign key (draft_user) referen
 
 #! represents a PostgreSQL-specific check constraint
 public class PgsqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
+    private {
+        # A catalog object's src holds PostgreSQL's complete CHECK clause for existing callers.
+        *string catalog_expression;
+    }
+
     #! creates the constraint from the supplied arguments
-    constructor(string n, string n_src) : AbstractCheckConstraint(n, n_src) {
+    constructor(string n, string n_src, *string expression = NOTHING) : AbstractCheckConstraint(n, n_src) {
+        catalog_expression = expression;
+    }
+
+    string getDescriptionExpression() {
+        return catalog_expression ?? src;
     }
 
     #! returns a string that can be used to drop the constraint from the database
@@ -5837,45 +5847,39 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return new ForeignConstraints(rv);
     }
 
+    private bool supportsCheckDescriptionsImpl() {
+        return True;
+    }
+
     private Constraints getConstraintsImpl() {
-        # get check constraints
-        *hash qh = ds.select("select
-            c.conname as constraint_name,
-            case when c.condeferrable = 'f' then 0 else 1 end as is_deferrable,
-            case when c.condeferred = 'f' then 0 else 1 end as is_deferred,
-            t.relname as table_name,
-            array_to_string(c.conkey, ' ') as constraint_key,
-            case confupdtype
-                when 'a' then 'NO ACTION'
-                when 'r' then 'RESTRICT'
-                when 'c' then 'CASCADE'
-                when 'n' then 'SET NULL'
-                when 'd' then 'SET DEFAULT'
-            end as on_update,
-            case confdeltype
-                when 'a' then 'NO ACTION'
-                when 'r' then 'RESTRICT'
-                when 'c' then 'CASCADE'
-                when 'n' then 'SET NULL'
-                when 'd' then 'SET DEFAULT'
-            end as on_delete,
-            case confmatchtype
-                when 'u' then 'UNSPECIFIED'
-                when 'f' then 'FULL'
-                when 'p' then 'PARTIAL'
-            end as match_type,
-            t2.relname as references_table,
-            array_to_string(c.confkey, ' ') as fk_constraint_key,
-            pg_get_constraintdef(c.oid) as consrc
-        from pg_constraint c
-            left join pg_class t on c.conrelid = t.oid
-            left join pg_class t2 on c.confrelid = t2.oid
-            join pg_catalog.pg_namespace n on n.oid = t.relnamespace
-        where
-            c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, getRelationName());
+        # Read the predicate without the surrounding CHECK clause. Keep special checks together with the names of
+        # their columns, since dropping a column would implicitly remove its check.
+        int version = pgsql_get_server_version_num(ds);
+        string reason = "case when not c.conislocal or c.coninhcount > 0 then 'inherited' ";
+        if (version >= 90100) {
+            reason += "when not c.convalidated then 'NOT VALID' ";
+        }
+        if (version >= 90200) {
+            reason += "when c.connoinherit then 'NO INHERIT' ";
+        }
+        if (version >= 180000) {
+            reason += "when not c.conenforced then 'NOT ENFORCED' ";
+        }
+        *hash qh = ds.select("select c.conname as constraint_name, pg_catalog.pg_get_constraintdef(c.oid) as consrc, "
+            "pg_catalog.pg_get_expr(c.conbin, c.conrelid, true) as expression, " + reason + "end as preserve_reason, a.attname as column_name from pg_catalog.pg_constraint c "
+            "join pg_catalog.pg_class t on c.conrelid = t.oid join pg_catalog.pg_namespace n on n.oid = t.relnamespace "
+            "left join pg_catalog.pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey) "
+            "where c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, getRelationName());
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
-            rv.(row.constraint_name) = new PgsqlCheckConstraint(row.constraint_name, row.consrc);
+            reference<PgsqlCheckConstraint> ck = \rv{row.constraint_name};
+            if (!ck) {
+                ck = new PgsqlCheckConstraint(row.constraint_name, row.consrc, row.expression);
+                ck.preserve_reason = row.preserve_reason ?? NOTHING;
+            }
+            if (ck.preserve_reason && row.column_name) {
+                ck.catalog_columns += row.column_name;
+            }
         }
 
         Constraints c = new Constraints(rv);

@@ -5275,17 +5275,39 @@ group by p.index_name", schema.upr(), name.upr());
         return new ForeignConstraints(ch);
     }
 
+    private bool supportsCheckDescriptionsImpl() {
+        return True;
+    }
+
     private Constraints getConstraintsImpl() {
         if (!tablespace)
             setTableInfoIntern();
 
-        # get only user check constraints
-        *hash qh = ds.select("select constraint_name, search_condition, status from " + systemView("dba_constraints") + (dblink ? "@" + dblink : "") + " where owner = %v and table_name = %v and constraint_type = 'C' and generated != 'GENERATED NAME'", schema.upr(), name.upr());
+        string suffix = dblink ? "@" + dblink : "";
+        *hash qh = ds.select("select c.constraint_name, c.search_condition, c.status, c.validated, c.deferrable, "
+            "c.rely, cc.column_name from " + systemView("dba_constraints") + suffix + " c left join "
+            + systemView("dba_cons_columns") + suffix + " cc on c.owner = cc.owner and "
+            "c.constraint_name = cc.constraint_name where c.owner = %v and c.table_name = %v "
+            "and c.constraint_type = 'C' and c.generated != 'GENERATED NAME'", schema.upr(), name.upr());
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
-            if (!native_case)
-                row.constraint_name = row.constraint_name.lwr();
-            rv.(row.constraint_name) = new OracleCheckConstraint(row.constraint_name, row.search_condition, row.status == "ENABLED");
+            string cname = native_case ? row.constraint_name : row.constraint_name.lwr();
+            reference<OracleCheckConstraint> ck = \rv{cname};
+            if (!ck) {
+                ck = new OracleCheckConstraint(cname, row.search_condition, row.status == "ENABLED");
+                if (!ck.enabled) {
+                    ck.preserve_reason = "DISABLED";
+                } else if (row.validated == "NOT VALIDATED") {
+                    ck.preserve_reason = "NOVALIDATE";
+                } else if (row.deferrable == "DEFERRABLE") {
+                    ck.preserve_reason = "DEFERRABLE";
+                } else if (row.rely == "RELY") {
+                    ck.preserve_reason = "RELY";
+                }
+            }
+            if (ck.preserve_reason && row.column_name) {
+                ck.catalog_columns += native_case ? row.column_name : row.column_name.lwr();
+            }
         }
 
         Constraints c(rv);
