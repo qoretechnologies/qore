@@ -6897,6 +6897,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             bool handler_close, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # the run of the response's event source, if any
         *Priv::SseEventSourceRun sse_run = rv.sse_source;
+        # the setup of the connection of a handler of restricted code gets the request without its credentials
+        # (qore#7303)
+        hash<auto> h_cx = cx;
+        hash<auto> h_hdr = hdr;
+        if (request_helper.restricted_handler && handler) {
+            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                request_helper.platform_changes);
+            h_cx = filtered.cx;
+            h_hdr = filtered.hdr;
+        }
         # SSE response — set up async SSE connection via the I/O controller.
         # The write path depends on the HTTP version:
         # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
@@ -6962,7 +6972,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
-                            handler_sock, cx, hdr, cid, session_id, stream_id, wake_cb);
+                            handler_sock, h_cx, h_hdr, cid, session_id, stream_id, wake_cb);
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http3SseStream(handler_sock, session_id, stream_id,
                             wake_cb, True);
@@ -6980,7 +6990,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
-                            handler_sock, cx, hdr, cid, stream_id, wake_cb);
+                            handler_sock, h_cx, h_hdr, cid, stream_id, wake_cb);
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http2SseStream(handler_sock, stream_id, wake_cb, True);
                     }
@@ -7119,12 +7129,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                         setup_called = True;
                         call_object_method(handler, "setupAsyncSseConnectionForRequest", request_helper.handler_sock,
-                            cx, hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
+                            h_cx, h_hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
                     }
                 } else {
                     poll_op = sock_handler
                         ? call_object_method(handler, "setupAsyncSseConnection", http_handler_connection_socket(s),
-                            cx, hdr, cid)
+                            h_cx, h_hdr, cid)
                         # a handler that is not a socket handler gets the stream from the server, for its event
                         # source
                         : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
