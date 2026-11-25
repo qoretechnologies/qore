@@ -27,7 +27,12 @@ foreach bool enumerate in ((False, True)) {
     call_function("dbg_hold_deref_marked", "ProgramControl", held, release);
     background sub () {
         on_exit done.dec();
-        ProgramControl control = pgm.getProgram();
+        # the wrapper is released in a block of its own, so that its final release, which the hold above keeps in
+        # this thread until the main thread decrements release, has returned before done is decremented: the main
+        # thread then never deletes the counters while this thread still waits on one of them
+        {
+            ProgramControl control = pgm.getProgram();
+        }
     }();
     if (held.waitForZero(30s)) {
         throw "TEST-ERROR", "the final ProgramControl release did not reach the hold";

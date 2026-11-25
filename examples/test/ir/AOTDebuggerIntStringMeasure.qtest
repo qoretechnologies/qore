@@ -17,6 +17,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../TestInterpreter.qm
 
 %exec-class AOTDebuggerIntStringMeasureTest
 
@@ -92,7 +93,7 @@ foreach int value in ((-9223372036854775807 - 1, -1000, -1, 0, 1, 999, 1000, 922
     }
 
     constructor() : QUnit::Test("AOTDebuggerIntStringMeasureTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");

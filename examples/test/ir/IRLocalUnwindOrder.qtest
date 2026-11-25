@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../TestInterpreter.qm
 %exec-class LocalUnwindOrderTest
 
 #! Tests that an exception leaving a function destroys its object locals in reverse declaration order
@@ -17,9 +18,9 @@
 */
 class LocalUnwindOrderTest inherits QUnit::Test {
     private {
-        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string qore = realpath(TestInterpreter::qore_interpreter());
         string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
-        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string qcc = TestInterpreter::qcc_compiler() ?? libdir + "/qcc";
     }
 
     public {

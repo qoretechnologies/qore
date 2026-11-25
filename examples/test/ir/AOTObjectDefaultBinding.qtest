@@ -7,13 +7,14 @@
 %requires QUnit
 %requires FsUtil
 %requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
 %exec-class AOTObjectDefaultBindingTest
 
 class AOTObjectDefaultBindingTest inherits QUnit::Test {
     private {
-        string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
-        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? lib_dir + "/qcc";
         #! bounds each command so that a hang fails the test instead of stalling the run
         string timeout_prefix = timeoutPrefix(90);
     }

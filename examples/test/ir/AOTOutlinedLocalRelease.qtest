@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../TestInterpreter.qm
 %exec-class AOTOutlinedLocalReleaseTest
 
 /*  An outlined function-body helper (see design/aot-function-outlining.md) that removes, replaces or empties a local
@@ -15,9 +16,9 @@
 */
 class AOTOutlinedLocalReleaseTest inherits QUnit::Test {
     private {
-        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string qore = realpath(TestInterpreter::qore_interpreter());
         string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
-        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string qcc = TestInterpreter::qcc_compiler() ?? libdir + "/qcc";
 
         #! forces the outliner onto any function
         const ForceOutlining = "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=1 ";

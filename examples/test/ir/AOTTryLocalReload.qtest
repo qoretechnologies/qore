@@ -5,6 +5,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires ../TestInterpreter.qm
 %exec-class TryLocalReloadTest
 
 #! Tests the locals of try statements in functions with and without on_exit/on_error handlers
@@ -16,9 +17,9 @@
 */
 class TryLocalReloadTest inherits QUnit::Test {
     private {
-        string qore = realpath(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0]);
+        string qore = realpath(TestInterpreter::qore_interpreter());
         string libdir = realpath(ENV.QORE_LIBDIR ?? dirname(qore));
-        string qcc = ENV.QCC ?? libdir + "/qcc";
+        string qcc = TestInterpreter::qcc_compiler() ?? libdir + "/qcc";
     }
 
     constructor() : Test("try local reload", "1.0", \ARGV) {
