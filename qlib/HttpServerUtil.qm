@@ -3019,12 +3019,14 @@ class HttpRawRequestScope {
     /** @param cx the raw request context
         @param hdr the raw request header fields
         @param s the socket of the request, if any
-        @param trailer_keep the credential trailer fields that the code serving a filtered request gets: those that
-        the trusted options of the dispatched handler keep (see AbstractHttpRequestHandler::setRequestCredentialHeaders())
+        @param keep_for the code of the dispatch capability that reads the credential trailer fields that the options
+        of a handler keep (see AbstractHttpRequestHandler::setRequestCredentialHeaders())
+        @param handler the handler that the request is dispatched to: the code that serves a filtered request gets
+        the credential trailer fields that its trusted options keep; none without it (see trailerKeepFor())
 
         @throw HTTP-SERVER-ERROR @ref MaxDepth raw requests are current on the thread already
     */
-    constructor(hash<auto> cx, hash<auto> hdr, *Socket s, *hash<string, bool> trailer_keep) {
+    constructor(hash<auto> cx, hash<auto> hdr, *Socket s, *code keep_for, *AbstractHttpRequestHandler handler) {
         HttpRawRequestScope::dropInvalid();
         if (http_raw_requests.size() >= MaxDepth) {
             throw "HTTP-SERVER-ERROR", sprintf("more than %d requests cannot be dispatched in the dispatch of other "
@@ -3032,8 +3034,8 @@ class HttpRawRequestScope {
         }
         token = ++http_raw_request_seq;
         tid = gettid();
-        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "trailer_keep": trailer_keep, "token": token,
-            "state": state},);
+        http_raw_requests += ({"cx": cx, "hdr": hdr, "s": s, "keep_for": keep_for,
+            "keep_handlers": (keep_for && handler) ? (handler,) : NOTHING, "token": token, "state": state},);
         active = True;
     }
 
@@ -3068,6 +3070,23 @@ class HttpRawRequestScope {
     */
     static bool isConnectionSocket(*Socket s) {
         return exists s && !HttpRawRequestScope::isStreamView(s) && s.isOpen();
+    }
+
+    #! returns the credential trailer fields that the code serving a filtered request gets (qore#6843)
+    /** Computed when a filtered stream request is created, not when the request is dispatched: the fields that the
+        trusted options of the dispatched handler keep (AbstractHttpRequestHandler::setRequestCredentialHeaders());
+        none without a dispatched handler, and none if they cannot be read (fails closed)
+
+        @param raw the raw request, as current() gives it
+    */
+    static *hash<string, bool> trailerKeepFor(hash<auto> raw) {
+        if (!raw.keep_for || !raw.keep_handlers) {
+            return;
+        }
+        try {
+            return raw.keep_for(raw.keep_handlers[0]);
+        } catch (hash<ExceptionInfo> ex) {
+        }
     }
 
     #! registers the name of a class of the sockets of a request alone that a host gives (see isStreamView())
@@ -3242,15 +3261,9 @@ class HttpServerDispatchCapability {
             return;
         }
         # the credential trailer fields of a filtered request: from the trusted options of the dispatched handler,
-        # never from the header fields that the code creating a stream request gives it (fails closed: none)
-        *hash<string, bool> trailer_keep;
-        if (handler) {
-            try {
-                trailer_keep = trailer_keep_for(handler);
-            } catch (hash<ExceptionInfo> ex) {
-            }
-        }
-        return new HttpRawRequestScope(cx, hdr, s, trailer_keep);
+        # never from the header fields that the code creating a stream request gives it; read only when a filtered
+        # stream request is created (see HttpRawRequestScope::trailerKeepFor())
+        return new HttpRawRequestScope(cx, hdr, s, trailer_keep_for, handler);
     }
 
     #! Registers a class of the sockets of a request alone that the host gives the handlers that it calls
@@ -3573,7 +3586,7 @@ public class AbstractStreamRequest {
         # object gives, which restricted code chooses
         if (restricted || !raw_args) {
             filter_trailers = True;
-            trailer_keep = raw.trailer_keep;
+            trailer_keep = HttpRawRequestScope::trailerKeepFor(raw);
         }
         # what subclasses read: as the code that created the object gives it, which the request handler filtered for
         # restricted code
@@ -6357,13 +6370,16 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
     #! returns the credential trailer fields that the code serving a filtered request of this handler gets: those
     #! that its options keep (setRequestCredentialHeaders(), with no authenticator that consumed them)
+    /** The same options as getRequestFilterOptions() for the handler's own credentials, without the authenticator's
+        platform context keys, which it does not need
+    */
     private:internal *hash<string, bool> getTrailerKeep() {
-        hash<HttpRequestFilterOptions> opts = getRequestFilterOptions();
-        if (opts.platform_authenticated || !opts.own_headers) {
+        # the handler's authenticator consumed the credentials that it reads, unless it accepts every request
+        if ((exists auth && !(auth instanceof PermissiveAuthenticator)) || !request_credential_headers) {
             return;
         }
         hash<string, bool> rv;
-        foreach string name in (opts.own_headers) {
+        foreach string name in (request_credential_headers) {
             name = name.lwr();
             if (inlist(name, AbstractStreamRequest::OwnCredentialHeaders)) {
                 rv{name} = True;

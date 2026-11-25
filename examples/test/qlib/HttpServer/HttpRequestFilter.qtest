@@ -202,6 +202,33 @@ class TrustedAuth inherits AbstractAuthenticator {
     }
 }
 
+#! an authenticator that accepts every request and counts the reads of its platform context keys
+class CountingAuth inherits AbstractAuthenticator {
+    public {
+        int calls = 0;
+    }
+
+    bool requiresAuthentication() {
+        return False;
+    }
+
+    *list<string> getPlatformContextKeys() {
+        ++calls;
+        return ("group_namespace",);
+    }
+}
+
+#! a handler that answers a request without a stream request
+class PlainHandler inherits AbstractHttpRequestHandler {
+    constructor(AbstractAuthenticator auth) : AbstractHttpRequestHandler(auth) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "plain"};
+    }
+}
+
 #! a trusted stream handler whose factory calls the given code, and that can run the code of another object
 class DelegatingHandler inherits AbstractHttpRequestHandler {
     public {
@@ -613,6 +640,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             \trailerKeepTest());
         addTestCase("the raw request is current only while the handler serves the request", \lateScopeTest());
         addTestCase("a socket of a request alone is of an allowed class, or not open", \viewClassTest());
+        addTestCase("the dispatch of a request that is not filtered reads no option of the filter",
+            \lazyTrailerKeepTest());
         set_return_value(main());
     }
 
@@ -1304,6 +1333,27 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(5, parse_json(rv.body).size);
         # restricted code that a host capability reaches by mistake registers no class
         assertEq("HTTP-SERVER-ERROR", t.callFunction("register_view", host()));
+    }
+
+    lazyTrailerKeepTest() {
+        # the credential trailer fields of a filtered stream request are read when one is created: the server's
+        # dispatch of a request that no stream request serves does not read the options of the filter, such as the
+        # authenticator's platform context keys
+        CountingAuth auth();
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("server", LoggerLevel::getLevelError())});
+        on_exit server.stop();
+        PlainHandler h(auth);
+        h.setRequestCredentialHeaders("Authorization");
+        server.setHandler("plain", "^plain", NOTHING, h);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        for (int i = 0; i < 3; ++i) {
+            Socket s();
+            s.connect("127.0.0.1:" + port);
+            on_exit s.close();
+            s.send("GET /plain HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
+            assertEq(200, s.readHTTPHeader(10s).status_code);
+        }
+        assertEq(0, auth.calls);
     }
 
     #! the capability of the test to make the raw request of a direct call of a handler current, as a host does
