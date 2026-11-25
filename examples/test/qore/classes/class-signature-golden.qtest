@@ -22,7 +22,8 @@
 
     This test compares the strings and the hashes of the classes of class-signature-golden/classes.q with
     class-signature-golden/class-signature-golden.expected; they are read with the debug hook dbg_class_signature(),
-    so the test is skipped by a library built without it.  QORE_UPDATE_CLASS_SIGNATURE_GOLDEN=1 rewrites the expected
+    so the test is skipped by a library built without it.  It also checks that the methods are in the signatures in
+    the order of their names (qore#7458).  QORE_UPDATE_CLASS_SIGNATURE_GOLDEN=1 rewrites the expected
     file instead.
 */
 class ClassSignatureGoldenTest inherits QUnit::Test {
@@ -52,7 +53,12 @@ class ClassSignatureGoldenTest inherits QUnit::Test {
         Program pgm(PO_NO_CHILD_PO_RESTRICTIONS);
         string file = dir + "/classes.q";
         pgm.parse(ReadOnlyFile::readTextFile(file), file);
-        string actual = format(pgm.callFunction("get_signatures"));
+        list<hash<auto>> sigs = pgm.callFunction("get_signatures");
+        # the methods are in the signature in the order of their names, not in that of the method map (qore#7458)
+        foreach hash<auto> sig in (sigs) {
+            assertEq(Qore::NOTHING, unsortedMethod(sig.parts), sig.path + ": methods in the order of their names");
+        }
+        string actual = format(sigs);
 
         if (ENV.QORE_UPDATE_CLASS_SIGNATURE_GOLDEN == "1") {
             File f();
@@ -84,6 +90,30 @@ class ClassSignatureGoldenTest inherits QUnit::Test {
             return out;
         }
         return lineDiff(ReadOnlyFile::readTextFile(golden), actual);
+    }
+
+    #! returns the first method line of a signature that is not in the order of the method names, if any
+    /** The non-static methods come first, then the static methods; the variants of a method are in the order of
+        their declarations
+    */
+    static *string unsortedMethod(list<string> parts) {
+        hash<string, string> last = {};
+        foreach string part in (parts) {
+            foreach string line in (part.split("\n")) {
+                *list<*string> m = (line =~ x/^(?:abstract )?(?:pub|priv|int) (static )?(\w+)\(/);
+                if (!m) {
+                    continue;
+                }
+                string kind = m[0] ? "static" : "normal";
+                if (kind == "normal" && last.static) {
+                    return line;
+                }
+                if (exists last{kind} && m[1] < last{kind}) {
+                    return line;
+                }
+                last{kind} = m[1];
+            }
+        }
     }
 
     #! returns the golden text of the signatures
