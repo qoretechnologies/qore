@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class PaymentsBillingTest
+
+class PaymentsBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Payments provider billing") {
+        addVendor("Stripe", "Stripe", "stripe.com", "metered",
+            "https://stripe.com/pricing", {
+                "get-charge": "included", "list-invoices": "included",
+                "create-charge": "metered", "create-customer": "included",
+            });
+        addVendor("Paddle", "Paddle", "paddle.com", "metered",
+            "https://www.paddle.com/pricing", {
+                "list_products": "included", "get_transaction": "included",
+                "create_transaction": "unknown", "create_product": "included",
+            });
+        addVendor("Square", "Square", "squareup.com", "included",
+            "https://developer.squareup.com/us/en/online-payment-apis", {
+                "get-payment": "included", "complete-payment": "metered",
+                "create-paid-order": "metered",
+            });
+        set_return_value(main());
+    }
+}
