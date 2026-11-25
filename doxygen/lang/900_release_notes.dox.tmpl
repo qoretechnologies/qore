@@ -2829,6 +2829,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - keys chosen to share the internal hash value of hash keys can no longer make the key lookups of a hash slow: a
+      hash with too many keys in one bucket switches to a keyed hash function with a secret key of the process (see
+      @ref hash_key_hardening;
+      <a href="https://github.com/qoretechnologies/qore/issues/7557">issue 7557</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;

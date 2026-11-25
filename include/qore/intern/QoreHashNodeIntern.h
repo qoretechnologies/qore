@@ -43,15 +43,21 @@
 #include "qore/intern/QoreKeyCompare.h"
 
 //! A key to look up in the key map of a hash: the key, its length and its hash (qore#7194)
-/** The hash is the one that qore_hash_str gives for the key, so that a hash computed in advance with qore_hash_str
-    (ex: by the JIT for a constant key) finds the key.
+/** The hash is the member hash of the key (hashBytes()), so that a hash computed in advance (ex: by the JIT or qcc
+    for a constant key) finds the key; a hardened key map hashes the key bytes with its keyed hash instead
+    (qore_hash_member_map, qore#7557).
 */
 struct DLLLOCAL qore_hash_lookup_key {
     const char* str;
     size_t len;
     size_t hash;
 
-    //! returns the hash of the key of \a len bytes at \a str; the same as qore_hash_str for the key
+    //! the tag of the constructor that takes the hash that a member of a key map keeps (HashMember::hash)
+    struct stored_hash_t {
+    };
+
+    //! returns the member hash of the key of \a len bytes at \a str: the hash of the key in a key map that is not
+    //! hardened, and the hash of the constant keys that the JIT and qcc compute in advance
     DLLLOCAL static size_t hashBytes(const char* str, size_t len) {
 #if TARGET_BITS == 64
         return XXH64(str, len, 0);
@@ -71,11 +77,27 @@ struct DLLLOCAL qore_hash_lookup_key {
         assert(strlen(str) == len);
         assert(hash == hashBytes(str, len));
     }
+
+    //! a key with the hash that a member of a key map keeps: the member hash, or the keyed hash of a hardened map
+    /** for a search of the key map that the member is in, or of another map of the same kind (see
+        qore_hash_member_map::sameKind())
+    */
+    DLLLOCAL qore_hash_lookup_key(const char* str, size_t len, size_t hash, stored_hash_t) : str(str), len(len),
+            hash(hash) {
+        assert(strlen(str) == len);
+    }
 };
 
+//! returns the keyed hash of the key of \a len bytes at \a str, the hash of a key in a hardened key map (qore#7557)
+/** SipHash-1-3 (qore_siphash13()) with the secret key of the process; only called once the key exists (a key map is
+    hardened only after qore_hash_member_map::harden() has created it)
+*/
+DLLLOCAL size_t qore_hash_keyed_bytes(const char* str, size_t len);
+
 //! A member of a hash: its value, key and the links of the member list and of the key map, in one allocation
-/** The member keeps the hash of its key (qore_hash_lookup_key::hashBytes()), so that the key map does not hash it
-    again, and so that a copy of the hash inserts its keys without hashing them again (qore#7265).
+/** The member keeps the hash of its key in the key map of its hash (qore_hash_member_map::hashOf()), so that the key
+    map does not hash it again, and so that a copy of the hash inserts its keys without hashing them again
+    (qore#7265).
 
     The member is the node of the member list (\c prev, \c next, in insertion order) and of the key map
     (\c bucket_next): a member costs one allocation, where a member, a node of a std::list and a node of a
@@ -86,7 +108,7 @@ class DLLLOCAL HashMember {
 public:
     //! the next member in the bucket of the key map (see qore_hash_member_map)
     HashMember* bucket_next = nullptr;
-    //! the hash of the key; the same as qore_hash_str for the key
+    //! the hash of the key in the key map of the hash (qore_hash_member_map::hashOf())
     size_t hash;
     QoreValue val{};
     std::string key;
@@ -99,8 +121,9 @@ public:
     }
 
     //! creates a member with the key \a n_key, whose hash is \a n_hash (ex: the key and hash of another member)
+    /** the key map that takes the member checks that the hash is the hash of the key in that map
+    */
     DLLLOCAL HashMember(const std::string& n_key, size_t n_hash) : hash(n_hash), key(n_key) {
-        assert(hash == qore_hash_lookup_key::hashBytes(key.data(), key.size()));
     }
 
     DLLLOCAL HashMember(const HashMember&) = delete;
@@ -237,16 +260,31 @@ private:
     of a member is the hash of its key masked to the number of buckets, a power of 2 that is at least the number of
     members.  A search compares the hashes of the members of the bucket before their keys.
 
+    A map hashes its keys with the member hash (qore_hash_lookup_key::hashBytes()), which the JIT and qcc also
+    compute in advance for constant keys.  Keys chosen to share that hash would otherwise make the chain of their
+    bucket, and so every search of it, as long as the number of keys; an insert that would make a chain longer than
+    MaxChain therefore hardens the map instead (qore#7557): it hashes all of its keys again with a keyed hash
+    (qore_hash_keyed_bytes()) whose key is secret and created once per process, and keeps doing so for every key that
+    it is given, ignoring a hash computed in advance.  A search of a map that is not hardened never changes it, so
+    that a hash can be searched by several threads at once; only an insert, which has the hash to itself, hardens it.
+
     The map does not own its members; only its bucket array is allocated, so inserting a member can fail
-    (std::bad_alloc) only when the array grows, before anything is changed, and removing one cannot fail.  The map
-    reads the hash of the members of a bucket when it searches it, so a member is removed from the map before it is
-    deleted while code can search the map; when no code can (the release of a hash), the map is cleared after the
-    members are deleted, without reading them (qore#7194, qore#7265).
+    (std::bad_alloc) only when the array grows, before anything is changed, and removing one cannot fail; a
+    hardening that cannot allocate its array changes nothing, and the next insert that would make a chain longer than
+    MaxChain tries it again.  The map reads the hash of the members of a bucket when it searches it, so a member is
+    removed from the map before it is deleted while code can search the map; when no code can (the release of a
+    hash), the map is cleared after the members are deleted, without reading them (qore#7194, qore#7265).
 */
 class DLLLOCAL qore_hash_member_map {
 public:
     //! the number of buckets that a map gets when its first member is inserted
     static constexpr size_t MinBuckets = 8;
+
+    //! the longest chain of a bucket that an insert makes in a map that is not hardened (qore#7557)
+    /** with keys that do not share hashes, a chain of this length is practically impossible at the load of the map
+        (at most one member per bucket on average), so only such keys harden a map
+    */
+    static constexpr size_t MaxChain = 16;
 
     DLLLOCAL qore_hash_member_map() = default;
     DLLLOCAL qore_hash_member_map(const qore_hash_member_map&) = delete;
@@ -269,7 +307,28 @@ public:
         return buckets ? mask + 1 : 0;
     }
 
+    //! true if the map hashes its keys with the keyed hash (qore#7557)
+    DLLLOCAL bool isHardened() const {
+        return hardened;
+    }
+
+    //! true if the members of both maps keep hashes of the same kind, so that the hash that a member of one keeps
+    //! finds its key in the other
+    DLLLOCAL bool sameKind(const qore_hash_member_map& other) const {
+        return hardened == other.hardened;
+    }
+
+    //! returns the hash of the key of \a len bytes at \a str in this map: the hash that its member keeps
+    DLLLOCAL size_t hashOf(const char* str, size_t len) const {
+        return hardened ? qore_hash_keyed_bytes(str, len) : qore_hash_lookup_key::hashBytes(str, len);
+    }
+
     //! returns the member with the key \a k, or nullptr
+    /** The bucket of the hash of \a k is searched first: it is the bucket of the key in a map that is not hardened.
+        In a hardened map it is another bucket, whose members cannot match unless one has the key (it then is the
+        member of the key), and the key is searched with its keyed hash after it; the search of a map that is not
+        hardened is therefore the same as before qore#7557 but for one test when the key is not found.
+    */
     DLLLOCAL HashMember* find(const qore_hash_lookup_key& k) const {
         if (!count) {
             return nullptr;
@@ -279,12 +338,42 @@ public:
                 return m;
             }
         }
+        if (hardened) [[unlikely]] {
+            return findKeyed(k.str, k.len);
+        }
         return nullptr;
     }
 
-    //! inserts \a m, whose key the map does not have; throws std::bad_alloc, with nothing changed, if the bucket
-    //! array cannot grow
+    //! inserts \a m, whose key the map does not have and whose hash is the member hash of its key (or, in a map that
+    //! is not hardened, any hash: debug functions simulate shared hashes so); throws std::bad_alloc, with nothing
+    //! changed, if the bucket array cannot grow
+    /** The map is hardened if the insert would make the chain of the bucket of \a m longer than MaxChain; the hash
+        of \a m is the keyed hash of its key then, as in any hardened map.
+    */
     DLLLOCAL void insert(HashMember* m) {
+        if (count >= bucket_count()) {
+            grow();
+        }
+        if (hardened) [[unlikely]] {
+            m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
+        }
+        HashMember** b = &buckets[m->hash & mask];
+        if (*b && !hardened && chainFull(*b)) [[unlikely]] {
+            if (tryHarden()) {
+                m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
+                b = &buckets[m->hash & mask];
+            }
+        }
+        m->bucket_next = *b;
+        *b = m;
+        ++count;
+    }
+
+    //! inserts \a m, a copy of a member of a map of the same kind with no fewer buckets than this map, whose key
+    //! this map does not have, without checking the length of its chain: the chain is not longer than the chain of
+    //! the member in that map (qore#7557); throws std::bad_alloc, with nothing changed, if the bucket array cannot
+    //! grow
+    DLLLOCAL void insertCopy(HashMember* m) {
         if (count >= bucket_count()) {
             grow();
         }
@@ -306,12 +395,13 @@ public:
         --count;
     }
 
-    //! forgets all members and frees the bucket array; reads no member
+    //! forgets all members and frees the bucket array; reads no member; the map is not hardened after it
     DLLLOCAL void clear() {
         delete[] buckets;
         buckets = nullptr;
         mask = 0;
         count = 0;
+        hardened = false;
     }
 
     //! makes room for \a n members without a rehash; throws std::bad_alloc, with nothing changed, if the bucket array
@@ -320,11 +410,30 @@ public:
     */
     QORE_HASH_NOINLINE DLLLOCAL void reserve(size_t n);
 
+    //! makes this map, which has no members, hash its keys as \a src does, for a copy of the members of \a src
+    /** a copy of a hardened map is hardened, so that it takes the keyed hashes of the members
+    */
+    DLLLOCAL void copyKind(const qore_hash_member_map& src) {
+        assert(!count);
+        hardened = src.hardened;
+    }
+
+    //! returns the index of the bucket of \a m, which is in the map (for debug functions)
+    DLLLOCAL size_t bucketIndex(const HashMember* m) const {
+        assert(count);
+        return m->hash & mask;
+    }
+
+    //! returns the length of the longest chain of a bucket (for debug functions)
+    DLLLOCAL size_t maxChain() const;
+
 private:
     HashMember** buckets = nullptr;
     //! the number of buckets - 1, if the array is allocated
     size_t mask = 0;
     size_t count = 0;
+    //! true if the keys are hashed with the keyed hash (qore#7557)
+    bool hardened = false;
 
     //! the number of buckets for \a n members: the smallest power of 2 that is at least \a n and MinBuckets
     DLLLOCAL static size_t bucketsFor(size_t n) {
@@ -337,11 +446,33 @@ private:
         return b;
     }
 
+    //! true if the chain that starts with \a m has MaxChain members, so that another one would make it too long
+    DLLLOCAL static bool chainFull(const HashMember* m) {
+        size_t n = 1;
+        for (m = m->bucket_next; m; m = m->bucket_next) {
+            if (++n == MaxChain) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     //! doubles the buckets, or allocates the first ones; not inline, so that insert() stays small
     QORE_HASH_NOINLINE DLLLOCAL void grow();
 
     //! moves the members to a new bucket array of \a n buckets, a power of 2 that is at least the number of members
     QORE_HASH_NOINLINE DLLLOCAL void rehash(size_t n);
+
+    //! returns the member with the key of \a len bytes at \a str in a hardened map, or nullptr
+    QORE_HASH_NOINLINE DLLLOCAL HashMember* findKeyed(const char* str, size_t len) const;
+
+    //! hardens the map (harden()); returns false, with nothing changed, if it cannot, so that a later insert tries
+    //! again
+    QORE_HASH_NOINLINE DLLLOCAL bool tryHarden();
+
+    //! moves the members to a new bucket array of as many buckets with the keyed hashes of their keys; throws an
+    //! exception, with nothing changed, if the array cannot be allocated or the secret key cannot be created
+    DLLLOCAL void harden();
 };
 
 //! the searches of the key map of a hash are functions of their own with the map's search inlined (qore#7265)
@@ -549,9 +680,14 @@ public:
                 return false;
             }
         }
+        // the key is searched with the hash that the member keeps if the key maps hash their keys the same way
+        // (qore#7265); else it is hashed again (one of the maps is hardened, qore#7557)
+        bool same_kind = hm.sameKind(other.hm);
         for (; m; m = m->next) {
-            // the key is searched with the hash that the member keeps (qore#7265)
-            const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash));
+            const HashMember* found = same_kind
+                ? other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
+                    qore_hash_lookup_key::stored_hash_t()))
+                : other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size()));
             if (!found || !value_equal(m->val, found->val)) {
                 return false;
             }
@@ -701,7 +837,12 @@ public:
 
     //! creates a member with the key of the member \a old of another hash, which this hash does not have, without
     //! hashing the key (qore#7265)
-    DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old);
+    /** @param old the member of the other hash, whose key map is of the same kind as the key map of this hash (see
+        reserveForCopy())
+        @param copy_layout the value that reserveForCopy() returned: true if the key map of this hash has no fewer
+        buckets than the key map of the other hash, so that the chains of its buckets need no check (qore#7557)
+    */
+    DLLLOCAL HashMember* createMemberKnownAbsent(const HashMember& old, bool copy_layout);
 
     //! adds the new member \a m, whose key the hash does not have, at the end of the hash; takes over \a m
     DLLLOCAL HashMember* addMemberKnownAbsent(HashMember* m);
@@ -916,10 +1057,10 @@ public:
         }
         QoreHashNode* h = new QoreHashNode;
         qore_hash_private& hp = *h->priv;
-        hp.reserveForCopy(*this);
+        bool copy_layout = hp.reserveForCopy(*this);
         // copy all members to new object
         for (const HashMember* i : member_list) {
-            HashMember* om = hp.createMemberKnownAbsent(*i);
+            HashMember* om = hp.createMemberKnownAbsent(*i, copy_layout);
             hp.setNewMemberValue(om, copy_strip_complex_types(i->val));
         }
         copyFreedState(hp);
@@ -957,24 +1098,33 @@ public:
 
     //! copies the members to the new hash \a h, which has none
     DLLLOCAL void copyIntern(qore_hash_private& h) const {
-        h.reserveForCopy(*this);
+        bool copy_layout = h.reserveForCopy(*this);
         // copy all members to new object
         for (const HashMember* i : member_list) {
-            h.setNewMemberValue(h.createMemberKnownAbsent(*i), i->val.refSelf());
+            h.setNewMemberValue(h.createMemberKnownAbsent(*i, copy_layout), i->val.refSelf());
         }
     }
 
     //! prepares this new hash, which has no members, for the members of \a src: the key map takes them without a
     //! rehash (qore#7265)
     /** the key map of a hash that grows from empty doubles its buckets from qore_hash_member_map::MinBuckets;
-        reserved, it has as many buckets as the next power of 2 from the number of keys, which is not more
+        reserved, it has as many buckets as the next power of 2 from the number of keys, which is not more; the key
+        map hashes its keys as the key map of \a src does (it is hardened if that one is, qore#7557), so that it takes
+        the hashes of the members of \a src
+
+        @return true if the chains of the buckets of the copy need no check (createMemberKnownAbsent()): its key map
+        is hardened, or it has no fewer buckets than the key map of \a src, so that the chain of a member is not
+        longer than in \a src
     */
-    DLLLOCAL void reserveForCopy(const qore_hash_private& src) {
+    DLLLOCAL bool reserveForCopy(const qore_hash_private& src) {
         assert(member_list.empty());
         assert(hm.empty());
-        if (!src.hm.empty()) {
-            hm.reserve(src.hm.size());
+        if (src.hm.empty()) {
+            return true;
         }
+        hm.reserve(src.hm.size());
+        hm.copyKind(src.hm);
+        return hm.isHardened() || hm.bucket_count() >= src.hm.bucket_count();
     }
 
     DLLLOCAL QoreHashNode* plusEquals(const QoreHashNode* h, ExceptionSink* xsink) const {
@@ -988,7 +1138,7 @@ public:
     DLLLOCAL QoreHashNode* evalImpl(ExceptionSink* xsink) const {
         QoreHashNodeHolder h(getCopy(), xsink);
         qore_hash_private& hp = *h->priv;
-        hp.reserveForCopy(*this);
+        bool copy_layout = hp.reserveForCopy(*this);
         size_t count = 0;
         for (const HashMember* i : member_list) {
             if (++count % 100 == 0 && qore_check_cancel(xsink, "hash expression evaluation")) {
@@ -1000,7 +1150,7 @@ public:
             }
             // the keys of this hash are unique, and the new hash has none of them; the member is created here, so a
             // rejected assignment removes it again
-            hash_assignment_priv ha(hp, hp.createMemberKnownAbsent(*i), true);
+            hash_assignment_priv ha(hp, hp.createMemberKnownAbsent(*i, copy_layout), true);
             ha.assign(value.takeReferencedValue(), xsink);
             if (*xsink) {
                 return nullptr;

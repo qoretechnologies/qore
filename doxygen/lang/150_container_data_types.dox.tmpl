@@ -490,6 +490,15 @@ ColumnarResult again = df.toColumnarResult();
     provide <i>O(ln(n))</i> complexity to execute; in the best case finding a particular key in a hash is executed in
     constant time (ie <i>O(1)</i> complexity).\n\n
 
+    @anchor hash_key_hardening
+    The keys of a hash can come from untrusted input, such as the keys of a JSON object received from a client.  So
+    that such keys cannot make the key lookups of a hash slow by sharing the internal hash value that places keys in
+    the hash's table, a hash whose insert would place too many keys in one bucket of its table switches, with that
+    insert, to a keyed hash function (SipHash-1-3) whose 128-bit key is chosen at random once per process, from the
+    random source of the operating system.  The switch is automatic and affects only that hash, and its copies; it
+    does not change the order of the keys, the results of any operation or the code that accesses the hash, in any
+    @ref execution_modes "execution mode".\n\n
+
     @anchor hash_key_nul
     A hash key or object member name cannot contain a NUL character: a key with one raises a \c HASH-KEY-ERROR
     exception giving the key and the byte offset of its first NUL character, when the code is parsed for a constant

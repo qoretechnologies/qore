@@ -45,13 +45,27 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 
+#include "qore/intern/qore_siphash.h"
+
 #include <cassert>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <new>
+#include <stdexcept>
 #include <strings.h>
+
+#include <openssl/err.h>
+#include <openssl/rand.h>
+
+#if defined(__linux__)
+#include <sys/random.h>
+#endif
 
 static const char* qore_hash_type_name = "hash";
 
@@ -221,13 +235,28 @@ HashMember* qore_hash_private::createMemberKnownAbsent(const qore_hash_lookup_ke
     return addMemberKnownAbsent(new HashMember(key));
 }
 
-HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old) {
-    return addMemberKnownAbsent(new HashMember(old.key, old.hash));
+HashMember* qore_hash_private::createMemberKnownAbsent(const HashMember& old, bool copy_layout) {
+    if (!copy_layout) {
+        // the key map can have fewer buckets than that of the other hash, so it checks the chains (qore#7557); the
+        // key maps are of the same kind (reserveForCopy()), and the member hash is what insert() takes in a map that
+        // is not hardened, which a hardened map replaces
+        return addMemberKnownAbsent(new HashMember(old.key, old.hash));
+    }
+    HashMember* m = new HashMember(old.key, old.hash);
+    assert(m->hash == hm.hashOf(m->key.data(), m->key.size()));
+    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
+    // only the key map can fail to take the member (when its buckets grow); the member is deleted then
+    std::unique_ptr<HashMember> holder(m);
+    hm.insertCopy(m);
+    holder.release();
+    member_list.push_back(m);
+    sbAdd(m);
+    return m;
 }
 
 HashMember* qore_hash_private::addMemberKnownAbsent(HashMember* m) {
     assert(m->val.isNothing());
-    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size(), m->hash)));
+    assert(!findMember(qore_hash_lookup_key(m->key.c_str(), m->key.size())));
     // only the key map can fail to take the member (when its buckets grow); the member is deleted then
     std::unique_ptr<HashMember> holder(m);
     hm.insert(m);
@@ -241,6 +270,186 @@ void qore_hash_member_map::reserve(size_t n) {
     if (n > bucket_count()) {
         rehash(bucketsFor(n));
     }
+}
+
+namespace {
+//! the secret key of the keyed hash of hardened key maps (qore#7557); created once, by the first hardening
+uint64_t qore_hash_process_key[2] = {0, 0};
+//! true once the key was created (qore_hash_ensure_process_key())
+std::atomic<bool> qore_hash_process_key_ready{false};
+//! serializes the creation of the key
+std::mutex qore_hash_process_key_lock;
+
+//! fills \a buf with \a len random bytes from the operating system, or from OpenSSL's generator if that fails
+/** @throw std::runtime_error if no source of random bytes works; the key is then not created, and a later
+    hardening tries again
+*/
+void qore_hash_random_bytes(unsigned char* buf, size_t len) {
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) \
+        || defined(__DragonFly__)
+    arc4random_buf(buf, len);
+    return;
+#else
+#if defined(__linux__)
+    size_t done = 0;
+    while (done < len) {
+        ssize_t rc = getrandom(buf + done, len - done, 0);
+        if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        done += static_cast<size_t>(rc);
+    }
+    if (done == len) {
+        return;
+    }
+#endif
+    if (RAND_bytes(buf, static_cast<int>(len)) != 1) {
+        ERR_clear_error();
+        throw std::runtime_error("no random bytes for the key of the keyed hash of hash members");
+    }
+#endif
+}
+
+#ifdef DEBUG
+//! debug builds: reads the key from QORE_DBG_HASH_KEY (32 hexadecimal digits: the 16 bytes of the key), so that
+//! the layout of hardened key maps can be reproduced; returns false if the variable is not set
+bool qore_hash_dbg_key(unsigned char* key) {
+    const char* env = getenv("QORE_DBG_HASH_KEY");
+    if (!env) {
+        return false;
+    }
+    if (strlen(env) != 32) {
+        fprintf(stderr, "QORE_DBG_HASH_KEY must have 32 hexadecimal digits\n");
+        abort();
+    }
+    for (size_t i = 0; i < 16; ++i) {
+        unsigned v = 0;
+        for (size_t j = 0; j < 2; ++j) {
+            char c = env[i * 2 + j];
+            unsigned d;
+            if (c >= '0' && c <= '9') {
+                d = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                d = c - 'a' + 10;
+            } else if (c >= 'A' && c <= 'F') {
+                d = c - 'A' + 10;
+            } else {
+                fprintf(stderr, "QORE_DBG_HASH_KEY must have 32 hexadecimal digits\n");
+                abort();
+            }
+            v = (v << 4) | d;
+        }
+        key[i] = static_cast<unsigned char>(v);
+    }
+    return true;
+}
+#endif
+
+//! creates the secret key; called once, with qore_hash_process_key_lock held
+void qore_hash_create_process_key() {
+    unsigned char key[16];
+#ifdef DEBUG
+    if (!qore_hash_dbg_key(key))
+#endif
+    {
+        qore_hash_random_bytes(key, sizeof key);
+    }
+    uint64_t k[2] = {0, 0};
+    for (size_t i = 0; i < 16; ++i) {
+        k[i / 8] |= static_cast<uint64_t>(key[i]) << (8 * (i % 8));
+    }
+    qore_hash_process_key[0] = k[0];
+    qore_hash_process_key[1] = k[1];
+}
+
+//! creates the secret key if it does not exist yet; thread-safe
+/** a failed creation throws and leaves no key, and a later call tries again (std::call_once is not used, as an
+    exception from it has hung later calls with some C++ runtimes)
+*/
+void qore_hash_ensure_process_key() {
+    if (qore_hash_process_key_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::lock_guard<std::mutex> guard(qore_hash_process_key_lock);
+    if (!qore_hash_process_key_ready.load(std::memory_order_relaxed)) {
+        qore_hash_create_process_key();
+        qore_hash_process_key_ready.store(true, std::memory_order_release);
+    }
+}
+}
+
+size_t qore_hash_keyed_bytes(const char* str, size_t len) {
+    assert(qore_hash_process_key_ready.load(std::memory_order_relaxed));
+    // the key was created before the first map was hardened (harden()), and a thread reads a hardened map only
+    // after it was made visible to it, which orders the creation of the key before this read
+    return static_cast<size_t>(qore_siphash13(qore_hash_process_key[0], qore_hash_process_key[1], str, len));
+}
+
+HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
+    assert(hardened && count);
+    size_t h = qore_hash_keyed_bytes(str, len);
+    for (HashMember* m = buckets[h & mask]; m; m = m->bucket_next) {
+        if (m->hash == h && qore_key_equal(m->key.data(), m->key.size(), str, len)) {
+            return m;
+        }
+    }
+    return nullptr;
+}
+
+bool qore_hash_member_map::tryHarden() {
+    try {
+        harden();
+        return true;
+    } catch (const std::exception&) {
+        // nothing was changed: the map stays as it was, and the next insert that would make a chain too long tries
+        // again
+        return false;
+    }
+}
+
+void qore_hash_member_map::harden() {
+    assert(!hardened && buckets);
+    // the key is created once, by the first hardening of the process
+    qore_hash_ensure_process_key();
+#ifdef DEBUG
+    // test hook: the allocation of the new bucket array fails
+    if (qore_dbg_hash_harden_alloc_must_fail()) {
+        throw std::bad_alloc();
+    }
+#endif
+    size_t n = mask + 1;
+    HashMember** nb = new HashMember*[n]();
+    // nothing can fail from here on
+    for (size_t b = 0; b < n; ++b) {
+        for (HashMember* m = buckets[b]; m;) {
+            HashMember* next = m->bucket_next;
+            m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
+            HashMember*& nbucket = nb[m->hash & mask];
+            m->bucket_next = nbucket;
+            nbucket = m;
+            m = next;
+        }
+    }
+    delete[] buckets;
+    buckets = nb;
+    hardened = true;
+}
+
+size_t qore_hash_member_map::maxChain() const {
+    size_t rv = 0;
+    for (size_t b = 0, e = bucket_count(); b < e; ++b) {
+        size_t n = 0;
+        for (const HashMember* m = buckets[b]; m; m = m->bucket_next) {
+            ++n;
+        }
+        if (n > rv) {
+            rv = n;
+        }
+    }
+    return rv;
 }
 
 void qore_hash_member_map::grow() {

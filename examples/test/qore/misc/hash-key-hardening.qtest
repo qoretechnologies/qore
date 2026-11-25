@@ -1,0 +1,388 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - the random source of the secret key of the keyed hash and its creation by concurrent threads
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires ../../TestInterpreter.qm
+%exec-class HashKeyHardeningTest
+
+#! The key map of a hash hardens itself against keys that share their hash (qore#7557)
+/** An insert that would make the chain of a bucket of the key map of a hash longer than 16 members makes the map hash
+    all its keys with a keyed hash whose key is secret and created once per process.  The debug function
+    dbg_hash_insert_with_hash_of() inserts keys with the hash of another key, as keys that share their hash would be
+    inserted, and dbg_hash_key_map_info() describes the key map; debug builds only.
+*/
+class HashKeyHardeningTest inherits QUnit::Test {
+    public {
+        #! the number of keys that share a hash in the large cases
+        const N = 10000;
+        #! the longest chain of a map that is not hardened
+        const MaxChain = 16;
+        #! the key whose hash the inserted keys share
+        const SharedKey = "shared";
+    }
+
+    constructor() : QUnit::Test("hash key hardening", "1.0", \ARGV) {
+        addTestCase("keys that share a hash harden the key map", \hardenTest());
+        addTestCase("searches, removals and copies of a hardened hash", \hardenedOperationsTest());
+        addTestCase("equality of hardened and other hashes", \equalityTest());
+        addTestCase("keys that do not share hashes do not harden the key map", \normalKeysTest());
+        addTestCase("a hardening that cannot allocate changes nothing", \allocFailureTest());
+        addTestCase("the keyed hash differs between processes", \processLayoutTest());
+        addTestCase("threads harden their first hashes at once", \concurrentFirstHardeningTest());
+        set_return_value(main());
+    }
+
+    hardenTest() {
+        requireDebug();
+        hash<auto> h = newHash();
+        for (int i = 0; i < MaxChain; ++i) {
+            insertShared(h, "k" + i, i);
+        }
+        hash<auto> info = mapInfo(h);
+        assertFalse(info.hardened, "a chain of 16 members does not harden the map");
+        assertEq(MaxChain, info.max_chain);
+        # the members keep the shared hash until the map is hardened, so only a search with it finds them
+        for (int i = 0; i < MaxChain; ++i) {
+            assertEq({"exists": True, "value": i}, call_function("dbg_hash_lookup_with_hash_of", h, "k" + i,
+                SharedKey));
+        }
+
+        insertShared(h, "k" + MaxChain, MaxChain);
+        info = mapInfo(h);
+        assertTrue(info.hardened, "the 17th member of a chain hardens the map");
+        assertLe(MaxChain, info.max_chain);
+        assertEq(MaxChain + 1, h.size());
+
+        for (int i = MaxChain + 1; i < N; ++i) {
+            insertShared(h, "k" + i, i);
+        }
+        info = mapInfo(h);
+        assertTrue(info.hardened);
+        assertEq(N, h.size());
+        assertLe(MaxChain, info.max_chain, "the chains of the hardened map are short");
+        assertEq(N, info.member_buckets.size());
+        checkKeys(h, N);
+    }
+
+    hardenedOperationsTest() {
+        requireDebug();
+        hash<auto> h = makeHardened(N);
+
+        # constant keys: their hashes are computed before the run
+        assertEq(5, h.k5);
+        assertEq(5, h."k5");
+        assertEq(9999, h{"k9999"});
+        assertTrue(exists h.k17);
+        assertFalse(exists h.k10000);
+        assertFalse(exists h."k-1");
+        assertEq(NOTHING, h.missing);
+        h.k5 = "five";
+        assertEq("five", h.k5);
+        h."k5" = 5;
+        h.added = "a";
+        assertEq("a", h{"added"});
+        remove h.added;
+        assertFalse(exists h.added);
+
+        # the order of the members is kept
+        assertEq((map "k" + $1, xrange(N)), keys h);
+        assertEq("k0", h.firstKey());
+        assertEq("k9999", h.lastKey());
+
+        # a slice and a difference
+        assertEq({"k3": 3, "k4000": 4000}, h{"k3", "k4000", "nope"});
+        hash<auto> d = h - "k1" - "k2";
+        assertEq(N - 2, d.size());
+        assertFalse(exists d.k1);
+        assertEq(3, d.k3);
+        assertTrue(mapInfo(d).hardened, "a hash computed from a hardened hash is hardened");
+
+        # a copy of a hardened hash is hardened, and its keys are found
+        hash<auto> c = h;
+        c.extra = 1;
+        assertEq(N, h.size(), "the copy was changed, not the hash");
+        hash<auto> info = mapInfo(c);
+        assertTrue(info.hardened, "a copy of a hardened hash is hardened");
+        assertLe(MaxChain, info.max_chain);
+        checkKeys(c - "extra", N);
+        assertEq(1, c.extra);
+
+        # removals
+        for (int i = 0; i < N; i += 2) {
+            remove h{"k" + i};
+        }
+        assertEq(N / 2, h.size());
+        for (int i = 0; i < N; ++i) {
+            assertEq(i % 2 ? i : NOTHING, h{"k" + i}, "k" + i);
+            assertEq(i % 2 != 0, exists h{"k" + i});
+        }
+        delete h.k1;
+        assertFalse(exists h.k1);
+        assertEq(N / 2 - 1, h.size());
+
+        # further inserts, with and without the shared hash, hash their keys with the keyed hash
+        for (int i = 0; i < N; ++i) {
+            if (i % 2) {
+                h{"n" + i} = i;
+            } else {
+                insertShared(h, "n" + i, i);
+            }
+        }
+        info = mapInfo(h);
+        assertTrue(info.hardened);
+        assertLe(MaxChain, info.max_chain);
+        for (int i = 0; i < N; ++i) {
+            assertEq(i, h{"n" + i});
+        }
+        assertEq(3, h.k3);
+
+        # a hash evaluated from a hash expression with the keys of a hardened hash
+        hash<auto> e = {"k3": h.k3, "n4": h.n4};
+        assertEq({"k3": 3, "n4": 4}, e);
+
+        # all members removed: the hash can be used again
+        foreach string k in (keys h) {
+            remove h{k};
+        }
+        assertEq(0, h.size());
+        h.again = 1;
+        assertEq({"again": 1}, h);
+    }
+
+    equalityTest() {
+        requireDebug();
+        hash<auto> h = makeHardened(N);
+        # the same keys and values in a hash that is not hardened, in the same order and in reverse order
+        hash<auto> same = numbered(range(N));
+        hash<auto> rev = numbered(range(N - 1, -1));
+        assertEq(N, rev.size());
+        assertEq("k" + (N - 1), rev.firstKey());
+        assertFalse(mapInfo(same).hardened);
+        assertFalse(mapInfo(rev).hardened);
+        foreach hash<auto> other in ((same, rev)) {
+            assertTrue(h == other);
+            assertTrue(other == h);
+            assertTrue(h === other);
+            assertTrue(other === h);
+            assertFalse(h != other);
+        }
+        # two hardened hashes, in another order
+        hash<auto> h2 = newHash();
+        for (int i = N - 1; i >= 0; --i) {
+            insertShared(h2, "k" + i, i);
+        }
+        assertTrue(mapInfo(h2).hardened);
+        assertTrue(h == h2);
+        assertTrue(h2 === h);
+        # a value differs
+        rev.k77 = -1;
+        assertFalse(h == rev);
+        assertFalse(rev == h);
+        h2.k77 = -1;
+        assertFalse(h == h2);
+        assertTrue(rev == h2);
+        # a key differs
+        same.k10000 = 0;
+        remove same.k0;
+        assertFalse(h == same);
+        assertFalse(same == h);
+    }
+
+    normalKeysTest() {
+        requireDebug();
+        hash<auto> h = map {("key-" + $1): $1}, xrange(N);
+        hash<auto> info = mapInfo(h);
+        assertFalse(info.hardened, "keys that do not share hashes do not harden the map");
+        assertLe(MaxChain, info.max_chain);
+        hash<auto> c = h;
+        c.x = 1;
+        assertFalse(mapInfo(c).hardened, "a copy of a hash that is not hardened is not hardened");
+        # nearly equal keys
+        hash<auto> h2 = newHash();
+        for (int i = 0; i < 256; ++i) {
+            h2{"a" + chr(i ?: 1)} = i;
+        }
+        assertFalse(mapInfo(h2).hardened);
+    }
+
+    allocFailureTest() {
+        requireDebug();
+        hash<auto> h = newHash();
+        for (int i = 0; i < MaxChain; ++i) {
+            insertShared(h, "k" + i, i);
+        }
+        call_function("dbg_fail_hash_harden_alloc");
+        insertShared(h, "k" + MaxChain, MaxChain);
+        assertTrue(call_function("dbg_hash_harden_alloc_failed"), "the hardening failed");
+        hash<auto> info = mapInfo(h);
+        assertFalse(info.hardened, "a hardening that fails leaves the map as it was");
+        assertEq(MaxChain + 1, info.max_chain, "the insert was made without the hardening");
+        assertEq(MaxChain + 1, h.size());
+        assertEq((map "k" + $1, xrange(MaxChain + 1)), keys h);
+        for (int i = 0; i <= MaxChain; ++i) {
+            assertEq({"exists": True, "value": i}, call_function("dbg_hash_lookup_with_hash_of", h, "k" + i,
+                SharedKey));
+        }
+        # the next insert into the chain hardens the map
+        insertShared(h, "k" + (MaxChain + 1), MaxChain + 1);
+        assertFalse(call_function("dbg_hash_harden_alloc_failed"), "the failure was one-shot");
+        info = mapInfo(h);
+        assertTrue(info.hardened, "a later insert hardens the map");
+        assertLe(MaxChain, info.max_chain);
+        checkKeys(h, MaxChain + 2);
+    }
+
+    processLayoutTest() {
+        requireDebug();
+        # each child prints the buckets of the members of a hardened hash
+        list<string> random = map runLayout(), xrange(2);
+        assertEq(2, random.size());
+        assertNeq(random[0], random[1], "two processes have different secret keys");
+
+        string key1 = "000102030405060708090a0b0c0d0e0f";
+        string key2 = "0f0e0d0c0b0a09080706050403020100";
+        string fixed1 = runLayout(key1);
+        assertEq(fixed1, runLayout(key1), "a fixed key gives the same layout");
+        assertNeq(fixed1, runLayout(key2), "another key gives another layout");
+    }
+
+    concurrentFirstHardeningTest() {
+        requireDebug();
+        # a new process, so that its threads create the secret key: each hardens a hash of its own at the same time
+        string src = "%modern\n"
+            "Counter c(8); Counter ready(1);\n"
+            "list<string> errs = ();\n"
+            "Mutex m();\n"
+            "for (int t = 0; t < 8; ++t) {\n"
+            "    background sub () {\n"
+            "        on_exit c.dec();\n"
+            "        hash<auto> h = {};\n"
+            "        h._ = 0;\n"
+            "        remove h._;\n"
+            "        ready.waitForZero();\n"
+            "        for (int i = 0; i < 200; ++i) {\n"
+            "            call_function(\"dbg_hash_insert_with_hash_of\", h, \"t\" + t + \"-\" + i, \"s\" + t, i);\n"
+            "        }\n"
+            "        hash<auto> info = call_function(\"dbg_hash_key_map_info\", h);\n"
+            "        bool ok = info.hardened && info.max_chain <= 16;\n"
+            "        for (int i = 0; i < 200; ++i) {\n"
+            "            ok = ok && h{\"t\" + t + \"-\" + i} === i;\n"
+            "        }\n"
+            "        if (!ok) { m.lock(); errs += sprintf(\"thread %d: %y\", t, info - \"member_buckets\"); "
+                "m.unlock(); }\n"
+            "    }();\n"
+            "}\n"
+            "ready.dec();\n"
+            "c.waitForZero();\n"
+            "printf(\"%s\\n\", errs ? errs.join(\"; \") : \"OK\");\n";
+        assertEq("OK", trim(runChild(src)));
+    }
+
+    #! runs a child process that prints the bucket of each member of a hardened hash
+    private string runLayout(*string key) {
+        string src = "%modern\n"
+            "hash<auto> h = {};\n"
+            "h._ = 0;\n"
+            "remove h._;\n"
+            "for (int i = 0; i < 64; ++i) {\n"
+            "    call_function(\"dbg_hash_insert_with_hash_of\", h, \"k\" + i, \"shared\", i);\n"
+            "}\n"
+            "hash<auto> info = call_function(\"dbg_hash_key_map_info\", h);\n"
+            "if (!info.hardened) { printf(\"not hardened\\n\"); exit(1); }\n"
+            "printf(\"%s\\n\", info.member_buckets.join(\",\"));\n";
+        string out = runChild(src, key);
+        assertRegex("^[0-9]+(,[0-9]+){63}$", trim(out), out);
+        return trim(out);
+    }
+
+    #! runs the Qore source \a src in a child process and returns its output; with the secret key \a key if given
+    private string runChild(string src, *string key) {
+        string file = tmp_location() + DirSep + sprintf("hash-key-hardening-%d-%d.q", getpid(), ++child_count);
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(src);
+        f.close();
+        on_exit unlink(file);
+        string qore = TestInterpreter::qore_interpreter();
+        string env = "unset QORE_DBG_HASH_KEY; ";
+        if (key) {
+            env += sprintf("QORE_DBG_HASH_KEY=%s ", key);
+        }
+        int rc;
+        string out = backquote(sprintf("%s'%s' '%s' 2>&1", env, replace(qore, "'", "'\\''"),
+            replace(file, "'", "'\\''")), \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    #! returns a new hash made at run time, which has no other reference
+    private hash<auto> newHash() {
+        # a hash<auto>: an empty literal, changed (and so copied) at run time
+        hash<auto> h = {};
+        h._ = 0;
+        remove h._;
+        return h;
+    }
+
+    #! returns a hash<auto> with the keys "k<i>" for the numbers \a nums and the numbers as values, inserted normally
+    private hash<auto> numbered(softlist<int> nums) {
+        hash<auto> h = newHash();
+        foreach int i in (nums) {
+            h{"k" + i} = i;
+        }
+        return h;
+    }
+
+    #! returns a hardened hash with the keys "k0" .. "k<n-1>" and their numbers as values
+    private hash<auto> makeHardened(int n) {
+        hash<auto> h = newHash();
+        for (int i = 0; i < n; ++i) {
+            insertShared(h, "k" + i, i);
+        }
+        assertTrue(mapInfo(h).hardened);
+        return h;
+    }
+
+    #! inserts \a key with the hash of SharedKey
+    private insertShared(hash<auto> h, string key, auto value) {
+        call_function("dbg_hash_insert_with_hash_of", h, key, SharedKey, value);
+    }
+
+    private hash<auto> mapInfo(hash<auto> h) {
+        return call_function("dbg_hash_key_map_info", h);
+    }
+
+    #! checks that the keys "k0" .. "k<n-1>" are found with their values, and that others are not
+    private checkKeys(hash<auto> h, int n) {
+        assertEq(n, h.size());
+        int bad = 0;
+        for (int i = 0; i < n; ++i) {
+            string k = "k" + i;
+            if (h{k} !== i || !exists h{k} || !h.hasKey(k)) {
+                ++bad;
+            }
+            if (exists h{"x" + i} || h.hasKey("k" + (i + n))) {
+                ++bad;
+            }
+        }
+        assertEq(0, bad, "every key is found, and no other");
+        assertEq((map "k" + $1, xrange(n)), keys h);
+    }
+
+    private requireDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug functions dbg_hash_insert_with_hash_of() and dbg_hash_key_map_info() are only in "
+                "debug builds");
+        }
+    }
+
+    private {
+        int child_count = 0;
+    }
+}
