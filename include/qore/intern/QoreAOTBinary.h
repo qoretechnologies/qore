@@ -688,6 +688,11 @@ constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY_VERSION = 52;
 //!        IR, the release of a pending return that a return replaces, which releases the value only if that can run
 //!        an object destructor (an object, or a value that owns one), and keeps any other value for a debugger request
 //!        that resumes the replaced return (qore#7022)
+//!      - no format change, but the class signature hashes of the CLASSES records that a v52 compiler wrote differ (an
+//!        image must be rebuilt): the signature of a user class starts with the path of its namespace
+//!        (qore_class_private::initializeIntern(), qore#7397), so that classes with the same name and declarations in
+//!        different namespaces are different types; the hashes of an earlier image do not have it, and its classes of
+//!        the same name and declarations in different namespaces would be one type
 //! The shared format version for the changes of the second AOT-identity batch (see v53 above).
 constexpr uint16_t QORE_AOT_BATCH_AOT_IDENTITY2_VERSION = 53;
 //! The shared format version for the changes in batch AL (see v48 above).
@@ -728,7 +733,8 @@ constexpr uint16_t QORE_AOT_TYPED_RELEASE_OWNED_TEMP_VERSION = QORE_AOT_BATCH_AO
 //! v53 image always has the temp scopes of its IR (qore#6742), the local unwind locations of its IR functions
 //! (qore#6672), the owner-qualified wildcard bounds of its type paths (qore#7184), the declaration index of each
 //! METHODS record (qore#7169), the callee of each background helper (qore#7087), the exit restorations of its IR
-//! functions (qore#7379) and the layout of the typed ReleaseOwnedTemp of its debug IR (qore#7022)
+//! functions (qore#7379), the layout of the typed ReleaseOwnedTemp of its debug IR (qore#7022) and class signature
+//! hashes with the namespace path of their class (qore#7397)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AOT_IDENTITY2_VERSION;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -1008,7 +1014,9 @@ constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records includ
 constexpr uint64_t QORE_AOT_FEAT_BCA_NATIVE_ARGS = 1ULL << 30; //!< BCA arg blobs contain native inline AOT expressions, not legacy EXPR_TREE blobs
 constexpr uint64_t QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS = 1ULL << 31; //!< closure records split effective varargs from signature ellipsis
 constexpr uint64_t QORE_AOT_FEAT_CONTAINER_TYPEINFO = 1ULL << 32; //!< MakeList/MakeHash records carry parse-time container typeInfo
-constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33; //!< CLASSES records carry parser-produced class signature hashes
+//! CLASSES records carry parser-produced class signature hashes (with the namespace path of the class from v53, see
+//! QORE_AOT_BATCH_AOT_IDENTITY2_VERSION)
+constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33;
 constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHODS variant flags preserve synchronized gates
 constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo
 constexpr uint64_t QORE_AOT_FEAT_MODULE_COMMANDS = 1ULL << 36; //!< `%module-cmd` directives replayed from source-stripped AOT metadata
