@@ -577,6 +577,112 @@ DLLEXPORT QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, c
 */
 DLLEXPORT int qore_dbi_check_connect_path(Datasource* ds, const char* path, int mode, ExceptionSink* xsink);
 
+//! defined if qore_dbi_pin_connect_path() and the qore_dbi_pinned_path_*() functions are available
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_DBI_PIN_CONNECT_PATH 1
+
+//! a local path of a connection pinned with qore_dbi_pin_connect_path(); opaque
+struct QoreDbiPinnedPath;
+
+//! checks a local path that a connection of the datasource opens as qore_dbi_check_connect_path() does, and pins it
+/** The path is checked against the filesystem policy of every sandbox that governed the code that chose the
+    connection values of the datasource, and the directory that holds the file is pinned against a concurrent change
+    of the filesystem: the driver opens the file, and the files that belong to it (such as the journal of a database
+    file), with qore_dbi_pinned_path_open(), relative to the directory checked and without following a link, and keeps
+    the pinned path for as long as the connection opens files with it (freeing it while the connection uses files in
+    the directory releases the directory).  Without a sandbox that restricts the connection, the files are opened by
+    their names.
+
+    The files that belong to the file (its name followed by a suffix, see qore_dbi_pinned_path_open()) are covered by
+    the check of the file: a rule of the policy for the name of such a file is not consulted.  With \c QSEC_CREATE,
+    the directory that holds the file is pinned and the file is not reached through a link (an existing file that is
+    a link is not opened); otherwise the file that the path reaches is pinned.
+
+    @param ds the datasource whose connection is being opened
+    @param path the path of the file that the connection opens
+    @param mode the access mode (\c QSEC_READ, \c QSEC_WRITE, \c QSEC_CREATE, ...); with \c QSEC_CREATE the file can
+    be created
+    @param xsink a denial is raised here (\c FILESYSTEM-ACCESS-DENIED), or the error of a path that cannot be pinned
+
+    @return the pinned path, which the caller frees with qore_dbi_pinned_path_free(), or nullptr if an exception was
+    raised
+
+    @note on Windows the path is checked but not pinned
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreDbiPinnedPath* qore_dbi_pin_connect_path(Datasource* ds, const char* path, int mode,
+        ExceptionSink* xsink);
+
+//! opens the file of a pinned path, or a file that belongs to it, relative to the directory checked
+/** The file is opened without following a link (a file that was replaced by a link after the check is not opened)
+
+    @param pin the pinned path
+    @param suffix appended to the name of the file to open a file that belongs to it in the same directory (for
+    example \c "-journal"), or nullptr for the file itself
+    @param flags the flags of open(2); \c O_NOFOLLOW and \c O_CLOEXEC are added; the access that they give must be
+    one that the path was checked for (write access, \c O_TRUNC and \c O_CREAT need \c QSEC_WRITE, and \c O_CREAT
+    also \c QSEC_CREATE), otherwise the open fails with \c EACCES
+    @param mode the mode of a file created
+
+    @return the descriptor, or -1 for an error (errno is set; \c EINVAL for a suffix that contains a \c '/')
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_dbi_pinned_path_open(const QoreDbiPinnedPath* pin, const char* suffix, int flags, int mode);
+
+//! removes a file that belongs to the file of a pinned path (or the file itself), relative to the directory checked
+/** @param pin the pinned path, which must have been checked for \c QSEC_DELETE or \c QSEC_WRITE
+    @param suffix appended to the name of the file (see qore_dbi_pinned_path_open()), or nullptr for the file itself
+
+    @return 0 for OK, -1 for an error (errno is set)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_dbi_pinned_path_unlink(const QoreDbiPinnedPath* pin, const char* suffix);
+
+//! checks the access of a file that belongs to the file of a pinned path (or the file itself), without following a link
+/** @param pin the pinned path
+    @param suffix appended to the name of the file (see qore_dbi_pinned_path_open()), or nullptr for the file itself
+    @param amode the access (\c F_OK, \c R_OK, \c W_OK, as for access(2))
+
+    @return 0 for access, -1 otherwise (errno is set)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_dbi_pinned_path_access(const QoreDbiPinnedPath* pin, const char* suffix, int amode);
+
+//! returns the descriptor of the directory that holds the file of a pinned path, or \c AT_FDCWD if it is not pinned
+/** For a driver that opens the files itself (for example through the VFS of its client library): it opens the name
+    that qore_dbi_pinned_path_leaf() returns relative to the descriptor with \c openat() and \c O_NOFOLLOW; the
+    descriptor belongs to the pinned path.  On Linux it is an \c O_PATH descriptor: to synchronize the directory, open
+    \c "." relative to it
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int qore_dbi_pinned_path_dirfd(const QoreDbiPinnedPath* pin);
+
+//! returns the name of the file of a pinned path in the directory that qore_dbi_pinned_path_dirfd() returns
+/** @since %Qore 3.0
+*/
+DLLEXPORT const char* qore_dbi_pinned_path_leaf(const QoreDbiPinnedPath* pin);
+
+//! returns a path of the file of a pinned path for a client library that can only open a file by its name
+/** On Linux, a path through the procfs link of the directory held, which reaches the directory checked; the client
+    library must open it as it is (not canonicalize it, which reaches the name again), and a file replaced by a link
+    after the check is followed: prefer qore_dbi_pinned_path_open(); on other systems the canonical path checked.
+    Without a sandbox that restricts the connection, the path as given
+
+    @since %Qore 3.0
+*/
+DLLEXPORT const char* qore_dbi_pinned_path_get(const QoreDbiPinnedPath* pin);
+
+//! frees a path pinned with qore_dbi_pin_connect_path(); nullptr is accepted
+/** @since %Qore 3.0
+*/
+DLLEXPORT void qore_dbi_pinned_path_free(QoreDbiPinnedPath* pin);
+
 //! defined if qore_dbi_check_connect_address() is available
 /** @since %Qore 3.0
 */
