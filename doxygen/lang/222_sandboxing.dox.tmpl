@@ -351,13 +351,12 @@ authenticate();
     code that parses or loads the class counts too: a class that restricted code parses or loads in a Program whose
     sandbox trusts its code, in a Program without a sandbox or in a Program that it creates is a class that sandboxed
     code declared.  A class of a Program whose sandbox trusts its code is also a class that trusted code declared, so
-    a tenant's subclass of it has no private access to it.  Code that is sandboxed without a manager (the code of a
-    Program that sandboxed code marked sandboxed, which no manager governs) is restricted for this rule, as is the
-    code that it calls, though SandboxManager::isRestricted() returns \c False for it as no manager restricts it.  As
-    for every other policy, the code of a Program is governed by the Program's own sandbox: the code of a Program whose
-    sandbox trusts its code is trusted also when restricted code calls it, so a host gives restricted code a
-    @ref Qore::Program "Program" object whose code parses what it is given (see @ref sandbox_program_capability)
-    only if that code may declare classes with private access to trusted classes.  Code
+    a tenant's subclass of it has no private access to it.  Code that restricted code calls acts for it: a class that
+    such code parses or loads is a class that sandboxed code declared, also when the sandbox of the Program of the
+    code that parses it trusts its code (a host's function that parses the source that a tenant hands it, for
+    example).  A Program that is sandboxed without a manager (one that sandboxed code marked sandboxed, which no
+    manager governs) is restricted for this rule, as for
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()".  Code
     that a sandbox restricts cannot relax the policy of the manager that governs it, and a class keeps the access that
     it was committed with when the policy is changed later.  A class that a Program parsed before a sandbox manager
     was set for it keeps the private access that it had, so a host sets the manager and its policy before it parses

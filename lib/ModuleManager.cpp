@@ -4884,10 +4884,7 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     // a module that a sandboxed Program without a manager of its own (one that sandboxed code created), or a
     // sandboxed caller, chose is sandboxed as well; its code is governed by the sandbox of its callers
     if (sandboxed_caller || qore_program_is_sandboxed(parent_pgm)) {
-        // the code of the module is restricted without a manager if code that no sandbox trusts chose it (qore#7635)
-        const qore_program_private* ppp = parent_pgm ? qore_program_private::get(*parent_pgm) : nullptr;
-        qore_program_mark_sandboxed(module_pgm, (sandboxed_caller && qore_caller_marks_untrusted())
-            || (ppp && ppp->untrusted_mark.load(std::memory_order_acquire)));
+        qore_program_mark_sandboxed(module_pgm);
     }
     if (sm) {
         sm->deref(nullptr);
