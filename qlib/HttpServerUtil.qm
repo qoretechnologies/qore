@@ -158,12 +158,60 @@ module HttpServerUtil {
     \c header-info key of the request context, and the server decodes request text with it; use the
     \c _qore_orig_content_type value to read the parameter for a request of any HTTP version.
 
+    @subsection httpserverutil_request_credentials The Credentials of a Request
+
+    The code that serves a stream request (the @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest" object
+    that @ref HttpServer::AbstractHttpRequestHandler::getStreamRequestImpl() "getStreamRequestImpl()" returns, and the
+    code that creates it), and the REST classes of a @ref RestHandler::RestHandler "RestHandler", get the request
+    without the objects of the server and without the credentials of the request:
+    @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" is the one filter
+    of the credentials of a request, which a platform that hands a request to the code of a tenant applies as well,
+    with the options of its own authentication (@ref HttpServer::HttpRequestFilterOptions "HttpRequestFilterOptions"):
+    - the request context has only the keys of
+      @ref HttpServer::AbstractStreamRequest::ContextKeys "ContextKeys": the identity of the authenticated user
+      (\c user) is given, and of the \c peer-info hash only the address of the client
+      (@ref HttpServer::AbstractStreamRequest::PeerInfoKeys "PeerInfoKeys"); the original \c Authorization value
+      (\c auth), the listener's sockets (\c socket, \c socket-info), the user thread context (\c uctx), the logger
+      and the other objects of the server are withheld
+    - the header fields of @ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders" (the
+      \c Proxy-Authorization field and the cookies, always; \c Authorization, see below) and those that the
+      platform's authentication consumed
+      (@ref HttpServer::HttpRequestFilterOptions::platform_headers "platform_headers") are withheld, also in the
+      \c headers hash and in the \c headers-raw hash of \c header-info
+    - the trailer fields of a chunked or an HTTP/2 or HTTP/3 body are header fields: the fields of
+      @ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders" are withheld from them as well,
+      in the \c trailers key of the request context and in the trailers that the stream request gets
+      (@ref HttpServer::AbstractStreamRequest::filterTrailers() "filterTrailers()")
+    - the user information of the request URI and the query parameters that the platform consumed
+      (@ref HttpServer::HttpRequestFilterOptions::platform_query_params "platform_query_params") are removed from the
+      paths and the request URI
+    - the \c Authorization field is given only to a handler that authenticates the requests of its own endpoint: it
+      has no authenticator, or a @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator", and it opts in
+      to receive the field
+      (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()",
+      which only trusted code can call: it refuses sandboxed callers); a credential that the platform consumed is
+      never given
+
+    A request handler that dispatches requests to the code of other components withholds their credentials with
+    @ref HttpServer::AbstractHttpRequestHandler::withholdRequestCredentials() "withholdRequestCredentials()".  The
+    stream request itself serves the request with the raw request, which it keeps in members that only its own code
+    reads: the request handler gives it to the stream request that it creates in the HTTP server's dispatch; a stream
+    request created otherwise, for example by code that calls a handler directly, serves the request with the context
+    and the header fields that it is given.  The socket of the request is given as before.
+
     See @subpage httpserverutil_relnotes "HttpServerUtil Module Release Notes" for the changes in each version.
 */
 /** @page httpserverutil_relnotes HttpServerUtil Module Release Notes
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - the code that serves a stream request gets the request without the objects of the server and the credentials
+      of the request, also in the arguments of the stream request's constructor; a handler that authenticates its own
+      endpoint opts in to receive its \c Authorization field
+      (@ref HttpServer::AbstractHttpRequestHandler::setRequestCredentialHeaders() "setRequestCredentialHeaders()"),
+      and a platform filters a request for the code of a tenant with
+      @ref HttpServer::AbstractStreamRequest::filterRequest() "AbstractStreamRequest::filterRequest()" (see
+      @ref httpserverutil_request_credentials; issue #6843)
     - added @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", through which
       the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request is set up without the
       connection's socket (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
@@ -2720,8 +2768,130 @@ public class Http1BodyReader {
     }
 }
 
+#! The raw requests that the request handlers on the thread hand to the stream requests that they create, the
+#! innermost last (qore#6843); see HttpRequestHandoff
+thread_local *list<*hash<auto>> http_request_handoffs;
+
+#! The last token of a handoff on the thread; see HttpRequestHandoff
+thread_local int http_request_handoff_seq;
+
+#! Hands the raw request of a request to the stream request that a request handler creates for it (qore#6843)
+/** Not public: only the code of this module uses it.  A request handler creates it with
+    AbstractHttpRequestHandler::withholdRequestCredentials() while it dispatches a request to the code that serves
+    it, which gets the request filtered; the first stream request created on the thread for the request (with its ID,
+    original path and method) takes the raw request, which then is no longer handed to another one.  The handoffs of
+    a thread end in the reverse order of their creation; one that does not fails closed: no raw request is handed on
+    the thread any more.
+*/
+class HttpRequestHandoff {
+    private:internal {
+        bool active;
+        int token;
+    }
+
+    #! hands the raw request to the next stream request created for it on the thread
+    constructor(hash<auto> cx, hash<auto> hdr) {
+        token = ++http_request_handoff_seq;
+        http_request_handoffs += ({"cx": cx, "hdr": hdr, "token": token},);
+        active = True;
+    }
+
+    #! a handoff cannot be copied: a copy would end the entry of the original
+    copy() {
+        active = False;
+        throw "HTTP-SERVER-ERROR", "a request handoff cannot be copied";
+    }
+
+    #! the raw request is no longer handed on the thread
+    destructor() {
+        if (!active) {
+            return;
+        }
+        active = False;
+        if (http_request_handoffs && http_request_handoffs.last().token == token) {
+            pop http_request_handoffs;
+            return;
+        }
+        remove http_request_handoffs;
+        throw "HTTP-SERVER-ERROR", "a request handoff ended that is not the innermost one of the thread; no raw request "
+            "is handed on the thread any more";
+    }
+
+    #! returns @ref True if the calling code is sandboxed; fails closed: @ref True if it cannot be decided
+    static bool callerIsSandboxed() {
+        try {
+            return SandboxManager::isSandboxed();
+        } catch (hash<ExceptionInfo> ex) {
+            return True;
+        }
+    }
+
+    #! Returns and takes the raw request of the innermost handoff of the thread if it is the request given, else NOTHING
+    static *hash<auto> take(hash<auto> cx, hash<auto> hdr) {
+        if (!http_request_handoffs) {
+            return;
+        }
+        int i = http_request_handoffs.size() - 1;
+        *hash<auto> h = http_request_handoffs[i];
+        if (!h.cx || h.cx.id != cx.id || h.cx.orig_path != cx.orig_path || h.hdr.method != hdr.method) {
+            return;
+        }
+        # used up: no other stream request gets it
+        http_request_handoffs[i] = {"token": h.token};
+        return h - "token";
+    }
+}
+
+#! The options of AbstractStreamRequest::filterRequest(): what the platform consumed and what the handler opts in to
+/** The code that serves a request (a stream request, the handler of a service) gets the request without the
+    credentials of the request: see @ref httpserverutil_request_credentials
+
+    @since HttpServerUtil 1.6
+*/
+public hashdecl HttpRequestFilterOptions {
+    #! more header fields that the platform's authentication consumed (compared without regard to case)
+    /** Withheld always, as the fields of @ref HttpServer::AbstractStreamRequest::CredentialHeaders "CredentialHeaders"
+        that are always withheld; for example an API key or a session token that the platform reads
+    */
+    *softlist<string> platform_headers;
+
+    #! the query parameters that the platform's authentication consumed (compared without regard to case)
+    /** Removed from the query strings of the request URI and of the paths of the request context and the headers
+    */
+    *softlist<string> platform_query_params;
+
+    #! the credential header fields addressed to the handler itself that it opts in to receive
+    /** Only the fields of @ref HttpServer::AbstractStreamRequest::OwnCredentialHeaders "OwnCredentialHeaders" can be
+        given, and only if the platform did not authenticate the request (\a platform_authenticated is @ref False);
+        any other field is withheld all the same
+    */
+    *softlist<string> own_headers;
+
+    #! @ref True if the platform authenticated the request, so that it consumed its \c Authorization header field
+    bool platform_authenticated = True;
+}
+
+#! The request that AbstractStreamRequest::filterRequest() returns
+/** @since HttpServerUtil 1.6
+*/
+public hashdecl HttpFilteredRequestInfo {
+    #! the request context without the server's objects and the credentials of the request
+    hash<auto> cx;
+    #! the request header fields without the credentials of the request
+    hash<auto> hdr;
+    #! what was withheld: the lower-case names of the header fields, \c "url-userinfo", and \c "query:<name>" for
+    #! each query parameter removed
+    list<string> withheld = ();
+}
+
 #! abstract class for streaming HTTP chunked requests/responses
 /** This class is the base class for handling HTTP stream requests; i.e. with chunked data
+
+    The code that serves a stream request, and the stream request's subclasses, get the request without the objects
+    of the server and the credentials of the request (see @ref httpserverutil_request_credentials); the stream request
+    itself serves the request with the raw request, which only its own code reads: the request handler hands it to the
+    first stream request that is created for the request in the HTTP server's dispatch.  A stream request created
+    otherwise serves the request with the context and the header fields that it is given.
 
     The calling order is as follows:
     - constructor(): this is called when the request is received
@@ -2754,7 +2924,60 @@ public class Http1BodyReader {
       sent.  Subclasses should re-implement sendImpl() which is called by this method
 */
 public class AbstractStreamRequest {
-    public {}
+    public {
+        #! The keys of the request context that filterRequest() gives
+        /** The request metadata of @ref httpserverutil_request_context, without the objects of the server (its
+            logger, the client certificate, the listener's socket information, the user thread context of the
+            listener) and the original \c Authorization header; an allowlist: other keys, including those that the
+            server adds to the context, are not given
+
+            @since HttpServerUtil 1.6
+        */
+        const ContextKeys = ("char_encoding", "close", "compression-levels", "debug", "handler_name", "hdr",
+            "header-info", "id", "listener-id", "listener-name", "masked_path", "orig_path", "peer-info", "raw_path",
+            "response-encoding", "root_path", "ssl", "trailers", "url", "user");
+
+        #! The keys of the \c "peer-info" hash of the request context that the code serving the request gets
+        /** The address of the client, for logging and rate limits; an allowlist
+
+            @since HttpServerUtil 1.6
+        */
+        const PeerInfoKeys = ("address", "address_desc", "family", "familystr", "port");
+
+        #! The request header fields that hold credentials, which filterRequest() withholds (lower-case names)
+        /** The one list of the credential header fields of a request (see @ref httpserverutil_request_credentials):
+            - \c True: withheld always: the \c Proxy-Authorization field and the cookies of the request
+            - \c False: withheld unless the handler opts in to receive it and the platform did not authenticate the
+              request (see @ref OwnCredentialHeaders)
+
+            A platform adds the fields that its authentication consumes with
+            @ref HttpServer::HttpRequestFilterOptions::platform_headers "HttpRequestFilterOptions.platform_headers"
+
+            @since HttpServerUtil 1.6
+        */
+        const CredentialHeaders = {
+            "authorization": False,
+            "proxy-authorization": True,
+            "cookie": True,
+            "set-cookie": True,
+        };
+
+        #! The credential header fields that a handler can opt in to receive when the platform did not authenticate
+        #! the request (see @ref CredentialHeaders)
+        /** @since HttpServerUtil 1.6
+        */
+        const OwnCredentialHeaders = ("authorization",);
+
+        #! The keys of the \c "header-info" hash of the request context that filterRequest() gives
+        /** The request metadata that @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" gives, without
+            the socket, the stream and session IDs, the closures and the other server state that the server adds; an
+            allowlist, as @ref ContextKeys
+
+            @since HttpServerUtil 1.6
+        */
+        const HeaderInfoKeys = ("accept-encoding", "accept-encoding-weights", "body-content-type", "charset",
+            "headers-raw", "http2", "http3", "request-uri");
+    }
 
     private {
         #! the bound of the replies on an interactive HTTP/2 or HTTP/3 stream
@@ -2766,14 +2989,26 @@ public class AbstractStreamRequest {
         AbstractHttpRequestHandler handler;
         #! the Socket object for the response
         Socket s;
-        #! the call context variable
-        hash<auto> cx;
-        #! a hash of request headers
-        hash<auto> hdr;
         #! any message body given in a non-chunked request; could already be deserialized
         auto body;
         #! send and receive timeout
         timeout timeout_ms = HttpServer::DefaultTimeout;
+    }
+
+    private {
+        #! the call context variable, without the server's objects and the credentials of the request
+        /** See @ref httpserverutil_request_credentials
+        */
+        hash<auto> cx;
+        #! a hash of request headers, without the credentials of the request
+        hash<auto> hdr;
+    }
+
+    private:internal {
+        #! the raw request context of the request, which only the code of this class uses
+        hash<auto> raw_cx;
+        #! the raw header fields of the request, which only the code of this class uses
+        hash<auto> raw_hdr;
     }
 
     #! creates the object with the given attributes
@@ -2796,9 +3031,233 @@ public class AbstractStreamRequest {
         self.listener = listener;
         self.handler = handler;
         self.s = s;
+        # what subclasses read: as the code that created the object gives it, which the request handler filtered
         self.cx = cx;
         self.hdr = hdr;
         self.body = body;
+        # the code of this class serves the request with the raw request, which the request handler hands to the
+        # first stream request created for it on the thread (see AbstractHttpRequestHandler::withholdRequestCredentials());
+        # a stream request created otherwise serves the request with what it is given
+        *hash<auto> raw = HttpRequestHandoff::take(cx, hdr);
+        if (raw) {
+            raw_cx = raw.cx;
+            raw_hdr = raw.hdr;
+            # a body that the code that created the object gives deserialized (a REST stream request) is not decoded
+            # again; only that body: what the server reads is never marked deserialized by the code that created the
+            # object
+            if (cx.deserialized && exists body) {
+                raw_cx.deserialized = True;
+            }
+        } else {
+            raw_cx = cx;
+            raw_hdr = hdr;
+        }
+    }
+
+    #! Returns the request without the server's objects and the credentials of the request
+    #! Returns the request without the server's objects and the credentials of the request
+    /** The one filter of the credentials of a request (see @ref httpserverutil_request_credentials): the request
+        handler applies it before the code that serves a request gets the request (see
+        AbstractHttpRequestHandler::getStreamRequest()), and a platform that hands a request to the code of a tenant
+        applies it with the options of its own authentication.
+
+        - the request context: only the keys in @ref ContextKeys; of its \c "header-info" hash only the keys in
+          @ref HeaderInfoKeys, and of its \c "peer-info" hash only the keys in @ref PeerInfoKeys
+        - the header fields of @ref CredentialHeaders and of \a opts.platform_headers are removed from the request
+          header fields, their \c "headers" hash, the \c "hdr" key of the request context and the \c "headers-raw"
+          hash of its \c "header-info"; \c Authorization is given only if the platform did not authenticate the
+          request and the handler opts in to receive it (\a opts.own_headers)
+        - the user information of the request URI and the query parameters of \a opts.platform_query_params are
+          removed from the request URI, the paths of the request context and the paths of the header fields
+
+        @param cx the request context
+        @param hdr the request header fields
+        @param opts the options of the platform and the handler; without them, every credential is withheld
+
+        @return the request context and header fields without the credentials, and what was withheld
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<HttpFilteredRequestInfo> filterRequest(hash<auto> cx, hash<auto> hdr,
+            *hash<HttpRequestFilterOptions> opts) {
+        # the header fields withheld: lower-case names
+        hash<string, bool> withheld_headers = map {$1: True}, keys CredentialHeaders;
+        hash<string, bool> platform_headers;
+        if (opts.platform_headers) {
+            platform_headers = map {$1.lwr(): True}, opts.platform_headers;
+            withheld_headers += platform_headers;
+        }
+        # a handler's own credentials only where the platform consumed none; without an opt-in, they are withheld
+        if (opts && !opts.platform_authenticated && opts.own_headers) {
+            foreach string name in (opts.own_headers) {
+                name = name.lwr();
+                if (inlist(name, OwnCredentialHeaders) && !platform_headers{name}) {
+                    remove withheld_headers{name};
+                }
+            }
+        }
+        hash<string, bool> query_params;
+        if (opts.platform_query_params) {
+            query_params = map {$1.lwr(): True}, opts.platform_query_params;
+        }
+
+        hash<string, bool> withheld = {};
+
+        # the request context
+        hash<auto> rv = {};
+        foreach string key in (ContextKeys) {
+            if (cx.hasKey(key)) {
+                rv{key} = cx{key};
+            }
+        }
+        if (cx."header-info".typeCode() == NT_HASH) {
+            hash<auto> info = {};
+            foreach string key in (HeaderInfoKeys) {
+                if (cx."header-info".hasKey(key)) {
+                    info{key} = cx."header-info"{key};
+                }
+            }
+            if (info."headers-raw".typeCode() == NT_HASH) {
+                info."headers-raw" = AbstractStreamRequest::removeHeaders(info."headers-raw", withheld_headers,
+                    \withheld);
+            }
+            if (info."request-uri".typeCode() == NT_STRING) {
+                info."request-uri" = AbstractStreamRequest::removeUriCredentials(info."request-uri", query_params,
+                    \withheld);
+            }
+            rv."header-info" = info;
+        }
+        if (rv."peer-info".typeCode() == NT_HASH) {
+            hash<auto> peer = {};
+            foreach string key in (PeerInfoKeys) {
+                if (rv."peer-info".hasKey(key)) {
+                    peer{key} = rv."peer-info"{key};
+                }
+            }
+            rv."peer-info" = peer;
+        }
+        if (rv.hdr.typeCode() == NT_HASH) {
+            rv.hdr = AbstractStreamRequest::removeHeaderCredentials(rv.hdr, withheld_headers, query_params,
+                \withheld);
+        }
+        # trailer fields are header fields
+        if (rv.trailers.typeCode() == NT_HASH) {
+            rv.trailers = AbstractStreamRequest::removeHeaders(rv.trailers, withheld_headers, \withheld);
+        }
+        foreach string key in ("masked_path", "orig_path", "raw_path") {
+            if (rv{key}.typeCode() == NT_STRING) {
+                rv{key} = AbstractStreamRequest::removeUriCredentials(rv{key}, query_params, \withheld);
+            }
+        }
+        if (rv.url.typeCode() == NT_HASH) {
+            hash<auto> url = rv.url;
+            foreach string key in ("username", "password") {
+                if (url.hasKey(key)) {
+                    remove url{key};
+                    withheld."url-userinfo" = True;
+                }
+            }
+            if (url.path.typeCode() == NT_STRING) {
+                url.path = AbstractStreamRequest::removeUriCredentials(url.path, query_params, \withheld);
+            }
+            rv.url = url;
+        }
+
+        hash<auto> rhdr = AbstractStreamRequest::removeHeaderCredentials(hdr, withheld_headers, query_params,
+            \withheld);
+        return <HttpFilteredRequestInfo>{
+            "cx": rv,
+            "hdr": rhdr,
+            "withheld": (keys withheld) ?? (),
+        };
+    }
+
+    #! Returns trailer fields without the credentials of the request
+    /** The trailer fields that a client sends after a chunked or an HTTP/2 or HTTP/3 body are header fields: the
+        fields of @ref CredentialHeaders are removed, compared without regard to case
+
+        @param trailers the trailer fields
+
+        @return \a trailers without the fields of @ref CredentialHeaders
+
+        @since HttpServerUtil 1.6
+    */
+    static *hash<auto> filterTrailers(*hash<auto> trailers) {
+        if (!trailers) {
+            return trailers;
+        }
+        hash<string, bool> withheld = {};
+        hash<string, bool> names = map {$1: True}, keys CredentialHeaders;
+        return AbstractStreamRequest::removeHeaders(trailers, names, \withheld);
+    }
+
+    #! removes the withheld fields from the header fields and their "headers" hash, and the user information and the
+    #! platform's query parameters from their paths
+    private:internal static hash<auto> removeHeaderCredentials(hash<auto> hdr, hash<string, bool> names,
+            *hash<string, bool> query_params, reference<hash<string, bool>> withheld) {
+        hdr = AbstractStreamRequest::removeHeaders(hdr, names, \withheld);
+        if (hdr.headers.typeCode() == NT_HASH) {
+            hdr.headers = AbstractStreamRequest::removeHeaders(hdr.headers, names, \withheld);
+        }
+        foreach string key in ("path", "method_path") {
+            if (hdr{key}.typeCode() == NT_STRING) {
+                hdr{key} = AbstractStreamRequest::removeUriCredentials(hdr{key}, query_params, \withheld);
+            }
+        }
+        return hdr;
+    }
+
+    #! removes the header fields with the given lower-case names, compared without regard to case
+    private:internal static hash<auto> removeHeaders(hash<auto> hdr, hash<string, bool> names,
+            reference<hash<string, bool>> withheld) {
+        foreach string key in (keys hdr) {
+            string lkey = key.lwr();
+            if (names{lkey}) {
+                remove hdr{key};
+                withheld{lkey} = True;
+            }
+        }
+        return hdr;
+    }
+
+    #! removes the user information of a URI and the given query parameters from its query string
+    private:internal static string removeUriCredentials(string uri, *hash<string, bool> query_params,
+            reference<hash<string, bool>> withheld) {
+        # the user information of an absolute URI: scheme://userinfo@host
+        *list<*string> m = (uri =~ x/^([A-Za-z][-A-Za-z0-9+.]*:\/\/)([^\/?#@]*)@(.*)$/s);
+        if (m) {
+            uri = m[0] + m[2];
+            withheld."url-userinfo" = True;
+        }
+        if (!query_params) {
+            return uri;
+        }
+        int q = uri.find("?");
+        if (q < 0) {
+            return uri;
+        }
+        string query = uri.substr(q + 1);
+        string frag = "";
+        int f = query.find("#");
+        if (f >= 0) {
+            frag = query.substr(f);
+            query = query.substr(0, f);
+        }
+        list<string> kept = ();
+        foreach string param in (query.split("&")) {
+            string name = param;
+            int e = name.find("=");
+            if (e >= 0) {
+                name = name.substr(0, e);
+            }
+            name = decode_url(name).lwr();
+            if (query_params{name}) {
+                withheld{"query:" + name} = True;
+                continue;
+            }
+            kept += param;
+        }
+        return uri.substr(0, q) + (kept ? "?" + join("&", kept) : "") + frag;
     }
 
     #! returns @ref True if the server should apply content encoding (compression) to the response body
@@ -2898,13 +3357,13 @@ public class AbstractStreamRequest {
                 "data": body,
                 "chunked": False
             };
-            if (cx.deserialized) {
+            if (raw_cx.deserialized) {
                 dh.deserialized = True;
             }
             recv(dh);
             # signal end of data with any trailers received with the buffered body
-            recvImpl({"hdr": cx.trailers});
-        } else if (body_reader = cx."header-info".body_reader) {
+            recvImpl({"hdr": AbstractStreamRequest::filterTrailers(raw_cx.trailers)});
+        } else if (body_reader = raw_cx."header-info".body_reader) {
             # an HTTP/1.x body with a Content-Length that the handler wants as a stream (qore#7308): it is given in
             # binary parts of at most BodyStreamPartSize bytes, whether the server read it before the request was
             # dispatched or it is read from the socket here
@@ -2918,14 +3377,14 @@ public class AbstractStreamRequest {
             }
             # signal end of data
             recvImpl({"hdr": NOTHING});
-        } else if (cx."header-info".body_streaming) {
+        } else if (raw_cx."header-info".body_streaming) {
             # Opt-in interactive bidirectional streaming on HTTP/2 / HTTP/3: instead of
             # reading all inbound DATA before replying, interleave read -> reply on the
             # same stream so the client can do send -> read-result -> send (e.g.
             # read-your-writes within one session).  HTTP/1.x is half-duplex and always
             # uses the legacy recv-all-then-send model below.
             if (wantsInteractiveStreaming()
-                    && (cx."header-info".http2 || cx."header-info".http3)) {
+                    && (raw_cx."header-info".http2 || raw_cx."header-info".http3)) {
                 return handleInteractiveStream();
             }
             # HTTP/2 or HTTP/3 body streaming: read DATA frames incrementally and
@@ -2941,9 +3400,9 @@ public class AbstractStreamRequest {
             # response the REST framework sends after this.  A path that abandons a
             # response in progress must cancel the stream in both directions instead (see
             # handleInteractiveStream()).
-            int sid = cx."header-info".stream_id;
-            if (cx."header-info".http3) {
-                int session_id = cx."header-info".session_id;
+            int sid = raw_cx."header-info".stream_id;
+            if (raw_cx."header-info".http3) {
+                int session_id = raw_cx."header-info".session_id;
                 # Locally-captured abort flag flipped by the body_cancel closure
                 # below; checked after each readQuicStreamDataBlock() returns so
                 # we can distinguish a clean EOF (body really ended) from a
@@ -3009,7 +3468,7 @@ public class AbstractStreamRequest {
                 # The I/O thread drains frames into the Queue (NOTHING sentinel
                 # = END_STREAM); the handler thread never touches the H2 session.
                 *code<nothing(Queue)> register_body_queue
-                    = cx."header-info".register_body_queue;
+                    = raw_cx."header-info".register_body_queue;
                 if (!register_body_queue) {
                     throw "HTTP2-BODY-STREAMING-ERROR",
                         sprintf("body_streaming dispatch missing register_body_queue "
@@ -3064,15 +3523,15 @@ public class AbstractStreamRequest {
                 }
             }
             # signal end of data with any trailers sent after the body
-            recvImpl({"hdr": cx."header-info".http3
-                ? s.getQuicStreamTrailers(cx."header-info".session_id, sid)
-                : s.getHttp2StreamTrailers(sid)});
+            recvImpl({"hdr": AbstractStreamRequest::filterTrailers(raw_cx."header-info".http3
+                ? s.getQuicStreamTrailers(raw_cx."header-info".session_id, sid)
+                : s.getHttp2StreamTrailers(sid))});
         } else {
-            if (http_get_field(hdr, "transfer-encoding") == "chunked") {
+            if (http_get_field(raw_hdr, "transfer-encoding") == "chunked") {
                 # a body read as a stream has the limit set for the listener or the server, not the default limit of
                 # a body that the server reads into memory (DefaultMaxRequestBodySize), which applies again after
                 # the read, as to the rest of a body that the handler leaves unread
-                *int stream_max_body = cx."header-info".max_request_body_size;
+                *int stream_max_body = raw_cx."header-info".max_request_body_size;
                 int buffered_max_body = s.getMaxChunkedBodySize();
                 bool set_stream_max_body = exists stream_max_body && stream_max_body != buffered_max_body;
                 if (set_stream_max_body) {
@@ -3099,7 +3558,7 @@ public class AbstractStreamRequest {
                     }
                 };
                 try {
-                    if (http_get_field(hdr, "content-encoding")) {
+                    if (http_get_field(raw_hdr, "content-encoding")) {
                         s.readHTTPChunkedBodyBinaryWithCallback(chunked_recv,
                             timeout_ms);
                     } else {
@@ -3153,10 +3612,10 @@ public class AbstractStreamRequest {
         # for HTTP/2
         rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
         bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
-        http_set_reply_headers(s, cx, \rv, NOTHING, True);
+        http_set_reply_headers(s, raw_cx, \rv, NOTHING, True);
 
         # issue #4109: do not start async I/O with a HEAD request
-        if (!chunked || hdr.method == "HEAD") {
+        if (!chunked || raw_hdr.method == "HEAD") {
             return rv;
         }
 
@@ -3167,7 +3626,7 @@ public class AbstractStreamRequest {
             # CallbackInputStream would destroy those boundaries because the HTTP library reads from
             # the InputStream in arbitrary block sizes.
             rv.no_content_encoding = True;
-            if (cx."header-info".http2 || cx."header-info".http3) {
+            if (raw_cx."header-info".http2 || raw_cx."header-info".http3) {
                 remove rv.hdr."Transfer-Encoding";
                 if (rv.hdr."Content-Type" =~ /^application\/connect\+/) {
                     # Connect protocol: frames are self-describing (5-byte length prefix),
@@ -3215,7 +3674,7 @@ public class AbstractStreamRequest {
         # downstream code sends QUIC stream data; for HTTP/1.x, the InputStream is sent as
         # a chunked response via sendHTTPResponse. All protocols route through the async I/O
         # controller, freeing the handler thread immediately.
-        if (cx."header-info".http2 || cx."header-info".http3) {
+        if (raw_cx."header-info".http2 || raw_cx."header-info".http3) {
             # HTTP/2+3 use DATA frames / QUIC stream data, not chunked transfer encoding
             remove rv.hdr."Transfer-Encoding";
         }
@@ -3242,10 +3701,10 @@ public class AbstractStreamRequest {
         @since HttpServerUtil 1.6
     */
     private hash<HttpHandlerResponseInfo> handleInteractiveStream() {
-        bool http3 = cx."header-info".http3 ?? False;
-        int sid = cx."header-info".stream_id;
-        int session_id = http3 ? cx."header-info".session_id : 0;
-        *code<nothing()> io_wake = cx."header-info".io_wake;
+        bool http3 = raw_cx."header-info".http3 ?? False;
+        int sid = raw_cx."header-info".stream_id;
+        int session_id = http3 ? raw_cx."header-info".session_id : 0;
+        *code<nothing()> io_wake = raw_cx."header-info".io_wake;
         if (!io_wake) {
             throw "INTERACTIVE-STREAM-ERROR",
                 sprintf("interactive streaming dispatch missing io_wake closure for stream %d", sid);
@@ -3262,7 +3721,7 @@ public class AbstractStreamRequest {
             throw "HTTP-RESPONSE-STATUS-ERROR", sprintf("status %d returned for an interactive HTTP/%s stream is not "
                 "the status of a final response", rcode, http3 ? "3" : "2");
         }
-        http_set_reply_headers(s, cx, \rh);
+        http_set_reply_headers(s, raw_cx, \rh);
         hash<auto> resp_hdr = rh.hdr ?? {};
         # HTTP/2 and HTTP/3 do not use chunked transfer encoding
         remove resp_hdr."Transfer-Encoding";
@@ -3277,7 +3736,7 @@ public class AbstractStreamRequest {
         # sentinel = END_STREAM); HTTP/3 reads directly from the per-stream CV-driven QUIC reader
         Queue body_queue;
         if (!http3) {
-            *code<nothing(Queue)> register_body_queue = cx."header-info".register_body_queue;
+            *code<nothing(Queue)> register_body_queue = raw_cx."header-info".register_body_queue;
             if (!register_body_queue) {
                 throw "INTERACTIVE-STREAM-ERROR",
                     sprintf("interactive streaming dispatch missing register_body_queue closure "
@@ -3358,7 +3817,8 @@ public class AbstractStreamRequest {
         }
         # signal end of data with any trailers sent after the body, flush any final reply, then half-close the
         # stream
-        recvImpl({"hdr": http3 ? s.getQuicStreamTrailers(session_id, sid) : s.getHttp2StreamTrailers(sid)});
+        recvImpl({"hdr": AbstractStreamRequest::filterTrailers(http3 ? s.getQuicStreamTrailers(session_id, sid)
+            : s.getHttp2StreamTrailers(sid))});
         drainInteractiveReplies(sid, session_id, http3, io_wake);
         sendInteractiveData(sid, session_id, http3, binary(), True, io_wake);
 
@@ -3391,7 +3851,7 @@ public class AbstractStreamRequest {
     private sendInteractiveData(int sid, int session_id, bool http3, binary data, bool end_stream,
             code<nothing()> io_wake) {
         if (!interactive_bound) {
-            interactive_bound = StreamSendBound::forHeaderInfo(StreamInteractiveStallTimeout, cx."header-info");
+            interactive_bound = StreamSendBound::forHeaderInfo(StreamInteractiveStallTimeout, raw_cx."header-info");
         }
         interactive_bound.send(s, http3 ? session_id : NOTHING, sid, data, end_stream, io_wake);
     }
@@ -3423,8 +3883,12 @@ public class AbstractStreamRequest {
         if (exists v."data") {
             logChunk(False, v."data".size());
 
-            if (cx.deserialized)
+            if (raw_cx.deserialized)
                 v.deserialized = True;
+        }
+        # the trailer fields of a chunked body are header fields: their credentials are withheld (qore#6843)
+        if (v.hdr.typeCode() == NT_HASH) {
+            v.hdr = AbstractStreamRequest::filterTrailers(v.hdr);
         }
         recvImpl(v);
     }
@@ -3449,7 +3913,7 @@ public class AbstractStreamRequest {
     /** @par
         @code{.py}
 private logChunk(bool send, int size) {
-    listener.log("cid %d %s CHUNK %d bytes", cx.id, send ? "send" : "recv", size);
+    listener.log("cid %d %s CHUNK %d bytes", raw_cx.id, send ? "send" : "recv", size);
 }
         @endcode
 
@@ -4118,6 +4582,9 @@ public class AbstractHttpRequestHandler {
         #! the thread-local key of the handlers that set persistence on the thread (a PersistentThreadHandlers object)
         const PersistentThreadHandlersKey = "_AHRH_pth";
 
+        #! the credential header fields that the code serving the requests of this handler gets; see
+        #! setRequestCredentialHeaders()
+        *list<string> request_credential_headers;
         #! set by setHostsCode(): the handler runs the code of objects of other code (see hostedObjects(); qore#7305)
         bool host_code = False;
         #! set by setHandlerSocketView(): the handler's code gets the socket of its HTTP/1.x request (qore#7305)
@@ -4922,6 +5389,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     }
 
     #! top-level request handling method
+    /** The code that serves a stream request (getStreamRequestImpl() and the code that it calls) gets the request
+        without the server's objects and the credentials of the request; the stream request that it creates is handed
+        the raw request (see @ref httpserverutil_request_credentials)
+    */
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
             *data body) {
         # classic, non-streaming interface
@@ -4937,12 +5408,65 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
-        AbstractStreamRequest req = getStreamRequestImpl(listener, s, cx, hdr, body);
+        # the code that serves the request gets it without the server's objects and the credentials of the request
+        # (see AbstractStreamRequest::filterRequest()); the stream request that it creates is handed the raw request
+        *object handoff;
+        hash<HttpFilteredRequestInfo> filtered = withholdRequestCredentials(cx, hdr, \handoff);
+        on_exit delete handoff;
+        AbstractStreamRequest req = getStreamRequestImpl(listener, s, filtered.cx, filtered.hdr, body);
         hash<auto!> hrv = req.handleRequest();
         if (hrv.hasKey("raw_response")) {
             delete hrv."raw_response";
         }
         return cast<hash<HttpResponseInfo>>(hrv);
+    }
+
+    #! Returns the request without the server's objects and the credentials of the request for the code that serves
+    #! it, and hands the raw request to the stream request created for it
+    /** For the code of the hierarchy of this class that hands a request to code that serves it, such as a request
+        handler that dispatches requests to the classes of another component: the request is filtered with
+        AbstractStreamRequest::filterRequest(), with the options of this handler (its authenticator and
+        setRequestCredentialHeaders()); the first stream request created on the thread for the request
+        (@ref AbstractStreamRequest) takes the raw request, which only its own code reads, until \a handoff is
+        destroyed, which the caller does when the request has been served.
+
+        @param cx the raw request context
+        @param hdr the raw request header fields
+        @param handoff set to the object that hands the raw request; it is no longer handed when it is destroyed
+
+        @return the filtered request
+
+        @since HttpServerUtil 1.6
+    */
+    private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr,
+            reference<*object> handoff) {
+        hash<HttpFilteredRequestInfo> rv = AbstractStreamRequest::filterRequest(cx, hdr,
+            <HttpRequestFilterOptions>{
+                # the handler's authenticator consumed the credentials that it reads, unless it accepts every request
+                "platform_authenticated": exists auth && !(auth instanceof PermissiveAuthenticator),
+                "own_headers": request_credential_headers,
+            });
+        handoff = new HttpRequestHandoff(cx, hdr);
+        return rv;
+    }
+
+    #! Sets the credential header fields addressed to this handler that the code serving its requests gets
+    /** A handler that authenticates the requests of its own endpoint itself, with no authenticator of the platform
+        (or a @ref PermissiveAuthenticator), names the fields that it reads, from
+        @ref AbstractStreamRequest::OwnCredentialHeaders; by default every credential is withheld (see
+        @ref httpserverutil_request_credentials).  Only trusted code can set it.
+
+        @param names the credential header fields that the code serving the requests of this handler gets
+
+        @throw REQUEST-ERROR the calling code is sandboxed
+
+        @since HttpServerUtil 1.6
+    */
+    setRequestCredentialHeaders(*softlist<string> names) {
+        if (HttpRequestHandoff::callerIsSandboxed()) {
+            throw "REQUEST-ERROR", "sandboxed code cannot set the credentials that a handler's code gets";
+        }
+        request_credential_headers = names;
     }
 
     #! returns the AbstractStreamRequest object for handling chunked requests
