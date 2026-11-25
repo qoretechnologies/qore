@@ -61,6 +61,15 @@ module UnstructuredDataProvider {
                 "backend for the RAG ingestion path through "
                 "@ref QoreRagUtils::RagPipeline \"RagPipeline\".",
             "scheme": "unstructured",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "unstructured.io",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://unstructured.io/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": UnstructuredLogo,
             "logo_file_name": "unstructured-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -88,6 +97,7 @@ module UnstructuredDataProvider {
             "action_code": DPAT_API,
             # the document is parsed and returned; nothing is stored (qore#7454)
             "mutates_state": False,
+            "billing": <DataProviderBillingInfo>{"unit": "page"},
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnstructuredPartitionFileRequestDataType::Fields{
@@ -121,6 +131,7 @@ module UnstructuredDataProvider {
             "action_code": DPAT_API,
             # the text is parsed and returned; nothing is stored (qore#7454)
             "mutates_state": False,
+            "billing": <DataProviderBillingInfo>{"unit": "page"},
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 UnstructuredPartitionTextRequestDataType::Fields{"text",}, {
@@ -137,10 +148,15 @@ module UnstructuredDataProvider {
         DataProviderActionCatalog::registerLazyAppActions(UnstructuredDataProvider::AppName, sub () {
             # Platform API actions, generated from the vendored schema.  The generator paths them at the
             # root, and they live under the "platform" child, so each path is prefixed here.
-            map DataProviderActionCatalog::registerAction(cast<hash<DataProviderActionInfo>>($1 + {
-                "path": "/" + UnstructuredPlatformDataProvider::ProviderName + $1.path,
-            })), UnstructuredPlatformSchema::getActionSet().getActionInfoList(
-                UnstructuredDataProvider::AppName);
+            foreach hash<DataProviderActionInfo> action in (UnstructuredPlatformSchema::getActionSet()
+                    .getActionInfoList(UnstructuredDataProvider::AppName)) {
+                action.path = "/" + UnstructuredPlatformDataProvider::ProviderName + action.path;
+                # Management operations do not process documents. A run can process both pages and media minutes.
+                if (action.action != "run-workflow") {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                }
+                DataProviderActionCatalog::registerAction(action);
+            }
 
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": UnstructuredDataProvider::AppName,
@@ -158,6 +174,8 @@ module UnstructuredDataProvider {
                     "This action answers from the API description shipped with this module and makes "
                     "no request to Unstructured.",
                 "action_code": DPAT_API,
+                "processing": <DataProviderProcessingInfo>{"locality": "local"},
+                "billing": <DataProviderBillingInfo>{"model": "included"},
                 # answered from the vendored API description (qore#7454)
                 "mutates_state": False,
                 "groups": (UnstructuredPlatformManifest::GroupConnectors,),
@@ -184,6 +202,7 @@ module UnstructuredDataProvider {
                     "Set `workflow_id` to watch one workflow rather than every run in the account.",
                 "action_code": DPAT_EVENT,
                 "action_val": UnstructuredJobWatchDataProvider::EventJobFinished,
+                "billing": <DataProviderBillingInfo>{"model": "included"},
                 "groups": (UnstructuredPlatformManifest::GroupJobs,),
                 "options": {
                     "workflow_id": <ActionOptionInfo>{
@@ -232,6 +251,11 @@ module UnstructuredDataProvider {
     |!API|!Host|!What it is
     |Partition API|@c api.transform.unstructured.io|one document in, a typed element tree out
     |Platform API|@c platform-api.transform.unstructured.io|connectors, workflows and their runs
+
+    The action catalog identifies the hosted recipient as @c unstructured.io and links to the vendor's
+    <a href="https://unstructured.io/pricing">pricing</a>. The two partition actions are metered by page.
+    Workflow runs can process both documents and time-based media, so their unit depends on the input.
+    Managing connectors, workflows and jobs is included. Looking up connector fields uses the local schema.
 
     @section unstructureddataproviderpartition Partitioning Documents
 
