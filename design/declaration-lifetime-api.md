@@ -15,6 +15,19 @@ Program's namespace data.
 - A declaration copied into a child Program or imported into another Program
   reports the receiving Program. Identity with the original declaration does
   not imply the same allocation or lifetime.
+- A child Program references the mortal declarations of its parent
+  (`isTypeOwnerSystem()` is false: user declarations and those of the next item)
+  that the copy of the parent's namespaces did not copy (`PO_NO_INHERIT_USER_CLASSES`,
+  `PO_NO_INHERIT_SYSTEM_CLASSES`, `PO_NO_ENUM`, a declaration that is not public),
+  as the functions, constants, typedefs and global variables that it inherits can
+  name them and the child can outlive its parent
+  (`qore_root_ns_private::refLeftOutDecls()`, released when the child's root
+  namespace is destroyed; qore#7607). Its enums are referenced also when they are
+  copied, as the copy of a user enum does not keep its original, and the
+  declarations that the parent keeps so are passed on to the child, whose own
+  children inherit the same functions. A child thus keeps every enum copy of its
+  parent, and a child created with `PO_NO_INHERIT_SYSTEM_HASHDECLS` every hashdecl
+  copy (a copy is never a builtin type owner), for its lifetime.
 - Static system declarations have no Program owner. Copies of builtin declarations
   in a Program do have that Program as their owner, even though `isSystem()` is true.
 - An unattached declaration has no Program owner. A reference-counted declaration
