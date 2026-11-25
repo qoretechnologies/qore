@@ -35,6 +35,7 @@ class RuntimeBuiltinSurvivorTest inherits QUnit::Test {
         addTestCase("a call reference to a function naming the class kept to library cleanup", \callRefTest());
         addTestCase("a Program with the class kept to library cleanup", \programTest());
         addTestCase("an object of the class and a Program with the class kept to library cleanup", \bothTest());
+        addTestCase("a Program with a class that names a class of the module kept beyond the module", \staticTest());
         set_return_value(main());
     }
 
@@ -95,5 +96,9 @@ class RuntimeBuiltinSurvivorTest inherits QUnit::Test {
 
     bothTest() {
         run("both");
+    }
+
+    staticTest() {
+        run("static");
     }
 }

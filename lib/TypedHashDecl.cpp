@@ -358,7 +358,7 @@ static std::string make_parameterized_hashdecl_name(const std::string& base,
     return rv;
 }
 
-bool typed_hash_decl_private::setProgramLocal(type_vec_t& marked_types) {
+bool typed_hash_decl_private::setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
     if (!sys || copied || program_local.load(std::memory_order_relaxed)) {
         return false;
     }
@@ -367,14 +367,17 @@ bool typed_hash_decl_private::setProgramLocal(type_vec_t& marked_types) {
     // added); getParameterizedHashDecl() reads the flag of the base for a new instance under the same lock
     std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
     marked_types.reserve(marked_types.size() + 2 * (parameterized_hashdecl_cache.size() + 1));
+    marked_owners.reserve(marked_owners.size() + parameterized_hashdecl_cache.size() + 1);
     program_local.store(true, std::memory_order_release);
     marked_types.push_back(getTypeInfo(false));
     marked_types.push_back(getTypeInfo(true));
+    marked_owners.push_back(&type_owner);
     for (auto& i : parameterized_hashdecl_cache) {
         typed_hash_decl_private* ipriv = get(*i.second);
         ipriv->program_local.store(true, std::memory_order_release);
         marked_types.push_back(ipriv->getTypeInfo(false));
         marked_types.push_back(ipriv->getTypeInfo(true));
+        marked_owners.push_back(&ipriv->type_owner);
     }
     return true;
 }

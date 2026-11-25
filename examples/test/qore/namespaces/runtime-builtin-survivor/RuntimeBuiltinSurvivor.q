@@ -44,6 +44,16 @@ switch (which) {
     case "program":
         dbg_keep_until_cleanup(c);
         break;
+    case "static": {
+        # a Program without the module's classes gets the class added at run time, whose method names the class of
+        # the module's namespace; the Program is kept beyond the deletion of the module (qore#7540)
+        Program s(PO_NEW_STYLE | PO_NO_INHERIT_SYSTEM_CLASSES);
+        # the module's function runs in the Program that calls it, which has the module's functions but not its classes
+        s.parse("sub add() { rtsurv_add(\"RtSurvNsS\"); }", "static");
+        s.callFunction("add");
+        dbg_keep_until_cleanup(s);
+        break;
+    }
     case "both": {
         # an object, whose destructor is the module's, and the Program that shares the class and its static variables
         object o = c.callFunction("mk");

@@ -126,12 +126,13 @@ public:
 
     //! Marks an original builtin enum as owned by the Program to whose namespace it is added; returns true if it was
     //! marked now and adds its types to \a marked_types (qore#7540)
-    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types) {
+    DLLLOCAL bool setProgramLocal(type_vec_t& marked_types, std::vector<QoreTypeOwner*>& marked_owners) {
         if (!sys || orig != this || program_local.load(std::memory_order_relaxed)) {
             return false;
         }
         marked_types.push_back(getTypeInfo(false));
         marked_types.push_back(getTypeInfo(true));
+        marked_owners.push_back(&type_owner);
         program_local.store(true, std::memory_order_release);
         return true;
     }

@@ -1119,6 +1119,8 @@ void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
     // an event that does not complete (an allocation failed) is completed by the next one
     bool full = rns->beginRuntimeMarking();
     type_vec_t marked_types;
+    // the declarations marked, which take their references to the module declarations that they name now
+    std::vector<QoreTypeOwner*> marked_owners;
     size_t old_variants = rns->runtime_variants.size();
     visit_namespace_tree(tree, [&](qore_ns_private& ns) {
         {
@@ -1127,20 +1129,20 @@ void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
                 qore_class_private* cp = qore_class_private::get(*cli.get());
                 // a copy of the class of a module shares its private data, whose namespace is the module's
                 if (cp->ns == &ns) {
-                    cp->setProgramLocal(marked_types);
+                    cp->setProgramLocal(marked_types, marked_owners);
                 }
             }
         }
         {
             HashDeclListIterator hli(ns.hashDeclList);
             while (hli.next()) {
-                typed_hash_decl_private::get(*hli.get())->setProgramLocal(marked_types);
+                typed_hash_decl_private::get(*hli.get())->setProgramLocal(marked_types, marked_owners);
             }
         }
         {
             EnumListIterator eli(ns.enumList);
             while (eli.next()) {
-                qore_enum_decl_private::get(*eli.get())->setProgramLocal(marked_types);
+                qore_enum_decl_private::get(*eli.get())->setProgramLocal(marked_types, marked_owners);
             }
         }
         // the variants of the functions of the tree that the Program owns
@@ -1150,6 +1152,11 @@ void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
     // and every variant of the Program references the mortal declarations that it names, also a variant added before a
     // declaration that it names was marked; when no declaration was marked, only the variants added now can name one
     // that they do not reference yet
+    // a declaration of a Program references the binary module declarations that it names from its first batch, which
+    // a declaration marked now has only at its Program's teardown, possibly after the module is deleted (qore#7540);
+    // taken before the rest of the event, which can fail and is then completed by the next one, which does not see
+    // the declarations marked now
+    qore_type_owner_take_module_refs(marked_owners);
     rns->completeRuntimeMarking(marked_types, old_variants, full);
 }
 
