@@ -657,10 +657,173 @@ list<auto> sub dp_wildcard_items(auto source, auto body, *hash<auto> tc) {
     return result;
 }
 
+#! Validates a list source before applying a DPQL list function
+list<auto> sub dp_list_source(string name, auto source) {
+    if (source.typeCode() != NT_LIST) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("%s expects a list, got %s", name, source.fullType());
+    }
+    return source;
+}
+
+#! Parses an optional field path once for the entire list
+list<hash<auto>> sub dp_list_path(string name, auto path) {
+    if (exists path && path.typeCode() != NT_STRING) {
+        throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("%s expects a string field path, got %s", name,
+            path.fullType());
+    }
+    return dp_find_in_location(path ?? "");
+}
+
+#! Selects a common comparison type and rejects a mixture of unrelated types
+int sub dp_list_value_type(string name, int common, auto value, bool numeric_only) {
+    int kind = value.typeCode();
+    if (inlist(kind, (NT_INT, NT_FLOAT, NT_NUMBER)) && common != NT_DATE && common != NT_STRING) {
+        return common == NT_NUMBER || kind == NT_NUMBER ? NT_NUMBER
+            : common == NT_FLOAT || kind == NT_FLOAT ? NT_FLOAT : NT_INT;
+    }
+    if (!numeric_only && (kind == NT_DATE || kind == NT_STRING) && (common == NT_NOTHING || common == kind)) {
+        return kind;
+    }
+    throw "DATA-PROVIDER-EXPRESSION-ERROR", sprintf("%s expects %s, got element of type %s", name,
+        numeric_only ? "numeric values" : "all numeric values, all dates, or all strings", value.fullType());
+}
+
+#! Converts numeric values to their common type using DPQL's decimal conversion for floats
+auto sub dp_list_promote(auto value, int common) {
+    if (common == NT_NUMBER) {
+        return value.typeCode() == NT_FLOAT ? DataProvider::floatToNumber(value) : value.toNumber();
+    }
+    return common == NT_FLOAT ? value.toFloat() : value;
+}
+
+#! Reduces present values at an optional path in a list
+auto sub dp_list_reduce(hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+    string name = exp.exp;
+    list<auto> source = dp_list_source(name, dp_eval_arg(rec, exp, 0, tc));
+    list<hash<auto>> path = dp_list_path(name, dp_eval_arg(rec, exp, 1, tc));
+    bool numeric_only = name == DP_FUNC_SUM || name == DP_FUNC_AVG;
+    list<auto> values = ();
+    int common = NT_NOTHING;
+    foreach auto item in (source) {
+        auto value = dp_find_in_value(item, path);
+        if (exists value && value.typeCode() != NT_NULL) {
+            common = dp_list_value_type(name, common, value, numeric_only);
+            push values, value;
+        }
+    }
+    if (!values.size()) {
+        return name == DP_FUNC_SUM ? 0 : NOTHING;
+    }
+    if (!numeric_only) {
+        auto best = dp_list_promote(values[0], common);
+        foreach auto item in (values) {
+            auto value = dp_list_promote(item, common);
+            if (name == DP_FUNC_MIN ? value < best : value > best) {
+                best = value;
+            }
+        }
+        return best;
+    }
+    # Accumulate integer inputs as numbers so an intermediate sum cannot wrap.
+    auto total = common == NT_FLOAT ? 0.0 : 0n;
+    foreach auto value in (values) {
+        total += dp_list_promote(value, common);
+    }
+    if (name == DP_FUNC_AVG) {
+        total /= values.size();
+    }
+    if (common == NT_INT && total >= MININT && total <= MAXINT && total == total.toInt()) {
+        return total.toInt();
+    }
+    return total;
+}
+
+#! Argument information for reducers accepting an optional path into each record
+const DpListPathArgs = (
+    <DataProviderArgInfo>{
+        "display_name": "List",
+        "short_desc": "List of values or records",
+        "desc": "The values or records to process",
+    },
+    <DataProviderArgInfo>{
+        "display_name": "Field path",
+        "short_desc": "Optional path into each record",
+        "desc": "A field path such as amount or invoice.amount",
+    },
+);
+
 #! Extended expression implementations for data providers
 /** @since DataProvider 3.3
 */
 public const hash<auto> ExtendedExpressionImplementations = {
+    DP_FUNC_SUM: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_SUM,
+            "display_name": "sum",
+            "short_desc": "Returns the sum of numeric list elements",
+            "desc": "Returns the sum of numeric list elements, optionally at a field path. Missing and null values are skipped. "
+                "An empty input gives an integer zero.",
+            "symbol": "sum()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs,
+            "return_type": new QoreUnionDataType(("int", "float", "number")),
+        },
+        "impl": \dp_list_reduce(),
+    },
+    DP_FUNC_AVG: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_AVG,
+            "display_name": "avg",
+            "short_desc": "Returns the arithmetic mean of numeric list elements",
+            "desc": "Returns the arithmetic mean of numeric list elements, optionally at a field path. Missing and null values are skipped. "
+                "An empty input gives NOTHING.",
+            "symbol": "avg()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs,
+            "return_type": new QoreUnionDataType(("*int", "float", "number")),
+        },
+        "impl": \dp_list_reduce(),
+    },
+    DP_FUNC_MIN: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MIN,
+            "display_name": "min",
+            "short_desc": "Returns the smallest numeric, date, or string list element",
+            "desc": "Returns the smallest numeric, date, or string list element, optionally at a field path. Missing and null values are skipped. "
+                "An empty input gives NOTHING.",
+            "symbol": "min()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs,
+            "return_type": new QoreUnionDataType(("*int", "float", "number", "date", "string")),
+        },
+        "impl": \dp_list_reduce(),
+    },
+    DP_FUNC_MAX: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MAX,
+            "display_name": "max",
+            "short_desc": "Returns the largest numeric, date, or string list element",
+            "desc": "Returns the largest numeric, date, or string list element, optionally at a field path. Missing and null values are skipped. "
+                "An empty input gives NOTHING.",
+            "symbol": "max()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureListType, DataProviderSignatureOptionalStringType),
+            "arg_info": DpListPathArgs,
+            "return_type": new QoreUnionDataType(("*int", "float", "number", "date", "string")),
+        },
+        "impl": \dp_list_reduce(),
+    },
     # --- Comparison extras ---
     DP_OP_ABSOLUTE_EQ: {
         "exp": <DataProviderExpressionInfo>{

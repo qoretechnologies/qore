@@ -1223,6 +1223,22 @@ auto has_2 = AbstractDataProvider::evalGenericExpressionValue(rec,
     DataProvider::parseDpqlExpression('listContains(@orders[*].id, 2)'));
     @endcode
 
+    @section dpql_list_reducers DPQL list reducers
+
+    |!Function|!Example|!Result
+    |<tt>sum(list [, path])</tt>|<tt>sum(\@lines, "dispute.amount")</tt>|Total disputed amount across the invoice lines
+    |<tt>avg(list [, path])</tt>|<tt>avg(\@lines, "weight")</tt>|Arithmetic mean of the recorded weights
+    |<tt>min(list [, path])</tt>|<tt>min(\@names)</tt>|First name in string comparison order
+    |<tt>max(list [, path])</tt>|<tt>max(\@deliveries, "date")</tt>|Latest recorded delivery date
+
+    Each function skips missing paths, @ref nothing, and @ref null. If no values remain, \c sum returns integer zero
+    and the other reducers return @ref nothing. Paths use the same notation as \c findIn.
+
+    Numeric inputs promote to \c number when any input is a number, then to \c float when any input is a float.
+    With integer inputs, an integral result in the integer range stays an integer. A fractional mean or a sum
+    outside that range is a number. Both \c min and \c max also accept lists of dates or lists of strings.
+    Mixing dates or strings with another type raises a data provider expression error.
+
     @section dpql_examples DPQL Examples
 
     @par Simple Comparison
@@ -1755,6 +1771,7 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_13 DataProvider v3.13
+    - added @ref dpql_list_reducers "DPQL list reducers" for totals, averages, and extrema
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
 
