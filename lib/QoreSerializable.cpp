@@ -32,6 +32,8 @@
 #include "qore/Qore.h"
 #include "qore/intern/QoreSerializable.h"
 #include "qore/intern/QC_Serializable.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -226,6 +228,25 @@ static int check_deserialization_string(const QoreString& str, const std::vector
     return -1;
 }
 
+bool qore_sandbox_serialization_restricted() {
+    // the class context of the calling code; in a builtin method (such as Serializable::serialize()), the context of
+    // the code that called the method
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && class_ctx->sys) {
+        class_ctx = runtime_get_caller_class();
+    }
+    if (class_ctx && !class_ctx->sys) {
+        // the code of a class that trusted code declared serializes for itself and is responsible for what it returns
+        return class_ctx->isSandboxDeclared();
+    }
+    // the code of a trusted Program outside a class serializes for itself; library code acts for its caller
+    const QoreProgram* pgm = getProgram();
+    if (pgm && !qore_program_is_sandboxed(pgm) && !qore_program_is_library_module(pgm)) {
+        return false;
+    }
+    return qore_caller_is_sandboxed();
+}
+
 int QoreInternalSerializationContext::serializeObject(const QoreObject& obj, std::string& index_str,
         ExceptionSink* xsink) {
     imap_t::iterator i = QoreSerializable::serializeObjectToIndex(obj, *this, xsink);
@@ -242,10 +263,15 @@ int QoreInternalSerializationContext::serializeStaticVars(const QoreClass& cls, 
         return 0;
     }
     cset.insert(i, &cls);
+    // the non-public static variables of a class that trusted code declared are not given to sandboxed code (qore#7146)
+    bool public_only = restricted && qore_class_private::get(cls)->sandboxSerializationProtected();
     ReferenceHolder<QoreHashNode> h(xsink);
     QoreClassStaticMemberIterator mi(cls);
     while (mi.next()) {
         const QoreExternalStaticMember& m = mi.getMember();
+        if (public_only && m.getAccess() != Public) {
+            continue;
+        }
         ValueHolder v(m.getValue(), xsink);
         if (!v) {
             continue;
@@ -598,15 +624,22 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
                 return context.imap.end();
             }
         } else {
-            // see if the local class has a serializeMembers() method defined
-            const QoreMethod* serializeMembers = current_cls.findLocalMethod("serializeMembers");
+            const qore_class_private* current_priv = qore_class_private::get(current_cls);
+            // sandboxed code gets the public members only of a class that trusted code declared (qore#7146)
+            bool public_only = context.restricted && current_priv->sandboxSerializationProtected();
+
+            // see if the local class has a serializeMembers() method defined; it is not called for sandboxed code if
+            // it can read non-public members that sandboxed code may not get (qore#7146)
+            const QoreMethod* serializeMembers = public_only && current_priv->hasSandboxSerialState()
+                ? nullptr
+                : current_cls.findLocalMethod("serializeMembers");
 
             // iterate all nornal members in the class
             QoreClassMemberIterator mi(ci.get());
             while (mi.next()) {
                 const QoreExternalNormalMember& m = mi.getMember();
-                // skip members marked as transient
-                if (m.isTransient()) {
+                // skip members marked as transient, and the non-public members that the calling code may not get
+                if (m.isTransient() || (public_only && m.getAccess() != Public)) {
                     continue;
                 }
                 const char* mname = mi.getName();
@@ -908,12 +941,36 @@ static int qore_set_indexed_hash_type(QoreHashNode& h, const QoreHashNode& oh, E
 }
 
 QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode& h, int64 flags) {
+    return deserializeIntern(xsink, h, flags, qore_sandbox_serialization_restricted());
+}
+
+QoreValue QoreSerializable::deserializeForProgram(ExceptionSink* xsink, QoreProgram* pgm, const QoreHashNode& h,
+        int64 flags) {
+    // the data is deserialized for the trusted calling code in the context of the target Program
+    ProgramThreadCountContextHelper tch(xsink, pgm, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return deserializeIntern(xsink, h, flags, false);
+}
+
+QoreValue QoreSerializable::deserializeForProgram(ExceptionSink* xsink, QoreProgram* pgm, InputStream& stream,
+        int64 flags) {
+    ReferenceHolder<QoreHashNode> h(deserializeToData(xsink, stream, flags), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return deserializeForProgram(xsink, pgm, **h, flags);
+}
+
+QoreValue QoreSerializable::deserializeIntern(ExceptionSink* xsink, const QoreHashNode& h, int64 flags,
+        bool restricted) {
     assert(hashdeclSerializationInfo->equal(h.getHashDecl()));
     if (qore_check_cancel(xsink, "object deserialization")) {
         return QoreValue();
     }
 
-    QoreInternalDeserializationContext context(xsink, flags);
+    QoreInternalDeserializationContext context(xsink, flags, restricted);
 
     QoreProgram* pgm = getProgram();
 
@@ -972,6 +1029,14 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                         xsink->raiseException("DESERIALIZATION-ERROR", "Cannot find class '%s' required for "
                             "deserialization", cname);
                     }
+                    return QoreValue();
+                }
+                // sandboxed code cannot create an object of a class whose non-public state trusted code declared
+                // without its constructor (qore#7146)
+                if (context.restricted && qore_class_private::get(*cls)->sandboxDeserializationRefused()) {
+                    xsink->raiseException("DESERIALIZATION-ERROR", "sandboxed code cannot deserialize an object of "
+                        "class '%s': the class has non-public members that a class declared by trusted code "
+                        "declares, which do not inherit 'SandboxSerializable'", cname);
                     return QoreValue();
                 }
                 // the object has the Program of its class, as a constructed or copied object does; the deserializing
@@ -1291,6 +1356,15 @@ int QoreSerializable::deserializeStaticClassVars(ExceptionSink* xsink, const Qor
             if (!m) {
                 xsink->raiseException("DESERIALIZATION-ERROR", "Class '%s' has no static var '%s'", cname,
                     ci.getKey());
+                return -1;
+            }
+            // sandboxed code cannot set the non-public static variables of a class that trusted code declared
+            // (qore#7146)
+            if (context.restricted && m->getAccess() != Public
+                && qore_class_private::get(*cls)->sandboxSerializationProtected()) {
+                xsink->raiseException("DESERIALIZATION-ERROR", "sandboxed code cannot set non-public static var "
+                    "'%s::%s': the class was declared by trusted code and does not inherit 'SandboxSerializable'",
+                    cname, ci.getKey());
                 return -1;
             }
             ValueHolder v(deserializeData(ci.get(), context, xsink), xsink);

@@ -50,6 +50,7 @@
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/QC_SandboxSerializable.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1481,6 +1482,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         deref_source_program(old.deref_source_program),
         sandbox_ctx(old.sandbox_ctx),
         sandbox_private_members(old.sandbox_private_members),
+        sandbox_serial_state(old.sandbox_serial_state),
+        sandbox_deserial_refused(old.sandbox_deserial_refused),
         from_module(old.from_module),
         lang(old.lang) {
     // the bare references option of the declaration (issue #3286)
@@ -1629,6 +1632,8 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
                 || (ns && ns->getProgram() != old.spgm.load()))),
         sandbox_ctx(old.sandbox_ctx),
         sandbox_private_members(old.sandbox_private_members),
+        sandbox_serial_state(old.sandbox_serial_state),
+        sandbox_deserial_refused(old.sandbox_deserial_refused),
         from_module(old.from_module),
         lang(old.lang) {
     // the bare references option of the declaration (issue #3286)
@@ -3627,6 +3632,8 @@ void qore_class_private::parseCommit() {
     // the class's Program is now (qore#6843)
     if (!sys) {
         initSandboxAccess();
+        // the declarations that sandboxed code may not serialize (qore#7146)
+        initSandboxSerialization();
     }
     // the committed class is visible to running code, which reads its members without a lock (#6272); a module cannot
     // add members to it (#6422)
@@ -9226,6 +9233,53 @@ void qore_class_private::initSandboxAccess() {
             return;
         }
     }
+}
+
+bool qore_class_private::isSandboxSerializable() const {
+    if (!scl || !QC_SANDBOXSERIALIZABLE) {
+        return false;
+    }
+    for (const BCNode* bc : *scl) {
+        if (bc->sclass && qore_class_private::get(*bc->sclass) == qore_class_private::get(*QC_SANDBOXSERIALIZABLE)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void qore_class_private::initSandboxSerialization() {
+    QoreClassHierarchyIterator ci(*cls);
+    while (ci.next()) {
+        if (ci.isVirtual()) {
+            continue;
+        }
+        const qore_class_private* qc = qore_class_private::get(ci.get());
+        if (qc->sys || !qc->sandboxSerializationProtected()) {
+            continue;
+        }
+        QoreClassMemberIterator mi(ci.get());
+        while (mi.next()) {
+            const QoreExternalNormalMember& m = mi.getMember();
+            if (m.getAccess() == Public) {
+                continue;
+            }
+            sandbox_serial_state = true;
+            if (!m.isTransient()) {
+                sandbox_deserial_refused = true;
+                return;
+            }
+        }
+    }
+}
+
+bool qore_class_private::sandboxSerialProtectsMember(const char* mname) const {
+    const QoreMemberInfo* mi = members.find(mname);
+    if (!mi || !mi->declaredNonPublic()) {
+        return false;
+    }
+    // a local member is declared by this class
+    const qore_class_private* decl = mi->getClass();
+    return (decl ? decl : this)->sandboxSerializationProtected();
 }
 
 void qore_class_private::execDestructor(QoreObject* self, RuntimeConfig& rc, ExceptionSink* xsink) const {

@@ -347,6 +347,37 @@ authenticate();
     was set for it keeps the private access that it had, so a host sets the manager before it parses code that it does
     not trust.
 
+    @subsection sandbox_serialization Serialization of the Objects of Trusted Classes
+
+    The @ref Qore::Serializable "Serializable" API applies the member access of classes to sandboxed code: the
+    non-public members (\c private, \c private:hierarchy and \c private:internal) and non-public static class
+    variables that a class declared by trusted code declares are its private state, which sandboxed code can neither
+    read nor set through serialization:
+    - when sandboxed code serializes an object, with @ref Qore::Serializable::serialize() "Serializable::serialize()",
+      @ref Qore::Serializable::serializeToData() "Serializable::serializeToData()" or the methods of the object, the
+      non-public members of the classes that trusted code declared are left out, also of the trusted base classes of a
+      class that sandboxed code declared, as are their non-public static variables with
+      @ref Qore::QSF_INCLUDE_STATIC_CLASS_VARS "QSF_INCLUDE_STATIC_CLASS_VARS"; the \c serializeMembers() method of
+      such a class that can read non-public members is not called, so the object is serialized with its public members
+    - sandboxed code cannot deserialize an object of a class whose hierarchy has a non-transient non-public member that
+      a class declared by trusted code declares, as the object would be created without its constructor with state of
+      the code's choosing; the deserialization raises a \c DESERIALIZATION-ERROR exception, as does a change of a
+      non-public static variable of such a class with @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS"
+    - formatting an object with \c %%y, \c %%n or \c %%N shows sandboxed code the members that it can serialize
+
+    A class that trusted code declares opts in by inheriting @ref Qore::SandboxSerializable "SandboxSerializable"
+    directly: its own non-public members and static variables are then serialized, set and shown as declared.  The
+    opt-in is not inherited by a subclass, which inherits the class directly too if its own non-public state may be
+    serialized by sandboxed code.  The members of a class that sandboxed code declared are serialized as declared.
+
+    The code that serializes decides: in a builtin method, the code that called the method.  The code of a class that
+    trusted code declared, and the code of a trusted Program outside a class, serialize for themselves, also when
+    sandboxed code called them, and are responsible for what they give their caller; library code outside a class acts
+    for its caller.  A trusted host that delivers serialized data to a sandboxed Program with the state of the classes
+    of the data, for example the result of a call that it made for the Program, deserializes it with
+    @ref Qore::Program::deserialize() "Program::deserialize()", which resolves the classes in that Program and can only
+    be called by trusted code.
+
     @subsection sandbox_program_capability Program Objects Are Capabilities
 
     A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the

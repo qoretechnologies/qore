@@ -200,6 +200,11 @@ hashdecl ListSerializationInfo {
     themselves; a reference to such an object that a custom deserialization method kept raises
     \c OBJECT-ALREADY-DELETED when it is used.
 
+    @anchor serializable_sandboxed_code
+    Sandboxed code does not get or set the non-public state of the classes that trusted code declared through
+    serialization, unless a class opts in with @ref Qore::SandboxSerializable "SandboxSerializable"; see
+    @ref sandbox_serialization (since %Qore 3.0).
+
     @since %Qore 0.9
  */
 qclass Serializable [
