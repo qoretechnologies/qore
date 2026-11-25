@@ -996,8 +996,9 @@ DLLLOCAL void qore_ml_onnx_unregister_fork_handlers();
 
 //! Records that an automatically selected execution provider failed, so that later models do not select it
 /** The record is process-wide: no later model of any code selects the provider automatically.  Only trusted code
-    makes it: a model of code with a sandbox policy that fails on a provider, or whose provider cannot be appended,
-    falls back to CPU itself, but does not change the provider choice of the models of other code (qore#7672).
+    makes it: a model of code that a sandbox governs (also trusted code in a capability that a sandboxed caller
+    called, see QoreSandboxManagerHelper::All) that fails on a provider, or whose provider cannot be appended, falls
+    back to CPU itself, but does not change the provider choice of the models of other code (qore#7672).
 
     @param provider the name of the execution provider
 

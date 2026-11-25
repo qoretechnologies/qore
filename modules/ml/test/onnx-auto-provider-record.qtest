@@ -43,6 +43,8 @@ class OnnxAutoProviderRecordTest inherits QUnit::Test {
     constructor() : Test("OnnxAutoProviderRecord", "1.0") {
         addTestCase("trusted code records a failed provider for all models", \trustedTest());
         addTestCase("sandboxed code does not record a failed provider for other code", \sandboxedTest());
+        addTestCase("a capability of trusted code called by sandboxed code does not record", \capabilityTest());
+        addTestCase("a Program that sandboxed code created does not record", \tenantChildTest());
         set_return_value(main());
     }
 
@@ -92,11 +94,8 @@ class OnnxAutoProviderRecordTest inherits QUnit::Test {
         assertFalse(disabled(provider));
     }
 
-    sandboxedTest() {
-        if (skipNoHooks()) {
-            return;
-        }
-        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+    #! returns a Program with a sandbox, whose root is \a root
+    private static Program tenant(string root) {
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.parse("
 %modern
@@ -109,10 +108,30 @@ bool sub record(string provider) {
 bool sub is_disabled(string provider) {
     return Qore::ML::ml_dbg_onnx_auto_provider_disabled(provider);
 }
+
+auto sub run(code c) {
+    return c();
+}
+
+Program sub child() {
+    Program p(PO_NEW_STYLE);
+    p.parse(\"%requires ml\nbool sub record(string provider) { return "
+            "Qore::ML::ml_dbg_onnx_record_auto_provider_failure(provider); }\", \"child\");
+    return p;
+}
         ", "ml_onnx_auto_provider_sandbox");
         SandboxManager sm();
-        sm.setFilesystemSandboxRoot(tmp.path);
+        sm.setFilesystemSandboxRoot(root);
         p.setSandboxManager(sm);
+        return p;
+    }
+
+    sandboxedTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
 
         string provider = "CUDAExecutionProvider";
         assertFalse(p.callFunction("record", provider), "a sandboxed caller's failure is not recorded");
@@ -123,5 +142,37 @@ bool sub is_disabled(string provider) {
         assertTrue(call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_failure", provider));
         assertTrue(p.callFunction("is_disabled", provider));
         call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+    }
+
+    #! trusted code that a sandboxed caller calls, such as a capability that loads a model for it, does not record
+    capabilityTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
+        string provider = "CUDAExecutionProvider";
+        code cap = SandboxManager::createSystemPolicyCall(bool sub () {
+            return call_function("Qore::ML::ml_dbg_onnx_record_auto_provider_failure", provider);
+        });
+        assertFalse(p.callFunction("run", cap), "the capability called by sandboxed code does not record");
+        assertFalse(disabled(provider));
+        # the same capability called by trusted code records
+        assertTrue(cap(), "the capability called by trusted code records");
+        assertTrue(disabled(provider));
+        call_function("Qore::ML::ml_dbg_onnx_clear_auto_provider_failures");
+    }
+
+    #! a Program that sandboxed code created is governed by its creator's sandbox, also when trusted code calls it
+    tenantChildTest() {
+        if (skipNoHooks()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-auto-provider-");
+        Program p = OnnxAutoProviderRecordTest::tenant(tmp.path);
+        Program child = p.callFunction("child");
+        string provider = "CUDAExecutionProvider";
+        assertFalse(child.callFunction("record", provider), "the Program that sandboxed code created does not record");
+        assertFalse(disabled(provider));
     }
 }

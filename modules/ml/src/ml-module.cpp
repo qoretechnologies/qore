@@ -462,7 +462,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addBuiltinVariant("ml_dbg_onnx_auto_provider_disabled", f_ml_dbg_onnx_auto_provider_disabled,
         QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "provider");
     MLNS.addBuiltinVariant("ml_dbg_onnx_clear_auto_provider_failures", f_ml_dbg_onnx_clear_auto_provider_failures,
-        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
+        QCF_NO_FLAGS, QDOM_PROCESS, nothingTypeInfo);
 #endif
 
     // Register algorithm deserializers for model persistence

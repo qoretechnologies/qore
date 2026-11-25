@@ -6343,9 +6343,14 @@ void qore_ml_onnx_unregister_fork_handlers() {
 }
 
 bool qore_ml_onnx_record_auto_provider_failure(const std::string& provider) {
-    // a model of sandboxed code does not change the provider choice of the models of other code (qore#7672)
-    if (onnxSandboxActive()) {
-        return false;
+    // a model of sandboxed code does not change the provider choice of the models of other code (qore#7672): the
+    // question is whether a sandbox governs the thread at all, also in a capability of trusted code that a sandboxed
+    // caller called (createSystemPolicyCall()), which suppresses the Policy check of onnxSandboxActive()
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::All);
+        if (smh) {
+            return false;
+        }
     }
     std::lock_guard<std::mutex> lock(auto_provider_mutex);
     unusable_auto_providers.insert(provider);
