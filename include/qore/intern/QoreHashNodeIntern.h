@@ -757,25 +757,17 @@ public:
             // again with its member hash (findCrossKind(), qore#7557)
             const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
                 qore_hash_lookup_key::stored_hash_t()));
-            if (!found || !value_equal(m->val, found->val)) {
-                // a value that differs, or a key that is not found when this hash is not hardened, is the result
-                if (found || hm.fastFind() || !memberEqualCrossKind(*m, other, value_equal)) {
+            if (!found) [[unlikely]] {
+                // a key that is not found when this hash is not hardened is the result
+                if (hm.fastFind() || !(found = findCrossKind(*m, other))) {
                     return false;
                 }
             }
+            if (!value_equal(m->val, found->val)) {
+                return false;
+            }
         }
         return true;
-    }
-
-    //! returns true if \a other has the key of \a m, a member of this hash, that a search of \a other with the
-    //! hash of \a m did not find, with a value equal to that of \a m (see findCrossKind())
-    /** not inline, so that the comparison of the hashes stays as small as before qore#7557
-    */
-    template <typename F>
-    QORE_HASH_NOINLINE DLLLOCAL bool memberEqualCrossKind(const HashMember& m, const qore_hash_private& other,
-            F& value_equal) const {
-        const HashMember* found = findCrossKind(m, other);
-        return found && value_equal(m.val, found->val);
     }
 
     //! returns the member of \a other with the key of \a m, a member of this hash, that a search of \a other with
