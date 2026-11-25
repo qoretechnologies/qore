@@ -282,7 +282,7 @@ class AbstractExampleInstanceBaseClass inherits AbstractRestClass {
     (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"), which cannot
     read a request that the client sends after its own on the connection, nor close the connection.  A
     @ref DataStreamRequestHandler::AbstractDataStreamRequestHandler "data stream request handler" of a class of a
-    sandboxed Program that gets no socket refuses an HTTP/1.x request when it is created.
+    restricted Program that gets no socket refuses an HTTP/1.x request when it is created.
 */
 /** @page resthierarchy Implementing Object Hierarchies
 
@@ -1102,12 +1102,12 @@ public namespace RestHandler {
         "Http3HandlerSocket": True,
     };
 
-    #! The response that refuses a request whose dispatch path has code of a sandboxed Program while the handler has
-    #! the connection's socket (qore#7305)
+    #! The response that refuses a request whose dispatch path has code of a restricted Program while the handler has
+    #! the connection's socket (qore#7305, qore#7577)
     hash<HttpServer::HttpHandlerResponseInfo> sub rest_refuse_connection_socket(object obj) {
         return <HttpServer::HttpHandlerResponseInfo>{
             "code": 500,
-            "body": sprintf("the REST request is refused: %s of a sandboxed Program would get the connection's socket; "
+            "body": sprintf("the REST request is refused: %s of a restricted Program would get the connection's socket; "
                 "a trusted handler that hands its requests to code that is not trusted calls "
                 "HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() in its constructor", obj.className()),
             "close": True,

@@ -246,10 +246,12 @@ module HttpServerUtil {
     request uses the socket of the connection, and trusted code gets it in the \c "s" key of
     @ref HttpServer::AbstractHttpRequestHandler::getRawRequest() "getRawRequest()"; a handler of trusted code gets
     the socket of the connection as before.  A handler socket, a socket of the
-    request alone, is given to that code as it is: the HTTP server gives one to a handler of a sandboxed %Program
-    (@ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"; see
+    request alone, is given to that code as it is: the HTTP server gives one to a handler of a restricted %Program
+    (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()"; see
     @ref httpserver_handler_socket), and to every handler of an HTTP/2 or HTTP/3 request; a stream handler of a
-    sandboxed %Program that gets the socket of the connection refuses the request (\c HTTP-HANDLER-ERROR).
+    restricted %Program that gets the socket of the connection refuses the request (\c HTTP-HANDLER-ERROR).  A socket
+    of the request alone is a handler socket of the HTTP server, or of a class that a host registers with its
+    dispatch capability; an open socket of any other class is the socket of a connection.
 
     See @subpage httpserverutil_relnotes "HttpServerUtil Module Release Notes" for the changes in each version.
 */
@@ -3362,8 +3364,8 @@ public hashdecl HttpFilteredRequestInfo {
     (@ref HttpServer::HttpServer "HttpServer"), or of a host with a dispatch capability
     (@ref HttpServer::AbstractHttpRequestHandler::claimHostDispatch() "claimHostDispatch()"), which makes the raw
     request of the request current: the constructor raises \c HTTP-SERVER-ERROR for a request that was not
-    dispatched so (see @ref httpserverutil_request_credentials).  A stream request of a class of a sandboxed %Program,
-    or that sandboxed code creates, cannot serve an HTTP/1.x request on the socket of the connection
+    dispatched so (see @ref httpserverutil_request_credentials).  A stream request of a class of a restricted
+    %Program, or that restricted code creates, cannot serve an HTTP/1.x request on the socket of the connection
     (\c HTTP-HANDLER-ERROR): a handler that hands its requests to such code asks for a socket of each request with
     @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()".
 
@@ -6449,7 +6451,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         requests: \c enter(cx, hdr, s, handler) returns an object that keeps the raw request current until it is
         destroyed; with the handler that the request is dispatched to, the code that serves a filtered request of the
         handler gets the credential trailer fields that the handler's trusted options keep
-        (setRequestCredentialHeaders()), and none without it.  The
+        (setRequestCredentialHeaders()), and none without it.  A host that gives the handlers sockets of a request
+        alone of a class of its own registers the class with \c registerStreamViewClass(name), so that restricted code
+        gets them (see @ref httpserver_handler_socket); an open socket of another class than the handler sockets of the
+        HTTP server is otherwise the socket of a connection.  The
         host keeps the capability in a \c private:internal member and never gives it to other code, as the capability
         lets its holder make a request of its own making current for the handlers that it calls (qore#6843).
 

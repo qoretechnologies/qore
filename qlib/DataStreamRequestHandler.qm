@@ -140,7 +140,7 @@ private nothing recvDataImpl(auto data) {
     @section datastreamrequesthandlerrelnotes Release Notes
 
     @subsection datastreamrequesthandler_v1_2 DataStreamRequestHandler v1.2
-    - a data stream request handler of a class of a sandboxed Program refuses an HTTP/1.x request when it is created
+    - a data stream request handler of a class of a restricted Program refuses an HTTP/1.x request when it is created
       (\c DATASTREAM-ERROR) if it gets no socket of the request: the REST handler does not give such a class the
       socket of the connection (see @ref rest_request_credentials; issue #6843), while a socket of its own request
       (see @ref httpserver_handler_socket) and its HTTP/2 and HTTP/3 data streams work
@@ -225,18 +225,18 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         regardless of the detected protocol.
 
         @throw DATASTREAM-ERROR the request is an HTTP/1.x request whose socket the object does not get: the REST
-        handler does not give the code of a class of a sandboxed Program the socket of the connection (see
+        handler does not give the code of a class of a restricted Program the socket of the connection (see
         @ref rest_request_credentials; issue #6843), which a data stream needs; a socket of its own request (see
         @ref httpserver_handler_socket) and HTTP/2 and HTTP/3 data streams work
 
         @since DataStreamRequestHandler 1.0, updated in 1.2 with Connect detection
     */
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractRestStreamRequestHandler(cx, ah) {
-        # a data stream needs the socket of its request, which the REST handler does not give a class of a sandboxed
+        # a data stream needs the socket of its request, which the REST handler does not give a class of a restricted
         # Program for an HTTP/1.x request on the socket of the connection
         if (!cx.socketobject) {
             throw "DATASTREAM-ERROR", "a data stream request handler cannot serve a request that it gets without a "
-                "socket: the REST handler gives no socket of an HTTP/1.x connection to a class of a sandboxed Program";
+                "socket: the REST handler gives no socket of an HTTP/1.x connection to a class of a restricted Program";
         }
         # Detect Connect protocol from Content-Type or Connect-specific headers.
         # Do NOT auto-upgrade based on HTTP/2 pseudo-headers alone — a client that downgraded
