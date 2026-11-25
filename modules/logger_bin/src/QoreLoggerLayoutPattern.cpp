@@ -78,6 +78,10 @@ QoreValue QoreLoggerLayoutPattern::resolveField(QoreObject* event, QoreLoggerEve
             return rv.release();
         }
         case 'E': {
+            // no variable without an option (ex: "%E" instead of "%E{HOME}")
+            if (!option) {
+                return new QoreStringNode;
+            }
             return SystemEnvironment::getAsStringNode(option->c_str());
         }
         case 'F': {

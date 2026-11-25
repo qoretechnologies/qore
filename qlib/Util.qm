@@ -746,7 +746,7 @@ public string sub normalize_dir_windows(string path, string cwd = getcwd() ?? ""
     list l = path.split("\\");
 
     # the root is never removed: a UNC path's root is "\\server\share"; otherwise it is a drive or "\"
-    int root_len;
+    int root_len = 0;
     if (l.size() > 1 && l[0] === "" && l[1] === "") {
         root_len = min(4, l.size());
     } else if (l[0] === "" || l[0] =~ /^[A-Za-z]:$/) {

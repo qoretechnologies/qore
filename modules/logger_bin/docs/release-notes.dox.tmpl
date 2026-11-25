@@ -8,6 +8,9 @@
 
     @section logger_bin_3_0 logger_bin Module Version 3.0
 
+    The \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" without a variable name
+    formats as an empty string instead of crashing the process.
+
     @ref Qore::Logger::LoggerAppenderFile "LoggerAppenderFile" raises \c FILE-OPEN2-ERROR when it opens a file name
     with a NUL character instead of opening the file named by the name cut at the NUL character, and raises only
     \c APPENDER-OPEN-ERROR when the file name is not a string.

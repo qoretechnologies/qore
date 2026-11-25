@@ -33,5 +33,8 @@ public class NormalizeDirTest inherits QUnit::Test {
         assertEq("C:\\x", normalize_dir_windows("..\\..\\x", "C:\\cwd"));
         assertEq("\\\\server\\share\\x", normalize_dir_windows("\\\\server\\share\\..\\x", "C:\\cwd"));
         assertEq("\\\\server\\share\\x", normalize_dir_windows("\\\\server\\share\\a\\..\\x", "C:\\cwd"));
+        # a working directory without a root
+        assertEq("cwd\\x", normalize_dir_windows("a\\..\\x", "cwd"));
+        assertEq("x", normalize_dir_windows("..\\x", "cwd"));
     }
 }

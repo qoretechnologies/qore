@@ -376,6 +376,12 @@ class Test inherits QUnit::Test {
                 "output": ENV.firstValue()+"|"+ENV.lastValue(),
             ),
 
+            # no variable without an option
+            "x%E-y": (
+                "parsed": ("x", ("key": "E"), "-y"),
+                "output": "x-y",
+            ),
+
             "%r{%010d} [%t] %p %c - %m%n": (
                 "parsed": (
                     ("key": "r", "option": "%010d"),
