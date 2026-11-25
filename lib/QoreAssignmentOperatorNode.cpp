@@ -973,15 +973,15 @@ static QORE_INTERN_NOINLINE QORE_INTERN_COLD int qore_weak_assign_bind_retry(LVa
     A store whose check records reference elements is made again out of line after they have been bound with no lvalue
     lock held (qore#7391).
 
-    @tparam KeysFirst true if the keys of the path were evaluated first into \a keys, which the path is resolved with
+    @tparam KeysFirst true if the keys of the path are evaluated first, after the operand is held, and the path is
+    resolved with them (qore#7391)
     @param policy the lexical semantic policy of the assignment, or nullptr for an assignment without one
     @param site the expression, which the copy held is keyed by
-    @param keys the keys of the path evaluated first if \a KeysFirst, otherwise nullptr
 */
 template <bool KeysFirst>
 static QORE_INTERN_ALWAYS_INLINE QoreValue qore_weak_assign_hold_copy_impl(const QoreValue& left,
         QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
-        const void* site, const QoreStorePathKeys* keys, ExceptionSink* xsink) {
+        const void* site, ExceptionSink* xsink) {
     // a weak reference does not keep the value assigned: a temporary lives until the end of the statement, as in the
     // other execution modes, so that the weak reference and the value of the assignment designate it until then
     // (qore#7085)
@@ -989,6 +989,17 @@ static QORE_INTERN_ALWAYS_INLINE QoreValue qore_weak_assign_hold_copy_impl(const
     if (*xsink) {
         return QoreValue();
     }
+    // the keys of a path that a retry of the store cannot evaluate again are evaluated after the operand is held, where
+    // the helper evaluates them, so that a key that raises an exception leaves the operand held until the end of the
+    // statement; they are released after the helper (qore#7391)
+    std::optional<QoreStorePathKeys> path_keys;
+    if constexpr (KeysFirst) {
+        path_keys.emplace(xsink);
+        if (path_keys->eval(left)) {
+            return QoreValue();
+        }
+    }
+    const QoreStorePathKeys* keys = path_keys ? &*path_keys : nullptr;
     // the copy made by the conversion, owned by this function until it is held
     QoreValue copy;
     QoreValue rv;
@@ -1039,15 +1050,15 @@ static QORE_INTERN_ALWAYS_INLINE QoreValue qore_weak_assign_hold_copy_impl(const
 static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy(const QoreValue& left,
         QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
         const void* site, ExceptionSink* xsink) {
-    return qore_weak_assign_hold_copy_impl<false>(left, new_value, ident, ref_rv, policy, site, nullptr, xsink);
+    return qore_weak_assign_hold_copy_impl<false>(left, new_value, ident, ref_rv, policy, site, xsink);
 }
 
-//! Makes a weak assignment whose path is resolved with the keys \a keys evaluated first; see
+//! Makes a weak assignment whose path is resolved with its keys evaluated first, after the operand is held; see
 //! qore_weak_assign_hold_copy_impl() (qore#7391)
 static QORE_INTERN_NOINLINE QoreValue qore_weak_assign_hold_copy_keys(const QoreValue& left,
         QoreMutationOperandHolder& new_value, bool ident, bool ref_rv, const LexicalSemanticPolicy* policy,
-        const void* site, const QoreStorePathKeys& keys, ExceptionSink* xsink) {
-    return qore_weak_assign_hold_copy_impl<true>(left, new_value, ident, ref_rv, policy, site, &keys, xsink);
+        const void* site, ExceptionSink* xsink) {
+    return qore_weak_assign_hold_copy_impl<true>(left, new_value, ident, ref_rv, policy, site, xsink);
 }
 
 template <bool Lexical>
@@ -1096,17 +1107,6 @@ QORE_INTERN_NOINLINE QoreValue QoreAssignmentOperatorNode::evalStoreSlow(QoreMut
         new_value.ensureReferencedValue();
     }
 
-    // the keys of a path that has key expressions which a retry of the store cannot evaluate again are evaluated first,
-    // after the operand, where the helper evaluates them; they are released after the helper (qore#7391)
-    std::optional<QoreStorePathKeys> path_keys;
-    if (m & QoreStorePathMode::KeysFirst) {
-        path_keys.emplace(xsink);
-        if (path_keys->eval(left)) {
-            return QoreValue();
-        }
-    }
-    const QoreStorePathKeys* keys = path_keys ? &*path_keys : nullptr;
-
     if constexpr (Weak) {
         assert(mode == AssignmentMode::Weak);
         LexicalSemanticPolicy policy;
@@ -1115,10 +1115,22 @@ QORE_INTERN_NOINLINE QoreValue QoreAssignmentOperatorNode::evalStoreSlow(QoreMut
             policy = getSemanticPolicy();
             policy_ptr = &policy;
         }
-        return keys
-            ? qore_weak_assign_hold_copy_keys(left, new_value, ident, ref_rv, policy_ptr, this, *keys, xsink)
+        // a weak assignment holds the operand before it evaluates the keys of its path (qore#7391)
+        return (m & QoreStorePathMode::KeysFirst)
+            ? qore_weak_assign_hold_copy_keys(left, new_value, ident, ref_rv, policy_ptr, this, xsink)
             : qore_weak_assign_hold_copy(left, new_value, ident, ref_rv, policy_ptr, this, xsink);
     } else {
+        // the keys of a path that has key expressions which a retry of the store cannot evaluate again are evaluated
+        // first, after the operand, where the helper evaluates them; they are released after the helper (qore#7391)
+        std::optional<QoreStorePathKeys> path_keys;
+        if (m & QoreStorePathMode::KeysFirst) {
+            path_keys.emplace(xsink);
+            if (path_keys->eval(left)) {
+                return QoreValue();
+            }
+        }
+        const QoreStorePathKeys* keys = path_keys ? &*path_keys : nullptr;
+
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
         LValueHelper v(xsink, true);
         if (qore_store_resolve_lvalue(v, left, keys)) {

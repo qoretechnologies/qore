@@ -27,8 +27,10 @@
     reference (a parameter, the variable of a foreach loop) and casts lists whose elements are references (qore#7377).
     It covers the other operations that store values into a container (push, unshift, splice, extract, +=, list
     assignment, object merges, foreach by reference), the keys of a path that are evaluated once when the store is made
-    again, the containers created for a refused store, and a hashdecl member initializer that binds a reference while
-    the check of a store holds its lock, which is refused (qore#7391).  In a debug build, the program arms
+    again (by each store site, a weak assignment included), a local index that the retry reads again, an assignment to
+    NOTHING, container operations through a weak reference to a list, the containers created for a refused store, and
+    a hashdecl member initializer that binds a reference while the check of a store holds its lock, which is refused
+    (qore#7391).  In a debug build, the program arms
     dbg_reference_bind_strict(), so that a bind made with an lvalue write lock held shows as \c DBG-REFERENCE-BIND-HELD
     in its output.  Every mode, qcc executables included, must print the output of the AST.
 

@@ -143,6 +143,31 @@ class OpsHolder {
     }
 }
 
+# the target of the stores whose path has keys with side effects (qore#7391)
+class KeyOps {
+    public {
+        auto v = "1";
+        hash<string, list<list<reference<softint>>>> h = {};
+        hash<string, list<reference<softint>>> hr = {};
+    }
+
+    constructor() {
+        list<reference<softint>> e = ();
+        list<list<reference<softint>>> l = (e,);
+        h.a = l;
+        list<reference<softint>> er = ();
+        hr.a = er;
+    }
+}
+
+# an object whose member holds a weak reference to a list (qore#7391)
+class WeakListHolder {
+    public {
+        auto wl;
+        auto s = "5";
+    }
+}
+
 # an object whose members += merges into a hash
 class Src {
     public {
@@ -170,6 +195,8 @@ our auto g_anc;
 our hash<H> g_lref = cast<hash<H>>({"b": "9"});
 # the number of calls of k()
 our int g_k = 0;
+# the number of calls of g()
+our int g_g = 0;
 # the number of calls of m3_init(), and the variable whose reference it is given
 our int g_m3 = 0;
 our auto g_m3v = "5";
@@ -185,6 +212,17 @@ if (exists_function("dbg_reference_bind_strict")) {
 string sub k() {
     ++g_k;
     return "a";
+}
+
+# a value whose evaluation is counted
+auto sub g() {
+    ++g_g;
+    return 2;
+}
+
+# assigns to NOTHING, which changes nothing and gives NOTHING; the value is evaluated (qore#7391)
+auto sub assign_nothing() {
+    return NOTHING = g();
 }
 
 # the initializer of hashdecl M3
@@ -922,4 +960,122 @@ show("hashdecl initializer binding a reference in a cast", auto sub () {
     auto src = {"s": (\m.v,)};
     hash<M3> h = cast<hash<M3>>(src);
     return (h.a, g_m3, g_m3v.type(), m.v.type(), m.v);
+});
+
+# a store that is made again after its reference elements have been bound, whose path has a key and an index with side
+# effects: they are evaluated once, by each store site (qore#7391)
+show("push with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    push o.h{k()}[i++], \o.v;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    # breaks the cycle
+    o.h = {};
+    return rv;
+});
+
+show("unshift with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    unshift o.h{k()}[i++], \o.v;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+show("splice with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    list<auto> rep = (\o.v,);
+    splice o.h{k()}[i++], 0, 0, rep;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+show("extract with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    list<auto> rep = (\o.v,);
+    auto removed = extract o.h{k()}[i++], 0, 0, rep;
+    list<auto> rv = (removed.size(), g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+show("+= with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    o.h{k()}[i++] += \o.v;
+    list<auto> rv = (g_k, i, o.h.a[0].size(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+# the operand of a weak assignment is held before the keys of its path are evaluated
+show(":= with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    o.hr{k()}[i++] := \o.v;
+    list<auto> rv = (g_k, i, o.hr.a.size(), o.v.type(), o.v);
+    o.hr = {};
+    return rv;
+});
+
+# the element whose keys are evaluated first follows a plain element
+show("list assignment with keys evaluated once", auto sub () {
+    g_k = 0;
+    KeyOps o();
+    int i = 0;
+    auto a;
+    list<auto> x = (\o.v,);
+    (a, o.h{k()}[i++]) = (2, x);
+    list<auto> rv = (a, g_k, i, o.h.a[0].size(), o.h.a[0].fullType(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+# a local variable of a scalar type that no closure binds is read again by the retry of the store
+show("local index read again", auto sub () {
+    KeyOps o();
+    int i = 1;
+    list<auto> x = (\o.v,);
+    o.h.a[i] = x;
+    list<auto> rv = (i, o.h.a.size(), o.h.a[1].fullType(), o.v.type(), o.v);
+    o.h = {};
+    return rv;
+});
+
+# the first run of an assignment site whose lvalue is NOTHING resolves no lvalue; its value is evaluated
+show("assignment to NOTHING", auto sub () {
+    g_g = 0;
+    auto r1 = assign_nothing();
+    auto r2 = assign_nothing();
+    return (g_g, r1, r2);
+});
+
+# a container operation through a weak reference to a list stores into the list that it designates; the target's
+# object is locked by the store, and the reference element to its member is bound after the lock has been released
+show("push through a weak reference to a list", auto sub () {
+    WeakListHolder c();
+    list<reference<softint>> l = ();
+    c.wl := l;
+    push c.wl, \c.s;
+    return (l.size(), c.wl.size(), c.s.type(), c.s);
+});
+
+show("splice through a weak reference to a list", auto sub () {
+    WeakListHolder c();
+    c.s = "6";
+    list<reference<softint>> l = ();
+    c.wl := l;
+    list<auto> rep = (\c.s,);
+    splice c.wl, 0, 0, rep;
+    return (l.size(), c.wl.size(), c.s.type(), c.s);
 });
