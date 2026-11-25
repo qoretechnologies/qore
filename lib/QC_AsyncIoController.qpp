@@ -523,6 +523,12 @@ AsyncIoController::copy() {
     \c ex is that error.  Without \a replace_existing, a submission with a key in use is refused as for any caller
     (\c ASYNC-IO-ERROR).  The operation with the key is not affected
 
+    A key is unique in the controller, not only on an I/O thread: operations are routed to an I/O thread by their
+    socket, and a submission whose key is in use by an operation on the I/O thread of another socket is refused, or
+    replaces that operation, exactly as a submission whose key is in use on its own thread is (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7624">issue #7624</a>).  The replaced operation is
+    canceled on its thread, so its canceled result can follow the return of the replacing call
+
     @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,

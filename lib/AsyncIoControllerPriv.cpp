@@ -2230,6 +2230,8 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
     // exiting in shutdown).
     switch (cmd.cmd) {
         case IoCommand::SubmitOp: {
+            // the submission is not admitted: its key is free for the next one (qore#7624)
+            releaseSubmitKey(cmd);
             // Dispatch a canceled onComplete / result-queue push BEFORE
             // freeing refs so synchronous callers waiting on the op (e.g.
             // FtpDataPollOperation::waitForCompletion, any submit-then-
@@ -4615,6 +4617,7 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
         }
         auto& t = *io_threads.back();
         t.thread_idx = i;
+        t.cache.setRegistry(&key_registry);
         t.loop = new QoreEventLoop(xsink);
         if (*xsink) {
             return;
@@ -5159,6 +5162,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         }
         // the replacing operation keeps the ID of the replaced one: its event loop registrations are kept for it
         uint64_t replaced_id = 0;
+        // the key token of the operation of this thread that the submission replaces (qore#7624)
+        uint64_t inherited_key_token = 0;
         // true if the same operation is submitted again while a step of it is in flight on a worker
         bool step_in_flight = false;
         auto it = t.cache.find(uh);
@@ -5180,6 +5185,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_SAME key='%s' owner='%s'\n",
                     uh.c_str(), it->second.owner.c_str());
                 PollInfo old_pinfo = t.takeOpKeepingId(it);
+                inherited_key_token = old_pinfo.key_token;
                 // the new submission waits for the step: no second step of the operation may run meanwhile, and
                 // the step's result, for the same operation ID, is the new submission's
                 step_in_flight = old_pinfo.continue_poll_in_flight;
@@ -5188,6 +5194,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_DIRECT key='%s' owner='%s'\n",
                     uh.c_str(), it->second.owner.c_str());
                 PollInfo old_pinfo = t.takeOpKeepingId(it);
+                inherited_key_token = old_pinfo.key_token;
                 if (old_pinfo.continue_poll_in_flight) {
                     // a step of the replaced operation is still running on a worker: its cancellation (abort() and
                     // the canceled result) waits for the step's result, as a Cancel does, and the replacing
@@ -5207,10 +5214,40 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             }
         }
 
+        // the key is reserved where the submissions of all threads are ordered, and checked against the operations of
+        // the other I/O threads (qore#7624)
+        uint64_t key_token = 0;
+        KeyRegistry::Entry displaced_key;
+        bool cancel_displaced = false;
+        {
+            SafeLocker kl(m);
+            switch (key_registry.reserve(uh, t.thread_idx, replace, sandboxed, app_id, spop_obj, key_token,
+                    displaced_key)) {
+                case KeyCollision::Refuse:
+                    kl.unlock();
+                    xsink->raiseException("ASYNC-IO-ERROR",
+                        "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
+                    return nullptr;
+                case KeyCollision::TakeOther:
+                    kl.unlock();
+                    xsink->raiseException("ASYNC-IO-KEY-ERROR",
+                        "the key '%s' is in use by an operation of other code", uh.c_str());
+                    return nullptr;
+                case KeyCollision::Replace:
+                    cancel_displaced = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
         // Direct cache insertion (I/O thread owns the cache)
         PollInfo& pinfo = t.cache.emplaceWithId(uh, replaced_id);
         t.cache_size.fetch_add(1, std::memory_order_relaxed);
         pinfo.app_pgm_id = app_id;
+        // the key token: the reservation, or the one of the operation of this thread that is replaced
+        pinfo.key_token = key_token ? key_token : (inherited_key_token ? inherited_key_token
+            : key_registry.adopt(uh, t.thread_idx, app_id, spop_obj));
         pinfo.continue_poll_in_flight = step_in_flight;
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
@@ -5244,6 +5281,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.controller = this;
         pinfo.sandbox_ctx = std::move(sandbox_ctx);
         pinfo.sync_release = std::move(sync_release);
+
+        // the operation of another I/O thread that the submission replaces is canceled (qore#7624)
+        if (cancel_displaced) {
+            cancelKeyedOp(displaced_key, uh, xsink);
+        }
 
         // the controller back-reference (see wakeIoThread()); an operation whose object was deleted meanwhile is
         // canceled at the next command pass of this thread
@@ -5357,6 +5399,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             cmd.submit_route_sock_hash = sock_hash;
             cmd.submit_route_thread_idx = target->thread_idx;
         }
+        KeyRegistry::Entry displaced_key;
+        bool cancel_displaced = false;
         {
             SafeLocker sl(m);
             if (shutting_down) {
@@ -5369,20 +5413,35 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 return nullptr;
             }
             target = &getThreadForHash(route_hash);
-            // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O
-            // thread's empty checks are synchronized by m, so a command
-            // visible to the I/O thread has a visible sequence bump.
-            // Capture the post-bump per-thread value into the cmd so the
-            // I/O thread can compare it against any cancelled_owners
-            // tombstone (SubmitOp accept gate).
-            ++submit_seq;
-            cmd.seq_at_push = ++target->submit_seq;
-            if (readsCommands(*target)) {
-                target->cmdq.push(std::move(cmd));
-            } else {
-                // a thread past its last command drain, or stopped, processes the submission when it is started
-                // again (below); it is kept where cancelByProgram() can see it until then (qore#7225)
-                target->preserved_submits.push_back(std::move(cmd));
+            // The key is reserved here, where the submissions of all threads are ordered, and checked against the
+            // operations of the other I/O threads: the submission is refused, or it replaces the operation of
+            // another thread, which is canceled below (qore#7624)
+            KeyCollision collision = key_registry.reserve(uh, target->thread_idx, replace, sandboxed, app_id,
+                spop_obj, cmd.submit_key_token, displaced_key);
+            cmd.submit_key_collision = collision == KeyCollision::Refuse || collision == KeyCollision::TakeOther
+                ? collision : KeyCollision::None;
+            cancel_displaced = collision == KeyCollision::Replace;
+            uint64_t key_token = cmd.submit_key_token;
+            try {
+                // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O
+                // thread's empty checks are synchronized by m, so a command
+                // visible to the I/O thread has a visible sequence bump.
+                // Capture the post-bump per-thread value into the cmd so the
+                // I/O thread can compare it against any cancelled_owners
+                // tombstone (SubmitOp accept gate).
+                ++submit_seq;
+                cmd.seq_at_push = ++target->submit_seq;
+                if (readsCommands(*target)) {
+                    target->cmdq.push(std::move(cmd));
+                } else {
+                    // a thread past its last command drain, or stopped, processes the submission when it is started
+                    // again (below); it is kept where cancelByProgram() can see it until then (qore#7225)
+                    target->preserved_submits.push_back(std::move(cmd));
+                }
+            } catch (...) {
+                // out of memory: the reservation is given back
+                key_registry.release(uh, key_token);
+                throw;
             }
             socket_async_io_guard.release();
         }
@@ -5390,6 +5449,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             *thread_idx = target->thread_idx;
         }
         target->notifier->notify();
+        // the operation of another thread that the submission replaces is canceled; its submission, if not yet
+        // processed, is ahead of the cancel in its thread's queue
+        if (cancel_displaced) {
+            cancelKeyedOp(displaced_key, uh, xsink);
+        }
         ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
             (int)submit_seq.load(), uh.c_str());
 
@@ -6051,11 +6115,41 @@ qore_program_id_t AsyncIoControllerPriv::callerAppId() {
 
 bool AsyncIoControllerPriv::submitTakesKeyOfOther(bool sandboxed, qore_program_id_t app_id, const PollInfo& pinfo,
         const QoreObject* spop_obj) {
-    if (!sandboxed || pinfo.spop_obj == spop_obj) {
-        return false;
+    return KeyRegistry::takesKeyOfOtherApp(sandboxed, app_id, pinfo.app_pgm_id, pinfo.spop_obj, spop_obj);
+}
+
+void AsyncIoControllerPriv::cancelKeyedOp(const KeyRegistry::Entry& old, const std::string& key,
+        ExceptionSink* xsink) {
+    std::vector<PollInfo> kept;
+    {
+        AutoLocker al(m);
+        if (old.thread_idx < 0 || old.thread_idx >= static_cast<int>(io_threads.size())) {
+            return;
+        }
+        IoThreadContext& tp = *io_threads[old.thread_idx];
+        if (readsCommands(tp)) {
+            // the operation is in the thread's cache, or its submission is in the thread's queue ahead of this
+            // command: the submissions were ordered by the lock
+            Command cmd;
+            cmd.cmd = IoCommand::Cancel;
+            cmd.key = key;
+            cmd.cancel_key_token = old.token;
+            tp.cmdq.push(std::move(cmd));
+            ++submit_seq;
+            ++tp.submit_seq;
+            // notify() does not block; notifying under m keeps the context alive until it returns
+            tp.notifier->notify();
+            return;
+        }
+        // a thread past its last command drain, or stopped, cancels the operations in its cache when it exits; the
+        // submission that it keeps is taken here, as cancelByKey() does
+        takeKeptSubmitsLocked(tp, [&key, &old](const Command& c) {
+            return c.key == key && c.submit_key_token == old.token;
+        }, kept);
     }
-    // fails closed: sandboxed code that runs for no known application takes the key of no other operation
-    return app_id == QORE_NO_PROGRAM_ID || !app_id || pinfo.app_pgm_id != app_id;
+    if (!kept.empty()) {
+        cancelTakenSubmits(kept, key, xsink);
+    }
 }
 
 AioAppRestriction AsyncIoControllerPriv::cancelRestriction(bool& none) {
@@ -8374,6 +8468,7 @@ void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsin
             tp = std::make_unique<IoThreadContext>();
         }
         tp->thread_idx = i;
+        tp->cache.setRegistry(&key_registry);
         tp->loop = new QoreEventLoop(xsink);
         if (*xsink) {
             return;
@@ -10783,6 +10878,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // Cache access is I/O-thread-only (no lock)
                     auto it = t.cache.find(cmd.key);
                     if (it != t.cache.end() && (!cmd.cancel_spop_obj || it->second.spop_obj == cmd.cancel_spop_obj)
+                            && (!cmd.cancel_key_token || it->second.key_token == cmd.cancel_key_token)
                             && opInProgram(it->second, cmd.restrict_app)) {
                         found = true;
                         ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
@@ -11347,6 +11443,25 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             break;
                         }
                     }
+                    // A submission that collided with the key of an operation of another I/O thread when it was queued
+                    // is refused as one that collides on this thread (qore#7624)
+                    if (cmd.submit_key_collision != KeyCollision::None) {
+                        ExceptionSink refuse_xsink;
+                        if (cmd.submit_key_collision == KeyCollision::Refuse) {
+                            refuse_xsink.raiseException("ASYNC-IO-ERROR", "operation with key '%s' already exists; "
+                                "use replace=True to replace", cmd.key.c_str());
+                        } else {
+                            refuse_xsink.raiseException("ASYNC-IO-KEY-ERROR", "the key '%s' is in use by an "
+                                "operation of other code", cmd.key.c_str());
+                        }
+                        ReferenceHolder<QoreHashNode> refuse_ex(nullptr, xsink);
+                        if (QoreException* ex_obj = qore_exception_sink_ops(refuse_xsink).getException()) {
+                            refuse_ex = ex_obj->makeExceptionObject();
+                        }
+                        refuse_xsink.clear();
+                        refuseSubmit(cmd, *refuse_ex, xsink);
+                        break;
+                    }
                     // Worker thread submitted an operation — insert into cache
                     // (cache is I/O-thread-only, no lock needed)
                     //
@@ -11359,6 +11474,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // the same spop re-submitted keeps its ID: its event loop
                     // registrations are kept for it
                     uint64_t resubmitted_id = 0;
+                    // the key token of the operation of this thread that the submission replaces (qore#7624)
+                    uint64_t inherited_key_token = 0;
                     // true if the same operation is submitted again while a step of it is in flight on a worker
                     bool step_in_flight = false;
                     {
@@ -11388,6 +11505,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 // immediately re-queueing).
                                 resubmitted_id = it->second.op_id;
                                 PollInfo old_pinfo = t.takeOpKeepingId(it);
+                                inherited_key_token = old_pinfo.key_token;
                                 // the new submission waits for the step: no second step of the operation may run
                                 // meanwhile, and the step's result, for the same operation ID, is the new
                                 // submission's
@@ -11411,7 +11529,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 break;
                             } else {
                                 // Different spop on same key and the caller asked to replace it: cancel the old
-                                // operation and clean up
+                                // operation and clean up; the replacing operation takes over its key token
+                                inherited_key_token = it->second.key_token;
+                                it->second.key_token = 0;
                                 PollInfo old_pinfo = retireOp(t, it, xsink);
                                 if (old_pinfo.continue_poll_in_flight) {
                                     // a step of the replaced operation is still running on a worker: its
@@ -11433,6 +11553,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     PollInfo& pinfo = t.cache.emplaceWithId(cmd.key, resubmitted_id);
                     t.cache_size.fetch_add(1, std::memory_order_relaxed);
                     pinfo.app_pgm_id = cmd.submit_app_id;
+                    // the key token: the reservation of the submission, or the one of the operation of this thread
+                    // that it replaces (qore#7624); the reservation passes to the operation
+                    pinfo.key_token = cmd.submit_key_token ? cmd.submit_key_token : (inherited_key_token
+                        ? inherited_key_token : key_registry.adopt(cmd.key, t.thread_idx, cmd.submit_app_id,
+                            cmd.submit_spop_obj));
+                    cmd.submit_key_token = 0;
                     pinfo.continue_poll_in_flight = step_in_flight;
                     pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
                     pinfo.sock = cmd.submit_sock;               // ownership transferred
@@ -11943,6 +12069,8 @@ size_t AsyncIoControllerPriv::takeKeptSubmitsLocked(IoThreadContext& tp,
 }
 
 AsyncIoControllerPriv::PollInfo AsyncIoControllerPriv::takeSubmitPollInfo(Command& cmd) {
+    // the submission is not admitted: its key is free for the next one (qore#7624)
+    releaseSubmitKey(cmd);
     // the operation is described as it is when it is admitted (processCommands(), SubmitOp), so that its abort() and
     // onComplete() run, and its result is delivered, as for an admitted operation that is canceled: with the
     // sandbox context of the code that submitted it (and its module cleanup state), the owner that it inherited, and
