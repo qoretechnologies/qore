@@ -940,17 +940,67 @@ void qore_root_ns_private::addRuntimeVariant(AbstractQoreFunctionVariant* v) {
     if (runtime_variant_set.count(v)) {
         return;
     }
-    runtime_variants.reserve(runtime_variants.size() + 1);
-    // both can throw before the variant is recorded
-    runtime_variant_set.insert(v);
-    runtime_variants.push_back(v->ref());
+    // grows geometrically: a reservation of one more element copied the vector for each variant added (qore#7608)
+    runtime_variants.push_back(v);
+    try {
+        runtime_variant_set.insert(v);
+    } catch (...) {
+        // the variant is not recorded
+        runtime_variants.pop_back();
+        throw;
+    }
+    v->ref();
+
+    // the variant is indexed by the declarations that it names that can still be marked (qore#7608)
+    if (unmarked_index_incomplete) {
+        return;
+    }
+    BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v);
+    if (!bv) {
+        return;
+    }
+    try {
+        type_vec_t types;
+        QoreTypeDeclRefs::getUnmarkedDeclTypes(bv->signature.getReturnTypeInfo(), types);
+        for (unsigned i = 0, e = bv->signature.numParams(); i < e; ++i) {
+            QoreTypeDeclRefs::getUnmarkedDeclTypes(bv->signature.getParamTypeInfo(i), types);
+        }
+        for (const QoreTypeInfo* t : types) {
+            std::vector<AbstractQoreFunctionVariant*>& vl = unmarked_decl_variants[t];
+            // a declaration named twice by the variant is indexed once
+            if (vl.empty() || vl.back() != v) {
+                vl.push_back(v);
+            }
+        }
+    } catch (...) {
+        // the index is an optimization: every marking event refreshes every variant from now on, and the caller
+        // refreshes the variant as for any other
+        unmarked_index_incomplete = true;
+    }
+}
+
+#ifdef DEBUG
+//! the number of variants whose references a marking event refreshed (qore#7608)
+static std::atomic<int64> dbg_runtime_variant_refreshes{0};
+
+int64 qore_dbg_runtime_variant_refreshes() {
+    return dbg_runtime_variant_refreshes.load(std::memory_order_relaxed);
+}
+#endif
+
+//! Makes a variant of qore_root_ns_private::runtime_variants reference the mortal declarations that it names
+static void refresh_runtime_variant(AbstractQoreFunctionVariant* v) {
+    if (BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v)) {
+#ifdef DEBUG
+        dbg_runtime_variant_refreshes.fetch_add(1, std::memory_order_relaxed);
+#endif
+        bv->refMortalDecls();
+    }
 }
 
 void qore_root_ns_private::refRuntimeVariantDecls(size_t start) {
     for (size_t i = start, e = runtime_variants.size(); i < e; ++i) {
-        if (BuiltinFunctionVariantBase* bv = get_builtin_variant_base(runtime_variants[i])) {
-            bv->refMortalDecls();
-        }
+        refresh_runtime_variant(runtime_variants[i]);
     }
 }
 
@@ -973,7 +1023,26 @@ void qore_root_ns_private::completeRuntimeMarking(const type_vec_t& marked_types
         throw std::bad_alloc();
     }
 #endif
-    refRuntimeVariantDecls(all ? 0 : start);
+    if (full || unmarked_index_incomplete) {
+        refRuntimeVariantDecls(0);
+    } else {
+        // the variants added by the event, and those added before that name a declaration that it marked; a variant
+        // that names no declaration marked now references what it named when it was refreshed last (qore#7608)
+        refRuntimeVariantDecls(start);
+        for (const QoreTypeInfo* t : marked_types) {
+            auto i = unmarked_decl_variants.find(t);
+            if (i == unmarked_decl_variants.end()) {
+                continue;
+            }
+            for (AbstractQoreFunctionVariant* v : i->second) {
+                refresh_runtime_variant(v);
+            }
+        }
+        // the declarations marked are mortal now: they are not marked again
+        for (const QoreTypeInfo* t : marked_types) {
+            unmarked_decl_variants.erase(t);
+        }
+    }
     runtime_refresh_pending = false;
 }
 
@@ -983,6 +1052,7 @@ void qore_root_ns_private::releaseRuntimeVariants() {
     }
     runtime_variants.clear();
     runtime_variant_set.clear();
+    unmarked_decl_variants.clear();
 }
 
 //! Returns true if the function has the variant

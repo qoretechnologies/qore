@@ -5063,6 +5063,13 @@ public:
     */
     DLLLOCAL void addMortal(const QoreTypeInfo* ti);
 
+    //! Appends to \a types the own types of the declarations that \a ti names (as addMortal() finds them) that are
+    //! not mortal (qore#7608)
+    /** The type of a class (QoreClass::getTypeInfo()), of a hashdecl or of an enum (not or-nothing) is appended: a
+        marking event reports these types of the declarations that it marks
+    */
+    DLLLOCAL static void getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& types);
+
     //! References the given declarations, each of which must be mortal (QoreTypeOwner::isTypeOwnerSystem() is
     //! false) and given once, when no declaration is referenced yet (qore#7607)
     DLLLOCAL void addMortalDecls(const std::vector<const QoreClass*>& classes,

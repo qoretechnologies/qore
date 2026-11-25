@@ -46,7 +46,12 @@ Program's namespace data.
   (`BuiltinFunctionVariantBase::refMortalDecls()`), so that the variant can be
   imported into another Program or copied into a child Program that does not inherit
   the classes and outlive the Program; such a declaration can therefore outlive its
-  Program (qore#7540). A builtin declaration that a module adds one at a time to a
+  Program (qore#7540). An attach refreshes the references of the variants that it
+  adds and of the variants added before it that name a declaration that it marks,
+  which the Program indexes by the declarations that they name that are not mortal
+  yet (`qore_root_ns_private::unmarked_decl_variants`), not those of every variant
+  of the Program (qore#7608); a variant of one Program that names a declaration
+  that a module attaches to another Program is not refreshed by that attach. A builtin declaration that a module adds one at a time to a
   namespace already attached to a Program (`addSystemClass()`, `addSystemHashDecl()`,
   `addSystemEnum()`) is not marked: it keeps the lifetime handling of a system
   declaration (module-jni shares such classes between Programs; qore#7649, qore#7650). One that something keeps to the end of the process (a value
