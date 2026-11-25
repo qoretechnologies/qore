@@ -5473,6 +5473,8 @@ public:
             // being parsed) and of the code that parses it decide and are charged, not only the caller of the parse
             // (qore#7566)
             std::vector<QoreSandboxManager*> managers;
+            // the capacity is reserved before any reference is taken, so that no reference leaks
+            managers.reserve(4);
             ON_BLOCK_EXIT([&managers] () {
                 for (QoreSandboxManager* sm : managers) {
                     sm->deref(nullptr);

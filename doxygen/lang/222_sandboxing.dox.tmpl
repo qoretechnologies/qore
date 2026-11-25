@@ -1326,7 +1326,8 @@ sm.setTimeZonePathLimits(16, 4 * 1024 * 1024);
       governed and charged in the same way
     - the @ref set-time-zone "%set-time-zone" directive with a path in a %Program that sandboxes govern is decided by
       and charged to the sandboxes of the %Program and of the code that parses it
-    - in a date literal of restricted code, a path names only the %Program's own time zone
+    - in a date literal of restricted code, a path names only the %Program's own time zone (in code compiled ahead of
+      time, such a literal is in UTC)
 
     Code restricted only by its parse options has no sandbox to charge and cannot load paths.  On Windows, restricted
     code cannot load paths.

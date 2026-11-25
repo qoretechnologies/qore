@@ -30,6 +30,21 @@ string sub load_via_module(string path) {
         return ex.err;
     }
 }
+string sub load_cap(string path) {
+    try {
+        return \"ok \" + TzPathHelper::load_cap(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub raise_presets() {
+    list<string> rv = ();
+    foreach SandboxManager sm in ((new SandboxManager()).copy(), SandboxManager::createLockdown(),
+            SandboxManager::createWebSafe()) {
+        rv += set_limits(sm, 10, 1000000);
+    }
+    return rv.join(\",\");
+}
 string sub load_in_thread(string path) {
     Queue q();
     background q.push(load(path));
@@ -77,6 +92,7 @@ string sub load_in_child(string path, SandboxManager child_sm) {
         addTestCase("code restricted only by parse options loads no paths", \parseOptionsTest());
         addTestCase("module code and threads charge the code they act for", \actsForTest());
         addTestCase("only unrestricted code raises a budget", \raiseTest());
+        addTestCase("a system-policy capability that sandboxed code calls", \capabilityTest());
         addTestCase("every sandbox that governs the code needs and pays a budget", \compositeTest());
         addTestCase("an isolation domain bounds the sandboxes of a tenant", \domainTest());
         addTestCase("replacing the zone of a name is charged", \replaceTest());
@@ -186,6 +202,10 @@ string sub load_in_child(string path, SandboxManager child_sm) {
         string link = dir.path + "/link.tz";
         symlink(outside, link);
         assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", link));
+        # a link to a file outside of the policy that does not exist gives the same error: nothing is learned of it
+        string dangling = dir.path + "/dangling.tz";
+        symlink("/usr/share/zoneinfo/No/Such_Zone", dangling);
+        assertEq("FILESYSTEM-ACCESS-DENIED", p.callFunction("load", dangling));
         # a FIFO does not block and is no zone
         string fifo = dir.path + "/fifo.tz";
         if (!system("mkfifo " + fifo + " 2>/dev/null")) {
@@ -229,6 +249,8 @@ string sub load_in_child(string path, SandboxManager child_sm) {
         assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("set_limits", sm, 2, Bytes + 1));
         # also of a manager that the sandboxed code created
         assertEq("SANDBOX-ACCESS-ERROR", p.callFunction("raise_own_new_manager"));
+        # nor of the copies and presets that it makes
+        assertEq("SANDBOX-ACCESS-ERROR,SANDBOX-ACCESS-ERROR,SANDBOX-ACCESS-ERROR", p.callFunction("raise_presets"));
         # lowering is allowed
         assertEq("ok", p.callFunction("set_limits", sm, 1, Bytes));
         assertEq(1, sm.getTimeZonePathLimits().max_zones);
@@ -250,6 +272,20 @@ string sub load_in_child(string path, SandboxManager child_sm) {
         # the tenant's budget bounds what its children load
         tenant.setTimeZonePathLimits(1, Bytes);
         assertEq("SANDBOX-TIMEZONE-LIMIT", p.callFunction("load_in_child", copyZone("child2.tz"), child));
+    }
+
+    capabilityTest() {
+        TzPathHelper::init_cap();
+        SandboxManager sm = manager();
+        Program p = sandboxed(sm);
+        string zone = copyZone("cap.tz");
+        # without a budget, a capability that runs with the system policy cannot load a path for the sandboxed code
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load_cap", zone));
+        assertEq("ILLEGAL-FILESYSTEM-ACCESS", p.callFunction("load_cap", "/usr/share/zoneinfo/Europe/Paris"));
+        # with one, the load is charged to the sandbox of the code that calls it
+        sm.setTimeZonePathLimits(10, Bytes);
+        assertEq("ok " + zone, p.callFunction("load_cap", zone));
+        assertEq(1, sm.getTimeZonePathLimits().zones);
     }
 
     domainTest() {

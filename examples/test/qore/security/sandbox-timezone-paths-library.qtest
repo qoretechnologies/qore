@@ -1,0 +1,47 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child interpreters started with a module directory of library code
+# test-platform: macos - module loading from a library module directory and zoneinfo files under the file-system policy
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%exec-class SandboxTimeZonePathsLibraryTest
+
+#! The initialization of library code that sandboxed code loads is governed by its sandbox for time zone paths
+#! (qore#7566)
+class SandboxTimeZonePathsLibraryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SandboxTimeZonePathsLibraryTest", "1.0") {
+        addTestCase("library module initialization", \initTest());
+        set_return_value(main());
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    initTest() {
+        if (PlatformOS == "Windows") {
+            testSkip("restricted code cannot load time zones from paths on Windows");
+        }
+        string zone = "/usr/share/zoneinfo/Europe/Paris";
+        if (!is_file(zone)) {
+            testSkip("no zoneinfo files on this system");
+        }
+        TmpDir allowed("tzlib");
+        string dir = get_script_dir() + DirSep + "sandbox-timezone-paths-library";
+        string qlib = get_script_dir() + "/../../../../qlib";
+        string prefix = sprintf("QORE_MODULE_DIR=%s:%s:${QORE_MODULE_DIR} QORE_TZLIB_PATH=%s ",
+            quote(dir + DirSep + "lib"), quote(qlib), quote(zone));
+        string cmd = prefix + quote(TestInterpreter::qore_interpreter()) + " -b --enable-debug "
+            + quote(dir + DirSep + "worker.q") + " " + quote(allowed.path);
+        # without a budget, the initialization of library code that the sandboxed code loads cannot load a path
+        assertEq("init=ILLEGAL-FILESYSTEM-ACCESS zones=0\n", backquote(cmd + " none 2>&1"));
+        # with one, the library code (whose module directory is trusted, and whose initialization reads with its own
+        # trust) loads it, and the sandbox of the code that loaded it pays
+        assertEq("init=loaded zones=1\n", backquote(cmd + " budget 2>&1"));
+    }
+}

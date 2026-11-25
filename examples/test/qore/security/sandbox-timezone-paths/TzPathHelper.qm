@@ -17,4 +17,20 @@ public string sub load(string path) {
     TimeZone tz(path);
     return tz.region();
 }
+
+#! a capability that loads a zone with the system policy, created by trusted code with init_cap()
+public our *code cap;
+
+#! creates the capability; called by trusted code
+public sub init_cap() {
+    cap = SandboxManager::createSystemPolicyCall(string sub (string path) {
+        TimeZone tz(path);
+        return tz.region();
+    });
+}
+
+#! loads the zone of the path with the capability
+public string sub load_cap(string path) {
+    return cap(path);
+}
 }

@@ -560,6 +560,18 @@ private:
     DLLLOCAL static int prepareSandboxCharge(const char* name, SandboxTzCharge& charge, ExceptionSink* xsink,
             const std::vector<QoreSandboxManager*>* managers = nullptr);
 
+    //! raises the error of a path that code that a sandbox governs cannot load (qore#7566)
+    /** @param directive true for the %set-time-zone directive
+    */
+    DLLLOCAL static void raiseSandboxPathError(const char* name, bool directive, const char* reason,
+            ExceptionSink* xsink);
+
+public:
+    //! returns true if the calling code, which is restricted, may load a path at all: every sandbox that governs it
+    //! grants a budget (qore#7566); code restricted only by its parse options cannot
+    DLLLOCAL static bool callerSandboxGrantsPaths();
+private:
+
     //! raises the error for a path that the policy does not permit
     DLLLOCAL static void raisePathDenied(const char* name, const char* code, ExceptionSink* xsink);
 #else

@@ -2222,9 +2222,14 @@ bool QoreTimeZoneManager::programRestricted(QoreProgram* pgm) {
 }
 
 int QoreTimeZoneManager::checkRegion(const QoreString& region, bool is_path, ExceptionSink* xsink) {
-    // a name that is a path is loaded as a path (findLoadRegion() passes it to findLoadRegionFromPath()), which decides
-    // what restricted code can load (qore#7566) before anything is accessed
+    // a name that is a path is loaded as a path (findLoadRegion() passes it to findLoadRegionFromPath()); restricted
+    // code that cannot load paths at all (no sandbox, or one without a time zone path budget; qore#7566) gets the
+    // error of a path that it cannot load first, whatever the path
     if (is_path || isPathName(region.c_str())) {
+        if ((callerRestricted() || qore_caller_is_untrusted()) && !callerSandboxGrantsPaths()) {
+            raiseRestrictedPath(region.c_str(), xsink);
+            return -1;
+        }
         return q_check_no_nul(region.c_str(), region.size(), "time zone region or path",
             "time zone regions and paths", "TZINFO-ERROR", xsink);
     }
@@ -2627,6 +2632,41 @@ charge_failed:
     return nullptr;
 }
 
+void QoreTimeZoneManager::raiseSandboxPathError(const char* name, bool directive, const char* reason,
+        ExceptionSink* xsink) {
+    if (directive) {
+        // the error of a directive does not name the path
+        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "the %%set-time-zone directive cannot name a zoneinfo file "
+            "path in a restricted Program: %s", reason);
+    } else {
+        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': restricted code "
+            "can load time zone regions only; %s", name, reason);
+    }
+}
+
+bool QoreTimeZoneManager::callerSandboxGrantsPaths() {
+#ifdef _Q_WINDOWS
+    return false;
+#else
+    ReferenceHolder<QoreSandboxManager> all(qore_caller_sandbox_ref(), nullptr);
+    if (!all) {
+        return false;
+    }
+    const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(*all);
+    if (!members) {
+        QoreSandboxMemoryAccount* account = all->getMemoryAccount();
+        return account->tz_max_zones.load() > 0 && account->tz_max_bytes.load() > 0;
+    }
+    for (QoreSandboxManager* sm : *members) {
+        QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
+        if (account->tz_max_zones.load() <= 0 || account->tz_max_bytes.load() <= 0) {
+            return false;
+        }
+    }
+    return true;
+#endif
+}
+
 QoreTimeZoneManager::SandboxTzCharge::~SandboxTzCharge() {
     for (QoreSandboxMemoryAccount* account : accounts) {
         account->deref();
@@ -2842,7 +2882,14 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
         fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     } while (fd < 0 && errno == EINTR);
     if (fd < 0) {
-        xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", name);
+        if (charge) {
+            // code that a sandbox governs learns nothing of a file that a link reaches outside of its policy: every
+            // failure before the opened file is checked gives the error of a path that the policy denies
+            // (qore#7566)
+            raisePathDenied(name, "FILESYSTEM-ACCESS-DENIED", xsink);
+        } else {
+            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", name);
+        }
         return nullptr;
     }
     ON_BLOCK_EXIT(close, fd);
@@ -2852,8 +2899,12 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::loadPath(const char* name, cons
     struct stat sbuf;
     std::string canon;
     if (fstat(fd, &sbuf) || get_open_file_path(fd, sbuf, path, canon)) {
-        xsink->raiseException("TZINFO-ERROR", "time zone file '%s' was replaced or removed while it was loaded",
-            name);
+        if (charge) {
+            raisePathDenied(name, "FILESYSTEM-ACCESS-DENIED", xsink);
+        } else {
+            xsink->raiseException("TZINFO-ERROR", "time zone file '%s' was replaced or removed while it was loaded",
+                name);
+        }
         return nullptr;
     }
     if (charge && !charge->policy_managers.empty()) {
@@ -2900,9 +2951,10 @@ int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge&
             }
         }
     }
+    bool directive = managers != nullptr;
     if (!valid) {
-        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': code that a "
-            "sandbox governs must give an absolute path without \".\", \"..\" or empty components", name);
+        raiseSandboxPathError(name, directive, "where its sandboxes grant a budget, code that a sandbox governs can "
+            "load only an absolute path without \".\", \"..\" or empty components", xsink);
         return -1;
     }
     // the sandbox that governs the calling code, with every sandbox that governs it (not only the one whose
@@ -2913,6 +2965,7 @@ int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge&
         raiseRestrictedPath(name, xsink);
         return -1;
     }
+    (void)directive;
     // the members of the sandboxes, flattened and without duplicates: never the account of a composite, which is
     // new for each resolution (qore#7566)
     std::vector<QoreSandboxManager*> flat;
@@ -2944,9 +2997,8 @@ int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge&
     for (QoreSandboxManager* sm : *members) {
         QoreSandboxMemoryAccount* account = sm->getMemoryAccount();
         if (account->tz_max_zones.load() <= 0 || account->tz_max_bytes.load() <= 0) {
-            xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': a sandbox "
-                "that governs the code grants no budget for time zones loaded from paths (see "
-                "SandboxManager::setTimeZonePathLimits())", name);
+            raiseSandboxPathError(name, directive, "a sandbox that governs the code grants no budget for time zones "
+                "loaded from paths (see SandboxManager::setTimeZonePathLimits())", xsink);
             return -1;
         }
         account->ref();
@@ -2977,8 +3029,8 @@ int QoreTimeZoneManager::prepareSandboxCharge(const char* name, SandboxTzCharge&
         charge.domain = qore_caller_isolation_domain();
     }
     if (qore_isolation_domain_is_mixed(charge.domain)) {
-        xsink->raiseException("ILLEGAL-FILESYSTEM-ACCESS", "cannot load a time zone from path '%s': the code is "
-            "governed by the sandboxes of different isolation domains", name);
+        raiseSandboxPathError(name, directive, "the code is governed by the sandboxes of different isolation domains",
+            xsink);
         return -1;
     }
     return 0;
@@ -3106,7 +3158,9 @@ const AbstractQoreZoneInfo* QoreTimeZoneManager::findLoadRegionFromPath(const ch
     // grants a budget, charged to each of them (qore#7566); other restricted code cannot (code restricted only by its
     // parse options has no sandbox to charge); on Windows, restricted code cannot load paths
     std::unique_ptr<SandboxTzCharge> charge;
-    if (!pgm && callerRestricted()) {
+    // restricted also when no file-system policy applies (a system-policy call that sandboxed code makes) and while
+    // library code that untrusted code loaded is initialized: every sandbox that governs the code decides and pays
+    if (!pgm && (callerRestricted() || qore_caller_is_untrusted())) {
         charge.reset(new SandboxTzCharge);
         if (prepareSandboxCharge(name, *charge, xsink)) {
             return nullptr;
