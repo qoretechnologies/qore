@@ -34354,6 +34354,79 @@ static QoreValue f_dbg_quic_wait_idle(const QoreListNode* params, RuntimeConfig&
     return dbg_quic_wait_until([&session]() { return !session->getBytesInFlight(); }, static_cast<int>(timeout_ms));
 }
 
+//! Debug-only: waits until a QUIC session has no data in flight and can send at once (qore#7638)
+/** As dbg_quic_wait_idle(), and also until no timer of the session is due soon: after the session sent, the pacing of
+    its sends (or another timer) can keep it from writing until a moment shortly after, when its own timer writes what
+    is pending, so that a write made before then (Socket::flushQuicPendingData(), for example) writes nothing.  With
+    nothing in flight, the timers that remain (the idle timeout, keep-alive) are far off: a timer due within 100 ms is
+    waited for, until the moment that it is due, which is known, and the state is checked again then.
+
+    @param session_id the QUIC session ID
+    @param timeout_ms the maximum time to wait in milliseconds
+
+    @return True if the session has nothing in flight and no timer due within 100 ms, False if the wait timed out
+
+    @throw QUIC-ERROR there is no such QUIC session
+*/
+static QoreValue f_dbg_quic_wait_send_ready(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t session_id = get_param_value(params, 0).getAsBigInt();
+    int64_t timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (session_id <= 0 || timeout_ms < 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_quic_wait_send_ready(): invalid session ID %lld or timeout "
+            "%lld", (long long)session_id, (long long)timeout_ms);
+        return QoreValue();
+    }
+    SocketSyncPoll::assertNotOnIoThread("Qore", "dbg_quic_wait_send_ready", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::shared_ptr<QuicSession> session;
+    {
+        std::lock_guard<std::mutex> lk(dbg_quic_sessions_m);
+        auto i = dbg_quic_sessions.find(session_id);
+        if (i != dbg_quic_sessions.end()) {
+            session = i->second.lock();
+        }
+    }
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "dbg_quic_wait_send_ready(): no QUIC session with id %lld",
+            (long long)session_id);
+        return QoreValue();
+    }
+    // a timer due within this many nanoseconds is a pending send, not the idle timeout or keep-alive
+    static constexpr int64_t soon_ns = 100 * 1000 * 1000;
+    qore_dbg_quic_idle_waiters.fetch_add(1, std::memory_order_acq_rel);
+    ON_BLOCK_EXIT([] { qore_dbg_quic_idle_waiters.fetch_sub(1, std::memory_order_acq_rel); });
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (true) {
+        uint64_t gen;
+        {
+            std::lock_guard<std::mutex> lk(dbg_quic_idle_m);
+            gen = dbg_quic_idle_gen;
+        }
+        // checked without the waiters' lock: it takes the session's lock
+        int64_t ns = session->dbgNsUntilExpiry();
+        bool in_flight = session->getBytesInFlight() > 0;
+        if (!in_flight && ns > soon_ns) {
+            return true;
+        }
+        // the moment that the timer is due is known: the state is checked again then, or when the session reads
+        auto until = deadline;
+        if (!in_flight) {
+            auto due = std::chrono::steady_clock::now() + std::chrono::nanoseconds(ns)
+                + std::chrono::microseconds(100);
+            if (due < until) {
+                until = due;
+            }
+        }
+        std::unique_lock<std::mutex> lk(dbg_quic_idle_m);
+        bool woken = dbg_quic_idle_cv.wait_until(lk, until, [gen] { return dbg_quic_idle_gen != gen; });
+        if (!woken && std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+    }
+}
+
 //! Debug-only: waits until no QUIC session of the process has data in flight or anything left to write (qore#7452)
 /** When a client and a server in the process have nothing in flight and nothing to write, each has had all its
     packets that need an acknowledgment acknowledged by the other, and has no frame waiting to be sent (ex: a client's
@@ -38095,6 +38168,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_quic_wait_idle", f_dbg_quic_wait_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_quic_wait_send_ready", f_dbg_quic_wait_send_ready, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "session_id", timeoutTypeInfo, QORE_PARAM_NO_ARG,
+        "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_wait_all_idle", f_dbg_quic_wait_all_idle, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_set_client_peer_response_timeout", f_dbg_quic_set_client_peer_response_timeout,
