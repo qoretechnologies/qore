@@ -13133,6 +13133,7 @@ list<auto> l = table.getAlignSql(table2);
             }
         }
 
+        *AbstractIndex removed_pk_index;
         if (!opt.omit.indexes) {
             # check for indexes with different names than in the template and rename them automatically
             foreach AbstractIndex ix in (indexes.iterator()) {
@@ -13222,7 +13223,11 @@ list<auto> l = table.getAlignSql(table2);
                             }
                         }
                     }
-                    if (!dropped) {
+                    if (!primaryKey.empty() && t.primaryKey.empty() && primaryKey.getIndex() == ix.name
+                            && !constraintsLinkedToIndexesImpl()) {
+                        # Oracle drops the primary key with KEEP INDEX. Its index can only be dropped afterwards.
+                        removed_pk_index = ix;
+                    } else if (!dropped) {
                         l += AbstractDatabase::doCallback(opt, ix.getDropSql(getSqlName()),
                             AbstractDatabase::AC_Drop, "index", ix.name, name);
                     }
@@ -13363,6 +13368,10 @@ list<auto> l = table.getAlignSql(table2);
             l += AbstractDatabase::doCallback(opt, primaryKey.getDropSql(getSqlName()), AbstractDatabase::AC_Drop,
                 "primary key", primaryKey.getName(), name);
             delete primaryKey;
+            if (removed_pk_index) {
+                l += AbstractDatabase::doCallback(opt, removed_pk_index.getDropSql(getSqlName()),
+                    AbstractDatabase::AC_Drop, "index", removed_pk_index.name, name);
+            }
         }
 
         # the driver refuses the changes that its database cannot make with any version before a column is aligned,
