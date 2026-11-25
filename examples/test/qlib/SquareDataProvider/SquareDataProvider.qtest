@@ -151,6 +151,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         addTestCase("sanity tests", \sanityTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("trigger example data tests", \triggerExampleDataTests());
@@ -312,6 +313,25 @@ public class SquareDataProviderTest inherits QUnit::Test {
             }
             rethrow;
         }
+    }
+
+    #! Action catalog tests - the read-only actions declare that they do not change state (qore#7454)
+    actionCatalogTests() {
+        checkJson();
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            SquareDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+        # these actions POST to Square's batch-retrieve endpoints, which only retrieve orders and inventory counts
+        list<string> read_only = ("get-inventory-count", "get-orders");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(DPAT_API, $1.action_code, $1.action), ro_actions;
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # change-inventory POSTs inventory changes: it changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(DataProviderActionCatalog::getAppAction(
+            SquareDataProvider::AppName, "change-inventory")));
     }
 
     #! Child provider tests - verify hierarchy

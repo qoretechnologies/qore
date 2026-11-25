@@ -874,6 +874,7 @@ public class LlamaParseManifest {
             <RestSchemaActionInfo>{
                 "action": "generate-extract-schema",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/api/v2/extract/schema/generate",
                 "display_name": "Generate Extraction Schema",
                 "short_desc": "Write an extraction schema from a plain-language description",
@@ -908,6 +909,7 @@ public class LlamaParseManifest {
             <RestSchemaActionInfo>{
                 "action": "validate-extract-schema",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/api/v2/extract/schema/validation",
                 "display_name": "Validate Extraction Schema",
                 "short_desc": "Check an extraction schema before running a job with it",

@@ -24,9 +24,10 @@
     an integer (qore#7084), and the IR interpreter gave the weak reference in some consumers. A temporary that a weak
     assignment is given lives until the end of the statement in every execution mode ("all chains, whole statement"):
     the AST interpreter and native code released it when the assignment ended, so that the weak reference designated a
-    destroyed object for the rest of the statement (qore#7085); so does a copy that the variable's type makes of a
-    container, which the AST interpreter released at once. Every mode must print the output of the AST; the JIT is also
-    run with its functions compiled synchronously, as otherwise they can run in the IR interpreter.
+    destroyed object for the rest of the statement (qore#7085). A container whose type the variable's type strips is
+    not copied: the weak reference designates the container assigned (qore#7237). Every mode must print the output of
+    the AST; the JIT is also run with its functions compiled synchronously, as otherwise they can run in the IR
+    interpreter.
 
     The same holds for the lvalues assigned through an lvalue path (members, hash and hashdecl keys, list elements, a
     softlist variable), where the IR interpreter and native code released the temporary and gave the weak reference

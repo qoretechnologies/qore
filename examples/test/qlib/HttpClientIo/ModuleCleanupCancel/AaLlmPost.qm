@@ -1,0 +1,92 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a module whose destructor submits an operation whose onComplete(), work of the module cleanup that the cleanup
+# counts, posts a task to an asynchronous LLM call (LlmAsyncOperation) whose executor runs it on a thread of its own:
+# the task runs as the work of the cleanup that posted it, and the cleanup waits for it before it deletes the data of
+# the next module (AbLater); see llm-client.qr (qore#7339)
+
+%modern
+
+%requires QoreLlmTypes
+
+module AaLlmPost {
+    version = "1.0";
+    desc = "work of the module cleanup that posts a task to an asynchronous LLM call";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace AaLlmPost {
+#! an executor that runs each task on a thread of its own, which the module cleanup does not count
+class ThreadExecutor inherits LlmAsyncExecutor {
+    execute(code<nothing()> task) {
+        background task();
+    }
+}
+
+#! an operation that reaches its goal in its first step; its onComplete() posts a task to the call
+class PostOperation inherits AbstractPollOperation<auto> {
+    private {
+        bool reached = False;
+        LlmAsyncOperation op;
+    }
+
+    constructor(LlmAsyncOperation op) {
+        self.op = op;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return reached ? "done" : "pending";
+    }
+
+    bool goalReached() {
+        return reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        reached = True;
+        return NOTHING;
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        op.post(sub () {
+            # the task runs as the work of the cleanup that posted it: it can hand work over in turn
+            int nested = AsyncIoController::holdModuleCleanupWork();
+            printf("posted task ran: counted: %y\n", nested != 0);
+            AsyncIoController::releaseModuleCleanupWork(nested);
+            flush();
+        });
+    }
+}
+
+#! submits the operation when the module cleanup deletes the module's data
+class Submitter {
+    private {
+        EventNotifier notifier();
+        LlmAsyncOperation op(new ThreadExecutor());
+    }
+
+    destructor() {
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new PostOperation(op),
+            "owner": "module-cleanup-llm-post",
+            "to": 10s,
+        });
+    }
+}
+
+#! the data of this module
+public class LlmPostHolder {
+    public {
+        static Submitter submitter();
+    }
+}
+}

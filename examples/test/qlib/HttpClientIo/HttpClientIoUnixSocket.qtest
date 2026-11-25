@@ -7,9 +7,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestSocketDir.qm
 %requires Logger
 %requires Mime
-%requires FsUtil
 %requires HttpServerUtil
 %requires HttpServerAsyncIo
 %requires HttpServer
@@ -126,7 +126,7 @@ class SilentUnixListener {
 
 public class HttpClientIoUnixSocketTest inherits QUnit::Test {
     private {
-        TmpDir tmp;
+        TestSocketDir tmp;
         HttpServer server;
         string sock_path;
         string url;
@@ -151,8 +151,7 @@ public class HttpClientIoUnixSocketTest inherits QUnit::Test {
     }
 
     globalSetUp() {
-        # macOS keeps $TMPDIR under /private/var/folders, where a socket path does not fit a UNIX socket address
-        tmp = new TmpDir("httpclientio-unix-", NOTHING, Qore::PlatformOS == "Darwin" ? "/tmp" : NOTHING);
+        tmp = new TestSocketDir();
         sock_path = tmp.path + "/rest.sock";
         url = "http://socket=" + encode_url(sock_path, True);
         server = new HttpServer(<HttpServerOptionInfo>{

@@ -225,6 +225,7 @@ public class CohereDataProviderTest inherits QUnit::Test {
         conn_name = LiveProvider::get("cohere", "COHERE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 24 actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("root provider resolves all 24 action paths",       \rootProviderTest());
         addTestCase("chat hits /v2/chat",                   \chatRequestTest());
         addTestCase("embed injects embedding_types default", \embedRequestTest());
@@ -257,6 +258,24 @@ public class CohereDataProviderTest inherits QUnit::Test {
             "set the Cohere connection name; without it (and "
             "without the COHERE_CONNECTION env var) the live test is skipped",
             OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("chat", "embed", "rerank", "classify", "tokenize", "detokenize", "parse", "transcribe", "check-api-key",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Cohere", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("create-dataset", "create-embed-job", "create-batch",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Cohere", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {

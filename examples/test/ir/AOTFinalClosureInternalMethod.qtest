@@ -34,6 +34,7 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
         addTestCase("qcc executables match AST", \compiled());
         addTestCase("method families in native initializers and debug IR", \imageFamilies());
         addTestCase("a closure calls a class declared in a transitive qmod", \compiledModuleOwner());
+        addTestCase("method of a module-private root class", \modulePrivateRootClass());
         addTestCase("dot target records", \records());
         addTestCase("AO reader refuses v50", \previousFormat());
         set_return_value(main());
@@ -85,6 +86,21 @@ class AOTFinalClosureInternalMethodTest inherits QUnit::Test {
             string exe = dir.path + "/probe";
             run((qcc_bin, level, "-g", "-o", exe, script));
             assertEq(expected, run((exe, "-b")), level);
+        }
+    }
+
+    modulePrivateRootClass() {
+        string src = get_script_dir() + "/AOTFinalClosureInternalMethod/root-class";
+        string script = src + "/probe.q";
+        string expected = "37/91\n";
+        assertEq(expected, run(("QORE_MODULE_DIR=" + src, qore_bin, "-b", "--exec-mode=ast", script)));
+        foreach string level in ("-O0", "-O3") {
+            TmpDir images("qore-private-root-class-");
+            run((qcc_bin, level, "-m", "-o", images.path + "/GateProbe.qmod", src + "/GateProbe.qm"));
+            foreach string mode in ("ast", "ir", "jit", "tiered") {
+                assertEq(expected, run(("QORE_MODULE_DIR=" + images.path, qore_bin, "-b", "--exec-mode=" + mode,
+                    script)), level + "/" + mode);
+            }
         }
     }
 

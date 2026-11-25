@@ -813,7 +813,7 @@ void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSi
             "cannot push data: connection has no poll operation");
         return;
     }
-    poll_op_priv->pushSendData(data, xsink);
+    poll_op_priv->pushSendData(data, xsink, switched_send_timeout_ms.load(std::memory_order_relaxed));
 
     // Wake the I/O controller so it processes the queued data
     if (sock_obj) {

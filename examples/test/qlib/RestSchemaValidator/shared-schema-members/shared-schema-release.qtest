@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedSchemaReleaseTest
+
+#! Regression test for qore#6843: what a shared REST schema builds for its callers is released with the schema
+/** The types and fields that a shared schema builds for its callers outside its type builds are kept in the
+    per-Program cache of each caller: they are released with the schema, in a trusted caller's cache at once, in a
+    tenant's cache (a sandboxed Program) by the tenant's next use of its cache, in the tenant's thread and never in
+    the host's, or with the tenant's Program; only the code of a class of an object can release its values.
+
+    SharedSchemaRelease.q checks these; its output must be the one in SharedSchemaRelease.expected in every execution
+    mode, and in programs compiled with qcc -O0 and -O3.
+*/
+class SharedSchemaReleaseTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedSchemaRelease.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedSchemaRelease.expected");
+    }
+
+    constructor() : QUnit::Test("shared schema release", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs and in the library modules, whose code (the catalog worker that
+                # builds the lazy values) chooses its own execution, so the native compilation is not checked
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        # no IR tier case: the library modules' own code (the catalog worker) is compiled to native code there too
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/shared-schema-release";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the output of the fixture only: a library module that the program loads from source because its binary
+        # module was built for another Qore library warns on stderr
+        assertEq(expected, backquote(shellQuote(program) + " 2>/dev/null"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

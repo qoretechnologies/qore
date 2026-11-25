@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - mutual TLS on a loopback socket and access to certificate files
+# test-loopback: localhost - it checks that "http://localhost:<port>" is another credential origin than the 127.0.0.1 server at the same port, and its "rests://localhost" connections are refused or made without connecting; no client connects to localhost, and the servers listen on 127.0.0.1 with 127.0.0.1 clients
 
 # Copyright 2026 Qore Technologies, s.r.o.
 

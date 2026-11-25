@@ -161,6 +161,7 @@ A row is named by its script and loop (`bench-func.q:fc`); names repeat between 
 | `bench-s.q` | `cv` `ci` `cs` `up` `um` `ua` `cc` `lp` `lr` `mp` `mr` `gp` `gr` `hp` `hr` | float to int conversions (qore#6181), unary plus and minus (qore#5712, qore#6132), a class cast, post and pre increment of a local, member, global and hash key (qore#6199) |
 | `bench-hasheq.q` | `hes` `her` `hsw` `hfv` `hfk` `hhe` `hhr` | `==` of two equal 26-key hashes with the keys in the same order, in reverse order, with the first two keys swapped; with the first value different, the first key different; `===` with the keys in the same order, in reverse order (qore#7266) |
 | `bench-gen.q` | `gr` `gc` `cr` `cc` `gn` `gl` `gh` `gk` `gm` `gx` `gv` | generic code at runtime (qore#6126): generic locals, closures, calls, classes, casts, with concrete controls (`cr`, `cc`) |
+| `bench-weak-assignment.q` | `member` `hash` `list` `variable` | a weak assignment (`:=`) from a public member, a hash key, a list element and a local (qore#7301) |
 
 A new bench script follows the same form, which `examples/test/runner/test_cgrows_tool.py` checks: its first line is
 `%modern`; it defines `int sub f(int a)` (which the dead statements call); each loop function starts with

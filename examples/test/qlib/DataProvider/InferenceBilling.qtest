@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class InferenceBillingTest
+
+class InferenceBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Inference provider billing") {
+        addVendor("DeepSeek", "DeepSeek", "deepseek.com", "metered",
+            "https://api-docs.deepseek.com/quick_start/pricing/", {
+                "chat-completion": "token",
+                "fim-completion": "token",
+                "list-models": "included",
+                "get-balance": "included",
+                "make-api-call": "metered",
+            });
+        addVendor("Voyage", "VoyageAI", "voyageai.com", "metered",
+            "https://docs.voyageai.com/docs/pricing", {
+                "create-embeddings": "token",
+                "rerank": "token",
+                "make-api-call": "metered",
+            });
+        addVendor("Deepgram", "Deepgram", "deepgram.com", "metered",
+            "https://deepgram.com/pricing", {
+                "transcribe-file": "second",
+                "synthesize-speech": "character",
+                "make-api-call": "metered",
+            });
+        addVendor("Tavily", "Tavily", "tavily.com", "metered",
+            "https://docs.tavily.com/documentation/api-credits", {
+                "search": "credit",
+                "extract": "credit",
+                "crawl": "credit",
+                "map": "credit",
+                "research": "credit",
+                "get-research": "included",
+                "usage": "included",
+                "logs": "included",
+                "make-api-call": "metered",
+            });
+        set_return_value(main());
+    }
+}

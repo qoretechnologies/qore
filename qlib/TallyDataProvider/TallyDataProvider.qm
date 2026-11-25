@@ -60,6 +60,15 @@ module TallyDataProvider {
                 "- **Automation**: set up webhooks to trigger workflows when forms are submitted\n"
                 "- **User management**: retrieve authenticated user information",
             "scheme": "tally",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "tally.so",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://tally.so/help/api",
+                "effective_date": 2026-11-25,
+            },
             "logo": TallyLogo,
             "logo_file_name": "tally-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -106,6 +115,7 @@ module TallyDataProvider {
             "short_desc": "Get a form by ID",
             "desc": "Retrieve a single form by its ID, including all blocks and settings",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Forms",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TallyGetFormRequestDataType::Fields, {
@@ -204,6 +214,7 @@ module TallyDataProvider {
             "short_desc": "Get a submission by ID",
             "desc": "Retrieve a specific form submission with all its responses and the form questions",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Submissions",),
             "options": {
                 "form_id": <ActionOptionInfo>{
@@ -535,6 +546,7 @@ module TallyDataProvider {
             "short_desc": "Get a workspace by ID",
             "desc": "Retrieve a single workspace by its ID, including its members and pending invites",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Workspaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TallyGetWorkspaceRequestDataType::Fields, {
@@ -616,6 +628,7 @@ module TallyDataProvider {
             "short_desc": "Get the current authenticated user",
             "desc": "Retrieve information about the currently authenticated user",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("User",),
             "options": {},
             "output_type": TallyGetCurrentUserDataProvider::ResponseType,

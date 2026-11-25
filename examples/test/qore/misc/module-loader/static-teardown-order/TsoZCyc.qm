@@ -1,0 +1,16 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TsoZCyc.qm - module of static-teardown-order.qtest: requires TsoZHolder, which loads it at run time, so that the
+# two modules make a cycle that requires TsoAStatic
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TsoZHolder
+
+module TsoZCyc {
+    version = "1.0";
+    desc = "module for the static teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}

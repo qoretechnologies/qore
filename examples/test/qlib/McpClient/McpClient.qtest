@@ -265,9 +265,9 @@ class McpClientTest inherits QUnit::Test {
         http = new HttpServer(http_opts);
         http.setHandler("mcp-handler", "", MimeTypeJson, mcp_server);
         http.setDefaultHandler("mcp-handler", mcp_server);
-        port = http.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        port = http.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
 
-        base_url = sprintf("http://localhost:%d", port);
+        base_url = sprintf("http://127.0.0.1:%d", port);
     }
 
     globalTearDown() {
@@ -922,7 +922,7 @@ class McpClientTest inherits QUnit::Test {
         # Port 99999 is invalid, so this should fail at constructor or initialize
         bool invalid_url_handled = False;
         try {
-            McpClient::McpClient client4("http://localhost:99999");
+            McpClient::McpClient client4("http://127.0.0.1:99999");
             client4.initialize(<McpClientInfo>{"name": "TestClient", "version": "1.0"});
         } catch (hash<ExceptionInfo> ex) {
             # Either URL parse error, socket error, or HTTP error is acceptable

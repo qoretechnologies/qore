@@ -947,6 +947,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "chat-completion",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/chat/completions",
                 "response_content_type": "application/json",
                 "display_name": "Chat Completion",
@@ -1126,6 +1127,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "text-completion",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/completions",
                 "response_content_type": "application/json",
                 "display_name": "Text Completion",
@@ -1227,6 +1229,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "create-embeddings",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/embeddings",
                 "display_name": "Create Embeddings",
                 "short_desc": "Create embedding",
@@ -1361,6 +1364,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "generate-image",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/images/generations",
                 "display_name": "Generate Image",
                 "short_desc": "Create image",
@@ -1764,6 +1768,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "estimate-fine-tune-price",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/fine-tunes/estimate-price",
                 "display_name": "Estimate Fine-Tune Price",
                 "short_desc": "Estimate price",
@@ -1815,6 +1820,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "preview-fine-tune-data",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/fine-tunes/preview",
                 "display_name": "Preview Fine-Tune Data",
                 "short_desc": "Preview tokenized data",
@@ -2078,6 +2084,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "rerank",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/rerank",
                 "display_name": "Rerank Documents",
                 "short_desc": "Create a rerank request",
@@ -2140,6 +2147,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "generate-speech",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/audio/speech",
                 "display_name": "Generate Speech",
                 "short_desc": "Create audio generation request",
@@ -2245,6 +2253,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "transcribe-audio",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/audio/transcriptions",
                 "display_name": "Transcribe Audio",
                 "short_desc": "Create audio transcription request",
@@ -2316,6 +2325,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "translate-audio",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/audio/translations",
                 "display_name": "Translate Audio",
                 "short_desc": "Create audio translation request",
@@ -3780,6 +3790,7 @@ public class TogetherManifest {
             <RestSchemaActionInfo>{
                 "action": "estimate-on-demand-model-resource-cost",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/rl/model-resources/estimate-cost",
                 "display_name": "Estimate On Demand Model Resource Cost",
                 "short_desc": "Estimate on-demand model resource cost",

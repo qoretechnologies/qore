@@ -541,6 +541,9 @@ public namespace HttpClientIo {
 
         #! Whether SSL/TLS is used (always True for HTTP/3; optional for HTTP/1.1 and HTTP/2)
         *bool ssl;
+
+        #! Why the connection was closed, once it is (qore#7443)
+        *string close_reason;
     }
 
     #! Options of a request of @ref HttpClientConnectionManager::request() and

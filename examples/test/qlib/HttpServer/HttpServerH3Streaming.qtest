@@ -902,8 +902,8 @@ class PartialReadHandler inherits AbstractHttpRequestHandler {
 }
 
 #! Handler for shutdown test — blocks in readQuicStreamDataBlock() until session is closed
-/** Uses a large payload (4MB) so the handler is still reading when server.stop() fires.
-    Signals a gate after receiving the first data chunk to synchronize with the test.
+/** The client sends the first part of a streamed body and then nothing more, so the handler is still reading when
+    server.stop() fires.  Signals a gate after receiving the first data chunk to synchronize with the test.
 */
 class ShutdownTestHandler inherits AbstractHttpRequestHandler {
     public {
@@ -926,11 +926,9 @@ class ShutdownTestHandler inherits AbstractHttpRequestHandler {
         *Socket sock = cx."header-info".sock;
 
         if (body_streaming && sock) {
-            # Signal that we're in the handler and actively reading
-            reading_gate.dec();
-
-            # Read body data: the server's stop drains the requests in progress first (at most its drain_timeout),
-            # then closes the session, which ends the read with an error at once
+            # Read body data: the client sends the first part of the body and then nothing more, so the read of the
+            # rest blocks until the server stops: the stop drains the requests in progress first (at most its
+            # drain_timeout), then closes the session, which ends the read with an error at once (qore#7428)
             while (True) {
                 try {
                     *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 30s);
@@ -938,8 +936,12 @@ class ShutdownTestHandler inherits AbstractHttpRequestHandler {
                         read_ended.push("end");
                         break;
                     }
+                    if (reading_gate.getCount()) {
+                        # the first data was read: the handler now waits for the rest, which the client never sends
+                        reading_gate.dec();
+                    }
                 } catch (hash<ExceptionInfo> ex) {
-                    # Expected: QUIC-ERROR from the close of the session during shutdown
+                    # Expected: QUIC-ERROR or HTTP-BODY-INCOMPLETE from the close of the session during shutdown
                     read_ended.push(ex.err);
                     break;
                 }
@@ -948,7 +950,7 @@ class ShutdownTestHandler inherits AbstractHttpRequestHandler {
         return makeResponse(200, "ok", {"Content-Type": "text/plain"});
     }
 
-    #! Waits until the handler has started reading
+    #! Waits until the handler has read the first data of the body
     /** @return 0 on success, ETIMEDOUT on timeout
     */
     int waitForReading(timeout t = 10s) {
@@ -1698,15 +1700,16 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
     }
 
-    #! Test 3.4: Server shutdown during streaming — handler exits quickly
-    /** Uses a ShutdownTestHandler with a Counter gate to deterministically wait
-        for the handler to start reading before shutting down.  Uses a 4MB payload
-        so that the handler can still be reading when server.stop() fires.
+    #! Test 3.4: Server shutdown during streaming — the stop ends a handler blocked reading the body, in time
+    /** The client sends the first part of a streamed request body and then nothing more, so the handler blocks in
+        readQuicStreamDataBlock() waiting for the rest, and the request cannot end by itself (qore#7428: with a whole
+        4 MB body, the upload could end first, or take longer than the drain, so the case tested neither).
 
         stop() first drains the requests in progress, for at most the server's drain_timeout, and then closes the
-        sessions, which ends the handler's read: a request still running makes stop() take the drain timeout, so the
-        case sets a short one and checks that stop() ends within it plus a margin for the rest of the stop, far below
-        the handler's read timeout (30 s), which a stop that did not end the read would wait for.
+        sessions, which ends the handler's read: the request still running makes stop() take the drain timeout, so
+        the case sets a short one and checks that stop() ends within it plus a margin for the rest of the stop, far
+        below the handler's read timeout (30 s), which a stop that did not end the read would wait for; and that the
+        read ended with the close of the session, not with the end of a body or its own timeout.
     */
     testH3ShutdownDuringStreaming() {
         ShutdownTestHandler shutdown_handler();
@@ -1723,37 +1726,20 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpServer server = setup.server;
         on_exit delete server;
 
-        # Use a 4MB payload — large enough that QUIC flow control ensures the handler
-        # is still actively reading when server.stop() fires
-        binary large_payload = generatePayload(4 * 1024 * 1024);
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        on_exit stream.cancel();
+        stream.startStreaming("POST", "/shutdown-test", {"Content-Type": "application/octet-stream"}, True);
+        # the first part of the body; the rest is never sent
+        stream.sendData(binary(strmul("X", 64 * 1024)));
 
-        # Start streaming POST in background with short request timeout
-        Counter cnt(1);
-        background sub () {
-            on_exit cnt.dec();
-            try {
-                HttpClientIo::HttpClientConnectionManager mgr =
-                    new HttpClientIo::HttpClientConnectionManager(
-                        <HttpClientIo::HttpClientConnectionManagerOptions>{
-                            "protocol": "h3",
-                            "accept_all_certs": True,
-                            "logger": mLogger,
-                            "request_timeout": 10s,
-                            "connect_timeout": 10s,
-                        },
-                    );
-                on_exit delete mgr;
-                string url = sprintf("https://127.0.0.1:%d", setup.port);
-                mgr.request(url, "POST", "/shutdown-test",
-                    {"Content-Type": "application/octet-stream"}, large_payload);
-            } catch (hash<ExceptionInfo> ex) {
-                # Expected: connection error due to server shutdown
-            }
-        }();
+        # Wait for the handler to read the first data (deterministic, no sleep)
+        assertEq(0, shutdown_handler.waitForReading(15s), "shutdown: handler read the first data");
 
-        # Wait for the handler to start reading (deterministic, no sleep)
-        int gate_rc = shutdown_handler.waitForReading(15s);
-        assertEq(0, gate_rc, "shutdown: handler entered read loop");
+        # the read is still waiting for the rest of the body before the stop
+        assertEq(0, shutdown_handler.read_ended.size(), "shutdown: the handler's read is still waiting");
 
         # Measure shutdown time
         date start = microseconds(clock_get_monotonic_us());
@@ -1765,12 +1751,18 @@ l50Xb2GWQesIt9k5jF5IOw==
         int bound_ms = ShutdownDrainTimeout.durationMilliseconds() + ShutdownStopMarginMs;
         assertTrue(elapsed_ms < bound_ms,
             sprintf("shutdown: completed in %dms (expected < %dms)", elapsed_ms, bound_ms));
-        # the handler's read ended: with the end of the body, or with the close of its session
-        assertEq(Type::String, shutdown_handler.read_ended.get(15s).type(), "shutdown: the handler's read ended");
-
-        # Wait for background thread to finish (client has 10s request timeout)
-        int rc = cnt.waitForZero(15s);
-        assertEq(0, rc, "shutdown: background thread completed");
+        # the drain ran to its timeout, with the request still blocked: the request did not end by itself (the drain
+        # computes its remaining wait in whole milliseconds, so a little less can be measured)
+        int drain_ms = ShutdownDrainTimeout.durationMilliseconds() - 100;
+        assertTrue(elapsed_ms >= drain_ms,
+            sprintf("shutdown: the drain waited for the request (%dms, expected >= %dms)", elapsed_ms, drain_ms));
+        # the handler's read was ended by the close of its session: QUIC-ERROR when the read waited as the session
+        # closed, HTTP-BODY-INCOMPLETE when the stream that the server stopped reading had data left to return (both
+        # documented for a server stop in Socket::readQuicStreamDataBlock()); never the end of a body, which the
+        # client never sent, nor the read's own timeout (QUIC-STREAM-TIMEOUT)
+        auto how = shutdown_handler.read_ended.get(15s);
+        assertTrue(how == "QUIC-ERROR" || how == "HTTP-BODY-INCOMPLETE",
+            sprintf("shutdown: the stop ended the handler's read (got: %y)", how));
     }
 
     #! Test 3.5: Partial body read + early response — handler reads one chunk, returns
