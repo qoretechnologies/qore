@@ -1046,7 +1046,10 @@ public:
             }
         }
         Http2SessionPtr session = priv->h2_session.get();
-        return session && (session->hasStreamData() || session->wantWrite());
+        // not output that the socket refused: the operation waits for the socket to become writable, and running it
+        // at once again and again would only repeat the refused write while the peer does not read
+        // (qoretechnologies/qore#7641)
+        return session && (session->hasStreamData() || session->wantWriteNow());
     }
 
 private:
@@ -22774,6 +22777,9 @@ QoreHashNode* SocketHttp2ServerPollOperation::checkHeadersOnlyDispatch(bool& han
     return nullptr;
 }
 
+// see the definition below (qore#7280)
+static QoreHashNode* h2_with_input_stream_poll_timeout(QoreHashNode* rv, Http2Session& session, ExceptionSink* xsink);
+
 QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink) {
     auto clear_non_block = [&]() {
         if (set_non_block) {
@@ -22885,7 +22891,10 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                         return nullptr;
                     }
                     if (srv == SOCK_POLLIN || srv == SOCK_POLLOUT) {
-                        return getSocketPollInfoHash(xsink, read_events | srv);
+                        // a client that stops reading leaves the socket unwritable: the bounds of the pumped bodies
+                        // are checked in time all the same (qore#7280)
+                        return h2_with_input_stream_poll_timeout(getSocketPollInfoHash(xsink, read_events | srv),
+                            *h2_session, xsink);
                     }
                     // Always read; add write if there are pending sends
                     int events = read_events;
@@ -22899,10 +22908,9 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     // Collect extra fds from active pollable InputStreams
                     std::vector<std::pair<int, int>> extra_fds;
                     h2_session->getExtraFds(extra_fds);
-                    if (!extra_fds.empty()) {
-                        return getSocketPollInfoHash(xsink, events, extra_fds);
-                    }
-                    return getSocketPollInfoHash(xsink, events);
+                    return h2_with_input_stream_poll_timeout(!extra_fds.empty()
+                        ? getSocketPollInfoHash(xsink, events, extra_fds)
+                        : getSocketPollInfoHash(xsink, events), *h2_session, xsink);
                 }
                 if (rv == 1) {
                     // Connection closed by peer - check if we have a completed request first
@@ -22953,7 +22961,9 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                 //   SOCK_POLLOUT: need to poll for write
                 //   -1: error (exception set)
                 if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
-                    return getSocketPollInfoHash(xsink, (read_events ? read_events : SOCK_POLLIN) | rv);
+                    return h2_with_input_stream_poll_timeout(
+                        getSocketPollInfoHash(xsink, (read_events ? read_events : SOCK_POLLIN) | rv), *h2_session,
+                        xsink);
                 }
 
                 // If we were receiving preface, move to reading state
@@ -22976,10 +22986,9 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
                     // Collect extra fds from active pollable InputStreams
                     std::vector<std::pair<int, int>> extra_fds;
                     h2_session->getExtraFds(extra_fds);
-                    if (!extra_fds.empty()) {
-                        return getSocketPollInfoHash(xsink, events, extra_fds);
-                    }
-                    return getSocketPollInfoHash(xsink, events);
+                    return h2_with_input_stream_poll_timeout(!extra_fds.empty()
+                        ? getSocketPollInfoHash(xsink, events, extra_fds)
+                        : getSocketPollInfoHash(xsink, events), *h2_session, xsink);
                 }
             }
 
@@ -23383,6 +23392,18 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
         input_stream->unassignThread(&release_xsink);
         release_xsink.clear();
         input_stream = nullptr;
+    }
+    return rv;
+}
+
+// a connection with a pumped response body waiting for its client is woken to check the bounds of the body even without
+// a socket event (qore#7280)
+static QoreHashNode* h2_with_input_stream_poll_timeout(QoreHashNode* rv, Http2Session& session, ExceptionSink* xsink) {
+    if (rv) {
+        int ms = session.getInputStreamPollTimeoutMs();
+        if (ms >= 0) {
+            rv->setKeyValue("poll_timeout_ms", ms, xsink);
+        }
     }
     return rv;
 }

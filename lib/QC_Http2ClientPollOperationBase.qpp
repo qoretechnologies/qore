@@ -1219,8 +1219,20 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         if (last_ping_sent_us == 0 || (now_us - last_ping_sent_us) >= ping_interval_us) {
             if (sock_obj) {
                 ExceptionSink ping_xsink;
-                qore_socket_object_private(sock_obj).submitHttp2PingForAsyncPoll(&ping_xsink);
+                int ping_events = qore_socket_object_private(sock_obj).submitHttp2PingForAsyncPoll(&ping_xsink);
                 ping_xsink.clear();
+                // a PING that the socket did not take waits for the readiness that its write needs: the controller
+                // does not run the operation again at once for output that the socket refused
+                // (qoretechnologies/qore#7641)
+                ping_events = ping_events > 0 ? (ping_events & (SOCK_POLLIN | SOCK_POLLOUT)) : 0;
+                if (ping_events && poll_info) {
+                    int events = poll_info->getKeyValue("events").getAsBigInt();
+                    poll_info->setKeyValue("events", events | ping_events, xsink);
+                    if (*xsink) {
+                        poll_info->deref(xsink);
+                        return nullptr;
+                    }
+                }
             }
             last_ping_sent_us = now_us;
         }

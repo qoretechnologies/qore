@@ -2961,6 +2961,10 @@ public class HttpAsyncSocketIoController {
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
+                    # the bounds of a body that the I/O thread sends, for the connection (qore#7280)
+                    hash<auto> send_settings = getStreamSendSettings(cinfo.listener);
+                    cinfo.sock.setQuicInputStreamSendBound(session_id, send_settings.stream_send_min_rate,
+                        send_settings.stream_send_min_rate_window, HttpServer::StreamStallTimeout);
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
                         session_id, stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
@@ -6188,6 +6192,10 @@ public class HttpAsyncSocketIoController {
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
+                    # the bounds of a body that the I/O thread sends, for the connection (qore#7280)
+                    hash<auto> send_settings = getStreamSendSettings(cinfo.listener);
+                    cinfo.sock.setHttp2InputStreamSendBound(send_settings.stream_send_min_rate,
+                        send_settings.stream_send_min_rate_window, HttpServer::StreamStallTimeout);
                     int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
                         stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {

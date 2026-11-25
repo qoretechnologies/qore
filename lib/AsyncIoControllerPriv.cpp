@@ -9805,10 +9805,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         // previous `already_deferred` guard was too aggressive:
                         // it blocked re-deferring after a single extra iteration,
                         // but HTTP/2 sessions can have pending protocol work
-                        // (WINDOW_UPDATE, SETTINGS_ACK via wantWrite()) that
-                        // requires multiple iterations to flush.  Without re-
-                        // deferring, the peer stalls waiting for flow control
-                        // credits and the connection deadlocks.
+                        // (WINDOW_UPDATE, SETTINGS_ACK that nghttp2 has yet to
+                        // produce: Http2Session::wantWriteNow()) that requires
+                        // multiple iterations to flush.  Without re-deferring,
+                        // the peer stalls waiting for flow control credits and
+                        // the connection deadlocks.  Output that the socket
+                        // refused is not such work: the operation waits for
+                        // SOCK_POLLOUT for it (qoretechnologies/qore#7641).
                         //
                         // Busy-loop prevention: ssl_deferred_hashes triggers
                         // poll(timeout_ms=0), but hasPendingData() returns false
