@@ -744,14 +744,14 @@ public:
                 return false;
             }
         }
-        // the key is searched with the hash that the member keeps if the key maps hash their keys the same way
-        // (qore#7265); else it is hashed again (one of the maps is hardened, qore#7557)
-        bool same_kind = hm.sameKind(other.hm);
+        // the key is searched with the hash that the member keeps (qore#7265), which finds it in a map of the same
+        // kind, and in a hardened map, which hashes the key itself when the hash does not find it; only a member of a
+        // hardened map is searched in a map that is not hardened with its member hash (qore#7557)
+        bool rehash = hm.isHardened() && !other.hm.isHardened();
         for (; m; m = m->next) {
-            const HashMember* found = same_kind
-                ? other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), m->hash,
-                    qore_hash_lookup_key::stored_hash_t()))
-                : other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size()));
+            size_t hash = rehash ? qore_hash_lookup_key::hashBytes(m->key.data(), m->key.size()) : m->hash;
+            const HashMember* found = other.findMember(qore_hash_lookup_key(m->key.data(), m->key.size(), hash,
+                qore_hash_lookup_key::stored_hash_t()));
             if (!found || !value_equal(m->val, found->val)) {
                 return false;
             }
