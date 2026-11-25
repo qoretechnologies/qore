@@ -35,6 +35,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_program_private.h"
 
 #include <cstdlib>
 
@@ -713,6 +714,49 @@ static void qore_append_escaped_utf8(QoreString& out, const char* text, size_t l
 
 void qore_append_line_safe_text(QoreString& out, const char* text, size_t len, bool double_percent) {
     qore_append_escaped_utf8(out, text, len, true, double_percent);
+}
+
+void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings) {
+    const QoreException* first = qore_es_private::get(sink)->head;
+    QoreString mark;
+    if (qore_exception_chain_mark(first, mark)) {
+        // Use the existing origin-marked report for the whole chain.
+        if (warnings) {
+            sink.handleWarnings();
+        } else {
+            sink.handleExceptions();
+        }
+        return;
+    }
+    auto append_value = [](QoreString& out, QoreValue value) {
+        QoreStringValueHelper text(value);
+        if (text->getEncoding() == QCS_UTF8 || text->getEncoding() == QCS_USASCII) {
+            qore_append_line_safe_text(out, text->c_str(), text->size(), false);
+        } else {
+            qore_append_escaped_report_text(out, *text);
+        }
+    };
+    for (const QoreException* e = first; e; e = e->next) {
+        QoreString out(QCS_UTF8);
+        if (e->file.empty() || e->isBuiltin()) {
+            out.concat("qore");
+        } else {
+            qore_append_line_safe_text(out, e->file.data(), e->file.size(), false);
+        }
+        if (e->start_line >= 0) {
+            out.sprintf(":%d", e->start_line);
+            if (e->start_column >= 0) {
+                out.sprintf(":%d", e->start_column + 1);
+            }
+        }
+        out.concat(warnings ? ": warning: " : ": error: ");
+        append_value(out, e->err);
+        out.concat(": ");
+        append_value(out, e->desc);
+        out.concat('\n');
+        write_report(out);
+    }
+    sink.clear();
 }
 
 void qore_append_escaped_report_text(QoreString& out, const char* text) {

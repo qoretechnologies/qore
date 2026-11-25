@@ -8372,6 +8372,9 @@ public:
 //! exported so the standalone interpreter (--diag-format=json) can emit them
 DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 
+//! Writes and consumes the exceptions or warnings of a top-level parse as compiler diagnostics on stderr.
+DLLEXPORT void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings);
+
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
 DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);

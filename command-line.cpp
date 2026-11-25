@@ -105,9 +105,11 @@ static bool warnings_are_errors = false;
 // stop writing parse exceptions after 1st one
 static bool only_first_except = false;
 
-// when true, parse the program and emit structured parse diagnostics as JSON instead of executing it
-// (for external tooling and AI coding assistants); set by --diag-format=json or QORE_DIAG_FORMAT=json
-static bool diag_json = false;
+// Text and legacy report diagnostics during a normal invocation. JSON parses without executing.
+enum class DiagnosticFormat { Text, Legacy, Json };
+static constexpr DiagnosticFormat DefaultDiagnosticFormat = DiagnosticFormat::Legacy;
+static DiagnosticFormat diagnostic_format = DefaultDiagnosticFormat;
+static bool diagnostic_format_given = false;
 
 // when true, parse the program and render human-readable code frames for any parse diagnostics instead
 // of executing it; set by --code-frames or QORE_CODE_FRAMES
@@ -215,7 +217,7 @@ static const char helpstr[] =
    "  -B, --show-build-options     show Qore build options and quit\n"
    "  -c, --charset=arg            sets default run-time encoding for strings and I/O (source is UTF-8)\n"
    "  -D, --define=arg             sets the value of a parse define\n"
-   "      --diag-format=json       parse only and emit structured parse diagnostics as JSON\n"
+   "      --diag-format=FORMAT     parse diagnostics: text, legacy, or json (parse only)\n"
    "      --code-frames            parse only and render parse diagnostics as code frames\n"
    "  -e, --exec=arg               execute program given on command-line\n"
    "      --exec-mode=arg          execution mode: ast, ir, jit, or tiered\n"
@@ -542,13 +544,25 @@ static void do_allow_reparse(const char* arg) {
    parse_options |= PO_ALLOW_REPARSE;
 }
 
-static void set_diag_format(const char* arg) {
+static bool parse_diag_format(const char* arg) {
    if (arg && !strcmp(arg, "json")) {
-      diag_json = true;
+      diagnostic_format = DiagnosticFormat::Json;
+   } else if (arg && !strcmp(arg, "legacy")) {
+      diagnostic_format = DiagnosticFormat::Legacy;
+   } else if (arg && !strcmp(arg, "text")) {
+      diagnostic_format = DiagnosticFormat::Text;
    } else {
-      fprintf(stderr, "unknown diagnostic format '%s'; supported formats: json\n", arg ? arg : "");
+      return false;
+   }
+   return true;
+}
+
+static void set_diag_format(const char* arg) {
+   if (!parse_diag_format(arg)) {
+      fprintf(stderr, "unknown diagnostic format '%s'; supported formats: text, legacy, json\n", arg ? arg : "");
       exit(1);
    }
+   diagnostic_format_given = true;
 }
 
 static void do_code_frames(const char* arg) {
@@ -1705,13 +1719,11 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
       }
 
       // allow enabling diagnostic modes via the environment (for tooling that cannot pass flags)
-      if (!diag_json) {
+      if (!diagnostic_format_given) {
           QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
-          const char* df = df_holder.c_str();
-          if (df && !strcmp(df, "json")) {
-              diag_json = true;
-          }
+          parse_diag_format(df_holder.c_str());
       }
+      const bool diag_json = diagnostic_format == DiagnosticFormat::Json;
       if (!code_frames && SystemEnvironment::isSet("QORE_CODE_FRAMES")) {
           code_frames = true;
       }
@@ -1724,7 +1736,11 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
       if (xsink.isException()) {
          rc = 2;
-         xsink.handleExceptions();
+         if (diagnostic_format == DiagnosticFormat::Text && !code_frames) {
+            qore_report_parse_diagnostics(xsink, false);
+         } else {
+            xsink.handleExceptions();
+         }
          goto exit;
       }
 
@@ -1849,7 +1865,11 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
 
       // display any warnings now
       if (wsink.isException()) {
-         wsink.handleWarnings();
+         if (diagnostic_format == DiagnosticFormat::Text) {
+            qore_report_parse_diagnostics(wsink, true);
+         } else {
+            wsink.handleWarnings();
+         }
          if (warnings_are_errors && !xsink.isException()) {
             printf("exiting due to the above warnings...\n");
             rc = 2; // set return code to 2 if there were parse warnings to be treated as errors
@@ -2028,8 +2048,12 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
          if (xsink.isException())
             rc = 3;
       }
-      else // set return code to 2 if there were parse errors
+      else {
          rc = 2;
+         if (diagnostic_format == DiagnosticFormat::Text) {
+            qore_report_parse_diagnostics(xsink, false);
+         }
+      }
 
       // run the default exception handler on any unhandled exceptions in the primary thread or during parsing
       xsink.handleExceptions();

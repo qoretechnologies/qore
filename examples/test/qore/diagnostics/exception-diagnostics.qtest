@@ -33,6 +33,9 @@ public class ExceptionDiagnosticsTest inherits QUnit::Test {
         addTestCase("an unknown time zone", \timeZoneTest());
         addTestCase("an exception beside parse errors", \mixedTest());
         addTestCase("parse errors are not recorded twice", \noDuplicateTest());
+        addTestCase("text and legacy parse errors", \textErrorsTest());
+        addTestCase("syntax and commit error locations", \textLocationsTest());
+        addTestCase("text warnings and runtime errors", \textExecutionTest());
         addTestCase("--diag-format=json", \jsonTest());
         addTestCase("--code-frames", \codeFramesTest());
         addTestCase("a script that cannot be opened", \missingFileTest());
@@ -139,11 +142,70 @@ public class ExceptionDiagnosticsTest inherits QUnit::Test {
         return path;
     }
 
-    private hash<auto> run(string opt, string path, bool stderr = True) {
+    private hash<auto> run(string opt, string path, bool stderr = True, *string env_format) {
         int rc;
-        string out = backquote(sprintf("%s %s %s%s", TestInterpreter::qore_interpreter(), opt, path,
+        string out = backquote(sprintf("%s%s %s %s%s", exists env_format ? "QORE_DIAG_FORMAT=" + env_format + " " : "",
+            TestInterpreter::qore_interpreter(), opt, path,
             stderr ? " 2>&1" : " 2>/dev/null"), \rc);
         return {"out": out, "status": rc};
+    }
+
+    textErrorsTest() {
+        string path = writeSource("errors.q", "%modern\nconst X = 1 / 0;\nconst Y = 1 / 0;\n");
+        hash<auto> r = run("--diag-format=text", path);
+        assertEq(2, r.status, r.out);
+        list<string> lines = split("\n", trim(r.out));
+        assertEq(2, lines.size(), r.out);
+        assertRegex("errors\\.q:2(:[0-9]+)?: error: DIVISION-BY-ZERO: ", lines[0]);
+        assertRegex("errors\\.q:3(:[0-9]+)?: error: DIVISION-BY-ZERO: ", lines[1]);
+        assertEq("", run("--diag-format=text", path, False).out);
+        assertEq(r.out, run("", path, True, "text").out);
+        assertEq(r.out, run("--diag-format=text", path, True, "legacy").out);
+        r = run("--diag-format=legacy", path);
+        assertEq(2, r.status, r.out);
+        assertRegex("unhandled QORE System exception", r.out);
+        assertRegex("unhandled QORE System exception", run("", path, True, "legacy").out);
+        assertRegex("unhandled QORE System exception", run("", path, True, "").out);
+        path = writeSource("first.q", "%modern\nconst A = no_such_a();\nconst B = no_such_b();\n");
+        r = run("--diag-format=text --only-first-exception", path);
+        assertEq(1, (select split("\n", r.out), $1 =~ /: error: /).size(), r.out);
+        path = writeSource("multiline.q", "%modern\nint sub fail() { throw \"TEST-ERROR\", \"first\\nsecond\"; }\n"
+            "const A = fail();\n");
+        r = run("--diag-format=text", path);
+        assertEq(2, r.status, r.out);
+        assertEq(1, split("\n", trim(r.out)).size(), r.out);
+        assertTrue(r.out.find("first\\nsecond") >= 0, r.out);
+        r = run("--diag-format=text", tmp.path + DirSep + "absent.q");
+        assertEq(2, r.status, r.out);
+        assertRegex("^qore: error: ", r.out);
+    }
+
+    textLocationsTest() {
+        string path = writeSource("syntax.q", "%modern\nint sub f( {\n");
+        hash<auto> r = run("--diag-format=text", path);
+        assertEq(2, r.status, r.out);
+        assertRegex("syntax\\.q:2:13: error: PARSE-EXCEPTION: ", r.out);
+        path = writeSource("commit.q", "%modern\nint sub f() {\n}\n");
+        r = run("--diag-format=text", path);
+        assertEq(2, r.status, r.out);
+        assertRegex("commit\\.q:2: error: MISSING-RETURN: ", r.out);
+    }
+
+    textExecutionTest() {
+        string path = writeSource("warn.q", "%modern\n%enable-all-warnings\nsub f() { int unused; }\n"
+            "printf(\"executed\\n\");\n");
+        hash<auto> r = run("--diag-format=text", path);
+        assertEq(0, r.status, r.out);
+        assertRegex("warn\\.q:3(:[0-9]+)?: warning: ", r.out);
+        assertEq("executed", trim(run("--diag-format=text", path, False).out));
+        r = run("--diag-format=text --warnings-are-errors", path);
+        assertEq(2, r.status, r.out);
+        assertFalse(r.out =~ /executed/, r.out);
+        path = writeSource("runtime.q", "%modern\nthrow \"RUNTIME-TEST\", \"from runtime\";\n");
+        r = run("--diag-format=text", path);
+        assertEq(3, r.status, r.out);
+        assertRegex("unhandled QORE User exception", r.out);
+        assertRegex("RUNTIME-TEST: from runtime", r.out);
     }
 
     jsonTest() {
