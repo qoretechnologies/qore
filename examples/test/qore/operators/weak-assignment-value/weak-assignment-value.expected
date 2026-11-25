@@ -62,3 +62,5 @@ done destroyed=42
 weak literals: [] [] null
 weak computed containers: 0 0
 deferred literal: null null
+weak declaration: top level: {}
+weak declaration: local: {} typed local: {}
