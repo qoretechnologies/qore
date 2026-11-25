@@ -685,10 +685,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         setupMethods();
     }
 
-    #! Creates the handler
-    /**
-    */
-    constructor() : ServerSentEventHandler(SseHandlerOpts) {
+    #! Creates the handler with the default HTTP authenticator
+    constructor() : JsonRpcHandler(new HttpServer::AbstractAuthenticator()), ServerSentEventHandler(SseHandlerOpts) {
         setupMethods();
     }
 
