@@ -150,8 +150,8 @@ handler rules.
 Native code makes `local[index] += value` and `local[index] -= value`
 (`LValuePathCompound` with a `LocalVar` step and a `ListIndex` step,
 `qore_ir_is_int_list_compound_shape()`) on a local declared `list<int>` that is
-neither read-only nor a closure variable, with a constant index or an index that
-is a native integer, with `qore_rt_lv_path_int_list_compound()` (`_aot` in
+neither read-only nor a closure variable, whose index operand is a native integer
+(a constant index is one too), with `qore_rt_lv_path_int_list_compound()` (`_aot` in
 compiled code) instead of the generic `qore_rt_lv_path_compound()`: the index is
 given as it is, and no array of boxed dynamic operands is built.  The helper
 changes the element in place only where the generic path would change the same

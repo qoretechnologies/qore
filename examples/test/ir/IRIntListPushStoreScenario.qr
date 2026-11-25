@@ -10,6 +10,7 @@
 
 %modern
 %allow-weak-references
+%allow-debugger
 
 # the list_mutate kernel of bench/runtime-comparison
 int sub pushLoop(int count, int seed) {
@@ -117,6 +118,22 @@ string sub otherThread() {
     return sprintf("%y %y", l, copy);
 }
 
+
+sub replaceList() {
+    set_local_var_value(1, "l", (41, 42));
+}
+
+# the variable is replaced through reflection between pushes
+string sub reflected() {
+    list<int> l = (1, 2);
+    push l, 3;
+    l[0] += 1;
+    call_function("replaceList");
+    push l, 4;
+    l[2] += 1;
+    return sprintf("%y %s", l, l.fullType());
+}
+
 printf("loop: %d %d %d\n", pushLoop(0, 7), pushLoop(17, 7), pushLoop(4096, 65535));
 printf("shared: %s\n", sharedList());
 printf("weak: %s\n", weakList());
@@ -125,3 +142,4 @@ printf("rejected: %s\n", rejected());
 printf("replaced: %s\n", replaced());
 printf("passed: %s\n", passed());
 printf("thread: %s\n", otherThread());
+printf("reflected: %s\n", reflected());

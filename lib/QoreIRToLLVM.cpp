@@ -41877,7 +41877,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* direct_member_ptr = direct_self_mutation
                 ? qore_ir_create_global_string_ptr(builder, *direct_self_member) : nullptr;
 
-            // += and -= on an element of a list<int> local with a constant or a native integer index: the helper
+            // += and -= on an element of a list<int> local whose index operand is a native integer (a constant index is
+            // one too; a path whose step had a constant index of its own would give it as a constant): the helper
             // changes an inline integer element of a list that only the variable holds in place and makes any other
             // case as the generic helper (qore_rt_lv_path_int_list_compound()); the index is given as it is, so no
             // array of boxed dynamic operands is built

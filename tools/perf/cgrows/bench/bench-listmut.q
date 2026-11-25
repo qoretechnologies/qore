@@ -1,6 +1,6 @@
 %modern
 # A list<int> built with push and changed in place with an indexed compound assignment, as in the list_mutate kernel
-# of bench/runtime-comparison, and the same loop changing a local instead of an element (qore#5578).
+# of bench/runtime-comparison, and the same loop reading the element without changing it (qore#5578).
 int sub f(int a) { return a + 1; }
 int sub run_lm(int n) {
     int t = 0;

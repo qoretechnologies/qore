@@ -10,6 +10,7 @@
 
 %modern
 %allow-weak-references
+%allow-debugger
 
 const Wide = 0x7fffffffffff;
 
@@ -171,6 +172,41 @@ string sub otherThread() {
     return sprintf("%y %y", l, copy);
 }
 
+
+sub replaceList() {
+    set_local_var_value(1, "l", (41, 42));
+}
+
+# the variable is replaced through reflection between changes
+string sub reflected() {
+    list<int> l = (1, 2);
+    l[0] += 1;
+    list<int> before = get_local_vars(0).l.value;
+    call_function("replaceList");
+    l[1] += 5;
+    return sprintf("%y %y", before, l);
+}
+
+# a list that a weak reference designates, held by a variable that no closure binds
+string sub weakHolder() {
+    list<int> l = (1, 2, 3);
+    list<int> w := l;
+    int i = 1;
+    l[i] += 20;
+    w[0] -= 5;
+    return sprintf("%y %y", l, w);
+}
+
+# the variable of each frame of a recursive function
+int sub recursive(int depth) {
+    list<int> l = (depth, depth);
+    int i = 0;
+    l[i] += depth > 0 ? recursive(depth - 1) : 100;
+    ++i;
+    l[i] -= 1;
+    return l[0] + l[1];
+}
+
 printf("loop: %d %d %d\n", mutateLoop(0, 7), mutateLoop(17, 7), mutateLoop(4096, 65535));
 printf("constant: %s\n", constantIndex());
 printf("shared: %s\n", sharedList());
@@ -182,3 +218,6 @@ printf("parameters: %s\n", parameters((1, 2, 3), 1));
 printf("try: %s\n", inTry());
 printf("types: %s\n", otherTypes());
 printf("thread: %s\n", otherThread());
+printf("reflected: %s\n", reflected());
+printf("weak: %s\n", weakHolder());
+printf("recursive: %d\n", recursive(5));

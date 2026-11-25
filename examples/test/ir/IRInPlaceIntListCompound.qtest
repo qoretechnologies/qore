@@ -36,9 +36,10 @@ class IRInPlaceIntListCompoundTest inherits QUnit::Test {
         const Gate = "QORE_DISABLE_IR_IN_PLACE_INT_LIST_COMPOUND=1 ";
 
         #! the functions that use the helper: a loop with a native index, constant indexes, a shared list, indexes
-        #! out of range, wide values, other operands, a parameter, a try block, another thread's list
+        #! out of range, wide values, other operands, a parameter, a try block, another thread's list, a variable
+        #! replaced through reflection, a list that a weak reference designates, a recursive function
         const Helper = ("mutateLoop", "constantIndex", "sharedList", "outOfRange", "wideValues", "otherOperands",
-            "parameters", "inTry", "otherThread");
+            "parameters", "inTry", "otherThread", "reflected", "weakHolder", "recursive");
 
         #! the functions that do not: lists of other element types, a reference parameter
         const Generic = ("otherTypes", "changeByReference");
@@ -80,6 +81,9 @@ class IRInPlaceIntListCompoundTest inherits QUnit::Test {
         assertEq("try: 0:ok 1:ok 2:RUNTIME-TYPE-ERROR 3:RUNTIME-TYPE-ERROR [6, 6, 1]", lines[8]);
         assertEq("types: [1, 2, 3] [6, 2] [4, \"x\"]", lines[9]);
         assertEq("thread: [2, 3, 4] [1, 2, 3]", lines[10]);
+        assertEq("reflected: [2, 2] [41, 47]", lines[11]);
+        assertEq("weak: [-4, 22, 3] [-4, 22, 3]", lines[12]);
+        assertEq("recursive: 124", lines[13]);
     }
 
     testJitHelper() {

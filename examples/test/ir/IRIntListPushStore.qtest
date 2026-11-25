@@ -37,8 +37,9 @@ class IRIntListPushStoreTest inherits QUnit::Test {
         const Gate = "QORE_DISABLE_IR_INT_LIST_PUSH_STORE=1 ";
 
         #! the functions that use the helpers: a loop, a shared list, wide values, a rejected value, a replaced and a
-        #! passed list, another thread's list
-        const Helper = ("pushLoop", "sharedList", "wideValues", "rejected", "replaced", "passed", "otherThread");
+        #! passed list, another thread's list, a variable replaced through reflection
+        const Helper = ("pushLoop", "sharedList", "wideValues", "rejected", "replaced", "passed", "otherThread",
+            "reflected");
 
         #! the functions that do not: a list that a weak reference designates is stored with the generic helpers, and
         #! a parameter is changed and returned
@@ -77,6 +78,7 @@ class IRIntListPushStoreTest inherits QUnit::Test {
         assertEq("replaced: [105, 2, 3]", lines[5]);
         assertEq("passed: [2, 2, 3] [1, 2, 50]", lines[6]);
         assertEq("thread: [1, 2, 4] [1, 2]", lines[7]);
+        assertEq("reflected: [41, 42, 5] list<int>", lines[8]);
     }
 
     testJitHelper() {
