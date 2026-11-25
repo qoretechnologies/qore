@@ -346,12 +346,16 @@ public:
         stopObserving();
     }
 
+    //! the innermost active snapshot of the thread (qore_pending_return_snapshot_tls)
+    static PendingReturnSnapshot* getActive() {
+        return static_cast<PendingReturnSnapshot*>(qore_pending_return_snapshot_tls);
+    }
+
     void capture(QoreValue& slot) {
         assert(!observed);
         if (!slot.isNothing()) {
             observed = &slot;
-            previous = active;
-            active = this;
+            previous = getActive();
             qore_pending_return_snapshot_tls = this;
             replaced = false;
         }
@@ -373,7 +377,7 @@ public:
     }
 
     static void replacing(QoreValue& slot) {
-        for (auto* p = active; p; p = p->previous) {
+        for (auto* p = getActive(); p; p = p->previous) {
             if (p->observed == &slot && !p->replaced) {
                 if (!qore_return_release_observable(slot)) {
                     p->saved = slot.refSelf();
@@ -384,7 +388,6 @@ public:
     }
 
 private:
-    static thread_local PendingReturnSnapshot* active;
     QoreValue* observed = nullptr;
     PendingReturnSnapshot* previous = nullptr;
     bool replaced = false;
@@ -392,15 +395,13 @@ private:
 
     void stopObserving() {
         if (observed) {
-            assert(active == this);
-            active = previous;
+            assert(getActive() == this);
             qore_pending_return_snapshot_tls = previous;
             observed = nullptr;
         }
     }
 };
 
-constinit thread_local PendingReturnSnapshot* PendingReturnSnapshot::active = nullptr;
 }
 
 constinit thread_local void* qore_pending_return_snapshot_tls = nullptr;
@@ -570,12 +571,12 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
         }
     }
     // a request in the last handler run leaves the block with a break or a continue: it abandons the return of the
-    // block or of its handlers, whose value is released here if that can run an object destructor (an object, or a
-    // value that owns one: #5992), when the return is abandoned, as compiled code releases it; other data is
-    // released when a loop or a later handler takes the request (#7022)
-    if ((nrc == RC_BREAK || nrc == RC_CONTINUE) && own_return && qore_return_release_observable(return_value)) {
-        ValueHolder abandoned(return_value, xsink);
-        return_value = QoreValue();
+    // block or of its handlers, whose value is released here, when the return is abandoned, as compiled code releases
+    // it (an object or a value that owns one at once: #5992), so that the handlers of the blocks around it, which the
+    // request passes, do not run with it as a pending return; the snapshots that observe the slot without a
+    // replacement keep the data of an enclosing pending return, which resumes (#7022)
+    if ((nrc == RC_BREAK || nrc == RC_CONTINUE) && own_return && !return_value.isNothing()) {
+        releaseAbandonedReturn(return_value, xsink);
     }
     if (ast_on_exit_count > 0) {
         static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {

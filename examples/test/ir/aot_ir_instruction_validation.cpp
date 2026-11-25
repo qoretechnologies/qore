@@ -338,6 +338,19 @@ int main() {
         false, false, QORE_AOT_BATCH_AN_VERSION);
     run("AO v51 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 51 ",
         false, false, QORE_AOT_BATCH_AO_VERSION);
+    run("AOT-identity v52 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 52 ",
+        false, false, QORE_AOT_BATCH_AOT_IDENTITY_VERSION);
+    // the typed ReleaseOwnedTemp of a replaced pending return in debug IR: type object and one operand (qore#7022)
+    const auto typed = [](const char* type) -> Payload {
+        return [type](QoreAOTBinaryWriter& w) { w.writeStringRef(type); };
+    };
+    const char* typed_release = "a typed ReleaseOwnedTemp requires object and one operand";
+    run("typed ReleaseOwnedTemp", O::ReleaseOwnedTemp, G::TypedBase, {1}, typed("object"));
+    run("typed ReleaseOwnedTemp of another type", O::ReleaseOwnedTemp, G::TypedBase, {1}, typed("int"),
+        typed_release);
+    run("typed ReleaseOwnedTemp without a type", O::ReleaseOwnedTemp, G::TypedBase, {1}, typed(""), typed_release);
+    run("typed ReleaseOwnedTemp with two operands", O::ReleaseOwnedTemp, G::TypedBase, {1, 2}, typed("object"),
+        typed_release);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -604,7 +617,7 @@ int main() {
             "invalid background helper callee -3");
     }
     constexpr unsigned expected_count =
-        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 178 : 168;
+        QORE_AOT_BINARY_VERSION >= QORE_AOT_LOCAL_UNWIND_LOCATIONS_VERSION ? 183 : 173;
     if (count != expected_count) {
         fprintf(stderr, "ran %u of %u expected checks for AOT format %u\n", count, expected_count,
             static_cast<unsigned>(QORE_AOT_BINARY_VERSION));

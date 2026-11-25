@@ -1263,6 +1263,32 @@ auto sub abandonedNestedTry(int n) {
     return -1;
 }
 
+# The second request in the same iteration (hit 1): the outer handler runs at the exit of the continue, after the
+# request abandoned the return, which it does not resume (#7022)
+auto sub abandonedNestedHit1(int n) {
+    return abandonedNested(n);
+}
+
+auto sub abandonedNestedTryHit1(int n) {
+    return abandonedNestedTry(n);
+}
+
+# The release of an abandoned object throws when a loop takes the request: the loop ends with the exception
+auto sub dtorThrowLoop(int n) {
+    for (int j = 0; j < 2; ++j) {
+        on_exit {
+            {
+                on_exit {
+                    push log, "inner";              ### dtor_throw_loop
+                }
+                return new ThrowingMarker();
+            }
+        }
+    }
+    push log, "after";
+    return n;
+}
+
 # The return in the handler is in a try statement, which gives its value to the block (qore_try_give_return())
 auto sub outerPendingTry(int n) {
     on_exit {
