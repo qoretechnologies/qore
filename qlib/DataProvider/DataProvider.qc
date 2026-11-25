@@ -1818,6 +1818,13 @@ if (errors) {
         connection other than \c NO-FUNCTION, \c DATASOURCE-ERROR and \c DATASOURCE-PARSE-ERROR, also from the lookup
         made after a \c QORE_DATA_PROVIDERS module is loaded (it was reported as an invalid module before %Qore 3.0;
         qore#7484)
+
+        @note the connection or datasource is resolved with the ConnectionProvider and DatasourceProvider modules, so
+        code that may not receive the host's secrets
+        (@ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()")
+        gets a data provider only for a connection or datasource of a provider module that declares that it resolves
+        names for the calling code (see the documentation of the provider modules in the ConnectionProvider and
+        DatasourceProvider modules); for any other name, @ref nothing is returned as for an unknown name
     */
     static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
             *LoggerInterface logger) {

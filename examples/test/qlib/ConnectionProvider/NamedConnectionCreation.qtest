@@ -17,7 +17,8 @@
     connection is a capability of the code that creates it, so code restricted from the connection's domains cannot
     create one itself; a lookup runs the provider in a Program of its own (see get_connection()), so the connection
     that the provider gives is the capability of the host that configured the provider: it gives its clients to the
-    restricted code, and the sandbox that governs that code still governs their I/O.
+    restricted code, and the sandbox that governs that code still governs their I/O.  The test provider declares that
+    it resolves names for the calling code, as sandboxed code gets the connections of only such a provider (qore#6844)
 
     The provider modules are named by \c QORE_CONNECTION_PROVIDERS, which the module reads from the environment of
     the process, so each check runs in a process of its own with the test provider (named-connection-creation),
