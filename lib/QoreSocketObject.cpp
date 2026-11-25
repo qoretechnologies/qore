@@ -7344,11 +7344,6 @@ static bool qore_socket_object_set_action_consume_hook(AbstractAsyncAction* acti
     if (SseAction* a = dynamic_cast<SseAction*>(action)) {
         return a->setConsumeHook(hook);
     }
-    // the AWS binary event stream (qore#7247): installed in a ChannelAction, which takes the hook above; an action of
-    // its own takes it as SseAction does
-    if (EventStreamAction* a = dynamic_cast<EventStreamAction*>(action)) {
-        return a->setConsumeHook(hook);
-    }
     return false;
 }
 

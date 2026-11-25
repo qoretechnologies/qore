@@ -332,18 +332,6 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
     /** @see HttpClientStreamHandle::installSseState() for full documentation
     */
     installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
-        installQueueStateIntern(queue, notifier, initial_body, False);
-    }
-
-    #! Installs a decoder of the AWS binary event stream on an existing streaming request
-    /** @see HttpClientStreamHandle::installEventStreamState() for full documentation
-    */
-    installEventStreamState(Queue queue, *EventNotifier notifier, *data initial_body) {
-        installQueueStateIntern(queue, notifier, initial_body, True);
-    }
-
-    #! Installs the SSE parser or the decoder of the AWS binary event stream (qore#7247)
-    private installQueueStateIntern(Queue queue, *EventNotifier notifier, *data initial_body, bool event_stream) {
         int sid;
         {
             AutoLock al(lock);
@@ -356,11 +344,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             sid = stream_id;
         }
 
-        if (event_stream) {
-            h1conn.installEventStreamState(sid, queue, notifier, initial_body);
-        } else {
-            h1conn.installSseState(sid, queue, notifier, initial_body);
-        }
+        h1conn.installSseState(sid, queue, notifier, initial_body);
     }
 
     #! Reads data from the streaming connection

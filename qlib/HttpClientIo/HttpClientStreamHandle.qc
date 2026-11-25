@@ -1788,35 +1788,6 @@ data text = HttpClientStreamHandle::decodeResponseText(resp).body;
             "SSE parser installation is not supported by " + conn.getProtocol();
     }
 
-    #! Installs a decoder of the AWS binary event stream for this streaming response
-    /** Swaps a stream started with @ref startStreaming() from raw response delivery through @ref readData() to the
-        decoding of the AWS binary event stream (\c application/vnd.amazon.eventstream) on the I/O thread, as
-        @ref installSseState() does for server-sent events: concrete implementations drain any body bytes already
-        queued for @ref readData() and feed them to the decoder before returning.
-
-        The decoder pushes each frame to \a queue as an untyped hash with the keys of
-        AwsEventStream::AwsEventStreamFrame, \c headers (the decoded header values by name) and \c payload (binary),
-        as AwsEventStream::AwsEventStreamDecoder::nextFrame() decodes them (\c cast<hash<AwsEventStreamFrame>>() gives
-        the typed frame), after checking the
-        prelude and message CRCs and the size limits of the protocol; a malformed frame or a CRC mismatch pushes a
-        hash with \c err (\c AWS-EVENT-STREAM-FORMAT-ERROR or \c AWS-EVENT-STREAM-CRC-ERROR) and \c desc, then
-        \c NOTHING, and the rest of the stream is discarded; the end of the stream pushes \c NOTHING, after an error
-        if it ended inside a frame.  \a notifier is signaled after queue updates.  Pass \c sse_install_eligible =
-        \c True to @ref startStreaming() if the decoder may be installed after the response has ended.
-
-        @param queue Queue that will receive the decoded frames
-        @param notifier optional EventNotifier signaled after queue updates
-        @param initial_body optional body bytes already consumed before installing the decoder
-
-        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support the installation of a decoder
-
-        @since HttpClientIo 1.0 (qore#7247)
-    */
-    installEventStreamState(Queue queue, *EventNotifier notifier, *data initial_body) {
-        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
-            "AWS event-stream decoder installation is not supported by " + conn.getProtocol();
-    }
-
     #! Starts an SSE streaming request with I/O-thread event parsing
     /** Creates a Queue and submits an SSE request where the I/O thread parses
         SSE events at double-newline boundaries and pushes parsed SseMessageInfo

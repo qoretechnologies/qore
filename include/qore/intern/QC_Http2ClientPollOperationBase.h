@@ -243,7 +243,7 @@ public:
     //! Installs an SSE parser on an active ChannelAction stream
     DLLLOCAL void installSseState(int32_t stream_id, Queue* queue,
         QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
-        ExceptionSink* xsink, bool aws_event_stream = false);
+        ExceptionSink* xsink);
 
     // --- Accessors ---
 

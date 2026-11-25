@@ -310,7 +310,7 @@ public:
         if (sse_state) {
             initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-                "cannot install frame state after a parser (SSE or AWS event-stream) has been installed");
+                "cannot install frame state after SSE state has been installed");
             return;
         }
         // the frame state reports the data from now on (issue #5820): with the messages made from it as they are
@@ -357,15 +357,9 @@ public:
         @param notifier_obj optional EventNotifier object to keep the fd valid
         @param initial optional already-consumed response item to feed first
         @param xsink exception sink
-        @param aws_event_stream installs the decoder of the AWS binary event stream (EventStreamAction) instead of
-        the SSE parser (qore#7247)
     */
     DLLLOCAL void installSseState(Queue* queue, QoreEventNotifier* notifier,
-        QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink, bool aws_event_stream = false);
-
-    //! Installs a queue parser (SseAction or EventStreamAction): called with mtx held (installSseState())
-    template <typename T>
-    DLLLOCAL void installQueueStateIntern(T* new_action, QoreValue initial, ExceptionSink* xsink);
+        QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink);
 
     //! Marks this action as eligible for delayed installSseState() after
     //! end_stream — callers must opt in to retention because every retained
@@ -796,197 +790,23 @@ private:
     DLLLOCAL bool addData(const char* data, size_t len, ExceptionSink* xsink);
 };
 
-
-//! Decodes the AWS binary event stream (\c application/vnd.amazon.eventstream) of a response on the I/O thread
-/** Each frame is a 12-byte prelude (the total length, the length of the headers and the CRC-32 of the first 8 bytes,
-    big-endian), the headers, the payload and the CRC-32 of the frame; the action checks both CRCs and the limits of the
-    protocol, and pushes each frame to a Queue as an untyped hash with the keys of AwsEventStream::AwsEventStreamFrame:
-    \c headers (the decoded header values by name) and \c payload (binary), as
-    AwsEventStream::AwsEventStreamDecoder::nextFrame() decodes them, then signals the notifier.
-    A malformed frame, or a CRC mismatch, pushes a hash with \c err and \c desc and the \c NOTHING sentinel, and the rest
-    of the stream is discarded; the end of the stream pushes the sentinel, after an error if it ended inside a frame
-    (qore#7247).
-*/
-class EventStreamAction : public AbstractAsyncAction {
-public:
-    //! The size of the prelude of a frame
-    static constexpr size_t PreludeSize = 12;
-    //! The size of the CRC-32 at the end of a frame
-    static constexpr size_t MessageCrcSize = 4;
-    //! The maximum size of the headers of a frame (AwsEventStream::EventStreamMaxHeaders)
-    static constexpr size_t MaxHeaders = 128 * 1024;
-    //! The maximum size of the payload of a frame (AwsEventStream::EventStreamMaxPayload)
-    static constexpr size_t MaxPayload = 24 * 1024 * 1024;
-
-    //! Creates the action, which pushes the frames to a Queue and signals a notifier
-    /** @param queue the target Queue (will be ref'd)
-        @param notifier optional EventNotifier to signal after queue updates (will be ref'd)
-        @param notifier_obj optional EventNotifier object to keep the notifier fd valid (will be ref'd)
-    */
-    DLLLOCAL EventStreamAction(Queue* queue, QoreEventNotifier* notifier, QoreObject* notifier_obj)
-        : queue(queue), notifier(notifier), notifier_obj(notifier_obj) {
-        assert(queue);
-        queue->ref();
-        if (notifier) {
-            notifier->ref();
-        }
-        if (notifier_obj) {
-            notifier_obj->ref();
-        }
-    }
-
-    //! Receives a chunk of the body and pushes each frame that it completes
-    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override;
-
-    DLLLOCAL bool isStreaming() const override { return true; }
-
-    //! Pushes the NOTHING sentinel (the stream is complete), after an error if the stream ended inside a frame
-    DLLLOCAL void complete(ExceptionSink* xsink) override;
-
-    //! Has the stream credit of the data granted as the frames made from it are taken from the queue (issue #5820)
-    /** @return true: the action always reports the data
-    */
-    DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
-        AsyncActionLocker lg(mtx);
-        if (queue) {
-            item_hook = qore_queue_ops(queue).getItemConsumeHook();
-        }
-        stream_hook = std::move(hook);
-        return true;
-    }
-
-    //! Pushes an error hash and the sentinel to the Queue
-    DLLLOCAL void executeError(const char* err, const char* desc, ExceptionSink* xsink) override {
-        AsyncActionLocker lg(mtx);
-        creditPendingLocked();
-        if (queue && !failed) {
-            pushErrorLocked(err, new QoreStringNode(desc), xsink);
-            notify();
-        }
-    }
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
-        // released after the lock, in the same order as SseAction::cleanup(), as releasing the notifier's object can
-        // run user code
-        QoreObject* old_notifier_obj;
-        QoreEventNotifier* old_notifier;
-        Queue* old_queue;
-        {
-            AsyncActionLocker lg(mtx);
-            old_notifier_obj = notifier_obj;
-            notifier_obj = nullptr;
-            old_notifier = notifier;
-            notifier = nullptr;
-            old_queue = queue;
-            queue = nullptr;
-        }
-        if (old_notifier_obj) {
-            old_notifier_obj->deref(xsink);
-        }
-        if (old_notifier) {
-            old_notifier->deref(xsink);
-        }
-        if (old_queue) {
-            old_queue->deref(xsink);
-        }
-    }
-
-private:
-    Queue* queue;           //!< ref'd Queue for frame delivery
-    QoreEventNotifier* notifier = nullptr; //!< optional notifier for wakeups
-    QoreObject* notifier_obj = nullptr; //!< ref'd EventNotifier object keeping fd valid
-    std::mutex mtx;         //!< serializes buffered replay with I/O-thread delivery
-    //! the bytes received that no frame was made from yet
-    std::string buf;
-    //! true once an error was pushed: the rest of the stream is discarded
-    bool failed = false;
-    //! reports the data that the frames were made from, if the stream's credit is granted as they are taken
-    std::shared_ptr<QueueItemConsumeHook> item_hook;
-    //! the hook of the stream, which the data is reported to
-    std::shared_ptr<QoreConsumeHook> stream_hook;
-    //! the part of the bytes in buf reported to the stream hook as the data of the frame in progress
-    size_t progress_bytes = 0;
-
-    DLLLOCAL void notify() {
-        if (notifier) {
-            notifier->notify();
-        }
-    }
-
-    //! Reports data that makes no frame at once
-    DLLLOCAL void creditNow(size_t bytes) {
-        if (stream_hook && bytes) {
-            stream_hook->consumed(bytes);
-        }
-    }
-
-    //! Ends the frame in progress for the stream hook
-    DLLLOCAL void closeItemLocked() {
-        if (stream_hook && progress_bytes) {
-            stream_hook->closeItem();
-        }
-        progress_bytes = 0;
-    }
-
-    //! Reports the data of the frame in progress that was not reported yet (it can exceed the stream's window)
-    DLLLOCAL void reportProgressLocked() {
-        if (stream_hook && buf.size() > progress_bytes) {
-            stream_hook->progress(buf.size() - progress_bytes);
-            progress_bytes = buf.size();
-        }
-    }
-
-    //! Reports the bytes received that no frame was made from at once, and discards them
-    DLLLOCAL void creditPendingLocked() {
-        closeItemLocked();
-        creditNow(buf.size());
-        buf.clear();
-    }
-
-    //! Pushes an error and the sentinel, and discards the rest of the stream; called with the lock held
-    DLLLOCAL void pushErrorLocked(const char* err, QoreStringNode* desc, ExceptionSink* xsink);
-
-    //! Fails the stream with a format or CRC error: the data is credited, the error and the sentinel pushed
-    DLLLOCAL void failLocked(const char* err, QoreStringNode* desc, ExceptionSink* xsink);
-
-    //! Decodes the frame at offset \a off of buf, and advances \a off past it
-    /** @return 1 if a frame was made (and pushed or credited), 0 if more data is needed, -1 if the stream failed
-    */
-    DLLLOCAL int nextFrameLocked(size_t& off, bool& pushed, ExceptionSink* xsink);
-
-    //! Fails the stream at a frame at offset \a off of buf: the frames before it were reported with them
-    DLLLOCAL void failAtLocked(size_t off, const char* err, QoreStringNode* desc, ExceptionSink* xsink);
-};
-
 inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* notifier,
-        QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink, bool aws_event_stream) {
+        QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink) {
     AsyncActionLocker lg(mtx);
-    const char* kind = aws_event_stream ? "AWS event-stream" : "SSE";
     if (frame_state) {
         initial.discard(xsink);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-            "cannot install %s state after frame state has been installed", kind);
+            "cannot install SSE state after frame state has been installed");
         return;
     }
     if (sse_state) {
         initial.discard(xsink);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
-            "a parser (SSE or AWS event-stream) has already been installed");
+            "SSE state has already been installed");
         return;
     }
 
-    // the parser of the stream: server-sent events, or the AWS binary event stream (qore#7247); both push to the
-    // queue and signal the notifier from the I/O thread
-    if (aws_event_stream) {
-        installQueueStateIntern(new EventStreamAction(queue, notifier, notifier_obj), initial, xsink);
-        return;
-    }
-    installQueueStateIntern(new SseAction(queue, notifier, notifier_obj), initial, xsink);
-}
-
-template <typename T>
-inline void ChannelAction::installQueueStateIntern(T* new_action, QoreValue initial, ExceptionSink* xsink) {
-    ReferenceHolder<T> action(new_action, xsink);
+    ReferenceHolder<SseAction> action(new SseAction(queue, notifier, notifier_obj), xsink);
     // the action reports the data from now on (issue #5820): with the events made from it as they are taken from the
     // queue (or at once without a queue); the data still in the channel is reported with the events made from it,
     // not when it is moved out of the channel below
