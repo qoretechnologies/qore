@@ -965,5 +965,26 @@ class BuildMatchSpaceTest(BuildMatchFixture):
         self.assertNotIn("lib/dead.cpp", result.output)
 
 
+class BuildCheckRetryTest(unittest.TestCase):
+    """qore#7615: a run that ends because the comparison of the tree with the build did not finish in time says nothing
+    about the tests, so the CI jobs run it again"""
+
+    def test_the_ci_retries_the_exit_code_of_a_comparison_that_did_not_finish_in_time(self):
+        ci = (ROOT / ".gitlab-ci.yml").read_text()
+        default = re.search(r"(?ms)^default:\n(.*?)^\S", ci)
+        self.assertIsNotNone(default, "the CI configuration has a default section")
+        retry = re.search(r"(?ms)^  retry:\n(.*?)^  \S", default.group(1))
+        self.assertIsNotNone(retry, "the default section has a retry")
+        codes = re.search(r"(?m)^    exit_codes: \[([0-9, ]+)\]$", retry.group(1))
+        self.assertIsNotNone(codes, "the default retry names exit codes")
+        # the code that run_tests.sh gives for such a run
+        runner = re.search(r'(?s)echo "\*\*\* BUILD CHECK FAILED:.*?Exiting\. \*\*\*"\n\s+exit (\d+)\n',
+                           RUN_TESTS.read_text())
+        self.assertIsNotNone(runner, "run_tests.sh ends a failed comparison with an exit code")
+        self.assertIn(int(runner.group(1)), [int(code) for code in codes.group(1).split(",")])
+        # a failure of the runner's own checks (the code 1) is not retried
+        self.assertNotIn(1, [int(code) for code in codes.group(1).split(",")])
+
+
 if __name__ == "__main__":
     unittest.main()
