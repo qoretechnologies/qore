@@ -82,6 +82,9 @@ class QdpCmd {
         #! Signal handler flag for graceful shutdown
         static bool shutdown_requested = False;
 
+        #! the width of a line with a description, once known (see getLineWidth())
+        static *int line_width;
+
         #! program options
         const Opts = {
             "bulk": "b,bulk",
@@ -656,7 +659,8 @@ class QdpCmd {
         if (info.display_name && info.display_name != info.name) {
             printf("  %s: %s\n", color.key("Display Name"), info.display_name);
         }
-        printf("  %s: %s\n", color.key("Type"), color.type(info.type));
+        # a provider's static info need not declare its type (qore#7386)
+        printf("  %s: %s\n", color.key("Type"), info.type ? color.type(info.type) : color.dim("(not declared)"));
         if (info.short_desc) {
             printf("  %s: %s\n", color.key("Description"), info.short_desc);
         }
@@ -837,12 +841,46 @@ class QdpCmd {
         }
     }
 
+    #! returns the width of a line with a description: the COLUMNS environment variable, else the width of the
+    #! terminal, or 0 (no limit) when the process has no terminal (qore#7125)
+    static int getLineWidth() {
+        if (!exists line_width) {
+            line_width = QdpCmd::getLineWidthIntern();
+        }
+        return line_width;
+    }
+
+    private static int getLineWidthIntern() {
+        *string columns = ENV.COLUMNS;
+        if (columns =~ /^[0-9]+$/ && columns.toInt() > 0) {
+            return columns.toInt();
+        }
+        # no terminal support in this build
+        if (!Option::HAVE_TERMIOS) {
+            return 0;
+        }
+        try {
+            return TermIOS::getWindowSize().columns;
+        } catch (hash<ExceptionInfo> ex) {
+            # no controlling terminal (output to a pipe or a file in a process without one, as in CI or a background
+            # job): descriptions are not shortened
+            if (ex.err !~ /^TERMIOS-/) {
+                rethrow;
+            }
+        }
+        return 0;
+    }
+
     static string getDesc(int offset, hash<auto> h) {
-        int len = TermIOS::getWindowSize().columns - offset;
-        map len -= h{$1}.length(), argv;
         string desc = h.desc ?? "";
         desc =~ s/\n/ /g;
         desc =~ s/ +/ /g;
+        int width = QdpCmd::getLineWidth();
+        if (!width) {
+            return desc;
+        }
+        int len = width - offset;
+        map len -= h{$1}.length(), argv;
         if (len < 0) {
             return "";
         }
@@ -862,6 +900,15 @@ class QdpCmd {
         {
             on_error rethrow $1.err, sprintf("%s (try using \"listen\" instead)", $1.desc);
             provider.checkMessages();
+        }
+        # the interactive mode reads lines from a terminal (qore#7130)
+        if (!stdin.isTty()) {
+            QdpCmd::error("the interactive mode requires a terminal on stdin; use \"listen\" instead");
+        }
+        # a background job cannot read from its terminal (qore#7387)
+        if (!stdin.isForegroundTty()) {
+            QdpCmd::error("the interactive mode cannot run in the background, as it reads from the terminal; use "
+                "\"listen\" instead");
         }
         hash<DataProviderInfo> info = provider.getInfo();
         MyObserver observer(info);
@@ -1014,18 +1061,34 @@ class QdpCmd {
             cast<DataProvider::DelayedObservable>(observable).observersReady();
         }
 
+        # a key stops listening only if stdin is a terminal and qdp is in its foreground; otherwise (input from
+        # /dev/null, a pipe or a file, as in CI, or a background job, which cannot read from its terminal) listening
+        # stops on its timeout, on a signal or when the event source ends (qore#7130, qore#7387)
+        bool read_keys = stdin.isForegroundTty();
+
         # a Ctrl+C during the open has already asked for shutdown; do not then invite a keystroke
         if (!shutdown_requested) {
             # print a message
             string timeout_msg = opts.timeout
                 ? sprintf(" %s", color.dim(sprintf("(timeout: %ds)", opts.timeout)))
                 : "";
-            stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
-                color.green("listening to events from"),
-                color.cyan(provider.getName()),
-                timeout_msg,
-                color.dim("Ctrl+C"));
+            if (read_keys) {
+                stdout.printf("%s %s%s; press any key or %s to stop listening...\n",
+                    color.green("listening to events from"),
+                    color.cyan(provider.getName()),
+                    timeout_msg,
+                    color.dim("Ctrl+C"));
+            } else {
+                stdout.printf("%s %s%s; send %s or %s to stop listening...\n",
+                    color.green("listening to events from"),
+                    color.cyan(provider.getName()),
+                    timeout_msg,
+                    color.dim("SIGINT"),
+                    color.dim("SIGTERM"));
+            }
         }
+        # set if listening stopped on its timeout
+        bool timed_out;
         {
             Term t();
 
@@ -1034,11 +1097,17 @@ class QdpCmd {
                 # Check timeout
                 if (opts.timeout && (now_us() - start) > seconds(opts.timeout)) {
                     printf("\n%s listen timed out after %d seconds\n", color.warning("TIMEOUT:"), opts.timeout);
+                    timed_out = True;
                     break;
                 }
-                if (stdin.isDataAvailable(250ms)) {
-                    stdin.readBinary(1);
-                    break;
+                if (read_keys) {
+                    if (stdin.isDataAvailable(250ms)) {
+                        stdin.readBinary(1);
+                        break;
+                    }
+                } else {
+                    # the timeout, a signal and the end of the event source are checked as often as with a terminal
+                    usleep(250ms);
                 }
             }
         }
@@ -1046,6 +1115,8 @@ class QdpCmd {
         delete provider;
         if (shutdown_requested) {
             printf("listening stopped due to signal\n");
+        } else if (timed_out) {
+            printf("listening stopped on its timeout\n");
         } else if (active) {
             printf("listening stopped on user request\n");
         } else {
@@ -2103,6 +2174,30 @@ class QdpCmd {
         QdpCmd::exitProgram(0);
     }
 
+    #! returns the connection of an app action and removes it from \a options (qore#7126)
+    /** The connection is given with the \c "connection" option, or with \c "qorus_app_connection", the name of the
+        option in Qorus and the IDE; a missing connection is a usage error.
+    */
+    private static string getAppActionConnection(string app_name, string action_name, reference<*hash<auto>> options) {
+        auto connection = options.connection;
+        auto alias = options.qorus_app_connection;
+        # an empty value is no value
+        if (connection.val() && alias.val() && connection != alias) {
+            error("@%s/%s: the options \"connection\" (%y) and \"qorus_app_connection\" (%y) name different "
+                "connections; give one of them", app_name, action_name, connection, alias);
+        }
+        # a missing connection is reported with the other required options
+        string key = connection.val() ? "connection" : "qorus_app_connection";
+        auto value = options{key};
+        if (value.typeCode() != NT_STRING) {
+            error("@%s/%s: the %y option must be a connection name; got type %y", app_name, action_name, key,
+                value.type());
+        }
+        remove options.connection;
+        remove options.qorus_app_connection;
+        return value;
+    }
+
     private AbstractDataProvider getDataProviderForAppAction(string app_name, string action_name, *string opts) {
         if (!ENV.QORE_PROVIDER_INDEX_DIR) {
             DataProvider::registerKnownFactories();
@@ -2126,30 +2221,45 @@ class QdpCmd {
         }
         hash<DataProviderAppInfo> app = DataProviderActionCatalog::getAppEx(app_name);
 
+        # the required options: the connection of an app with a connection scheme and the data provider path options
+        # (qore#7126)
+        list<string> missing = map $1.key, action.path_vars.pairIterator(), !options{$1.key}.val();
+        if (app.scheme.val() && !options.connection.val() && !options.qorus_app_connection.val()) {
+            unshift missing, "connection";
+        }
+        if (missing) {
+            # the syntax with every required option of the action
+            list<string> required = keys action.path_vars ?? ();
+            if (app.scheme.val()) {
+                unshift required, "connection";
+            }
+            error("@%s/%s requires the option%s %s: qdp '@%s/%s{%s}' ...", app_name, action_name,
+                missing.size() == 1 ? "" : "s", (map sprintf("%y", $1), missing).join(", "), app_name, action_name,
+                (map $1 + "=<value>", required).join(","));
+        }
+
         string connection;
         AbstractConnection conn;
         if (app.scheme.val()) {
-            connection = OptionHelper::getString(options, "connection", True);
-            remove options.connection;
-            conn = get_connection(connection);
+            connection = getAppActionConnection(app_name, action_name, \options);
+            try {
+                conn = get_connection(connection);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "CONNECTION-ERROR") {
+                    rethrow;
+                }
+                error("@%s/%s: connection %y cannot be used: %s", app_name, action_name, connection, ex.desc);
+            }
             hash<ConnectionSchemeInfo> scheme_info = ConnectionSchemeCache::getSchemeEx(app.scheme);
             if (!scheme_info.schemes{string scheme = conn.getType()}) {
-                throw "APP-CONFIG-ERROR", sprintf("app %y action %y: connection %y has scheme %y; expecting %y", app.name,
-                    action.action, connection, scheme, keys scheme_info.schemes);
+                error("@%s/%s: connection %y has scheme %y; expecting %y", app_name, action_name, connection, scheme,
+                    keys scheme_info.schemes);
             }
             if (!conn.hasDataProvider()) {
-                throw "APP-CONFIG-ERROR", sprintf("connection %y has no data provider but should be valid for "
-                    "app %y action %y", connection, app.name, action.action);
+                error("@%s/%s: connection %y has no data provider", app_name, action_name, connection);
             }
         }
 
-        # check data provider path options
-        foreach hash<auto> i in (action.path_vars.pairIterator()) {
-            if (!options{i.key}.val()) {
-                throw "ACTION-ARG-ERROR", sprintf("app %y action %y: required option %y is missing in \"options\"",
-                    app.name, action.action, i.key);
-            }
-        }
 
         AbstractDataProvider prov;
         try {
@@ -2429,6 +2539,10 @@ class QdpCmd {
         printHelpLine(color.key("<connection>"), "Use a named connection", key_width);
         printHelpLine(color.key("<factory>{options}"), "Use a factory with options", key_width);
         printHelpLine(color.key("@<app>/<action>"), "Use an app action", key_width);
+        printHelpLine(color.key("@<app>/<action>{...}"), "Use an app action with options, ex: connection=<name>",
+            key_width);
+        printHelpLine(color.key("  qorus_app_connection"), "Alias of the connection option of an app action",
+            key_width);
         printHelpLine(color.key("<provider>/child/..."), "Navigate to child providers", key_width);
         printf("\n");
 
@@ -2498,6 +2612,8 @@ class QdpCmd {
         printHelpLine(color.key("-Y, --yaml"), "Use YAML for input and output", key_width);
         printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
         printHelpLine(color.key("-v, --verbose"), "Increase verbosity (can repeat)", key_width);
+        printHelpLine(color.key("COLUMNS=N"), "Shorten descriptions to N columns (default: the terminal width; "
+            "not shortened without a terminal)", key_width);
         printf("\n");
 
         printf("%s\n", color.bold("SEARCH OPTIONS"));
@@ -2902,13 +3018,21 @@ class ProgressMetricsCollector inherits DataProvider::AbstractPipelineMetricsCol
     }
 }
 
+#! Puts the terminal on stdin in raw mode for its lifetime, if stdin is a terminal and qdp is in its foreground
+/** a background job leaves the terminal of the shell in the foreground as it is (qore#7130, qore#7387)
+*/
 class Term {
     public {}
     private {
-        TermIOS orig;
+        #! the original attributes of the terminal on stdin; not set if stdin is not a terminal or qdp is not
+        #! in its foreground
+        *TermIOS orig;
     }
 
     constructor() {
+        if (!stdin.isForegroundTty()) {
+            return;
+        }
         TermIOS t();
 
         # get current terminal attributes for stdin
@@ -2948,7 +3072,9 @@ class Term {
 
     restore() {
         # restore terminal attributes
-        stdin.setTerminalAttributes(TCSADRAIN, orig);
+        if (orig) {
+            stdin.setTerminalAttributes(TCSADRAIN, orig);
+        }
     }
 }
 
@@ -2957,13 +3083,19 @@ class MyObserver inherits Observer {
 
     private {
         hash<DataProviderInfo> info;
-        TermIOS t();
+        #! the attributes of the terminal on stdin, restored when the process exits; not set if stdin is not a terminal
+        #! or qdp is not in its foreground
+        *TermIOS t;
     }
 
     constructor(hash<DataProviderInfo> info) {
         self.info = info;
-        # get current terminal attributes for stdin
-        stdin.getTerminalAttributes(t);
+        # get current terminal attributes for stdin, if stdin is a terminal and qdp is in its foreground (qore#7130,
+        # qore#7387)
+        if (stdin.isForegroundTty()) {
+            t = new TermIOS();
+            stdin.getTerminalAttributes(t);
+        }
     }
 
     update(string event_id, hash<auto> data_) {
@@ -2987,7 +3119,9 @@ class MyObserver inherits Observer {
                 log("<", "%s; auto_reconnect not enabled; exiting",
                     QdpCmd::color.error("disconnected from server"));
                 # restore original terminal attributes
-                stdin.setTerminalAttributes(TCSADRAIN, t);
+                if (t) {
+                    stdin.setTerminalAttributes(TCSADRAIN, t);
+                }
                 QdpCmd::exitProgram(0);
             }
         }

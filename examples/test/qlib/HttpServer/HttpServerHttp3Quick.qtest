@@ -105,7 +105,7 @@ for (int i = 0; i < 3; i++) {
 
 # Benchmark: 20 sequential requests
 report("\nBenchmark: 20 sequential requests\n");
-date start = now_us();
+int start = clock_get_monotonic_us();
 int success = 0;
 int errors = 0;
 
@@ -125,7 +125,7 @@ for (int i = 0; i < 20; i++) {
     }
 }
 
-date elapsed = now_us() - start;
+date elapsed = microseconds(clock_get_monotonic_us() - start);
 float seconds = elapsed.toFloat() / 1000000.0;
 
 # Prevent division by zero if test runs too fast

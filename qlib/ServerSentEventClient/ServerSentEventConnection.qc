@@ -35,6 +35,24 @@ public namespace ServerSentEventClient {
     - \c "yield": a closure to yield current thread execution
 */
 public class ServerSentEventConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! The synchronous client is not given to code restricted from NETWORK (qore#7262)
+    /** Its connections and requests are made by module code from the connection's \c url and options, which
+        restricted code that was lent the connection can change, and they send the connection's credentials; it is not
+        bound to the target of the code that created the connection
+
+        @throw PERMISSION-DENIED always (called by get() and getPollImpl() for code restricted from NETWORK only)
+    */
+    private checkLentClientTarget() {
+        throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK functional "
+            "domain, and the connection's synchronous client is not bound to the target of the code that created the "
+            "connection", name);
+    }
+
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("ServerSentEventClient",
@@ -218,9 +236,12 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
                 Socket::poll((info,), info.poll_timeout_ms ?? 1000);
             }
         }
+        date delta = now_us() - start;
+        # issue #7236: a successful ping marks the connection up
+        handlePingSuccess(delta);
         return rv += {
             "ok": True,
-            "time": now_us() - start,
+            "time": delta,
             "info": "OK",
         };
     }
@@ -397,7 +418,8 @@ public class SseConnectPollOperation inherits ConnectionProvider::HttpClientIoPo
     */
     constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger,
             string sse_method = "GET", *data sse_body)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger), base_url,
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
+                base_url,
                 sse_method,
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts,
                     SseConnectPollOperation::getSseHeaders(headers, sse_body)),

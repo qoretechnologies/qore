@@ -42,8 +42,10 @@
 #include "qore/QoreThreadLock.h"
 
 #include "qore/intern/SSLSocketHelper.h"
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/CompressionTransforms.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 
 #include "qore/intern/Http2Session.h"
 // NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
@@ -57,6 +59,7 @@
 #include "qore/intern/QoreConnectionDestinations.h"
 #include "qore/intern/SseEventFramer.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <atomic>
@@ -73,6 +76,12 @@
 #include <vector>
 #include <strings.h>
 #include <sys/time.h>
+#ifndef _Q_WINDOWS
+// dup3(), fcntl() and their flags of the inert socket of a connection attempt (see makeInertLocked())
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 #include <ares.h>
 #include <ares_version.h>
@@ -106,8 +115,22 @@ typedef struct ares_channeldata ares_channel_t;
 #define DEFAULT_SOCKET_BUFSIZE (64 * 1024)
 #endif
 
+//! The default maximum size in bytes of an HTTP/1.x header section, of a chunked body trailer section and of a chunk
+//! size line (qore#6867)
+/** The limit is the size of the text as received, with the line ends.  It can be changed per socket with
+    Socket::setMaxHeaderSize().
+*/
 #ifndef QORE_MAX_HEADER_SIZE
-#define QORE_MAX_HEADER_SIZE 16384
+#define QORE_MAX_HEADER_SIZE 65536
+#endif
+
+//! The default maximum size in bytes of a line that a client of a line-based protocol (IMAP, POP3, SMTP, FTP) reads,
+//! or that any reader reads until a line terminator ("\n" or "\r\n") (qore#6914)
+/** The limit is the size of the line as received, with the line end.  It can be changed per socket with
+    Socket::setMaxLineSize().
+*/
+#ifndef QORE_MAX_LINE_SIZE
+#define QORE_MAX_LINE_SIZE (1024 * 1024)
 #endif
 
 #define CHF_HTTP11  (1 << 0)
@@ -129,6 +152,22 @@ class QoreFuture;
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
+
+#ifndef _Q_WINDOWS
+//! Raises \a err and returns -1 if a UNIX socket path does not fit a socket address with its terminator (issue #6910)
+DLLLOCAL int qore_socket_check_unix_path(const char* path, const char* err, ExceptionSink* xsink);
+#endif
+
+//! Appends data received to an HTTP message body (the binary body, or the string body if \a body_bin is nullptr)
+/** The size of a body comes from the peer, so a body that cannot grow fails the read without ending the process or
+    losing data silently (issue 7417)
+
+    @return 0 for OK, -1 if the memory could not be allocated (a SOCKET-RECV-ERROR exception is raised; the body is
+    unchanged)
+*/
+DLLLOCAL int qore_socket_append_http_body(ExceptionSink* xsink, BinaryNode* body_bin, QoreString* body_str,
+        const void* data, size_t size);
+
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 #if defined(DEBUG) && !defined(_Q_WINDOWS)
@@ -145,6 +184,24 @@ class QoreSocketObject;
     @return 0 if the stream has no data buffered to be sent (or the stream or the session is gone), 1 if the wait timed
     out, -1 if an exception was raised (\c HTTP2-ERROR or \c QUIC-ERROR without a session)
 */
+//! Returns the bytes of an HTTP/2 stream's buffered data that nghttp2 has taken so far (never decreases)
+/** @return the byte count, -1 if the session is closed or the stream is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_h2_stream_taken(QoreSocketObject* s, int64_t stream_id, ExceptionSink* xsink);
+
+//! Returns the bytes of a client stream's data that the peer has acknowledged on the socket's first QUIC session
+/** @return the byte count (never decreases), -1 if the session or the stream's data record is gone, or if an
+    exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_quic_client_stream_acked(QoreSocketObject* s, int64_t stream_id,
+        ExceptionSink* xsink);
+
+//! Returns the bytes of a server-side HTTP/3 stream's data that the peer has acknowledged (never decreases)
+/** @return the byte count, -1 if the stream has no data record or the session is gone, or if an exception was raised
+*/
+DLLLOCAL int64_t qore_socket_object_quic_stream_acked(QoreSocketObject* s, int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
+
 DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool http2, int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink);
 //! Returns a reference to the sandbox manager whose network policy applies to the calling thread, or nullptr
@@ -152,6 +209,18 @@ DLLLOCAL int qore_socket_object_wait_stream_flushed(QoreSocketObject* s, bool ht
     resolves the manager on the thread that creates it and keeps it for its checks.
 */
 DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
+#ifdef DEBUG
+//! Makes the policy lookup of the thread find no policy while it exists (dbg_socket_drop_network_policy(), #6913)
+class QoreSocketDbgDropPolicyHelper {
+public:
+    DLLLOCAL QoreSocketDbgDropPolicyHelper();
+    DLLLOCAL ~QoreSocketDbgDropPolicyHelper();
+    QoreSocketDbgDropPolicyHelper(const QoreSocketDbgDropPolicyHelper&) = delete;
+    QoreSocketDbgDropPolicyHelper& operator=(const QoreSocketDbgDropPolicyHelper&) = delete;
+private:
+    bool old;
+};
+#endif
 //! Opens the socket in the given family and type if necessary and binds it to the given numeric address
 /** Runs no resolution and waits for nothing, so it can be called on an async I/O thread, by the operation that
     drives the socket (with the lock of its socket object held, if it has one).  The bind is checked against the
@@ -171,6 +240,23 @@ DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
 */
 DLLLOCAL int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr, int size,
     int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
+
+//! Binds an open socket descriptor to a numeric address, with the network policy check of any bind
+/** The descriptor variant of qore_socket_bind_family_sockaddr_direct() for a descriptor that no socket owns yet, such
+    as a connection attempt of the address family race of a QUIC client connection; it neither resolves nor waits.
+
+    @param fd the open socket descriptor
+    @param addr the address to bind to
+    @param size the size of the address
+    @param sock_type the socket type (ex: \c SOCK_DGRAM)
+    @param sandbox_manager the sandbox manager whose network policy governs the bind, if any
+    @param xsink raises \c NETWORK-ACCESS-DENIED if the policy denies the bind
+
+    @return 0 for success, -1 for error; a failed bind leaves its error number in errno without raising an exception,
+    and the caller closes the descriptor
+*/
+DLLLOCAL int qore_socket_bind_descriptor_checked(int fd, const struct sockaddr* addr, int size, int sock_type,
+    QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 
 //! Binds a socket descriptor so that, on macOS, a socket on all interfaces never shares its port with an IPv4 socket
 /** A socket on all interfaces shares its port with any socket bound to a more specific address of the same port,
@@ -682,6 +768,18 @@ struct QoreSharedDescriptor {
     int fd;
     //! set when the descriptor is given up while it is used: the last reference closes it
     bool close_on_release = false;
+    //! set while the connection attempt that the socket adopted the descriptor from holds it (qore#6962)
+    /** Set and cleared with the socket's @ref qore_socket_private::close_m held: a close of the socket then makes the
+        descriptor inert instead of leaving the connection open until the attempt releases it (see
+        qore_socket_private::releaseAttemptHold())
+    */
+    bool attempt_hold = false;
+    //! the wakes of the async I/O registrations of the descriptor (see qore_descriptor_hold_set_close_wake())
+    /** Changed and read with the socket's @ref qore_socket_private::close_m held: a close of the socket that gives
+        the descriptor up while it is held runs them after the lock is released, as the event loop is not told of a
+        close that makes the descriptor inert (qore#7003)
+    */
+    std::vector<std::shared_ptr<std::function<void()>>> close_wakes;
 
     DLLLOCAL explicit QoreSharedDescriptor(int fd) : fd(fd) {
     }
@@ -691,6 +789,39 @@ struct QoreSharedDescriptor {
     QoreSharedDescriptor(const QoreSharedDescriptor&) = delete;
     QoreSharedDescriptor& operator=(const QoreSharedDescriptor&) = delete;
 };
+
+//! Sets the function that a close of the socket runs when it gives up the descriptor of a hold (qore#7003)
+/** @param hold a hold that a pollable object's holdPollableDescriptor() returned
+    @param wake run once the socket's close lock is released, by the thread that closes the socket, while the hold
+    exists: a close that makes the descriptor inert gives the event loop no event for the registration
+
+    @return true if the hold is a socket's descriptor hold, which then has the function, false if not
+*/
+DLLLOCAL bool qore_descriptor_hold_set_close_wake(const std::shared_ptr<void>& hold, std::function<void()> wake);
+
+#ifdef DEBUG
+//! Debug builds: if set, called by the thread that closes a socket right before it runs the wakes of the
+//! registrations of a descriptor that it gave up while it was held (see qore_descriptor_hold_set_close_wake())
+/** For the C++ unit tests of a close of a registered connection (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_before_close_wakes;
+//! Debug builds: if set, called with the socket by the thread that closes it right after prepareForClose() shut the
+//! descriptor down, without the socket's close lock, before the close gives the descriptor up
+/** For the C++ unit tests of a connection step between the shutdown of a close and the close
+*/
+DLLLOCAL extern std::atomic<void (*)(qore_socket_private*)> qore_dbg_after_pre_close_shutdown;
+#endif
+
+#ifdef DEBUG
+//! Debug builds: if true, no inert socket can be made for a descriptor that a connection attempt holds when the socket
+//! is closed (see qore_socket_private::makeInertLocked()), as when the process has no free descriptor
+DLLLOCAL extern std::atomic<bool> qore_dbg_inert_socket_fails;
+//! Debug builds: if true, the inert socket cannot take the number of a descriptor held by a connection attempt when
+//! the socket is closed (a failed dup2() or dup3(); see qore_socket_private::makeInertLocked())
+DLLLOCAL extern std::atomic<bool> qore_dbg_inert_dup_fails;
+//! Debug builds: the number of closes of a descriptor held by a connection attempt that could not make it inert
+DLLLOCAL extern std::atomic<unsigned> qore_dbg_inert_socket_fallbacks;
+#endif
 
 //! Makes an owned descriptor: a descriptor that its owner can give up while an async I/O thread has it registered
 /** The descriptors that an operation gives the async I/O controller as extra fds of its poll info, such as the
@@ -739,6 +870,15 @@ public:
     //! Makes the channel use these socket functions; returns an ARES_* status
     DLLLOCAL int install(ares_channel_t* channel);
 
+#ifdef DEBUG
+    //! Makes each UDP socket of the channel one end of a socketpair whose other end is given to @p peer (see
+    //! qore_dbg_cares_set_local_transport()); called before the channel makes a socket
+    DLLLOCAL void setDbgLocalTransport(void (*peer)(int fd, void* arg), void* arg) {
+        dbg_local_peer = peer;
+        dbg_local_peer_arg = arg;
+    }
+#endif
+
     QoreCaresSockets(const QoreCaresSockets&) = delete;
     QoreCaresSockets& operator=(const QoreCaresSockets&) = delete;
 
@@ -746,6 +886,19 @@ private:
     std::mutex lock;
     //! the open sockets of the channel, by descriptor
     std::unordered_map<int, std::shared_ptr<QoreSharedDescriptor>> fds;
+#ifdef DEBUG
+    //! called with the other end of each UDP socketpair (see setDbgLocalTransport())
+    void (*dbg_local_peer)(int fd, void* arg) = nullptr;
+    //! the argument of @ref dbg_local_peer
+    void* dbg_local_peer_arg = nullptr;
+    //! the address that c-ares connected each socketpair socket to, by descriptor (empty before it is connected)
+    std::unordered_map<int, std::pair<struct sockaddr_storage, socklen_t>> dbg_local_addrs;
+
+    //! Returns true and the address that a socketpair socket was connected to, or false if @p sock is not one
+    DLLLOCAL bool getDbgLocalAddr(int sock, struct sockaddr_storage& addr, socklen_t& len);
+    //! Forgets a socketpair socket that is closed before c-ares gets it
+    DLLLOCAL void dbgForgetLocal(int sock);
+#endif
 
     DLLLOCAL static ares_socket_t asocket(int domain, int type, int protocol, void* user_data);
     DLLLOCAL static int aclose(ares_socket_t sock, void* user_data);
@@ -1076,6 +1229,15 @@ private:
             hold it (see qore_owned_descriptor_create())
         */
         std::shared_ptr<QoreSharedDescriptor> owned;
+        //! the attempt's hold of its descriptor once the socket has taken it over (qore#6962); null otherwise
+        /** Taken with the socket's @ref qore_socket_private::close_m held when the socket adopts the descriptor
+            (qore_socket_private::setDescriptor(), qore_socket_private::replaceDescriptor()).  The attempt keeps the
+            number to check the connection; a close of the socket (a connect timeout, or a close by its owner) while
+            the attempt has the hold leaves the descriptor open and marks it to be closed by its last reference, so
+            the number cannot be given to another descriptor while the attempt can still use it.  The attempt never
+            closes such a descriptor itself, nor polls it as an extra fd: it gives it up by releasing the hold.
+        */
+        std::shared_ptr<QoreSharedDescriptor> sock_hold;
 
         DLLLOCAL ConnAttempt() = default;
         DLLLOCAL ConnAttempt(ConnAttempt&&) = default;
@@ -1115,6 +1277,10 @@ private:
         the error is raised, all with system calls of their own
     */
     int last_error = 0;
+    //! The @ref qore_socket_private::fd_generation "generation" of the socket's descriptor since this operation last
+    //! gave it one (or since the operation started): a close of the socket, or a descriptor that another caller gave
+    //! it, changes it, and the operation then gives the socket no descriptor (qore#7003)
+    uint32_t sock_gen = 0;
 
     //! Continue asynchronous DNS resolution
     /** Returns 0 when resolved, 1 when polling must continue, -1 on error */
@@ -1150,8 +1316,20 @@ private:
         qore_socket_private::DescriptorHold): the descriptor is then closed when the I/O thread has removed it, so its
         number cannot be given to another object before; otherwise it is closed now.  If a concurrent close of the
         socket has released the descriptor already, nothing is closed here.
+
+        @return true if the socket gave the descriptor up, false if it was closed, or given another descriptor, since
+        this operation last gave it one
     */
-    DLLLOCAL void releasePrimaryFd(int fd, ConnAttempt* next);
+    DLLLOCAL bool releasePrimaryFd(int fd, ConnAttempt* next);
+
+    //! Raises the connection's error, or the close's if the socket was closed since this operation last gave it a
+    //! descriptor (whose effect, such as a shutdown's error, can be what made the attempts fail)
+    DLLLOCAL void raiseConnectErrorOrClosed(ExceptionSink* xsink);
+
+    //! Returns true if the socket was closed, or given another descriptor, since this operation last gave it one
+    /** Read with the socket's close lock held, where a close changes the generation (see @ref sock_gen)
+    */
+    DLLLOCAL bool socketChanged() const;
 };
 
 #ifndef _Q_WINDOWS
@@ -1173,8 +1351,16 @@ private:
     std::string name;
     struct sockaddr_un addr;
     int state = SCIPS_CONNECT;
+    //! The @ref qore_socket_private::fd_generation "generation" of the socket's descriptor since the connection gave
+    //! it one (or since it started): a close of the socket changes it, and the connection then fails (qore#7156)
+    uint32_t sock_gen = 0;
 
     DLLLOCAL int doConnect(ExceptionSink* xsink);
+
+    //! Raises SOCKET-CLOSED and returns true if the socket was closed since the connection gave it its descriptor
+    /** @param fd the descriptor of the caller's hold (IoUseHelper), taken before the call
+    */
+    DLLLOCAL bool closedSinceStart(int fd, ExceptionSink* xsink);
 
     // returns 0 = connected, 1 = try again, -1 = error
     DLLLOCAL int checkConnection(ExceptionSink* xsink);
@@ -1300,11 +1486,15 @@ public:
         return sent;
     }
 
+    DLLLOCAL bool started() const { return sent || tls_write_pending; }
+
 private:
     qore_socket_private* sock;
     const char* data;
     size_t size;
     size_t sent = 0;
+    size_t tls_awaiting_drain = 0;
+    bool tls_write_pending = false;
 };
 
 class SocketRecvPollState : public AbstractPollState {
@@ -1331,13 +1521,32 @@ public:
         return received;
     }
 
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
 
+    //! Makes room in the buffer for more data
+    /** @return -1 if the memory cannot be allocated: a SOCKET-RECV-ERROR exception is raised, the data received is
+        lost, and the connection is shut down, as the rest of the data cannot be told apart from what follows it
+    */
+    DLLLOCAL int grow(ExceptionSink* xsink, int fd);
+
+    //! the most memory allocated for the data before any of it has been received
+    /** The size to receive can come from the peer (a Content-Length or a chunk size), so the buffer grows as the
+        data arrives instead of being allocated for the whole size at once (issue 7417)
+    */
+    static constexpr size_t MaxPrealloc = 1024 * 1024;
+
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     size_t size;
+    //! the size of the buffer allocated for the data
+    size_t allocated = 0;
+    bool retry_tls_read = false;
+    //! true if the buffer could not grow: the data received is lost, and the read cannot continue
+    bool failed = false;
     size_t received = 0;
 };
 
@@ -1365,6 +1574,13 @@ public:
         return bin ? bin->size() : 0;
     }
 
+    //! Exchanges a DEFAULT_SOCKET_BUFSIZE buffer with the I/O thread driving HTTP/2.
+    DLLLOCAL void swapReadBuffer(std::unique_ptr<char[]>& spare) { rbuf.swap(spare); }
+
+    DLLLOCAL bool mustRetryTlsRead() const { return retry_tls_read; }
+
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
@@ -1376,6 +1592,7 @@ private:
     //! the thread that drives the operation (an I/O thread or a handler thread with a small stack)
     std::unique_ptr<char[]> rbuf;
     bool io = false;
+    bool retry_tls_read = false;
 };
 
 class SocketRecvPacketPollState : public AbstractPollState {
@@ -1399,8 +1616,10 @@ public:
 
     //! Returnd the number of bytes received so far
     DLLLOCAL size_t getBytesReceived() const {
-        return bin ? bin->size() : 0;
+        return retrying ? retry_offset : (bin ? bin->size() : 0);
     }
+
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retrying; }
 
 private:
     //! Receives data; continuePoll() records received data on the socket
@@ -1409,6 +1628,8 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<BinaryNode> bin;
     bool io = false;
+    bool retrying = false;
+    size_t retry_offset = 0; // logical length while the remainder is reserved for an unfinished TLS read
 };
 
 class SocketRecvUntilBytesPollState : public AbstractPollState {
@@ -1437,15 +1658,73 @@ public:
         return bin ? bin->size() : 0;
     }
 
+    DLLLOCAL bool mustCloseOnAbort() const { return getBytesReceived() || retry_tls_read; }
+
+    //! Limits the size of the data received, including the pattern, for the reader of an HTTP header or trailer
+    //! section or of a line of a chunked body (qore#6867)
+    /** An HTTP-HEADER-TOO-LARGE exception is raised, and no more data is read or kept, when the data received is
+        larger than the limit.
+
+        @param max_size the maximum size in bytes; 0 = no limit
+        @param what what is read, for the exception: \c "header", \c "chunked body trailer" or \c "chunk size line"
+    */
+    DLLLOCAL void setLimit(size_t max_size, const char* what, size_t total_max = 0) {
+        this->max_size = max_size;
+        limit_what = what;
+        limit_total = total_max ? total_max : max_size;
+        line_limit = false;
+        message_limit = false;
+    }
+
+    //! Limits the size of the data received for a reader of a message that can be large, such as the end of a POP3
+    //! message (qore#6914)
+    /** A SOCKET-RESPONSE-TOO-LARGE exception is raised, and no more data is read or kept, when the data received is
+        larger than the limit.
+
+        @param max_size the maximum size in bytes; 0 = no limit
+    */
+    DLLLOCAL void setMessageLimit(size_t max_size) {
+        this->max_size = max_size;
+        limit_total = max_size;
+        line_limit = false;
+        message_limit = true;
+    }
+
+    //! Ends the data at the end of an HTTP/1.x header section instead of at the pattern (qore#7491)
+    /** The header ends at its first empty line, where a line ends with LF, which a CR can precede (RFC 9112 section
+        2.2): at the first \c "\n\n" or \c "\n\r\n", so that \c "\r\n\r\n", \c "\r\n\n", \c "\n\r\n"
+        and \c "\n\n" all end it, where the parser of the header (qore_socket_private::checkHttpFieldLines()) finds
+        its end.  A CR that no LF follows does not end a line; the parser refuses it.  The pattern must be
+        \c "\r\n\r\n", whose matches this includes.
+    */
+    DLLLOCAL void setHttpHeaderEnd() {
+        assert(size == 4 && !memcmp(bytes, "\r\n\r\n", 4));
+        http_header_end = true;
+    }
+
 private:
     //! Receives data; continuePoll() records received data on the socket
     DLLLOCAL int continuePollIntern(ExceptionSink* xsink);
+
+    //! the limit of the size of the data received (0 = none)
+    size_t max_size = 0;
+    //! what is read, for the exception raised when the limit is exceeded
+    const char* limit_what = nullptr;
+    //! the limit of the whole section, for the exception, when the data is a part of a section
+    size_t limit_total = 0;
+    //! true if the limit is the maximum line size of the socket (a read until a line terminator; qore#6914)
+    bool line_limit = false;
+    //! true if the limit is that of a message (qore#6914)
+    bool message_limit = false;
+    //! true if the data ends at the end of an HTTP/1.x header section (qore#7491); see setHttpHeaderEnd()
+    bool http_header_end = false;
 
     qore_socket_private* sock;
     // we are using QoreStringNode as it has a much better append / concat implementation than BinaryNode
     SimpleRefHolder<QoreStringNode> bin;
     const char* bytes;
     size_t size;
+    bool retry_tls_read = false;
     size_t matched = 0;
     //! The KMP failure table of the pattern, or nullptr when it is all 0 (issue #6325)
     /** fail[i] is the length of the longest proper prefix of bytes[0..i] that is also a suffix of it: after a
@@ -1818,11 +2097,74 @@ struct qore_socket_private : public QoreReferenceCounter {
 
         DLLLOCAL DescriptorHold(qore_socket_private& priv, std::shared_ptr<SharedDescriptor> fd);
 
+        //! Sets the function that a close of the socket that gives the descriptor up runs (once the close lock is
+        //! released) while this hold exists; runs it at once if the socket already gave the descriptor up
+        DLLLOCAL void setCloseWake(std::function<void()> wake);
+
+        //! The deleter of the holds that take() makes, which identifies them (see qore_descriptor_hold_set_close_wake())
+        struct Deleter {
+            DLLLOCAL void operator()(DescriptorHold* h) const {
+                delete h;
+            }
+        };
+
     private:
         //! the socket, referenced
         qore_socket_private* priv;
         std::shared_ptr<SharedDescriptor> fd;
+        //! the function that a close runs, if any; also in the descriptor's close_wakes
+        std::shared_ptr<std::function<void()>> close_wake;
     };
+
+    using CloseWakes = std::vector<std::shared_ptr<std::function<void()>>>;
+    //! Waits on a socket without a descriptor (e.g. during DNS resolution), protected by close_m.
+    CloseWakes generation_wakes;
+#ifdef DEBUG
+    //! A single allocation failure in the registration of this socket's next generation wake.
+    enum class WakeAllocation { None, Callback, SocketList, OperationMap, Recheck };
+    std::atomic<WakeAllocation> dbg_wake_failure{WakeAllocation::None};
+
+    DLLLOCAL void dbgCheckWakeAllocation(WakeAllocation point) {
+        if (dbg_wake_failure.compare_exchange_strong(point, WakeAllocation::None, std::memory_order_relaxed)) {
+            throw std::bad_alloc();
+        }
+    }
+#endif
+
+    //! Registers a one-shot wake for the next close if the socket still has no descriptor.
+    //! Releasing the returned hold unregisters it.
+    DLLLOCAL std::shared_ptr<void> holdGenerationWake(std::function<void()> wake);
+
+    //! the wakes that a close that gave the descriptor up while it was held runs once @ref close_m is released
+    CloseWakes pending_close_wakes;
+
+    //! Runs the wakes of a close that gave the descriptor up while it was held; called without @ref close_m held
+    DLLLOCAL void runPendingCloseWakes() {
+        std::vector<std::shared_ptr<std::function<void()>>> wakes;
+        {
+            CloseLockHelper cl(*this);
+            wakes.swap(pending_close_wakes);
+        }
+        runCloseWakes(wakes);
+    }
+
+    DLLLOCAL static void runCloseWakes(const CloseWakes& wakes) {
+        if (wakes.empty()) {
+            return;
+        }
+#ifdef DEBUG
+        if (void (*hook)() = qore_dbg_before_close_wakes.load(std::memory_order_acquire)) {
+            hook();
+        }
+#endif
+        // nothing may leave a close, which a destructor can make
+        for (auto& w : wakes) {
+            try {
+                (*w)();
+            } catch (...) {
+            }
+        }
+    }
 
     //! Holds @ref close_m for the scope of the object
     class CloseLockHelper {
@@ -1870,6 +2212,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds a peer-close error (a stale errno);
     //! one-shot, set with QoreSocketObject::dbgForceSslErrorSslAtNextWrite()
     std::atomic<bool> dbg_force_ssl_error_ssl{false};
+
+    //! Debug-only: the next TLS write that can stage its ciphertext finds the socket buffer full, stages it, and the
+    //! drain of the staged ciphertext then fails as when the peer reset the connection; one-shot, set with
+    //! dbg_force_staged_write_failure()
+    std::atomic<bool> dbg_force_staged_write_failure{false};
 
     //! Debug-only: prepares an abortive close if one was requested; returns true if so (close_m held)
     DLLLOCAL bool dbgAbortiveCloseLocked() {
@@ -1947,6 +2294,21 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::string ssl_ca_file;
     //! A directory with hashed CA certificates that server certificates are verified against, if set
     std::string ssl_ca_path;
+    //! An in-memory trust store that peer certificates are verified against, if set (qoretechnologies/qore#7248)
+    /** Takes precedence over @ref ssl_ca_file and @ref ssl_ca_path; holds a reference
+    */
+    QoreSSLTrustStore* ssl_trust_store = nullptr;
+
+    //! Sets the in-memory trust store; takes a reference to the new one and releases the old one
+    DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts) {
+        if (ts) {
+            ts->ref();
+        }
+        if (ssl_trust_store) {
+            ssl_trust_store->deref();
+        }
+        ssl_trust_store = ts;
+    }
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
     //! protects event queue pointer, callback argument, and data flag lifetime
@@ -1986,6 +2348,11 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::atomic<bool> http_fields_at_top_level{true};
     bool del = false,
         http_exp_chunked_body = false,
+        //! True while the read of a chunked body has started and has not reached the end of the body
+        /** The rest of such a body cannot be told apart from the next message, so no header is read on the
+            connection until it is closed (issue 7417)
+        */
+        http_chunked_body_unfinished = false,
         ssl_accept_all_certs = false,
         ssl_capture_remote_cert = false,
         event_data = false,
@@ -2028,7 +2395,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     //! Configured TCP_USER_TIMEOUT (ms); 0 = unset, applied at connect.
     /** Set via QoreSocket::setUserTimeout.  Re-applied at every successful
-        TCP connect inside confirmConnected() so it survives disconnect/
+        TCP connect by applyTcpUserTimeout() so it survives disconnect/
         reconnect cycles.  Has no effect on UNIX-domain or UDP sockets.
         On platforms without TCP_USER_TIMEOUT (BSD/macOS/Windows) the
         value is stored but no kernel option is set.
@@ -2069,9 +2436,12 @@ struct qore_socket_private : public QoreReferenceCounter {
         Mirrors @ref SocketPollOperationBase::getFdGeneration() at the
         socket level rather than the poll-op level.
 
+        Atomic: it is changed with @ref close_m held, and the async I/O controller reads it with the socket's lock
+        held instead (its debug fd swap changes it there too).
+
         @since %Qore 3.0
     */
-    uint32_t fd_generation = 0;
+    std::atomic<uint32_t> fd_generation{0};
 
     //! True if the descriptor is known to be non-blocking, so set_non_blocking(true) needs no system call
     /** Set when the library creates the descriptor (openUNIX(), openINET()) or makes it non-blocking, cleared when the
@@ -2208,6 +2578,31 @@ public:
         instead of being accumulated.
     */
     std::atomic<int64> max_chunked_body_size{0};
+
+    //! Maximum size in bytes of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+    //! (0 = QORE_MAX_HEADER_SIZE)
+    /** The readers of these sections raise an HTTP-HEADER-TOO-LARGE exception when a peer sends more, instead of
+        keeping the data in memory.  The value is read when the section is read, so that it can change at any time.
+    */
+    std::atomic<size_t> max_header_size{0};
+
+    //! Returns the maximum size in bytes of an HTTP/1.x header or trailer section
+    DLLLOCAL size_t getMaxHeaderSize() const {
+        size_t rv = max_header_size.load(std::memory_order_relaxed);
+        return rv ? rv : QORE_MAX_HEADER_SIZE;
+    }
+
+    //! Maximum size in bytes of a line read until a line terminator (0 = QORE_MAX_LINE_SIZE)
+    /** The readers of a line raise a SOCKET-LINE-TOO-LARGE exception when a peer sends more, instead of keeping the
+        data in memory.  The value is read when the line is read, so that it can change at any time.
+    */
+    std::atomic<size_t> max_line_size{0};
+
+    //! Returns the maximum size in bytes of a line read until a line terminator
+    DLLLOCAL size_t getMaxLineSize() const {
+        size_t rv = max_line_size.load(std::memory_order_relaxed);
+        return rv ? rv : QORE_MAX_LINE_SIZE;
+    }
 
     //! Maximum request body size for HTTP/2 streams (0 = unlimited)
     /** Propagated to Http2Session when created; DATA frame accumulation exceeding
@@ -2427,6 +2822,8 @@ public:
         // (sessions hold their own SSL_CTX_up_ref'd references via SSL_new)
         freeQuicServerSslCtx();
 
+        setSslTrustStore(nullptr);
+
         // must be dereferenced and removed before deleting
         assert(!event_queue);
         assert(!warn_queue);
@@ -2441,6 +2838,10 @@ public:
             delete this;
         }
     }
+
+    //! Close during teardown of the owning object; a pending pollable holds its own reference to this state.
+    DLLLOCAL void closeForTeardown(bool sole_owner);
+    DLLLOCAL void cleanup(ExceptionSink* xsink, bool sole_owner);
 
     DLLLOCAL bool isOpen() {
         return sock != QORE_INVALID_SOCKET;
@@ -2516,6 +2917,27 @@ public:
 
     DLLLOCAL int close() {
         return close_internal();
+    }
+
+    //! Ends a connection being made if the socket has no descriptor; returns false if the socket has one
+    /** A connection that is being made (ex: resolving its host) gives the socket no descriptor after this: the
+        socket's descriptor generation changes, which the connection checks with @ref close_m held before it gives the
+        socket a descriptor (qore#7003).  Nothing else of the socket is changed.
+
+        @return true if the socket had no descriptor, false if it has one, which the caller then closes
+    */
+    DLLLOCAL bool endConnectIfNoDescriptor() {
+        CloseWakes wakes;
+        {
+            CloseLockHelper cl(*this);
+            if (sock != QORE_INVALID_SOCKET) {
+                return false;
+            }
+            ++fd_generation;
+            wakes.swap(generation_wakes);
+        }
+        runCloseWakes(wakes);
+        return true;
     }
 
     //! Shuts down the connection for sending and receiving; a TLS connection sends its close_notify alert first
@@ -2625,8 +3047,20 @@ public:
         // SSL_write currently in flight on this socket; if a racing close
         // has already released the fd, there is nothing to shut down.  A TLS
         // connection that no call is using sends its close_notify alert first.
-        CloseLockHelper cl(*this);
-        if (sock != QORE_INVALID_SOCKET) {
+#ifdef DEBUG
+        bool shut = false;
+#endif
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET) {
+                return;
+            }
+            // the shutdown is the start of the close: the descriptor generation changes with it, so that a connection
+            // that sees its effect on the descriptor (a connection attempt that reads the shutdown's error) sees the
+            // socket closed, and fails as closed, not with the error that the shutdown caused; the close changes it
+            // again when it gives the descriptor up.  Nothing takes a changed generation for a released descriptor:
+            // the descriptor stays the socket's, open, until the close
+            ++fd_generation;
 #ifdef DEBUG
             if (dbgAbortiveCloseLocked()) {
                 return;
@@ -2634,13 +3068,36 @@ public:
 #endif
             sendTlsCloseNotifyLocked();
             ::shutdown(sock, SHUTDOWN_ARG);
+#ifdef DEBUG
+            shut = true;
+#endif
         }
+#ifdef DEBUG
+        // a test holds the close here, after the shutdown and before the close, without the close lock
+        if (shut) {
+            if (void (*hook)(qore_socket_private*) = qore_dbg_after_pre_close_shutdown.load(std::memory_order_acquire)) {
+                hook(this);
+            }
+        }
+#endif
     }
 
     //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
     DLLLOCAL int close_and_reset() {
-        CloseLockHelper cl(*this);
-        return sock != QORE_INVALID_SOCKET ? close_and_reset_locked() : 0;
+        int rc = 0;
+        CloseWakes wakes;
+        {
+            CloseLockHelper cl(*this);
+            wakes.swap(generation_wakes);
+            if (sock == QORE_INVALID_SOCKET) {
+                ++fd_generation;
+            } else {
+                rc = close_and_reset_locked();
+            }
+        }
+        runCloseWakes(wakes);
+        runPendingCloseWakes();
+        return rc;
     }
 
     //! Replaces the open descriptor with another one, as for a QUIC connection migration
@@ -2649,19 +3106,31 @@ public:
         @param close_old set to true if the caller must close @a old_fd, false if the last I/O call or event loop
         registration that still uses it closes it (see DescriptorHold)
 
+        @param adopt the owned descriptor of @a new_fd, if any (see setDescriptor()), which is reset
+        @param hold set to a hold of @a new_fd when the socket adopts @a adopt (see setDescriptor())
+        @param old_generation the @ref fd_generation that the caller read with @a old_fd (getDescriptorGeneration()),
+        if any: the descriptor is then replaced only if the socket still has that descriptor, not only its number
+        (qore#7003)
+        @param new_generation set to the @ref fd_generation of @a new_fd when it is replaced, read with @ref close_m
+        held
+
         @return true if @a old_fd was replaced by @a new_fd; false if the socket no longer has @a old_fd, because a
         concurrent close released it, in which case the caller keeps @a new_fd and must not close @a old_fd
     */
     DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd, bool& close_old,
-            std::shared_ptr<SharedDescriptor>* adopt = nullptr) {
+            std::shared_ptr<SharedDescriptor>* adopt = nullptr, std::shared_ptr<SharedDescriptor>* hold = nullptr,
+            const uint32_t* old_generation = nullptr, uint32_t* new_generation = nullptr) {
         CloseLockHelper cl(*this);
-        if (sock != old_fd || old_fd == QORE_INVALID_SOCKET) {
+        if (sock != old_fd || old_fd == QORE_INVALID_SOCKET || (old_generation && fd_generation != *old_generation)) {
             return false;
         }
         sock = new_fd;
         // the caller closes the old descriptor, unless a use of it closes it when it ends with it
         close_old = true;
         if (shared_fd && shared_fd->fd == old_fd && shared_fd.use_count() > 1) {
+            // the close wakes of the replaced descriptor's registration holds are not run: the replacement is made
+            // in a step of the operation that has the registration (a connection that takes another attempt's
+            // descriptor, a QUIC migration), which updates its registration after the step (harmless)
             shared_fd->close_on_release = true;
             close_old = false;
         }
@@ -2669,11 +3138,28 @@ public:
         // an owned descriptor that becomes the socket's is taken over under close_m, so its holds count as uses
         if (adopt && *adopt) {
             shared_fd = qore_owned_descriptor_adopt(*adopt);
+            if (hold) {
+                *hold = shared_fd;
+                shared_fd->attempt_hold = true;
+            }
         }
         // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
         ++fd_generation;
+        if (new_generation) {
+            *new_generation = fd_generation;
+        }
         fd_nonblocking.store(false, std::memory_order_relaxed);
         return true;
+    }
+
+    //! Returns the socket's descriptor and its @ref fd_generation, read together with @ref close_m held
+    /** For replaceDescriptor(): a descriptor that the socket was given after the caller's read has another
+        generation, also when its number is the same
+    */
+    DLLLOCAL int getDescriptorGeneration(uint32_t& generation) {
+        CloseLockHelper cl(*this);
+        generation = fd_generation;
+        return sock;
     }
 
     //! Makes an owned descriptor the descriptor of the socket, which has none
@@ -2684,13 +3170,74 @@ public:
         @param fd the descriptor
         @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
         @param nonblocking true if the descriptor is non-blocking (created with create_nonblocking_socket())
+        @param hold set to a hold of the adopted descriptor, taken with @ref close_m held, if @a adopt is set: while
+        the caller has it, a close of the socket makes the descriptor inert, keeping its number, and the release of
+        the last reference closes it (see close_and_reset_locked()), so the number cannot be given to another
+        descriptor while the caller has it; the caller never closes the descriptor itself, and releases the hold
+        with releaseAttemptHold()
+        @param new_generation set to the @ref fd_generation of @a fd, read with @ref close_m held
     */
-    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking) {
+    DLLLOCAL void setDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking,
+            std::shared_ptr<SharedDescriptor>* hold = nullptr, uint32_t* new_generation = nullptr) {
         CloseLockHelper cl(*this);
+        setDescriptorLocked(fd, adopt, nonblocking, hold, new_generation);
+    }
+
+    //! Makes an owned descriptor the descriptor of the socket only if the socket has had no other descriptor since
+    //! the caller read its generation
+    /** As setDescriptor(); a close of the socket, or a descriptor given to it, after the caller's read changes its
+        @ref fd_generation: the socket then does not take @a fd, which the caller still owns (qore#7003)
+
+        @param expected_generation the @ref fd_generation that the caller read (getDescriptorGeneration(), or the
+        @a new_generation of its last setDescriptor() or replaceDescriptor())
+
+        @return true if the socket took @a fd over
+    */
+    DLLLOCAL bool setDescriptorIfGeneration(uint32_t expected_generation, int fd,
+            std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking, std::shared_ptr<SharedDescriptor>* hold = nullptr,
+            uint32_t* new_generation = nullptr) {
+        CloseLockHelper cl(*this);
+        if (sock != QORE_INVALID_SOCKET || fd_generation != expected_generation) {
+            return false;
+        }
+        setDescriptorLocked(fd, adopt, nonblocking, hold, new_generation);
+        return true;
+    }
+
+    //! Makes an owned descriptor the descriptor of the socket; @ref close_m must be held
+    DLLLOCAL void setDescriptorLocked(int fd, std::shared_ptr<SharedDescriptor>& adopt, bool nonblocking,
+            std::shared_ptr<SharedDescriptor>* hold, uint32_t* new_generation) {
         sock = fd;
         shared_fd = adopt ? qore_owned_descriptor_adopt(adopt) : nullptr;
+        if (hold && shared_fd) {
+            *hold = shared_fd;
+            shared_fd->attempt_hold = true;
+        }
         ++fd_generation;
+        if (new_generation) {
+            *new_generation = fd_generation;
+        }
         fd_nonblocking.store(nonblocking, std::memory_order_relaxed);
+    }
+
+    //! Makes a connected UDP descriptor, an owned descriptor, the descriptor of the socket, which has none
+    /** Used by the address family race of a QUIC client connection (SocketQuicClientPollOperation) for the
+        connection attempt that wins: the socket is then as if it had been bound to the wildcard address of the family
+        and connected
+
+        @param fd the descriptor, which is non-blocking
+        @param adopt the owned descriptor (see qore_owned_descriptor_create()), which is reset
+        @param family the address family of the descriptor
+    */
+    DLLLOCAL void adoptDatagramDescriptor(int fd, std::shared_ptr<SharedDescriptor>& adopt, int family) {
+        assert(sock == QORE_INVALID_SOCKET);
+        setDescriptor(fd, adopt, true);
+        resetCloseInterrupt();
+        sfamily = family;
+        stype = SOCK_DGRAM;
+        sprot = 0;
+        port = -1;
+        listening = false;
     }
 
     //! Closes a socket descriptor that is not the socket's own descriptor
@@ -2721,8 +3268,92 @@ public:
         bind_reservations.clear();
     }
 
+#ifndef _Q_WINDOWS
+    //! Replaces the descriptor with an inert one that keeps its number: a socket that is not connected
+    /** The connection of the descriptor, also one that is being established, is closed when no system call uses it
+        any more; I/O on the number fails as on a socket that is not connected.  Nothing happens if no inert socket
+        can be made: the descriptor is then only shut down.
+    */
+    DLLLOCAL static bool makeInertLocked(int fd) {
+        int inert;
+#ifdef DEBUG
+        if (qore_dbg_inert_socket_fails.load(std::memory_order_relaxed)) {
+            inert = -1;
+            errno = EMFILE;
+        } else
+#endif
+#ifdef SOCK_CLOEXEC
+        inert = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+#else
+        inert = ::socket(AF_UNIX, SOCK_STREAM, 0);
+#endif
+        if (inert < 0) {
+            inertFallback(fd, "no inert socket");
+            return false;
+        }
+        // the number keeps the close-on-exec flag of the socket's descriptors, which dup2() clears
+        int rc;
+        while (true) {
+#ifdef DEBUG
+            if (qore_dbg_inert_dup_fails.load(std::memory_order_relaxed)) {
+                // as if the number could not be taken: nothing is replaced
+                rc = -1;
+                errno = EBADF;
+                break;
+            }
+#endif
+#ifdef __linux__
+            rc = ::dup3(inert, fd, O_CLOEXEC);
+#else
+            rc = ::dup2(inert, fd);
+#endif
+            if (rc >= 0 || errno != EINTR) {
+                break;
+            }
+        }
+        if (rc < 0) {
+            int err = errno;
+            ::close(inert);
+            errno = err;
+            inertFallback(fd, "the inert socket cannot take the number");
+            return false;
+        }
+#ifndef __linux__
+        ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+        ::close(inert);
+        return true;
+    }
+
+    //! The descriptor could not be made inert: the caller shuts it down, and the attempt's hold still keeps its number
+    DLLLOCAL static void inertFallback(int fd, const char* why) {
+#ifdef DEBUG
+        qore_dbg_inert_socket_fallbacks.fetch_add(1, std::memory_order_relaxed);
+        printd(1, "qore_socket_private::makeInertLocked() fd %d: %s: %s; the descriptor is only shut down\n", fd, why,
+            strerror(errno));
+#endif
+    }
+#endif
+
+    //! Releases the hold that a connection attempt took of the descriptor that the socket adopted from it
+    /** Taken with setDescriptor() or replaceDescriptor(); released with @ref close_m held, so a close of the socket
+        either sees the attempt's hold and makes the descriptor inert, or does not and closes it itself, and the
+        release closes it if the socket has closed it while the attempt held it
+
+        @param hold the hold, which is reset; nothing happens if it is null
+    */
+    DLLLOCAL void releaseAttemptHold(std::shared_ptr<SharedDescriptor>& hold) {
+        if (!hold) {
+            return;
+        }
+        CloseLockHelper cl(*this);
+        hold->attempt_hold = false;
+        hold.reset();
+    }
+
     //! Closes the descriptor and resets the connection state; @ref close_m must be held
-    /** If an I/O call uses the descriptor, the last I/O call using it closes it; see @ref SharedDescriptor
+    /** If an I/O call uses the descriptor, the last I/O call using it closes it; see @ref SharedDescriptor.  If a
+        connection attempt holds it, the descriptor is made inert first (see makeInertLocked())
     */
     DLLLOCAL int close_and_reset_locked() {
         assert(sock != QORE_INVALID_SOCKET);
@@ -2730,6 +3361,30 @@ public:
         int rc = 0;
         if (shared_fd && shared_fd->fd == sock && shared_fd.use_count() > 1) {
             shared_fd->close_on_release = true;
+            // the async I/O registrations of the descriptor are woken once the close lock is released: an inert
+            // descriptor (below) replaces the one registered, which the event loop drops without an event (qore#7003);
+            // the descriptor's wakes run once, as it is given up once (a hold that sets a wake later runs it at once)
+            if (pending_close_wakes.empty()) {
+                pending_close_wakes.swap(shared_fd->close_wakes);
+            } else {
+                try {
+                    pending_close_wakes.insert(pending_close_wakes.end(), shared_fd->close_wakes.begin(),
+                        shared_fd->close_wakes.end());
+                } catch (...) {
+                    // no memory: the close goes on, its registrations are not woken (an exception may not leave a
+                    // close, which a destructor can make)
+                }
+            }
+#ifndef _Q_WINDOWS
+            // a connection attempt in progress holds the descriptor (qore#6962): the shutdown does not stop a
+            // connection that is being established, so the connection is closed now and the number is kept by an
+            // inert descriptor until the attempt releases it
+            if (shared_fd->attempt_hold && !makeInertLocked(sock)) {
+                // no inert socket: the connection being established is at least shut down, whichever close path
+                // this is (close_internal() shuts it down before, close_and_reset() does not)
+                ::shutdown(sock, SHUTDOWN_ARG);
+            }
+#endif
         } else {
             while (true) {
 #ifdef _Q_WINDOWS
@@ -2778,6 +3433,9 @@ public:
         }
         if (http_exp_chunked_body) {
             http_exp_chunked_body = false;
+        }
+        if (http_chunked_body_unfinished) {
+            http_chunked_body_unfinished = false;
         }
         if (sse_got_cr) {
             sse_got_cr = false;
@@ -2834,6 +3492,7 @@ public:
         QoreStringNode* old_ssl_err_str;
         QoreObject* old_remote_cert;
         std::shared_ptr<Http2Session> old_h2_session;
+        CloseWakes wakes;
         std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> old_h2_stream_complete_callback;
         int rc = 0;
         {
@@ -2843,6 +3502,7 @@ public:
             old_remote_cert = remote_cert;
             remote_cert = nullptr;
             old_h2_session = h2_session.take();
+            wakes.swap(generation_wakes);
             old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
 
             if (sock >= 0) {
@@ -2888,6 +3548,8 @@ public:
                 ++connection_id;
 
                 rc = close_and_reset_locked();
+            } else {
+                ++fd_generation;
             }
         }
 
@@ -2908,6 +3570,9 @@ public:
         if (old_ssl_err_str) {
             old_ssl_err_str->deref();
         }
+        // the async I/O registrations of a descriptor given up while it was held (see close_and_reset_locked())
+        runCloseWakes(wakes);
+        runPendingCloseWakes();
         return rc;
     }
 
@@ -3609,25 +4274,127 @@ public:
         service.swap(sandbox_proxy_target_service);
     }
 
-    DLLLOCAL void confirmConnected(const char* host) {
-        resetCloseInterrupt();
-        listening = false;
-        do_connected_event();
+    //! Returns the descriptor generation from which a connection that is started owns the socket (qore#7003)
+    /** Called after the connection closed the socket: the generation is read with @ref close_m held while the socket
+        has no descriptor, and a descriptor that another thread gave the socket since is closed first (with the full
+        close); a close by another thread after this ends the connection, and one before it precedes the connection.
 
-        // issue #3053: save hostname for SNI
+        A socket does no locking of its own besides its close (see QoreSocket): its user serializes its operations.
+        A Socket object refuses the operation of another thread while a connection has the socket
+        (SOCKET-ASYNC-MODE-ERROR), and a connection made after another one closes the socket first, so the later
+        connection wins.  A descriptor that is closed here can therefore only come from a C++ caller that breaks the
+        rule; it is closed rather than left open or leaked.
+    */
+    DLLLOCAL uint32_t startConnectGeneration() {
+        while (true) {
+            {
+                CloseLockHelper cl(*this);
+                if (sock == QORE_INVALID_SOCKET) {
+                    return fd_generation;
+                }
+            }
+            // the full close, which also releases the TLS connection (with its recorded ALPN result) and the HTTP/2
+            // session of the descriptor
+            close_internal();
+        }
+    }
+
+    //! Sets the state of a UNIX socket connection, if the socket was not closed since it had the given descriptor
+    //! generation; returns false if it was (qore#7156)
+    /** The state (the socket's path and family), where the connection leads, and the connected event are set and sent
+        with @ref close_m held, where a close reads and clears them: a close after it comes after the connection, and
+        its events after the connected event
+    */
+    DLLLOCAL bool setUnixConnectedIfGeneration(uint32_t gen, const char* path,
+            std::shared_ptr<const QoreConnectionDestinations> dests) {
+        CloseLockHelper cl(*this);
+        if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
+            return false;
+        }
+        socketname = path;
+        sfamily = AF_UNIX;
+        listening = false;
+        resetCloseInterrupt();
+        // the destinations' lock nests in close_m, as in the close
+        setConnectedDestinations(std::move(dests));
+        // the connected event is sent with close_m held, as the close sends its closed event, which orders them (no
+        // connected event after a closed one); it takes only the event queue's locks (event_queue_m, then the
+        // Queue's own lock), calls no user code and does not block: pushAndTakeRef() ignores a size limit and only
+        // signals waiters, and an event refused by a deleted queue is released while the socket still references
+        // its argument, so no destructor runs
+        do_connected_event();
+        return true;
+    }
+
+    //! Closes the socket's descriptor only if the socket has the given descriptor generation (qore#7156)
+    /** A connection that failed closes the descriptor that it gave the socket, but not one that another caller gave
+        the socket after a close
+    */
+    DLLLOCAL void closeIfGeneration(uint32_t gen) {
+        {
+            CloseLockHelper cl(*this);
+            if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
+                return;
+            }
+            close_and_reset_locked();
+        }
+        runPendingCloseWakes();
+    }
+
+    //! Sets the state of the connection that the socket's descriptor has, if the socket was not closed since it had
+    //! the given descriptor generation; returns false if it was (qore#7003)
+    /** Set with @ref close_m held, where a close resets it
+    */
+    /** The state, the host name (for SNI, issue #3053), where the connection leads, and the connected event are set
+        and sent in the section with @ref close_m held where the generation is checked, where a close resets them:
+        a close after it comes after the connection, and its events after the connected event
+
+        @param host the host name of the connection, or nullptr
+        @param dests where the connection leads
+
+        @return true if the socket has the connection, false if it was closed (nothing is set then)
+    */
+    DLLLOCAL bool setConnectedIfGeneration(uint32_t gen, int family, int type, int protocol, int new_port,
+            const char* host, std::shared_ptr<const QoreConnectionDestinations> dests) {
+        CloseLockHelper cl(*this);
+        if (sock == QORE_INVALID_SOCKET || fd_generation != gen) {
+            return false;
+        }
+        sfamily = family;
+        stype = type;
+        sprot = protocol;
+        port = new_port;
+        listening = false;
         if (host) {
             client_target = host;
         }
+        resetCloseInterrupt();
+        // the destinations' lock nests in close_m, as in the close
+        setConnectedDestinations(std::move(dests));
+        // the connected event is sent with close_m held, as the close sends its closed event, which orders them (no
+        // connected event after a closed one); it takes only the event queue's locks (event_queue_m, then the
+        // Queue's own lock), calls no user code and does not block: pushAndTakeRef() ignores a size limit and only
+        // signals waiters, and an event refused by a deleted queue is released while the socket still references
+        // its argument, so no destructor runs
+        do_connected_event();
+        return true;
+    }
 
-        // Re-apply configured TCP_USER_TIMEOUT on the new fd if set.  Only
-        // meaningful for TCP (skips UNIX-domain and UDP).
+    //! Sets the configured TCP user timeout of a TCP connection that the socket has (re-applied on each connection)
+    /** @param family the connection's address family, as given to setConnectedIfGeneration()
+        @param type the connection's socket type, as given to setConnectedIfGeneration()
+    */
+    DLLLOCAL void applyTcpUserTimeout(int family, int type) {
 #ifdef TCP_USER_TIMEOUT
-        if (tcp_user_timeout_ms > 0 && sock != QORE_INVALID_SOCKET
-                && (sfamily == AF_INET || sfamily == AF_INET6)
-                && stype == SOCK_STREAM) {
-            unsigned int v = (unsigned int)tcp_user_timeout_ms;
-            (void)setsockopt(sock, IPPROTO_TCP, TCP_USER_TIMEOUT,
-                (SETSOCKOPT_ARG_4)&v, sizeof(v));
+        if (tcp_user_timeout_ms > 0 && (family == AF_INET || family == AF_INET6) && type == SOCK_STREAM) {
+            // the descriptor is used through a hold: a close by another thread meanwhile cannot give its number to
+            // another socket while the option is set (qore#7003)
+            IoUseHelper io_use(*this);
+            int fd = io_use.getDescriptor();
+            if (fd != QORE_INVALID_SOCKET) {
+                unsigned int v = (unsigned int)tcp_user_timeout_ms;
+                (void)setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, (SETSOCKOPT_ARG_4)&v, sizeof(v));
+            }
         }
 #endif
     }
@@ -3827,6 +4594,11 @@ public:
         return -1;
 #else
         close();
+
+        // a path that does not fit the socket address is refused before it is copied (issue #6910)
+        if (qore_socket_check_unix_path(name, "SOCKET-BIND-ERROR", xsink)) {
+            return -1;
+        }
 
         // try to open socket if necessary
         if (openUNIX(socktype, protocol)) {
@@ -4077,6 +4849,102 @@ public:
         return 0;
     }
 
+    //! raises the exception for HTTP data over the limit (qore#6867)
+    /** @param xsink for the exception
+        @param max_size the limit in bytes
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"
+    */
+    DLLLOCAL static void raiseHttpHeaderTooLarge(ExceptionSink* xsink, size_t max_size, const char* what) {
+        xsink->raiseException("HTTP-HEADER-TOO-LARGE", "the HTTP %s received exceeds the maximum size of %zu bytes; "
+            "the limit can be changed with Socket::setMaxHeaderSize()", what, max_size);
+    }
+
+    //! limits the size of what a receive until a pattern state reads, for the reader of an HTTP header or trailer
+    //! section or of a chunk size line (qore#6867)
+    /** @param xsink for the exception
+        @param state the state, which must be a SocketRecvUntilBytesPollState
+        @param max_size the limit of the whole section in bytes
+        @param used the size of the part of the section that was read before this state, which is counted in the
+            limit
+        @param what what is read: \c "header", \c "chunked body trailer" or \c "chunk size line"; a header is read
+            up to the first empty line, whatever its line ends (see SocketRecvUntilBytesPollState::setHttpHeaderEnd())
+
+        @return 0 if the state was limited, -1 if the part of the section read already leaves no room for the data of
+        the state, and an exception was raised
+    */
+    DLLLOCAL static int limitHttpRead(ExceptionSink* xsink, AbstractPollState* state, size_t max_size, size_t used,
+            const char* what) {
+        assert(state);
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(state));
+        // every reader of a header section ends it where its parser ends it: at the first empty line, whatever the
+        // line ends (qore#7491)
+        if (!strcmp(what, "header")) {
+            static_cast<SocketRecvUntilBytesPollState*>(state)->setHttpHeaderEnd();
+        }
+        // a state limit of 0 means no limit: nothing is left, and the data to come cannot be empty
+        if (used >= max_size) {
+            raiseHttpHeaderTooLarge(xsink, max_size, what);
+            return -1;
+        }
+        static_cast<SocketRecvUntilBytesPollState*>(state)->setLimit(max_size - used, what, max_size);
+        return 0;
+    }
+
+    //! returns the size of the text of an HTTP/1.x header section read up to its end, without the empty line that
+    //! ends it and the line end before it (qore#7491)
+    /** The header ends with \c "\n\n" or \c "\n\r\n", where a CR can precede the first LF (see
+        SocketRecvUntilBytesPollState::setHttpHeaderEnd())
+
+        @param str the text read
+        @param len the length of the text in bytes
+
+        @return the size of the text without its end, or \a len if the text does not end as a header section ends
+    */
+    DLLLOCAL static size_t getHttpHeaderTextSize(const char* str, size_t len) {
+        assert(str || !len);
+        // the empty line
+        size_t end;
+        if (len >= 2 && str[len - 1] == '\n' && str[len - 2] == '\n') {
+            end = len - 1;
+        } else if (len >= 3 && str[len - 1] == '\n' && str[len - 2] == '\r' && str[len - 3] == '\n') {
+            end = len - 2;
+        } else {
+            return len;
+        }
+        // the line end before it
+        assert(end && str[end - 1] == '\n');
+        --end;
+        if (end && str[end - 1] == '\r') {
+            --end;
+        }
+        return end;
+    }
+
+    //! returns the start of a line of HTTP text received, for the argument of an exception, with its non-printable
+    //! bytes and backslashes escaped as \c "\xhh"
+    /** The line is not given in the description of an exception, which a client checks for text of its own (such as
+        for a closed connection, which is retried)
+
+        @param str the start of the line
+        @param len the length of the line in bytes, without its line end
+    */
+    DLLLOCAL static QoreStringNode* getHttpLineArg(const char* str, size_t len) {
+        QoreStringNode* line = new QoreStringNode;
+        static constexpr size_t MaxShown = 64;
+        for (size_t i = 0; i < len && i < MaxShown; ++i) {
+            unsigned char c = static_cast<unsigned char>(str[i]);
+            if (c < 0x20 || c >= 0x7f || c == '\\') {
+                line->sprintf("\\x%02x", static_cast<unsigned>(c));
+            } else {
+                line->concat(static_cast<char>(c));
+            }
+        }
+        if (len > MaxShown) {
+            line->concat("...");
+        }
+        return line;
+    }
+
     //! raises an exception if HTTP header or trailer text received contains a NUL character
     /** HTTP header and trailer text is parsed as a C string, so a NUL character would cut it off; RFC 9110 does not
         allow a NUL character in a field name or value
@@ -4103,14 +4971,20 @@ public:
 
     //! checks the lines of an HTTP header or trailer section as RFC 9112 requires
     /** - a CR is allowed only before the LF that ends a line; a bare CR is invalid (RFC 9112 section 2.2)
-        - a line may end with LF instead of CRLF (section 2.2)
+        - a field line has no control characters other than HTAB (RFC 9110 sections 5.1 and 5.5); the exception
+          raised for one has the start of the line, with its non-printable bytes escaped, as its argument
+        - a line may end with LF instead of CRLF (section 2.2), unless \a reject_bare_lf is true
         - a field line has a colon, the field name before it is not empty and has no whitespace, as between the name
           and the colon (sections 5 and 5.1)
         - a line that starts with whitespace is an obsolete line folding (section 5.2); it is refused if
           \a reject_obs_fold is true (a request), and is otherwise replaced in place with spaces; a whitespace line
           before the first field line is refused (section 2.2)
 
-        The check ends at the first empty line, which ends the section.
+        The check ends at the first empty line, which ends the section; if \a end_at_empty_line is true, text after
+        it is refused: the readers of a trailer section read its lines up to CRLF, and a parser that ended it at an
+        earlier empty line would lose the text after it, which the sender meant as something else (the next message,
+        or the rest of the section); the readers of a header end it at its first empty line, whatever its line ends
+        (qore#7491), so no text follows it
 
         @param xsink for the exception
         @param str the text received, NUL-terminated; obsolete line foldings are replaced with spaces in it
@@ -4118,11 +4992,13 @@ public:
         @param reject_obs_fold true to refuse an obsolete line folding, false to replace it with spaces
         @param err the error code of the exception
         @param what what the text is: \c "header" or \c "chunked body trailer"
+        @param reject_bare_lf true to refuse a line that ends with LF alone
+        @param end_at_empty_line true to refuse text after the first empty line
 
         @return 0 if the text is valid, -1 if an exception was raised
     */
     DLLLOCAL static int checkHttpFieldLines(ExceptionSink* xsink, char* str, bool skip_start_line, bool reject_obs_fold,
-            const char* err, const char* what) {
+            const char* err, const char* what, bool reject_bare_lf = false, bool end_at_empty_line = false) {
         assert(str);
         bool first_field = true;
         bool start_line = skip_start_line;
@@ -4144,9 +5020,34 @@ public:
                 ++e;
             }
             char* le = (e > line && e[-1] == '\r') ? e - 1 : e;
+            if (reject_bare_lf && *e == '\n' && le == e) {
+                xsink->raiseException(err, "invalid HTTP %s received with a line that ends with a bare LF character "
+                    "at byte offset %zu; a line must end with CRLF", what, static_cast<size_t>(e - str));
+                return -1;
+            }
             // an empty line ends the section
             if (le == line) {
+                if (end_at_empty_line && *e && e[1]) {
+                    xsink->raiseException(err, "invalid HTTP %s received with text after the empty line at byte "
+                        "offset %zu that ends it", what, static_cast<size_t>(line - str));
+                    return -1;
+                }
                 break;
+            }
+            if (!start_line) {
+                // a field line has no control characters other than HTAB: a field value is made of visible
+                // characters, SP, HTAB and obs-text (RFC 9110 section 5.5), and a field name of visible characters
+                // (section 5.1); a CR before the LF that ends the line is not in it (qore#7491)
+                for (const char* c = line; c < le; ++c) {
+                    unsigned char uc = static_cast<unsigned char>(*c);
+                    if ((uc < 0x20 && uc != '\t') || uc == 0x7f) {
+                        xsink->raiseExceptionArg(err, getHttpLineArg(line, le - line), "invalid HTTP %s received "
+                            "with the control character 0x%02x in a field line at byte offset %zu; a field line can "
+                            "have no control characters other than HTAB (RFC 9110 section 5.5)", what,
+                            static_cast<unsigned>(uc), static_cast<size_t>(c - str));
+                        return -1;
+                    }
+                }
             }
             if (start_line) {
                 start_line = false;
@@ -4199,9 +5100,297 @@ public:
         return 0;
     }
 
+    //! the framing that the \c Transfer-Encoding field of an HTTP/1.x message gives its body
+    enum class HttpTransferCodingFraming {
+        Chunked,        //!< the chunked transfer coding alone
+        Invalid,        //!< the framing cannot be determined: chunked is not the final coding, is given more than once
+                        //!< or with a parameter, or there is no coding
+        Unsupported,    //!< a transfer coding other than chunked
+        CloseDelimited, //!< a response whose final transfer coding is not chunked: its body ends when the
+                        //!< connection is closed (RFC 9112 section 6.3)
+    };
+
+    //! returns the framing that the value of the \c Transfer-Encoding field of an HTTP/1.x message gives its body
+    /** The field is a list of transfer codings, which can be given in more than one field line (\a te is then a list
+        of the values of the lines); empty elements are ignored, and the codings are compared without the whitespace
+        around them and without regard to case (RFC 9112 section 6.1, RFC 9110 section 5.6.1).  The chunked coding
+        must be the final coding and must be applied once; it has no parameters (RFC 9112 section 7).  A message body
+        with a coding other than chunked cannot be read, as the library implements no other transfer coding.
+
+        A response is never refused, as RFC 9112 section 6.3 requires of a client: its body is chunked if its final
+        coding is chunked without parameters (the codings before it are not decoded, and a repeated chunked coding,
+        as some intermediaries repeat the field of the origin server, is taken once); any other response body is
+        delimited by the end of the connection (\c CloseDelimited).
+
+        @param te the value of the field: a string, or a list of strings
+        @param desc set to why the framing is not \c Chunked
+        @param response true for a response, false for a request
+        @param only_chunked if not null, set to true if every coding of the field is the chunked coding
+
+        @return the framing of the message body
+    */
+    DLLLOCAL static HttpTransferCodingFraming getHttpTransferCodingFraming(QoreValue te, std::string& desc,
+            bool response, bool* only_chunked = nullptr) {
+        // the codings, in order
+        std::vector<std::string> codings;
+        auto add_value = [&codings](QoreValue v) {
+            QoreStringValueHelper str(v);
+            const char* p = str->c_str();
+            const char* end = p + str->size();
+            while (p <= end) {
+                const char* e = static_cast<const char*>(memchr(p, ',', end - p));
+                if (!e) {
+                    e = end;
+                }
+                const char* s = p;
+                const char* t = e;
+                while (s < t && (*s == ' ' || *s == '\t')) {
+                    ++s;
+                }
+                while (t > s && (t[-1] == ' ' || t[-1] == '\t')) {
+                    --t;
+                }
+                if (s < t) {
+                    codings.emplace_back(s, t - s);
+                }
+                p = e + 1;
+            }
+        };
+        if (te.getType() == NT_LIST) {
+            ConstListIterator li(te.get<const QoreListNode>());
+            while (li.next()) {
+                add_value(li.getValue());
+            }
+        } else {
+            add_value(te);
+        }
+
+        bool all_chunked = !codings.empty() && std::all_of(codings.begin(), codings.end(),
+            [](const std::string& c) { return !strcasecmp(c.c_str(), "chunked"); });
+        if (only_chunked) {
+            *only_chunked = all_chunked;
+        }
+        if (response) {
+            if (!codings.empty() && !strcasecmp(codings.back().c_str(), "chunked")) {
+                return HttpTransferCodingFraming::Chunked;
+            }
+            desc = "the final transfer coding of the response is not chunked";
+            return HttpTransferCodingFraming::CloseDelimited;
+        }
+        if (codings.empty()) {
+            desc = "the Transfer-Encoding field has no transfer coding";
+            return HttpTransferCodingFraming::Invalid;
+        }
+        const char* unsupported = nullptr;
+        for (size_t i = 0, e = codings.size(); i < e; ++i) {
+            const std::string& c = codings[i];
+            // the name of the coding, without any parameters
+            size_t n = c.find(';');
+            std::string name = c.substr(0, n);
+            while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) {
+                name.pop_back();
+            }
+            if (!strcasecmp(name.c_str(), "chunked")) {
+                if (n != std::string::npos) {
+                    desc = "the chunked transfer coding is given with a parameter";
+                    return HttpTransferCodingFraming::Invalid;
+                }
+                if (i != e - 1) {
+                    desc = "the chunked transfer coding is not the final transfer coding, or is given more than once";
+                    return HttpTransferCodingFraming::Invalid;
+                }
+            } else if (!unsupported) {
+                unsupported = c.c_str();
+            }
+        }
+        if (unsupported) {
+            desc = "the transfer coding \"";
+            desc += unsupported;
+            desc += "\" is not supported; only the chunked transfer coding is";
+            return HttpTransferCodingFraming::Unsupported;
+        }
+        return HttpTransferCodingFraming::Chunked;
+    }
+
+    //! returns true if a response with the given \c Transfer-Encoding field value has a chunked body
+    /** @see getHttpTransferCodingFraming()
+    */
+    DLLLOCAL static bool isHttpResponseBodyChunked(QoreValue te) {
+        std::string desc;
+        return !te.isNothing()
+            && getHttpTransferCodingFraming(te, desc, true) == HttpTransferCodingFraming::Chunked;
+    }
+
+    //! checks how the body of an HTTP/1.x message is framed (RFC 9112 section 6), after its header was parsed
+    /** A request with more than one \c Host field, or with a list in it, is refused with \c SOCKET-HTTP-ERROR
+        (RFC 9112 section 3.2).  A request whose body cannot be framed as every other recipient would frame it is
+        refused, so that the bytes that follow its header are never taken for another request:
+        - a request with both \c Transfer-Encoding and \c Content-Length (RFC 9112 section 6.3): \c SOCKET-HTTP-ERROR
+        - a \c Transfer-Encoding whose framing cannot be determined (chunked not the final coding, given more than
+          once or with a parameter, or no coding): \c SOCKET-HTTP-ERROR
+        - a \c Transfer-Encoding with a coding other than chunked: \c HTTP-UNSUPPORTED-TRANSFER-CODING
+
+        A response is never refused for its \c Transfer-Encoding (RFC 9112 section 6.3): a response with the status
+        1xx, 204 or 304 has no body; otherwise its body is chunked if its final coding is chunked, which overrides
+        any \c Content-Length, and is delimited by the end of the connection if not.
+
+        A message with a \c Transfer-Encoding of the chunked coding alone has its field given with the value
+        \c "chunked" (also when it was received in another case, with whitespace or in more than one field line), so
+        that every reader of the message finds the same framing; the \c "headers-raw" key of the information hash
+        has the value received.  A connection that receives an HTTP/1.0 request with a \c Transfer-Encoding is closed
+        after the request (RFC 9112 section 6.1).
+
+        @return 0 if the message can be read, -1 if an exception was raised
+    */
+    DLLLOCAL int checkHttpMessageFraming(ExceptionSink* xsink, QoreHashNode& h, QoreHashNode& fields, int flags,
+            bool& close) {
+        // a request has one Host field, whose value is one host (RFC 9112 section 3.2): a server or an intermediary
+        // that took another one than this one would apply the request to another target
+        if (flags & CHF_REQUEST) {
+            QoreValue host = fields.getKeyValue("host");
+            if (host.getType() == NT_LIST) {
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with more than one "
+                    "Host field (RFC 9112 section 3.2)");
+                return -1;
+            }
+            if (host.getType() == NT_STRING) {
+                QoreStringValueHelper str(host);
+                if (strchr(str->c_str(), ',')) {
+                    xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with a list "
+                        "of hosts in the Host field (RFC 9112 section 3.2)");
+                    return -1;
+                }
+            }
+        }
+        QoreValue te = fields.getKeyValue("transfer-encoding");
+        if (te.isNothing()) {
+            return 0;
+        }
+        bool request = flags & CHF_REQUEST;
+        if (!request) {
+            // a response with one of these statuses has no body, whatever its fields say
+            int64 status = h.getKeyValue("status_code").getAsBigInt();
+            if ((status >= 100 && status < 200) || status == 204 || status == 304) {
+                return 0;
+            }
+        }
+        if (request && !fields.getKeyValue("content-length").isNothing()) {
+            xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received with both "
+                "Transfer-Encoding and Content-Length (RFC 9112 section 6.3)");
+            return -1;
+        }
+        std::string desc;
+        bool only_chunked = false;
+        switch (getHttpTransferCodingFraming(te, desc, !request, &only_chunked)) {
+            case HttpTransferCodingFraming::Invalid:
+                xsink->raiseException("SOCKET-HTTP-ERROR", "invalid HTTP request header received: %s (RFC 9112 "
+                    "section 6.3)", desc.c_str());
+                return -1;
+            case HttpTransferCodingFraming::Unsupported:
+                xsink->raiseException("HTTP-UNSUPPORTED-TRANSFER-CODING", "HTTP request header received with an "
+                    "unsupported Transfer-Encoding: %s (RFC 9112 section 6.1)", desc.c_str());
+                return -1;
+            case HttpTransferCodingFraming::CloseDelimited:
+                // the body of the response ends when the connection is closed
+                return 0;
+            case HttpTransferCodingFraming::Chunked:
+                break;
+        }
+        http_exp_chunked_body = true;
+        // the value is given as "chunked", where it is given, if it has no other coding
+        if (only_chunked) {
+            bool normalized = false;
+            if (te.getType() == NT_STRING) {
+                // note: the value can be held in inline short string storage, which the value helper reads
+                QoreStringValueHelper str(te);
+                normalized = !strcmp(str->c_str(), "chunked");
+            }
+            if (!normalized) {
+                fields.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+                if (!h.getKeyValue("transfer-encoding").isNothing()) {
+                    h.setKeyValue("transfer-encoding", new QoreStringNode("chunked"), nullptr);
+                }
+            }
+        }
+        // a recipient of an HTTP/1.0 message with a Transfer-Encoding closes the connection after it
+        if (request && !(flags & CHF_HTTP11)) {
+            close = true;
+        }
+        return 0;
+    }
+
+    //! checks the status line at the start of the header of an HTTP/1.x response (qore#7485)
+    /** The line must be <tt>HTTP-version SP status-code [ SP [ reason-phrase ] ]</tt>:
+        <tt>HTTP-version = "HTTP/" DIGIT "." DIGIT</tt>, a single space, a status code of exactly three digits in the
+        range 100 - 599 (RFC 9110 section 15: other values are invalid), and either the end of the line or a space and
+        a reason phrase of <tt>HTAB / SP / VCHAR / obs-text</tt>, which can be empty; nothing can precede the version,
+        not even whitespace or an empty line.  The line ends with LF, which a CR can precede.  RFC 9112 section 4
+        requires the space after the status code, but a line that ends right after the code is unambiguous, and is
+        accepted, as other clients do, since servers send it.
+
+        @param xsink for the \c SOCKET-HTTP-ERROR exception raised for an invalid status line
+        @param str the header, which the first line of is checked
+
+        @return 0 if the status line is valid, -1 if not, with an exception raised
+    */
+    DLLLOCAL static int checkHttpStatusLine(ExceptionSink* xsink, const char* str) {
+        assert(str);
+        const char* lf = strchr(str, '\n');
+        size_t len = lf ? static_cast<size_t>(lf - str) : strlen(str);
+        if (len && str[len - 1] == '\r') {
+            --len;
+        }
+        // a line terminator or the end of the string is neither a digit nor a space, so each test below stops at the
+        // end of a shorter line
+        auto is_digit = [](char c) -> bool { return c >= '0' && c <= '9'; };
+        const char* why = nullptr;
+        if (strncmp(str, "HTTP/", 5) || !is_digit(str[5]) || str[6] != '.' || !is_digit(str[7]) || str[8] != ' ') {
+            why = "it does not start with an HTTP version (\"HTTP/\" DIGIT \".\" DIGIT) followed by a space";
+        } else if (!is_digit(str[9]) || !is_digit(str[10]) || !is_digit(str[11]) || len < 12
+                || (len > 12 && str[12] != ' ')) {
+            why = "the status code is not three digits followed by a space or the end of the line";
+        } else {
+            int code = (str[9] - '0') * 100 + (str[10] - '0') * 10 + (str[11] - '0');
+            if (code < 100 || code > 599) {
+                why = "the status code is not in the range 100 - 599";
+            } else {
+                for (size_t i = 13; i < len; ++i) {
+                    unsigned char c = static_cast<unsigned char>(str[i]);
+                    if ((c < 0x20 && c != '\t') || c == 0x7f) {
+                        why = "the reason phrase has a control character";
+                        break;
+                    }
+                }
+            }
+        }
+        if (!why) {
+            return 0;
+        }
+        // the start of the line is given in the argument of the exception, with its non-printable bytes escaped; it
+        // is not given in the description, which a client checks for text of its own (such as for a closed
+        // connection, which is retried)
+        xsink->raiseExceptionArg("SOCKET-HTTP-ERROR", getHttpLineArg(str, len), "invalid HTTP response status line received: %s; "
+            "expecting \"HTTP/<digit>.<digit> <status code 100 - 599> <reason phrase>\" (RFC 9112 section 4)", why);
+        return -1;
+    }
+
     //! processes a header string to a hash and raises socket events
+    /** @param xsink for any exception raised
+        @param hdr the header string
+        @param info an optional hash for header information
+        @param source the event source
+        @param headers_raw_key the key of the fields with their original names in \a info
+        @param expect_response true if the header must be that of a response, as an HTTP client reads (qore#7485): its
+        first line is checked as a status line (see checkHttpStatusLine()) whatever it starts with; when false, a
+        header that starts with \c "HTTP/" is a response, whose status line is checked alike, and any other is a request
+    */
     DLLLOCAL QoreHashNode* processHttpHeaderString(ExceptionSink* xsink, QoreStringNodeHolder& hdr,
-            QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw") {
+            QoreHashNode* info, int source, const char* headers_raw_key = "headers-raw",
+            bool expect_response = false) {
+        // the rest of a chunked body that was not read to its end would be taken for this header (issue 7417)
+        if (checkHttpChunkedBodyFinished(xsink)) {
+            return nullptr;
+        }
         // the header is parsed as a C string, which a NUL character would end: the header lines after it, such as
         // Content-Length or Transfer-Encoding, would be lost silently, and the rest of the message read as the body
         // or as another message, so a header with a NUL character is refused
@@ -4209,9 +5398,21 @@ public:
             return nullptr;
         }
         // the field lines are checked as RFC 9112 requires; an obsolete line folding is refused in a request and
-        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2)
-        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, strncmp(hdr->c_str(), "HTTP/", 5) != 0,
-                "SOCKET-HTTP-ERROR", "header")) {
+        // replaced with spaces in a response, which a user agent must do (RFC 9112 section 5.2); the readers end a
+        // header at its first empty line, where a line ends with LF, which a CR can precede (qore#7491); a line of a
+        // response can end with LF, which a recipient may accept (RFC 9112 section 2.2), while a line of a request
+        // that ends with a bare LF is refused (HttpServer answers 400 and closes the connection), as a server that
+        // takes the end of a request where another recipient does not would let a request be smuggled; text after
+        // the first empty line of any header is refused
+        bool is_request = !expect_response && strncmp(hdr->c_str(), "HTTP/", 5) != 0;
+        // the status line of a response is checked first (qore#7485): one that is not valid, such as one with other
+        // data before it or a status code that is not three digits, would be read as a request line, or give a wrong
+        // status code
+        if (!is_request && checkHttpStatusLine(xsink, hdr->c_str())) {
+            return nullptr;
+        }
+        if (checkHttpFieldLines(xsink, const_cast<char*>(hdr->c_str()), true, is_request, "SOCKET-HTTP-ERROR",
+                "header", is_request, true)) {
             return nullptr;
         }
         const char* buf = hdr->c_str();
@@ -4309,8 +5510,12 @@ public:
         // (qore#6761)
         QoreHashNode* fields = new QoreHashNode(autoTypeInfo);
         h->setKeyValue("headers", fields, nullptr);
-        bool close = convertHeaderToHash(*h, p, flags, info, &http_exp_chunked_body, headers_raw_key, fields,
+        bool close = convertHeaderToHash(*h, p, flags, info, nullptr, headers_raw_key, fields,
             http_fields_at_top_level.load(std::memory_order_relaxed));
+        // the framing of the body is checked once the fields are known (RFC 9112 section 6)
+        if (checkHttpMessageFraming(xsink, **h, *fields, flags, close)) {
+            return nullptr;
+        }
         do_read_http_header(QORE_EVENT_HTTP_MESSAGE_RECEIVED, *h, source);
 
         // process header info
@@ -4820,6 +6025,115 @@ public:
         return http_exp_chunked_body && sock != QORE_INVALID_SOCKET;
     }
 
+    //! Called when the read of a chunked body starts: the body is no longer pending, and it is unfinished until
+    //! the read reaches its end (finishHttpChunkedBodyRead())
+    DLLLOCAL void startHttpChunkedBodyRead() {
+        if (http_exp_chunked_body) {
+            http_exp_chunked_body = false;
+        }
+        http_chunked_body_unfinished = true;
+    }
+
+    //! Called when the read of a chunked body has read the end of the body (the last chunk and the trailer section)
+    DLLLOCAL void finishHttpChunkedBodyRead() {
+        if (http_chunked_body_unfinished) {
+            http_chunked_body_unfinished = false;
+        }
+    }
+
+    //! Returns true if the read of a chunked body started on the connection and stopped before the end of the body
+    DLLLOCAL bool unfinishedHttpChunkedBody() const {
+        return http_chunked_body_unfinished && sock != QORE_INVALID_SOCKET;
+    }
+
+    //! Raises an exception and returns -1 if a header cannot be read, because a chunked body read on the connection
+    //! stopped before its end: the rest of the body would be taken for the header (issue 7417)
+    DLLLOCAL int checkHttpChunkedBodyFinished(ExceptionSink* xsink) const {
+        if (!http_chunked_body_unfinished) {
+            return 0;
+        }
+        xsink->raiseException("SOCKET-HTTP-ERROR", "cannot read an HTTP header: the read of a chunked message body "
+            "on this connection stopped before the end of the body, whose rest cannot be told apart from the next "
+            "message; the connection must be closed");
+        return -1;
+    }
+
+    //! Returns the size of a line of a chunked body read up to its line end, without the line end
+    /** Exactly one line end is removed (CRLF, or a bare LF), so that every reader of a chunked body takes a line in
+        the same way: any other CR or LF stays in the line, where it is refused (issue 7417)
+    */
+    DLLLOCAL static size_t httpLinePayloadSize(const char* str, size_t len) {
+        if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
+            return len - 2;
+        }
+        if (len && str[len - 1] == '\n') {
+            return len - 1;
+        }
+        return len;
+    }
+
+    //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
+    /** The size is one or more hexadecimal digits, which whitespace and a chunk extension can follow; any other
+        value is refused, as a reader that took it otherwise than the sender's other readers would find the end of
+        the chunk elsewhere (issue 7417)
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink) {
+        size_t i = 0;
+        // whitespace around the size is tolerated, as it cannot change the size
+        while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+            ++i;
+        }
+        size_t start = i;
+        uint64_t size = 0;
+        // the largest size whose chunk can be read with its line end
+        const uint64_t max_size = static_cast<uint64_t>(std::numeric_limits<ssize_t>::max() - 2);
+        bool overflow = false;
+        for (; i < len; ++i) {
+            int v;
+            char c = line[i];
+            if (c >= '0' && c <= '9') {
+                v = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                v = c - 'a' + 10;
+            } else if (c >= 'A' && c <= 'F') {
+                v = c - 'A' + 10;
+            } else {
+                break;
+            }
+            if (size > (max_size >> 4)) {
+                overflow = true;
+            } else {
+                size = (size << 4) | static_cast<uint64_t>(v);
+            }
+        }
+        size_t digits = i - start;
+        size_t digits_end = i;
+        // bad whitespace before a chunk extension (RFC 9112 section 7.1.1)
+        while (i < len && (line[i] == ' ' || line[i] == '\t')) {
+            ++i;
+        }
+        if (!digits || (i < len && line[i] != ';')) {
+            QoreString val(line, len);
+            if (!len || (!digits && i == len)) {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "empty value given for chunk size");
+            } else {
+                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid value given for chunk size ('%s')",
+                    val.c_str());
+            }
+            return -1;
+        }
+        if (overflow || size > max_size) {
+            QoreString val(line + start, digits_end - start);
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size 0x%s exceeds the maximum supported size",
+                val.c_str());
+            return -1;
+        }
+        chunk_size = static_cast<int64_t>(size);
+        return 0;
+    }
+
     //! Advances the TLS state generation; called after every change of the TLS state (see @ref tls_state_gen)
     DLLLOCAL void advanceTlsStateGen() {
         tls_state_gen.fetch_add(1, std::memory_order_acq_rel);
@@ -4891,6 +6205,9 @@ public:
         sock.priv->getUsageInfo(h, *s.priv);
     }
 
+    //! Returns the bytes in the send buffer of \a fd that the peer has not acknowledged, or 0 if unknown
+    DLLLOCAL static int64 getUnacknowledgedBytes(int fd);
+
     DLLLOCAL static qore_socket_private* get(QoreSocket& sock) {
         return sock.priv;
     }
@@ -4921,6 +6238,75 @@ DLLLOCAL extern std::atomic<bool> qore_dbg_connect_no_immediate_check;
     loopback connection has only after connect() has returned (see SocketConnectInetHappyEyeballsPollState::continuePoll())
 */
 DLLLOCAL extern std::atomic<bool> qore_dbg_connect_complete_before_immediate_check;
+
+//! Debug builds: if set, called by a happy-eyeballs connect step right before it checks its attempts
+/** For the C++ unit tests of a close of the socket by another thread while the step runs (it holds the lock of the
+    connect operation, not the socket's @ref qore_socket_private::close_m): see
+    SocketConnectInetHappyEyeballsPollState::continuePoll()
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_check_attempts;
+//! Debug builds: if set, called by a happy-eyeballs connect step right after it checked that the socket was not
+//! closed, before it checks its attempts
+/** For the C++ unit tests of a close by another thread that lands after the step's check of the socket
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_socket_check;
+
+//! Debug builds: if set, called by a happy-eyeballs connect step right before the socket takes the winning attempt's
+//! descriptor over
+/** For the C++ unit tests of a close of the socket by another thread after the step has checked that the socket was not
+    closed (see SocketConnectInetHappyEyeballsPollState::assignWinner())
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_assign_winner;
+
+//! Debug builds: if set, called by a happy-eyeballs connection right before it gives the socket a descriptor
+/** With the place: 1 the winner when the socket has none, 2 the winner replacing the socket's descriptor, 3 another
+    attempt replacing the descriptor of a failed attempt, 4 the first attempt in progress; for the C++ unit tests of a
+    close of the socket between the connection's check and the adoption, which the adoption refuses with the socket's
+    close lock held (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_connect_before_adopt;
+
+//! Debug builds: if set, called by a happy-eyeballs connection step while it resolves the host
+/** For the C++ unit tests of a close of the socket while the connection has no descriptor yet (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_in_resolve;
+
+//! Debug builds: if true, the next check of the attempt that the socket took over fails (ECONNREFUSED) once another
+//! attempt is in progress; reset when it is used
+/** For the C++ unit tests of the replacement of a failed attempt's descriptor by another attempt's (qore#7003)
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_connect_fail_held_attempt;
+
+//! Debug builds: if set, called by a UNIX socket connection right before it gives the socket its descriptor
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_adopt;
+
+//! Debug builds: if set, called by the check of a UNIX socket connection with the descriptor that it uses
+/** For the C++ unit tests of a close of the socket by another thread while the check uses it (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)(int)> qore_dbg_unix_connect_before_check;
+
+//! Debug builds: if set, called by a UNIX socket connection after its check and before the connection's state is set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_before_connected;
+
+//! Debug builds: if set, called by a UNIX socket connection after its state was set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7156)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_unix_connect_after_connected;
+
+//! Debug builds: if set, called by a happy-eyeballs connection after the socket took the winner's descriptor and
+//! before the connection's state is set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_before_connected;
+
+//! Debug builds: if set, called by a happy-eyeballs connection after its state was set
+/** For the C++ unit tests of a close of the socket by another thread at that point (qore#7003)
+*/
+DLLLOCAL extern std::atomic<void (*)()> qore_dbg_connect_after_connected;
 
 #ifndef _Q_WINDOWS
 //! Debug builds: if not 0, the connect checked fails with this error after its pending error was read as 0

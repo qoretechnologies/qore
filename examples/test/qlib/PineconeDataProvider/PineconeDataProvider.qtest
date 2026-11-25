@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -62,9 +63,10 @@ public class PineconeDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("PineconeDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.PINECONE_CONNECTION;
+        conn_name = LiveProvider::get("pinecone", "PINECONE_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("the manifests agree with the pinned schemas", \schemaTest());
         addTestCase("every action publishes a usable form", \actionShapeTest());
         addTestCase("action presentation", \actionPresentationTest());
@@ -88,6 +90,24 @@ public class PineconeDataProviderTest inherits QUnit::Test {
         printOption("-c,--connection=ARG",
             "set the Pinecone connection name; without it (and without the PINECONE_CONNECTION "
             "environment variable) the live tests are skipped", OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("describe-index-stats", "query-vectors", "fetch-vectors-by-metadata", "search-records", "search-documents", "fetch-documents", "list-documents", "embed", "rerank",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Pinecone", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("upsert-vectors", "delete-vectors", "update-documents", "start-import",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Pinecone", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {
@@ -484,6 +504,7 @@ public class PineconeDataProviderTest inherits QUnit::Test {
         would reject.  Measured before the fix: an invalid key answered ok in 5356 microseconds.
     */
     private livePingTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Pinecone connection ping failed: %s", ping.info ?? "no info"));
@@ -498,6 +519,7 @@ public class PineconeDataProviderTest inherits QUnit::Test {
 
     #! Reads the control-plane listings and the model catalogue that back the dropdowns
     private liveReadTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractDataProvider prov = get_connection(conn_name).getDataProvider();
 
         # an empty project is the normal case here; what is being checked is that each listing resolves
@@ -534,6 +556,7 @@ public class PineconeDataProviderTest inherits QUnit::Test {
         Creation is asynchronous, so "describe-index" is polled until the index reports itself ready.
     */
     private liveIndexTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractDataProvider prov = get_connection(conn_name).getDataProvider();
         string idx = sprintf("qore-test-%d", now_us().getEpochMicroseconds() % 1000000);
         string ns = "qore-test-ns";

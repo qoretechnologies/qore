@@ -326,6 +326,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     /** Creates the connection object, registers it, wires it to an HttpSseStreamPollOperation,
         and calls the registered/connectionRegisteredImpl hooks.
 
+        The HTTP server does not call this method for a handler that gets the socket of its request (see
+        @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView()), which gets no connection socket:
+        it calls @ref setupAsyncSseConnectionForRequest() instead.
+
         @param sock the socket for the SSE connection
         @param cx call context hash; the HTTP server sets \c sse_max_buffer_size in it to the bound of the listener,
         which applies to the stream unless the handler sets its own (see @ref setSseMaxBufferSize())
@@ -357,6 +361,41 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         registerAndInvokeHooks(conn, cid, hdr);
 
         return poll_op;
+    }
+
+    #! Sets up the async SSE connection of an HTTP/1.x request whose handler gets the socket of its request
+    /** The HTTP server calls this method instead of @ref setupAsyncSseConnection() for a handler that gets the socket
+        of its request (see @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView()): the server makes
+        the stream's poll operation from the connection's socket itself and keeps it, so that neither the handler,
+        its connection object nor its event source gets the connection's socket.  The method applies the handler's
+        heartbeat and buffer bound to the stream, creates the connection with the socket of the request (whose
+        methods give the connection's information only) and registers it.
+
+        The method is final, so that a subclass cannot change how the connection is set up; a handler customizes its
+        connection with @ref getConnectionImpl() and @ref connectionRegisteredImpl() as with
+        @ref setupAsyncSseConnection().
+
+        @param sock the socket of the request, which the connection object gets
+        @param cx call context hash; the HTTP server sets \c sse_max_buffer_size in it to the bound of the listener,
+        which applies to the stream unless the handler sets its own (see @ref setSseMaxBufferSize())
+        @param hdr incoming request headers
+        @param cid connection ID (typically cx.id)
+        @param sse_conn the stream, made by the server; it gives no poll operation
+        (see @ref HttpServerAsyncIo::Http1SseConnection::getPollOperation())
+
+        @since %ServerSentEventHandler 1.2
+    */
+    final nothing setupAsyncSseConnectionForRequest(Socket sock, hash<auto> cx, hash<auto> hdr, string cid,
+            HttpServerAsyncIo::Http1SseConnection sse_conn) {
+        logDebug("ServerSentEventHandler::setupAsyncSseConnectionForRequest() cid: %y", cid);
+
+        sse_conn.setHeartbeat(heartbeat * 1000, heartbeat_msg);
+        configureSseStream(sse_conn, cx, cid);
+
+        ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
+        conn.setAsyncSseConnection(sse_conn);
+
+        registerAndInvokeHooks(conn, cid, hdr);
     }
 
     #! Sets up an async SSE connection on an HTTP/2 stream
@@ -471,8 +510,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             registerNewConnectionIntern(cid, conn);
         }
 
-        if (hdr."last-event-id".val()) {
-            replayEventsSince(conn, hdr."last-event-id");
+        if (http_get_field(hdr, "last-event-id").val()) {
+            replayEventsSince(conn, http_get_field(hdr, "last-event-id"));
         }
 
         try {

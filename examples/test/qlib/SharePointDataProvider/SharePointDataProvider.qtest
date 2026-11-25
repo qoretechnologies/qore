@@ -200,6 +200,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
     constructor() : Test("SharePointDataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("sanity", \sanityTest());
         addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("read-only actions", \readOnlyActionsTest());
         addTestCase("file API registration", \fileApiTest());
         addTestCase("connection scheme", \connectionSchemeTest());
         addTestCase("data types", \dataTypesTest());
@@ -258,6 +259,26 @@ public class SharePointDataProviderTest inherits QUnit::Test {
 
         assertEq("SharePoint", SharePointDataProvider::AppName);
         assertEq("sharepoint", ApiProfile, "the client profile the module pins");
+    }
+
+    #! the actions that only read declare that they change nothing, and the write actions still do (qore#7454)
+    readOnlyActionsTest() {
+        checkModule();
+        # each of these makes only GET requests and stores nothing
+        foreach string name in (("get-site", "get-drive-info", "get-item", "download-file", "get-list",
+                "get-list-item")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction("SharePoint", name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # the write actions keep the default of an API action, which changes state
+        foreach string name in (("upload-file", "delete-item", "create-list-item", "create-sharing-link")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction("SharePoint", name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     actionCatalogTest() {
@@ -1068,6 +1089,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
             testSkip("no connection specified; use -c <connection_name>");
             return;
         }
+        # live-provider-optin: the connection name comes only from the test's own command line (-c)
         return get_connection(conn_name);
     }
 

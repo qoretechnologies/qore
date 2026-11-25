@@ -44,6 +44,14 @@ public class Http1ClientConnection inherits HttpClientConnection {
         #! Cached socket reference — must return the same object on every call
         #! so the AsyncIoController's obj_to_sock_hash lookup works correctly
         Socket cached_socket;
+
+        #! The stream ID of the last streaming request on the connection that asked for a protocol upgrade
+        /** Its caller takes the socket over with @ref getSocket() (qore#7500)
+        */
+        *int upgrade_stream_id;
+
+        #! The stream ID of the upgrade request whose caller took the socket over with @ref getSocket() (qore#7500)
+        *int taken_over_stream_id;
     }
 
     #! Copying is not supported
@@ -63,22 +71,32 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, int max_streams = 1,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path)
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store)
             : HttpClientConnection(url_info, connect_timeout, logger,
                     Http1ClientConnection::validateMaxStreams(max_streams),
                     proxy_info) {
+        # the caller check comes first, before any code of a caller (such as the logger) runs (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         log(LoggerLevel::DEBUG, "creating HTTP/1.1 connection to %s:%d (ssl=%y proxy=%y mtls=%y)",
             url_info.host, url_info.port, url_info.protocol == "https",
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING,
             client_cert ? True : False);
 
+        HttpClientCallerExemption exemption();
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path);
+            ssl_verify_mode, accept_all_certs, proxy_info, self, client_cert, client_pk, ssl_ca_file, ssl_ca_path,
+            ssl_trust_store);
     }
 
     #! Enforces the HTTP/1.1 single-stream cap before the parent constructor runs.
@@ -106,7 +124,62 @@ public class Http1ClientConnection inherits HttpClientConnection {
     }
 
     #! Returns the underlying socket (cached for stable identity)
+    /** After a streaming request that asked for a protocol upgrade was submitted on the connection, its caller takes
+        the socket over with this call, which it makes when the request is answered with \c 101: the release of the
+        request's stream handle then leaves the connection to the caller (see @ref closeUnclaimedUpgrade()).  The
+        take-over is recorded also when the call comes before the \c 101 response has been fully processed, as it
+        does when the caller takes the socket as soon as it has the response header.
+    */
     Socket getSocket() {
+        {
+            AutoLock al(lock);
+            if (exists upgrade_stream_id) {
+                taken_over_stream_id = upgrade_stream_id;
+            }
+        }
+        return getSocketIntern();
+    }
+
+    #! Closes the connection of a request that asked for a protocol upgrade, unless the caller took its socket over
+    /** Called when the stream handle of a request that asked for a protocol upgrade with an \c Upgrade header is
+        released.  After a \c 101 response, the connection belongs to the caller of the request, who takes its socket
+        over with @ref getSocket() or closes it; a connection that the caller did neither for would keep its active
+        stream for the life of the connection manager, which never gives it to another request (qore#7500).  The
+        request is canceled, which closes the connection if the request is still active on it (it was answered with
+        \c 101, or its response has not been received yet); the connection manager then removes it from its pool.  A
+        connection whose socket the caller took over is left as it is.
+
+        @param stream_id the stream ID of the request
+
+        @since HttpClientIo 1.0
+    */
+    closeUnclaimedUpgrade(int stream_id) {
+        {
+            AutoLock al(lock);
+            if (taken_over_stream_id == stream_id) {
+                return;
+            }
+        }
+        if (poll_op.isClosed()) {
+            return;
+        }
+        log(LoggerLevel::DEBUG, "closing the connection of upgrade stream %d, whose handle was released without "
+            "the socket being taken over", stream_id);
+        cancelRequest(stream_id);
+    }
+
+    #! Returns @ref True if the request header fields have an \c Upgrade field, which asks for a protocol upgrade
+    static bool hasUpgradeHeader(*hash<auto> headers) {
+        foreach string key in (keys headers) {
+            if (key.lwr() == "upgrade") {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the underlying socket (cached for stable identity) without taking it over
+    private Socket getSocketIntern() {
         if (!cached_socket) {
             cached_socket = poll_op.getSocket();
         }
@@ -130,7 +203,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
         return sid;
     }
@@ -172,6 +245,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming, body_streaming, notifier,
             sse_install_eligible);
+        # the caller of a request that asks for an upgrade takes the socket over after a 101 response (qore#7500)
+        if (Http1ClientConnection::hasUpgradeHeader(headers)) {
+            AutoLock al(lock);
+            upgrade_stream_id = sid;
+        }
         # Wake the I/O controller so it processes the queued request
         *AsyncSocketIoController ctl;
         {
@@ -179,7 +257,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
         return sid;
     }
@@ -196,6 +274,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
         thread sends them, and the response chunks queue in the data channel
         until the caller reads them.
 
+        After a \c 101 response that the server sent before the request body was complete, the body is completed
+        (RFC 9110 section 7.8): the data given before the response is sent before the end of the response stream is
+        delivered, and the data given after it is written to the socket in the calling thread, each write bounded by
+        \a timeout_ms (qore#7503).
+
         @param stream_id the stream ID returned by \c submitRequestStreaming
             (kept for API parity with H2/H3 — H1 is single-stream and the
             value is currently advisory)
@@ -203,12 +286,16 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param end_stream if \c True, signal end-of-request-body — the
             poll op writes the final \c "0\\r\\n" terminator and any
             trailers; the response continues to be read to completion
+        @param timeout_ms the time to wait for a write of the request body in the calling thread after a \c 101
+            response; a negative value means no limit
 
         @throw HTTP1-STATE-ERROR if the connection is not READY
+        @throw HTTPCLIENT-STATE-ERROR data is given after the end of the request body, or after a \c 101 response
+            with which the request body was complete or could not be completed
 
         @since %Qore 3.0
     */
-    sendStreamData(int stream_id, data data, bool end_stream = False) {
+    sendStreamData(int stream_id, data data, bool end_stream = False, timeout timeout_ms = -1) {
         if (!self.isReady()) {
             throw "HTTP1-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
@@ -222,13 +309,13 @@ public class Http1ClientConnection inherits HttpClientConnection {
         log(LoggerLevel::DEBUG,
             "sending data on H1 stream %d (end_stream=%y)", stream_id, end_stream);
         if (data.size() > 0) {
-            poll_op.pushSendData(data);
+            poll_op.pushSendData(data, timeout_ms);
         }
         if (end_stream) {
-            poll_op.pushSendData();  # NOTHING = EOF sentinel
+            poll_op.pushSendData(NOTHING, timeout_ms);  # NOTHING = EOF sentinel
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
     }
 
@@ -284,7 +371,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getSocket());
+            ctl.wakeSocket(sock: getSocketIntern());
         }
         return sid;
     }
@@ -296,6 +383,8 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
+        # a close whose caller gave no reason (qore#7443)
+        setCloseReason("closed");
         self.setClosed();
         *AsyncSocketIoController ctl;
         {
@@ -304,7 +393,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(sock: self.getSocket());
+                ctl.cancelAndClose(sock: getSocketIntern());
             } catch () {
                 # Ignore close errors during close
             }
@@ -316,7 +405,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             }
         }
         try {
-            self.getSocket().close();
+            getSocketIntern().close();
         } catch () {
             # Ignore close errors during close
         }

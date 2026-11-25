@@ -198,11 +198,10 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
             "closure-member": "secret-code",
             "copy": "secret",
             "keys": "pub,n,s,cb",
-            # hash() and ObjectKeyIterator are builtin code, which reads the object without the reader's class
-            # context, so the public members only
-            "cast": "pub",
+            # hash() and ObjectKeyIterator read the object in the class context of the code that calls them
+            "cast": "pub,n,s,cb",
             "plus": "pub,n,s,cb",
-            "iterator": "pub",
+            "iterator": "pub,n,s,cb",
             "slice": "pub,s",
             "last-key": "cb",
             "format": "secret",
@@ -299,7 +298,8 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         assertEq(Refused, a.callFunction("run_all", b_obj, count), mode + ": A on B's object");
         assertEq("hidden", a.callFunction("format_object", host_obj), mode + ": A formats the host's object");
         assertEq("pub|1|1", a.callFunction("names_object", host_obj), mode + ": A on the host's object's names");
-        assertEq("pub,n,s,cb|4|4", a.callFunction("names_object", a.callFunction("make_target")),
+        # outside of a class, the public members only, also of its own object (qore#7048)
+        assertEq("pub|1|1", a.callFunction("names_object", a.callFunction("make_target")),
             mode + ": A on its own object's names");
         assertEq(Refused, a.callFunction("run_all_background", host_obj), mode + ": A's thread");
 
@@ -334,7 +334,8 @@ class SandboxPrivateMemberReadTest inherits QUnit::Test {
         assertEq(Owned, t.callFunction("run_all", host_obj), "trusted code on the host's object");
         assertEq(Owned, t.callFunction("run_all", a_obj), "trusted code on a tenant's object");
         assertEq("secret", t.callFunction("format_object", a_obj), "trusted code formats a tenant's object");
-        assertEq("pub,n,s,cb|4|4", t.callFunction("names_object", host_obj), "trusted code on the names");
+        # outside of a class, the public members only (qore#7048)
+        assertEq("pub|1|1", t.callFunction("names_object", host_obj), "trusted code on the names");
         # the trusted copy of a tenant's object stays the tenant's
         assertEq(Owned, a.callFunction("run_all", a_obj.copy()), "a tenant on a trusted copy of its object");
     }

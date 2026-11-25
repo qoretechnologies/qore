@@ -1236,7 +1236,7 @@ static bool isAOTNonOverridableMethodTarget(const QoreClass* qc,
     if (qc && qc->isFinal()) {
         return true;
     }
-    if (q_env_is_set("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
         return false;
     }
     const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
@@ -2317,7 +2317,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
         ? target_triple : QoreAOT::getDefaultTargetTriple());
     add("opt-level", std::to_string(opt_level));
     add("include-source", include_source ? "true" : "false");
-    add("debug-info", q_env_is_set("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
+    add("debug-info", QORE_ENV_IS_SET("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
     QoreEnvironmentValue big_fn_holder("QORE_AOT_BIG_FN_THRESHOLD");
     const char* big_fn = big_fn_holder.c_str();
     add("big-fn-threshold", big_fn ? big_fn : "");
@@ -2366,7 +2366,7 @@ static constexpr const char* QCC_CODE_BODY_DESC = "Qore code variants";
 static bool qccAOTVerbose() {
     QoreEnvironmentValue verbose_holder("QORE_AOT_VERBOSE");
     const char* verbose = verbose_holder.c_str();
-    return debug > 0 || (verbose && *verbose && strcmp(verbose, "0")) || q_env_is_set("QORE_AOT_DEBUG");
+    return debug > 0 || (verbose && *verbose && strcmp(verbose, "0")) || QORE_ENV_IS_SET("QORE_AOT_DEBUG");
 }
 
 static std::string qccTargetTriple(const char* target_triple) {
@@ -2776,7 +2776,7 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
     for (auto& cf : compiled_funcs) {
         if (cf.slot_ids.has_unsupported_exprs) {
             ++unsupported_count;
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: function '%s' is missing required AOT metadata (unsupported exprs)\n",
                     cf.name.c_str());
             }
@@ -3033,7 +3033,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         lowering.setSelfLocal(sig->selfid);
     }
     if (!lowering.lowerStatementBlock(statements, error)) {
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());
         }
         delete ir_func;
@@ -3049,7 +3049,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         builder.createReturnNothing();
     }
     if (!QoreIRVerifier::verify(*ir_func, error)) {
-        if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
             fprintf(stderr, "=== FAILED IR for %s ===\n", name);
             QoreIRPrinter::print(*ir_func, std::cerr);
             fprintf(stderr, "=== VERIFY ERROR: %s ===\n", error.c_str());
@@ -3067,7 +3067,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     ir_func->computeSlotIdsAndEmbed();
     std::string handler_error;
     if (lowering.compileAllHandlerIRs(handler_error) < 0) {
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: handler IR compilation failed for '%s': %s\n",
                     name, handler_error.c_str());
         }
@@ -3116,7 +3116,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     fold_context.pgm = pgm;
     qore_ir_optimize(*ir_func, &optimization_stats, !preserve_outline_regions, fold_context);
     if (!QoreIRVerifier::verify(*ir_func, error)) {
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: optimized IR verification failed for '%s': %s\n",
                 name, error.c_str());
         }
@@ -3124,7 +3124,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         ir_func = nullptr;
         return -1;
     }
-    if (q_env_is_set("QORE_IR_OPT_STATS")) {
+    if (QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu return-checks-elided=%zu constant-loads=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
@@ -3301,7 +3301,7 @@ static std::vector<std::vector<int>> collectOperandSubgraphs(
     //      resolve within the range or to external values (params /
     //      outer locals — init-exprs have none in practice).  Any
     //      back-ref into an earlier operand's range blocks outlining.
-    const bool dbg = q_env_is_set("QORE_AOT_DEBUG");
+    const bool dbg = QORE_ENV_IS_SET("QORE_AOT_DEBUG");
     const auto& instrs = block->instructions;
     auto* agg = instrs[agg_idx].get();
     std::vector<std::vector<int>> subgraphs(agg->operands.size());
@@ -3458,7 +3458,7 @@ static bool outlineInitExpression(QoreIRFunction* outer,
     constexpr size_t MIN_TOTAL_INSTS = 20;   //!< outer must have >=N total instructions
     constexpr size_t MIN_SUBGRAPH_SIZE = 3;  //!< each outlined subgraph must have >=N instructions
 
-    const bool dbg = q_env_is_set("QORE_AOT_DEBUG");
+    const bool dbg = QORE_ENV_IS_SET("QORE_AOT_DEBUG");
     if (outer->blocks.size() != 1) {
         if (dbg) fprintf(stderr, "AOT-OUTLINE: '%s' skipped: multi-block (%zu)\n",
                 outer_name.c_str(), outer->blocks.size());
@@ -3636,7 +3636,7 @@ static bool outlineInitExpression(QoreIRFunction* outer,
         }
     }
 
-    if (q_env_is_set("QORE_AOT_DEBUG")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT-OUTLINE: '%s' outlined %zu/%zu operands "
                 "(%zu helper instructions extracted)\n",
                 outer_name.c_str(), outlined_count,
@@ -4088,7 +4088,7 @@ public:
     bool analyze(const QoreIRFunction& fn, std::vector<AOTFnOutlineRegion>& regions,
             bool emit_debug = true) {
         const AOTFnOutlineTunables& tun = aotFnOutlineTunables();
-        const bool dbg = emit_debug && q_env_is_set("QORE_AOT_DEBUG");
+        const bool dbg = emit_debug && QORE_ENV_IS_SET("QORE_AOT_DEBUG");
         size_t n = fn.blocks.size();
         if (n < 3) {
             return false;
@@ -5058,7 +5058,7 @@ public:
 
     //! Analyze and transform; returns true when the function was outlined.
     bool run(QoreIRFunction* func, bool emit_debug = true) {
-        const bool dbg = emit_debug && q_env_is_set("QORE_AOT_DEBUG");
+        const bool dbg = emit_debug && QORE_ENV_IS_SET("QORE_AOT_DEBUG");
         const AOTFnOutlineTunables& tun = aotFnOutlineTunables();
         if (!tun.enabled || !tun.transform) {
             return false;
@@ -5979,10 +5979,10 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, bool preserve_debug_calls,
         llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
-    const bool dbg = q_env_is_set("QORE_AOT_DEBUG");
+    const bool dbg = QORE_ENV_IS_SET("QORE_AOT_DEBUG");
     for (auto& h : helpers) {
         QoreIRFunction* helper = h.ir_func.get();
-        if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
             fprintf(stderr, "=== IR for %s ===\n", helper->name.c_str());
             QoreIRPrinter::print(*helper, std::cerr);
             fprintf(stderr, "=================\n");
@@ -6027,7 +6027,7 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     // Lower the init expression to IR and return its value
     QoreIRValue result = lowering.lowerExpression(init_expr, error);
     if (!result.isValid()) {
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: init expression lowering failed for '%s': %s\n",
                 name, error.c_str());
         }
@@ -6040,7 +6040,7 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     builder.createReturn(result);
 
     if (!QoreIRVerifier::verify(*ir_func, error)) {
-        if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
             fprintf(stderr, "=== FAILED IR for init %s ===\n", name);
             QoreIRPrinter::print(*ir_func, std::cerr);
             fprintf(stderr, "=== VERIFY ERROR: %s ===\n", error.c_str());
@@ -6218,7 +6218,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     const QoreFunction* source_qf = nullptr;
     UserVariantBase* uvb = getModuleInitUserVariant(init_c, mod_name, module_path, source_qf, error);
     if (!uvb) {
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT: %s\n", error.c_str());
         }
         return false;
@@ -6234,7 +6234,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
             source_qf, nullptr, nullptr, const_reverse_map) != 0 || !ir_func) {
         error = makeModuleInitCompileError(mod_name, module_path,
             "IR lowering failed for '" + init_name + "': " + lower_error);
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT: %s\n", error.c_str());
         }
         return false;
@@ -6256,7 +6256,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-    if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
         fprintf(stderr, "=== IR for module init %s ===\n", init_name.c_str());
         QoreIRPrinter::print(*ir_func, std::cerr);
         fprintf(stderr, "=================\n");
@@ -6267,7 +6267,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     if (!ok) {
         error = makeModuleInitCompileError(mod_name, module_path,
             "LLVM lowering failed for '" + init_name + "': " + llvm_error);
-        if (q_env_is_set("QORE_AOT_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT: %s\n", error.c_str());
         }
         delete ir_func;
@@ -6292,7 +6292,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.item_name = module_path ? module_path : "";
 
     compiled_init_funcs.push_back(std::move(cif));
-    if (q_env_is_set("QORE_AOT_DEBUG")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: compiled module init for '%s' as '%s'\n",
             mod_name, init_name.c_str());
     }
@@ -6773,7 +6773,7 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
         }
         if (!ce->getInitExpr().isNothing()) {
             std::string fqn = makeAOTConstantFQN(ns_path, ce->getName());
-            if (q_env_is_set("QORE_AOT_DEBUG_PENDING_CONSTS")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG_PENDING_CONSTS")) {
                 fprintf(stderr, "AOT pending const: %s module=%s file=%s compile_module=%s\n",
                     fqn.c_str(),
                     ce->getModuleName() ? ce->getModuleName() : "<null>",
@@ -6812,7 +6812,7 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
             }
             if (!ce->getInitExpr().isNothing()) {
                 std::string fqn = makeAOTConstantFQN(class_path, ce->getName());
-                if (q_env_is_set("QORE_AOT_DEBUG_PENDING_CONSTS")) {
+                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG_PENDING_CONSTS")) {
                     fprintf(stderr, "AOT pending class const: %s module=%s file=%s compile_module=%s\n",
                         fqn.c_str(),
                         ce->getModuleName() ? ce->getModuleName() : "<null>",
@@ -6932,7 +6932,7 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
 
 static const QoreTypeInfo* qore_aot_get_call_receiver_type_info(const QoreValue& expr) {
     if (!expr.hasNode()
-            || q_env_is_set("QORE_DISABLE_AOT_GENERIC_RECEIVER_BINDING")) {
+            || QORE_ENV_IS_SET("QORE_DISABLE_AOT_GENERIC_RECEIVER_BINDING")) {
         return nullptr;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
@@ -7086,7 +7086,7 @@ static bool collectAOTGenericSpecializationCandidates(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*,
             std::unique_ptr<QoreIRFunction>>>& candidates,
         AOTGenericSpecializationCandidates& specializations) {
-    if (q_env_is_set("QORE_DISABLE_AOT_GENERIC_FAST_ENTRY")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_GENERIC_FAST_ENTRY")) {
         return true;
     }
     size_t candidate_count = 0;
@@ -7152,7 +7152,7 @@ static bool collectAOTGenericSpecializationCandidates(
                     candidate->second.source_function = function_call
                         ? function_call->getFunction() : nullptr;
                 } else if (candidate->second.key != key) {
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr,
                             "AOT: generic specialization conflict '%s' vs '%s'\n",
                             candidate->second.key.c_str(), key.c_str());
@@ -7221,7 +7221,7 @@ static bool qore_aot_fast_entry_args_need_no_binding(
                 continue;
             }
             const QoreTypeInfo* arg_ti = (*arg_types)[arg_start + i];
-            if (q_env_is_set("QORE_AOT_DEBUG")
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")
                     && sig->needsTypeParameterSubstitution()) {
                 fprintf(stderr,
                     "AOT: generic binding param=%d declared='%s' arg='%s' explicit=%zu receiver='%s'\n",
@@ -7421,7 +7421,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         return false;
     }
     const bool allow_body_locals =
-        !q_env_is_set("QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_BODY_LOCALS");
+        !QORE_ENV_IS_SET("QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_BODY_LOCALS");
     if (!allow_body_locals && !ir_func.all_body_locals.empty()) {
         return false;
     }
@@ -7587,7 +7587,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     break;
                 case QoreIROpcode::HashKeyAccessHash:
                 case QoreIROpcode::HashKeyAccessHashGuarded:
-                    if (q_env_is_set(
+                    if (QORE_ENV_IS_SET(
                             "QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_HASH_ACCESS")) {
                         return false;
                     }
@@ -7669,7 +7669,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     break;
                 }
                 default:
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr,
                             "AOT: context-independent fast-entry rejected opcode %s (%d)\n",
                             getOpcodeName(static_cast<int>(inst->opcode)),
@@ -7750,7 +7750,7 @@ static void resolveAOTBatchContextIndependentFastEntries(
             if (qore_aot_fast_entry_is_context_independent(candidate.first, *candidate.second,
                     aot_batch_callee_map)) {
                 it->second.context_independent_fast_entry = true;
-                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                     fprintf(stderr,
                         "AOT: context-independent fast entry '%s'\n",
                         it->second.name.c_str());
@@ -7851,7 +7851,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         const UserSignature& sig, AOTStringOpInfo& result) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_STRING_OP_IMPORT")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_OP_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || code_blocks.size() != 1 || !code_blocks.front()
             || qore_aot_code_size_exceeds(*code_blocks.front(), 8)) {
@@ -8038,7 +8038,7 @@ static bool qore_aot_is_non_overridable_method_call(
     if (call.qc->isFinal()) {
         return true;
     }
-    if (q_env_is_set("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
         return false;
     }
     const auto* method_variant =
@@ -8193,7 +8193,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             BatchCalleeInfo>* batch_callees = nullptr) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || code_blocks.size() != 1 || !code_blocks.front()
             || code_blocks.front()->instructions.size()
@@ -8254,7 +8254,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             const AbstractQoreFunctionVariant* variant,
             const QoreValue& expr, bool has_ref_args) -> int {
         if (!batch_callees || !call || !variant || has_ref_args
-                || q_env_is_set("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
+                || QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
             return -1;
         }
         auto found = batch_callees->find(variant);
@@ -8764,7 +8764,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
         const UserSignature& sig, AOTCollectionOpInfo& result) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || code_blocks.size() != 1 || !code_blocks.front()
             || qore_aot_code_size_exceeds(*code_blocks.front(), 6)) {
@@ -9425,7 +9425,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
     }
     result.kind = common.kind;
     if (!common_shape) {
-        if (q_env_is_set(
+        if (QORE_ENV_IS_SET(
                     "QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_SHAPE")
                 || condition_param < 0 || return_count != 2
                 || !have_true_shape || !have_false_shape
@@ -9579,7 +9579,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
                     : AOTAggregateReturnValueKind::BoolParamSelect;
             continue;
         }
-        if (q_env_is_set(
+        if (QORE_ENV_IS_SET(
                 "QORE_DISABLE_AOT_CONDITIONAL_AGGREGATE_EXPRESSIONS")) {
             continue;
         }
@@ -9608,7 +9608,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         const UserSignature& sig, AOTAggregateReturnInfo& result) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")
             || sig.numParams() > INT8_MAX) {
         return false;
     }
@@ -10099,7 +10099,7 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
         std::unordered_map<const AbstractQoreFunctionVariant*,
             BatchCalleeInfo>& batch_callees,
         size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
         return true;
     }
 
@@ -10683,7 +10683,7 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         const UserSignature& sig) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || code_blocks.size() != 1
             || !code_blocks.front()
@@ -10797,7 +10797,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
     const QoreIRCodeBlocks code_blocks(func);
     // a value returned through `any` or a plain `auto!` loses the complex type of a list or hash (qore#6058,
     // qore#6059), so the call is not replaced with its argument
-    if (q_env_is_set("QORE_DISABLE_AOT_GENERIC_RETURN_PARAM_FOLD")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_GENERIC_RETURN_PARAM_FOLD")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || code_blocks.size() != 1 || !code_blocks.front()
             || qore_aot_code_size_exceeds(*code_blocks.front(), 16)
@@ -10950,7 +10950,7 @@ static int8_t qore_aot_get_composed_boxed_return_param(
             BatchCalleeInfo>& batch_callees) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || code_blocks.empty() || code_blocks.size() > 16
             || outer_info.may_invalidate_external_caches) {
@@ -11351,7 +11351,7 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
         const UserSignature& sig, AOTComposedIntInfo& result) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_COMPOSED_INT_IMPORT")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_COMPOSED_INT_IMPORT")
             || !sig.numParams() || sig.numParams() > 2
             || code_blocks.size() != 1 || !code_blocks.front()
             || qore_aot_code_size_exceeds(*code_blocks.front(), 12)) {
@@ -11555,7 +11555,7 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
         const UserSignature& sig, AOTContextIntInfo& result) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_CONTEXT_INT_IMPORT")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_CONTEXT_INT_IMPORT")
             || sig.numParams() != 1 || code_blocks.size() != 1
             || !code_blocks.front()
             || qore_aot_code_size_exceeds(*code_blocks.front(), 12)) {
@@ -11696,7 +11696,7 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
         const UserSignature& sig, AOTGlobalIntInfo& result) {
     // the code without the paths of a debugger's flow requests (#6201)
     const QoreIRCodeBlocks code_blocks(func);
-    if (q_env_is_set("QORE_DISABLE_AOT_GLOBAL_INT_IMPORT")
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_GLOBAL_INT_IMPORT")
             || sig.numParams() != 1 || code_blocks.size() != 1
             || !code_blocks.front()
             || qore_aot_code_size_exceeds(*code_blocks.front(), 12)) {
@@ -11838,7 +11838,7 @@ static bool qore_aot_collect_int_expression_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
         size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT")) {
         return true;
     }
 
@@ -12342,7 +12342,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 && proven_return_kind != BatchCalleeReturnKind::NativeBool) {
             proven_return_kind = qore_ir_get_fast_entry_return_kind(variant, true);
         }
-        bool nested_cfg_select = !q_env_is_set(
+        bool nested_cfg_select = !QORE_ENV_IS_SET(
             "QORE_DISABLE_AOT_NESTED_CFG_SELECT_IMPORT");
         if (!func || (code_blocks.size() != 1 && code_blocks.size() != 3
                     && code_blocks.size() != 4
@@ -13206,7 +13206,7 @@ static bool qore_aot_collect_float_expression_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
         size_t& check_count) {
-    if (q_env_is_set("QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT")) {
         return true;
     }
 
@@ -14553,8 +14553,8 @@ bool qore_ir_resolve_batch_function_summaries(
             return false;
         }
     }
-    if (q_env_is_set("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
-            || q_env_is_set("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_INTERPROCEDURAL_SUMMARIES")
+            || QORE_ENV_IS_SET("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
         return !collect_body_dependency_provenance
             || resolveAOTBatchBodyDependencyProvenance(functions,
                 batch_callees);
@@ -14575,11 +14575,11 @@ bool qore_ir_resolve_batch_function_summaries(
     if (!qore_ir_compute_function_effect_summaries(functions, summaries)) {
         return false;
     }
-    const bool disable_noescape_params = q_env_is_set("QORE_DISABLE_AOT_NOESCAPE_PARAMS");
+    const bool disable_noescape_params = QORE_ENV_IS_SET("QORE_DISABLE_AOT_NOESCAPE_PARAMS");
     const bool disable_param_effects =
-        q_env_is_set("QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY");
+        QORE_ENV_IS_SET("QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY");
     const bool disable_precise_effect_domains =
-        q_env_is_set("QORE_DISABLE_AOT_PRECISE_EFFECT_DOMAINS");
+        QORE_ENV_IS_SET("QORE_DISABLE_AOT_PRECISE_EFFECT_DOMAINS");
     auto get_declared_return_type = [](
             const AbstractQoreFunctionVariant* variant,
             const QoreIRFunction* func) -> const QoreTypeInfo* {
@@ -14685,7 +14685,7 @@ bool qore_ir_resolve_batch_function_summaries(
             pass_through_variants.insert(entry.first);
         }
     }
-    if (!q_env_is_set("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
         for (const auto& [variant, func] : functions) {
                 if (++check_count % 100 == 0
                         && qore_check_cancel(nullptr,
@@ -14740,7 +14740,7 @@ bool qore_ir_resolve_batch_function_summaries(
                                 || facts->representation
                                     != QoreIRValueRepresentation::Boxed
                                 || !facts->never_nothing) {
-                            if (q_env_is_set("QORE_AOT_DEBUG")) {
+                            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                                 fprintf(stderr,
                                     "AOT: exact boxed return rejected '%s':"
                                     " facts=%d assigned=%d representation=%d"
@@ -14789,7 +14789,7 @@ bool qore_ir_resolve_batch_function_summaries(
                         if (return_kind
                                 == BatchCalleeBoxedReturnKind::Unknown
                                 || (saw_return && return_kind != kind)) {
-                            if (q_env_is_set("QORE_AOT_DEBUG")) {
+                            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                                 fprintf(stderr,
                                     "AOT: exact boxed return rejected '%s':"
                                     " type=%d previous=%d\n",
@@ -14810,7 +14810,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 }
                 if (valid && saw_return) {
                     callee->second.boxed_return_kind = kind;
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr,
                             "AOT: exact boxed return '%s' kind=%d\n",
                             func->name.c_str(), static_cast<int>(kind));
@@ -14834,7 +14834,7 @@ bool qore_ir_resolve_batch_function_summaries(
             int num_params, AOTScalarLeafInfo& leaf) -> bool {
         // the code without the paths of a debugger's flow requests (#6201)
         const QoreIRCodeBlocks code_blocks = func ? QoreIRCodeBlocks(*func) : QoreIRCodeBlocks();
-        if (q_env_is_set("QORE_DISABLE_AOT_CFG_SELECT_IMPORT") || !func || !uvb
+        if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_CFG_SELECT_IMPORT") || !func || !uvb
                 || num_params < 1 || num_params > 2 || code_blocks.size() != 3) {
             return false;
         }
@@ -15114,7 +15114,7 @@ bool qore_ir_resolve_batch_function_summaries(
             std::string& member_name) -> bool {
         // the code without the paths of a debugger's flow requests (#6201)
         const QoreIRCodeBlocks code_blocks = func ? QoreIRCodeBlocks(*func) : QoreIRCodeBlocks();
-        if (q_env_is_set("QORE_DISABLE_AOT_OBJECT_GETTER_IMPORT") || !func
+        if (QORE_ENV_IS_SET("QORE_DISABLE_AOT_OBJECT_GETTER_IMPORT") || !func
                 || num_params || code_blocks.size() != 1
                 || qore_aot_code_size_exceeds(*code_blocks.front(), 4)) {
             return false;
@@ -15382,11 +15382,11 @@ bool qore_ir_resolve_batch_function_summaries(
                 case QoreIROpcode::LValuePathAssign:
                 case QoreIROpcode::LValuePathCompound: {
                     if ((inst->opcode == QoreIROpcode::LValuePathAssign
-                                && q_env_is_set(
+                                && QORE_ENV_IS_SET(
                                     "QORE_DISABLE_AOT_OBJECT_SET_GET_IMPORT"))
                             || (inst->opcode
                                     == QoreIROpcode::LValuePathCompound
-                                && q_env_is_set(
+                                && QORE_ENV_IS_SET(
                                     "QORE_DISABLE_AOT_OBJECT_COMPOUND_GET_IMPORT"))) {
                         return false;
                     }
@@ -15787,7 +15787,7 @@ bool qore_ir_resolve_batch_function_summaries(
         }
         callee_it->second.forwarded_return_param =
             qore_aot_get_forwarded_return_param(*func, *sig);
-        if (q_env_is_set("QORE_AOT_DEBUG")
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")
                 && sig->needsTypeParameterSubstitution()) {
             fprintf(stderr,
                 "AOT: generic forwarded return summary '%s' param=%d\n",
@@ -15855,7 +15855,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 static_cast<int>(sig->numParams()), leaf)
                 && !get_cfg_select(func, uvb, static_cast<int>(sig->numParams()), leaf)) {
             AOTFixedHashRemapInfo hash_remap;
-            bool fixed_hash = !q_env_is_set("QORE_DISABLE_AOT_FIXED_HASH_REMAP")
+            bool fixed_hash = !QORE_ENV_IS_SET("QORE_DISABLE_AOT_FIXED_HASH_REMAP")
                 && qore_aot_get_fixed_hash_remap(*func, *sig, hash_remap);
             if (fixed_hash) {
                 callee_it->second.fixed_hash_remap = std::move(hash_remap);
@@ -15879,7 +15879,7 @@ bool qore_ir_resolve_batch_function_summaries(
         callee_it->second.scalar_leaf = leaf;
     }
 
-    if (!q_env_is_set("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION")) {
         for (size_t pass = 0; pass < 8; ++pass) {
             bool changed = false;
             for (const auto& [variant, func] : functions) {
@@ -15914,7 +15914,7 @@ bool qore_ir_resolve_batch_function_summaries(
         }
     }
 
-    if (!q_env_is_set("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
         for (size_t pass = 0; pass < 8; ++pass) {
             bool changed = false;
             for (const auto& [variant, func] : functions) {
@@ -15957,7 +15957,7 @@ bool qore_ir_resolve_batch_function_summaries(
         return false;
     }
 
-    if (!q_env_is_set("QORE_DISABLE_AOT_AFFINE_BODY_IMPORT")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_AFFINE_BODY_IMPORT")) {
         struct AffineValue {
             int64_t scale = 0;
             int64_t offset = 0;
@@ -16563,7 +16563,7 @@ static size_t projectAOTNonescapingObjectScalars(
         QoreIRFunction& func,
         const std::unordered_map<const AbstractQoreFunctionVariant*,
             BatchCalleeInfo>& batch_callees) {
-    if (q_env_is_set(
+    if (QORE_ENV_IS_SET(
             "QORE_DISABLE_AOT_NONESCAPING_OBJECT_SCALAR_PROJECTION")
             || func.has_opaque_ast_local_access) {
         return 0;
@@ -19436,7 +19436,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* aot_batch_callee_map,
         std::string* fatal_error) {
     const bool disable_native_closures =
-        q_env_is_set("QORE_DISABLE_AOT_NATIVE_CLOSURES");
+        QORE_ENV_IS_SET("QORE_DISABLE_AOT_NATIVE_CLOSURES");
 
     const size_t num_exprs = compiled_funcs[owner_index].slot_ids.exprs.size();
     for (size_t expr_index = 0; expr_index < num_exprs; ++expr_index) {
@@ -19490,7 +19490,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
         }
         const BatchCalleeInfo* closure_effect =
-            !q_env_is_set("QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY")
+            !QORE_ENV_IS_SET("QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY")
                 ? closure_info : nullptr;
         const std::vector<BatchCalleeParamKind> empty_capture_kinds;
         const std::vector<BatchCalleeParamKind>& dispatch_capture_kinds =
@@ -19614,7 +19614,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         if (tryLowerFunction(variant, native_key.c_str(), pgm, ir_func, lower_error,
                 nullptr, nullptr, nullptr, const_reverse_map) != 0
                 || !ir_func) {
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: native closure '%s' IR lowering skipped: %s\n",
                     native_key.c_str(), lower_error.c_str());
             }
@@ -19759,7 +19759,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         bool closure_fast_eligible = sig && supported_captures
             && isAOTFastEntryEligible(ir_func, variant);
         if ((dispatch || native_dispatch || native_guarded_dispatch)
-                && q_env_is_set("QORE_AOT_DEBUG")) {
+                && QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
             fprintf(stderr,
                 "AOT: direct closure candidate '%s': sig=%d captures=%zu supported=%d eligible=%d\n",
                 native_key.c_str(), sig != nullptr,
@@ -19767,7 +19767,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 closure_fast_eligible);
         }
         if ((dispatch || native_dispatch || native_guarded_dispatch) && !metadata_only
-                && !q_env_is_set("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY")
+                && !QORE_ENV_IS_SET("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY")
                 && sig && closure_fast_eligible) {
             static const std::unordered_map<const AbstractQoreFunctionVariant*,
                 BatchCalleeInfo> empty_batch_callees;
@@ -19784,7 +19784,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             bool context_independent = qore_aot_fast_entry_is_context_independent(
                 variant, *ir_func, batch_callees,
                 explicit_capture_set.empty() ? nullptr : &explicit_capture_set);
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
                     "AOT: direct closure proof '%s': typed-abi=%d context-independent=%d\n",
                     native_key.c_str(), typed_signature_matches, context_independent);
@@ -19911,7 +19911,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 if (!fast_lowered) {
                     direct_fast_fn->eraseFromParent();
                     direct_fast_fn = nullptr;
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr,
                             "AOT: direct closure fast entry '%s' lowering skipped: %s\n",
                             fast_name.c_str(), fast_error.c_str());
@@ -19992,7 +19992,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         }
 
         if (!lowered) {
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: native closure '%s' LLVM lowering skipped: %s\n",
                     native_key.c_str(), llvm_error.c_str());
             }
@@ -20045,7 +20045,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
             total_ir_insts_all += closure_blocks[block_index]->instructions.size();
         }
-        if (q_env_is_set("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
             fprintf(stderr, "AOT: compiled native closure '%s'\n", native_key.c_str());
         }
 
@@ -20099,7 +20099,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
     auto refine_interprocedural = [&](QoreIRFunction& func) {
         size_t exact_boxed_call_facts = 0;
-        if (!q_env_is_set("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
             QoreIRExactBoxedReturnQuery query =
                 [&](const AbstractQoreFunctionVariant* callee)
                     -> const QoreTypeInfo* {
@@ -20133,7 +20133,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 qore_ir_import_exact_boxed_call_facts(func, query);
         }
         size_t folded_list_sizes = 0;
-        if (!q_env_is_set("QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD")) {
             QoreIRFreshListSizeQuery list_size_query =
                 [&](const AbstractQoreFunctionVariant* callee, size_t arg) {
                     auto info = aot_batch_callee_map->find(callee);
@@ -20153,7 +20153,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 qore_ir_fold_fresh_list_size_calls(func, list_size_query);
         }
         size_t folded_hash_keys = 0;
-        if (!q_env_is_set("QORE_DISABLE_AOT_FRESH_HASH_KEY_CALL_FOLD")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_FRESH_HASH_KEY_CALL_FOLD")) {
             QoreIRFreshHashKeyQuery hash_key_query =
                 [&](const AbstractQoreFunctionVariant* callee, size_t arg,
                         std::string& key) {
@@ -20177,7 +20177,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             folded_hash_keys =
                 qore_ir_fold_fresh_hash_key_calls(func, hash_key_query);
         }
-        if (!q_env_is_set("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
             // Exact aggregate calls produce assigned boxed values on every
             // normal return. Propagate that fact through bounded nested call
             // chains so an outer aggregate can project an inner aggregate.
@@ -20286,7 +20286,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
         }
         size_t aggregate_projections = 0;
         size_t borrowed_aggregate_projections = 0;
-        if (!q_env_is_set("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
             QoreIRAggregateProjectionQuery projection_query =
                 [&](const AbstractQoreFunctionVariant* callee,
                         const QoreIRInstruction* call,
@@ -21247,7 +21247,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         const QoreIRInstruction* call, size_t& base_operand,
                         QoreIRAggregateProjectionQueryKind& kind,
                         int64_t& index, std::string& key) {
-                    if (q_env_is_set(
+                    if (QORE_ENV_IS_SET(
                             "QORE_DISABLE_AOT_AGGREGATE_CONSUMER_COMPOSITION")
                             || !callee || !call) {
                         return false;
@@ -21378,7 +21378,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             projectAOTNonescapingObjectScalars(
                 func, *aot_batch_callee_map);
         size_t boxed_return_calls = 0;
-        if (!q_env_is_set("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {
             QoreIRBoxedReturnParamQuery boxed_return_query =
                 [&](const AbstractQoreFunctionVariant* callee,
                         const QoreIRInstruction* call,
@@ -21427,7 +21427,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             static_cast<int>(call->operands.size()))
                         && !qore_aot_forwarded_return_call_strips(callee, *expr,
                             found->second.forwarded_return_param);
-                    if (q_env_is_set("QORE_AOT_DEBUG")
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")
                             && found != aot_batch_callee_map->end()
                             && found->second.forwarded_return_param >= 0) {
                         fprintf(stderr,
@@ -21526,7 +21526,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     func, boxed_return_query);
         }
         size_t changed = 0;
-        if (!q_env_is_set("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
             QoreIRParamNoEscapeQuery query =
                 [&](const AbstractQoreFunctionVariant* callee, size_t arg) {
                     auto info = aot_batch_callee_map->find(callee);
@@ -21537,7 +21537,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             changed = qore_ir_optimize_fresh_list_calls(func, query);
         }
         size_t collection_consumers = 0;
-        if (!q_env_is_set(
+        if (!QORE_ENV_IS_SET(
                 "QORE_DISABLE_AOT_COLLECTION_PREDICATE_FUSION")) {
             QoreIRCollectionProducerQuery query =
                 [&](const AbstractQoreFunctionVariant* callee,
@@ -21601,13 +21601,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
         }
         size_t string_consumers = 0;
         size_t int_string_measure_consumers = 0;
-        if (!q_env_is_set(
+        if (!QORE_ENV_IS_SET(
                 "QORE_DISABLE_AOT_INT_TO_STRING_MEASURE_FUSION")) {
             int_string_measure_consumers =
                 qore_ir_fuse_native_int_string_measure_consumers(func);
         }
         size_t object_int_string_measure_consumers = 0;
-        if (!q_env_is_set(
+        if (!QORE_ENV_IS_SET(
                 "QORE_DISABLE_AOT_OBJECT_INT_STRING_MEASURE_FUSION")) {
             QoreIRObjectIntStringMeasureQuery query =
                 [&](const QoreIRDotEvalMethodDirectInstruction* call,
@@ -21654,7 +21654,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     func, query);
         }
         QoreIRStringProducerQuery string_producer_query;
-        if (!q_env_is_set("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
             string_producer_query =
                 [&](const AbstractQoreFunctionVariant* callee,
                         const QoreIRStringConsumerCallInstruction* call,
@@ -21741,7 +21741,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                                 == QoreIROpcode::CallMethodDirect
                                             && info->second
                                                 .implicit_self_method))
-                                    && !q_env_is_set(
+                                    && !QORE_ENV_IS_SET(
                                         "QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT");
                             }
                         }
@@ -21806,10 +21806,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
         size_t cross_block_boxed_facts = 0;
         size_t post_rewrite_rounds = 0;
         constexpr size_t max_post_rewrite_rounds = 4;
-        size_t round_limit = q_env_is_set(
+        size_t round_limit = QORE_ENV_IS_SET(
                 "QORE_DISABLE_AOT_POST_REWRITE_FIXED_POINT")
             ? 1 : max_post_rewrite_rounds;
-        bool propagate_cross_block_boxed_facts = !q_env_is_set(
+        bool propagate_cross_block_boxed_facts = !QORE_ENV_IS_SET(
             "QORE_DISABLE_AOT_CROSS_BLOCK_BOXED_FACTS");
         for (size_t round = 0; round < round_limit; ++round) {
             size_t round_changes = 0;
@@ -21817,21 +21817,21 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 func, propagate_cross_block_boxed_facts);
             cross_block_boxed_facts += changes;
             round_changes += changes;
-            if (!q_env_is_set(
+            if (!QORE_ENV_IS_SET(
                     "QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
                 size_t changes =
                     qore_ir_specialize_proven_boxed_operations(func);
                 boxed_specializations += changes;
                 round_changes += changes;
             }
-            if (!q_env_is_set(
+            if (!QORE_ENV_IS_SET(
                     "QORE_DISABLE_AOT_LATE_COLLECTION_SPECIALIZATION")) {
                 size_t changes =
                     qore_ir_specialize_proven_collection_operations(func);
                 collection_specializations += changes;
                 round_changes += changes;
             }
-            if (!q_env_is_set(
+            if (!QORE_ENV_IS_SET(
                     "QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
                 size_t round_exception_edges_elided = 0;
                 size_t changes =
@@ -21847,7 +21847,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             }
             ++post_rewrite_rounds;
         }
-        if (!q_env_is_set(
+        if (!QORE_ENV_IS_SET(
                 "QORE_DISABLE_AOT_STRING_TRANSFORM_CONSUMER_FUSION")) {
             string_transform_consumers =
                 qore_ir_fuse_string_transform_consumers(func);
@@ -21870,7 +21870,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 || collection_specializations
                 || native_specializations || exception_edges_elided
                 || post_rewrite_rounds)
-                && q_env_is_set("QORE_IR_OPT_STATS")) {
+                && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: exact-boxed-call-facts=%zu"
                 " fresh-list-size-calls=%zu"
@@ -22187,7 +22187,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                 llvm::Function::InternalLinkage, fast_entry_name, module);
                     }
                     fast_fn->addFnAttr(llvm::Attribute::InlineHint);
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: fast entry '%s' (%u params%s)\n",
                             fast_entry_name.c_str(), num_params,
                             self_rec_eligible ? ", self-recursive" : "");
@@ -22268,7 +22268,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                 &fast_entry_param_rejects_nothing, self_return_kind);
                     }
                     // Debug: dump IR before LLVM lowering if requested
-                    if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
                         fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
                         QoreIRPrinter::print(*ir_func, std::cerr);
                         fprintf(stderr, "=================\n");
@@ -22279,7 +22279,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         total_ir_insts += block->instructions.size();
                     }
                     total_ir_insts_all += total_ir_insts;
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: lowering function '%s' (blocks=%zu, insts=%zu)\n",
                             variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
                     }
@@ -22306,7 +22306,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (!std_entry_ok && fn_outliner.active()) {
                         // Outlined coordinator lowering failed — restore the
                         // original function and retry without outlining.
-                        if (q_env_is_set("QORE_AOT_DEBUG")) {
+                        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT-OUTLINE-FN: coordinator '%s' lowering "
                                 "failed (%s); retrying un-outlined\n",
                                 variant_key.c_str(), llvm_error.c_str());
@@ -22393,7 +22393,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                 *fast_ir_func, module, fast_error)) {
                             printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
                                 fast_entry_name.c_str(), fast_error.c_str());
-                            if (q_env_is_set("QORE_AOT_DEBUG")) {
+                            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                                 fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
                                     fast_entry_name.c_str(), fast_error.c_str());
                             }
@@ -22453,7 +22453,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         (int)slots.expr_slots.size());
                 } else {
                     printd(2, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
                     }
                     ++failed_count;
@@ -22465,7 +22465,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 delete ir_func;
             } else {
                 printd(2, "AOT: IR lowering failed for '%s': %s\n", variant_key.c_str(), lower_error.c_str());
-                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                     fprintf(stderr, "AOT: IR lowering failed for '%s': %s\n", variant_key.c_str(), lower_error.c_str());
                 }
                 ++failed_count;
@@ -22692,7 +22692,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                     llvm::Function::InternalLinkage, fast_entry_name, module);
                         }
                         fast_fn->addFnAttr(llvm::Attribute::InlineHint);
-                        if (q_env_is_set("QORE_AOT_DEBUG")) {
+                        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT: method fast entry '%s' (%u params)\n",
                                 fast_entry_name.c_str(), num_params);
                         }
@@ -22746,11 +22746,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             total_ir_insts += block->instructions.size();
                         }
                         total_ir_insts_all += total_ir_insts;
-                        if (q_env_is_set("QORE_AOT_DEBUG")) {
+                        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT: lowering method '%s' (blocks=%zu, insts=%zu)\n",
                                 variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
                         }
-                        if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+                        if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
                             fprintf(stderr, "=== IR for %s ===\n", variant_key.c_str());
                             QoreIRPrinter::print(*ir_func, std::cerr);
                             fprintf(stderr, "=================\n");
@@ -22776,7 +22776,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         method_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
 
                         if (!method_ok && fn_outliner.active()) {
-                            if (q_env_is_set("QORE_AOT_DEBUG")) {
+                            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                                 fprintf(stderr, "AOT-OUTLINE-FN: coordinator '%s' lowering "
                                     "failed (%s); retrying un-outlined\n",
                                     variant_key.c_str(), llvm_error.c_str());
@@ -22856,7 +22856,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                     *fast_ir_func, module, fast_error)) {
                                 printd(2, "AOT: method fast entry '%s' lowering failed: %s\n",
                                     fast_entry_name.c_str(), fast_error.c_str());
-                                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                                     fprintf(stderr,
                                         "AOT: method fast entry '%s' lowering failed: %s\n",
                                         fast_entry_name.c_str(), fast_error.c_str());
@@ -22912,7 +22912,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                                 aot_batch_callee_map, fatal_error)) {
                             return;
                         }
-                        if (q_env_is_set("QORE_AOT_DEBUG")) {
+                        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d)\n",
                                 variant_key.c_str(), (int)slots.local_slots.size(),
                                 (int)slots.global_slots.size(), (int)slots.expr_slots.size());
@@ -22923,7 +22923,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     } else {
                         printd(2, "AOT: LLVM lowering failed for '%s': %s\n",
                             variant_key.c_str(), llvm_error.c_str());
-                        if (q_env_is_set("QORE_AOT_DEBUG")) {
+                        if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT: LLVM lowering failed for '%s': %s\n",
                                 variant_key.c_str(), llvm_error.c_str());
                         }
@@ -22937,7 +22937,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 } else {
                     printd(2, "AOT: IR lowering failed for '%s': %s\n",
                         variant_key.c_str(), lower_error.c_str());
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: IR lowering failed for '%s': %s\n",
                             variant_key.c_str(), lower_error.c_str());
                     }
@@ -22998,7 +22998,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
         int rc = tryLowerInitExpression(init_expr, init_name.c_str(), pgm, ir_func, lower_error,
             init_const_reverse_map);
         if (rc != 0 || !ir_func) {
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: init expr lowering failed for '%s': %s\n",
                     init_name.c_str(), lower_error.c_str());
             }
@@ -23051,7 +23051,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
-            if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
                 fprintf(stderr, "=== IR for init %s ===\n", name.c_str());
                 QoreIRPrinter::print(*fn, std::cerr);
                 fprintf(stderr, "=================\n");
@@ -23060,7 +23060,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             bool ok = lowerer.lowerFunction(*fn, module, err);
             if (!ok) {
                 llvm_error = err;
-                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                     fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
                         name.c_str(), err.c_str());
                 }
@@ -23175,7 +23175,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 scan_deps(h.ir_func.get());
             }
             compiled_init_funcs.push_back(std::move(cif));
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: compiled init function '%s' (globals=%d, exprs=%d"
                     ", %zu helpers)\n", init_name.c_str(),
                     (int)slots.global_slots.size(),
@@ -24653,7 +24653,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
 
     // Dump IR before optimization if requested
-    if (q_env_is_set("QORE_DUMP_IR_BEFORE_OPT")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_IR_BEFORE_OPT")) {
         fprintf(stderr, "=== IR BEFORE OPTIMIZATION (O%d) ===\n", opt_level);
         module.print(llvm::errs(), nullptr);
         fprintf(stderr, "=== END IR BEFORE OPTIMIZATION ===\n");
@@ -24663,7 +24663,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     llvm::OptimizationLevel llvm_opt = getOptimizationLevel(opt_level);
     if (llvm_opt != llvm::OptimizationLevel::O0) {
         // Print function names during optimization for hang debugging
-        bool debug_opt = q_env_is_set("QORE_DEBUG_OPT");
+        bool debug_opt = QORE_ENV_IS_SET("QORE_DEBUG_OPT");
         if (debug_opt) {
             fprintf(stderr, "AOT: Starting optimization (O%d) for %d functions in module\n", opt_level,
                 (int)std::distance(module.begin(), module.end()));
@@ -24677,7 +24677,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         llvm::ModuleAnalysisManager MAM;
 
         // Add per-pass timing instrumentation if requested
-        bool pass_timing = q_env_is_set("QORE_PASS_TIMING");
+        bool pass_timing = QORE_ENV_IS_SET("QORE_PASS_TIMING");
         llvm::PassInstrumentationCallbacks PIC;
         llvm::StandardInstrumentations SI(module.getContext(), false);
         SI.registerCallbacks(PIC, &MAM);
@@ -24744,7 +24744,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         auto opt_end = std::chrono::high_resolution_clock::now();
         auto opt_duration = std::chrono::duration_cast<std::chrono::milliseconds>(opt_end - opt_start).count();
 
-        if (debug_opt || q_env_is_set("QORE_SHOW_OPT_TIME")) {
+        if (debug_opt || QORE_ENV_IS_SET("QORE_SHOW_OPT_TIME")) {
             fprintf(stderr, "AOT: Optimization passes completed in %lld ms\n",
                 static_cast<long long>(opt_duration));
             fflush(stderr);
@@ -24757,7 +24757,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     }
 
     size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
-    if (pruned_calls && q_env_is_set("QORE_IR_OPT_STATS")) {
+    if (pruned_calls && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-AOT-LLVM: pruned-noop-decrefs=%zu\n",
             pruned_calls);
     }
@@ -24767,14 +24767,14 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     QoreIRToLLVM::sinkFrameSlotAddresses(module);
 
     // Dump IR after optimization if requested
-    if (q_env_is_set("QORE_DUMP_IR_AFTER_OPT")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_IR_AFTER_OPT")) {
         fprintf(stderr, "=== IR AFTER OPTIMIZATION (O%d) ===\n", opt_level);
         module.print(llvm::errs(), nullptr);
         fprintf(stderr, "=== END IR AFTER OPTIMIZATION ===\n");
     }
 
     // Emit object file
-    bool debug_opt = q_env_is_set("QORE_DEBUG_OPT");
+    bool debug_opt = QORE_ENV_IS_SET("QORE_DEBUG_OPT");
     if (debug_opt) {
         fprintf(stderr, "AOT: Starting object file emission (code generation)\n");
         fflush(stderr);
@@ -24824,7 +24824,7 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         if (QoreEnvironmentValue tenv_holder("QCC_SPLIT_THRESHOLD"); const char* tenv = tenv_holder.c_str()) {
             threshold = atol(tenv);
         }
-        if (q_env_is_set("QORE_AOT_SIZE_DEBUG")) {
+        if (QORE_ENV_IS_SET("QORE_AOT_SIZE_DEBUG")) {
             fprintf(stderr, "AOT-SIZE: insts=%zu threshold=%ld jobs=%d split=%d %s\n",
                 insts, threshold, aot_jobs, (int)(static_cast<long>(insts) >= threshold), path.c_str());
         }
@@ -24892,7 +24892,7 @@ static std::string qore_aot_libqore_macos_version() {
 
 std::string QoreAOT::getLinkTargetFlags() {
 #if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
-    if (q_env_is_set("MACOSX_DEPLOYMENT_TARGET")) {
+    if (QORE_ENV_IS_SET("MACOSX_DEPLOYMENT_TARGET")) {
         return std::string();
     }
     return "-mmacosx-version-min=" + qore_aot_libqore_macos_version();
@@ -25553,7 +25553,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     !isTerminator(current_block->instructions.back()->opcode))) {
                 builder.createReturnNothing();
             }
-            if (q_env_is_set("QORE_AOT_DUMP_IR")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DUMP_IR")) {
                 fprintf(stderr, "=== IR for _toplevel ===\n");
                 QoreIRPrinter::print(*ir_func, std::cerr);
                 fprintf(stderr, "========================\n");
@@ -25653,7 +25653,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                         (int)slots.local_slots.size(), (int)slots.global_slots.size(),
                         (int)slots.expr_slots.size());
                 } else {
-                    if (q_env_is_set("QORE_AOT_DEBUG")) {
+                    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                         fprintf(stderr, "AOT: LLVM lowering failed for _toplevel: %s\n",
                             llvm_error.c_str());
                     }
@@ -25662,7 +25662,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     toplevel_failed_reason = llvm_error;
                 }
             } else {
-                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                     fprintf(stderr, "AOT: _toplevel verification failed: %s\n",
                         verify_error.c_str());
                 }
@@ -25671,7 +25671,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 toplevel_failed_reason = verify_error;
             }
         } else {
-            if (q_env_is_set("QORE_AOT_DEBUG")) {
+            if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
             }
             printd(2, "AOT: _toplevel IR lowering failed: %s\n", lower_error.c_str());
@@ -25879,7 +25879,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Verify the complete module
-    if (q_env_is_set("QORE_AOT_DEBUG")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: verifying LLVM module...\n");
     }
     std::string verify_error;
@@ -25891,20 +25891,20 @@ bool QoreAOT::compile(QoreProgram* pgm,
     }
 
     // Dump LLVM IR if requested
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
 
     // Step 4: Emit object file
     std::string obj_path = output_path + ".o";
-    if (q_env_is_set("QORE_AOT_DEBUG")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: emitting object file (O%d, total IR insts: %zu)...\n",
             opt_level, total_ir_insts_all);
     }
     if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, split_codegen)) {
         return false;
     }
-    if (q_env_is_set("QORE_AOT_DEBUG")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: object file emitted\n");
     }
     printd(2, "AOT: emitted object file: %s (O%d)\n", obj_path.c_str(), opt_level);
@@ -26844,7 +26844,7 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
         license_gv,
         builder.getInt32(QORE_MODULE_API_MAJOR),
         builder.getInt32(QORE_AOT_MODULE_ABI_API_MINOR_MARKER
-            | ((q_env_is_set("QORE_AOT_TEST_LEGACY_MODULE_ABI")
+            | ((QORE_ENV_IS_SET("QORE_AOT_TEST_LEGACY_MODULE_ABI")
                 ? 0U : QORE_AOT_MODULE_ABI_VERSION) << 8)
             | QORE_MODULE_API_MINOR),
         builder.getInt32(getLicenseEnum(mod_info.license)),
@@ -28041,7 +28041,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
 //! Link an object file into a shared library
 static std::string createAOTModuleVersionScript(const std::string& so_path, std::string& error) {
 #ifdef __ELF__
-    if (q_env_is_set("QORE_AOT_EXPORT_INTERNAL_SYMBOLS")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_EXPORT_INTERNAL_SYMBOLS")) {
         return {};
     }
     std::string path = so_path + ".exports." + std::to_string(getpid());
@@ -28362,7 +28362,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             return false;
         }
         // the functions of the other AOT modules that this one requires, which its code calls natively
-        if (!q_env_is_set("QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS")) {
+        if (!QORE_ENV_IS_SET("QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS")) {
             std::unordered_map<std::string, std::unique_ptr<QoreAOTModuleFastRecords>> module_records;
             if (!addAOTCrossModuleFastEntries(root_ns, mod_info.name.c_str(), module_records,
                     module_batch_callees)) {
@@ -28572,7 +28572,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         return false;
     }
 
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
 
@@ -29092,7 +29092,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             return false;
         }
 
-        if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+        if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
             module->print(llvm::errs(), nullptr);
         }
 
@@ -29779,7 +29779,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         return false;
     }
 
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
     if (batch_timing) {
@@ -30519,7 +30519,7 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& library_paths,
         const QoreAOTSourceSymbolManifest* source_symbols) {
     aot_compile_failed_in_preload = false;
-    const bool trace_timing = q_env_is_set("QORE_AOT_BATCH_TIMING");
+    const bool trace_timing = QORE_ENV_IS_SET("QORE_AOT_BATCH_TIMING");
     const auto batch_start = std::chrono::steady_clock::now();
     auto input_done = batch_start;
     auto setup_done = batch_start;
@@ -30966,7 +30966,7 @@ bool QoreAOT::compileScriptFilesBatch(
     // to name resolution -- which would publish a different body, and so a
     // different compile contract, for a source nothing about which changed.
     if (!sibling_preload.fast_entries.empty()
-            && !q_env_is_set("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES")) {
+            && !QORE_ENV_IS_SET("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES")) {
         qore_ns_private* preload_root_ns = qore_ns_private::get(*batch_pp->RootNS);
         if (!addAOTPreloadedFastEntries(preload_root_ns, preserve_debug_calls,
                 sibling_preload.fast_entries, shared_batch_callees)) {
@@ -30975,7 +30975,7 @@ bool QoreAOT::compileScriptFilesBatch(
         }
     }
     if (entries.size() > 1
-            && !q_env_is_set("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES")) {
+            && !QORE_ENV_IS_SET("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES")) {
         std::unordered_set<std::string> batch_target_files;
         batch_target_files.reserve(entries.size());
         size_t target_i = 0;
@@ -31038,7 +31038,7 @@ bool QoreAOT::compileScriptFilesBatch(
     // GNU make's jobserver supplies the actually spare build slots across all
     // concurrently running qcc groups. QORE_AOT_BATCH_JOBS overrides the
     // most workers (1 = serial, identical to the old path).
-    const bool trace_emit = q_env_is_set("QORE_AOT_TRACE_BATCH_EMIT");
+    const bool trace_emit = QORE_ENV_IS_SET("QORE_AOT_TRACE_BATCH_EMIT");
     unsigned requested_jobs = qoreAotChooseBatchJobs(entries.size());
     JobserverClient batch_jobserver;
     AOTBatchEmitTiming emit_timing;
@@ -31821,7 +31821,7 @@ bool QoreAOT::compileScriptAggregate(
         return false;
     }
 
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
 
@@ -31908,7 +31908,7 @@ bool QoreAOT::compileScriptRegisterAggregate(
         return false;
     }
 
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
 
@@ -32514,7 +32514,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         return false;
     }
 
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         module->print(llvm::errs(), nullptr);
     }
 
@@ -33080,7 +33080,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             return false;
         }
 
-        if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+        if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
             module->print(llvm::errs(), nullptr);
         }
 
@@ -33603,7 +33603,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+        if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
             module->print(llvm::errs(), nullptr);
         }
 
@@ -34181,7 +34181,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+        if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
             module->print(llvm::errs(), nullptr);
         }
 
@@ -36170,6 +36170,7 @@ class ExprTreeSerializer {
         }
 
         // String constant
+        // note: safe; a node of a value: serializeValue() writes an inline short string before it gives a node here
         if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STRING));
             writeStr(str->c_str(), str->size());
@@ -37126,7 +37127,7 @@ class ExprTreeSerializer {
 
 public:
     ExprTreeSerializer(const AOTSlotMap& s, const AOTConstantReverseMap* crm = nullptr)
-        : slots(s), const_reverse_map(crm), debug(q_env_is_set("QORE_AOT_DEBUG")) {
+        : slots(s), const_reverse_map(crm), debug(QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
     }
 
     //! Serialize a QoreValue (scalar or node) into a binary blob
@@ -37632,6 +37633,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
 
     // QoreStringNode: string constant (e.g., switch case string values like "file")
+    // note: safe; the node of the value, whose inline short string is classified above (!v.hasNode())
     if (auto* str_node = dynamic_cast<const QoreStringNode*>(node)) {
         // a CONST_STRING is rebuilt in UTF-8 from its bytes up to a null byte
         if (qore_aot_string_needs_value(str_node->c_str(), str_node->size(), str_node->getEncoding())) {
@@ -38249,7 +38251,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         id.kind = AOTExprKind::CAST_COMPLEX_LIST;
-        id.ref1 = getSlotTypePath(clc->getCastTypeInfo());
+        const QoreTypeInfo* ti = clc->getCastTypeInfo();
+        id.ref1 = ti ? getSlotTypePath(ti) : "list";
         id.flags = clc->isOrNothing() ? 1 : 0;
         return id;
     }
@@ -38264,9 +38267,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
         const TypedHashDecl* cast_hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
-        if (cast_hd || hdc->isDynamicHashDeclCast()) {
+        if (cast_hd || hdc->getCastTypeInfo() == hashTypeInfo || hdc->isDynamicHashDeclCast()) {
             id.kind = AOTExprKind::CAST_HASHDECL;
-            id.ref1 = cast_hd ? qore_aot_encode_expr_hashdecl_path(cast_hd) : hdc->getDynamicHashDeclName();
+            id.ref1 = cast_hd ? qore_aot_encode_expr_hashdecl_path(cast_hd)
+                : (hdc->isDynamicHashDeclCast() ? hdc->getDynamicHashDeclName() : "hash");
             id.flags = hdc->isOrNothing() ? 1 : 0;
             return id;
         }
@@ -38444,7 +38448,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     id.ref1 += "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
         "operation to native IR";
     printd(3, "AOT: unsupported expression type '%s' for slot serialization\n", node->getTypeName());
-    if (q_env_is_set("QORE_AOT_DEBUG")) {
+    if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: unsupported expression type '%s' (node type %d) for slot serialization\n",
             node->getTypeName(), node->getType());
     }
@@ -38617,7 +38621,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         sig ? sig->argvid : nullptr, sig ? sig->selfid : nullptr);
     out.uses_argv = context_usage.argv;
     out.uses_self = context_usage.self;
-    if (uvb && q_env_is_set("QORE_IR_CONTEXT_STATS")) {
+    if (uvb && QORE_ENV_IS_SET("QORE_IR_CONTEXT_STATS")) {
         fprintf(stderr, "AOT-CONTEXT: %s: argv=%d self=%d\n",
             func.name.c_str(), out.uses_argv, out.uses_self);
     }
@@ -38771,7 +38775,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
                     detail += ": unsupported expression";
                 }
                 out.unsupported_expr_details.push_back(std::move(detail));
-                if (q_env_is_set("QORE_AOT_DEBUG")) {
+                if (QORE_ENV_IS_SET("QORE_AOT_DEBUG")) {
                     QoreValue dbg_v;
                     memcpy(&dbg_v, &bits, sizeof(dbg_v));
                     if (dbg_v.hasNode() && dbg_v.getInternalNode()) {

@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -205,13 +206,13 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
 
     #! Sets up the Instantly client for integration tests
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.INSTANTLY_CONNECTION;
+        *string conn_name = LiveProvider::get("instantly", "INSTANTLY_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("instantly", "INSTANTLY_CONNECTION", m_options.conn);
             client = conn.getAsync();
             return;
         }
-        *string apikey = ENV.INSTANTLY_API_KEY;
+        *string apikey = LiveProvider::get("instantly", "INSTANTLY_API_KEY");
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -c option or INSTANTLY_API_KEY/"
@@ -228,12 +229,12 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
 
-        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key", "url": "http://localhost:" + port}, True);
+        InstantlyRestClient::InstantlyRestClient rest({"apikey": "test-key", "url": "http://127.0.0.1:" + port}, True);
         handler.rate_limited = 1;
         hash<auto> info;
         hash<auto> resp = rest.doRequest("GET", "campaigns/c1", NOTHING, \info);
@@ -249,11 +250,11 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
-        string url = "http://localhost:" + port + "/api/v2";
+        string url = "http://127.0.0.1:" + port + "/api/v2";
 
         # the example event data is requested once
         InstantlyDataProvider::InstantlyReplyReceivedEventDataProvider watch(
@@ -384,14 +385,14 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeInstantlyHandler handler();
         server.setHandler("instantly", "", NOTHING, handler);
         server.setDefaultHandler("instantly", handler);
 
         InstantlyRestClient::InstantlyRestClientIo rest({
             "apikey": "test-key",
-            "url": "http://localhost:" + port + "/api/v2",
+            "url": "http://127.0.0.1:" + port + "/api/v2",
         });
         InstantlyDataProvider::InstantlyDataProvider provider({
             "instantlyrestclient": rest,
@@ -624,7 +625,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
             InstantlyRestClient::InstantlyRestConnection conn({
                 "name": "test",
                 "desc": "test",
-                "opts": {"apikey": ENV.INSTANTLY_API_KEY},
+                "opts": {"apikey": LiveProvider::get("instantly", "INSTANTLY_API_KEY")},
             }, {"monitor": False});
             hash<PingInfo> ping_info = conn.ping(True);
             assertTrue(ping_info.ok, "connection ping succeeded");
@@ -665,6 +666,33 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         # Verify total count matches expectations
         assertEq(ExpectedActions.size(), actions.size(),
             "total registered action count matches expected");
+
+        # the get and count actions only read (GET, or the analytics query POST of get-warmup-analytics): they
+        # declare that they are read-only, which the catalogue reports as such; the other API actions change state
+        # (qore#7454)
+        list<string> read_only = (
+            "count-unread-emails", "get-account", "get-background-job", "get-campaign", "get-campaign-analytics",
+            "get-campaign-analytics-overview", "get-campaign-daily-analytics", "get-campaign-for-email",
+            "get-campaign-step-analytics", "get-campaign-subsequence", "get-custom-tag",
+            "get-custom-tracking-domain-status", "get-email", "get-email-verification-status",
+            "get-inbox-placement-analytics", "get-inbox-placement-test", "get-ip-analytics-stats-by-date",
+            "get-ip-analytics-stats-by-test", "get-ip-blacklist-report", "get-ip-deliverability-insights",
+            "get-lead", "get-lead-label", "get-lead-list", "get-warmup-analytics", "get-workspace",
+            "get-workspace-admin", "get-workspace-group-member", "get-workspace-member",
+        );
+        list<hash<DataProviderActionInfo>> typed_actions = DataProviderActionCatalog::getActionsEx(
+            InstantlyDataProvider::AppName);
+        list<hash<DataProviderActionInfo>> ro_actions = select typed_actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        list<hash<DataProviderActionInfo>> rw_actions = select typed_actions,
+            $1.action_code == DPAT_API && $1.action != AbstractDataProvider::GenericApiCallActionName
+                && !inlist($1.action, read_only);
+        assertTrue(inlist("export-leads", (map $1.action, rw_actions)));
+        assertTrue(inlist("test-account-vitals", (map $1.action, rw_actions)));
+        map assertTrue(DataProviderActionCatalog::actionMutatesState($1), $1.action), rw_actions;
     }
 
     #! Metadata tests - verify provider info for key providers

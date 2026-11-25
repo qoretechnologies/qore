@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - it checks that the no_proxy entry "localhost" excludes "http://localhost:8000/" from the proxy, which resolves the URL without connecting to it; its servers listen on 127.0.0.1 and their clients connect to 127.0.0.1
 # Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
@@ -227,6 +228,7 @@ DlzqJCYj569YNnMxXATrUXWlZKA2gUadYwrQYdoIe4eI8pAa5q2BgY7PsaqyFN0q
     }
 
     environmentTest() {
+        # live-provider-optin: saves and restores the proxy variables
         hash<string, *string> saved = map {$1: getenv($1)}, ("http_proxy", "https_proxy", "HTTPS_PROXY", "all_proxy",
             "ALL_PROXY", "no_proxy", "NO_PROXY", "HTTP_PROXY");
         on_exit {

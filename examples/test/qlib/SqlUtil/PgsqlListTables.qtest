@@ -12,6 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}"
 %requires ./PgsqlTestIsolation.qm
+%requires ./TestRunIsolation.qm
 
 %exec-class PgsqlListTablesTest
 
@@ -162,7 +163,7 @@ class PgsqlListTablesTest inherits QUnit::Test {
 
     private checkConnection() {
         if (!ds) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 

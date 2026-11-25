@@ -36,9 +36,14 @@
 #include "qore/intern/qore_encoding_private.h"
 #include "qore/intern/QC_FilePollOperation.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <cerrno>
 #include <chrono>
+#include <fcntl.h>
+#ifndef _Q_WINDOWS
+#include <sys/param.h>
+#endif
 #include <climits>
 #include <condition_variable>
 #include <cstdio>
@@ -460,11 +465,13 @@ FileReadPollOperation::FileReadPollOperation(ExceptionSink* xsink, File* file, c
 
 #ifdef _Q_WINDOWS
     // FIXME: implement non-blocking I/O (overlapped) for QoreFile on Windows
-    if (file->priv->open_intern(path, O_RDONLY, 0, file->priv->charset)) {
+    if (file->priv->open_intern(path, O_RDONLY, 0, file->priv->charset, xsink)) {
 #else
-    if (file->priv->open_intern(path, O_RDONLY | O_NONBLOCK, 0, file->priv->charset)) {
+    if (file->priv->open_intern(path, O_RDONLY | O_NONBLOCK, 0, file->priv->charset, xsink)) {
 #endif
-        xsink->raiseErrnoException("FILE-OPEN-ERROR", errno, "failed to open file: '%s'", path);
+        if (!*xsink) {
+            xsink->raiseErrnoException("FILE-OPEN-ERROR", errno, "failed to open file: '%s'", path);
+        }
         file->priv->clearNonBlock(xsink);
         set_non_block = false;
         return;
@@ -798,26 +805,115 @@ int QoreFile::sync(ExceptionSink* xsink) {
     return -1;
 }
 
-void QoreFile::makeSpecial(int sfd) {
-    priv->is_open = true;
-    priv->filename.clear();
-    priv->charset = QCS_DEFAULT;
-    priv->resetDecoder();
-    priv->special_file = true;
-    priv->fd = sfd;
+void qore_file_ops::makeSpecialImpl(QoreFile* b, int sfd) {
+    b->priv->is_open = true;
+    b->priv->filename.clear();
+    b->priv->charset = QCS_DEFAULT;
+    b->priv->resetDecoder();
+    b->priv->special_file = true;
+    b->priv->fd = sfd;
 }
 
-void QoreFile::makeOwnedSpecial(int fd) {
-    makeSpecial(fd);
-    priv->owned_special = true;
+void qore_file_ops::makeOwnedSpecialImpl(QoreFile* b, int fd) {
+    qore_file_ops(b).makeSpecial(fd);
+    b->priv->owned_special = true;
 }
 
-int qore_qf_private::checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    if (!smh) {
+int q_get_open_file_path(int fd, const struct stat& sbuf, const char* opened_path, std::string& canon) {
+    canon.clear();
+#ifdef _Q_WINDOWS
+    return -1;
+#else
+    // the name is resolved only where the descriptor cannot be asked for its path
+    bool by_name = false;
+#if defined(F_GETPATH)
+    {
+        char buf[MAXPATHLEN];
+        if (fcntl(fd, F_GETPATH, buf)) {
+            // a pipe, a socket or a removed file has no path
+            return -1;
+        }
+        canon = buf;
+    }
+#elif defined(__linux__)
+    {
+        char link[64];
+        snprintf(link, sizeof link, "/proc/self/fd/%d", fd);
+        char buf[PATH_MAX];
+        ssize_t len = readlink(link, buf, sizeof buf);
+        if (len < 0) {
+            // without procfs the descriptor cannot be asked
+            if (errno != ENOENT) {
+                return -1;
+            }
+            by_name = true;
+        } else if (static_cast<size_t>(len) >= sizeof buf) {
+            return -1;
+        } else {
+            // the target of an object without a path (ex: "pipe:[1234]") is not absolute
+            canon.assign(buf, static_cast<size_t>(len));
+        }
+    }
+#else
+    by_name = true;
+#endif
+    if (by_name) {
+        if (!opened_path) {
+            return -1;
+        }
+        std::unique_ptr<char, decltype(&free)> real(realpath(opened_path, nullptr), &free);
+        if (!real) {
+            return -1;
+        }
+        canon = real.get();
+    }
+    // a descriptor alias (/dev/fd/N) names another file, not one of its own
+    if (canon.empty() || canon[0] != '/' || !canon.compare(0, 8, "/dev/fd/")) {
+        return -1;
+    }
+    // the path must name the open file
+    struct stat cbuf;
+    if (stat(canon.c_str(), &cbuf) || cbuf.st_dev != sbuf.st_dev || cbuf.st_ino != sbuf.st_ino) {
+        return -1;
+    }
+    return 0;
+#endif
+}
+
+int q_check_opened_file_policy(QoreSandboxManager& sm, int fd, const char* name, int access_mode,
+        ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    // a name on Windows reaches no other file than the one that the policy checked
+    return 0;
+#else
+    struct stat sbuf;
+    std::string canon;
+    if (fstat(fd, &sbuf) || q_get_open_file_path(fd, sbuf, name, canon)) {
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file opened cannot be "
+            "identified by a path, so the security policy cannot be applied to it", name);
+        return -1;
+    }
+    // the name was checked before it was opened
+    if (canon == name) {
         return 0;
     }
-    // Determine access mode based on flags
+    // errors name the file as given, not the file reached
+    ExceptionSink xsink2;
+    if (!sm.checkFilesystemAccess(canon.c_str(), access_mode, &xsink2)) {
+        QoreValue err = xsink2.getExceptionErr();
+        QoreStringDataHelper err_str(err);
+        QoreString code(err_str ? err_str.c_str() : "FILESYSTEM-ACCESS-DENIED");
+        xsink2.clear();
+        xsink->raiseException(code.c_str(), "Access to '%s' denied: the file opened is not permitted by the security "
+            "policy", name);
+        return -1;
+    }
+    return 0;
+#endif
+}
+
+//! returns the QSEC_* access of an open() with the given flags
+static int qore_open_access_mode(int flags) {
     int access_mode = 0;
     if ((flags & O_ACCMODE) == O_RDONLY) {
         access_mode = QSEC_READ;
@@ -826,10 +922,128 @@ int qore_qf_private::checkOpenAccess(const char* fn, int flags, ExceptionSink* x
     } else if ((flags & O_ACCMODE) == O_RDWR) {
         access_mode = QSEC_READ | QSEC_WRITE;
     }
+    // O_TRUNC changes the file also with O_RDONLY
+    if (flags & O_TRUNC) {
+        access_mode |= QSEC_WRITE;
+    }
     if (flags & O_CREAT) {
         access_mode |= QSEC_CREATE;
     }
-    return smh->checkFilesystemAccess(fn, access_mode, xsink) ? 0 : -1;
+    return access_mode;
+}
+
+int qore_qf_private::checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return 0;
+    }
+    return smh->checkFilesystemAccess(fn, qore_open_access_mode(flags), xsink) ? 0 : -1;
+}
+
+//! truncates a file that was opened without O_TRUNC, as O_TRUNC would have, once the policy allowed it
+/** A descriptor open for writing is truncated directly.  A descriptor open only for reading cannot be truncated: the
+    file is opened for writing again by the path of the descriptor, which must still name the same file (its device
+    and inode), so that a file put in its place meanwhile is never truncated.
+
+    @return 0 for OK, -1 for an error (errno is set)
+*/
+static int truncate_open_file(int fd, int flags) {
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        return -1;
+    }
+    // as with O_TRUNC, only a regular file is truncated
+    if (!S_ISREG(sbuf.st_mode)) {
+        return 0;
+    }
+    if ((flags & O_ACCMODE) != O_RDONLY) {
+        return ftruncate(fd, 0);
+    }
+#ifdef _Q_WINDOWS
+    errno = EACCES;
+    return -1;
+#else
+    std::string canon;
+    if (q_get_open_file_path(fd, sbuf, nullptr, canon)) {
+        errno = EACCES;
+        return -1;
+    }
+    int wfd;
+    do {
+        wfd = ::open(canon.c_str(), O_WRONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    } while (wfd < 0 && errno == EINTR);
+    if (wfd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(::close, wfd);
+    struct stat wbuf;
+    if (fstat(wfd, &wbuf)) {
+        return -1;
+    }
+    if (wbuf.st_dev != sbuf.st_dev || wbuf.st_ino != sbuf.st_ino) {
+        errno = EACCES;
+        return -1;
+    }
+    return ftruncate(wfd, 0);
+#endif
+}
+
+int qore_qf_private::openFd(const char* fn, int flags, int mode, ExceptionSink* xsink) {
+    // the policy checked the name before the open; the file actually opened is checked after it
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    // a file is truncated only once it is known to be the one the policy allows: O_TRUNC is never given to the open
+    // under a policy, also with O_RDONLY, with which an open truncates the file on some systems (ex: Linux)
+    bool trunc = smh && (flags & O_TRUNC);
+    int oflags = trunc ? (flags & ~O_TRUNC) : flags;
+#ifdef O_NOCTTY
+    // under a policy, a file opened never becomes the controlling terminal of the process (qore#7498)
+    if (smh) {
+        oflags |= O_NOCTTY;
+    }
+#endif
+#ifdef DEBUG
+    // test hook: a concurrent change of the file system between the check of the name and the open
+    if (smh) {
+        qore_dbg_fs_swap_on_open(fn);
+    }
+#endif
+    // a file opened by the library is never inherited by a program the process starts (with system(),
+    // backquote(), fork() and exec(), or a module)
+#ifdef O_CLOEXEC
+    int nfd = ::open(fn, oflags | O_CLOEXEC, mode);
+#else
+    int nfd = ::open(fn, oflags, mode);
+#endif
+    if (nfd < 0 || !smh) {
+        return nfd;
+    }
+    ExceptionSink local_xsink;
+    if (q_check_opened_file_policy(*smh.get(), nfd, fn, qore_open_access_mode(flags),
+            xsink ? xsink : &local_xsink)) {
+        ::close(nfd);
+        if (!xsink) {
+            local_xsink.clear();
+        }
+        errno = EACCES;
+        return -1;
+    }
+    if (trunc && truncate_open_file(nfd, flags)) {
+        int err = errno;
+        ::close(nfd);
+        errno = err;
+        return -1;
+    }
+    return nfd;
+}
+
+void q_dbg_fs_swap_point(const char* name) {
+#ifdef DEBUG
+    qore_dbg_fs_swap_on_open(name);
+#endif
+}
+
+int q_open_policy_checked(const char* fn, int flags, int mode, ExceptionSink* xsink) {
+    return qore_qf_private::openFd(fn, flags, mode, xsink);
 }
 
 int QoreFile::open(const char *fn, int flags, int mode, const QoreEncoding *cs) {
@@ -845,11 +1059,11 @@ int QoreFile::open(const char *fn, int flags, int mode, const QoreEncoding *cs) 
     return priv->open(fn, flags, mode, cs);
 }
 
-int QoreFile::openCheckAccess(ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs) {
+int qore_file_ops::openCheckAccessImpl(QoreFile* b, ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs) {
     if (fn && qore_qf_private::checkOpenAccess(fn, flags, xsink)) {
         return -1;
     }
-    return priv->open(fn, flags, mode, cs);
+    return b->priv->open(fn, flags, mode, cs, xsink);
 }
 
 int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, const QoreEncoding *cs) {
@@ -875,11 +1089,13 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
             return -1;
         }
 
-        rc = priv->open_intern(fn, flags, mode, cs);
+        rc = priv->open_intern(fn, flags, mode, cs, xsink);
     }
 
     if (rc) {
-        xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", fn);
+        if (!*xsink) {
+            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", fn);
+        }
         return -1;
     }
 
@@ -910,8 +1126,8 @@ QoreStringNode* QoreFile::readUntil(const char* bytes, bool incl_bytes, Exceptio
     return priv->readUntil(bytes, incl_bytes, xsink);
 }
 
-QoreStringNode* QoreFile::readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink) {
-    return priv->readUntilText(eol, incl_eol, xsink);
+QoreStringNode* qore_file_ops::readUntilTextImpl(QoreFile* b, const QoreString& eol, bool incl_eol, ExceptionSink* xsink) {
+    return b->priv->readUntilText(eol, incl_eol, xsink);
 }
 
 int QoreFile::readUntil(char byte, QoreString& str, bool incl_byte) {
@@ -1439,21 +1655,21 @@ int QoreFile::getFD() const {
 }
 
 #ifdef HAVE_TERMIOS_H
-int QoreFile::setTerminalAttributes(int action, QoreTermIOS *ios, ExceptionSink* xsink) const {
-    return priv->setTerminalAttributes(action, ios, xsink);
+int qore_file_ops::setTerminalAttributesImpl(QoreFile* b, int action, QoreTermIOS *ios, ExceptionSink* xsink) {
+    return b->priv->setTerminalAttributes(action, ios, xsink);
 }
 
-int QoreFile::getTerminalAttributes(QoreTermIOS *ios, ExceptionSink* xsink) const {
-    return priv->getTerminalAttributes(ios, xsink);
+int qore_file_ops::getTerminalAttributesImpl(QoreFile* b, QoreTermIOS *ios, ExceptionSink* xsink) {
+    return b->priv->getTerminalAttributes(ios, xsink);
 }
 #endif
 
-void QoreFile::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setEventQueue(xsink, q, arg, with_data);
+void qore_file_ops::setEventQueueImpl(QoreFile* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFile::cleanup(ExceptionSink* xsink) {
-    priv->cleanup(xsink);
+void qore_file_ops::cleanupImpl(QoreFile* b, ExceptionSink* xsink) {
+    b->priv->cleanup(xsink);
 }
 
 QoreListNode* QoreFile::stat(ExceptionSink* xsink) const {
@@ -1491,8 +1707,8 @@ QoreObject* File::startPollRead(ExceptionSink* xsink, QoreObject* self, const ch
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_FILEPOLLOPERATION, getProgram(), poller.release()), xsink);
     if (!*xsink) {
         p->setSelf(*rv);
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("read-done"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("read-done"), xsink);
     }
     return rv.release();
 }
@@ -1505,7 +1721,7 @@ File::~File() {
 
 void File::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
-        cleanup(xsink);
+        qore_file_ops(this).cleanup(xsink);
         delete this;
     }
 }
@@ -1513,7 +1729,7 @@ void File::deref(ExceptionSink* xsink) {
 void File::deref() {
     if (ROdereference()) {
         ExceptionSink xsink;
-        cleanup(&xsink);
+        qore_file_ops(this).cleanup(&xsink);
         delete this;
     }
 }

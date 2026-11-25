@@ -33,6 +33,7 @@
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QC_FtpClient.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 // a remote path is sent to the server in an FTP command as a C string, which would be cut at a NUL character, and a
 // CR or LF would end the command and start another one
@@ -169,7 +170,7 @@ FtpClient::destructor() {
    // disconnect to clean up async control op and sockets
    f->disconnect();
    // have to clear callbacks before destroying
-   f->cleanup(xsink);
+   qore_ftp_client_ops(f).cleanup(xsink);
    f->deref(xsink);
 }
 
@@ -1222,7 +1223,7 @@ ftp.setEventQueue();
     @endcode
 */
 nothing FtpClient::setEventQueue() {
-    f->setEventQueue(xsink, nullptr, QoreValue(), false);
+    qore_ftp_client_ops(f).setEventQueue(xsink, nullptr, QoreValue(), false);
 }
 
 //! Sets a Queue object to receive FtpClient and Socket events on both the data and control connections
@@ -1249,7 +1250,7 @@ nothing FtpClient::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument
             "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
+    qore_ftp_client_ops(f).setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Clears any Queue object that may be set on the FtpClient object so that @ref event_handling "I/O events" are no longer captured on the object on the data connection
@@ -1260,7 +1261,7 @@ ftp.setDataEventQueue();
     @endcode
  */
 nothing FtpClient::setDataEventQueue() {
-    f->setDataEventQueue(xsink, nullptr, QoreValue(), false);
+    qore_ftp_client_ops(f).setDataEventQueue(xsink, nullptr, QoreValue(), false);
 }
 
 //! Sets a Queue object to receive FtpClient and Socket events on the data connection
@@ -1287,7 +1288,7 @@ nothing FtpClient::setDataEventQueue(Qore::Thread::Queue[Queue] queue, auto argu
             "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setDataEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
+    qore_ftp_client_ops(f).setDataEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Clears any Queue object that may be set on the FtpClient object so that @ref event_handling "I/O events" are no longer captured on the object on the control connection
@@ -1298,7 +1299,7 @@ ftp.setControlEventQueue();
     @endcode
  */
 nothing FtpClient::setControlEventQueue() {
-    f->setControlEventQueue(xsink, nullptr, QoreValue(), false);
+    qore_ftp_client_ops(f).setControlEventQueue(xsink, nullptr, QoreValue(), false);
 }
 
 //! Sets a Queue object to receive FtpClient and Socket events on the control connection
@@ -1325,7 +1326,7 @@ nothing FtpClient::setControlEventQueue(Qore::Thread::Queue[Queue] queue, auto a
             "size for I/O monitoring", (int64)(queue->getMax()), queue->getMax() == 1 ? "y" : "ies");
     }
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    f->setControlEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
+    qore_ftp_client_ops(f).setControlEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -1429,7 +1430,7 @@ FtpClient::clearStats() {
     @since %Qore 0.8.12.3
 */
 int FtpClient::getTimeout() [flags=CONSTANT] {
-    return f->getTimeout();
+    return qore_ftp_client_ops(f).getTimeout();
 }
 
 //! sets the socket I/O timeout value in milliseconds
@@ -1438,7 +1439,7 @@ int FtpClient::getTimeout() [flags=CONSTANT] {
     @since %Qore 0.8.12.3
 */
 FtpClient::setTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
-    f->setTimeout(timeout_ms);
+    qore_ftp_client_ops(f).setTimeout(timeout_ms);
 }
 
 //! Sends a message on the control connection with a reply on the control connection only

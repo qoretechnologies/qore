@@ -277,6 +277,8 @@ public:
     DLLLOCAL QoreStringNode* getPendingDBEncoding() const;
     DLLLOCAL QoreStringNode* getPendingHostName() const;
     DLLLOCAL int getPendingPort() const;
+    //! appends the masked description of the datasource with its pending host and port, read together (qore#6988)
+    DLLLOCAL void appendMaskedPendingDesc(QoreString& str) const;
     //! returns the port in use; read with ds_lock held, as the thread that holds the connection changes it
     DLLLOCAL int getPort() const;
     DLLLOCAL void setTransactionLockTimeout(int t_ms);

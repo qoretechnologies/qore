@@ -100,6 +100,7 @@ module LinkedInOrganizationsDataProvider {
                 "Useful for confirming which account a connection is bound to; the organizations "
                 "that account administers are what every other action can reach.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Identity",),
             "output_type": LinkedInGetCurrentMemberDataProvider::ResponseType,
         });
@@ -117,6 +118,7 @@ module LinkedInOrganizationsDataProvider {
                 "The `id` of an organization here is what every other action takes, and the "
                 "`organizational_page` URN is what LinkedIn's analytics and follows APIs address.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Organizations",),
             "output_type": LinkedInListOrganizationsDataProvider::ResponseType,
         });
@@ -130,6 +132,7 @@ module LinkedInOrganizationsDataProvider {
             "desc": "Retrieves one organization's profile: its name, description, tagline, website, "
                 "logo, cover photo, size, industries, specialties and page URL.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Organizations",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInGetOrganizationRequestDataType::Fields{"organization",}, {
@@ -155,6 +158,7 @@ module LinkedInOrganizationsDataProvider {
                 "Reading with the `AUTHOR` view context also returns drafts and scheduled posts; a "
                 "scheduled post is the one with `scheduled_at` set.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Content",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInListPostsRequestDataType::Fields{"organization",}, {
@@ -182,6 +186,7 @@ module LinkedInOrganizationsDataProvider {
                 "A post is reachable when the organization authored it, or when it reshares a post "
                 "the organization authored.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Content",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInGetOrgPostRequestDataType::Fields{"post",}, {
@@ -207,6 +212,7 @@ module LinkedInOrganizationsDataProvider {
                 "A comment made by a member who has not opted in to sharing their data arrives "
                 "without its author **and without its text** — LinkedIn removes both together.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Engagement",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInListCommentsRequestDataType::Fields{"entity",}, {
@@ -238,6 +244,7 @@ module LinkedInOrganizationsDataProvider {
                 "authoritative total and is not reduced by consent; this action is for identifying "
                 "*who* reacted, as far as LinkedIn will say.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Engagement",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInListReactionsRequestDataType::Fields{"entity",}, {
@@ -264,6 +271,7 @@ module LinkedInOrganizationsDataProvider {
                 "Several URNs can be summarized in one call, which is far cheaper than listing "
                 "every reaction on each of them.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Engagement",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInGetSocialMetadataRequestDataType::Fields{"entities",}, {
@@ -287,6 +295,7 @@ module LinkedInOrganizationsDataProvider {
                 "A follower who has not opted in to sharing their data arrives with only a "
                 "timestamp; that setting is off by default, so expect many such entries.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Audience",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInListFollowersRequestDataType::Fields{"organization",}, {
@@ -309,6 +318,7 @@ module LinkedInOrganizationsDataProvider {
             "short_desc": "List the pages an organization follows",
             "desc": "Lists the organizational pages that an organization's own page follows.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Audience",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInListFollowingRequestDataType::Fields{"organization",}, {
@@ -341,6 +351,7 @@ module LinkedInOrganizationsDataProvider {
                 "undisclosed threshold is reported as `0`, and the same request repeated can return "
                 "slightly different values.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Analytics",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInGetFollowerStatisticsRequestDataType::Fields{"organization",
@@ -366,6 +377,7 @@ module LinkedInOrganizationsDataProvider {
                 "The same privacy protections apply: small counts are reported as `0` and repeated "
                 "requests can differ slightly.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Analytics",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 LinkedInGetVisitorStatisticsRequestDataType::Fields{"organization",

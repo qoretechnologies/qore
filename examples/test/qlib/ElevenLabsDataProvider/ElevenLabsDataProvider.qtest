@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires RestClientIo
@@ -171,6 +172,23 @@ class ElevenLabsDataProviderTest inherits QUnit::Test {
         assertEq("elevenlabs", info.name);
         assertEq(True, info.supports_children);
         assertEq(True, info.children_can_support_apis);
+        # these actions only make GET requests: the actions declare that they are read-only (qore#7454)
+        foreach string name in ("list-voices", "get-voice", "list-models", "list-history", "get-history-item",
+                "get-history-audio", "get-dubbing", "get-dubbing-audio", "list-dubbing",
+                "list-pronunciation-dictionaries", "get-pronunciation-dictionary") {
+            hash<DataProvider::DataProviderActionInfo> action_info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("ElevenLabs"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, action_info.mutates_state.typeCode(), name);
+            assertFalse(action_info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action_info), name);
+        }
+        # ElevenLabs keeps generated audio as history items (and transcripts), so the generation actions are not
+        # read-only (qore#7454)
+        foreach string name in ("text-to-speech", "speech-to-speech", "speech-to-text") {
+            hash<DataProvider::DataProviderActionInfo> action_info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("ElevenLabs"), $1.action == name)[0];
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action_info), name);
+        }
     }
 
     testDataTypes() {
@@ -876,9 +894,10 @@ class ElevenLabsDataProviderTest inherits QUnit::Test {
 
     testIntegration() {
         # Integration tests run only when ELEVENLABS_API_KEY is set
-        *string api_key = ENV.ELEVENLABS_API_KEY;
+        *string api_key = LiveProvider::get("elevenlabs", "ELEVENLABS_API_KEY");
         if (!api_key) {
-            testSkip("set ELEVENLABS_API_KEY to run integration tests");
+            testSkip(LiveProvider::enabled("elevenlabs") ? "set ELEVENLABS_API_KEY to run integration tests"
+                : LiveProvider::skipReason("elevenlabs", "ELEVENLABS_API_KEY"));
         }
 
         ElevenLabsDataProvider::ElevenLabsDataProvider real_dp({"apikey": api_key});

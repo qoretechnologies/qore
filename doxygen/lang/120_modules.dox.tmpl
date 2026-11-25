@@ -1378,8 +1378,11 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
       when parsing modules
 
     When parsing module code, the default warning mask is set to @ref Qore::WARN_MODULES "WARN_MODULES", and any
-    warnings are treated as errors.   Furthermore, any restrictions that the importing @ref Qore::Program "Program"
-    object has will be added to the module's @ref Qore::Program "Program" object, including the extended parse
+    warnings are treated as errors (@ref Qore::load_module_warn() "load_module_warn()" returns them instead).  This
+    applies to every file of a @ref separated_modules "separated module" as to a module in a single file, including
+    the warnings that are found only when the module's code is committed, such as \c INVALID-OPERATION.  Furthermore,
+    any restrictions that the importing @ref Qore::Program "Program" object has will be added to the module's
+    @ref Qore::Program "Program" object, including the extended parse
     options (for example \c no-class-defs, \c no-new or \c no-module-path-directives), as will its permissions
     (for example @ref allow-weak-references "%allow-weak-references" or
     @ref allow-opaque-references "%allow-opaque-references").  Options that only select language behavior (the
@@ -1478,6 +1481,13 @@ qcc of this Qore installation
       reported;
     - if the source module loads, a \c BINARY-MODULE-SOURCE-FALLBACK warning gives the reason; with a warning mask
       of 0, no warning is issued, except for a compiled module that is out of date with its sources
+    - the compiled modules that cannot be loaded because a module that they were compiled against is missing (one
+      that their source loads with \c %%try-module, for example) are reported in one
+      \c BINARY-MODULE-SOURCE-FALLBACK warning for the module load, when it ends, instead of one warning each: it names
+      the missing modules and, for each one, the modules loaded from their source, in the order of their names, ex:
+      <tt>3 AOT modules were loaded from their source because modules that they were compiled against are missing:
+      'msgpack' (ProviderIndexUtil), 'xml' (DataProvider, RestClient); ...</tt>; loading a module from its source is
+      slower than loading its compiled module, so installing the missing modules makes the load faster
 
     The warnings of the module loader (\c BINARY-MODULE-SOURCE-FALLBACK, \c BINARY-MODULE-STALE, and
     \c MODULE-CHILD-FAILED and \c MODULE-CHILD-SKIPPED for @ref user_module_children "child modules") are reported
@@ -1674,8 +1684,11 @@ module MyWorkerModule {
     code cannot register an exit hook.
 
     @anchor module_deletion_order
-    When the process exits, the objects that the Programs of user and AOT-compiled modules hold through opaque
-    references (\c \@=) are released first, while all module Programs still exist.  Then a module is deleted only
+    When the process exits, the global variables and the static class variables of the Programs of user and
+    AOT-compiled modules, and the objects that they hold through opaque references (\c \@=), are released first, while
+    all module Programs still exist; those of a module are released before those of the modules that it requires, so
+    that a destructor of an object of a required module's class that a module holds can use the static variables of
+    its own class.  Then a module is deleted only
     after every module that requires it; a binary module that no remaining module requires is deleted before the user
     and AOT-compiled modules, while the asynchronous I/O services still run, and a module imported into a Program that
     a binary module owns is deleted after that binary module, unless that module requires it.  Modules that require

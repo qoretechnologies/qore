@@ -61,7 +61,7 @@ QoreString *QoreExtractOperatorNode::getAsString(bool &del, int foff, ExceptionS
 }
 
 int QoreExtractOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink *xsink) const {
-    qore_string_private::get(str)->concat(&extract_str);
+    qore_string_private::get(str)->concatAsciiName(extract_str);
     return 0;
 }
 
@@ -188,6 +188,11 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
         return QoreValue();
     }
 
+    // a list freed under a weak reference cannot be changed, as by the other changes (qore#7199)
+    if (vt == NT_LIST && qore_list_private::get(*val.getValue().get<QoreListNode>())->checkValid(xsink)) {
+        return QoreValue();
+    }
+
     size_t offset = (size_t)eoffset->getAsBigInt();
 
 #ifdef DEBUG
@@ -219,8 +224,13 @@ QoreValue QoreExtractOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* 
                     rv = qore_list_private::replace(*vl, offset, length, *exp, true, xsink);
                 }
         }
+        // the elements taken out of a list reached through a weak reference (qore#7373)
+        if (rv) {
+            val.removedValueThroughWeak(QoreValue(*rv));
+        }
     }
     else if (vt == NT_STRING) {
+        // note: safe; val.ensureUnique() above makes a node of an inline short string
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();
         if (!length_exp && !new_exp)
             rv = vs->extract(offset, xsink);

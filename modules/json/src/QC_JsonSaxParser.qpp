@@ -96,8 +96,7 @@ private:
         std::string chunk;
         if (!handler->read(chunk, JSON_STREAM_READ_SIZE)) {
             if (handler->hasError() && xsink) {
-                xsink->raiseException("JSON-SAX-PARSE-ERROR",
-                    "stream read error: %s", handler->getErrorMessage().c_str());
+                handler->raiseReadError(xsink);
             }
             eof_flag = true;
             return false;
@@ -842,8 +841,7 @@ int JsonSaxParser::parseStream(QoreObject* stream, ResolvedCallReferenceNode* ca
     }
 
     if (read_handler.hasError() && !*xsink) {
-        xsink->raiseException("JSON-SAX-PARSE-ERROR",
-            "stream read error: %s", read_handler.getErrorMessage().c_str());
+        read_handler.raiseReadError(xsink);
         return -1;
     }
 

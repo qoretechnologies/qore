@@ -129,7 +129,7 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
     }
 
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
-        date start = now_us();
+        int start_us = clock_get_monotonic_us();
 
         # Get sources from context
         *list<string> sources;
@@ -142,23 +142,23 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
             if (getFailClosed()) {
                 hash<GuardrailResult> result = makeFailResult(
                     "no RAG sources provided for hallucination check (fail-closed)");
-                result.duration_ms = getElapsedMs(start);
+                result.duration_ms = getElapsedMs(start_us);
                 return result;
             }
             hash<GuardrailResult> result = makePassResult();
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
         if (llm) {
             try {
-                return checkGrounding(text, sources, start);
+                return checkGrounding(text, sources, start_us);
             } catch (hash<ExceptionInfo> ex) {
                 if (getFailClosed()) {
                     hash<GuardrailResult> result = makeFailResult(
                         sprintf("hallucination check unavailable (fail-closed): %s",
                             ex.desc));
-                    result.duration_ms = getElapsedMs(start);
+                    result.duration_ms = getElapsedMs(start_us);
                     return result;
                 }
             }
@@ -167,17 +167,17 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
         if (getFailClosed()) {
             hash<GuardrailResult> result = makeFailResult(
                 "LLM unavailable for hallucination check (fail-closed)");
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 
     #! Uses LLM to check if the response is grounded in sources
     private hash<GuardrailResult> checkGrounding(string text, list<string> sources,
-            date start) {
+            int start_us) {
         # Build sources summary
         string sources_text = "";
         int idx = 1;
@@ -235,12 +235,12 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
                     "reason": parsed.reason,
                 },
             );
-            result.duration_ms = getElapsedMs(start);
+            result.duration_ms = getElapsedMs(start_us);
             return result;
         }
 
         hash<GuardrailResult> result = makePassResult();
-        result.duration_ms = getElapsedMs(start);
+        result.duration_ms = getElapsedMs(start_us);
         return result;
     }
 }

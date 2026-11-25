@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -168,6 +169,13 @@ public class GmailDataProviderTest inherits QUnit::Test {
         );
         assertTrue(watch_att.options.delete_messages.desc.find("consumer") >= 0,
             "the attachment watch deletion option describes the same");
+        # delete_messages deletes the reported messages, so the watch events declare a change (qore#7454)
+        foreach hash<DataProviderActionInfo> action in ((watch, watch_att)) {
+            assertEq(DPAT_EVENT, action.action_code, action.action);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action.action);
+            assertTrue(action.mutates_state, action.action);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), action.action);
+        }
     }
 
     #! Returns the registered action, failing if it is unknown
@@ -574,12 +582,12 @@ public class GmailDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.GMAIL_CONNECTION;
+        *string conn_name = LiveProvider::get("google", "GMAIL_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             return;
         }
 
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("google", "GMAIL_CONNECTION", m_options.conn);
         if (!(conn instanceof GmailRestConnection)) {
             error("connection %y is type %y; expecting \"GmailRestConnection\"", conn_name, conn.className());
         }

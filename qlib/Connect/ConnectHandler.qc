@@ -74,6 +74,8 @@ public class ConnectHandler inherits HttpServer::AbstractHttpRequestHandler {
         bool m_debug = False;
         #! Maximum message size in bytes (0 = no limit)
         int m_max_message_size = CONNECT_DEFAULT_MAX_MESSAGE_SIZE;
+        #! The time that an HTTP/3 send may make no progress (see ConnectHelper::sendQuicStreamData())
+        timeout m_send_timeout = CONNECT_DEFAULT_SEND_TIMEOUT;
     }
 
     #! Create a Connect handler
@@ -413,6 +415,27 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         return m_max_message_size;
     }
 
+    #! Sets the maximum time that a send on an HTTP/3 stream may wait with the client acknowledging no data
+    /** A response whose send makes no progress for this time fails with \c STREAM-SEND-TIMEOUT, and its stream is
+        cancelled, so that a client that takes no data cannot hold the handler's thread (see
+        ConnectHelper::sendQuicStreamData(), qoretechnologies/qore#7282)
+
+        @param send_timeout the time; a value less than or equal to zero waits without a limit; the default is
+        @ref CONNECT_DEFAULT_SEND_TIMEOUT
+
+        @since Connect 1.3
+    */
+    setSendTimeout(timeout send_timeout) {
+        m_send_timeout = send_timeout;
+    }
+
+    #! Returns the maximum time that a send on an HTTP/3 stream may wait with the client acknowledging no data
+    /** @since Connect 1.3
+    */
+    timeout getSendTimeout() {
+        return m_send_timeout;
+    }
+
     #! HttpServer handler entry point
     /** Routes the request based on URL path and Content-Type, then dispatches
         to the appropriate registered handler.
@@ -428,9 +451,9 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
             hash<auto> cx, hash<auto> hdr, *data body) {
         @debug {
-            if (m_debug && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (m_debug && SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("ConnectHandler::handleRequest() method=%y path=%y ct=%y body_size=%d\n",
-                    hdr.method, hdr.path, hdr."content-type", body.size());
+                    hdr.method, hdr.path, http_get_field(hdr, "content-type"), body.size());
             }
         }
 
@@ -473,7 +496,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         }
 
         # Parse Content-Type to determine codec and streaming mode
-        string content_type = hdr."content-type" ?? "";
+        string content_type = http_get_field(hdr, "content-type") ?? "";
         *hash<auto> ct_info = ConnectHelper::parseContentType(content_type);
 
         # Resolve codec
@@ -502,7 +525,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
 
         # Parse deadline from Connect-Timeout-Ms
         *date deadline;
-        *string timeout_str = hdr{ConnectTimeoutHeader};
+        *string timeout_str = http_get_field(hdr, ConnectTimeoutHeader);
         if (timeout_str.val()) {
             deadline = now_us() + milliseconds(int(timeout_str));
         }
@@ -618,13 +641,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         *int session_id = cx."header-info".session_id;
 
         # Negotiate compression
-        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        *string recv_encoding = http_get_field(hdr, ConnectContentEncodingHeader);
         if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
             return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
                 sprintf("unsupported connect-content-encoding: %y", recv_encoding));
         }
         *string send_encoding =
-            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+            ConnectCompression::negotiateEncoding(http_get_field(hdr, ConnectAcceptEncodingHeader));
 
         # Deserialize request from streaming frames
         auto request;
@@ -654,15 +677,18 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         # can use the *Async Socket methods without a handler-thread flush.
         *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, (),
-            m_max_message_size, send_encoding, recv_encoding, io_wake);
+            m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         *hash<ConnectErrorInfo> error;
+        # set if the stream of the response failed: nothing more can be sent on it (qoretechnologies/qore#7282)
+        bool stream_failed;
         try {
             method_info.handler(request, stream, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
+            stream_failed = isStreamFailure(ex);
             error = <ConnectErrorInfo>{
                 "code": CONNECT_ERROR_INTERNAL,
                 "message": sprintf("%s: %s", ex.err, ex.desc),
@@ -677,31 +703,50 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             };
         }
 
-        # Ensure response headers are sent
-        stream.ensureHeadersSent();
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
+        # a stream that failed (the client took no data within the send timeout, or reset or closed it) is not
+        # answered again: the server would try to send an error response on it (qoretechnologies/qore#7282)
+        if (stream_failed) {
+            return <HttpResponseInfo>{
+                "reply_sent": True,
+                "streaming": is_multiplexed,
+            };
+        }
+        try {
+            # Ensure response headers are sent
+            stream.ensureHeadersSent();
 
-        # Send EndStreamResponse frame
-        binary end_frame = ConnectHelper::frameEndStream(
-            stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
-            error);
-        if (http3) {
-            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
-                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            # Send EndStreamResponse frame
+            binary end_frame = ConnectHelper::frameEndStream(
+                stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
+                error);
+            if (http3) {
+                # bounded by the time without progress (qoretechnologies/qore#7282)
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
+            } else {
+                # Async H2 end-of-stream write + io_wake to flush promptly.
+                # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+                s.sendHttp2StreamData(stream_id, end_frame, True);
+                if (io_wake) {
+                    io_wake();
+                }
             }
-        } else {
-            # Async H2 end-of-stream write + io_wake to flush promptly.
-            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            if (io_wake) {
-                io_wake();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream failed while the end of the response was sent: see above
+            if (!isStreamFailure(ex)) {
+                rethrow;
             }
         }
-
-        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
             "streaming": is_multiplexed,
         };
+    }
+
+    #! Returns @ref True "True" if the exception means that the stream of the response failed, so that nothing more can
+    #! be sent on it (qoretechnologies/qore#7282)
+    private static bool isStreamFailure(hash<ExceptionInfo> ex) {
+        return ex.err == "STREAM-SEND-TIMEOUT" || ex.err == "QUIC-STREAM-CLOSED" || ex.err == "QUIC-STREAM-RESET";
     }
 
     #! Handle a client-streaming RPC request
@@ -714,13 +759,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         *int session_id = cx."header-info".session_id;
 
         # Negotiate compression
-        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        *string recv_encoding = http_get_field(hdr, ConnectContentEncodingHeader);
         if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
             return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
                 sprintf("unsupported connect-content-encoding: %y", recv_encoding));
         }
         *string send_encoding =
-            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+            ConnectCompression::negotiateEncoding(http_get_field(hdr, ConnectAcceptEncodingHeader));
 
         # Parse all client messages from the buffered body
         list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
@@ -728,16 +773,19 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         # Create server stream with pre-parsed messages
         *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size, send_encoding, recv_encoding, io_wake);
+            m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         auto response;
         *hash<ConnectErrorInfo> error;
+        # set if the stream of the response failed: nothing more can be sent on it (qoretechnologies/qore#7282)
+        bool stream_failed;
         try {
             response = method_info.handler(stream, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
+            stream_failed = isStreamFailure(ex);
             error = <ConnectErrorInfo>{
                 "code": CONNECT_ERROR_INTERNAL,
                 "message": sprintf("%s: %s", ex.err, ex.desc),
@@ -752,40 +800,52 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             };
         }
 
-        # Ensure headers sent
-        stream.ensureHeadersSent();
-
-        if (!error && exists response) {
-            # Send the response as a framed message
-            binary encoded = codec.serialize(response);
-            binary framed = ConnectHelper::frameMessage(encoded);
-            if (http3) {
-                while (s.submitQuicStreamData(session_id, stream_id, framed, False) == 1) {
-                    s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-                }
-            } else {
-                s.sendHttp2StreamData(stream_id, framed, False);
-            }
-        }
-
-        # Send EndStreamResponse
-        binary end_frame = ConnectHelper::frameEndStream(
-            stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
-            error);
-        if (http3) {
-            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
-                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
-            }
-        } else {
-            # Async H2 end-of-stream write + io_wake to flush promptly.
-            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            if (io_wake) {
-                io_wake();
-            }
-        }
-
         bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
+        # a stream that failed (the client took no data within the send timeout, or reset or closed it) is not
+        # answered again: the server would try to send an error response on it (qoretechnologies/qore#7282)
+        if (stream_failed) {
+            return <HttpResponseInfo>{
+                "reply_sent": True,
+                "streaming": is_multiplexed,
+            };
+        }
+        try {
+            # Ensure headers sent
+            stream.ensureHeadersSent();
+
+            if (!error && exists response) {
+                # Send the response as a framed message
+                binary encoded = codec.serialize(response);
+                binary framed = ConnectHelper::frameMessage(encoded);
+                if (http3) {
+                    # bounded by the time without progress (qoretechnologies/qore#7282)
+                    ConnectHelper::sendQuicStreamData(s, session_id, stream_id, framed, False, m_send_timeout, io_wake);
+                } else {
+                    s.sendHttp2StreamData(stream_id, framed, False);
+                }
+            }
+
+            # Send EndStreamResponse
+            binary end_frame = ConnectHelper::frameEndStream(
+                stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
+                error);
+            if (http3) {
+                # bounded by the time without progress (qoretechnologies/qore#7282)
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
+            } else {
+                # Async H2 end-of-stream write + io_wake to flush promptly.
+                # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+                s.sendHttp2StreamData(stream_id, end_frame, True);
+                if (io_wake) {
+                    io_wake();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream failed while the end of the response was sent: see above
+            if (!isStreamFailure(ex)) {
+                rethrow;
+            }
+        }
         return <HttpResponseInfo>{
             "reply_sent": True,
             "streaming": is_multiplexed,
@@ -802,13 +862,13 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         *int session_id = cx."header-info".session_id;
 
         # Negotiate compression
-        *string recv_encoding = hdr{ConnectContentEncodingHeader};
+        *string recv_encoding = http_get_field(hdr, ConnectContentEncodingHeader);
         if (recv_encoding && !ConnectCompression::isSupported(recv_encoding)) {
             return makeErrorResponse(400, CONNECT_ERROR_INVALID_ARGUMENT,
                 sprintf("unsupported connect-content-encoding: %y", recv_encoding));
         }
         *string send_encoding =
-            ConnectCompression::negotiateEncoding(hdr{ConnectAcceptEncodingHeader});
+            ConnectCompression::negotiateEncoding(http_get_field(hdr, ConnectAcceptEncodingHeader));
 
         # Parse all client messages from the buffered body
         list<auto> messages = parseStreamMessages(body, codec, recv_encoding);
@@ -816,15 +876,18 @@ handler.registerDatagramBidi("Sensor", "Exchange",
         # Create server stream with pre-parsed messages
         *code<nothing()> io_wake = cx."header-info".io_wake;
         ConnectServerStream stream(s, codec, stream_id, http3, session_id, messages,
-            m_max_message_size, send_encoding, recv_encoding, io_wake);
+            m_max_message_size, send_encoding, recv_encoding, io_wake, m_send_timeout);
 
         *hash<ConnectErrorInfo> error;
+        # set if the stream of the response failed: nothing more can be sent on it (qoretechnologies/qore#7282)
+        bool stream_failed;
         try {
             method_info.handler(stream, metadata);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
                 rethrow;
             }
+            stream_failed = isStreamFailure(ex);
             error = <ConnectErrorInfo>{
                 "code": CONNECT_ERROR_INTERNAL,
                 "message": sprintf("%s: %s", ex.err, ex.desc),
@@ -839,27 +902,40 @@ handler.registerDatagramBidi("Sensor", "Exchange",
             };
         }
 
-        # Ensure headers sent
-        stream.ensureHeadersSent();
+        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
+        # a stream that failed (the client took no data within the send timeout, or reset or closed it) is not
+        # answered again: the server would try to send an error response on it (qoretechnologies/qore#7282)
+        if (stream_failed) {
+            return <HttpResponseInfo>{
+                "reply_sent": True,
+                "streaming": is_multiplexed,
+            };
+        }
+        try {
+            # Ensure headers sent
+            stream.ensureHeadersSent();
 
-        # Send EndStreamResponse
-        binary end_frame = ConnectHelper::frameEndStream(
-            stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
-            error);
-        if (http3) {
-            while (s.submitQuicStreamData(session_id, stream_id, end_frame, True) == 1) {
-                s.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            # Send EndStreamResponse
+            binary end_frame = ConnectHelper::frameEndStream(
+                stream.getTrailingMetadata().size() > 0 ? stream.getTrailingMetadata() : NOTHING,
+                error);
+            if (http3) {
+                # bounded by the time without progress (qoretechnologies/qore#7282)
+                ConnectHelper::sendQuicStreamData(s, session_id, stream_id, end_frame, True, m_send_timeout, io_wake);
+            } else {
+                # Async H2 end-of-stream write + io_wake to flush promptly.
+                # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
+                s.sendHttp2StreamData(stream_id, end_frame, True);
+                if (io_wake) {
+                    io_wake();
+                }
             }
-        } else {
-            # Async H2 end-of-stream write + io_wake to flush promptly.
-            # Replaces the former sendHttp2StreamData + flushHttp2 sync pair.
-            s.sendHttp2StreamData(stream_id, end_frame, True);
-            if (io_wake) {
-                io_wake();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream failed while the end of the response was sent: see above
+            if (!isStreamFailure(ex)) {
+                rethrow;
             }
         }
-
-        bool is_multiplexed = http3 || (cx."header-info".http2 ?? False);
         return <HttpResponseInfo>{
             "reply_sent": True,
             "streaming": is_multiplexed,
@@ -909,7 +985,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
                     rethrow;
                 }
                 @debug {
-                    if (m_debug && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (m_debug && SandboxManager::isTerminalIoAllowed()) {
                         stdout.printf("ConnectHandler: fire-and-forget handler error: %s: %s\n",
                             ex.err, ex.desc);
                     }
@@ -1000,7 +1076,7 @@ handler.registerDatagramBidi("Sensor", "Exchange",
     private hash<auto> extractMetadata(hash<auto> hdr) {
         hash<auto> metadata();
         map metadata{$1.key} = $1.value,
-            hdr.pairIterator(),
+            http_get_fields(hdr).pairIterator(),
             $1.key != "content-type"
                 && $1.key != "content-length"
                 && $1.key != "host"

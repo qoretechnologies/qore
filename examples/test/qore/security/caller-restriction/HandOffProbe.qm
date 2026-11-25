@@ -1,0 +1,103 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# a library module for caller-restriction-hand-offs.qtest: each function hands work over to another thread and returns
+# whether the work there runs for a caller that the file system is restricted for
+
+%modern
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+
+module HandOffProbe {
+    domains = "NETWORK,THREAD_CONTROL,THREAD_CLASS";
+    version = "1.0";
+    desc = "caller restriction hand-off probe (qore#6844, qore#6996)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    # the call references that the work runs are created here, so that they record no restrictions of a caller: the
+    # work runs only for the code that it was handed over for
+    init = sub () {
+        HandOffProbe::Results = new Queue();
+        HandOffProbe::InitResults = new Queue();
+        HandOffProbe::TaskRef = \HandOffProbe::task_probe();
+        HandOffProbe::FrameRef = \HandOffProbe::frame_probe();
+    };
+}
+
+class HandOffHolder {
+    public {
+        static list<auto> hold;
+    }
+}
+
+public namespace HandOffProbe {
+    our Queue Results;
+    our Queue InitResults;
+    our code TaskRef;
+    our code FrameRef;
+
+    nothing sub task_probe() {
+        Results.push(SandboxManager::isCallerRestricted(DOM_FILESYSTEM));
+    }
+
+    nothing sub frame_probe(auto frame) {
+        Results.push(SandboxManager::isCallerRestricted(DOM_FILESYSTEM));
+    }
+
+    nothing sub init_probe() {
+        InitResults.push(SandboxManager::isCallerRestricted(DOM_FILESYSTEM));
+    }
+
+    #! sets the thread initialization code of the module's own Program for the caller; it runs with no Program of a
+    #! caller on the stack when a thread enters the module's Program
+    public nothing sub set_init() {
+        set_thread_init(\HandOffProbe::init_probe());
+    }
+
+    #! starts a thread in the module's Program for the caller and returns whether the initialization code ran
+    #! restricted
+    public bool sub spawn() {
+        Queue done();
+        background done.push(True);
+        done.get(10s);
+        return InitResults.get(10s);
+    }
+
+    #! a task of the process-wide controller, which the first caller that needs it can create (qore#6996)
+    public bool sub global_task() {
+        Queue q();
+        AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+        c.submitTask(sub () {
+            q.push(SandboxManager::isCallerRestricted(DOM_FILESYSTEM));
+        });
+        return q.get(10s);
+    }
+
+    #! a task of the module's own code submitted for the caller, which runs on an I/O worker
+    public bool sub module_task() {
+        AsyncSocketIo::AsyncSocketIoController c = AsyncSocketIo::getGlobalAsyncIoController();
+        c.submitTask(TaskRef);
+        return Results.get(10s);
+    }
+
+    #! the frame callback of a WebSocket operation, the module's own code, called by an I/O worker
+    public bool sub ws_frame() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", "0", True);
+        listener.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port);
+        Socket server = listener.accept();
+        HttpWebSocketPollOperationBase op(server);
+        op.setFrameCallback(FrameRef);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": server, "spop": op, "to": -1s, "owner": "hand-off-ws-" + gettid(),
+        });
+        # a masked text frame "hi" from the client
+        client.send(binary(chr(0x81)) + binary(chr(0x82)) + binary(chr(0) + chr(0) + chr(0) + chr(0))
+            + binary("hi"));
+        HandOffHolder::hold += (op, server, client, listener);
+        return Results.get(10s);
+    }
+}

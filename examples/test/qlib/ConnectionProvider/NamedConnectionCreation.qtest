@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode, whose restricted Programs set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class NamedConnectionCreationTest
+
+#! Tests that restricted code uses the connections that it looks up by name (qore#7052, qore#7067)
+/** A connection provider module gives the connection for a name in the call of the code that looks it up.  A
+    connection is a capability of the code that creates it, so code restricted from the connection's domains cannot
+    create one itself; a lookup runs the provider in a Program of its own (see get_connection()), so the connection
+    that the provider gives is the capability of the host that configured the provider: it gives its clients to the
+    restricted code, and the sandbox that governs that code still governs their I/O.
+
+    The provider modules are named by \c QORE_CONNECTION_PROVIDERS, which the module reads from the environment of
+    the process, so each check runs in a process of its own with the test provider (named-connection-creation),
+    named so that it is loaded as a library module.
+*/
+class NamedConnectionCreationTest inherits QUnit::Test {
+    private {
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : QUnit::Test("NamedConnectionCreation", "1.0", \ARGV) {
+        foreach string mode in (Modes) {
+            string m = mode;
+            addTestCase("a lookup by restricted code, " + m, sub () { testLookup(m); });
+            addTestCase("the sandbox of the restricted code, " + m, sub () { testSandbox(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! the refusal of a synchronous client that is not bound to the target of the connection's creator (qore#7262)
+    const UnboundDenied = "^PERMISSION-DENIED: connection .*synchronous client is not bound";
+
+    #! restricted code creates the connection that it looks up, but cannot create one itself; the connection's
+    #! synchronous client is not given to it, as its requests would be made by module code from targets that it can
+    #! change (qore#7262)
+    private testLookup(string mode) {
+        assertEq("created", run(mode, False, "lookup", "net"), "lookup, " + mode);
+        assertRegex(UnboundDenied, run(mode, False, "client", "net"), "client, " + mode);
+        assertRegex("^PERMISSION-DENIED: code restricted from the NETWORK functional domain cannot create",
+            run(mode, False, "create", "direct"), "direct, " + mode);
+    }
+
+    #! a synchronous client of the connections that the restricted code looks up is refused before any I/O, also for a
+    #! target that its sandbox allows (qore#7262)
+    private testSandbox(string mode) {
+        Socket allowed();
+        allowed.bind("127.0.0.1:0");
+        allowed.listen();
+        # a target that the policy denies: another port on the same address, which every platform has
+        Socket denied();
+        denied.bind("127.0.0.1:0");
+        denied.listen();
+        hash<auto> env = {
+            "NCC_ALLOWED_URL": sprintf("http://127.0.0.1:%d", allowed.getSocketInfo().port),
+            "NCC_DENIED_URL": sprintf("http://127.0.0.1:%d", denied.getSocketInfo().port),
+            "NCC_ALLOWED_PORT": allowed.getSocketInfo().port,
+        };
+        assertRegex(UnboundDenied, run(mode, True, "connect", "allowed", env), "allowed target, " + mode);
+        assertEq(NOTHING, allowed.accept(0), "the allowed target is not connected, " + mode);
+        assertRegex(UnboundDenied, run(mode, True, "connect", "denied", env), "denied target, " + mode);
+        assertEq(NOTHING, denied.accept(0), "the denied target is not connected, " + mode);
+    }
+
+    #! runs an operation in a child process with the test provider and returns its result
+    private string run(string mode, bool sandbox, string op, string name, *hash<auto> env) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string dir = realpath(get_script_dir() + "named-connection-creation");
+        string qlib_dir = realpath(get_script_dir() + "../../../../qlib");
+        # the provider is named, so that it is loaded as a library module, as a host configures one: a module that is
+        # loaded by its path is not library code, and the code that it runs is not the caller's
+        string mod_dir = qlib_dir + ":" + dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        string vars = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+            "QORE_CONNECTION_PROVIDERS=%s", quote(libqore_dir), quote(libqore_dir), quote(libqore_dir),
+            quote(mod_dir), "NamedConnectionTestProvider");
+        foreach hash<auto> i in (env.pairIterator()) {
+            vars += sprintf(" %s=%s", i.key, quote(sprintf("%s", i.value)));
+        }
+        string cmd = sprintf("%s %s -b %s %s %s %s %s 2>/dev/null", vars, quote(qore_bin), quote(dir + "/child.q"),
+            mode, sandbox ? "1" : "0", op, quote(name));
+        return trim(backquote(cmd));
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

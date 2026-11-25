@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires DataProvider
 %requires ConnectionProvider
 %requires Mime
@@ -323,6 +324,14 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
         assertEq(LinkedInOrganizationsDataProvider::EVENT_NEW_POST, trigger.action_val);
 
         assertEq(expected.size() + 2, actions.size(), "no action may be registered twice");
+
+        # every API action of the module only reads (GET requests of the Community Management API): they
+        # declare that they are read-only, which the catalogue reports as such (qore#7454)
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, expected);
+        assertEq(expected.size(), ro_actions.size());
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
 
         # every action path must resolve to a provider
         FakeDmaRestClientIo rest = client();
@@ -1099,13 +1108,13 @@ public class LinkedInOrganizationsDataProviderTest inherits QUnit::Test {
 
     #! Returns the connection named on the command line, or skips the test
     private *AbstractConnection getConnection() {
-        *string conn_name = m_options.conn ?? ENV.LINKEDIN_ORG_CONNECTION;
+        *string conn_name = LiveProvider::get("linkedin", "LINKEDIN_ORG_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             testSkip("no connection specified; use -c,--connection=ARG or set "
                 "LINKEDIN_ORG_CONNECTION");
             return;
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("linkedin", "LINKEDIN_ORG_CONNECTION", m_options.conn);
         if (conn.getType() != "linkedindma") {
             # a connection still serving the TypeScript application reads as
             # "tsrest-linkedinorganizations" inside the platform and as "invalid" outside it, since that

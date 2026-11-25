@@ -1,0 +1,251 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - QUIC connections over UDP sockets, reset by a server that restarted on the same port
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# qore#6931: an HTTP/3 server answers a packet of a connection that it does not know with a stateless reset (RFC 9000
+# section 10.3), whose token is derived from a static key that it derives from its private key: a server that restarts
+# with the same key resets the connections of the server before it at once, and the client ends the connection with
+# HTTP3-STATELESS-RESET instead of waiting for its connect timeout (HTTP3-PEER-UNRESPONSIVE, qore#6930); an idempotent
+# request is repeated on a new connection, another one raises the error.  A server with another key cannot reset the
+# connection: its reset has another token, which the client does not take.  The connect timeout of the client is long,
+# so that a request that waited for it would fail the checks of the reset; the counts of the resets that the process
+# sent and received (dbg_quic_stateless_reset_counts()) show which happened, with no clock involved.  The server is
+# stopped as a killed one is with dbg_quic_silent_server_close() (debug builds), once neither the client nor the server
+# has anything in flight (dbg_quic_wait_all_idle()), so that the client sends nothing more until the request.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires json
+%requires ../../TestCertificates.qm
+
+%exec-class RestClientH3StatelessResetTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The connect timeout of the client, which the load of the machine cannot exceed: a request that waits for it when
+#! the server resets the connection (as before qore#6931) is ended by it, with HTTP3-PEER-UNRESPONSIVE, and fails the
+#! checks of the reset
+const LongConnectTimeout = 20s;
+
+#! The peer response timeout of the old connection when the server cannot reset it, set only once the old server is
+#! gone (dbg_quic_set_client_peer_response_timeout()), so that no other wait is bounded by it
+const ShortPeerResponseTimeout = 1s;
+
+#! a certificate and key other than those of TestCertificates.qm
+const OtherCertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const OtherKeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Answers each request with its method and body, and counts the requests
+class CountingHandler inherits AbstractHttpRequestHandler {
+    public {
+        Counter requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        requests.inc();
+        return makeResponse(200, make_json({"method": hdr.method, "body": body ? string(body) : NOTHING}),
+            {"Content-Type": "application/json"});
+    }
+}
+
+class RestClientH3StatelessResetTest inherits QUnit::Test {
+    constructor() : QUnit::Test("RestClientH3StatelessResetTest", "1.0") {
+        addTestCase("a GET is reset by the restarted server and repeated on a new connection", \resetTest(), "GET");
+        addTestCase("a POST raises HTTP3-STATELESS-RESET, and the next request takes a new connection", \resetTest(),
+            "POST");
+        addTestCase("a server with another key cannot reset the connection", \otherKeyTest());
+        # no path MTU probe is sent once nothing is in flight (debug builds; see connectAndStop())
+        setenv("QORE_QUIC_TEST_DISABLE_PMTUD", "1");
+        set_return_value(main());
+    }
+
+    #! starts an HTTPS server with HTTP/3 on the given port (0: assigned by the OS); returns the server and its port
+    private list<auto> startServer(int port, CountingHandler handler, bool other_key = False) {
+        HttpServer server(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("count", handler);
+        server.waitForAsyncIo();
+        int p = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": port,
+            "cert": new SSLCertificate(other_key ? OtherCertPem : TestCertificates::CertPem),
+            "key": new SSLPrivateKey(other_key ? OtherKeyPem : TestCertificates::KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+        return (server, p);
+    }
+
+    #! starts a server that is to be restarted on its port; returns the server and its port
+    /** The port is below the range of the ports that the OS assigns to a socket bound to port 0 (ephemeral ports:
+        32768-60999 by default on Linux, read from /proc/sys/net/ipv4/ip_local_port_range when available; 49152-65535
+        on macOS), so that no socket of another process, such as a client socket of a test running beside this one,
+        can take it while the server restarts on it; a port that a socket bound explicitly is in use is skipped
+    */
+    private list<auto> startRestartableServer(AbstractHttpRequestHandler handler) {
+        int first_ephemeral = 32768;
+        if (is_file("/proc/sys/net/ipv4/ip_local_port_range")) {
+            *string first = (ReadOnlyFile::readTextFile("/proc/sys/net/ipv4/ip_local_port_range") =~ x/^\s*([0-9]+)/)[0];
+            if (first) {
+                first_ephemeral = first.toInt();
+            }
+        }
+        if (first_ephemeral <= 10000) {
+            # no range is left below the ephemeral ports
+            return startServer(0, handler);
+        }
+        for (int attempt = 0; ; ++attempt) {
+            int port = 10000 + (rand() % (first_ephemeral - 10000));
+            try {
+                return startServer(port, handler);
+            } catch (hash<ExceptionInfo> ex) {
+                if (attempt == 100 || ex.desc !~ /in use/) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
+    #! returns a client on HTTP/3 to a server that then stops as a killed server process does, and the server's port
+    private list<auto> connectAndStop() {
+        CountingHandler first_handler();
+        HttpServer first;
+        int port;
+        (first, port) = startRestartableServer(first_handler);
+        on_exit if (first) {
+            first.stop();
+        }
+        RestClient rc({
+            "url": "https://127.0.0.1:" + port,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+            "connect_timeout": LongConnectTimeout,
+            "serialization": "json",
+        });
+        # the first response offers HTTP/3 (Alt-Svc), which the next request takes
+        for (int i = 0; i < 2; ++i) {
+            assertEq("GET", rc.get("/").body.method);
+        }
+        assertTrue(rc.isHttp3Active(), "the client uses HTTP/3");
+        # the server stops only when neither side has anything to send (qore#7452): a packet of the client sent after it
+        # stopped would reach the new server before the request, which would reset the connection before the request
+        # was submitted, and a packet of the old server could arrive after the request; path MTU discovery, whose
+        # probes follow one another also when nothing is in flight, is disabled for the test's connections
+        assertTrue(call_function("dbg_quic_wait_all_idle", HangGuard), "nothing is in flight");
+        call_function("dbg_quic_silent_server_close", True);
+        on_exit call_function("dbg_quic_silent_server_close", False);
+        first.stop();
+        delete first;
+        return (rc, port);
+    }
+
+    resetTest(string method) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("a server is stopped as a killed one is only with dbg_quic_silent_server_close()");
+        }
+        RestClient rc;
+        int port;
+        (rc, port) = connectAndStop();
+        CountingHandler handler();
+        HttpServer second = startServer(port, handler)[0];
+        on_exit second.stop();
+
+        hash<auto> before = call_function("dbg_quic_stateless_reset_counts");
+        # the request is sent on the old connection, which the new server does not know: it resets the connection
+        if (method == "GET") {
+            assertEq("GET", rc.get("/").body.method, "the new server answered the request");
+            assertEq(1, handler.requests.getCount(), "the new server received the request once");
+        } else {
+            # a request that is not idempotent is not repeated: the old server may have processed it
+            assertThrows("HTTP3-STATELESS-RESET", \rc.post(), ("/", "payload"));
+            assertEq(0, handler.requests.getCount(), "the request was not repeated");
+            # the next request takes a new connection
+            hash<auto> rv = rc.post("/", "payload").body;
+            assertEq("POST", rv.method, "the new server answered the next request");
+            assertEq("payload", parse_json(rv.body), "the request body was sent");
+            assertEq(1, handler.requests.getCount(), "the new server received the next request once");
+        }
+        hash<auto> after = call_function("dbg_quic_stateless_reset_counts");
+        assertGt(before.sent, after.sent, "the new server sent a stateless reset");
+        assertEq(before.received + 1, after.received, "the client took the reset");
+    }
+
+    otherKeyTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("a server is stopped as a killed one is only with dbg_quic_silent_server_close()");
+        }
+        RestClient rc;
+        int port;
+        (rc, port) = connectAndStop();
+        CountingHandler handler();
+        HttpServer second = startServer(port, handler, True)[0];
+        on_exit second.stop();
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", ShortPeerResponseTimeout),
+            "the peer response timeout of the old connection was shortened");
+
+        hash<auto> before = call_function("dbg_quic_stateless_reset_counts");
+        # the reset of the new server has another token: the client ends the connection after its peer response
+        # timeout (qore#6930), and repeats the request on a new connection
+        assertEq("GET", rc.get("/").body.method, "the new server answered the request");
+        assertEq(1, handler.requests.getCount(), "the new server received the request once");
+        hash<auto> after = call_function("dbg_quic_stateless_reset_counts");
+        assertGt(before.sent, after.sent, "the new server sent a stateless reset");
+        assertEq(before.received, after.received, "the client did not take a reset with another token");
+    }
+}

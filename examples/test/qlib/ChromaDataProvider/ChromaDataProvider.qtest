@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -56,7 +57,7 @@ public class ChromaDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("ChromaDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.CHROMA_CONNECTION;
+        conn_name = LiveProvider::get("chroma", "CHROMA_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + action registered", \registrationTest());
         addTestCase("query hits tenant/database-scoped collection URL",
@@ -100,6 +101,10 @@ public class ChromaDataProviderTest inherits QUnit::Test {
             $1.action != AbstractDataProvider::GenericApiCallActionName;
         assertEq(1, actions.size());
         assertEq("vector-search", actions[0].action);
+        # the vector search sends only a POST query, which reads the collection: the action declares that it is read-only (qore#7454)
+        assertEq(NT_BOOLEAN, actions[0].mutates_state.typeCode());
+        assertFalse(actions[0].mutates_state);
+        assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(actions[0]));
     }
 
     private queryTest() {
@@ -138,12 +143,13 @@ public class ChromaDataProviderTest inherits QUnit::Test {
         with embeddings.
     */
     private liveChromaTest() {
-        *string coll_id = ENV.CHROMA_COLLECTION_ID;
+        *string coll_id = LiveProvider::get("chroma", "CHROMA_COLLECTION_ID");
         if (!coll_id.val()) {
             testSkip("CHROMA_COLLECTION_ID env var must name an existing "
                 "Chroma collection UUID");
         }
 
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Chroma connection ping failed: %s",
@@ -154,7 +160,7 @@ public class ChromaDataProviderTest inherits QUnit::Test {
         # Use a small 5-dim vector by default; users can override the
         # dimension by setting CHROMA_QUERY_DIM if their collection's
         # embedder requires a different size.
-        int dim = (ENV.CHROMA_QUERY_DIM ?? "5").toInt();
+        int dim = (LiveProvider::get("chroma", "CHROMA_QUERY_DIM") ?? "5").toInt();
         list<float> vec = map 0.1, xrange(dim);
         auto resp = q.doRequest({
             "collection_id": coll_id,

@@ -42,6 +42,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #include <exception>
 
@@ -163,7 +164,7 @@ void Http3ServerPollOperationPriv::closeStreamQueues() {
             // released by the standard internal_members deref path.  Pushed
             // without waiting, even if the Queue is bounded and full (issue #5859).
             ExceptionSink push_xsink;
-            queue->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(queue).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
         }
     }
@@ -888,7 +889,7 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
                 "pushing persistent close session=%lld\n", (long long)sid);
             // pushed without waiting, even if the Queue is bounded and full (issue #5859)
             ExceptionSink push_xsink;
-            q->tryPush(&push_xsink, close_entry.release(), true);
+            qore_queue_ops(q).tryPush(&push_xsink, close_entry.release(), true);
             push_xsink.clear();
         }
     }
@@ -944,7 +945,7 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
             // stays clear: other live sessions must still be able to register.
             // Pushed without waiting, even if the Queue is bounded and full (issue #5859).
             ExceptionSink push_xsink;
-            it->second->tryPush(&push_xsink, QoreValue(), true);
+            qore_queue_ops(it->second).tryPush(&push_xsink, QoreValue(), true);
             push_xsink.clear();
         }
         // Dispatch onStreamData() for this stream so the listener's notifyIo()
@@ -1083,7 +1084,11 @@ static QoreHashNode* takeAllResponseSendCallbacks(QoreObject* self, Http3ServerP
 
     @since %Qore 3.0
 */
-qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase<*hash<auto>>; private_members=object sock,string goal,auto data_save];
+qclass Http3ServerPollOperation [
+    arg=Http3ServerPollOperationPriv* priv;
+    ns=Qore;
+    vparent=SocketPollOperationBase<*hash<auto>>
+];
 
 //! Creates the HTTP/3 server poll operation
 /** @param socket the UDP socket bound and ready for QUIC connections
@@ -1108,11 +1113,9 @@ Http3ServerPollOperation::constructor(Socket[QoreSocketObject] socket,
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_HTTP3SERVERPOLLOPERATION,
-            sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP3SERVERPOLLOPERATION,
-        new QoreStringNode("http3_connection"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http3_connection"), xsink);
 
     // Create private data — ref sock for ownership
     sock_ptr->ref();
@@ -1150,7 +1153,7 @@ Http3ServerPollOperation::copy() {
 /** @return the goal string "http3_connection"
 */
 string Http3ServerPollOperation::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1188,7 +1191,7 @@ bool Http3ServerPollOperation::goalReached() [flags=RET_VALUE_ONLY] {
 /** @return the socket object
 */
 Socket Http3ServerPollOperation::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Returns True if the connection should be kept alive
@@ -1549,10 +1552,17 @@ nothing Http3ServerPollOperation::deregisterStreamListener(int session_id, int s
     case the callback is not called
 
     @throw QUIC-ERROR the QUIC session is gone; the callback is not called
+    @throw PERMISSION-DENIED the callback was authored by code that may not control threads, as it runs on another
+    thread (see @ref sandbox_thread_callables)
 
     @since %Qore 3.0
 */
 bool Http3ServerPollOperation::watchResponseSend(int session_id, int stream_id, code callback) {
+    // the callback runs on a controller worker (qore#7056)
+    if (qore_check_thread_callable(callback, QDOM_THREAD_CONTROL, "Http3ServerPollOperation::watchResponseSend()",
+            xsink)) {
+        return false;
+    }
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
     if (!setResponseSendCallback(self, priv, skey, callback, xsink)) {
         return false;

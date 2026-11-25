@@ -111,7 +111,7 @@ module HttpServerUtil {
     |\c hdr|hash|the request headers, as returned by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" for an HTTP/1.x request, except for the \c content-type key; see @ref httpserverutil_request_headers
     |\c id|int|the ID for this socket connection; note that socket connections may be reused by proxies, so this ID cannot be used to identify the peer
     |\c handler_name|string|the name of the handler serving the request
-    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers)
+    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers); its \c body_reader key is the @ref HttpServer::Http1BodyReader "Http1BodyReader" of an HTTP/1.x body with a \c Content-Length that a stream handler wants as a stream (see @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()")
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
     |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
@@ -133,11 +133,22 @@ module HttpServerUtil {
     @subsection httpserverutil_request_headers HttpServerUtil Request Headers
 
     The request headers given to a handler (the \c hdr argument of its methods and the \c hdr key of the
-    @ref httpserverutil_request_context "request context") have lower-case names, and the server sets the following
-    keys in them:
+    @ref httpserverutil_request_context "request context") give the fields of the request, with lower-case names,
+    under their \c "headers" key, and also at their top level (deprecated), except a field whose name is a key of the
+    hash (see @ref HttpUtil::HttpReservedFieldNames "HttpReservedFieldNames"), unless the server's
+    \c http_fields_at_top_level option is @ref False.  Read a field with @ref HttpUtil::http_get_field()
+    "http_get_field()", which gives it from \c "headers", or from the top level of a hash built by user code (see
+    @ref httputil_message_fields):
+
+    @code{.py}
+*string accept = http_get_field(hdr, "accept");
+    @endcode
+
+    The server sets the following keys in them:
 
     |!Key|!Type|!Description
-    |\c content-type|*string|the request \c Content-Type: for an HTTP/1.x request, the value without its \c charset parameter (the \c body-content-type value of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"), so that the media type can be compared without it, with its other parameters (such as \c boundary); for an HTTP/2 or HTTP/3 request, the value as received
+    |\c headers|hash|the fields of the request, with lower-case names; the server sets \c content-type here as described below
+    |\c content-type|*string|the request \c Content-Type (a field: under \c "headers", and at the top level as the other fields are): for an HTTP/1.x request, the value without its \c charset parameter (the \c body-content-type value of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"), so that the media type can be compared without it, with its other parameters (such as \c boundary); for an HTTP/2 or HTTP/3 request, the value as received
     |\c _qore_orig_content_type|*string|the request \c Content-Type as received, with any \c charset parameter; set if the request has a \c Content-Type
     |\c http_version|string|the HTTP version of the request
     |\c method|string|the HTTP method of the request (ex: \c "GET" or \c "POST")
@@ -153,6 +164,25 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::HttpWebSocketPollOperationHandle "HttpWebSocketPollOperationHandle", through which
+      the HTTP/1.1 WebSocket connection of a handler that gets the socket of its request is set up without the
+      connection's socket (<a href="https://github.com/qoretechnologies/qore/issues/7476">issue 7476</a>)
+    - added @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "AbstractHttpRequestHandler::setHandlerSocketView()"
+      and @ref HttpServer::AbstractHttpRequestHandler::needsHandlerSocketView() "needsHandlerSocketView()": the handler
+      of an HTTP/1.x request that is declared by sandboxed code, or that asks for it, gets a socket of its request
+      (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7305">issue 7305</a>),
+      as does one that runs the code of objects of classes of a sandboxed Program
+      (@ref HttpServer::AbstractHttpRequestHandler::hostsSandboxedCode() "hostsSandboxedCode()")
+    - added @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize", the default maximum size of a
+      request body that the server reads into memory (256 MiB)
+    - added @ref HttpServer::Http1BodyReader "Http1BodyReader",
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" and
+      @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize": a stream request
+      (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") whose handler wants an HTTP/1.x body with a
+      \c Content-Length as a stream gets it in binary parts of the same size whatever the size of the body, with no
+      body in the constructor, and the server closes the connection after the response when the handler did not
+      read the whole body; documented how a body is given to a stream request that does not want a stream
+      (<a href="https://github.com/qoretechnologies/qore/issues/7308">issue 7308</a>)
     - the persistence and the close notification of a request handler
       (@ref HttpServer::AbstractHttpRequestHandler::setPersistent() "AbstractHttpRequestHandler::setPersistent()",
       @ref HttpServer::AbstractHttpRequestHandler::notifyClosed() "notifyClosed()") are kept by the handler only:
@@ -161,6 +191,11 @@ module HttpServerUtil {
       another tenant, could report itself persistent and call the callback of the first one; the cleanup of a thread
       ends the persistence of every handler that set it on the thread, not of the last one only
       (issue #6847)
+    - @ref HttpServer::HttpReservedFieldNames is @ref HttpUtil::HttpReservedFieldNames; the handlers and
+      @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" read the fields of a request with
+      @ref HttpUtil::http_get_field() "http_get_field()", from the \c "headers" key of its header hash, or from the
+      top level of a hash built by user code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - added @ref HttpServer::HttpReservedFieldNames and @ref HttpServer::http_get_request_header_hash(); the header
       hash of a request gives its fields under \c "headers", and a field whose name is a key of the hash is not given
       at its top level; AbstractHttpRequestHandler::getMessageBody() gives the trailer fields of a chunked body,
@@ -190,6 +225,12 @@ module HttpServerUtil {
       accepts: see @ref override_return_types); an inline request answered by
       @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" accepts a string or binary
       response as the full path does (@ref HttpServer::AbstractHttpRequestHandler::makeResponseFromResult() "makeResponseFromResult()")
+    - added @ref HttpServer::StreamSendBound "StreamSendBound" and the \c stream_send_min_rate and
+      \c stream_send_min_rate_window listener options: a streamed HTTP/2 or HTTP/3 response to a client that takes
+      nothing for the stall time, or less than a minimum rate (1 KiB/s per stream by default), fails with
+      \c STREAM-SEND-TIMEOUT, and a client that keeps taking the data is no longer cut off by a limit on the number
+      of retries
+      (<a href="https://github.com/qoretechnologies/qore/issues/7280">issue 7280</a>)
     - added the \c sse_max_buffer_size listener option
       (@ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"),
       the bound of the data held for the client of each Server-Sent Events stream
@@ -360,20 +401,14 @@ module HttpServerUtil {
 public namespace HttpServer {
 #! The names of the keys that the readers of an HTTP message set in its hash themselves
 /** A header or trailer field with one of these names is given only under the \c "headers" or \c "trailers" key of
-    the message, never at its top level, so that a field cannot replace a key of the message (qore#6761, qore#6811)
+    the message, never at its top level, so that a field cannot replace a key of the message (qore#6761, qore#6811);
+    the same as @ref HttpUtil::HttpReservedFieldNames
+
+    @see @ref HttpUtil::http_get_field() "http_get_field()", which reads a field of such a hash
 
     @since HttpServerUtil 1.6
 */
-public const HttpReservedFieldNames = {
-    "body": True,
-    "headers": True,
-    "trailers": True,
-    "status_code": True,
-    "status_message": True,
-    "http_version": True,
-    "method": True,
-    "path": True,
-};
+public const HttpReservedFieldNames = HttpUtil::HttpReservedFieldNames;
 
 #! Returns the hash of the header of a request from its header fields, as Qore::Socket::readHTTPHeader() gives it
 /** @param fields the header fields of the request, with lower-case names
@@ -422,6 +457,45 @@ public const date<relative> ReadTimeout = DefaultTimeout;
     @since HttpServerUtil 1.6
 */
 public const int DefaultMaxDecodedBodySize = 128 * 1024 * 1024;
+
+#! default maximum size in bytes of a request body that the server reads into memory (256 MiB)
+/** Applies when \c max_request_body_size is set neither for the server
+    (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size",
+    @ref HttpServer::HttpServer::setMaxRequestBodySize() "HttpServer::setMaxRequestBodySize()") nor for the listener
+    (@ref HttpServer::HttpListenerOptionInfo::max_request_body_size "HttpListenerOptionInfo::max_request_body_size"),
+    to a body that the server reads into memory for the handler: a body that it reads before dispatching the request
+    or for a handler that does not read it as a stream (HTTP/1.x with a \c Content-Length or chunked, HTTP/2 and
+    HTTP/3), one that a handler reads with
+    @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()", and
+    the rest of a chunked body that the handler left unread.  A larger body is answered with HTTP 413 (Content Too
+    Large), and an HTTP/1.x connection is closed.  A body that a handler reads as a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"
+    and @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest") is not limited by this default.
+
+    Set \c max_request_body_size to \c 0 explicitly for no limit.
+
+    @since HttpServerUtil 1.6
+*/
+public const int DefaultMaxRequestBodySize = 256 * 1024 * 1024;
+
+#! the largest HTTP/1.x request body with a \c Content-Length that the server reads before the request is dispatched (1 MiB)
+/** A body of this size or smaller is read by the server's I/O thread before the handler is called, so that a small
+    request does not hold a handler thread while its body arrives; a larger body is read on the handler thread: as a
+    stream in parts by a stream handler that wants it (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"),
+    whole otherwise.  The value decides only where the bytes are read: a stream handler receives a body of either
+    size in the same way (see @ref HttpServer::Http1BodyReader "Http1BodyReader")
+
+    @since HttpServerUtil 1.6
+*/
+public const int DefaultBodyStreamThreshold = 1024 * 1024;
+
+#! the largest part of an HTTP/1.x request body with a \c Content-Length that a stream handler receives (64 KiB)
+/** @see @ref HttpServer::Http1BodyReader "Http1BodyReader"
+
+    @since HttpServerUtil 1.6
+*/
+public const int BodyStreamPartSize = 64 * 1024;
 
 #! maximum X.509 and private key file length
 /** there is no real maximum size for these files, however an upper limit is used here to ensure that
@@ -1000,10 +1074,15 @@ public hashdecl HttpListenerOptionInfo {
     */
     bool sync = True;
 
-    #! Maximum HTTP request body size in bytes (0 = unlimited)
+    #! Maximum HTTP request body size in bytes (0 = the server's limit)
     /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends.
+
+        \c 0 (the default) uses the limit of the server
+        (@ref HttpServer::HttpServerOptionInfo::max_request_body_size "HttpServerOptionInfo::max_request_body_size"),
+        which is @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize" for the bodies that the
+        server reads into memory if none is set.
 
         A handler that reads the request body as a stream (see
         @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces the limit on
@@ -1048,6 +1127,25 @@ public hashdecl HttpListenerOptionInfo {
         @since HttpServerUtil 1.6
     */
     int sse_max_buffer_size = 1048576;
+
+    #! The minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
+    /** A stream that the client takes less of while the server waits for it is ended, so that the client cannot hold
+        a handler thread by taking very little data; 0 disables the check.  The rate applies to each stream, so a
+        client with many concurrent streams on one slow connection shares that connection's rate among them; a listener
+        that serves such clients may need a lower value.  The default is
+        @ref HttpServer::DefaultStreamSendMinRate "DefaultStreamSendMinRate" (1 KiB/s).  It applies to a response
+        body that the HTTP/1 controller sends. On HTTP/2 and HTTP/3 it applies to a body that a handler thread
+        sends; a body from an @ref Qore::InputStream "InputStream" that the I/O thread
+        pumps directly holds no thread and is not checked.
+
+        @since HttpServerUtil 1.6
+    */
+    int stream_send_min_rate = 1024;
+
+    #! The sliding window of \c stream_send_min_rate; must be at least one millisecond
+    /** @since HttpServerUtil 1.6
+    */
+    date stream_send_min_rate_window = 60s;
 
     #! If True, skip bind/listen (for QUIC listeners that use a separate UDP socket)
     /** @since HttpServer 1.6
@@ -1131,7 +1229,7 @@ public class CookieHelper {
 
     @par Example:
     @code{.py}
-*int len = http_parse_content_length(hdr."content-length");
+*int len = http_parse_content_length(http_get_field(hdr, "content-length"));
 if (!exists len) {
     # answer 400 Bad Request
 }
@@ -1229,7 +1327,7 @@ bool sub http_is_exception_info(auto v) {
 */
 public bool sub is_extended_connect(hash<auto> cx, hash<auto> hdr) {
     return cx."header-info".is_extended_connect
-        || (hdr.method == "CONNECT" && hdr.":protocol".val());
+        || (hdr.method == "CONNECT" && http_get_field(hdr, ":protocol").val());
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT for WebSocket
@@ -1243,7 +1341,7 @@ public bool sub is_extended_connect(hash<auto> cx, hash<auto> hdr) {
 public bool sub is_websocket_extended_connect(hash<auto> cx, hash<auto> hdr) {
     return is_extended_connect(cx, hdr)
         && (cx."header-info".is_websocket_connect
-            || hdr.":protocol" == "websocket");
+            || http_get_field(hdr, ":protocol") == "websocket");
 }
 
 #! returns a complete URL from a bind address
@@ -1970,7 +2068,25 @@ public class AbstractLogger {
 }
 
 #! this abstract class defines the public interface of the private HttpListener class defined in the HttpServer module
+/** The handlers of a listener's requests and connections get an object of this type for the listener, which has only
+    the methods of this class: not the listener itself, whose other methods are for the server only.  The object is
+    the same for the whole life of the listener, so a handler can keep it and use it later, also on another thread.
+*/
 public class HttpListenerInterface inherits AbstractLogger {
+    #! Returns the minimum rate of streamed HTTP/2 and HTTP/3 responses in bytes per second; 0 means no check
+    /** @since HttpServerUtil 1.6
+    */
+    int getStreamSendMinRate() {
+        return DefaultStreamSendMinRate;
+    }
+
+    #! Returns the sliding window of the minimum rate of streamed HTTP/2 and HTTP/3 responses
+    /** @since HttpServerUtil 1.6
+    */
+    date getStreamSendMinRateWindow() {
+        return StreamSendBound::DefaultMinRateWindow;
+    }
+
     #! method to log a response message
     /** @param cx the call context hash; see @ref httpserverutil_request_context for information about this value
         @param rv the response hash
@@ -1982,6 +2098,18 @@ public class HttpListenerInterface inherits AbstractLogger {
     #! Removes a dedicated socket handler from the listener
     removeExternalDedicatedSocket(softstring id) {
         throw "UNIMPLEMENTED";
+    }
+
+    #! Removes the given dedicated socket handler from the listener, if it is the handler of the given connection
+    /** @param id the ID of the connection
+        @param handler the handler of the connection; the handler of the connection is removed only if it is this one
+
+        This implementation calls removeExternalDedicatedSocket(softstring)
+
+        @since HttpServerUtil 1.6
+    */
+    removeExternalDedicatedSocket(softstring id, AbstractHttpSocketHandlerInterface handler) {
+        removeExternalDedicatedSocket(id);
     }
 
     #! Returns the maximum size in bytes of a decompressed request body for this listener
@@ -2057,6 +2185,22 @@ public class HttpListenerInterface inherits AbstractLogger {
     signalPersistentSessionClose(softstring uh) {
         # no implementation in the base class — listeners that support
         # dedicated persistent sessions override this
+    }
+
+    #! Force-closes the persistent session for the given connection, if the given handler registered it
+    /** As signalPersistentSessionClose(softstring), but the session is closed only if \a handler is the handler
+        whose persistent session it is; this is the variant that sandboxed code uses (see
+        @ref HttpServer::HttpListenerInterface "HttpListenerInterface")
+
+        This implementation calls signalPersistentSessionClose(softstring)
+
+        @param uh the key of the persistent session (\c cx.sock_key in the request context)
+        @param handler the handler whose persistent session it is
+
+        @since HttpServerUtil 1.6
+    */
+    signalPersistentSessionClose(softstring uh, AbstractHttpRequestHandler handler) {
+        signalPersistentSessionClose(uh);
     }
 }
 
@@ -2182,7 +2326,7 @@ public class AbstractAuthenticator {
         @since HttpServerUtil 1.6
     */
     string getDefault401ContentType(*hash<auto> cx) {
-        *string accept = cx.hdr.accept ?? cx.hdr.Accept;
+        *string accept = http_get_field(cx.hdr, "accept") ?? cx.hdr.Accept;
         if (accept && accept =~ /text\/html/i) {
             return MimeTypeHtml;
         }
@@ -2288,24 +2432,25 @@ public class AbstractAuthenticator {
     */
     private *hash<HttpResponseInfo> authenticateRequestIntern(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx, reference<bool> authenticated) {
-        if (hdr.authorization) {
+        auto authorization = http_get_field(hdr, "authorization");
+        if (authorization) {
             try {
-                if (hdr.authorization =~ /^Negotiate .+/i) {
+                if (authorization =~ /^Negotiate .+/i) {
                     if (*hash<HttpResponseInfo> rv = processNegotiateAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
                     }
-                } else if (hdr.authorization =~ /^Basic .+/i) {
+                } else if (authorization =~ /^Basic .+/i) {
                     if (*hash<HttpResponseInfo> rv = processBasicAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
                     }
-                } else if (hdr.authorization =~ /^Digest .+/i) {
+                } else if (authorization =~ /^Digest .+/i) {
                     if (*hash<HttpResponseInfo> rv = processDigestAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
                     }
-                } else if (hdr.authorization =~ /^Bearer .+/i) {
+                } else if (authorization =~ /^Bearer .+/i) {
                     if (*hash<HttpResponseInfo> rv = processBearerAuthorizationHeader(listener, hdr, \cx,
                         \authenticated)) {
                         return rv;
@@ -2313,7 +2458,7 @@ public class AbstractAuthenticator {
                 } else {
                     # the header value is a credential; only the name of its scheme can be logged
                     listener.logError("Unsupported 'Authorization' header scheme: %y (from %s)",
-                        (hdr.authorization =~ x/^([-A-Za-z0-9._~+\/]+)/)[0], cx."peer-info".address_desc);
+                        (authorization =~ x/^([-A-Za-z0-9._~+\/]+)/)[0], cx."peer-info".address_desc);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "AUTHENTICATION-ERROR") {
@@ -2328,7 +2473,7 @@ public class AbstractAuthenticator {
             }
         }
 
-        if (hdr.cookie) {
+        if (http_get_field(hdr, "cookie")) {
             if (*hash<HttpResponseInfo> rv = processCookieHeader(listener, hdr, \cx, \authenticated)) {
                 return rv;
             }
@@ -2356,7 +2501,7 @@ public class AbstractAuthenticator {
 
     private *hash<HttpResponseInfo> processBasicAuthorizationHeader(HttpListenerInterface listener, hash<auto> hdr,
             reference<hash<auto>> cx, reference<bool> authenticated) {
-        *string bstr = (hdr.authorization =~ x/basic (.*)/i)[0];
+        *string bstr = (http_get_field(hdr, "authorization") =~ x/basic (.*)/i)[0];
         if (!bstr) {
             listener.logError("Invalid Basic Authorization header %y received from %s", bstr,
                 cx."peer-info".address_desc);
@@ -2462,6 +2607,119 @@ public class PermissiveAuthenticator inherits AbstractAuthenticator {
     }
 }
 
+#! Reads an HTTP/1.x request body with a \c Content-Length in parts for a stream handler
+/** The server gives an object of this class to a stream handler that wants the body of an HTTP/1.x request with a
+    \c Content-Length as a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()")
+    in the \c body_reader key of \c cx."header-info"; @ref HttpServer::AbstractStreamRequest::handleRequest()
+    "AbstractStreamRequest::handleRequest()" reads the body with it and gives each part to
+    @ref HttpServer::AbstractStreamRequest::recv() "AbstractStreamRequest::recv()".
+
+    Each part is @ref binary data of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes, also for
+    a text content type (a part could end inside a multibyte character), and each byte of the body is given once.  The
+    parts are the same whether the server read the body before the request was dispatched (a body of at most
+    @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes) or reads it from the socket as it
+    is read here.
+
+    The server refuses a body larger than the maximum request body size of the listener before it is read; the
+    reader also refuses to give more than that size.  When the handler has not read the whole body, the server closes
+    the connection after the response, as the bytes that remain cannot be told apart from the next request.
+
+    @since HttpServerUtil 1.6
+*/
+public class Http1BodyReader {
+    private:internal {
+        #! the socket that the body is read from
+        Socket s;
+        #! the bytes of the body that the server read before the request was dispatched, given before any others
+        *binary buffered;
+        #! the offset in \c buffered of the next part
+        int buffered_offset = 0;
+        #! the length of the body
+        int length;
+        #! the number of bytes of the body given so far
+        int received = 0;
+        #! the maximum size of the body; 0 for no limit
+        int max_body;
+    }
+
+    #! Creates the reader of a body
+    /** @param s the socket that the body is read from
+        @param length the length of the body (its \c Content-Length)
+        @param buffered the bytes of the body that the server read before the request was dispatched, if any
+        @param max_body the maximum size of the body; 0 for no limit
+
+        @throw HTTP-BODY-READER-ERROR the length is negative, or the buffered bytes are more than the body
+    */
+    constructor(Socket s, int length, *binary buffered, int max_body = 0) {
+        if (length < 0) {
+            throw "HTTP-BODY-READER-ERROR", sprintf("invalid body length %d", length);
+        }
+        if (buffered && buffered.size() > length) {
+            throw "HTTP-BODY-READER-ERROR", sprintf("%d buffered bytes exceed the body length %d", buffered.size(),
+                length);
+        }
+        self.s = s;
+        self.length = length;
+        self.buffered = buffered;
+        self.max_body = max_body;
+    }
+
+    #! Returns the next part of the body, or @ref nothing when the whole body has been given
+    /** @param timeout_ms the timeout for reading the part from the socket
+
+        @return the next part of the body, of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes,
+        or @ref nothing when the whole body has been given
+
+        @throw HTTP-BODY-TOO-LARGE the body exceeds the maximum request body size
+        @throw SOCKET-TIMEOUT, SOCKET-CLOSED or another socket error: the part could not be read
+    */
+    *binary read(timeout timeout_ms = HttpServer::DefaultTimeout) {
+        int remaining = length - received;
+        if (!remaining) {
+            return;
+        }
+        int size = remaining > BodyStreamPartSize ? BodyStreamPartSize : remaining;
+        if (max_body > 0 && received + size > max_body) {
+            throw "HTTP-BODY-TOO-LARGE", sprintf("HTTP/1.x request body size %d exceeds maximum allowed body size %d",
+                length, max_body);
+        }
+        binary part;
+        int buffered_left = buffered ? buffered.size() - buffered_offset : 0;
+        if (buffered_left) {
+            # the bytes read before the request was dispatched are given in parts of the same size as those read
+            # from the socket
+            if (size > buffered_left) {
+                size = buffered_left;
+            }
+            part = (buffered_offset == 0 && size == buffered.size()) ? buffered : buffered.substr(buffered_offset, size);
+            buffered_offset += size;
+            if (buffered_offset == buffered.size()) {
+                remove buffered;
+                buffered_offset = 0;
+            }
+        } else {
+            part = s.recvBinary(size, timeout_ms);
+            if (part.size() != size) {
+                throw "HTTP-BODY-INCOMPLETE", sprintf("HTTP/1.x request body ended after %d of %d bytes",
+                    received + part.size(), length);
+            }
+        }
+        received += size;
+        return part;
+    }
+
+    #! Returns the length of the body
+    int getLength() {
+        return length;
+    }
+
+    #! Returns the number of bytes of the body that have not been given yet
+    int getRemaining() {
+        return length - received;
+    }
+}
+
 #! abstract class for streaming HTTP chunked requests/responses
 /** This class is the base class for handling HTTP stream requests; i.e. with chunked data
 
@@ -2472,6 +2730,22 @@ public class PermissiveAuthenticator inherits AbstractAuthenticator {
       the monolithic message body and then again with @ref nothing to signify the end of the transfer and to simulate
       a chunked transfer.  The simulation of a chunked transfer or the actual chunked receive with the callbacks is
       made by the handleRequest() method. Subclasses should re-implement recvImpl() which is called by this method
+
+    @par Request Bodies With a Content-Length
+    How the body of a request with a \c Content-Length reaches the object depends on whether the handler wants it as
+    a stream (see
+    @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "AbstractHttpRequestHandler::wantsBodyStreaming()"):
+    - <b>as a stream</b>: the \c body argument of the constructor is @ref nothing, and recv() is called once for each
+      part of the body, with @ref binary data (also for a text content type) and each byte once, then once with the
+      end of the body.  Over HTTP/1.x, each part has at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize"
+      bytes, whatever the size of the body: a body of at most
+      @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes, which the server reads before
+      the request is dispatched, is given in the same parts as a larger one, which is read from the socket as the
+      parts are given (see @ref HttpServer::Http1BodyReader "Http1BodyReader")
+    - <b>whole</b> (the default): the complete body is the \c body argument of the constructor, decoded as text for a
+      text content type (a REST handler gives it deserialized), and the same body is also given in a single call of
+      recv() before the end of the body; a handler that reads the body in recv() must then ignore the constructor's
+      argument, or the reverse
     - getResponseHeaderMessage(): this is called after the message body has been received to get the response headers
       and optionally a message body.  Subclasses should reimplement getResponseHeaderMessageImpl() which is called by
       this method
@@ -2483,6 +2757,9 @@ public class AbstractStreamRequest {
     public {}
 
     private {
+        #! the bound of the replies on an interactive HTTP/2 or HTTP/3 stream
+        *StreamSendBound interactive_bound;
+
         #! an HttpListenerInterface object for the listener serving the request for logging purposes
         HttpListenerInterface listener;
         #! the request handler for the request
@@ -2613,6 +2890,8 @@ public class AbstractStreamRequest {
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
         bool chunked_recv_aborted = False;
+        # the reader of an HTTP/1.x body with a Content-Length that the handler wants as a stream (qore#7308)
+        *Http1BodyReader body_reader;
         # handle message body
         if (exists body) {
             hash<auto> dh = {
@@ -2625,6 +2904,20 @@ public class AbstractStreamRequest {
             recv(dh);
             # signal end of data with any trailers received with the buffered body
             recvImpl({"hdr": cx.trailers});
+        } else if (body_reader = cx."header-info".body_reader) {
+            # an HTTP/1.x body with a Content-Length that the handler wants as a stream (qore#7308): it is given in
+            # binary parts of at most BodyStreamPartSize bytes, whether the server read it before the request was
+            # dispatched or it is read from the socket here
+            while (*binary part = body_reader.read(timeout_ms)) {
+                recv({"data": part});
+                if (hasRecvError()) {
+                    # the rest of the body is not read: the server closes the connection after the response, as the
+                    # bytes that remain cannot be told apart from the next request
+                    break;
+                }
+            }
+            # signal end of data
+            recvImpl({"hdr": NOTHING});
         } else if (cx."header-info".body_streaming) {
             # Opt-in interactive bidirectional streaming on HTTP/2 / HTTP/3: instead of
             # reading all inbound DATA before replying, interleave read -> reply on the
@@ -2775,7 +3068,19 @@ public class AbstractStreamRequest {
                 ? s.getQuicStreamTrailers(cx."header-info".session_id, sid)
                 : s.getHttp2StreamTrailers(sid)});
         } else {
-            if (hdr."transfer-encoding" == "chunked") {
+            if (http_get_field(hdr, "transfer-encoding") == "chunked") {
+                # a body read as a stream has the limit set for the listener or the server, not the default limit of
+                # a body that the server reads into memory (DefaultMaxRequestBodySize), which applies again after
+                # the read, as to the rest of a body that the handler leaves unread
+                *int stream_max_body = cx."header-info".max_request_body_size;
+                int buffered_max_body = s.getMaxChunkedBodySize();
+                bool set_stream_max_body = exists stream_max_body && stream_max_body != buffered_max_body;
+                if (set_stream_max_body) {
+                    s.setMaxChunkedBodySize(stream_max_body);
+                }
+                on_exit if (set_stream_max_body) {
+                    s.setMaxChunkedBodySize(buffered_max_body);
+                }
                 # HTTP/1.1 chunked reading: the native socket library controls
                 # the chunk loop via readHTTPChunkedBody*WithCallback(), so
                 # unlike HTTP/2/3 (which have explicit loops with
@@ -2794,7 +3099,7 @@ public class AbstractStreamRequest {
                     }
                 };
                 try {
-                    if (hdr."content-encoding") {
+                    if (http_get_field(hdr, "content-encoding")) {
                         s.readHTTPChunkedBodyBinaryWithCallback(chunked_recv,
                             timeout_ms);
                     } else {
@@ -2821,10 +3126,11 @@ public class AbstractStreamRequest {
         }
 
         hash<HttpHandlerResponseInfo> resp = sendResponse();
-        if (chunked_recv_aborted) {
-            # Force connection close: the socket has unread chunked data
-            # from the client, so keep-alive would desynchronize the
-            # protocol
+        if (chunked_recv_aborted || (body_reader && body_reader.getRemaining())) {
+            # Force connection close: the socket has unread body data
+            # from the client (chunked, or a Content-Length body that the
+            # handler stopped reading), so keep-alive would desynchronize
+            # the protocol
             resp.close = True;
             resp.hdr.Connection = "close";
         }
@@ -2947,8 +3253,16 @@ public class AbstractStreamRequest {
 
         # build and submit early 200 streaming response headers (no body)
         hash<HttpHandlerResponseInfo> rh = getResponseHeaderMessage();
-        http_set_reply_headers(s, cx, \rh);
         int rcode = rh."code" ?? 200;
+        # the status of the response must be a final one: a protocol upgrade (101) exists in HTTP/1.x only and makes
+        # the client fail its HTTP/2 or HTTP/3 stream or connection, with the other streams on it, and another
+        # informational (1xx) status leaves the client waiting; it is refused before anything is sent, so the server
+        # answers the request with an error (qoretechnologies/qore#7212, #7222)
+        if (rcode < 200 || rcode > 599) {
+            throw "HTTP-RESPONSE-STATUS-ERROR", sprintf("status %d returned for an interactive HTTP/%s stream is not "
+                "the status of a final response", rcode, http3 ? "3" : "2");
+        }
+        http_set_reply_headers(s, cx, \rh);
         hash<auto> resp_hdr = rh.hdr ?? {};
         # HTTP/2 and HTTP/3 do not use chunked transfer encoding
         remove resp_hdr."Transfer-Encoding";
@@ -3071,51 +3385,15 @@ public class AbstractStreamRequest {
     }
 
     #! sends a single DATA frame (optionally with END_STREAM) on an interactive stream with backpressure
-    /** Mirrors the controller's \c send_stream_data backpressure handling: on HTTP/2 retries on
-        \c HTTP2-FLOW-CONTROL after waiting for the stream send buffer to drain; on HTTP/3 retries
-        while \c submitQuicStreamData() reports the buffer full.  The I/O thread is woken via
-        \c io_wake so it flushes the queued frame.
+    /** Waits for a peer that is not taking the data within the bound of the stream, which is kept across its replies;
+        the I/O thread is woken via \c io_wake so it flushes the queued frame.
     */
     private sendInteractiveData(int sid, int session_id, bool http3, binary data, bool end_stream,
             code<nothing()> io_wake) {
-        int retries = 0;
-        if (http3) {
-            while (s.submitQuicStreamData(session_id, sid, data, end_stream) == 1) {
-                io_wake();
-                if (++retries > 200) {
-                    throw "HTTP3-FLOW-CONTROL",
-                        sprintf("stream %d: buffer not draining after %d retries", sid, retries);
-                }
-                if (s.waitForQuicStreamDrain(session_id, sid, 50ms) == -1) {
-                    throw "HTTP3-STREAM-ERROR",
-                        sprintf("stream %d: stream removed while waiting for drain", sid);
-                }
-            }
-            io_wake();
-        } else {
-            while (True) {
-                try {
-                    s.sendHttp2StreamData(sid, data, end_stream);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "HTTP2-FLOW-CONTROL") {
-                        io_wake();
-                        if (++retries > 200) {
-                            throw "HTTP2-FLOW-CONTROL",
-                                sprintf("stream %d: buffer not draining after %d retries", sid,
-                                    retries);
-                        }
-                        if (s.waitForHttp2StreamDrain(sid, 10s)) {
-                            throw "HTTP2-STREAM-ERROR",
-                                sprintf("stream %d: drain timed out or stream removed", sid);
-                        }
-                        continue;
-                    }
-                    rethrow;
-                }
-            }
-            io_wake();
+        if (!interactive_bound) {
+            interactive_bound = StreamSendBound::forHeaderInfo(StreamInteractiveStallTimeout, cx."header-info");
         }
+        interactive_bound.send(s, http3 ? session_id : NOTHING, sid, data, end_stream, io_wake);
     }
 
     #! this method returns the response message description hash by calling getResponseHeaderMessageImpl()
@@ -3380,6 +3658,220 @@ public class CallbackInputStream inherits InputStream {
     }
 }
 
+#! The time without progress from the peer after which the send of a streamed HTTP/2 or HTTP/3 response fails
+public const StreamStallTimeout = 30m;
+
+#! The default minimum rate in bytes per second at which a client must take an HTTP/1 controller response or a streamed HTTP/2 or HTTP/3 response
+/** @since HttpServerUtil 1.6
+*/
+public const DefaultStreamSendMinRate = 1024;
+
+#! The time without progress from the peer after which a reply on an interactive HTTP/2 or HTTP/3 stream fails
+public const StreamInteractiveStallTimeout = 10s;
+
+#! Sends data on an HTTP/2 or HTTP/3 stream, waiting for a peer that is not taking it within the bounds of the stream
+/** The wait ends with \c STREAM-SEND-TIMEOUT when the peer takes nothing for the stall timeout, or, with a minimum
+    rate set, when it takes less than that rate over its window.  The time counts from the last progress of the peer,
+    so a large response that a slow client keeps taking is not cut off by the stall timeout.  One object is kept for a
+    stream, across its sends, so that a peer cannot start a new rate window with each one.
+
+    @since HttpServerUtil 1.6
+*/
+public class StreamSendBound {
+    public {
+        #! The default window of the minimum rate
+        const DefaultMinRateWindow = 60s;
+    }
+
+    private {
+        #! the time without progress after which a send fails, in milliseconds
+        int stall_ms;
+        #! the rate of the peer; no value if there is no minimum rate
+        *SendRateMonitor rate;
+    }
+
+    #! Creates the object
+    /** @param stall_timeout the time without progress from the peer after which a send fails; must be positive
+        @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the window of the minimum rate
+
+        @throw STREAM-SEND-BOUND-ERROR the stall timeout is not positive
+        @throw SEND-RATE-ERROR the minimum rate or its window is invalid
+    */
+    constructor(timeout stall_timeout, int min_rate = 0, date window = DefaultMinRateWindow) {
+        if (stall_timeout <= 0) {
+            throw "STREAM-SEND-BOUND-ERROR", sprintf("the stall timeout must be positive; got %d ms", stall_timeout);
+        }
+        stall_ms = stall_timeout;
+        if (min_rate) {
+            rate = new SendRateMonitor(min_rate, window);
+            # the transport shows a peer's progress in steps of its flow-control window and of TCP's; the sender wakes
+            # at least every check interval, so a longer time between updates is its own delay
+            rate.enableProgressSteps();
+            rate.setMaxWaitCharge(2 * rate.getCheckInterval());
+        }
+    }
+
+    #! Creates the bound of a stream from the settings of its listener in a request's header info
+    /** Settings that the header info does not give are the defaults, with the minimum rate on.
+
+        @param stall_timeout the time without progress from the peer after which a send fails
+        @param header_info the header info hash of the request
+
+        @return the new object
+    */
+    static StreamSendBound forHeaderInfo(timeout stall_timeout, *hash<auto> header_info) {
+        return new StreamSendBound(stall_timeout, header_info.stream_send_min_rate ?? DefaultStreamSendMinRate,
+            header_info.stream_send_min_rate_window ?? DefaultMinRateWindow);
+    }
+
+    #! Sends the data, waiting for the peer as needed
+    /** @param s the socket of the stream
+        @param session_id the QUIC session ID for HTTP/3; @ref nothing for HTTP/2
+        @param stream_id the stream ID
+        @param data the data to send
+        @param end_stream @ref True to end the stream with the data
+        @param wake called so that the I/O thread sends the data that is queued
+
+        @throw STREAM-SEND-TIMEOUT the peer did not take the data within the bounds, or the stream ended first
+        @throw STREAM-SEND-ERROR an unexpected result from the HTTP/3 send
+    */
+    send(Socket s, *int session_id, int stream_id, *binary data, bool end_stream, *code<nothing()> wake) {
+        bool http3 = exists session_id;
+        # the deadline moves only when the count grows, so an unknown count (-1: the stream or session is gone) ends
+        # the wait; on the monotonic clock, in milliseconds
+        *int stall_deadline;
+        int last_taken = -1;
+        # the waits in a row that found the stream ended, with the send still refused
+        int ended_waits = 0;
+        # True once this send has waited with a minimum rate set: the time after it is not waiting for the peer
+        bool rate_wait;
+        on_error if (rate_wait) {
+            try {
+                rate.update(getTakenBytes(s, session_id, stream_id), False);
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+        }
+        while (!trySend(s, session_id, stream_id, data, end_stream)) {
+            # the data already queued must be sent before the stream can drain
+            if (wake) {
+                wake();
+            }
+            int now = clock_get_monotonic_us() / 1000;
+            int taken = getTakenBytes(s, session_id, stream_id);
+            if (!stall_deadline || taken > last_taken) {
+                last_taken = taken;
+                stall_deadline = now + stall_ms;
+            }
+            int wait_ms = stall_deadline - now;
+            if (wait_ms <= 0) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the send buffer did not drain within %d ms "
+                    "and the peer %s meanwhile; %d bytes were not sent", http3 ? 3 : 2, stream_id, stall_ms,
+                    http3 ? "acknowledged no data" : "granted no credit", data.size());
+            }
+            if (rate) {
+                rate_wait = True;
+                if (rate.update(taken, True, now)) {
+                    throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the peer took less than the minimum "
+                        "rate of %d bytes/s; %d bytes were not sent", http3 ? 3 : 2, stream_id, rate.getMinRate(),
+                        data.size());
+                }
+                wait_ms = min(wait_ms, rate.getCheckInterval());
+            }
+            # 0: drained, 1: timed out, -1: the stream has no data buffered any more (sent or closed); the send is
+            # made again in each case; a stream that has ended and still refuses it will never take it
+            int rv = http3
+                ? s.waitForQuicStreamDrain(session_id, stream_id, wait_ms)
+                : s.waitForHttp2StreamDrain(stream_id, wait_ms);
+            if (rv >= 0) {
+                ended_waits = 0;
+            } else if (++ended_waits > 1) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the stream ended with its send buffer full; "
+                    "%d bytes were not sent", http3 ? 3 : 2, stream_id, data.size());
+            }
+        }
+        if (wake) {
+            wake();
+        }
+        # a wait that used up the credit between two checks is decided here, so that no verdict is left for a later
+        # send; the end of the stream has nothing more to bound
+        if (rate_wait) {
+            bool below;
+            try {
+                below = rate.update(getTakenBytes(s, session_id, stream_id), False);
+            } catch () {
+                # the stream or its session is gone: nothing more is measured
+            }
+            if (below && !end_stream) {
+                throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/%d stream %d: the peer took less than the minimum rate of "
+                    "%d bytes/s", http3 ? 3 : 2, stream_id, rate.getMinRate());
+            }
+        }
+    }
+
+    #! Sends the data as @ref send() does, and ends the stream for the peer if the send timed out
+    /** For a sender whose caller may not reset the stream itself, so that the peer is not left waiting for a response
+        that will not come.
+
+        @see @ref send()
+    */
+    sendOrReset(Socket s, *int session_id, int stream_id, *binary data, bool end_stream, *code<nothing()> wake) {
+        try {
+            send(s, session_id, stream_id, data, end_stream, wake);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "STREAM-SEND-TIMEOUT") {
+                resetStream(s, session_id, stream_id, wake);
+            }
+            rethrow;
+        }
+    }
+
+    #! Resets the stream for the peer (best-effort: the stream may already be gone)
+    static resetStream(Socket s, *int session_id, int stream_id, *code<nothing()> wake) {
+        try {
+            if (exists session_id) {
+                s.cancelQuicStream(session_id, stream_id);
+            } else {
+                s.resetHttp2Stream(stream_id);
+            }
+            if (wake) {
+                wake();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream or its session is gone
+        }
+    }
+
+    #! Makes one attempt to send; returns @ref False if the send buffer of the stream is full
+    private static bool trySend(Socket s, *int session_id, int stream_id, *binary data, bool end_stream) {
+        if (exists session_id) {
+            int rv = s.submitQuicStreamData(session_id, stream_id, data, end_stream);
+            if (rv && rv != 1) {
+                throw "STREAM-SEND-ERROR", sprintf("unexpected rv=%d from submitQuicStreamData on stream %d", rv,
+                    stream_id);
+            }
+            return !rv;
+        }
+        try {
+            s.sendHttp2StreamData(stream_id, data, end_stream);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP2-FLOW-CONTROL") {
+                rethrow;
+            }
+            return False;
+        }
+        return True;
+    }
+
+    #! Returns the bytes of the stream that the peer has taken, or -1 if that is not known
+    private static int getTakenBytes(Socket s, *int session_id, int stream_id) {
+        return exists session_id
+            ? s.getQuicStreamAckedBytes(session_id, stream_id)
+            : s.getHttp2StreamTakenBytes(stream_id);
+    }
+}
+
 #! Dedicated worker that streams a non-I/O-thread-safe InputStream response body
 #! as HTTP/2 DATA frames or HTTP/3 QUIC stream data without materialization
 /** Runs on its own background thread so blocking @ref Qore::InputStream::read() "read()"
@@ -3429,10 +3921,8 @@ public class StreamResponseProducer {
 
         #! Size of each chunk pulled from the InputStream
         int chunk_size = 65536;
-        #! Per-drain wait timeout in milliseconds (CV signaled by the I/O thread)
-        int drain_timeout_ms = 30000;
-        #! Safety cap on consecutive drain retries per chunk (bounds total block time)
-        int max_drain_retries = 60;
+        #! The bound of the sends on the stream
+        StreamSendBound bound;
     }
 
     #! Creates the producer; call @ref start() to dispatch the background worker
@@ -3444,9 +3934,12 @@ public class StreamResponseProducer {
         must be unassigned from any thread (the producer will claim it)
         @param io_wake optional callback invoked after every chunk send so
         the async I/O controller can flush pending frames to the wire
+        @param bound the bound of the sends on the stream; by default a stall timeout of
+        @ref StreamStallTimeout and no minimum rate
     */
     constructor(Socket sock, int stream_id, *int session_id, InputStream is,
-            *code<nothing()> io_wake) {
+            *code<nothing()> io_wake, *StreamSendBound bound) {
+        self.bound = bound ?? new StreamSendBound(StreamStallTimeout);
         self.sock = sock;
         self.stream_id = stream_id;
         self.session_id = session_id;
@@ -3508,49 +4001,9 @@ public class StreamResponseProducer {
         }
     }
 
-    #! Sends a chunk, blocking on drain if the session buffer is full
+    #! Sends a chunk, waiting for the peer within the bound of the stream
     private sendWithBackpressure(binary data, bool end_stream) {
-        int retries = 0;
-        while (True) {
-            bool backpressure = False;
-            try {
-                if (session_id) {
-                    int rv = sock.submitQuicStreamData(session_id, stream_id,
-                        data, end_stream);
-                    if (rv == 1) {
-                        backpressure = True;
-                    } else if (rv != 0) {
-                        throw "STREAM-SEND-ERROR",
-                            sprintf("unexpected rv=%d from submitQuicStreamData on "
-                                "stream %d", rv, stream_id);
-                    }
-                } else {
-                    sock.sendHttp2StreamData(stream_id, data, end_stream);
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                    backpressure = True;
-                } else {
-                    rethrow;
-                }
-            }
-            if (io_wake) {
-                io_wake();
-            }
-            if (!backpressure) {
-                return;
-            }
-            if (++retries > max_drain_retries) {
-                throw "STREAM-BACKPRESSURE-TIMEOUT",
-                    sprintf("stream %d buffer still full after %d drain attempts; "
-                        "peer may be stalled or disconnected", stream_id, retries);
-            }
-            if (session_id) {
-                sock.waitForQuicStreamDrain(session_id, stream_id, drain_timeout_ms);
-            } else {
-                sock.waitForHttp2StreamDrain(stream_id, drain_timeout_ms);
-            }
-        }
+        bound.send(sock, session_id, stream_id, data, end_stream, io_wake);
     }
 
     #! Sends a stream-level reset to the peer (best-effort)
@@ -3664,6 +4117,11 @@ public class AbstractHttpRequestHandler {
     private:internal {
         #! the thread-local key of the handlers that set persistence on the thread (a PersistentThreadHandlers object)
         const PersistentThreadHandlersKey = "_AHRH_pth";
+
+        #! set by setHostsCode(): the handler runs the code of objects of other code (see hostedObjects(); qore#7305)
+        bool host_code = False;
+        #! set by setHandlerSocketView(): the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+        bool handler_socket_view = False;
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -3675,6 +4133,104 @@ public class AbstractHttpRequestHandler {
     constructor(*AbstractAuthenticator n_auth, softbool n_stream = False) {
         auth = n_auth;
         stream = n_stream;
+    }
+
+    #! Makes the handler's code get the socket of its HTTP/1.x request instead of the connection's socket (qore#7305)
+    /** The server gives the handler of an HTTP/1.x request a socket that acts on the connection for the request only
+        (see @ref httpserver_handler_socket) when the handler object is declared by sandboxed code, which needs no call
+        of this method, or when this method was called before the handler was registered with the server; other
+        handlers get the connection's socket.  A handler that passes the socket of a request to code that is not
+        trusted calls it in its constructor (a trusted @ref RestHandler::RestHandler "RestHandler" whose REST classes
+        are such code, for example, which does not call it itself).  It cannot be undone.
+
+        @warning A trusted handler that hands the socket of its HTTP/1.x request to code that is not trusted (such as
+        code of a tenant) <b>must</b> call this method in its constructor: without it, that code gets the
+        connection's socket, with which it can read the next request on the connection (with its \c Authorization
+        header) and write responses to other requests; see @ref httpserver_handler_socket and
+        <a href="https://github.com/qoretechnologies/qore/issues/7338">issue 7338</a>
+
+        @since HttpServerUtil 1.6
+    */
+    final setHandlerSocketView() {
+        handler_socket_view = True;
+    }
+
+    #! Returns @ref True "True" if the handler's code gets the socket of its HTTP/1.x request (qore#7305)
+    /** True if the handler object is declared by sandboxed code (the call of this method on the object is sandboxed:
+        see @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()", or a sandbox governs the Program
+        that created the object: see
+        @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"), or if
+        setHandlerSocketView() was called; also True if this cannot be decided.  The method is final, so that a subclass cannot change the
+        decision; the server calls it when the handler is registered
+
+        @since HttpServerUtil 1.6
+    */
+    final bool needsHandlerSocketView() {
+        try {
+            return handler_socket_view || SandboxManager::isSandboxed() || SandboxManager::isFromSandboxedProgram(self)
+                || hostsSandboxedCode();
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
+    }
+
+    #! Returns @ref True "True" if the handler runs the code of other objects (see setHostsCode()) (qore#7305)
+    /** The server asks for each request whether one of them is of a class of a sandboxed Program
+        (hostsSandboxedCode()) only for a handler that runs the code of other objects
+
+        @since HttpServerUtil 1.6
+    */
+    final bool hostsCode() {
+        return host_code;
+    }
+
+    #! Returns @ref True "True" if an object whose code the handler runs (see hostedObjects()) is of a class of a
+    #! sandboxed Program (qore#7305)
+    /** Also True if this cannot be decided
+
+        @see @ref Qore::SandboxManager::isFromSandboxedProgram() "SandboxManager::isFromSandboxedProgram()"
+
+        @since HttpServerUtil 1.6
+    */
+    final bool hostsSandboxedCode() {
+        try {
+            if (!host_code) {
+                return False;
+            }
+            foreach object obj in (hostedObjects()) {
+                if (SandboxManager::isFromSandboxedProgram(obj)) {
+                    return True;
+                }
+            }
+            return False;
+        } catch (hash<ExceptionInfo> ex) {
+            # the decision fails closed
+            return True;
+        }
+    }
+
+    #! Makes the handler run the code of other objects, which can be of classes of sandboxed Programs (qore#7305)
+    /** A handler that calls the code of objects that other code gives it (as
+        @ref RestHandler::RestHandler "RestHandler" does with its REST classes) calls it in its constructor and
+        returns them from hostedObjects(); the server then asks for each request whether one of them is of a class of a
+        sandboxed Program, and if so, the handler's code gets the socket of its HTTP/1.x request (see
+        @ref httpserver_handler_socket).  It cannot be undone
+
+        @since HttpServerUtil 1.6
+    */
+    final private setHostsCode() {
+        host_code = True;
+    }
+
+    #! Returns the objects whose code the handler runs, for a handler that called setHostsCode() (qore#7305)
+    /** The objects of classes of sandboxed Programs make the handler's code get the socket of its HTTP/1.x request;
+        a subclass that runs the code of other objects returns them
+
+        @since HttpServerUtil 1.6
+    */
+    private list<object> hostedObjects() {
+        return ();
     }
 
     #! Returns @ref True "True" if this handler wants to receive streaming requests without waiting for the full
@@ -3690,6 +4246,20 @@ public class AbstractHttpRequestHandler {
           \c cx."header-info".  The handler thread drives the TCP socket directly.
 
         Check \c cx."header-info".http3 to determine which protocol is in use.
+
+        @par HTTP/1.x Request Bodies With a Content-Length
+        For an HTTP/1.x request with a \c Content-Length body, this method is called for a stream handler (one
+        created with \c stream = @ref True "True") on the handler thread, before the body is given to the handler;
+        \c body_streaming is not set.  When it returns @ref True "True", the body is not given whole: the server
+        sets \c cx."header-info".body_reader to an @ref HttpServer::Http1BodyReader "Http1BodyReader", which
+        @ref HttpServer::AbstractStreamRequest::handleRequest() "AbstractStreamRequest::handleRequest()" reads the
+        body with, giving each part of at most @ref HttpServer::BodyStreamPartSize "BodyStreamPartSize" bytes to
+        @ref HttpServer::AbstractStreamRequest::recv() "AbstractStreamRequest::recv()" as @ref binary data.  The
+        parts are the same whether the server read the body before the request was dispatched (a body of at most
+        @ref HttpServer::DefaultBodyStreamThreshold "DefaultBodyStreamThreshold" bytes) or reads it from the socket
+        as the handler reads the parts.  A body larger than the maximum request body size is refused with 413 before
+        any of it is read.  The method is not called for a handler that is not a stream handler, which always gets
+        an HTTP/1.x body whole.
 
         Any trailer fields that the client sends after the body are available once the body has ended from
         @ref Qore::Socket::getQuicStreamTrailers() "Socket::getQuicStreamTrailers()" (HTTP/3) or
@@ -3707,9 +4277,11 @@ public class AbstractHttpRequestHandler {
         - \c http2 (\c bool): \c True for HTTP/2 requests
         - \c max_request_body_size (\c int): the effective maximum request body size of the listener in bytes
           (the listener's \c max_request_body_size, or the server's if the listener sets none); \c 0 means no
-          limit.  The server does not limit the total size of a body read as a stream; the handler must stop
-          reading and reject the request (for example with HTTP 413 Content Too Large) when the total exceeds this
-          value.  The key is also set for requests with a buffered body
+          limit, also when none is set (the default limit,
+          @ref HttpServer::DefaultMaxRequestBodySize "DefaultMaxRequestBodySize", applies only to the bodies that
+          the server reads into memory).  The server does not limit the total size of a body read as a stream; the
+          handler must stop reading and reject the request (for example with HTTP 413 Content Too Large) when the
+          total exceeds this value.  The key is also set for requests with a buffered body
 
         @par Complete Streaming Handler Example
         @code{.py}
@@ -4184,7 +4756,7 @@ public class AbstractHttpRequestHandler {
         # Socket::readHTTPHeader() sets the value in cx.close according to the HTTP version and the Connection header
         if (cx.close)
             throw "PERSISTENT-ERROR", sprintf("a persistent connection cannot be granted because the requesting HTTP "
-                "level is %y and the Connection header is %y", hdr.http_version, hdr.connection);
+                "level is %y and the Connection header is %y", hdr.http_version, http_get_field(hdr, "connection"));
     }
 
     #! Called if the request contains an \c "Expect: 100-continue" header
@@ -4484,7 +5056,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.6
     */
     static string decodeRequestText(hash<auto> hdr, binary body, string assumed_encoding) {
-        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        auto ct = hdr."_qore_orig_content_type" ?? http_get_field(hdr, "content-type");
         data rv;
         try {
             rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding, "raise");
@@ -4587,12 +5159,12 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             *HttpListenerInterface listener, *reference<*hash<auto>> trailers) {
         # set if the chunked body read here is to be decoded as text, as readHTTPChunkedBody() returned it
         bool chunked_text;
-        if (!body && hdr."transfer-encoding" == "chunked") {
+        if (!body && http_get_field(hdr, "transfer-encoding") == "chunked") {
             # the body is read as bytes and decoded once below: a chunk can end inside a character, and the text is
             # checked where it enters the server (qore#6604)
             hash<auto> chunked = s.readHTTPChunkedBodyBinary(timeout_ms);
             body = remove chunked.body;
-            chunked_text = !hdr."content-encoding";
+            chunked_text = !http_get_field(hdr, "content-encoding");
             # the trailer fields are given to the caller apart and are not merged into the request's header fields,
             # so that they neither replace nor add a header field (RFC 9110 section 6.5, RFC 9112 section 7.1.2); the
             # body is decoded with the request's own header fields (qore#6753); they are read from "trailers", where
@@ -4602,10 +5174,10 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             }
         }
 
-        if (decode && body && hdr."content-encoding" && decompress) {
+        if (decode && body && http_get_field(hdr, "content-encoding") && decompress) {
             # the decompressed octets are text in the charset of the request, decoded as an uncompressed body is,
             # with the socket's encoding as the assumed one (qore#6618)
-            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
+            body = AbstractHttpRequestHandler::decodeRequestBody(http_get_field(hdr, "content-encoding"), body, NOTHING,
                 getMaxDecodedBodySize(listener));
             if (decompress_to_string) {
                 body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, getAssumedTextEncoding(s, listener));
@@ -4800,7 +5372,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             *hash<auto> response_hdr) {
         # make sure no forward slashes are doubled in the path
         path =~ s/\/+/\//g;
-        string uri = sprintf("http%s://%s/%s", cx.ssl ? "s" : "", request_hdr.host, path);
+        string uri = sprintf("http%s://%s/%s", cx.ssl ? "s" : "", http_get_field(request_hdr, "host"), path);
         return <HttpResponseInfo>{
             "code": status_code,
             "hdr": response_hdr + {"Location": uri},
@@ -4860,6 +5432,144 @@ public class AbstractUrlHandler inherits HttpServer::AbstractHttpRequestHandler 
       the handler returns
     - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 */
+#! A handle of the poll operation of an HTTP/1.1 WebSocket connection, which gives no socket (qore#7476)
+/** The HTTP server gives this handle, not the poll operation, to the setup of the WebSocket connection of a handler
+    that gets the socket of its request (see
+    @ref WebSocketHandler::WebSocketHandler::startAsyncWebSocketForRequest() "startAsyncWebSocketForRequest()"):
+    the poll operation holds the connection's socket, which such a handler must not get, and the server cannot tell
+    the method of the trusted handler from a method with the same name of another class.  The handle keeps the
+    poll operation in an internal member and gives only what the setup and the connection need: its settings, the
+    frames that it sends, its state, and the wake-up of the async I/O controller for the connection, never the poll
+    operation or its socket.
+
+    @since HttpServerUtil 1.6
+*/
+public final class HttpWebSocketPollOperationHandle {
+    private:internal {
+        #! the poll operation, which holds the connection's socket
+        HttpWebSocketPollOperationBase op;
+    }
+
+    #! Creates the handle of a poll operation
+    constructor(HttpWebSocketPollOperationBase op) {
+        self.op = op;
+    }
+
+    #! A copy of a handle is not supported
+    /** @throw HANDLE-COPY-ERROR always
+    */
+    copy() {
+        throw "HANDLE-COPY-ERROR", "a poll operation handle cannot be copied";
+    }
+
+    #! Sets the interval of the heartbeat pings in milliseconds
+    nothing setHeartbeat(int ms) {
+        op.setHeartbeat(ms);
+    }
+
+    #! Sets the idle timeout in milliseconds
+    nothing setIdleTimeout(int ms) {
+        op.setIdleTimeout(ms);
+    }
+
+    #! Sets the send timeout in milliseconds
+    nothing setSendTimeout(int ms) {
+        op.setSendTimeout(ms);
+    }
+
+    #! Sets whether the send timeout is scaled
+    nothing setSendTimeoutScaled(bool scaled) {
+        op.setSendTimeoutScaled(scaled);
+    }
+
+    #! Sets the minimum send rate
+    nothing setSendMinRate(int min_rate, timeout window) {
+        op.setSendMinRate(min_rate, window);
+    }
+
+    #! Sets the close timeout
+    nothing setCloseTimeout(timeout close_timeout) {
+        op.setCloseTimeout(close_timeout);
+    }
+
+    #! Sets the maximum frame size
+    nothing setMaxFrameSize(int size) {
+        op.setMaxFrameSize(size);
+    }
+
+    #! Sets the RSV bits of the negotiated extensions
+    nothing setExtensionRsvMask(int mask) {
+        op.setExtensionRsvMask(mask);
+    }
+
+    #! Enables or disables echo mode
+    nothing setEchoMode(bool enabled) {
+        op.setEchoMode(enabled);
+    }
+
+    #! Sets the connection and its handler that the frames are dispatched to
+    nothing setConnection(auto wsc, auto handler) {
+        call_object_method(op, "setConnection", wsc, handler);
+    }
+
+    #! Sets the counter that is decremented when the connection ends
+    nothing setDone(Counter done) {
+        call_object_method(op, "setDone", done);
+    }
+
+    #! Sets the code that is called when the connection has ended
+    nothing setDoneCallback(code<nothing()> cb) {
+        call_object_method(op, "setDoneCallback", cb);
+    }
+
+    #! Queues an encoded frame
+    nothing sendRawFrame(binary frame) {
+        op.sendRawFrame(frame);
+    }
+
+    #! Queues a close frame
+    nothing sendClose(int code = 1000, string reason = "") {
+        op.sendClose(code, reason);
+    }
+
+    #! Ends the connection at once, if the poll operation supports it
+    nothing forceClose() {
+        if (op.hasCallableMethod("forceClose")) {
+            call_object_method(op, "forceClose");
+        }
+    }
+
+    #! Wakes the async I/O controller for the connection
+    nothing wake() {
+        Qore::AsyncIoController::wakeSocket(io_object: op.getSocket());
+    }
+
+    #! Returns the size of the send queue
+    int getSendQueueSize() {
+        return op.getSendQueueSize();
+    }
+
+    #! Returns True if the connection failed
+    bool hasError() {
+        return op.hasError();
+    }
+
+    #! Returns the error of the connection, if any
+    *hash<auto> getError() {
+        return op.getError();
+    }
+
+    #! Returns the close code
+    int getCloseCode() {
+        return op.getCloseCode();
+    }
+
+    #! Returns the close reason
+    string getCloseReason() {
+        return op.getCloseReason();
+    }
+}
+
 public class AbstractHttpSocketHandlerInterface {
     private {
         #! stop listener flag
@@ -4876,18 +5586,50 @@ public class AbstractHttpSocketHandlerInterface {
     }
 
     #! Returns a closure that can be used to confirm that the connection has been closed
+    /** The id of a dedicated connection over HTTP/2 or HTTP/3 is that of its stream (\c "<connection id>:<stream
+        id>"), a string (qore#7042).
+
+        The closure ends the connection: on HTTP/1.x it shuts down and closes the socket; over HTTP/2 it ends the
+        connection's own stream only, as the client's other streams share the socket; over HTTP/3 the socket is that
+        of the connection's own stream, whose @ref Qore::Socket::shutdown() "shutdown()" and
+        @ref Qore::Socket::close() "close()" end the stream.
+    */
     code setExternallyManaged(softstring lid, hash<auto> cx, Socket s) {
         # get local vars that will be bound in the closure
         HttpServer::HttpListenerInterface listener = cx.listener;
-        int cid = cx.id;
+        string cid = cx.id.toString();
+        # the stream of a connection over HTTP/2, decided by the transport
+        *int h2_stream_id = (!s.isQuic() && s.isHttp2()) ? cx."header-info".stream_id : NOTHING;
 
         # return a closure to confirm that the connection has been closed
         return sub () {
             handlerStopped(lid);
-            listener.removeExternalDedicatedSocket(cid);
-            s.shutdown();
-            s.close();
+            # only this handler's own connection is removed (qore#6921)
+            listener.removeExternalDedicatedSocket(cid, self);
+            if (exists h2_stream_id) {
+                endHttp2Stream(s, h2_stream_id);
+            } else {
+                s.shutdown();
+                s.close();
+            }
         };
+    }
+
+    #! Ends the stream of a connection over HTTP/2 after its pending data, or resets it if it cannot be ended
+    /** The socket is the client's connection, which its other streams share: it is left open.  Both calls hand the
+        frame to the server's async I/O controller and wake it, so that the end is sent also when nothing else
+        happens on the connection; the handler needs no controller of its own for it (qore#7213)
+    */
+    private static endHttp2Stream(Socket s, int stream_id) {
+        try {
+            s.sendHttp2StreamData(stream_id, NOTHING, True);
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has already ended or been reset by the peer
+            try {
+                s.resetHttp2Stream(stream_id);
+            } catch () {
+            }
+        }
     }
 
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
@@ -5016,6 +5758,10 @@ public class AbstractHttpSocketHandlerInterface {
     /** The default implementation does nothing. SSE handlers that maintain a
         connection registry should override this method and remove \a cid from
         their registry.
+
+        The server also calls it for an HTTP/1.x event stream whose setup failed, which may have failed before the
+        handler registered the connection: an implementation does nothing for a \a cid that it has not registered
+        (qore#7376).
 
         @param cid the SSE connection ID
     */

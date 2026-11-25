@@ -3,6 +3,7 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires json
 %requires QUnit
 %requires AzureOpenAiDataProvider
@@ -75,9 +76,6 @@ class AzureActionsTest inherits QUnit::Test {
         foreach int pass in (0..1) {
             if (pass) {
                 foreach hash<DataProviderActionInfo> action in (actionInfoList("AzureOpenAI")) {
-                    if (action.action == "embedding") {
-                        action.mutates_state = False;
-                    }
                     DataProviderActionCatalog::registerAction(action);
                 }
             }

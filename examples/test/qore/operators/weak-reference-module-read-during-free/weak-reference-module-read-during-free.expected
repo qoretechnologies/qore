@@ -1,0 +1,10 @@
+json list: "[[]]"
+json hash: "{\"a\":{}}"
+yaml list: [[]]
+yaml hash: {a: {}}
+yaml stream list: [[]]
+yaml stream hash: {a: {}}
+avro list: [[]]
+avro hash: {a: {}}
+dataframe list: 2
+dataframe hash: 2

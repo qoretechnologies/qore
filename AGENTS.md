@@ -29,7 +29,9 @@
   symlink to the AOT-compiled `build/qlib-qmod/` output and is preferred over the `.qm`/`.qc`
   sources, so source edits are silently ignored until the qmod is rebuilt — even with `qlib`
   prepended to the module path. Symptom: the edited code simply never runs (no error). The same
-  applies to `build-debug/` when testing the debug build.
+  applies to `build-debug/` when testing the debug build. The links are shared by the builds of the
+  tree and lead to the build built last, but a qore of another build loads its own build's module
+  in their place, or the source if its build has none (`design/aot-linked-module-sources.md`).
 
 ## Coding Style & Naming Conventions
 - C++ code uses 4-space indentation and braces on the same line; follow nearby file style.
@@ -63,6 +65,10 @@
   its own where perl or `setsid` is available (otherwise it is signalled alone); when it exceeds its time limit or the
   run is interrupted, every process of the group is ended with it (after its call stacks are dumped), on every
   platform.  A test must not rely on a process of its own outliving it, nor on being in the runner's process group.
+- The runner searches build and source modules, then the external module directories configured with CMake. Older builds
+  also accept existing directories under the source or build root from `QORE_MODULE_DIR`. To supply your own external
+  module path, set `QORE_MODULE_DIR_ONLY=1` and `QORE_MODULE_DIR`. The runner keeps only existing directories under
+  those same roots from `QORE_INCLUDE_DIR` unless you set `QORE_TEST_ALLOW_EXTERNAL_INCLUDES=1`.
 - Use `QORE_TEST_OPTS` and database env vars (for example `QORE_DB_CONNSTR`) when tests need external services.
 - A test that uses `examples/test/ExecModeHarness.qm` declares `# test-exec-mode: children - <why>` when all its checks
   run in child processes that set their own `--exec-mode` (the CI jobs that run every test in one execution mode leave
@@ -107,6 +113,11 @@
   Memcached or MongoDB test random key prefixes or a database of its own.  A test that takes more than about two minutes
   is split into parts: its class adds each case with `addPartCase(<part>, ...)` and each `<name>-<part>.qtest` runs one
   part (ex: `ir/CMakeBuildHelpers.qc`); `examples/test/runner/test_split_tests.py` checks the parts.
+- A test connects its clients to the address that its servers listen on: a server on `127.0.0.1` is reached at
+  `127.0.0.1`, not at `localhost`, which resolves to `::1` first, where a test running beside it can listen at the
+  same port number.  A test that needs the name `localhost` (a TLS host name check, an origin that must differ from
+  `127.0.0.1`, a fallback from `::1`) listens on both loopback addresses, or holds the port on `::1`, and declares
+  `# test-loopback: localhost - <why>`; `examples/test/runner/test_loopback_hosts.py` enforces it (#7469).
 - The shards of a CI job are balanced by `examples/test/docker_test/test-durations.tsv`; refresh it from a green
   pipeline with `examples/test/docker_test/update-test-durations.py <pipeline ID>` after adding long tests or shards.
 - The Linux CI build and test jobs run on the qore-test-base digests that `resolve-qore-test-base-images` resolves the
@@ -115,6 +126,11 @@
   pipeline (design/ci-test-base-image-digests.md, `examples/test/runner/test_resolve_image_digests.py`).
 
 ## Running Tests Under valgrind
+- `run_tests.sh` passes `examples/test/valgrind.supp` to every valgrind that a test starts (`VALGRIND_OPTS`); give it
+  to a manual run with `--suppressions=examples/test/valgrind.supp`.  It suppresses the reports of LLVM 21's JIT that
+  are not errors (each by its exact frames, with the standalone reproduction in the file), never a report of Qore's own
+  code (`qore/misc/valgrind-suppressions.qtest` checks it); add a library false positive there only with such a
+  reproduction.
 - Disable signal handling with `-b` (`--disable-signals`), for example
   `QORE_PCRE2_NO_JIT=1 valgrind qore -b --exec-mode=ir --enable-debug <test>`.  Qore wakes its signal handling thread
   with `SIGSYS`, and valgrind treats `SIGSYS` as a fault signal: a wake-up that arrives while the signal thread is

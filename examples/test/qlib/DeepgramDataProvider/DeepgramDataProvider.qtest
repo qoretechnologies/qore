@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires json
@@ -104,7 +105,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("DeepgramDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.DEEPGRAM_CONNECTION;
+        conn_name = LiveProvider::get("deepgram", "DEEPGRAM_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 2 actions registered", \registrationTest());
         addTestCase("transcribe-file builds query string from non-URL params",
@@ -160,10 +161,22 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
 
         list<string> action_codes = sort(map $1.action, actions);
         assertEq(("synthesize-speech", "transcribe-file"), action_codes);
+        # POST /v1/speak synthesizes the audio and returns it, storing nothing (qore#7454)
+        foreach string name in ("synthesize-speech",) {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("Deepgram"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, info.mutates_state.typeCode(), name);
+            assertFalse(info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
 
         # transcribe-file: url is no longer required; audio is a file input in the same
         # required group, and each excludes the other
         hash<DataProviderActionInfo> tf = (select actions, $1.action == "transcribe-file")[0];
+        # the callback option makes Deepgram POST the transcript to another URL, so transcribe-file is not
+        # read-only (qore#7454)
+        assertTrue(exists tf.options.callback);
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(tf));
         assertFalse(tf.options.url.required ?? False);
         assertTrue(tf.options.url.preselected);
         assertEq(("audio_source",), tf.options.url.required_groups);
@@ -441,6 +454,7 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         against any tier.
     */
     private liveDeepgramTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Deepgram connection ping failed: %s",

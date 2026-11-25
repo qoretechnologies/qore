@@ -42,6 +42,7 @@ class TerminalIoRestrictedLoadTest inherits QUnit::Test {
         const Code = {
             # a provider module that does not exist: the verbose output of its error is left out
             "DatasourceProvider": "auto sub test() { return get_ds_hash(True); }",
+            # live-provider-optin: lists the connections in a restricted Program; none is opened
             "ConnectionProvider": "auto sub test() { return get_connections(True); }",
         };
 

@@ -96,6 +96,7 @@ module OneDriveDataProvider {
             "desc": "Retrieve the current user's OneDrive metadata including storage quota, drive type, "
                 "and owner information",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Drive",),
             "output_type": OneDriveGetDriveInfoDataProvider::ResponseType,
         });
@@ -155,6 +156,7 @@ module OneDriveDataProvider {
             "short_desc": "Get file or folder metadata",
             "desc": "Retrieve metadata for a specific file or folder by ID or path",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OneDriveGetItemRequestDataType::Fields{"id",}, {
@@ -246,6 +248,7 @@ module OneDriveDataProvider {
             "desc": "Get the download URL and metadata for a file. Returns a pre-authenticated download "
                 "URL that can be used to download the file content directly",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OneDriveDownloadFileRequestDataType::Fields, {

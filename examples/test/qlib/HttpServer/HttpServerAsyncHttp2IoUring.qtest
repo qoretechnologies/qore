@@ -141,6 +141,8 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         addTestCase("mixed file and memory streams", \testMixedStreams());
         addTestCase("sequential file streams on same connection", \testSequentialFileStreams());
         addTestCase("file streaming does not block non-streaming requests", \testFileStreamWithPing());
+        addTestCase("a file read that completes after the I/O thread's poll is sent",
+            \testReadCompletedAfterPoll());
 
         # Stress tests
         addTestCase("stress: rapid connect/disconnect with in-flight streams",
@@ -247,6 +249,36 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
                 sprintf("io_uring completions increased (%d -> %d)",
                     stats_before.completions, stats_after.completions));
         }
+    }
+
+    #! a file read that completes after the poll of the I/O thread returned is taken by the drain at the end of the
+    #! thread's iteration; the connection, which waits for nothing else, must still run and send the data (qore#7435)
+    testReadCompletedAfterPoll() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        *hash<auto> stats_before = get_io_uring_debug_stats();
+        if (!stats_before) {
+            testSkip("io_uring is not available");
+        }
+
+        # every completion is left to the drain at the end of the iteration
+        call_function("dbg_io_uring_defer_completions", True);
+        on_exit {
+            call_function("dbg_io_uring_defer_completions", False);
+        }
+
+        # a stalled response ends with SOCKET-TIMEOUT; a response of several reads normally takes milliseconds
+        RestClient rc = getClient(20s);
+        # several reads, each completed by the drain
+        int size = 4 * 65536 + 100;
+        hash<auto> resp = rc.get("/file-stream/" + size);
+        verifyBody(resp, size, "F", "a file stream whose reads complete after the poll");
+
+        *hash<auto> stats_after = get_io_uring_debug_stats();
+        assertTrue(stats_after.completions > stats_before.completions,
+            sprintf("the response was read with io_uring (%d -> %d completions)", stats_before.completions,
+                stats_after.completions));
     }
 
     testSmallFileStream() {
@@ -480,13 +512,13 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
     #! no crashes or use-after-free when Http2Session is destroyed during io_uring reads.
     testStressRapidConnectDisconnect() {
         # Probe to detect valgrind — a single request under valgrind is very slow
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         {
             RestClient rc = getClient(30000);
             hash<auto> resp = rc.get("/file-stream/1024");
             assertEq(200, resp.status_code, "probe request succeeded");
         }
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
         int cycles = probe_elapsed > 2s ? 5 : 50;
 
         int successes = 0;
@@ -545,10 +577,10 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         RestClient rc = getClient(60000);
 
         # Probe for valgrind
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         hash<auto> probe = rc.get("/file-stream/1024");
         assertEq(200, probe.status_code, "probe request succeeded");
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
         int num_streams = probe_elapsed > 1s ? 5 : 15;
 
         Counter cnt(num_streams);
@@ -624,13 +656,13 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
     #! concurrently and validates session-level isolation in processCompletions().
     testStressConcurrentConnections() {
         # Probe for valgrind
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         {
             RestClient rc = getClient(30000);
             hash<auto> probe = rc.get("/file-stream/1024");
             assertEq(200, probe.status_code, "probe request succeeded");
         }
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
         int num_connections = probe_elapsed > 1s ? 3 : 8;
         int requests_per_conn = probe_elapsed > 1s ? 2 : 5;
         int total = num_connections * requests_per_conn;
@@ -713,10 +745,10 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         RestClient rc = getClient(30000);
 
         # Probe to calibrate — detect valgrind
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         hash<auto> probe = rc.get("/file-stream/8192");
         assertEq(200, probe.status_code, "probe request succeeded");
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
 
         # 5s under normal conditions, 2s under valgrind
         timeout duration = probe_elapsed > 1s ? 2s : 5s;
@@ -727,10 +759,10 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         int count = 0;
         int total_bytes = 0;
         int errors = 0;
-        date start_time = now_us();
+        date start_time = microseconds(clock_get_monotonic_us());
         date end_time = start_time + duration;
 
-        while (now_us() < end_time) {
+        while (microseconds(clock_get_monotonic_us()) < end_time) {
             try {
                 hash<auto> resp = rc.get("/file-stream/" + file_size);
                 if (resp.status_code == 200) {
@@ -772,7 +804,7 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         }
 
         if (m_options.verbose) {
-            date actual_elapsed = now_us() - start_time;
+            date actual_elapsed = microseconds(clock_get_monotonic_us()) - start_time;
             float elapsed_sec = float(get_duration_microseconds(actual_elapsed)) / 1000000.0;
             float mb_sec = (float(total_bytes) / (1024.0 * 1024.0)) / elapsed_sec;
             printf("sustained throughput: %d requests in %.1fs (%.1f req/s, %.2f MB/s)\n",
@@ -787,10 +819,10 @@ class HttpServerAsyncHttp2IoUringTest inherits QUnit::Test {
         RestClient rc = getClient(30000);
 
         # Probe for valgrind
-        date probe_start = now_us();
+        date probe_start = microseconds(clock_get_monotonic_us());
         hash<auto> probe = rc.get("/file-stream/1024");
         assertEq(200, probe.status_code, "probe request succeeded");
-        date probe_elapsed = now_us() - probe_start;
+        date probe_elapsed = microseconds(clock_get_monotonic_us()) - probe_start;
         int count = probe_elapsed > 1s ? 10 : 50;
 
         *hash<auto> stats_before = get_io_uring_debug_stats();

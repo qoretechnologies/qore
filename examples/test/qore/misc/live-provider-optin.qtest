@@ -1,0 +1,720 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class LiveProviderOptInTest
+
+#! A line of a test that reaches a credential of an external service without LiveProviderTest.qm
+hashdecl LiveProviderReadInfo {
+    #! the file, relative to the repository root
+    string file;
+    #! the line number
+    int line;
+    #! what the line does
+    string what;
+    #! the line
+    string text;
+}
+
+#! Rejects tests that reach the credentials of external services without LiveProviderTest.qm (qore#6964)
+/** A test calls an external service with an account only when \c QORE_TEST_LIVE_PROVIDERS enables it, which
+    @ref LiveProviderTest::LiveProvider "LiveProvider" checks; so a test reads a credential, or opens a connection
+    whose definition has one, only through it.  This test fails on a line of a test outside LiveProviderTest.qm
+    that:
+    - reads a variable with a credential-like name: <tt>ENV.NAME</tt>, <tt>ENV{"NAME"}</tt> or
+      <tt>getenv("NAME")</tt>, where the name has a part such as \c KEY, \c TOKEN, \c SECRET, \c PASSWORD, \c USER,
+      \c CONNECTION, \c ACCOUNT or \c LIVE (\c QORE_DB_CONNSTR and the other \c QORE_DB_ variables of the local
+      database servers are not, see TestRunIsolation.qm)
+    - reads a variable whose name is computed (<tt>ENV{expr}</tt>, <tt>getenv(expr)</tt>), or iterates over the
+      names of the environment (<tt>keys ENV</tt>, <tt>ENV.keys()</tt>, <tt>ENV.pairIterator()</tt>, ...), as the
+      name of a credential can be computed
+
+    The names are checked as follows (qore#6986):
+    - a write is not a read: the variable assigned in <tt>ENV{x} = ...</tt> or <tt>ENV.X = ...</tt>, removed in a
+      <tt>remove ENV{x};</tt> statement or deleted with <tt>delete ENV{x}</tt> is not read (\c setenv() and
+      \c unsetenv() are not reads either); a save of the value before a case (<tt>*string old = ENV{x};</tt>) is a
+      read, checked as any other
+    - a literal name between escaped quotes in embedded source (the argument of \c getenv() or the key of \c ENV
+      in a string that a test parses or compiles) is checked as that literal name
+    - a name given by a constant (<tt>ENV{X}</tt>, <tt>getenv(Class::X)</tt>) that is declared with a literal name
+      (<tt>const X = "NAME";</tt>) in the same file (outside comments and strings; a qualified name in that class or
+      namespace of the file), or that is one of the @ref ModuleConstants, is checked as that literal name; if the
+      constant has more than one declaration, every value is checked; a name that has a declaration with another
+      value (an expression, or a declaration in a comment or a string), or that the file also declares or assigns as a
+      variable, is computed
+    - opens a named connection (\c get_connection(), \c get_datasource_connection(), ...), which has the
+      credentials of its definition (the connection providers, ex: \c QORE_CONNECTION_PROVIDERS)
+    - reads a file of the home directory (\c HOME, <tt>~/</tt>) or a credential file of a service's tools (ex:
+      <tt>.aws/</tt>, <tt>.config/gcloud</tt>, <tt>.netrc</tt>)
+
+    It also fails a test that loads a client module that finds credentials by itself (the AWS, Azure and Google
+    Cloud clients: \c AwsRestClient, \c BedrockRestClient, \c AzureAuth, \c GcpAuth, \c VertexAiRestClient, ...)
+    without loading LiveProviderTest.qm, which removes those credentials from the environment unless live calls
+    to the service are enabled.
+
+    A line that does not reach a credential (ex: a test that saves and restores a variable around a case that sets
+    a fake value, or opens a connection that it defined itself to a local server) is allowed when it, or the line
+    before it, has a comment starting with <tt>live-provider-optin:</tt> that says why.
+*/
+class LiveProviderOptInTest inherits QUnit::Test {
+    public {
+        #! the directories scanned, relative to the repository root; "modules/*/test" is added
+        const ScanDirs = ("examples/test",);
+
+        #! the files that are not scanned, relative to the repository root
+        const Exempt = {
+            # the helper reads the credentials
+            "examples/test/LiveProviderTest.qm": True,
+            # this test has the forms that it finds in its own test case
+            "examples/test/qore/misc/live-provider-optin.qtest": True,
+        };
+
+        #! the extensions of the files scanned
+        const Extensions = {
+            "qtest": True,
+            "q": True,
+            "qc": True,
+            "qm": True,
+            "ql": True,
+        };
+
+        #! the credential-like parts of a variable name
+        const CredentialName = "(?:^|_)(?:API_?KEYS?|APIKEY|ACCESS_?KEY|KEY_?ID|KEYS?|TOKENS?|SECRETS?|PASS|PASSWD|"
+            "PASSWORD|PASSPHRASE|PWD|CLIENT_?ID|API_?ID|APP_?ID|CREDENTIALS?|CREDS|SA_JSON|SERVICE_?ACCOUNT|ACCOUNT|"
+            "ACCOUNT_?ID|AUTH|BEARER|SESSION|USER|USERNAME|LOGIN|CONNECTION|CONNECTIONS|CONN|SITE|TENANT|SID|DSN|"
+            "PROVIDERS|LIVE)(?:_|$)";
+
+        #! the client modules that find credentials by themselves (LiveProvider::AmbientVars)
+        const AmbientClientModule = "^(?:Aws|Bedrock|Gcp|GoogleCloud|GoogleDocumentAi|VertexAi|Azure)";
+
+        #! the URLs of services that can be hosted services with credentials, read with LiveProvider::getService()
+        const ServiceUrl = {
+            "MONGODB_URL": True,
+        };
+
+        #! the constants of modules that name a variable: name -> the source that declares it, relative to the
+        #! repository root, and its namespace
+        const ModuleConstants = {
+            "ProviderIndexEnvVar": {"file": "qlib/ProviderIndexUtil/ProviderIndexUtil.qc", "ns": "ProviderIndexUtil"},
+            "EdifactCacheEnvVar": {"file": "qlib/EdifactUtil/Edifact01DirectoryCache.qc", "ns": "EdifactUtil"},
+        };
+
+        #! the value of a constant that is not declared with a literal name
+        const NotLiteral = "*";
+
+        #! the names with a credential-like part that are not credentials
+        const NotCredential = {
+            # the user running the process
+            "USER": True,
+            "LOGNAME": True,
+            "USERNAME": True,
+        };
+    }
+
+    constructor() : Test("live provider credentials are read through LiveProviderTest.qm", "1.0") {
+        addTestCase("the scanner finds the reads of credentials", \scannerTest());
+        addTestCase("a write is not a read", \writeTest());
+        addTestCase("an escaped literal name is checked as that name", \escapedLiteralTest());
+        addTestCase("a constant name is checked as its value", \constantTest());
+        addTestCase("no test reads a credential without LiveProviderTest.qm", \repositoryTest());
+        set_return_value(main());
+    }
+
+    scannerTest() {
+        list<string> lines = (
+            "*string k = ENV.MISTRALAI_APIKEY;",                            # 1
+            "*string k = ENV{\"OPENAI_TOKEN\"};",                           # 2
+            "*string k = getenv(\"SALESFORCE_PASS\");",                     # 3
+            "*string k = getenv( 'ZOHO_CLIENT_ID' );",                      # 4
+            "if (ENV.BEDROCK_LIVE || ENV.UNLEASHED_API_ID) {",              # 5
+            "*string c = m_options.conn ?? ENV.ANTHROPIC_CONNECTION;",      # 6
+            "*string v = ENV{name};",                                       # 7
+            "*string v = getenv(var);",                                     # 8
+            "foreach string k in (keys ENV) {",                             # 9
+            "map $1, ENV.pairIterator();",                                  # 10
+            "foreach string k in (ENV.keys()) {",                           # 11
+            "AbstractConnection c = get_connection(name);",                 # 12
+            "Datasource ds = get_datasource_connection(\"omq\");",          # 13
+            "string f = ENV.HOME + \"/.qorus/conn.yaml\";",                 # 14
+            "string f = \"~/.aws/credentials\";",                           # 15
+            "string f = getenv(\"HOME\");",                                 # 16
+            "string f = dir + \"/.config/gcloud/adc.json\";",               # 17
+            # not credentials
+            "*string c = ENV.QORE_DB_CONNSTR_PGSQL;",
+            "*string u = ENV.USER;",
+            "*string p = ENV.PATH;",
+            "*string s = ENV.QORE_TEST_OPTS;",
+            "*string m = ENV.MISTRAL_TEST_CHAT_MODEL;",
+            "# *string k = ENV.MISTRALAI_APIKEY;",
+            "string s = \"ENVIRONMENT\";",
+            "string s = sprintf(\"%s\", MY_ENV.X_TOKEN);",
+            "setenv(\"AWS_ACCESS_KEY_ID\", \"fake\");",
+            # allowed with a reason
+            "*string saved = getenv(\"AWS_ACCESS_KEY_ID\"); # live-provider-optin: saved and restored",
+            "# live-provider-optin: a connection to the test's own local server",
+            "AbstractConnection c = get_connection(\"local-6964\");",
+            # a marker without a reason allows nothing
+            "*string k = ENV.CHARGEBEE_API_KEY; # live-provider-optin:",
+        );
+        list<hash<LiveProviderReadInfo>> found = scanLines("examples/test/x.qtest", lines);
+        assertEq((1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, lines.size()), map $1.line, found);
+        assertEq("reads ENV.MISTRALAI_APIKEY", found[0].what);
+        map assertTrue(LiveProviderOptInTest::isCredentialName($1), $1), ("UNLEASHED_API_ID", "VERTEX_SA_JSON",
+            "GOOGLE_SERVICE_ACCOUNT", "AWS_TEXTRACT_LIVE", "QORE_CONNECTION_PROVIDERS", "MONGODB_URL");
+        map assertFalse(LiveProviderOptInTest::isCredentialName($1), $1), ("USER", "QORE_DB_CONNSTR_PGSQL",
+            "QORE_TEST_OPTS", "MISTRAL_TEST_CHAT_MODEL");
+        assertEq("reads a variable whose name is computed", found[6].what);
+        assertEq("iterates over the environment", found[8].what);
+        assertEq("opens a named connection", found[11].what);
+        assertEq("reads a file of the home directory or a credential file", found[13].what);
+
+        # a client module that finds credentials by itself needs the helper
+        assertEq(("loads AwsRestClient without LiveProviderTest.qm", "loads GcpAuth without LiveProviderTest.qm"),
+            map $1.what, scanAmbientClients("examples/test/x.qtest", ("%requires QUnit", "%requires AwsRestClient",
+            "%requires(reexport) ../../../../qlib/GcpAuth.qm", "%requires RestClient")));
+        assertEq((), scanAmbientClients("examples/test/x.qtest", ("%requires AwsRestClient",
+            "%requires ../../LiveProviderTest.qm")));
+
+        # a doc comment block is not code
+        assertEq((), scanLines("examples/test/x.qm", ("/** example:", "    ENV.MISTRALAI_APIKEY", "*/")));
+        assertEq((3,), map $1.line, scanLines("examples/test/x.qm", ("/* x */", "int i;",
+            "*string k = ENV.MISTRALAI_APIKEY;")));
+    }
+
+    #! Returns the line numbers and what is found in the lines
+    private list<string> scanResult(list<string> lines, hash<string, list<string>> module_consts = {}) {
+        return map sprintf("%d: %s", $1.line, $1.what), scanLines("examples/test/x.qtest", lines, module_consts);
+    }
+
+    writeTest() {
+        # writes are not reads
+        assertEq((), scanResult((
+            "ENV{name} = \"fake\";",
+            "ENV{i.key} = i.value;",
+            "ENV.AWS_SECRET_ACCESS_KEY = \"fake\";",
+            "remove ENV{name};",
+            "    remove ENV{i.key};",
+            "if (exists old) ENV{name} = old; else remove ENV{name};",
+            "if (!had) { remove ENV{name}; }",
+            "delete ENV{name};",
+            "setenv(name, \"fake\");",
+            "unsetenv(name);",
+        )));
+        # a read beside a write, or the value of a remove expression, is a read
+        assertEq((
+            "1: reads a variable whose name is computed",
+            "2: reads a variable whose name is computed",
+            "3: reads a variable whose name is computed",
+            "4: reads a variable whose name is computed",
+            "5: reads ENV.AWS_SECRET_ACCESS_KEY",
+            "6: reads ENV.OPENAI_API_KEY",
+            "7: reads ENV.SLACK_TOKEN",
+            "8: reads a variable whose name is computed",
+            "9: reads a variable whose name is computed",
+            "10: reads ENV.SLACK_TOKEN",
+            "11: reads a variable whose name is computed",
+            "12: reads ENV.SLACK_TOKEN",
+            "13: reads ENV.SLACK_TOKEN",
+        ), scanResult((
+            "*string old = remove ENV{name};",
+            "ENV{name} = ENV{other};",
+            "*string old = ENV{name}; ENV{name} = \"fake\";",
+            "if (ENV{name} == \"x\") {",
+            "*string old = remove ENV{\"AWS_SECRET_ACCESS_KEY\"};",
+            "ENV.X_FAKE = ENV.OPENAI_API_KEY;",
+            "ENV{\"X\"} = getenv(\"SLACK_TOKEN\");",
+            "f(remove ENV{name});",
+            # a key or text that reads a variable
+            "log(\"ENV{\" + getenv(name) + \"} = set\");",
+            "x = 'ENV{' + ENV.SLACK_TOKEN + '}=';",
+            "ENV{getenv(\"SLACK_TOKEN\")} = \"x\";",
+            "delete ENV{ENV.SLACK_TOKEN};",
+            "for (int i = 0; remove ENV{\"SLACK_TOKEN\"}; ++i) {",
+        )));
+    }
+
+    escapedLiteralTest() {
+        # an escaped literal name in embedded source is checked as that name
+        assertEq((
+            "1: reads ENV.OPENAI_API_KEY",
+            "2: reads ENV.ZOHO_TOKEN",
+            "3: reads ENV.GITHUB_TOKEN",
+            "6: reads a variable whose name is computed",
+            "7: reads a variable whose name is computed",
+            "8: reads a variable whose name is computed",
+            "11: reads a variable whose name is computed",
+            "12: reads a variable whose name is computed",
+            "13: reads a variable whose name is computed",
+        ), scanResult((
+            "string src = \"x = getenv(\\\"OPENAI_API_KEY\\\");\";",
+            "string src = \"*string t = ENV{\\\"ZOHO_TOKEN\\\"};\";",
+            "\"const char* t = std::getenv(\\\"GITHUB_TOKEN\\\");\\n\"",
+            "\"const char* p = std::getenv(\\\"QORE_AOT_LOAD_COUNTER_FILE\\\");\\n\"",
+            "\"h.pgoptions = ENV{\\\"PGOPTIONS\\\"};\\n\"",
+            "string src = \"x = getenv(\\\"\" + name + \"\\\");\";",
+            "string src = \"x = ENV{\\\"\" + \"SLACK\" + \"_TOKEN\\\"};\";",
+            "*string v = getenv(\"X\" + suffix);",
+            "assertTrue(threw, \"getenv() is rejected\");",
+            "assertNothing(getenv(\"A=B\"));",
+            # quotes that are not a pair
+            "string s = 'getenv(' + getenv(name) + ')';",
+            "string s = \"x = getenv(\\\"SLACK_TOKEN')\";",
+            "string s = \"x = getenv(\\\\\\\"SLACK_TOKEN\\\")\";",
+        )));
+    }
+
+    constantTest() {
+        # a constant declared in the file is checked as its value
+        assertEq((
+            "6: reads ENV.MISTRAL_API_KEY",
+            "7: reads ENV.MISTRAL_API_KEY",
+            "10: reads a variable whose name is computed",
+            "11: reads a variable whose name is computed",
+            "12: reads ENV.SLACK_TOKEN",
+            "13: reads a variable whose name is computed",
+            "14: reads a file of the home directory or a credential file",
+            "15: reads a variable whose name is computed",
+        ), scanResult((
+            "class T { const TokenVar = \"MISTRAL_API_KEY\"; }",
+            "const ChildVar = \"QORE_X_TEST_CHILD\";",
+            "public { const DirVar = \"QORE_PROVIDER_INDEX_DIR\"; }",
+            "class A { const DupVar = \"QORE_X_DIR\"; } class B { const DupVar = \"SLACK_TOKEN\"; }",
+            "const HomeVar = \"HOME\";",
+            "*string k = ENV{TokenVar};",
+            "*string k = getenv(T::TokenVar);",
+            "if (!ENV{ChildVar}) {",
+            "*string d = getenv(::DirVar);",
+            "*string v = ENV{Unknown};",
+            "*string v = getenv(ChildVar + \"_TOKEN\");",
+            "*string v = ENV{DupVar};",
+            "string src = \"const EmbVar = \\\"GITHUB_TOKEN\\\"; x = getenv(EmbVar);\";",
+            "string h = getenv(HomeVar);",
+            "*string v = getenv(Helper::ChildVar);",
+        )));
+
+        # a name that the file also declares or assigns as a variable is computed
+        assertEq((
+            "3: reads a variable whose name is computed",
+            "6: reads a variable whose name is computed",
+            "9: reads a variable whose name is computed",
+            "12: reads a variable whose name is computed",
+            "15: reads a variable whose name is computed",
+            "20: reads a variable whose name is computed",
+            "22: reads a variable whose name is computed",
+            "24: reads a variable whose name is computed",
+            "27: reads a variable whose name is computed",
+        ), scanResult((
+            "const NameVar = \"QORE_X_DIR\";",
+            "string NameVar = \"OPENAI_API_KEY\";",
+            "*string k = ENV{NameVar};",
+            "const ParamVar = \"QORE_X_DIR\";",
+            "sub f(string ParamVar) {",
+            "    return getenv(ParamVar);",
+            "const MemberVar = \"QORE_X_DIR\";",
+            "    self.MemberVar = \"OPENAI_API_KEY\";",
+            "*string k = ENV{MemberVar};",
+            # a declaration that is not a literal name, or a parameter at the end of a line
+            "const A = \"QORE_X\";",
+            "namespace N { const A = sprintf(\"%s_TOKEN\", \"SLACK\"); }",
+            "*string k = getenv(N::A);",
+            "# const KeyVar = \"QORE_X\";",
+            "const KeyVar = get_name();",
+            "*string k = getenv(KeyVar);",
+            "const ParamVar2 = \"QORE_X_DIR\";",
+            "sub g(int a,",
+            "      string ParamVar2",
+            "    ) {",
+            "    return getenv(ParamVar2);",
+            # a declaration in a comment or a string, or a qualified name of another class
+            "foo(); # const KeyVar2 = \"QORE_X\";",
+            "*string k = getenv(KeyVar2);",
+            "x = 'const KeyVar3 = \"QORE_X\";';",
+            "*string k = getenv(KeyVar3);",
+            "class T2 { const TokenVar2 = \"QORE_X\"; }",
+            "namespace Helper;",
+            "*string k = getenv(Helper::TokenVar2);",
+            "*string k = getenv(T2::TokenVar2);",
+        )));
+
+        # a constant of a module is checked as its value
+        assertEq(("3: reads ENV.NOTION_TOKEN", "4: reads a variable whose name is computed",
+            "5: reads a variable whose name is computed"), scanResult((
+            "*string d = getenv(ProviderIndexUtil::ProviderIndexEnvVar);",
+            "*string d = getenv(ProviderIndexEnvVar);",
+            "*string k = ENV{ModTokenVar};",
+            "*string k = ENV{OtherVar};",
+            "*string d = getenv(Helper::ProviderIndexEnvVar);",
+        ), {"ProviderIndexEnvVar": ("QORE_PROVIDER_INDEX_DIR",),
+            "ProviderIndexUtil::ProviderIndexEnvVar": ("QORE_PROVIDER_INDEX_DIR",), "ModTokenVar": ("NOTION_TOKEN",)}));
+        assertEq({"A": ("QORE_A",), "B": ("QORE_B", "X_TOKEN"), "C": (NotLiteral,), "D": (NotLiteral,),
+            "G": (NotLiteral,), "H": ("QORE_H", NotLiteral), "J": ("QORE_J",), "K::J": ("QORE_J",),
+            "L": (NotLiteral,), "K::L": (NotLiteral,)}, LiveProviderOptInTest::getConstants((
+            "public const A = \"QORE_A\";",
+            "    const B = \"QORE_B\"; const B = 'X_TOKEN';",
+            "const C = \"A\" + \"B\";",
+            "const D = (\"A\", \"B\");",
+            "string_const E = \"X\";",
+            "# const F = \"QORE_F\";",
+            "string s = \"const G = \\\"QORE_G\\\";\";",
+            "const H = \"QORE_H\"; /* const I = \"QORE_H\"; */ const H = 'QORE_H\";",
+            "# class M",
+            "class K { const J = \"QORE_J\"; } # class N",
+            "foo(); # const L = \"QORE_L\";",
+        )));
+    }
+
+    repositoryTest() {
+        string root = normalize_dir(get_script_dir() + "/../../../..");
+        hash<string, list<string>> consts = {};
+        foreach hash<auto> i in (ModuleConstants.pairIterator()) {
+            ReadOnlyFile f(root + "/" + i.value.file);
+            *list<string> values = LiveProviderOptInTest::getConstants(f.read(-1).split("\n")){i.key};
+            # the constant is declared once, with a literal name
+            assertEq(1, values.size(), i.key);
+            assertTrue(values[0] =~ /^[A-Za-z0-9_]+$/, i.key);
+            consts{i.key} = consts{i.value.ns + "::" + i.key} = values;
+        }
+        assertEq(("QORE_PROVIDER_INDEX_DIR",), consts.ProviderIndexEnvVar);
+        assertEq(("QORE_EDIFACT_DIRCACHE",), consts."EdifactUtil::EdifactCacheEnvVar");
+        list<hash<LiveProviderReadInfo>> found = ();
+        foreach string dir in (ScanDirs) {
+            found += scanDir(root, dir, consts);
+        }
+        Dir d();
+        d.chdir(root + "/modules");
+        foreach string name in (sort(d.listDirs() ?? ())) {
+            if (is_dir(root + "/modules/" + name + "/test")) {
+                found += scanDir(root, "modules/" + name + "/test", consts);
+            }
+        }
+        assertEq((), map sprintf("%s:%d: %s: %s", $1.file, $1.line, $1.what, $1.text), found);
+    }
+
+    #! Returns the constants declared in the lines of a file: the name, and the name qualified with the class or
+    #! namespace declared last before it -> the literal names, or @ref NotLiteral
+    static hash<string, list<string>> getConstants(list<string> lines) {
+        hash<string, list<string>> rv = {};
+        bool in_comment = False;
+        string scope;
+        foreach string line in (lines) {
+            # a comment is not code
+            if (in_comment) {
+                int end = line.find("*/");
+                if (end < 0) {
+                    continue;
+                }
+                line = line.substr(end + 2);
+                in_comment = False;
+            }
+            while (True) {
+                int start = line.find("/*");
+                if (start < 0) {
+                    break;
+                }
+                int end = line.find("*/", start + 2);
+                if (end < 0) {
+                    line = line.substr(0, start);
+                    in_comment = True;
+                    break;
+                }
+                line = line.substr(0, start) + line.substr(end + 2);
+            }
+            if (line =~ /^\s*(?:#|\/\/)/) {
+                continue;
+            }
+            # the declarations of classes, namespaces and constants in the line, in order
+            string before = "";
+            string rest = line;
+            while (*list<*string> decl = (rest =~ x/^(.*?)(?<![A-Za-z0-9_])(class|namespace|const)\s+([A-Za-z_][A-Za-z0-9_]*)(.*)$/)) {
+                string prefix = before + (decl[0] ?? "");
+                before = prefix + decl[1] + " " + decl[2];
+                rest = decl[3] ?? "";
+                # a declaration in a string or a comment of the line is not code
+                bool text = regex_subst(prefix, "\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'", "",
+                    RE_Global) =~ /["'#]|\/\//;
+                if (decl[1] != "const") {
+                    if (!text) {
+                        scope = decl[2];
+                    }
+                    continue;
+                }
+                # opening quote, value, closing quote, semicolon
+                *list<*string> value = (rest =~ x/^\s*=\s*(["']?)([A-Za-z0-9_]*)(["']?)\s*(;?)/);
+                if (!value) {
+                    continue;
+                }
+                string v = (!text && value[0] && value[0] == value[2] && value[3] == ";") ? value[1] : NotLiteral;
+                foreach string name in (scope ? (decl[2], scope + "::" + decl[2]) : (decl[2],)) {
+                    if (!inlist(v, rv{name})) {
+                        rv{name} += (v,);
+                    }
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the constants that name a variable read in a file: the name as given (without a leading "::") ->
+    #! the literal names, or @ref NotLiteral
+    static hash<string, list<string>> getFileConstants(list<string> lines, hash<string, list<string>> module_consts) {
+        hash<string, list<string>> file_consts = LiveProviderOptInTest::getConstants(lines);
+        # the names given to ENV{} and getenv()
+        hash<string, bool> used = {};
+        foreach string line in (lines) {
+            if (line.find("ENV") < 0 && line.find("getenv") < 0) {
+                continue;
+            }
+            map used{$1} = True, (line =~ x/\b(?:ENV\s*\{|getenv\s*\()\s*(?:::)?((?:[A-Za-z_][A-Za-z0-9_]*::)*[A-Za-z_][A-Za-z0-9_]*)\s*[})]/g) ?? (),
+                $1;
+        }
+        hash<string, list<string>> rv = {};
+        foreach string key in (keys used) {
+            list<string> parts = key.split("::");
+            string name = parts.last();
+            list<string> values = module_consts{key} ?? ();
+            # a qualified name: the constant declared in that class or namespace
+            *list<string> file_values = parts.size() == 1
+                ? file_consts{name}
+                : file_consts{parts[parts.size() - 2] + "::" + name};
+            map values += $1, file_values, !inlist($1, values);
+            if (!values) {
+                continue;
+            }
+            bool var;
+            foreach string line in (lines) {
+                # a line comment and the reason of a marker are not code
+                if (line =~ /^\s*#/) {
+                    continue;
+                }
+                line = regex_subst(line, "#\\s*live-provider-optin:.*$", "");
+                # a declaration of a variable or parameter, or an assignment (not the constant's declaration)
+                if (line.regex("(?<![A-Za-z0-9_$])" + name + "\\s*=(?![=~>])")
+                    && !line.regex("\\bconst\\s+" + name + "\\s*=")) {
+                    var = True;
+                    break;
+                }
+                if (line.regex("\\b(?!const\\b)[A-Za-z_*][A-Za-z0-9_:<>*]*\\s+" + name
+                    + "\\s*(?:[=,;)]|\\bin\\b|$)")) {
+                    var = True;
+                    break;
+                }
+            }
+            if (!var) {
+                rv{key} = values;
+            }
+        }
+        return rv;
+    }
+
+    #! Scans the files below a directory relative to the repository root
+    private list<hash<LiveProviderReadInfo>> scanDir(string root, string rel, hash<string, list<string>> consts) {
+        list<hash<LiveProviderReadInfo>> rv = ();
+        string path = root + "/" + rel;
+        Dir d();
+        d.chdir(path);
+        foreach string name in (sort(d.listDirs() ?? ())) {
+            # build trees, dependencies and VCS data hold no tests of the repository
+            if (name =~ /^build/ || name == "node_modules" || name =~ /^\./) {
+                continue;
+            }
+            rv += scanDir(root, rel + "/" + name, consts);
+        }
+        foreach string name in (sort(d.listFiles() ?? ())) {
+            *string ext = (name =~ x/\.([^.]+)$/)[0];
+            if (!exists ext || !Extensions{ext} || Exempt{rel + "/" + name}) {
+                continue;
+            }
+            ReadOnlyFile f(path + "/" + name, NOTHING, ENCODING_ERRORS_KEEP);
+            string text = f.read(-1) ?? "";
+            if (!text.isEncodingValid()) {
+                continue;
+            }
+            list<string> lines = text.split("\n");
+            rv += scanLines(rel + "/" + name, lines, consts);
+            rv += scanAmbientClients(rel + "/" + name, lines);
+        }
+        return rv;
+    }
+
+    #! Returns the directives that load a client module that finds credentials by itself, if the file does not load
+    #! LiveProviderTest.qm
+    private list<hash<LiveProviderReadInfo>> scanAmbientClients(string file, list<string> lines) {
+        if (select lines, $1 =~ /^\s*%requires(?:\s*\([^)]*\))?\s+\S*LiveProviderTest\.qm\b/) {
+            return ();
+        }
+        list<hash<LiveProviderReadInfo>> rv = ();
+        foreach string line in (lines) {
+            *string mod = (line =~ x/^\s*%(?:requires|try-module)(?:\s*\([^)]*\))?\s+(?:\S*\/)?([A-Za-z0-9_]+)/)[0];
+            if (mod && mod.regex(AmbientClientModule)) {
+                rv += <LiveProviderReadInfo>{
+                    "file": file,
+                    "line": $# + 1,
+                    "what": "loads " + mod + " without LiveProviderTest.qm",
+                    "text": trim(line),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the lines that reach a credential without LiveProviderTest.qm
+    private list<hash<LiveProviderReadInfo>> scanLines(string file, list<string> lines,
+            hash<string, list<string>> module_consts = {}) {
+        hash<string, list<string>> consts = LiveProviderOptInTest::getFileConstants(lines, module_consts);
+        list<hash<LiveProviderReadInfo>> rv = ();
+        bool in_comment = False;
+        foreach string line in (lines) {
+            string code = line;
+            # the parts of the line in a /* */ comment are not code
+            if (in_comment) {
+                int end = code.find("*/");
+                if (end < 0) {
+                    continue;
+                }
+                code = code.substr(end + 2);
+                in_comment = False;
+            }
+            while (True) {
+                int start = code.find("/*");
+                if (start < 0) {
+                    break;
+                }
+                int end = code.find("*/", start + 2);
+                if (end < 0) {
+                    code = code.substr(0, start);
+                    in_comment = True;
+                    break;
+                }
+                code = code.substr(0, start) + code.substr(end + 2);
+            }
+            # a line comment is not code
+            if (code =~ /^\s*#/) {
+                continue;
+            }
+            *string what = LiveProviderOptInTest::getRead(code, consts);
+            if (!what) {
+                continue;
+            }
+            # the line, or the line before it, says why it does not reach a credential
+            if (line =~ /#\s*live-provider-optin:\s*\S/ || ($# && lines[$# - 1] =~ /^\s*#\s*live-provider-optin:\s*\S/)) {
+                continue;
+            }
+            rv += <LiveProviderReadInfo>{
+                "file": file,
+                "line": $# + 1,
+                "what": what,
+                "text": trim(line),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns what a line of code does to reach a credential, or @ref NOTHING if it does not
+    /** @param code the code of the line
+        @param consts the string constants that can name a variable: name -> the literal values
+    */
+    static *string getRead(string code, hash<string, list<string>> consts = {}) {
+        if (code.find("ENV") < 0 && code.find("getenv") < 0) {
+            return LiveProviderOptInTest::getOtherRead(code);
+        }
+        # a write is not a read: the variable assigned, a remove statement and delete, with a key that is a literal
+        # name or a variable or constant (a key that is an expression can read a variable)
+        string key = "\\{\\s*(?:(?![A-Za-z0-9_:.]*\\bENV\\b)[A-Za-z_:][A-Za-z0-9_:.]*|(?<b>\\\\*)(?<q>[\"'])[A-Za-z0-9_]*\\k<b>\\k<q>)\\s*\\}";
+        code = regex_subst(code, "\\bENV\\s*(?:" + key + "|\\.\\s*[A-Za-z_][A-Za-z0-9_]*)\\s*=(?![=~>])", " ", RE_Global);
+        # a remove statement (not the condition of a for loop, which is not a statement)
+        if (code !~ /\bfor\s*\(/) {
+            code = regex_subst(code, "(?:^|(?<=[;{})])|(?<=\\belse))(\\s*)remove\\s+ENV\\s*" + key + "\\s*;", "$1;", RE_Global);
+        }
+        code = regex_subst(code, "\\bdelete\\s+ENV\\s*" + key, " ", RE_Global);
+
+        # the names read with a literal name
+        list<*string> names = ();
+        names += (code =~ x/\bENV\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)/g) ?? ();
+        # the names read with ENV{} and getenv(): a literal, possibly between escaped quotes in embedded source, or
+        # a constant; anything else is computed
+        bool computed;
+        {
+            list<*string> reads = (code =~ x/\b(ENV\s*\{|getenv\s*\()\s*(\\*["'][^"'\\\s(){}]*\\*["']|[A-Za-z_:][A-Za-z0-9_:]*|)\s*([})]|)/g) ?? ();
+            for (int i = 0; i + 2 < reads.size(); i += 3) {
+                *string arg = reads[i + 1];
+                *string close = reads[i + 2];
+                bool closed = close && (reads[i] =~ /^ENV/ ? close == "}" : close == ")");
+                # ENV{} and getenv() (ex: in a text) read nothing
+                if (!arg && closed) {
+                    continue;
+                }
+                if (!arg || !closed) {
+                    computed = True;
+                    continue;
+                }
+                # a literal (without the spaces, parentheses and braces of an expression): the same quote and
+                # escape on both sides
+                if (arg =~ /^[\\"']/) {
+                    *list<*string> literal = (arg =~ x/^(\\*)(["'])([^"'\\\s(){}]*)(\\*)(["'])$/);
+                    if (literal && literal[0] == literal[3] && literal[1] == literal[4]) {
+                        names += literal[2];
+                    } else {
+                        computed = True;
+                    }
+                    continue;
+                }
+                # a constant, possibly qualified
+                *list<string> values = consts{arg =~ /^::/ ? arg.substr(2) : arg};
+                if (!values || inlist(NotLiteral, values)) {
+                    computed = True;
+                } else {
+                    names += values;
+                }
+            }
+        }
+        foreach *string name in (names) {
+            if (!name) {
+                continue;
+            }
+            if (name == "HOME") {
+                return "reads a file of the home directory or a credential file";
+            }
+            # the methods of the hash, see below
+            if (code.regex("\\bENV\\s*\\.\\s*" + name + "\\s*\\(")) {
+                continue;
+            }
+            if (LiveProviderOptInTest::isCredentialName(name)) {
+                return "reads ENV." + name;
+            }
+        }
+        if (computed) {
+            return "reads a variable whose name is computed";
+        }
+        return LiveProviderOptInTest::getOtherRead(code);
+    }
+
+    #! Returns what a line of code does to reach a credential other than by reading a variable by name
+    static *string getOtherRead(string code) {
+        if (code =~ /\bkeys\s+ENV\b/ || code =~ /\bin\s*\(\s*ENV\s*\)/
+            || code =~ /\bENV\s*\.\s*(?:keys|values|pairIterator|keyIterator|iterator|contextIterator|firstKey|lastKey|size|sort|select|map)\s*\(/) {
+            return "iterates over the environment";
+        }
+        if (code =~ /\bget_(?:datasource_)?connections?(?:_hash|_url)?\s*\(/) {
+            return "opens a named connection";
+        }
+        if (code =~ /["']~\// || code =~ /\.aws\/|\.config\/gcloud|\.netrc\b|\.qorus\/|\.pgpass\b|\.my\.cnf\b/) {
+            return "reads a file of the home directory or a credential file";
+        }
+    }
+
+    #! Returns @ref True if a variable name is credential-like
+    static bool isCredentialName(string name) {
+        string uname = name.upr();
+        if (NotCredential{uname} || uname =~ /^QORE_DB_/) {
+            return False;
+        }
+        return ServiceUrl{uname} || uname.regex(CredentialName);
+    }
+}

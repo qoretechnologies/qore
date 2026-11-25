@@ -33,8 +33,9 @@
 #include "QC_NormalMethodVariant.h"
 #include "QC_AbstractMethod.h"
 
-int check_variant_call(const QoreExternalVariant* v, QoreObject* obj, const QoreMethod& m, ExceptionSink* xsink) {
-    if (check_call(obj, m, xsink)) {
+int check_variant_call(const QoreReflectionCaller& caller, const QoreExternalVariant* v, QoreObject* obj,
+        const QoreMethod& m, ExceptionSink* xsink) {
+    if (check_call(caller, obj, m, xsink)) {
         return -1;
     }
 
@@ -72,7 +73,7 @@ static QORE_LEXICAL_REFLECTION_INLINE QoreValue NormalMethodVariant_call_VoVV_im
     // a confusing exception
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreMethod* m = mv->getMethod();
-    if (check_variant_call(v->variant, obj, *m, xsink)) {
+    if (check_variant_call(caller, v->variant, obj, *m, xsink)) {
         return QoreValue();
     }
 
@@ -117,7 +118,7 @@ static QORE_LEXICAL_REFLECTION_INLINE QoreValue NormalMethodVariant_callArgs_VoC
     // a confusing exception
     const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreMethod* m = mv->getMethod();
-    if (check_variant_call(v->variant, obj, *m, xsink)) {
+    if (check_variant_call(caller, v->variant, obj, *m, xsink)) {
         return QoreValue();
     }
 

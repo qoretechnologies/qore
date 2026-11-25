@@ -1562,6 +1562,7 @@ module KeapDataProvider {
             "short_desc": "Get file details",
             "desc": "Get file details from Keap",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "output_type": new KeapFileDataType(),
             "options": {
                 "file_id": <ActionOptionInfo>{

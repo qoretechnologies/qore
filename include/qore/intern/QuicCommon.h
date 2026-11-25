@@ -144,6 +144,13 @@ struct QuicPacketBatch {
     DLLLOCAL bool empty() const { return pkt_offsets.empty(); }
     //! Returns the number of packets in the batch
     DLLLOCAL int size() const { return static_cast<int>(pkt_offsets.size()); }
+
+    //! Exchanges the packets of this batch with those of @p other; does not allocate
+    DLLLOCAL void swap(QuicPacketBatch& other) noexcept {
+        buf.swap(other.buf);
+        pkt_offsets.swap(other.pkt_offsets);
+        pkt_lengths.swap(other.pkt_lengths);
+    }
 };
 
 //! Maximum size of ancillary data buffer for sendmsg() source address pinning
@@ -286,6 +293,21 @@ DLLLOCAL void qore_quic_test_take_back_sent(int fd, const struct sockaddr* addr,
 */
 DLLLOCAL int qore_quic_test_send_error(int fd);
 
+//! Debug-only: true while the current thread sends the datagrams of Socket::flushQuicPendingData()
+/** So that a test can fail the sends of that operation alone (dbg_quic_fail_sends(), qore#7414)
+*/
+DLLLOCAL bool qore_quic_test_flush_sending();
+
+//! Debug-only: marks the current thread as sending the datagrams of Socket::flushQuicPendingData() while it exists
+class QuicTestFlushSending {
+public:
+    DLLLOCAL QuicTestFlushSending();
+    DLLLOCAL ~QuicTestFlushSending();
+
+    QuicTestFlushSending(const QuicTestFlushSending&) = delete;
+    QuicTestFlushSending& operator=(const QuicTestFlushSending&) = delete;
+};
+
 //! Debug-only: receives the datagrams of a UDP socket that has none as the QUIC poll operations do
 /** For the test of the receive buffers that cannot be allocated: the socket must have no datagram to receive, as
     there is no session to dispatch it to.
@@ -360,14 +382,23 @@ private:
     @param addrlen destination address length, or 0 for connected UDP sockets
     @param local_addr per-session local address for source IP pinning, or nullptr
     @param local_addrlen local address length, or 0
+    @param stop_error if not nullptr, receives the error that stopped a send after some of the datagrams were sent,
+    or 0 if all were sent or the system call took fewer without an error (qore#7414)
     @return number of messages sent, or -1 on error (errno set)
+
+    @note in a debug build, the test hook of qore_quic_test_set_send_hook() is called once before each datagram is
+    sent, on every platform; when it returns an error, the datagrams before it are sent, and the send stops with that
+    error
 
     @since %Qore 3.0
 */
 inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
                                 const struct sockaddr* addr, socklen_t addrlen,
                                 const struct sockaddr* local_addr = nullptr,
-                                socklen_t local_addrlen = 0) {
+                                socklen_t local_addrlen = 0, int* stop_error = nullptr) {
+    if (stop_error) {
+        *stop_error = 0;
+    }
     // Build cmsg template once (shared by all packets in this batch)
     // Zero-init to avoid valgrind warnings about CMSG_SPACE alignment padding
     alignas(alignof(struct cmsghdr)) uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE] = {};
@@ -423,32 +454,49 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
         }
 
         int sent;
+        // the datagrams that this system call is to send; fewer than the chunk when a test fails a datagram of it
+        int sendable = batch_size;
 #ifdef DEBUG
-        int test_error = qore_quic_test_send_error(fd);
-        if (test_error) {
+        // the test hook is called for each datagram, as with sendmsg()/sendto() below, so that a test can fail any
+        // datagram of a batch on every platform
+        int test_error = 0;
+        for (int i = 0; i < batch_size; ++i) {
+            test_error = qore_quic_test_send_error(fd);
+            if (test_error) {
+                sendable = i;
+                break;
+            }
+        }
+        if (test_error && !sendable) {
             errno = test_error;
             sent = -1;
         } else
 #endif
         {
             do {
-                sent = sendmmsg(fd, msgs, static_cast<unsigned int>(batch_size), 0);
+                sent = sendmmsg(fd, msgs, static_cast<unsigned int>(sendable), 0);
             } while (sent < 0 && errno == EINTR);
         }
         if (sent < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (offset > 0) {
-                    break;  // partial send — return what we sent
-                }
-                return -1;  // nothing sent
-            }
             // If prior batches succeeded, return partial count instead of error
             if (offset > 0) {
+                if (stop_error) {
+                    *stop_error = errno;
+                }
                 break;
             }
-            return -1;
+            return -1;  // nothing sent
         }
         offset += sent;
+#ifdef DEBUG
+        if (test_error && sent == sendable) {
+            // the datagram that the test failed stops the send with its error
+            if (stop_error) {
+                *stop_error = test_error;
+            }
+            break;
+        }
+#endif
         if (sent < batch_size) {
             break;  // partial send — stop batching
         }
@@ -489,23 +537,136 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
             } while (sent < 0 && errno == EINTR);
         }
         if (sent < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (offset > 0) {
-                    break;  // partial send — return what we sent
-                }
-                return -1;  // nothing sent
-            }
             if (offset > 0) {
-                break;  // partial send — return what we sent
+                // partial send — return what we sent
+                if (stop_error) {
+                    *stop_error = errno;
+                }
+                break;
             }
-            return -1;
+            return -1;  // nothing sent
         }
         ++offset;
     }
 #endif
-    // Partial sends are expected under congestion; QUIC retransmission handles recovery.
-    // Callers should check: return value < batch.size() means some packets were not sent.
+    // Callers should check: return value < batch.size() means some packets were not sent; ngtcp2 has counted them
+    // as sent, so they are kept and sent again (see sendQuicPacketsKeepingUnsent())
     return offset;
+}
+
+//! The delay before QUIC datagrams whose send failed with ENOBUFS are sent again (qore#7414)
+/** ENOBUFS means that the output queue of the interface is full (macOS returns it for UDP sends).  No event reports
+    that the queue drained: a UDP socket is writable all the while, so waiting for POLLOUT would spin.  The datagrams
+    are therefore kept and sent again after a delay that starts at 1 ms and doubles with each failure in a row, up to
+    128 ms; a send operation polls with the earlier of this time and the connection's next timer as its timeout.
+
+    @since %Qore 3.0
+*/
+class QuicSendBackoff {
+public:
+    //! The delay after the first failure in a row, in nanoseconds
+    static constexpr uint64_t FirstDelayNs = 1000000ULL;
+    //! The longest delay, in nanoseconds
+    static constexpr uint64_t MaxDelayNs = 128000000ULL;
+
+    //! Records a send that failed with ENOBUFS at @p now; returns the time at which to send again
+    DLLLOCAL uint64_t fail(uint64_t now) {
+        delay_ns = delay_ns ? std::min(delay_ns * 2, MaxDelayNs) : FirstDelayNs;
+        retry_at = now + delay_ns;
+        return retry_at;
+    }
+
+    //! Records a send that did not fail with ENOBUFS
+    DLLLOCAL void reset() {
+        delay_ns = 0;
+        retry_at = 0;
+    }
+
+    //! Returns true if the datagrams are not to be sent again yet at @p now
+    DLLLOCAL bool waiting(uint64_t now) const {
+        return retry_at && now < retry_at;
+    }
+
+    //! Returns the time at which to send again, or 0 if no send failed with ENOBUFS
+    DLLLOCAL uint64_t retryAt() const {
+        return retry_at;
+    }
+
+    //! Returns the current delay in nanoseconds, or 0 if no send failed with ENOBUFS
+    DLLLOCAL uint64_t delay() const {
+        return delay_ns;
+    }
+
+private:
+    uint64_t delay_ns = 0;
+    uint64_t retry_at = 0;
+};
+
+//! What a QUIC send operation does after sendQuicPacketsKeepingUnsent() (qore#7414)
+enum class QuicSendResult {
+    //! all datagrams were sent
+    Sent,
+    //! the socket's buffer is full: the datagrams not sent are sent when the socket is writable (POLLOUT)
+    WaitWritable,
+    //! the interface queue is full (ENOBUFS): the datagrams not sent are sent at QuicSendBackoff::retryAt()
+    Backoff,
+    //! the send failed with another error, in errno; the batch is unchanged
+    Error,
+};
+
+//! Sends the datagrams of a batch, removes those sent from it, and returns how to send the others
+/** ngtcp2 counts a datagram as sent when it writes it, so a datagram that is not sent is lost to the connection,
+    which recovers it only with its loss recovery (PTO), with exponential backoff.  The datagrams that are not sent
+    are therefore kept in @p batch, and the caller sends them before any that it writes after them.
+
+    A send that failed with EAGAIN or EWOULDBLOCK, or took fewer datagrams without an error, is retried when the
+    socket is writable; one that failed with ENOBUFS is retried after the delay of @p backoff, and until then this
+    function sends nothing.  A send that failed with another error after some datagrams were sent is also retried
+    when the socket is writable, and that send reports the error.
+
+    @param fd the socket
+    @param batch the datagrams to send; keeps those not sent
+    @param backoff the delay of the sends that failed with ENOBUFS
+    @param now the current QUIC timestamp (QuicSession::timestamp())
+    @param addr destination address, or nullptr for connected UDP sockets
+    @param addrlen destination address length, or 0 for connected UDP sockets
+    @param local_addr per-session local address for source IP pinning, or nullptr
+    @param local_addrlen local address length, or 0
+
+    @since %Qore 3.0
+*/
+inline QuicSendResult sendQuicPacketsKeepingUnsent(int fd, QuicPacketBatch& batch, QuicSendBackoff& backoff,
+        uint64_t now, const struct sockaddr* addr, socklen_t addrlen, const struct sockaddr* local_addr = nullptr,
+        socklen_t local_addrlen = 0) {
+    if (batch.empty()) {
+        return QuicSendResult::Sent;
+    }
+    if (backoff.waiting(now)) {
+        return QuicSendResult::Backoff;
+    }
+    int stop_error = 0;
+    int sent = sendQuicPacketsBatch(fd, batch, addr, addrlen, local_addr, local_addrlen, &stop_error);
+    int err;
+    if (sent < 0) {
+        err = errno;
+    } else {
+        batch.removeFront(sent);
+        if (batch.empty()) {
+            backoff.reset();
+            return QuicSendResult::Sent;
+        }
+        err = stop_error;
+    }
+    if (err == ENOBUFS) {
+        backoff.fail(now);
+        return QuicSendResult::Backoff;
+    }
+    backoff.reset();
+    if (sent < 0 && err != EAGAIN && err != EWOULDBLOCK) {
+        errno = err;
+        return QuicSendResult::Error;
+    }
+    return QuicSendResult::WaitWritable;
 }
 
 //! Enable per-packet destination address reporting (IP_PKTINFO / IPV6_PKTINFO)
@@ -653,6 +814,38 @@ inline const std::unordered_set<std::string>& getForbiddenHopByHopHeaders() {
         "connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade"
     };
     return headers;
+}
+
+//! Returns true if a header field (lower-case name) is not sent in an HTTP/2 or HTTP/3 response
+/** The hop-by-hop fields of getForbiddenHopByHopHeaders(), and \c te, a field of requests only, whose only valid
+    value in HTTP/2 and HTTP/3, \c trailers, has no meaning in a response: a client rejects a message with another
+    value as malformed (RFC 9113 section 8.2.2, RFC 9114 section 4.2), which an HTTP/3 client answers by closing the
+    connection with all its streams (qoretechnologies/qore#7212)
+*/
+inline bool isForbiddenResponseHeader(const std::string& lname) {
+    return lname == "te" || getForbiddenHopByHopHeaders().count(lname);
+}
+
+//! The Connection Attempt Delay of the address family race of a QUIC client connection (RFC 8305 section 5)
+/** 250 ms, the value that RFC 8305 recommends: the next connection attempt starts this long after the previous one,
+    unless every attempt started has failed before
+*/
+constexpr int64_t QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS = 250'000'000LL;
+
+//! Returns true if the error of a QUIC client connection attempt means that the attempt never reached a server
+/** A send error is one only before the QUIC handshake completed: raised while the HTTP/3 layer is set up after it,
+    the server was reached (issue #5944).  Any other error, such as a refusal by the sandbox or a rejected
+    certificate, explains the failure better than an error of an attempt that reached no server, so the error of a
+    failed connection is the error of the attempt that got furthest.
+
+    @param err the error code
+    @param handshake_complete true if the QUIC handshake of the attempt had completed
+*/
+inline bool quic_is_unreached_error(const char* err, bool handshake_complete) {
+    if (!strcmp(err, "QUIC-SEND-ERROR")) {
+        return !handshake_complete;
+    }
+    return !strcmp(err, "QUIC-CONNECT-REFUSED") || !strcmp(err, "QUIC-HANDSHAKE-TIMEOUT");
 }
 
 #endif // _QORE_QUICCOMMON_H

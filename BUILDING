@@ -19,6 +19,22 @@ Keep .git-archive-revision when repacking an exported archive. An unversioned
 source copy reports "unknown"; an invalid archive marker or broken Git checkout
 fails instead of silently retaining a stale revision.
 
+External Qore modules
+---------------------
+By default, the build searches in-tree modules first, then the versioned and unversioned
+binary and user module directories of its install prefix. To select other external directories,
+pass CMake an ordered, semicolon-separated list. Relative paths start
+at the source root. An example configure option is
+'-DQORE_EXTERNAL_MODULE_DIRS=/opt/qore/lib/qore-modules;/opt/qore/share/qore-modules'.
+An empty list selects only in-tree modules. QORE_BUILD_WITH_EXTERNAL_MODULES=OFF disables
+the list. To restore the prefix default in an existing build, configure with
+-UQORE_EXTERNAL_MODULE_DIRS. The next build refreshes qmods when the list changes
+or a dependency recorded by qcc changes.
+
+run_tests.sh searches the build and source modules followed by the configured directories.
+Set QORE_MODULE_DIR_ONLY=1 to supply your own external test paths via QORE_MODULE_DIR.
+In both cases the runner omits the runtime's implicit installation paths.
+
 Build Requirements
 ------------------
 *) a C++ compiler with C++17 support
@@ -353,3 +369,8 @@ The chunks compile concurrently and each needs several GB of memory (about 5 to 
 memory as well as by the cores.  N is limited to 256.  Dynamic initialization of namespace-scope objects is not
 ordered between chunks, as it is not between the translation units of a build with SINGLE_COMPILATION_UNIT=OFF.
 Adding, removing or re-costing a source can move other sources to other chunks, which recompiles those chunks once.
+
+A source edited while the object that includes it compiles is compiled again by the next build: libqore is
+compiled through tools/compile-race-guard.py, which then makes the object older than the edit
+(-DQORE_COMPILE_RACE_GUARD=OFF, or QORE_COMPILE_RACE_GUARD=0 in the environment of the build, turns it off; see
+design/compile-race-guard.md).

@@ -656,6 +656,12 @@ public:
     ptid_map_t tidmap;           // map of tids -> thread count in program object
     std::set<int> foreign_tids;  // the tids in tidmap of foreign threads
     int foreign_teardown_tid = 0; // the TID of the thread whose teardown at the end of the process refuses other foreign threads; under plock
+    //! the monotonic time (us) until which the teardown at the end of the process waits for the foreign threads that
+    //! run in the Program, or 0 if it waits for them without a bound (see setProcessEndForeignWait()); under plock
+    int64 foreign_wait_deadline_us = 0;
+    //! true once the teardown no longer waits for the foreign threads that run in the Program, as after qore_cleanup()
+    //! has waited for the threads of the library (see setProcessEndForeignWait()); under plock
+    bool foreign_wait_ended = false;
     unsigned thread_count = 0;   // number of threads currently running in this Program
     // A cancellation wave includes preregistered workers and descendants until the Program becomes idle.
     bool cancel_new_threads = false;
@@ -1480,10 +1486,6 @@ public:
     //! true if the Program stays allocated while any code can run: a module's Program (see
     //! qore_program_set_module_lifetime()); never cleared once set
     std::atomic<bool> module_lifetime{false};
-
-    //! true if a trusted build created the Program (SandboxManager::createTrustedBuildCall()); its code does not
-    //! identify the code that it serves, so qore_find_caller_program() reports an unknown caller there (qore#6852)
-    bool created_in_trusted_build = false;
 
     // define map
     dmap_t dmap;
@@ -2376,6 +2378,12 @@ public:
     */
     bool exit_hooks_closed = false;
 
+    //! set by the module manager for the Program that it creates or takes for a user module, before the module's code
+    //! is parsed or initialized: the Program is a module's from then on (qore_find_caller_program(), qore#7077);
+    //! a Program that module code creates is not a module's (it does not inherit PO_IN_MODULE, qore#7067)
+    //! (atomic: the threads that already run a container Program's code read it while the loader sets it)
+    std::atomic<bool> module_program{false};
+
     //! set for the Program of a module that is library code (see QoreModuleManager::isTrustedModulePath())
     /** What such a Program has is library code's own (its parse defines, its module path directives) or was
         filtered when it was created, so the library modules that it loads inherit it whoever loads it first
@@ -2421,9 +2429,78 @@ public:
     };
 
     typedef section_sline_statement_map section_sline_statement_map_t;
-    // map for filenames
-    typedef vector_map_t<const char*, section_sline_statement_map_t*> name_section_sline_statement_map_t;
-    //typedef std::map<const char*, section_sline_statement_map_t*, ltstr> name_section_sline_statement_map_t;
+
+    //! map of file names (or labels) to their statement maps
+    /** Iterates in insertion order, which getStatementFromIndex() relies on for its suffix match, and finds keys
+        through a hash index: AOT registration of a program that allows the debugger looks up and adds every
+        statement location of every function here, and a linear scan with strcmp() per lookup made that
+        O(statements x files), most of the startup time of a large AOT program on a slow CPU.
+
+        Keys are not copied; they must stay valid while they are in the map, as the strings that the Program owns
+        (file names, labels and runtime strings) do.
+    */
+    class name_section_sline_statement_map_t {
+    public:
+        typedef vector_map_t<const char*, section_sline_statement_map_t*> vmap_t;
+        typedef vmap_t::value_type value_type;
+        typedef vmap_t::iterator iterator;
+        typedef vmap_t::const_iterator const_iterator;
+
+        DLLLOCAL iterator find(const char* key) {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        DLLLOCAL const_iterator find(const char* key) const {
+            auto i = index.find(std::string_view(key));
+            return i == index.end() ? vmap.end() : vmap.begin() + i->second;
+        }
+
+        //! adds the key with its value, or replaces the value of a key that is already in the map
+        DLLLOCAL std::pair<iterator, bool> insert(value_type vt) {
+            auto [i, created] = index.try_emplace(std::string_view(vt.first), vmap.size());
+            if (!created) {
+                iterator vi = vmap.begin() + i->second;
+                vi->second = vt.second;
+                return std::pair<iterator, bool>(vi, false);
+            }
+            return std::pair<iterator, bool>(vmap.append(std::move(vt)), true);
+        }
+
+        DLLLOCAL iterator begin() {
+            return vmap.begin();
+        }
+
+        DLLLOCAL const_iterator begin() const {
+            return vmap.begin();
+        }
+
+        DLLLOCAL iterator end() {
+            return vmap.end();
+        }
+
+        DLLLOCAL const_iterator end() const {
+            return vmap.end();
+        }
+
+        DLLLOCAL bool empty() const {
+            return vmap.empty();
+        }
+
+        DLLLOCAL size_t size() const {
+            return vmap.size();
+        }
+
+        DLLLOCAL void clear() {
+            index.clear();
+            vmap.clear();
+        }
+
+    private:
+        vmap_t vmap;
+        //! the position of each key in vmap
+        std::unordered_map<std::string_view, size_t> index;
+    };
 
     DLLLOCAL qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
             QoreProgram* p_pgm = nullptr, const QoreParseOptions* p_parse_options = nullptr,
@@ -2596,6 +2673,12 @@ public:
         @throw std::bad_alloc the composition of the two managers could not be allocated
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
+
+    //! Returns true once the teardown of the Program has started (its private data is being or has been deleted)
+    DLLLOCAL bool isTornDown() {
+        AutoLocker al(plock);
+        return ptid != 0;
+    }
 
     //! Returns references to the Program's own sandbox manager and to the sandbox of the code that created it
     /** Allocates nothing; the caller must call deref() on each pointer returned that is not nullptr.  The managers
@@ -3413,7 +3496,8 @@ public:
     */
     DLLLOCAL bool leaveForeignThreads() {
         if (!qore_shutdown.load(std::memory_order_acquire)) {
-            return false;
+            AutoLocker al(plock);
+            return foreign_wait_ended && getOtherForeignThreadCountIntern() > 0;
         }
         if (leaveForeignThreadsInModuleCode()) {
             return true;
@@ -3563,6 +3647,34 @@ public:
         return parse_tid == tid;
     }
 
+    //! Returns true if the teardown does not wait for the foreign threads that run in the Program; called with plock
+    //! held
+    /** Once qore_cleanup() has waited for the threads of the library (qore_shutdown), or once the bound of the wait of
+        the process end has passed (see setProcessEndForeignWait())
+    */
+    DLLLOCAL bool foreignThreadsLeftIntern() const {
+        return qore_shutdown.load(std::memory_order_acquire) || foreign_wait_ended;
+    }
+
+    //! Bounds the wait of the teardown of the Program for the foreign threads that run in it, at the end of the process
+    /** Called for the Program of the script when it is deleted at the end of the process (QoreProgramHelper), after the
+        library's own threads have ended: a foreign thread (a thread of another runtime that calls into the Program,
+        such as a JVM thread through the jni module) can be blocked in a call that never returns, which made the end
+        of the process wait for it forever (qore#6904).  The teardown waits for the foreign threads at most \a
+        timeout_ms milliseconds from now, as exit() waits for the threads that are ending, and then leaves the Program
+        as it is to them, as it does once qore_cleanup() has waited for the threads of the library (see
+        leaveForeignThreads()); a call that returns within the bound is waited for, and the library's own threads
+        are waited for as before
+    */
+    DLLLOCAL void setProcessEndForeignWait(int64 timeout_ms) {
+        AutoLocker al(plock);
+        foreign_wait_deadline_us = q_clock_getmicros_monotonic() + timeout_ms * 1000;
+        if (!foreign_wait_deadline_us) {
+            // 0 means no bound
+            foreign_wait_deadline_us = 1;
+        }
+    }
+
     // called only with plock held
     DLLLOCAL void waitForAllThreadsToTerminateIntern() {
         int tid = q_gettid();
@@ -3576,16 +3688,32 @@ public:
         unsigned adj = (i != tidmap.end() ? i->second : 0);
 
         // a batch JIT compile that reads the Program's code holds it as well (see tryHoldForCompile())
-        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads())
-        while ((thread_count - adj - (qore_shutdown.load(std::memory_order_acquire)
-            ? getOtherForeignThreadCountIntern() : 0)) || parse_count || compile_holds) {
+        // the foreign threads that remain at the end of the process are not waited for (see leaveForeignThreads()),
+        // nor, once its bound has passed, by the teardown at the end of the process (see setProcessEndForeignWait())
+        while ((thread_count - adj - (foreignThreadsLeftIntern() ? getOtherForeignThreadCountIntern() : 0))
+                || parse_count || compile_holds) {
+            // a bounded wait while a foreign thread runs in the Program at the end of the process; a thread that
+            // leaves the Program wakes the wait (see decThreadCount())
+            int64 wait_us = 0;
+            if (foreign_wait_deadline_us && !foreign_wait_ended && getOtherForeignThreadCountIntern()) {
+                wait_us = foreign_wait_deadline_us - q_clock_getmicros_monotonic();
+                if (wait_us <= 0) {
+                    foreign_wait_ended = true;
+                    continue;
+                }
+            }
             ++thread_waiting;
 #ifdef DEBUG
             if (compile_holds) {
                 qore_program_dbg_teardown_waits_for_compile_hold();
             }
 #endif
-            pcond.wait(plock);
+            if (wait_us) {
+                // rounded up, so that the wait does not end before the deadline
+                pcond.wait2(plock, (wait_us + 999) / 1000);
+            } else {
+                pcond.wait(plock);
+            }
             --thread_waiting;
         }
     }
@@ -4589,14 +4717,18 @@ public:
     DLLLOCAL static int checkModernSourceDefault(const QoreParseOptions& current, const char* filename,
             ExceptionSink* xsink);
 
+    /** @param open_path the file opened, if not \a filename, which is the name of the source and the script path: a
+        module that is library code is read from the path where it was judged to be, and keeps the name it was found
+        by (qore#7319)
+    */
     DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
-            bool first_except_only = false) {
+            bool first_except_only = false, const char* open_path = nullptr) {
         QORE_TRACE("QoreProgram::parseFile()");
 
         printd(5, "QoreProgram::parseFile(%s)\n", filename);
 
         FILE *fp;
-        if (!(fp = fopen(filename, "r"))) {
+        if (!(fp = fopen(open_path ? open_path : filename, "r"))) {
             if ((first_except_only && !exceptions_raised) || !first_except_only)
                 xsink->raiseErrnoException("PARSE-EXCEPTION", errno, "cannot open qore script '%s'", filename);
             exceptions_raised++;
@@ -4979,16 +5111,30 @@ public:
         syncExecModeWithParseOptions();
     }
 
+    DLLLOCAL static int raiseLockedOptions(const QoreParseOptions& requested, ExceptionSink* xsink);
+
+    //! Rejects user requests to set or clear an option owned by the runtime.
+    DLLLOCAL static bool checkSystemParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
+        if (!(po & PO_SYSTEM_OPS)) {
+            return false;
+        }
+        static_assert(PO_SYSTEM_OPS == PO_IN_MODULE, "name each system option in the diagnostic");
+        xsink->raiseException("PROGRAM-OPTION-ERROR", "only the system may set or clear PO_IN_MODULE");
+        return true;
+    }
+
     DLLLOCAL int setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
+        if (checkSystemParseOptions(po, xsink)) {
+            return -1;
+        }
         // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
         // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // the check and the change are one step with respect to lockOptions() (changeIfNotLocked()); the exceptions
         // are raised without po_mutex, as raising one takes other locks (the Programs on the call stack)
         if (isLocked(po, true)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         // a change for the whole Program is checked against the Program's own options, not against the scoped
         // options of a parse in progress, which it does not change (issue #6207)
@@ -5001,8 +5147,7 @@ public:
             return -1;
         }
         if (changeIfNotLocked(po, true)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         return 0;
     }
@@ -5025,14 +5170,16 @@ public:
 
     DLLLOCAL int disableParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
         assert(xsink);
+        if (checkSystemParseOptions(po, xsink)) {
+            return -1;
+        }
         // the checks and the change are atomic: the write lock of the options is held throughout (#6078), and
         // po_mutex only inside it (isLocked(), changeIfNotLocked()), so that no exception is raised under po_mutex
         std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
         // only raise the exception if parse options are locked and the option is not a "free option"; disabling a
         // positive option is more restrictive and is allowed, disabling a restriction is not; as setParseOptions()
         if (isLocked(po, false)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         // checked against the Program's own options, as setParseOptions()
         QoreParseOptions current = pwo.parse_options.loadShared();
@@ -5044,8 +5191,7 @@ public:
             return -1;
         }
         if (changeIfNotLocked(po, false)) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(po, xsink);
         }
         return 0;
     }
@@ -5084,12 +5230,17 @@ public:
         // locked with Program::lockOptions()) keeps them: the options that the replacement removes and adds are
         // checked as Program::disableParseOptions() and Program::setParseOptions() check them; the check and the
         // change are one step with respect to lockOptions(), and the exception is raised without po_mutex
+        QoreParseOptions changed;
         bool refused;
         {
             // the write lock before po_mutex (see po_mutex)
             std::lock_guard<std::recursive_mutex> lg(pwo.parse_options.writeLock());
             // the options that the replacement replaces are the Program's own (issue #6207)
             QoreParseOptions current = pwo.parse_options.loadShared();
+            changed = current ^ po;
+            if (checkSystemParseOptions(changed, xsink)) {
+                return -1;
+            }
             if (static_cast<bool>(po & PO_ALLOW_REPARSE) != static_cast<bool>(current & PO_ALLOW_REPARSE)
                     && checkReparseOptionChange("Program::replaceParseOptions()", xsink)) {
                 return -1;
@@ -5103,8 +5254,7 @@ public:
             }
         }
         if (refused) {
-            xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
-            return -1;
+            return raiseLockedOptions(changed, xsink);
         }
         return 0;
     }
@@ -5918,6 +6068,11 @@ public:
     }
 
     DLLLOCAL QoreValue evalExpression(q_exp_t exp, ExceptionSink* xsink) {
+        // an expression of a Program that may not control threads is not evaluated by the expression of the
+        // background operator itself (qore#7087)
+        if (qore_check_background_direct_entry(pgm, false, xsink)) {
+            return QoreValue();
+        }
         ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (*xsink) {
             return QoreValue();
@@ -6394,9 +6549,15 @@ public:
     DLLLOCAL QoreValue callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
             LexicalSemanticPolicy policy);
 
+    //! Calls a function by name with a temporary list of evaluated arguments that the caller owns
+    /** The call takes the values of the list over, as a direct call takes its evaluated arguments: the ones that the
+        function has no parameter for are moved into its \c argv variable (qore#6052); the caller releases the list
+    */
+    DLLLOCAL QoreValue callFunctionGivenArgs(const char* name, QoreListNode* args, ExceptionSink* xsink);
+
     template <bool LexicalInvocation>
     DLLLOCAL QoreValue callFunctionImpl(const char* name, const QoreListNode* args, ExceptionSink* xsink,
-            LexicalSemanticPolicy policy);
+            LexicalSemanticPolicy policy, bool given_args = false);
 
     DLLLOCAL static qore_program_private* get(QoreProgram& pgm) {
         return pgm.priv;
@@ -7458,7 +7619,7 @@ public:
     DLLLOCAL AbstractStatement* getStatementFromIndex(const char* name, int line) {
         printd(5, "qore_program_private::getStatementFromIndex('%s',%d), this: %p, file#: %d, label#: %d\n", name, line, this, (int)(statementByFileIndex.size()), (int)(statementByLabelIndex.size()));
         AutoLocker al(&plock);
-        name_section_sline_statement_map_t::iterator it;
+        name_section_sline_statement_map_t::const_iterator it;
         if (statementByFileIndex.empty()) {
             return nullptr;
         }
@@ -7953,6 +8114,38 @@ public:
         for (QoreProgram* p : removed) {
             p->deref();
         }
+    }
+
+    //! Raises SANDBOX-ISOLATION-ERROR and returns -1 if a Program that the debugger of \a dpgm is bound to is
+    //! refused by the isolation of the thread's trusted build (qore#6958)
+    DLLLOCAL static int checkProgramIsolation(QoreDebugProgram* dpgm, ExceptionSink* xsink) {
+        return dpgm->priv->checkProgramIsolation(xsink);
+    }
+
+    DLLLOCAL int checkProgramIsolation(ExceptionSink* xsink) {
+        // nothing to check outside a trusted build that a tenant entered
+        if (!qore_sandbox_isolation_active()) {
+            return 0;
+        }
+        // referenced under the lock and checked after it is released: a check does not run under the lock that
+        // the callbacks of the debugger take
+        std::vector<QoreProgram*> pgms;
+        {
+            QoreAutoRWReadLocker al(&tlock);
+            pgms.reserve(qore_program_map.size());
+            for (auto& i : qore_program_map) {
+                i.first->ref();
+                pgms.push_back(i.first);
+            }
+        }
+        int rc = 0;
+        for (QoreProgram* pgm : pgms) {
+            if (!rc && qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
+                rc = -1;
+            }
+            pgm->deref(xsink);
+        }
+        return rc;
     }
 
     DLLLOCAL QoreListNode* getAllProgramObjects() {

@@ -192,14 +192,14 @@ public class HttpClientStreamCancelWakeTest inherits QUnit::Test {
         Counter reader_done(1);
         date reader_elapsed;
         background sub () {
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             try {
                 sh.readData(30s);
             } catch (hash<ExceptionInfo> ex) {
                 # Expected — HTTPCLIENT-STREAM-CLOSED or similar when the
                 # channel closes.  We only care about wake latency here.
             }
-            reader_elapsed = now_us() - start;
+            reader_elapsed = microseconds(clock_get_monotonic_us()) - start;
             reader_done.dec();
         }();
 
@@ -278,13 +278,13 @@ public class HttpClientStreamCancelWakeTest inherits QUnit::Test {
         # One more readData() — the channel should be closed by
         # action->complete(), so this must NOT block the full 5s.
         # If H-D is unfixed, recv waits out the timeout and returns NOTHING.
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         try {
             sh.readData(5s);
         } catch (hash<ExceptionInfo> ex) {
             # HTTPCLIENT-STREAM-CLOSED is acceptable.
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us()) - start;
         assertTrue(elapsed < 2s,
             sprintf("readData after end_stream returned within 2s (actual: %y)",
                 elapsed));

@@ -27,3 +27,19 @@ ForStatement::execImpl QoreStatementTempScope::release
 ForStatement::execImpl QoreStatementTempScope::~QoreStatementTempScope
 # the conversion check of an integer result assigned to an lvalue
 LValueHelper::intResultNeedsConversion QoreTypeInfo::parseReturns
+# the temporary of an operand of a comparison operator, on the hot path of a loop's condition (the AST interpreter;
+# qore#7085: the growth of the unit made GCC call it out of line)
+QoreLogicalLessThanOperatorNode::bigIntLessThan QoreStatementTempScope::holdReceiver
+QoreLogicalLessThanOperatorNode::floatLessThan QoreStatementTempScope::holdReceiver
+QoreLogicalGreaterThanOperatorNode::bigIntGreaterThan QoreStatementTempScope::holdReceiver
+QoreLogicalLessThanOrEqualsOperatorNode::bigIntLessThanOrEquals QoreStatementTempScope::holdReceiver
+QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals QoreStatementTempScope::holdReceiver
+QoreLogicalEqualsOperatorNode::bigIntSoftEqual QoreStatementTempScope::holdReceiver
+# Both parts of an AST integer pre-increment must stay inline together (qore#7256).
+QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::LValueHelper
+QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::preIncrementBigInt
+QoreIntPreIncrementOperatorNode::evalImpl LValueHelper::preIncrementBigIntInline
+# the unqualified call of a method of self in the IR interpreter, on the path of a recursion of a method that calls
+# itself: an out-of-line call puts its frame on the stack at each level (qore#7336: the growth of the unit made GCC
+# call it out of line, about 105 bytes per level of recursion-frame-budget.qtest's ir method recursion)
+QoreIRInterpreter::execute qore_rt_try_self_call_fast_object

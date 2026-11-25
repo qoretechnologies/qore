@@ -42,7 +42,7 @@ class MssqlTestIsolationTest inherits QUnit::Test {
                 Datasource ds(connstr);
                 ds.open();
             } catch (hash<ExceptionInfo> ex) {
-                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+                skip_reason = TestRun::getConnectFailureReason("no DB connection", ex);
             }
         }
         addTestCase("a non-SQL Server connection has no run database", \notMssql());
@@ -67,7 +67,7 @@ class MssqlTestIsolationTest inherits QUnit::Test {
 
     private checkSkip() {
         if (skip_reason) {
-            testSkip(skip_reason);
+            TestRun::skipOrFail(skip_reason);
         }
     }
 

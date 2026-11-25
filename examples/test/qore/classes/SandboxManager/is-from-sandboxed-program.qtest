@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class IsFromSandboxedProgramTest
+
+#! An object of the test's own Program
+class Local {
+}
+
+#! Verifies SandboxManager::isFromSandboxedProgram() (qore#7305)
+/** The method tells whether a sandbox governs the Program that created an object, whatever code is running: the
+    Program's own sandbox, also one set after the object was created, and that of the code that created the Program
+*/
+class IsFromSandboxedProgramTest inherits QUnit::Test {
+    public {
+        const Source = "%modern
+class Made {
+    public {
+        static Made early = new Made();
+    }
+}
+
+Made sub make() {
+    return new Made();
+}
+
+Made sub early() {
+    return Made::early;
+}
+
+object sub make_local(code factory) {
+    return factory();
+}
+
+Program sub make_program() {
+    Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+    p.parse(\"%modern\\nclass Inner {}\\nobject sub make() { return new Inner(); }\\n\", \"inner\");
+    return p;
+}
+
+bool sub check(object o) {
+    return SandboxManager::isFromSandboxedProgram(o);
+}
+";
+    }
+
+    constructor() : Test("SandboxManager::isFromSandboxedProgram()", "1.0", \ARGV) {
+        addTestCase("trusted objects", \trustedTest());
+        addTestCase("objects of a sandboxed Program", \sandboxedTest());
+        addTestCase("a sandbox set after the object was created", \laterTest());
+        addTestCase("a Program created by sandboxed code", \creatorTest());
+        set_return_value(main());
+    }
+
+    trustedTest() {
+        assertFalse(SandboxManager::isFromSandboxedProgram(new Local()), "the test's own object");
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Source, "trusted");
+        assertFalse(SandboxManager::isFromSandboxedProgram(p.callFunction("make")), "an object of a trusted Program");
+    }
+
+    sandboxedTest() {
+        Program p = getSandboxed();
+        p.parse(Source, "sandboxed");
+        object o = p.callFunction("make");
+        assertTrue(SandboxManager::isFromSandboxedProgram(o), "an object of a sandboxed Program");
+        assertTrue(SandboxManager::isFromSandboxedProgram(p.callFunction("early")), "made when it was parsed");
+        assertTrue(p.callFunction("check", o), "from the sandboxed code itself");
+        # an object that the sandboxed code made by calling trusted code is the trusted Program's
+        assertFalse(SandboxManager::isFromSandboxedProgram(p.callFunction("make_local", object sub () {
+            return new Local();
+        })), "an object that trusted code made for the sandboxed code");
+    }
+
+    laterTest() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(Source, "later");
+        object o = p.callFunction("make");
+        assertFalse(SandboxManager::isFromSandboxedProgram(o), "before the sandbox is set");
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        assertTrue(SandboxManager::isFromSandboxedProgram(o), "after the sandbox is set");
+    }
+
+    creatorTest() {
+        Program p = getSandboxed();
+        p.parse(Source, "creator");
+        Program inner = p.callFunction("make_program");
+        assertTrue(SandboxManager::isFromSandboxedProgram(inner.callFunction("make")),
+            "an object of a Program that sandboxed code created");
+    }
+
+    private static Program getSandboxed() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        return p;
+    }
+}

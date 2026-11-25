@@ -33,6 +33,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreObjectIterator.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 extern QoreClass* QC_OBJECTITERATOR;
 extern QoreClass* QC_OBJECTKEYITERATOR;
@@ -43,7 +44,7 @@ extern QoreClass* QC_OBJECTPAIRITERATOR;
 //! Methods in this pseudo-class can be executed on @ref object "objects"
 /**
  */
-qclass <object> [arg=QoreObject* obj = const_cast<QoreObject*>(v.get<QoreObject>());vparent=<value>];
+qclass <object> [arg=QoreObject* obj = const_cast<QoreObject*>(qore_pseudo_receiver<QoreObject>(v, NT_OBJECT, "<object>", xsink));vparent=<value>];
 
 //! Returns Qore::NT_OBJECT
 /**
@@ -89,12 +90,15 @@ list<string> l = o.keys();
     @endcode
  */
 list<string> <object>::keys() [const;flags=RET_VALUE_ONLY] {
-    return obj->getMemberList(xsink);
+    return qore_object_private::get(*obj)->getRuntimeMemberList(xsink);
 }
 
-//! Returns the first member name in the object or @ref nothing if the object has no members; if called from outside the object, the first public member name is returned (if any)
-/**
-    @return the first member name in the object or @ref nothing if the object has no members; if called from outside the object, the first public member name is returned (if any)
+//! Returns the first member name in the object's main member data or @ref nothing if there is none; if called from outside the object, the first public member name is returned (if any)
+/** Only the object's main member data is considered: members held in internal storage (such as those declared
+    \c private:internal, or those that a parent class itself inherits with \c private:internal) are not returned, so in
+    a class context the result can differ from the first name of <object>::keys()
+
+    @return the first member name in the object's main member data or @ref nothing if there is none; if called from outside the object, the first public member name is returned (if any)
 
     @par Example:
     @code{.py}
@@ -107,9 +111,12 @@ list<string> <object>::keys() [const;flags=RET_VALUE_ONLY] {
     return qore_object_private::firstKey(obj, xsink);
 }
 
-//! Returns the last member name in the object or @ref nothing if the object has no members; if called from outside the object, the last public member name is returned (if any)
-/**
-    @return the last member name in the object or @ref nothing if the object has no members; if called from outside the object, the last public member name is returned (if any)
+//! Returns the last member name in the object's main member data or @ref nothing if there is none; if called from outside the object, the last public member name is returned (if any)
+/** Only the object's main member data is considered: members held in internal storage (such as those declared
+    \c private:internal, or those that a parent class itself inherits with \c private:internal) are not returned, so in
+    a class context the result can differ from the last name of <object>::keys()
+
+    @return the last member name in the object's main member data or @ref nothing if there is none; if called from outside the object, the last public member name is returned (if any)
 
     @par Example:
     @code{.py}
@@ -122,10 +129,10 @@ list<string> <object>::keys() [const;flags=RET_VALUE_ONLY] {
     return qore_object_private::lastKey(obj, xsink);
 }
 
-//! Returns @ref True if the object has no public or private members, @ref False if it does
-/** The opposite of <object>::val()
+//! Returns @ref True if the object has no members that the calling code can access, @ref False if it does; if called from outside the object, only public members are counted
+/** Unlike <object>::val(), the result depends on the code that calls it
 
-    @return @ref True if the object has no public or private members, @ref False if it does
+    @return @ref True if the object has no members that the calling code can access, @ref False if it does
 
     @par Example:
     @code{.py}
@@ -133,12 +140,12 @@ bool b = o.empty();
     @endcode
  */
 bool <object>::empty() [const;flags=RET_VALUE_ONLY] {
-    return !obj->size(xsink);
+    return !qore_object_private::get(*obj)->hasRuntimeMembers();
 }
 
-//! Returns the number of members in the object, public and private
+//! Returns the number of members in the object that the calling code can access; if called from outside the object, only public members are counted
 /**
-    @return the number of members in the object, public and private
+    @return the number of members in the object that the calling code can access
 
     @par Example:
     @code{.py}
@@ -148,7 +155,7 @@ int num = o.size();
     @see <object>::sizep()
  */
 int <object>::size() [const;flags=RET_VALUE_ONLY] {
-    return obj->size(xsink);
+    return qore_object_private::get(*obj)->getRuntimeMemberCount();
 }
 
 //! Returns the class name of the object
@@ -179,10 +186,14 @@ bool <object>::isSystem() [const;flags=CONSTANT] {
     return obj->isSystemObject();
 }
 
-//! Returns @ref False if the object has no public or private members, @ref True if it does
-/** The opposite of <object>::empty()
+//! Returns @ref False if the object has no members in its main member data, @ref True if it does
+/** The result does not depend on the code that calls it: a private member counts for any caller.  Members held in
+    internal storage (such as those declared \c private:internal, or those that a parent class itself inherits with
+    \c private:internal) do not count, so a valid object can return @ref False; use the @ref exists "exists operator"
+    to test if an object is present.  <object>::empty() reports only the members that the calling code can access, so it is not always the
+    opposite of this method.
 
-    @return @ref False if the object has no public or private members, @ref True if it does
+    @return @ref False if the object has no members in its main member data, @ref True if it does
 
     @par Example:
     @code{.py}

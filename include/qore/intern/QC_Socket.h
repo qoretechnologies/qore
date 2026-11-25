@@ -77,6 +77,7 @@ class QoreSocketObject;
 DLLLOCAL int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int64 timeout_ms, ExceptionSink* xsink);
 
 #include <qore/QoreSocket.h>
+#include <qore/ReferenceHolder.h>
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSocketObject.h>
@@ -85,12 +86,17 @@ DLLLOCAL int qore_socket_object_wait_for_quic_settings(QoreSocketObject* s, int6
 #include <atomic>
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 class my_socket_priv {
 public:
     QoreSocket* socket;
     QoreSSLCertificate* cert = nullptr;
     QoreSSLPrivateKey* pk = nullptr;
+    // Consumed by the first HTTP client operation constructed on this socket. Ordinary socket TLS APIs
+    // use cert/pk only and cannot read or install these references.
+    SimpleRefHolder<QoreSSLCertificate> http_handshake_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> http_handshake_key;
     mutable QoreThreadLock m;
     std::string ssl_cipher_name_cache;
     std::string ssl_cipher_version_cache;
@@ -103,10 +109,22 @@ public:
     //! true if Socket::accept() and Socket::acceptSSL() resolve the peer's hostname for the accepted socket's
     //! \c source_host member (see Socket::setSourceHostLookup())
     std::atomic<bool> source_host_lookup{false};
+    // A connection can supply TLS objects for use without exporting them in an HTTP client's configuration.
+    bool opaque_cert = false;
+    bool opaque_key = false;
     int async_io_count = 0;
     int async_sequence_owner_tid[3] = {-1, -1, -1};
     int async_sequence_count[3] = {0, 0, 0};
     bool valid = true;
+
+    //! Transfers HTTP handshake credentials to one poll operation and identifies the original connection.
+    DLLLOCAL int64 takeHttpHandshakeCredentials(SimpleRefHolder<QoreSSLCertificate>& certificate,
+            SimpleRefHolder<QoreSSLPrivateKey>& private_key) {
+        AutoLocker al(m);
+        certificate = http_handshake_cert.release();
+        private_key = http_handshake_key.release();
+        return certificate || private_key ? socket->getConnectionId() : -1;
+    }
 
     DLLLOCAL my_socket_priv(QoreSocket* s, QoreSSLCertificate* c = nullptr, QoreSSLPrivateKey* p = nullptr);
 
@@ -537,7 +555,7 @@ public:
 
     //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore
     DLLLOCAL void setAccept(QoreObject* o) {
-        socket->setAccept(o);
+        qore_socket_ops(socket).setAccept(o);
     }
 
     //! sets the backwards-compatible \c source and \c source_host members of an accepted socket's object
@@ -583,8 +601,30 @@ public:
     DLLLOCAL int convertHeaderToHash(QoreHashNode& h, QoreString& hdr, ExceptionSink* xsink,
             QoreHashNode* info = nullptr, bool in_trailers = false) const;
 
-    //! Clears the pending chunked body expectation flag on the underlying socket private implementation
-    DLLLOCAL void clearHttpExpectChunkedBody() const;
+    //! Called when the read of a chunked body starts: clears the pending chunked body expectation flag, and the
+    //! body is unfinished until finishHttpChunkedBodyRead() is called (issue 7417)
+    DLLLOCAL void startHttpChunkedBodyRead() const;
+
+    //! Called when the read of a chunked body has read the end of the body
+    DLLLOCAL void finishHttpChunkedBodyRead() const;
+
+    //! Returns true if the read of a chunked body started on the connection and stopped before the end of the body
+    DLLLOCAL bool unfinishedHttpChunkedBody() const;
+
+    //! Raises an exception and returns -1 if a header cannot be read, because a chunked body read on the
+    //! connection stopped before its end (issue 7417)
+    DLLLOCAL int checkHttpChunkedBodyFinished(ExceptionSink* xsink) const;
+
+    //! Returns the size of a line of a chunked body read up to its line end, without the line end
+    DLLLOCAL static size_t httpLinePayloadSize(const char* str, size_t len);
+
+    //! returns true if a response with the given \c Transfer-Encoding field value has a chunked body (RFC 9112
+    //! section 6.3: its final transfer coding is chunked); a response with another one is delimited by the end of the
+    //! connection
+    DLLLOCAL static bool isHttpResponseBodyChunked(QoreValue te);
+
+    //! Parses the size of a chunk from its chunk size line without the line end (RFC 9112 section 7.1)
+    DLLLOCAL static int parseHttpChunkSize(const char* line, size_t len, int64_t& chunk_size, ExceptionSink* xsink);
 
     //! Sets whether the fields of the HTTP messages read are also given at the top level of their hashes
     DLLLOCAL void setHttpFieldsAtTopLevel(bool top_level) const;

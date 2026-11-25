@@ -81,6 +81,10 @@ if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1 AND NOT SINGLE_COMPILATION_UNIT)
     message(WARNING "SINGLE_COMPILATION_UNIT_CHUNKS=${SINGLE_COMPILATION_UNIT_CHUNKS} is ignored because SINGLE_COMPILATION_UNIT is OFF")
 endif ()
 
+option(QORE_COMPILE_RACE_GUARD
+       "Compile libqore through tools/compile-race-guard.py, so that a source edited while its object compiles (minutes for a single compilation unit) is compiled again by the next build (see design/compile-race-guard.md)"
+       ON)
+
 option(ENABLE_ALLOC_TRACKING
        "Enable malloc/free interposer for memory leak tracking (adds overhead to all allocations; debug only)"
        OFF)
@@ -97,10 +101,6 @@ set(QORE_AOT_MODULE_OPT_LEVEL "3" CACHE STRING "Optimization level (0-3) for AOT
 option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"
        OFF)
-
-option(QORE_BUILD_WITH_EXTERNAL_MODULES
-       "Allow installed Qore modules to provide optional features in build outputs"
-       ON)
 
 option(QORE_STACK_USAGE_REPORT
        "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
@@ -178,21 +178,13 @@ foreach(mod_dir ${QORE_BINARY_MODULE_SOURCE_DIRS})
         list(APPEND QORE_BINARY_MODULE_DIRS "${CMAKE_BINARY_DIR}/modules/${mod_name}")
     endif ()
 endforeach ()
-if (WIN32 OR MSYS OR MINGW)
-    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
-    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
-    string(REPLACE ";" "\\;" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
-else (WIN32 OR MSYS OR MINGW)
-    set(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib")
-    list(APPEND QORE_MODULE_DIR_FOR_DOCS ${QORE_BINARY_MODULE_DIRS})
-    string(REPLACE ";" ":" QORE_MODULE_DIR_FOR_DOCS "${QORE_MODULE_DIR_FOR_DOCS}")
-endif (WIN32 OR MSYS OR MINGW)
 set(QORE_QDX_COMMAND ${QORE_INTERPRETER} ${QORE_QDX_EXECUTABLE})
 set(QORE_QJAR_COMMAND ${QORE_INTERPRETER} ${QORE_QJAR_EXECUTABLE})
 # simulate QoreConfig
 
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/QoreMacrosIntern.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/QoreCompileRaceGuard.cmake")
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 # The third-party source archives that the build may download, with their pinned versions and SHA-256 checksums, are
@@ -229,6 +221,9 @@ else (WIN32 OR MSYS or MINGW)
     set(USER_MODULE_DIR ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules/)
     set(USER_MODULE_VER_DIR ${USER_MODULE_DIR}${VERSION})
 endif (WIN32 OR MSYS OR MINGW)
+
+include(cmake/QoreExternalModuleDirs.cmake)
+qore_build_module_path(QORE_MODULE_DIR_FOR_DOCS "${CMAKE_SOURCE_DIR}/qlib" ${QORE_BINARY_MODULE_DIRS})
 
 # Install directory for native Qore i18n catalogs.
 #
@@ -331,6 +326,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_QoreParseOptions.qpp
     lib/QC_SSLCertificate.qpp
     lib/QC_SSLPrivateKey.qpp
+    lib/QC_SSLTrustStore.qpp
     lib/QC_ThreadPool.qpp
     lib/QC_StreamBase.qpp
     lib/QC_InputStream.qpp
@@ -359,6 +355,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Serializable.qpp
     lib/QC_AbstractPollableIoObject.qpp
     lib/QC_AbstractPollableIoObjectBase.qpp
+    lib/QC_SendRateMonitor.qpp
     lib/QC_AbstractPollOperation.qpp
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
@@ -1522,10 +1519,8 @@ if (DEFINED ENV{QORE_DOC_DEFINES})
         set(QORE_DOC_DEFINES "${_QORE_DOC_DEFINES_ENV}")
     endif ()
 endif ()
-set(QORE_DOCS_ENV QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS} QORE_DOC_DEFINES=${QORE_DOC_DEFINES})
-if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
-    list(APPEND QORE_DOCS_ENV "QORE_MODULE_DIR_ONLY=1")
-endif()
+set(QORE_DOCS_ENV "QORE_MODULE_DIR=${QORE_MODULE_DIR_FOR_DOCS}" "QORE_MODULE_DIR_ONLY=1"
+    "QORE_DOC_DEFINES=${QORE_DOC_DEFINES}")
 
 check_cxx_source_compiles("#include <sys/stat.h>
 int main() {
@@ -2426,6 +2421,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_WaitGroup.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLCertificate.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SSLPrivateKey.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SSLTrustStore.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HTTPClient.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoLock.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_ThreadCapabilityScope.cpp\"
@@ -2465,6 +2461,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Serializable.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObject.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollableIoObjectBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_SendRateMonitor.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
@@ -2641,11 +2638,15 @@ if (SINGLE_COMPILATION_UNIT)
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
+# an edit made while a libqore object compiles must not be lost (issue #6951)
+qore_compile_race_guard(libqore)
 
 add_dependencies(QPP_GENERATED_FILES qpp)
 add_dependencies(libqore QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity CHECK_GRAMMAR_CONFLICTS)
 
 target_compile_definitions(libqore PUBLIC _QORE_LIB_INTERN HAVE_UNIX_CONFIG_H)
+# defined only when libqore itself is compiled, not for the code that uses it (see DLLEXPORT_BOUND, #7006)
+target_compile_definitions(libqore PRIVATE QORE_BUILDING_LIBQORE)
 if (APPLE)
     # Required to expose IPV6_PKTINFO and struct in6_pktinfo in <netinet/in.h>
     # on macOS/Darwin.  Must be a global define so it takes effect before the
@@ -3007,6 +3008,11 @@ target_include_directories(qore-utf16-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the test calls the validation of IconvHelper, which is inline
 target_link_libraries(qore-utf16-validation-test PRIVATE libqore ${ICONV_LIBRARY})
+# the character functions of the multi-byte encodings against the platform's iconv (qore#6796)
+add_executable(qore-multibyte-iconv-parity-test examples/test/qore/strings/multibyte_iconv_parity.cpp)
+target_include_directories(qore-multibyte-iconv-parity-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${ICONV_INCLUDE_DIR})
+target_link_libraries(qore-multibyte-iconv-parity-test PRIVATE libqore ${ICONV_LIBRARY})
 # the keep-alive interval policy of QUIC connections is header-only, so the test needs no library
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
@@ -3055,6 +3061,7 @@ add_executable(qore-ir-phase0-smoke EXCLUDE_FROM_ALL
     examples/test/ir/phase0_metadata_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
 add_dependencies(qore-ir-phase0-smoke QPP_GENERATED_FILES BISON_GENERATED_FILES FLEX_GENERATED_FILES UpdateGitRevision qore-aot-runtime-identity)
+qore_compile_race_guard(qore-ir-phase0-smoke)
 target_compile_definitions(qore-ir-phase0-smoke PRIVATE
     _QORE_LIB_INTERN
     HAVE_UNIX_CONFIG_H
@@ -3330,8 +3337,14 @@ set(_qcc_format_sources
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
+#   QoreAOTMethodDispatchReclaim
+#                      when the run-time method dispatch cache that AOT code's
+#                      by-name calls use frees the entries it replaced
+#                      (qore#7459): libqore's own run-time state; qcc emits
+#                      calls to the same runtime functions either way.
 set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTMethodDispatchReclaim.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPointerSlot.h
@@ -3528,7 +3541,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreEnsureDepfile.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreQmodSourceCheck.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
@@ -3794,55 +3807,8 @@ set(QORE_QM_METADATA_SUBDIR core-qlib)
 # the build directories of the in-tree binary modules, which QORE_BINARY_MODULE_QORE() records as the modules are
 # declared above, so that a new module is on the module path of the metadata extraction without a list to keep in sync
 get_property(QORE_QM_METADATA_MODULE_DIRS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_DIRS)
-string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
-set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
-if (QORE_BUILD_WITH_EXTERNAL_MODULES)
-    set(QORE_BUILD_EXTERNAL_MODULE_DIRS
-        ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules
-        ${CMAKE_INSTALL_FULL_LIBDIR}/qore-modules
-        /usr/local/share/qore-modules
-        /usr/local/lib/qore-modules
-        /usr/share/qore-modules
-        /usr/lib/qore-modules)
-    if(CMAKE_LIBRARY_ARCHITECTURE)
-        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-            /usr/local/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules
-            /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules)
-    endif()
-    if(APPLE)
-        list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
-            /opt/local/share/qore-modules
-            /opt/local/lib/qore-modules
-            /opt/homebrew/share/qore-modules
-            /opt/homebrew/lib/qore-modules)
-    endif()
-    list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
-endif()
-string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
-# The directories of the installed (external) modules that the qlib qmods are compiled against: run_tests.sh appends
-# them to QORE_MODULE_DIR, so that the tests find the modules that the qmods of this build require.  Otherwise a qmod
-# compiled against a module installed outside this build's prefix cannot load it at test time and falls back to its
-# source (BINARY-MODULE-SOURCE-FALLBACK).  Empty when QORE_BUILD_WITH_EXTERNAL_MODULES is OFF.
-file(WRITE ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in "${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}\n")
-configure_file(
-    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in
-    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt
-    COPYONLY)
-set(QORE_BUILD_MODULE_DIRS_STR
-    "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
-if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
-    string(APPEND QORE_BUILD_MODULE_DIRS_STR ":${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
-endif()
-set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${QORE_BUILD_MODULE_DIRS_STR}"
-    "QORE_INCLUDE_DIR="
-    "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
-    # QORE_MODULE_DIR normally augments the runtime's installed search paths.
-    # Package builds must also omit those defaults: a successful %try-module
-    # becomes a hard dependency of the resulting AOT artifact.
-    list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
-endif()
+qore_build_module_env(QORE_QM_METADATA_ENV ${QORE_QM_METADATA_MODULE_DIRS} "${CMAKE_SOURCE_DIR}/qlib")
+list(APPEND QORE_QM_METADATA_ENV "QORE_INCLUDE_DIR=" "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 # every in-tree binary module (QORE_BINARY_MODULE_QORE()) installs its qmod with the qore-bootstrap component, so the
 # qore-bootstrap target builds each of them; the list is recorded as the modules are declared above, so a new module
 # cannot be left out (a module missing from a list kept by hand failed only at install time: "file INSTALL cannot find
@@ -3874,16 +3840,17 @@ find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 # when the probe set actually changes.
 set(_qore_aot_probe_modules xml uuid msgpack process imagemagick sysconf oracle)
 set(_qore_aot_probe_content "")
-if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
+if(NOT QORE_BUILD_EXTERNAL_MODULE_DIRS)
     foreach(_pm ${_qore_aot_probe_modules})
         string(APPEND _qore_aot_probe_content "${_pm}=disabled\n")
     endforeach()
 elseif(_qore_exe)
+    qore_build_module_env(_qore_probe_env)
     foreach(_pm ${_qore_aot_probe_modules})
         # The probe searches the external module directories that the AOT compile searches (QORE_QM_METADATA_ENV)
         # and not those of the environment cmake runs in, so that it records the modules the qmods are compiled with.
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env "QORE_MODULE_DIR=${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}"
+            COMMAND ${CMAKE_COMMAND} -E env ${_qore_probe_env}
                 ${_qore_exe} -l ${_pm} -ne
                 "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
             RESULT_VARIABLE _pm_rc

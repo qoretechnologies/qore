@@ -37,6 +37,7 @@
 %requires ../SqlUtil/PgsqlTestIsolation.qm
 %requires ../SqlUtil/MysqlTestIsolation.qm
 %requires ../SqlUtil/OracleTestIsolation.qm
+%requires ../SqlUtil/TestRunIsolation.qm
 
 %exec-class DbViewDataProviderTest
 
@@ -120,6 +121,7 @@ class DbViewDataProviderTest inherits QUnit::Test {
             }
             connstr = "sqlite3:@:memory:";
         } else {
+            # live-provider-optin: the QORE_DB_CONNSTR_ variable of a local database server
             connstr = ENV{Drivers{label}};
             if (!connstr) {
                 skip_reasons{label} = sprintf("%s is not set", Drivers{label});
@@ -216,7 +218,7 @@ class DbViewDataProviderTest inherits QUnit::Test {
         if (*Datasource ds = dsh{label}) {
             return ds;
         }
-        testSkip(skip_reasons{label} ?? sprintf("no %s connection", label));
+        TestRun::skipOrFail(skip_reasons{label} ?? sprintf("no %s connection", label));
     }
 
     #! returns the name of a test object as the database lists it

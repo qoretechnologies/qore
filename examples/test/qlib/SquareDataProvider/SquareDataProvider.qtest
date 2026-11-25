@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -150,6 +151,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         addTestCase("sanity tests", \sanityTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
+        addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("trigger example data tests", \triggerExampleDataTests());
@@ -176,19 +178,19 @@ public class SquareDataProviderTest inherits QUnit::Test {
     #! Sets up the Square client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.SQUARE_CONNECTION;
+        *string conn_name = LiveProvider::get("square", "SQUARE_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = LiveProvider::connection("square", "SQUARE_CONNECTION", m_options.conn).get();
             return;
         }
 
-        *string token = m_options.token ?? ENV.SQUARE_ACCESS_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.SQUARE_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.SQUARE_CLIENT_SECRET;
-        locationId = m_options.location_id ?? ENV.SQUARE_LOCATION_ID;
+        *string token = LiveProvider::get("square", "SQUARE_ACCESS_TOKEN", m_options.token);
+        *string client_id = LiveProvider::get("square", "SQUARE_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("square", "SQUARE_CLIENT_SECRET", m_options.client_secret);
+        locationId = m_options.location_id ?? LiveProvider::get("square", "SQUARE_LOCATION_ID");
 
         if (!token && (!client_id || !client_secret)) {
             if (m_options.verbose) {
@@ -206,8 +208,8 @@ public class SquareDataProviderTest inherits QUnit::Test {
         }
 
         # Determine URL
-        *string url = m_options.url ?? ENV.SQUARE_URL;
-        if (!url && (m_options.sandbox || ENV.SQUARE_SANDBOX)) {
+        *string url = m_options.url ?? LiveProvider::get("square", "SQUARE_URL");
+        if (!url && (m_options.sandbox || LiveProvider::get("square", "SQUARE_SANDBOX"))) {
             url = "https://connect.squareupsandbox.com/v2";
         }
 
@@ -311,6 +313,25 @@ public class SquareDataProviderTest inherits QUnit::Test {
             }
             rethrow;
         }
+    }
+
+    #! Action catalog tests - the read-only actions declare that they do not change state (qore#7454)
+    actionCatalogTests() {
+        checkJson();
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            SquareDataProvider::AppName);
+        assertTrue(actions.size() > 0);
+        # these actions POST to Square's batch-retrieve endpoints, which only retrieve orders and inventory counts
+        list<string> read_only = ("get-inventory-count", "get-orders");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(DPAT_API, $1.action_code, $1.action), ro_actions;
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # change-inventory POSTs inventory changes: it changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(DataProviderActionCatalog::getAppAction(
+            SquareDataProvider::AppName, "change-inventory")));
     }
 
     #! Child provider tests - verify hierarchy

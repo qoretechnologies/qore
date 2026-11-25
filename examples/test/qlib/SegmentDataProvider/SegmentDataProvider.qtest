@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -70,6 +71,7 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         addTestCase("sanity tests", \sanityTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
+        addTestCase("action catalogue tests", \actionCatalogueTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("connection tests", \connectionTests());
@@ -97,13 +99,14 @@ public class SegmentDataProviderTest inherits QUnit::Test {
     #! Sets up the Segment client for integration tests
     private setupConnection() {
         if (m_options.conn) {
+            # live-provider-optin: the connection name comes only from the test's own command line (-c)
             AbstractConnection conn = get_connection(m_options.conn);
             client = conn.getAsync();
             return;
         }
 
-        *string token = m_options.token ?? ENV.SEGMENT_API_TOKEN;
-        *string region = m_options.region ?? ENV.SEGMENT_REGION ?? "us";
+        *string token = LiveProvider::get("segment", "SEGMENT_API_TOKEN", m_options.token);
+        *string region = m_options.region ?? LiveProvider::get("segment", "SEGMENT_REGION") ?? "us";
 
         if (!token) {
             if (m_options.verbose) {
@@ -179,6 +182,25 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         assertEq(True, inlist("delete-tracking-plan", children));
         assertEq(True, inlist("create-label", children));
         assertEq(True, inlist("delete-label", children));
+    }
+
+    actionCatalogueTests() {
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionsEx(
+            SegmentDataProvider::AppName);
+        # the get actions only read (GET): they declare that they are read-only, which the catalogue reports as
+        # such; the other API actions change state (qore#7454)
+        list<string> read_only = ("get-destination", "get-source", "get-tracking-plan", "get-warehouse");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        list<hash<DataProviderActionInfo>> rw_actions = select actions, $1.action_code == DPAT_API
+            && $1.action != AbstractDataProvider::GenericApiCallActionName && !inlist($1.action, read_only);
+        # create, update and delete of sources, destinations, warehouses and tracking plans; create and delete
+        # of labels
+        assertEq(14, rw_actions.size());
+        map assertTrue(DataProviderActionCatalog::actionMutatesState($1), $1.action), rw_actions;
     }
 
     childProviderTests() {

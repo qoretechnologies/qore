@@ -63,6 +63,7 @@
 #include <unistd.h>
 
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 #define FTPDEBUG 5
 
@@ -340,19 +341,45 @@ static void qore_ftp_raise_file_open_error(ExceptionSink& open_xsink, const char
     xsink->raiseException("FTP-FILE-OPEN-ERROR", "%s", msg.c_str());
 }
 
-static int qore_ftp_write_temp_file_to_local_path(const char* tmp_path, const char* local_path,
-        ExceptionSink* xsink) {
-    int ifd = ::open(tmp_path, O_RDONLY);
+//! copies the temporary file that a download was written to to the local file
+/** The temporary file is in a directory that the caller can change: it is opened again without following a link, and
+    it must be the file that the download was written to (its device and inode), so that a file put in its place
+    meanwhile is never copied (qore#7498)
+
+    @param tmp_dev the device of the temporary file written
+    @param tmp_ino the inode of the temporary file written
+*/
+static int qore_ftp_write_temp_file_to_local_path(const char* tmp_path, dev_t tmp_dev, ino_t tmp_ino,
+        const char* local_path, ExceptionSink* xsink) {
+#ifdef O_NOFOLLOW
+    int ifd = q_open_policy_checked(tmp_path, O_RDONLY | O_NOFOLLOW, 0, xsink);
+#else
+    int ifd = q_open_policy_checked(tmp_path, O_RDONLY, 0, xsink);
+#endif
     if (ifd < 0) {
-        xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot open temporary file '%s'", tmp_path);
+        if (!*xsink) {
+            xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot open temporary file '%s'", tmp_path);
+        }
         return -1;
     }
+    {
+        struct stat sbuf;
+        if (fstat(ifd, &sbuf) || sbuf.st_dev != tmp_dev || sbuf.st_ino != tmp_ino) {
+            ::close(ifd);
+            xsink->raiseException("FTP-FILE-WRITE-ERROR", "the temporary file '%s' was replaced during the "
+                "download", tmp_path);
+            return -1;
+        }
+    }
 
-    int ofd = ::open(local_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    // the policy checked the name; the file actually opened is checked too, and it is truncated only then (qore#7498)
+    int ofd = q_open_policy_checked(local_path, O_WRONLY | O_CREAT | O_TRUNC, 0644, xsink);
     if (ofd < 0) {
         int en = errno;
         ::close(ifd);
-        xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", en, "%s", local_path);
+        if (!*xsink) {
+            xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", en, "%s", local_path);
+        }
         return -1;
     }
 
@@ -858,7 +885,7 @@ struct qore_ftp_private {
         if (event_queue) {
             event_queue->ref();
         }
-        control.setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
+        qore_socket_ops(control).setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
         if (*xsink) {
             return;
         }
@@ -874,7 +901,7 @@ struct qore_ftp_private {
         if (data_event_queue) {
             data_event_queue->ref();
         }
-        data.setEventQueue(xsink, data_event_queue, data_event_arg.refSelf(), data_event_with_data);
+        qore_socket_ops(data).setEventQueue(xsink, data_event_queue, data_event_arg.refSelf(), data_event_with_data);
     }
 
     DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
@@ -894,14 +921,14 @@ struct qore_ftp_private {
         if (event_queue) {
             event_queue->ref();
         }
-        control.setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
+        qore_socket_ops(control).setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
         if (*xsink) {
             return;
         }
         if (event_queue) {
             event_queue->ref();
         }
-        data.setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
+        qore_socket_ops(data).setEventQueue(xsink, event_queue, event_arg.refSelf(), event_with_data);
         if (*xsink) {
             return;
         }
@@ -911,10 +938,10 @@ struct qore_ftp_private {
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         AutoLocker al(m);
         cleanupAsync(xsink);
-        if (data.getQueue() && (data.getQueue() == control.getQueue())) {
+        if (qore_socket_ops(data).getQueue() && (qore_socket_ops(data).getQueue() == qore_socket_ops(control).getQueue())) {
             // make sure only one close event is pushed on the queue
             data.cleanup(xsink);
-            control.setEventQueue(xsink, nullptr, QoreValue(), false);
+            qore_socket_ops(control).setEventQueue(xsink, nullptr, QoreValue(), false);
             return;
         }
 
@@ -988,7 +1015,7 @@ struct qore_ftp_private {
         ctrl_op_obj = new QoreObject(QC_FTPCONTROLPOLLOPERATION, getProgram());
         // Set sock member (setMemberValue takes ownership)
         QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock_priv);
-        ctrl_op_obj->setMemberValue("sock", QC_FTPCONTROLPOLLOPERATION, sock_obj, xsink);
+        qore_poll_op_set_member(ctrl_op_obj, "sock", sock_obj, xsink);
         if (*xsink) {
             sock_obj->deref(xsink);
             connect_op->deref(xsink);
@@ -996,8 +1023,7 @@ struct qore_ftp_private {
             ctrl_op_obj = nullptr;
             return -1;
         }
-        ctrl_op_obj->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION,
-            new QoreStringNode("ftp-login"), xsink);
+        qore_poll_op_set_member(ctrl_op_obj, "goal", new QoreStringNode("ftp-login"), xsink);
         if (*xsink) {
             connect_op->deref(xsink);
             ctrl_op_obj->deref(xsink);
@@ -1131,14 +1157,14 @@ struct qore_ftp_private {
         // Create QoreObject for the data poll op
         QoreObject* dop_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
         QoreObject* dsock_obj = new QoreObject(QC_SOCKET, getProgram(), dsock);
-        dop_obj->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, dsock_obj, xsink);
+        qore_poll_op_set_member(dop_obj, "sock", dsock_obj, xsink);
         if (*xsink) {
             dsock_obj->deref(xsink);
             dconnect->deref(xsink);
             dop_obj->deref(xsink);
             return nullptr;
         }
-        dop_obj->setMemberValue("goal", QC_FTPDATAPOLLOPERATION,
+        qore_poll_op_set_member(dop_obj, "goal",
             new QoreStringNode(recv_mode ? "ftp-data-recv" : "ftp-data-send"), xsink);
         if (*xsink) {
             dconnect->deref(xsink);
@@ -1351,9 +1377,8 @@ struct qore_ftp_private {
         // Create FtpPortAcceptPollOperation (composite: accept + optional SSL)
         QoreObject* accept_op_obj = new QoreObject(QC_FTPPORTACCEPTPOLLOPERATION, getProgram());
         listen_obj->ref();
-        accept_op_obj->setMemberValue("sock", QC_FTPPORTACCEPTPOLLOPERATION, listen_obj, xsink);
-        accept_op_obj->setMemberValue("goal", QC_FTPPORTACCEPTPOLLOPERATION,
-            new QoreStringNode("ftp-port-accept"), xsink);
+        qore_poll_op_set_member(accept_op_obj, "sock", listen_obj, xsink);
+        qore_poll_op_set_member(accept_op_obj, "goal", new QoreStringNode("ftp-port-accept"), xsink);
         if (*xsink) {
             raw_accept->deref(xsink);
             accept_op_obj->deref(xsink);
@@ -1449,9 +1474,9 @@ struct qore_ftp_private {
         // 8. Create FtpDataPollOperation with adopt-socket constructor.
         QoreObject* data_op_obj = new QoreObject(QC_FTPDATAPOLLOPERATION, getProgram());
         accepted_obj->ref();
-        data_op_obj->setMemberValue("sock", QC_FTPDATAPOLLOPERATION, accepted_obj, xsink);
+        qore_poll_op_set_member(data_op_obj, "sock", accepted_obj, xsink);
         bool recv_mode = recv_output || recv_output_stream;
-        data_op_obj->setMemberValue("goal", QC_FTPDATAPOLLOPERATION,
+        qore_poll_op_set_member(data_op_obj, "goal",
             new QoreStringNode(recv_mode ? "ftp-data-recv" : "ftp-data-send"), xsink);
         if (*xsink) {
             data_op_obj->deref(xsink);
@@ -2272,13 +2297,20 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
         }
         return rv;
     }
+    // the identity of the file written, which the copy must read (qore#7498)
+    struct stat tmp_sbuf;
+    if (fstat(os->getFD(), &tmp_sbuf)) {
+        xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot get the status of temporary file '%s'",
+            tmp_path.c_str());
+        return -1;
+    }
     os->close(xsink);
     os.discard();
     if (*xsink) {
         return -1;
     }
 
-    return qore_ftp_write_temp_file_to_local_path(tmp_path.c_str(), *ln, xsink);
+    return qore_ftp_write_temp_file_to_local_path(tmp_path.c_str(), tmp_sbuf.st_dev, tmp_sbuf.st_ino, *ln, xsink);
 }
 
 // public locked
@@ -2674,20 +2706,20 @@ const char* QoreFtpClient::getHostName() const {
     return priv->host;
 }
 
-void QoreFtpClient::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setEventQueue(xsink, q, arg, with_data);
+void qore_ftp_client_ops::setEventQueueImpl(QoreFtpClient* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFtpClient::setControlEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setControlEventQueue(xsink, q, arg, with_data);
+void qore_ftp_client_ops::setControlEventQueueImpl(QoreFtpClient* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setControlEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFtpClient::setDataEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-    priv->setDataEventQueue(xsink, q, arg, with_data);
+void qore_ftp_client_ops::setDataEventQueueImpl(QoreFtpClient* b, ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+    b->priv->setDataEventQueue(xsink, q, arg, with_data);
 }
 
-void QoreFtpClient::cleanup(ExceptionSink* xsink) {
-    priv->cleanup(xsink);
+void qore_ftp_client_ops::cleanupImpl(QoreFtpClient* b, ExceptionSink* xsink) {
+    b->priv->cleanup(xsink);
 }
 
 void QoreFtpClient::clearWarningQueue(ExceptionSink* xsink) {
@@ -2707,12 +2739,12 @@ void QoreFtpClient::clearStats() {
     priv->clearStats();
 }
 
-void QoreFtpClient::setTimeout(int timeout_ms) {
-    priv->timeout_ms = timeout_ms;
+void qore_ftp_client_ops::setTimeoutImpl(QoreFtpClient* b, int timeout_ms) {
+    b->priv->timeout_ms = timeout_ms;
 }
 
-int QoreFtpClient::getTimeout() const {
-    return priv->timeout_ms;
+int qore_ftp_client_ops::getTimeoutImpl(QoreFtpClient* b) {
+    return b->priv->timeout_ms;
 }
 
 void QoreFtpClient::setNetworkFamily(int family) {

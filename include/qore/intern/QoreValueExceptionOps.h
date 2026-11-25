@@ -82,6 +82,11 @@ public:
         return getExceptionImpl(b);
     }
 
+    //! appends text in its own encoding to the description of the last exception, converting it (qore#6741)
+    /** @return -1 if there is no exception or its description is not a string, 0 if the text was appended
+    */
+    DLLLOCAL int appendLastDescription(const QoreString& text);
+
     DLLLOCAL static void defaultExceptionHandler(QoreException* e);
 
     DLLLOCAL static void defaultWarningHandler(QoreException* e);
@@ -131,6 +136,15 @@ public:
     }
 
     DLLLOCAL explicit qore_value_ops(const QoreValue& r) : b(const_cast<QoreValue*>(&r)) {
+    }
+
+    //! QoreValue::needsEval(), inline for the library's call paths (qore#7066)
+    DLLLOCAL bool needsEval() const {
+        if (!b->isPointer()) {
+            return false;
+        }
+        AbstractQoreNode* n = b->getPointerUnsafe();
+        return n && n->needs_eval();
     }
 
     //! Evaluates the value with RuntimeConfig and returns the result with deref flag

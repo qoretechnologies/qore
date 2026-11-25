@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires JinaDataProvider
 %requires json
 
@@ -101,8 +102,10 @@ public class JinaDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("JinaDataProvider Test", "1.1", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.JINA_CONNECTION;
+        conn_name = LiveProvider::get("jina", "JINA_CONNECTION", m_options.conn);
         addTestCase("registration and every action path", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
+        addTestCase("read-only content actions declare that they change nothing", \readOnlyContentActionsTest());
         addTestCase("vendored schema provenance and drift", \schemaTest());
         addTestCase("constructor alternatives and child registration", \constructorTest());
         addTestCase("embedding model variants and encoding compatibility", \embeddingTest());
@@ -114,18 +117,18 @@ public class JinaDataProviderTest inherits QUnit::Test {
         addTestCase("JSONL downloads and malformed responses", \downloadTest());
         addTestCase("invalid inputs never reach transport", \invalidInputTest());
         addTestCase("transport errors are not retried", \errorTest());
-        if (conn_name || ENV.JINAAI_APIKEY) {
+        if (conn_name || LiveProvider::get("jina", "JINAAI_APIKEY")) {
             addTestCase("live catalog, inference, and model dropdowns", \liveInferenceTest());
             addTestCase("live Reader, Search, Segmenter, and vision", \liveContentTest());
             addTestCase("live batch submission and status", \liveBatchTest());
         }
-        if (ENV.JINA_TEST_CLASSIFIERS) {
+        if (LiveProvider::get("jina", "JINA_TEST_CLASSIFIERS")) {
             addTestCase("live classifier lifecycle", \liveClassifierTest());
         }
-        if (ENV.JINA_TEST_DEEPSEARCH) {
+        if (LiveProvider::get("jina", "JINA_TEST_DEEPSEARCH")) {
             addTestCase("live DeepSearch", \liveDeepSearchTest());
         }
-        if (ENV.JINA_BATCH_ID) {
+        if (LiveProvider::get("jina", "JINA_BATCH_ID")) {
             addTestCase("live completed batch downloads", \liveBatchDownloadTest());
         }
         set_return_value(main());
@@ -138,6 +141,43 @@ public class JinaDataProviderTest inherits QUnit::Test {
 
     private hash<JinaRecordedRequest> last() {
         return FakeJinaRestClientIo::Log.last();
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("create-embeddings", "rerank", "classify",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("train-classifier",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+    }
+
+    #! the hand-registered actions that only search, read, segment, answer or download declare mutates_state False
+    #! (qore#7454)
+    private readOnlyContentActionsTest() {
+        foreach string name in (("search-web", "segment-text", "chat", "deep-search", "download-batch-output",
+                "download-batch-errors")) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # read-url can run a page script (injectPageScript) in the browser that loads the page, so it keeps the
+        # default
+        hash<DataProvider::DataProviderActionInfo> action =
+            DataProvider::DataProviderActionCatalog::getAppActionEx("JinaAi", "read-url");
+        assertTrue(exists action.options.injectPageScript);
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action));
     }
 
     private registrationTest() {
@@ -437,9 +477,10 @@ public class JinaDataProviderTest inherits QUnit::Test {
 
     private AbstractDataProvider liveProvider() {
         if (conn_name) {
+            # live-provider-optin: the connection name comes from LiveProvider
             return get_connection(conn_name).getDataProvider();
         }
-        return new JinaDataProvider::JinaDataProvider({"apikey": ENV.JINAAI_APIKEY});
+        return new JinaDataProvider::JinaDataProvider({"apikey": LiveProvider::get("jina", "JINAAI_APIKEY")});
     }
 
     private liveInferenceTest() {
@@ -496,7 +537,7 @@ public class JinaDataProviderTest inherits QUnit::Test {
         hash<auto> status = p.getChildProvider("get-batch").doRequest({"batch_id": batch.batch_id});
         assertEq(batch.batch_id, status.batch_id);
         assertTrue(!!status.status);
-        if (!ENV.JINA_KEEP_BATCH) {
+        if (!LiveProvider::get("jina", "JINA_KEEP_BATCH")) {
             if (status.status == "pending" || status.status == "processing") {
                 try {
                     hash<auto> cancelled = p.getChildProvider("cancel-batch").doRequest({"batch_id": batch.batch_id});
@@ -517,7 +558,8 @@ public class JinaDataProviderTest inherits QUnit::Test {
 
     private liveBatchDownloadTest() {
         AbstractDataProvider p = liveProvider();
-        hash<auto> result = p.getChildProvider("download-batch-output").doRequest({"batch_id": ENV.JINA_BATCH_ID});
+        hash<auto> result = p.getChildProvider("download-batch-output").doRequest({"batch_id":
+            LiveProvider::get("jina", "JINA_BATCH_ID")});
         assertEq("qore-5432", result.records[0].custom_id);
         assertEq(32, result.records[0].response.body.data[0].embedding.lsize());
     }

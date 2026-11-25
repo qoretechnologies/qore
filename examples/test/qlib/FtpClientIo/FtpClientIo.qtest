@@ -41,7 +41,7 @@ class FtpClientIoTest inherits QUnit::Test {
         addTestCase("FtpClientPollOperation PASV fallback", \testCompositePasvFallback());
         addTestCase("FtpClientPollOperation FTPS", \testCompositeFtps());
 
-        ftpServer = new FtpServer(0, m_options.verbose);
+        ftpServer = new FtpServer(0, m_options.verbose, "127.0.0.1");
         port = ftpServer.getPort();
         ftpServer.setFs();
         serverDir = ftpServer.getLocalDir();
@@ -73,12 +73,12 @@ class FtpClientIoTest inherits QUnit::Test {
 
     #! Drive a poll operation to completion using continuePoll + Socket::poll
     private drivePollOp(AbstractPollOperation op, timeout tmout = 10s) {
-        date deadline = now_us() + tmout;
+        int deadline = clock_get_monotonic_us() + tmout * 1000;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (pi) {
                 list<hash<SocketPollInfo>> poll_list = (pi,);
-                timeout remaining = deadline - now_us();
+                timeout remaining = microseconds(deadline - clock_get_monotonic_us());
                 if (remaining <= 0) {
                     throw "TIMEOUT", "poll operation timed out";
                 }
@@ -118,7 +118,7 @@ class FtpClientIoTest inherits QUnit::Test {
 
     #! Returns a logged-in composite operation
     private FtpClientIo::FtpClientPollOperation loginComposite() {
-        FtpClientIo::FtpClientPollOperation op("localhost", port, False, False, "user", "pass");
+        FtpClientIo::FtpClientPollOperation op("127.0.0.1", port, False, False, "user", "pass");
         assertFalse(op.isLoggedIn(), "should not be logged in before being driven");
         driveComposite(op);
         assertTrue(op.isLoggedIn(), "should be logged in after the login operation completes");
@@ -264,7 +264,7 @@ class FtpClientIoTest inherits QUnit::Test {
     */
     testCompositeFtps() {
         # secure control channel and secure data channel
-        FtpClientIo::FtpClientPollOperation op("localhost", port, True, True, "user", "pass");
+        FtpClientIo::FtpClientPollOperation op("127.0.0.1", port, True, True, "user", "pass");
         driveComposite(op);
         assertTrue(op.isLoggedIn(), "FTPS login should complete over the TLS control channel");
         assertTrue(op.getControlOp().isSecure(), "the control channel should be TLS");
@@ -294,7 +294,7 @@ class FtpClientIoTest inherits QUnit::Test {
 
     testControlPollOperationBasic() {
         # Test basic construction and state
-        FtpControlPollOperation op(host: "localhost", port: port);
+        FtpControlPollOperation op(host: "127.0.0.1", port: port);
         assertEq("FtpControlPollOperation", op.className());
         assertEq("connecting", op.getState());
         assertEq("ftp-login", op.getGoal());
@@ -314,7 +314,7 @@ class FtpClientIoTest inherits QUnit::Test {
 
     testControlPollOperationLogin() {
         # Test login via poll driver
-        FtpControlPollOperation op(host: "localhost", port: port);
+        FtpControlPollOperation op(host: "127.0.0.1", port: port);
 
         # Drive to login completion
         drivePollOp(op);
@@ -330,7 +330,7 @@ class FtpClientIoTest inherits QUnit::Test {
 
     testControlPollOperationCommand() {
         # Test command execution after login
-        FtpControlPollOperation op(host: "localhost", port: port);
+        FtpControlPollOperation op(host: "127.0.0.1", port: port);
 
         # Login first
         drivePollOp(op);

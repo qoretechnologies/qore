@@ -34,8 +34,9 @@
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
 #include <qore/HttpClientConnectionManager.h>
+#include "qore/intern/QC_SSLTrustStore.h"
 #include "qore/intern/QoreChannel.h"
-#include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QC_HttpClientConnection.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
@@ -45,6 +46,7 @@
 #include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
+#include <utility>
 
 // The QPP-generated .cpp for Http1ClientPollOperationBase is #included later
 // in the single-compilation-unit umbrella, so these globals are not yet
@@ -66,6 +68,11 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     client_key = ssl_config.key;
     ssl_ca_file = ssl_config.ca_file;
     ssl_ca_path = ssl_config.ca_path;
+    ssl_trust_store = ssl_config.trust_store;
+    // a reference of its own: the connection can outlive its manager
+    if (ssl_trust_store) {
+        ssl_trust_store->ref();
+    }
     // Set the manager BEFORE submitting to the I/O controller so that
     // onClosedHook dispatches correctly even when the I/O thread
     // processes a connect failure before we return to the caller.
@@ -91,6 +98,11 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     client_key = ssl_config.key;
     ssl_ca_file = ssl_config.ca_file;
     ssl_ca_path = ssl_config.ca_path;
+    ssl_trust_store = ssl_config.trust_store;
+    // a reference of its own: the connection can outlive its manager
+    if (ssl_trust_store) {
+        ssl_trust_store->ref();
+    }
     negotiate_alpn = ssl_config.negotiate_alpn;
     if (mgr) {
         setManager(mgr);
@@ -141,21 +153,34 @@ void Http1ClientConnection::configureSsl(int verify_mode, bool accept_all,
     }
 }
 
+void Http1ClientConnection::moveTransportToMembers(QoreObject* owner, ExceptionSink* xsink) {
+    assert(sock_obj && poll_op_obj);
+    // Keep native calls and closeConnection() safe regardless of wrapper destruction order. Each slot
+    // consumes the original object reference, including on error; the native-only path keeps its own.
+    sock_priv->ref();
+    if (owner->setInternalMemberValue("sock_obj", QC_HTTP1CONNECTION, std::exchange(sock_obj, nullptr), xsink)) {
+        return;
+    }
+    poll_op_priv->ref();
+    owner->setInternalMemberValue("poll_op_obj", QC_HTTP1CONNECTION, std::exchange(poll_op_obj, nullptr), xsink);
+}
+
 Http1ClientConnection::~Http1ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
+    if (ssl_trust_store) {
+        ssl_trust_store->deref();
+    }
     if (poll_op_obj) {
         poll_op_obj->deref(&xsink);
-        poll_op_obj = nullptr;
+    } else if (poll_op_priv) {
+        poll_op_priv->deref(&xsink);
     }
     if (sock_obj) {
         sock_obj->deref(&xsink);
-        sock_obj = nullptr;
+    } else if (sock_priv) {
+        sock_priv->deref(&xsink);
     }
-    // poll_op_priv / sock_priv are owned by poll_op_obj / sock_obj — clearing
-    // is unnecessary but makes use-after-free bugs easier to catch.
-    poll_op_priv = nullptr;
-    sock_priv = nullptr;
     xsink.clear();
 }
 
@@ -181,6 +206,13 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     //     by configureSsl() called from the manager after construction.
     sock_priv_raw->setSslVerifyMode(ssl_verify_mode);
     sock_priv_raw->acceptAllCertificates(accept_all_certs);
+    if (ssl_trust_store) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_trust_store, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
     if (!ssl_ca_file.empty() || !ssl_ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
         qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),
@@ -192,7 +224,7 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 
     // Apply TCP_USER_TIMEOUT if the manager configured it.  The value is
     // stored on the socket and re-applied by qore_socket_private at the
-    // post-connect hook (confirmConnected).
+    // post-connect hook (applyTcpUserTimeout()).
     if (manager_) {
         int ut_ms = manager_->getOptions().tcp_user_timeout_ms;
         if (ut_ms > 0) {
@@ -376,11 +408,11 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
 
     // Set poll op QoreObject members: "sock" and "goal" — same as the
     // connect-path constructor does.
-    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setValue("goal", new QoreStringNode("http1_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http1_client"), xsink);
     if (*xsink) {
         return -1;
     }
@@ -415,11 +447,11 @@ int Http1ClientConnection::finalizePollOpSubmission(
     // "goal" — same as the QPP binding would.  Idempotent when already
     // set by the caller (adopt-socket path sets them before calling
     // initAdoptedReady, which must run before this helper).
-    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setValue("goal", new QoreStringNode("http1_client"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("http1_client"), xsink);
     if (*xsink) {
         return -1;
     }
@@ -781,7 +813,7 @@ void Http1ClientConnection::pushSendData(const QoreStringNode* data, ExceptionSi
             "cannot push data: connection has no poll operation");
         return;
     }
-    poll_op_priv->pushSendData(data, xsink);
+    poll_op_priv->pushSendData(data, xsink, switched_send_timeout_ms.load(std::memory_order_relaxed));
 
     // Wake the I/O controller so it processes the queued data
     if (sock_obj) {

@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires OpenAiDataProvider
@@ -161,12 +162,12 @@ class StreamObserver inherits Observer {
     }
 
     wait(int count) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         m.lock();
         on_exit m.unlock();
         while (events.lsize() < count) {
             cond.wait(m, 1s);
-            if ((now_us() - start) > 5s) {
+            if ((microseconds(clock_get_monotonic_us() - start)) > 5s) {
                 throw "ERROR", "no stream events in timeout";
             }
         }
@@ -1826,11 +1827,12 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.OPENAI_CONNECTION;
+        *string conn_name = LiveProvider::get("openai", "OPENAI_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             error("missing -c,--connection option or OPENAI_CONNECTION environment variable");
         }
 
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         if (!(conn instanceof OpenAiRestConnection)) {
             error("connection %y is type %y; expecting \"OpenAiRestConnection\"", conn_name, conn.className());

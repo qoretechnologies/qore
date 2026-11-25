@@ -35,6 +35,7 @@
 #include "qore/intern/WeakReferenceNode.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/SocketRecvHttpLinePollOperation.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/ssl_constants.h"
@@ -236,8 +237,8 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("send"), xsink);
     }
     if (*xsink) {
         return -1;
@@ -257,6 +258,18 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
 static int socket_check_http1_allowed(QoreSocketObject* s, const char* mname, ExceptionSink* xsink) {
     if (my_socket_priv::getPriv(*s)->hasH2SessionForAsyncPoll()) {
         xsink->raiseException("HTTP2-ERROR", "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname);
+        return -1;
+    }
+    return 0;
+}
+
+// checks the status of the final response of an HTTP/2 or HTTP/3 stream as the 64-bit value given, before it is
+// narrowed to the int of the C++ API, where a value out of range could become a valid status (qoretechnologies/qore#7212)
+static int socket_check_final_status(int64 status_code, const char* err, ExceptionSink* xsink) {
+    if (status_code < 200 || status_code > 599) {
+        xsink->raiseException(err, "the status of a final response must be between 200 and 599; got " QLLD "%s",
+            status_code, (status_code >= 100 && status_code < 200)
+                ? " (an informational status is not a final response)" : "");
         return -1;
     }
     return 0;
@@ -339,7 +352,8 @@ static int socket_check_head_response(bool head, const QoreHashNode* headers, co
     if (!head) {
         return 0;
     }
-    if (body.getType() == NT_STRING ? !body.get<const QoreStringNode>()->empty()
+    // the body can be an inline short string, which has no node (issue #7038)
+    if (body.getType() == NT_STRING ? !QoreStringDataHelper(body).empty()
             : (body.getType() == NT_BINARY && body.get<const BinaryNode>()->size())) {
         xsink->raiseException(err, "the response to a HEAD request has no message body");
         return -1;
@@ -780,8 +794,8 @@ static int socket_exec_connect_operation(QoreObject* self, QoreSocketObject* s,
 
     const char* goal = ssl ? "connect-ssl" : "connect";
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return -1;
@@ -843,8 +857,8 @@ static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int ti
 
     const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return -1;
@@ -885,8 +899,8 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
 
     const char* goal = ssl ? "accept-ssl" : "accept";
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(goal), xsink);
     }
     if (*xsink) {
         return QoreValue();
@@ -960,8 +974,8 @@ static QoreValue socket_exec_recv_poll(QoreObject* self, QoreSocketObject* s, So
     poller_holder.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
         return QoreValue();
@@ -1145,8 +1159,8 @@ static int socket_exec_recv_output_stream_poll(QoreObject* self, QoreSocketObjec
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
         return -1;
@@ -1203,8 +1217,8 @@ static int socket_exec_write_output_stream_poll(QoreObject* self, QoreSocketObje
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("written"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("written"), xsink);
     }
     if (*xsink) {
         return -1;
@@ -1264,8 +1278,8 @@ static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketOb
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("received"), xsink);
     }
     if (*xsink) {
         return nullptr;
@@ -1313,10 +1327,14 @@ static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketOb
 
 static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, QoreSocketObject* s,
         int timeout_ms, ExceptionSink* xsink) {
+    // the rest of a chunked body that was not read to its end would be taken for the header (issue 7417)
+    if (my_socket_priv::getPriv(*s)->checkHttpChunkedBodyFinished(xsink)) {
+        return nullptr;
+    }
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
     s->ref();
     ValueHolder result(socket_exec_recv_poll(self, s,
-        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true, true),
+        new SocketRecvHttpLinePollOperation(xsink, *pattern, s, true, true, "header"),
         timeout_ms, "readHTTPHeaderString", xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -1333,8 +1351,11 @@ static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, Qor
     QoreStringNodeValueHelper raw(*result);
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
-    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
-        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+    // the header is given without the empty line that ends it, whatever its line ends (qore#7491), and its last
+    // line ends with LF
+    size_t text_size = qore_socket_private::getHttpHeaderTextSize(raw->c_str(), len);
+    if (text_size < len) {
+        hdr = new QoreStringNode(raw->c_str(), text_size, raw->getEncoding());
         hdr->concat('\n');
     } else {
         hdr = raw.getReferencedValue();
@@ -1485,8 +1506,8 @@ static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, in
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode(owner_name), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode(owner_name), xsink);
     }
     if (*xsink) {
         return false;
@@ -1530,8 +1551,8 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
     poller.release();
 
     if (!*xsink) {
-        op_obj->setValue("sock", new WeakReferenceNode(self), xsink);
-        op_obj->setValue("goal", new QoreStringNode("isDataAvailable"), xsink);
+        qore_poll_op_set_member(op_obj, "sock", new WeakReferenceNode(self), xsink);
+        qore_poll_op_set_member(op_obj, "goal", new QoreStringNode("isDataAvailable"), xsink);
     }
     if (*xsink) {
         return false;
@@ -1556,15 +1577,8 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
 }
 
 static size_t socket_exec_http_line_payload_size(const QoreStringNode& line) {
-    size_t len = line.size();
-    const char* str = line.c_str();
-    if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
-        return len - 2;
-    }
-    if (len && str[len - 1] == '\n') {
-        return len - 1;
-    }
-    return len;
+    // the line is taken as every reader of a chunked body takes it (issue 7417)
+    return my_socket_priv::httpLinePayloadSize(line.c_str(), line.size());
 }
 
 static bool socket_exec_http_blank_line(const QoreStringNode& line) {
@@ -1604,12 +1618,15 @@ static int socket_exec_run_http_recv_header_callback(QoreObject* self,
     return *xsink ? -1 : 0;
 }
 
+// reads a chunk size line or a line of a trailer section, within the size limit of the socket (qore#6867):
+// what is "chunk size line" or "chunked body trailer"; used is the size of the part of the trailer section read before
+// this line, which counts against the limit
 static QoreStringNode* socket_exec_recv_http_line(QoreObject* self, QoreSocketObject* s, int timeout_ms,
-        const char* owner_name, ExceptionSink* xsink) {
+        const char* owner_name, ExceptionSink* xsink, const char* what, size_t used = 0) {
     SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
     s->ref();
     ValueHolder result(socket_exec_recv_poll(self, s,
-        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true, true),
+        new SocketRecvHttpLinePollOperation(xsink, *pattern, s, true, true, what, used),
         timeout_ms, owner_name, xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -1634,7 +1651,9 @@ static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketOb
             return -1;
         }
 
-        SimpleRefHolder<QoreStringNode> line(socket_exec_recv_http_line(self, s, timeout_ms, owner_name, xsink));
+        // the lines of the trailer section count together against the limit
+        SimpleRefHolder<QoreStringNode> line(socket_exec_recv_http_line(self, s, timeout_ms, owner_name, xsink,
+            "chunked body trailer", trailers.size()));
         if (*xsink) {
             return -1;
         }
@@ -1690,7 +1709,8 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
         return nullptr;
     }
 
-    priv->clearHttpExpectChunkedBody();
+    // the body is unfinished until the read reaches its end (issue 7417)
+    priv->startHttpChunkedBodyRead();
 
     SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
     SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback ? nullptr : new QoreStringNode(s->getEncoding()));
@@ -1704,19 +1724,16 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             return nullptr;
         }
 
-        SimpleRefHolder<QoreStringNode> line(socket_exec_recv_http_line(self, s, timeout_ms, owner_name, xsink));
+        SimpleRefHolder<QoreStringNode> line(socket_exec_recv_http_line(self, s, timeout_ms, owner_name, xsink,
+            "chunk size line"));
         if (*xsink) {
             return nullptr;
         }
 
         size_t line_len = socket_exec_http_line_payload_size(**line);
-        const char* line_str = line->c_str();
-        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-        std::string hex(line_str, hex_len);
-        long chunk_size = strtol(hex.c_str(), nullptr, 16);
-        if (chunk_size < 0) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+        // the size is parsed as the other readers of a chunked body parse it (issue 7417)
+        int64_t chunk_size = 0;
+        if (my_socket_priv::parseHttpChunkSize(line->c_str(), line_len, chunk_size, xsink)) {
             return nullptr;
         }
 
@@ -1738,6 +1755,8 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
                     *info, &has_trailers)) {
                 return nullptr;
             }
+            // the whole body has been read
+            priv->finishHttpChunkedBodyRead();
             if (recv_callback) {
                 if (socket_exec_run_http_recv_header_callback(self, recv_callback,
                         has_trailers ? *output : nullptr, info.release(), xsink)) {
@@ -1746,12 +1765,6 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
                 return nullptr;
             }
             return output.release();
-        }
-
-        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-                chunk_size);
-            return nullptr;
         }
 
         // apply the limit before the chunk is read, so no data over the limit is read, written, or delivered
@@ -1775,14 +1788,19 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             if (write_rc == -1 || *xsink) {
                 return nullptr;
             }
-        } else if (!recv_callback && binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else if (!recv_callback) {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        } else if (!recv_callback && qore_socket_append_http_body(xsink, *body_bin,
+                binary_body ? nullptr : *body_str, chunk->getPtr(), chunk->size())) {
+            return nullptr;
         }
 
         SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
         if (*xsink) {
+            return nullptr;
+        }
+        // the chunk data ends with a line end (RFC 9112 section 7.1)
+        if (crlf->size() != 2 || memcmp(crlf->getPtr(), "\r\n", 2)) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "the data of a chunk of " QLLD " bytes is not followed by "
+                "a line end", static_cast<int64>(chunk_size));
             return nullptr;
         }
         priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
@@ -2517,6 +2535,23 @@ Socket::constructor() {
     self->setPrivate(CID_SOCKET, new QoreSocketObject);
 }
 
+//! Creates a socket with client credentials for its first HTTP client poll operation
+/** @internal HTTP transport API used by the HttpClientIo module. The operation takes the references on
+    construction. Raw socket TLS methods never use them.
+    @param certificate the client certificate for the target TLS handshake
+    @param private_key the client private key for the target TLS handshake
+
+    @since %Qore 3.0
+*/
+static Socket Socket::forHttpClientHandshake(*SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreSocketObject> sock(new QoreSocketObject, xsink);
+    my_socket_priv* priv = my_socket_priv::getPriv(**sock);
+    priv->http_handshake_cert = certificate.release();
+    priv->http_handshake_key = private_key.release();
+    return new QoreObject(QC_SOCKET, getProgram(), sock.release());
+}
+
 //! Creates a new Socket object, not based on the source being copied
 /** @par Example:
     @code{.py} Socket newsock = sock.copy(); @endcode
@@ -2559,8 +2594,8 @@ AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect"), xsink);
     }
     return rv.release();
 }
@@ -2593,8 +2628,8 @@ AbstractPollOperation<auto> Socket::startPollConnectSsl(string target) [flags=NA
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("connect-ssl"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("connect-ssl"), xsink);
     }
     return rv.release();
 }
@@ -2623,8 +2658,8 @@ AbstractPollOperation<auto> Socket::startPollSend(string data) [flags=NAMED_ARGS
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send"), xsink);
     }
     return rv.release();
 }
@@ -2644,8 +2679,8 @@ AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send"), xsink);
     }
     return rv.release();
 }
@@ -2735,8 +2770,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, s
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-http-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-http-response"), xsink);
     }
     return rv.release();
 }
@@ -2826,8 +2861,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -2938,8 +2973,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-stream-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -3036,8 +3071,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -3138,8 +3173,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-stream"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-stream"), xsink);
     }
     return rv.release();
 }
@@ -3226,8 +3261,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(i
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-chunked-stream"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-chunked-stream"), xsink);
     }
     return rv.release();
 }
@@ -3251,8 +3286,8 @@ AbstractPollOperation<auto> Socket::startPollAccept() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("accept"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("accept"), xsink);
     }
     return rv.release();
 }
@@ -3275,8 +3310,8 @@ AbstractPollOperation<auto> Socket::startPollRecvString(int size) [flags=NAMED_A
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send"), xsink);
     }
     return rv.release();
 }
@@ -3299,8 +3334,8 @@ AbstractPollOperation<auto> Socket::startPollRecvBinary(int size) [flags=NAMED_A
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3322,8 +3357,8 @@ AbstractPollOperation<auto> Socket::startPollRecvData() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3388,8 +3423,8 @@ AbstractPollOperation<auto> Socket::startPollLingeringClose(int max_discard = 0)
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("closed"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("closed"), xsink);
     }
     return rv.release();
 }
@@ -3409,6 +3444,10 @@ AbstractPollOperation<auto> Socket::startPollLingeringClose(int max_discard = 0)
     \c getOutput() returns the accumulated body as a binary value
 
     @throw SOCKET-STARTPOLLREADHTTPBODY-ERROR invalid parameter combination
+    @throw READ-HTTP-CHUNK-ERROR (raised by the operation) a chunked body with an invalid chunk size (not
+    hexadecimal digits), chunk data not followed by a line end, or data that ended before the end of the body; a
+    chunked body that is not read to its end leaves the socket unable to read an HTTP header (see
+    unfinishedHttpChunkedBody())
 
     @since %Qore 3.0
 */
@@ -3427,8 +3466,8 @@ AbstractPollOperation<auto> Socket::startPollReadHttpBody(int content_length, bo
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("read-http-body"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("read-http-body"), xsink);
     }
     return rv.release();
 }
@@ -3451,8 +3490,8 @@ AbstractPollOperation<auto> Socket::startPollRecvUntilBytesString(string pattern
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3475,8 +3514,8 @@ AbstractPollOperation<auto> Socket::startPollRecvUntilBytesBinary(string pattern
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3514,8 +3553,8 @@ AbstractPollOperation<auto> Socket::startPollRecvFrom(*int max_size) [flags=NAME
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3547,8 +3586,8 @@ AbstractPollOperation<auto> Socket::startPollSendTo(
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("sent"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("sent"), xsink);
     }
     return rv.release();
 }
@@ -3590,8 +3629,8 @@ AbstractPollOperation<auto> Socket::startPollReadHttpHeader() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3605,8 +3644,8 @@ AbstractPollOperation<auto> Socket::startPollReadServerSentEvent() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("received"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("received"), xsink);
     }
     return rv.release();
 }
@@ -3635,8 +3674,8 @@ AbstractPollOperation<auto> Socket::startPollUpgradeClientToSSL() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("upgrade-client-ssl"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("upgrade-client-ssl"), xsink);
     }
     return rv.release();
 }
@@ -3664,8 +3703,8 @@ AbstractPollOperation<auto> Socket::startPollUpgradeServerToSSL() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("upgrade-server-ssl"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("upgrade-server-ssl"), xsink);
     }
     return rv.release();
 }
@@ -4667,7 +4706,9 @@ string data = sock.recv(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -4697,7 +4738,9 @@ binary data = sock.recvBinary(-1); # read all data available
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data, or the memory for the data could not be
+    allocated; the memory grows as the data arrives, and a read whose memory cannot grow shuts the connection down, as
+    the rest of the data cannot be told apart from what follows it
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -5782,7 +5825,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
     - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
     - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this key; a quoted-string value is unquoted
-    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated
+    - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated; an HTTP/1.0 request with a \c Transfer-Encoding closes the connection (RFC 9112 section 6.1)
     - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
@@ -5793,7 +5836,9 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @return a hash of the header; a header value, as the \c status_message, that is not valid UTF-8 is given in
     ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text; the hash has the following keys:
     - \c headers: a hash of every header field, with lower-case names; a field given more than once is a list of its
-      values
+      values; a \c Transfer-Encoding field of the chunked coding alone is given as \c "chunked", as which it is
+      recognized without regard to case, to the whitespace around it and to the empty elements of its list, also when
+      it is given in more than one line (the value received is given in the \c headers-raw key of \a info)
     - the header fields with their lower-case names at the top level as well (deprecated; see
       @ref setHttpFieldsAtTopLevel()), except a field named \c body, \c headers, \c trailers, \c status_code,
       \c status_message, \c http_version, \c method or \c path, which is given only under \c headers (so that a field
@@ -5810,11 +5855,32 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw SOCKET-HTTP-ERROR Invalid HTTP data was received, in the case of invalid header info received, the \c arg key of the exception hash will have the invalid data received
+    @throw HTTP-HEADER-TOO-LARGE the header is larger than the limit set with setMaxHeaderSize() (65536 bytes by default)
     @throw SOCKET-HTTP-ERROR a header with a NUL character was received, which would cut off the header lines after
     it, or a header with a field line that RFC 9112 does not allow: a bare CR, whitespace in a field name (as between
     the name and the colon), a line without a colon or with an empty field name, a whitespace line before the first
     field line, or, in a request, an obsolete line folding (a line that starts with whitespace); in a response, an
     obsolete line folding is replaced with spaces
+    @throw SOCKET-HTTP-ERROR a header with a field line with a control character other than tab (RFC 9110 section
+    5.5; since %Qore 3.0): the \c arg key of the exception hash has the start of the line, with its non-printable
+    bytes escaped as \c "\xhh"; or a request header with a line that ends with a bare LF; a header is read up to its
+    first empty line, where a line ends with LF, which a CR can precede, and a line of a response header can end with
+    LF alone (RFC 9112 section 2.2; a header that ends with \c "\n\n" is read since %Qore 3.0)
+    @throw SOCKET-HTTP-ERROR a request with more than one \c Host field or a list in it (RFC 9112 section 3.2), with
+    both \c Transfer-Encoding and \c Content-Length, or whose \c Transfer-Encoding does not give a framing that every
+    recipient finds: the chunked transfer coding is not the final coding, is given more than once or with a
+    parameter, or no coding is given (RFC 9112 section 6.3)
+    @throw HTTP-UNSUPPORTED-TRANSFER-CODING a request with a transfer coding other than chunked (RFC 9112 section 6.1);
+    a server answers such a request with 501 (Not Implemented); a response is never refused for its
+    \c Transfer-Encoding: its body is chunked if its final transfer coding is chunked, and is delimited by the end of
+    the connection if not (RFC 9112 section 6.3); a response with the status 1xx, 204 or 304 has no body
+    @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
+    unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
+    closed
+    @throw SOCKET-HTTP-ERROR a header that starts with \c "HTTP/" (a response) with an invalid status line: the line
+    must be <tt>HTTP/</tt><em>digit</em><tt>.</tt><em>digit</em>, a space, a status code of three digits in the range
+    \c 100 - \c 599, and either the end of the line or a space and a reason phrase, which can be empty, without
+    control characters other than tab (RFC 9112 section 4; since %Qore 3.0)
 
     @note
     - if the header claims a certain character encoding via a \c charset declaration in the \c "Content-Type" header, the Socket's @ref character_encoding "character encoding" is automatically set accordingly
@@ -5833,8 +5899,12 @@ hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>
     return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
 
-//! Retuns a string representing the data in the HTTP header read (reads until \c "\r\n\r\n")
+//! Retuns a string representing the data in the HTTP header read (reads until the first empty line)
 /** If any errors occur reading from the socket, an exception is raised. Accepts an optional timeout value in milliseconds.
+
+    The header is read up to its first empty line, where a line ends with LF, which a CR can precede (\c "\r\n\r\n",
+    and since %Qore 3.0 also \c "\n\n", \c "\r\n\n" and \c "\n\r\n"); the string is returned without the empty
+    line and with \c "\n" as the line end of its last line.
 
     @par Example:
     @code{.py}
@@ -5853,7 +5923,10 @@ string str = sock.readHTTPHeaderString(10s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw SOCKET-HTTP-ERROR maximum header size was exceeded
+    @throw HTTP-HEADER-TOO-LARGE the header is larger than the limit set with setMaxHeaderSize() (65536 bytes by default)
+    @throw SOCKET-HTTP-ERROR the read of a chunked message body on the socket stopped before the end of the body (see
+    unfinishedHttpChunkedBody()), whose rest cannot be told apart from the next message; the connection must be
+    closed
 
     @since %Qore 0.8.8
 */
@@ -5882,13 +5955,16 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
 hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false, "readHTTPChunkedBody", xsink);
@@ -5914,13 +5990,16 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end has closed the connection
-    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-RECV-ERROR There was an error receiving the data, or the memory for the body could not be allocated
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
 hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false, "readHTTPChunkedBodyBinary", xsink);
@@ -5954,10 +6033,13 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
 */
 hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, true, "readHTTPChunk", xsink);
@@ -5984,10 +6066,13 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is written to the stream
     @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
 */
@@ -6022,10 +6107,13 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback
 
     @since %Qore 0.8.10
@@ -6064,10 +6152,13 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
-    @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server, or a trailer with a NUL character
+    @throw READ-HTTP-CHUNK-ERROR an invalid chunk size (not hexadecimal digits), chunk data not followed by a line
+    end, or a trailer with a NUL character
     or with a field line that RFC 9112 does not allow was received (an obsolete line folding in a trailer is
-    replaced with spaces)
+    replaced with spaces), or a trailer section with a line that ends with a bare LF or with an empty line before
+    its end: the lines of a trailer section end with CRLF
     @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     no data over the limit is passed to the callback
 
     @since %Qore 0.8.10
@@ -6553,6 +6644,10 @@ if (sock.isHttp2()) {
 
     @return @ref True if the connection is using HTTP/2, @ref False otherwise
 
+    @note The result of the ALPN negotiation is recorded when the TLS handshake completes, as it does not change after
+    it; the call answers from it without querying the TLS state, and without an operation of the async I/O controller
+    (qore#7223)
+
     @since %Qore 3.0
 */
 bool Socket::isHttp2() [flags=CONSTANT] {
@@ -6845,7 +6940,8 @@ nothing Socket::setHttpFastExtraHeaders(*hash<auto> headers) [flags=NAMED_ARGS] 
                     v.getFullTypeName());
                 return QoreValue();
             }
-            TempEncodingHelper t(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+            // the value can be an inline short string, which has no node (issue #7038)
+            QoreStringNodeValueHelper t(v, QCS_UTF8, xsink);
             if (*xsink) {
                 return QoreValue();
             }
@@ -6958,8 +7054,8 @@ AbstractPollOperation<auto> Socket::startPollIdleAndReadHttpHeader(timeout idle_
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("send-and-read-header"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("send-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -7241,6 +7337,29 @@ bool Socket::pendingHttpChunkedBody() {
     return s->pendingHttpChunkedBody();
 }
 
+//! Returns @ref True if the socket is still connected, and the read of a chunked message body started on it and stopped before the end of the body
+/** A read of a chunked body stops before its end when its receive callback or output stream raises an exception,
+    when it times out, when the body is larger than the maximum set with setMaxChunkedBodySize(), or when the body
+    is not valid; the rest of the body cannot then be told apart from the next message, so the connection must be
+    closed: no HTTP header can be read on it (readHTTPHeader(), readHTTPHeaderString() and the operations that read
+    a header raise a \c SOCKET-HTTP-ERROR exception).  A body read in chunks with readHTTPChunk() is unfinished
+    until its last chunk and trailer section have been read.
+
+    @par Example:
+    @code{.py}
+bool b = sock.unfinishedHttpChunkedBody();
+    @endcode
+
+    @return @ref True if the read of a chunked body started on the socket and stopped before the end of the body
+
+    @since %Qore 3.0
+
+    @see pendingHttpChunkedBody()
+*/
+bool Socket::unfinishedHttpChunkedBody() [flags=CONSTANT] {
+    return my_socket_priv::getPriv(*s)->unfinishedHttpChunkedBody();
+}
+
 //! sets the SSL verification mode
 /** @par Example:
     @code{.py}
@@ -7366,6 +7485,30 @@ nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYS
     s->setSslCaLocations(ca_file ? ca_file->c_str() : nullptr, ca_path ? ca_path->c_str() : nullptr, xsink);
 }
 
+//! Sets or clears the in-memory trust store that peer certificates are verified against
+/** A trust store takes precedence over the CA locations set with
+    @ref Qore::Socket::setSslCaLocations() "Socket::setSslCaLocations()": its certificates were read when it was
+    created, so no file is read and the environment is not consulted when a certificate is verified
+    (qoretechnologies/qore#7248)
+
+    @param store the trust store; @ref nothing to clear it
+
+    @par Example:
+    @code{.py}
+sock.setSslTrustStore(SSLTrustStore::getDefault());
+    @endcode
+
+    @note the verification mode is not changed: certificates are verified only with a verification mode set with
+    @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()", and not with
+    @ref Qore::Socket::acceptAllCertificates() "Socket::acceptAllCertificates()"
+
+    @since %Qore 3.0
+*/
+nothing Socket::setSslTrustStore(*SSLTrustStore[QoreSSLTrustStore] store) {
+    // the socket takes a reference of its own; the holder releases the one from the argument
+    qore_socket_object_private(s).setSslTrustStore(store ? *store : nullptr, xsink);
+}
+
 //! Sets the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
 /** @par Example:
     @code{.py}
@@ -7439,6 +7582,67 @@ Socket::setMaxChunkedBodySize(int max_body_size) [flags=NAMED_ARGS] {
 */
 int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
     return s->getMaxChunkedBodySize();
+}
+
+//! Sets the maximum size of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+/** The readers of an HTTP header (readHTTPHeader(), readHTTPHeaderString() and the poll operations that read a header),
+    of the trailer section of a chunked body (the chunked body readers) and of the size line of a chunk
+    (readHTTPChunk() and the chunked body readers) raise an \c HTTP-HEADER-TOO-LARGE exception, and keep no more data
+    in memory, if a peer sends more than this limit.  The size is that of the text received, with the line ends; for
+    a trailer section, it is the size of the whole section.
+
+    @param max_header_size the maximum size in bytes; 0 restores the default of 65536 bytes
+
+    @throw INVALID-ARGUMENT the size is negative
+
+    @since %Qore 3.0
+*/
+Socket::setMaxHeaderSize(int max_header_size) [flags=NAMED_ARGS] {
+    if (max_header_size < 0) {
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum header size cannot be negative (" QLLD ")",
+            max_header_size);
+    }
+    s->setMaxHeaderSize(static_cast<size_t>(max_header_size));
+}
+
+//! Returns the maximum size of an HTTP/1.x header section, of a chunked body trailer section and of a chunk size line
+/** @return the maximum size in bytes; the default of 65536 bytes if no other was set
+
+    @since %Qore 3.0
+*/
+int Socket::getMaxHeaderSize() [flags=CONSTANT] {
+    return static_cast<int>(s->getMaxHeaderSize());
+}
+
+//! Sets the maximum size of a line that is read until a line terminator
+/** The readers that receive until a line terminator (<tt>&quot;\\n&quot;</tt> or <tt>&quot;\\r\\n&quot;</tt>), such as
+    @ref Qore::Socket::startPollRecvUntilBytesString() "startPollRecvUntilBytesString()", the line steps of a
+    @ref Qore::PollPipeline "PollPipeline" and the IMAP, POP3, SMTP and FTP clients that are built on them, raise a
+    \c SOCKET-LINE-TOO-LARGE exception, and keep no more data in memory, if a peer sends a line larger than this limit.
+    The size is that of the line as received, with the line end.  A read until another pattern, such as the end of a
+    POP3 message, is not limited by this value.
+
+    @param max_line_size the maximum size in bytes; 0 restores the default of 1048576 bytes
+
+    @throw INVALID-ARGUMENT the size is negative
+
+    @since %Qore 3.0
+*/
+Socket::setMaxLineSize(int max_line_size) [flags=NAMED_ARGS] {
+    if (max_line_size < 0) {
+        return xsink->raiseException("INVALID-ARGUMENT", "the maximum line size cannot be negative (" QLLD ")",
+            max_line_size);
+    }
+    s->setMaxLineSize(static_cast<size_t>(max_line_size));
+}
+
+//! Returns the maximum size of a line that is read until a line terminator
+/** @return the maximum size in bytes; the default of 1048576 bytes if no other was set
+
+    @since %Qore 3.0
+*/
+int Socket::getMaxLineSize() [flags=CONSTANT] {
+    return static_cast<int>(s->getMaxLineSize());
 }
 
 //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
@@ -7625,8 +7829,8 @@ AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> option
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-request"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-request"), xsink);
     }
     return rv.release();
 }
@@ -7666,6 +7870,9 @@ AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> option
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     (void)body;  // the body is read from the argument, where a short string is handled
     s->ref();
 
@@ -7687,8 +7894,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, in
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-response"), xsink);
     }
     return rv.release();
 }
@@ -7716,6 +7923,9 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, in
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
     InputStream* body_ptr = body.release();
     // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
@@ -7743,8 +7953,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stre
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-streaming-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-streaming-response"), xsink);
     }
     return rv.release();
 }
@@ -7797,16 +8007,21 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
     sendPendingData() calls.
 
     @param stream_id the HTTP/2 stream ID from the request
-    @param status_code the HTTP status code to send
+    @param status_code the HTTP status code to send; must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
     @param body the response body (optional)
 
-    @throw HTTP2-ERROR no HTTP/2 session active or submission failed
+    @throw HTTP2-ERROR no HTTP/2 session active or submission failed, or a \c content-length header that does not
+    match the length of a non-empty body (qoretechnologies/qore#7212)
 
     @since %Qore 3.0
 */
 nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     (void)body;  // the body is read from the argument, where a short string is handled
     const void* body_ptr = nullptr;
     size_t body_len = 0;
@@ -7863,7 +8078,8 @@ nothing Socket::setHttp3ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
     thread and CONNECT responses are submitted from handler threads.
 
     @param stream_id the HTTP/2 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
 
     @throw HTTP2-ERROR no HTTP/2 session active or submission failed
@@ -7872,6 +8088,9 @@ nothing Socket::setHttp3ConnectProtocolEnabled(bool enabled = True) [flags=NAMED
 */
 nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
 }
 
@@ -7902,7 +8121,8 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
     @endcode
 
     @param stream_id the HTTP/2 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers hash of response headers
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object for sending the response
@@ -7914,6 +8134,9 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
 */
 AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->ref();
 
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -7926,8 +8149,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-connect-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-connect-response"), xsink);
     }
     return rv.release();
 }
@@ -8019,7 +8242,8 @@ int Socket::waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) [f
     flush call is needed from the handler.
 
     @param stream_id the HTTP/2 stream ID
-    @param status_code HTTP status code (e.g., 200)
+    @param status_code HTTP status code (e.g., 200); must be a final status
+        (200 - 599): an informational (1xx) status raises \c HTTP2-ERROR (qoretechnologies/qore#7212)
     @param headers response headers
 
     @throw HTTP2-ERROR if no HTTP/2 session is active or submission fails
@@ -8028,6 +8252,9 @@ int Socket::waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) [f
 */
 nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     s->submitHttp2StreamingResponseHeadersAsync((int32_t)stream_id, status_code, headers, xsink);
     return QoreValue();
 }
@@ -8137,7 +8364,9 @@ int Socket::sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool 
     @param stream_id the HTTP/2 stream ID
     @param trailers trailer header name/value pairs
 
-    @throw HTTP2-ERROR if no HTTP/2 session is active or trailer submission fails
+    @throw HTTP2-ERROR if no HTTP/2 session is active or trailer submission fails, or on a server stream whose
+    response has not been submitted, as the trailers would be a header block without a status
+    (qoretechnologies/qore#7212)
 
     @since %Qore 3.0
 */
@@ -8223,6 +8452,9 @@ nothing Socket::setHttp2StreamSendLimit(int stream_id, int limit) [flags=NAMED_A
 */
 int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "HTTP2-ERROR", xsink)) {
+        return QoreValue();
+    }
     // Pass raw pointer; only release from SimpleRefHolder if C++ takes ownership (rv == 0).
     // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
     int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
@@ -8277,8 +8509,8 @@ AbstractPollOperation<auto> Socket::startPollHttp2Flush() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-flush"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-flush"), xsink);
     }
     return rv.release();
 }
@@ -8325,8 +8557,8 @@ AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("http2-client-multiplex"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("http2-client-multiplex"), xsink);
     }
     return rv.release();
 }
@@ -8442,8 +8674,8 @@ AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, 
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-connect"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-connect"), xsink);
     }
     return rv.release();
 }
@@ -8543,8 +8775,8 @@ AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [fl
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-accept"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-accept"), xsink);
     }
     return rv.release();
 }
@@ -8580,8 +8812,7 @@ AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, in
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    if (status_code < 100 || status_code >= 600) {
-        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+    if (socket_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
         return QoreValue();
     }
     ValueHolder materialized_body(xsink);
@@ -8604,8 +8835,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, in
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-response"), xsink);
     }
     return rv.release();
 }
@@ -8646,6 +8877,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset: it has no state for the connection (ex: it restarted); the request was not sent, and it can be repeated on a new connection (since %Qore 3.0)
     @throw HTTP3-REQUEST-ERROR the headers have a \c ":protocol" pseudo-header: an extended CONNECT request (RFC 9220) must be made with @ref Qore::Socket::submitQuicRequestStreaming() "submitQuicRequestStreaming()" (since %Qore 3.0); the request was not sent
 
     @note This method requires an active QUIC session, typically established via
@@ -8699,6 +8931,7 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer, including a connection that has been idle for longer than its idle timeout, whose timer has not run yet (RFC 9000 section 10.1); the request was not sent, and it can be repeated on a new connection
     @throw HTTP3-LOCAL-CLOSE the QUIC connection was closed locally; the request was not sent
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server; the request was not sent
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset: it has no state for the connection (ex: it restarted); the request was not sent, and it can be repeated on a new connection (since %Qore 3.0)
     @throw HTTP3-EXTENDED-CONNECT-UNSUPPORTED the headers have a \c ":protocol" pseudo-header (an extended CONNECT request, RFC 9220), and the server's SETTINGS did not advertise \c SETTINGS_ENABLE_CONNECT_PROTOCOL; the request was not sent
     @throw HTTP3-EXTENDED-CONNECT-ERROR the headers have a \c ":protocol" pseudo-header, and the server's HTTP/3 SETTINGS have not been received yet (see @ref Qore::Socket::waitForQuicSettings() "waitForQuicSettings()"); the request was not sent
 
@@ -8762,6 +8995,7 @@ int stream_id = sock.submitQuicRequestStreaming("CONNECT", "/ws", {":protocol": 
     SETTINGS, while they have not been received
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer before the SETTINGS were received
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server before the SETTINGS were received
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset before the SETTINGS were received (since %Qore 3.0)
     @throw HTTP3-LOCAL-CLOSE the QUIC connection or the socket was closed locally before the SETTINGS were received
     @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
     @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited
@@ -8880,6 +9114,65 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
 */
 int Socket::waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     return qore_socket_object_wait_stream_flushed(s, false, stream_id, (int)timeout_ms, xsink);
+}
+
+//! Returns the number of bytes of an HTTP/2 stream's buffered data that the connection has taken so far
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForHttp2StreamDrain()) can tell from it whether the connection still takes the data (the peer grants
+    flow-control credit): a wait during which the count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int taken = sock.getHttp2StreamTakenBytes(stream_id);
+    @endcode
+
+    @param stream_id the stream ID
+
+    @return the byte count, or -1 if the session is closed or has no such stream
+
+    @throw HTTP2-ERROR no HTTP/2 session is active
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+int Socket::getHttp2StreamTakenBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getHttp2StreamTakenBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_h2_stream_taken(s, stream_id, xsink);
+}
+
+//! Returns the number of bytes of a client-side HTTP/3 stream's data that the peer has acknowledged
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForQuicClientStreamDrain()) can tell from it whether the peer still takes the data: a wait during which
+    the count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int acked = sock.getQuicClientStreamAckedBytes(stream_id);
+    @endcode
+
+    @param stream_id the stream ID
+
+    @return the acknowledged byte count, or -1 if the stream has no data record or there is no QUIC session
+
+    @since %Qore 3.0
+*/
+int Socket::getQuicClientStreamAckedBytes(int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicClientStreamAckedBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_quic_client_stream_acked(s, stream_id, xsink);
 }
 
 //! Waits for a client-side HTTP/3 streaming body buffer to drain
@@ -9007,11 +9300,14 @@ nothing Socket::cancelQuicStreamRead(int session_id, int stream_id) {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
-    @param status_code the HTTP status code
+    @param status_code the HTTP status code; must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
     @param body optional response body
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active or submission fails
+    @throw QUIC-HTTP3-ERROR a response has already been submitted on the stream, or a \c content-length header that
+    does not match the length of a non-empty body (qoretechnologies/qore#7212)
 
     @note This method requires an active QUIC server session, typically established via
     @ref startPollQuicAccept()
@@ -9029,8 +9325,7 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    if (status_code < 100 || status_code >= 600) {
-        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+    if (socket_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
         return QoreValue();
     }
     const void* body_ptr = nullptr;
@@ -9273,8 +9568,7 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    if (status_code < 100 || status_code >= 600) {
-        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+    if (socket_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
         return QoreValue();
     }
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
@@ -9305,8 +9599,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
     poller.release();
 
     if (!*xsink) {
-        rv->setValue("sock", self->objectRefSelf(), xsink);
-        rv->setValue("goal", new QoreStringNode("quic-streaming-response"), xsink);
+        qore_poll_op_set_member(rv, "sock", self->objectRefSelf(), xsink);
+        qore_poll_op_set_member(rv, "goal", new QoreStringNode("quic-streaming-response"), xsink);
     }
     return rv.release();
 }
@@ -9327,7 +9621,8 @@ AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int sessi
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
-    @param status_code the HTTP status code
+    @param status_code the HTTP status code; must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
@@ -9345,8 +9640,7 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    if (status_code < 100 || status_code >= 600) {
-        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+    if (socket_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
         return QoreValue();
     }
     s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
@@ -9506,6 +9800,9 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
 */
 int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
         int status_code, *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
+    if (socket_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
+        return QoreValue();
+    }
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             (long long)session_id);
@@ -9583,6 +9880,42 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Returns the number of bytes of an HTTP/3 stream's data that the peer has acknowledged
+/** The count never decreases; a sender that waits for a full send buffer to drain (see
+    @ref waitForQuicStreamDrain()) can tell from it whether the peer still takes the data: a wait during which the
+    count did not change made no progress.
+
+    @par Example:
+    @code{.py}
+    int acked = sock.getQuicStreamAckedBytes(session_id, stream_id);
+    @endcode
+
+    @param session_id the QUIC session ID
+    @param stream_id the HTTP/3 stream ID
+
+    @return the acknowledged byte count, or -1 if the stream has no data record or there is no such QUIC session
+
+    @throw QUIC-ERROR the session or stream ID is invalid
+    @throw SOCKET-SYNC-ON-IO-THREAD-ERROR called on the async I/O controller's I/O thread
+
+    @since %Qore 3.0
+*/
+int Socket::getQuicStreamAckedBytes(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "getQuicStreamAckedBytes", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
+        return -1;
+    }
+    if (stream_id < 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
+        return -1;
+    }
+    return qore_socket_object_quic_stream_acked(s, session_id, stream_id, xsink);
+}
+
 //! Flushes pending HTTP/3 write data through the async I/O controller
 /** Runs one QUIC timer/write cycle for the given session on the async I/O
     controller thread and sends any generated packets on the UDP socket.
@@ -9621,7 +9954,8 @@ nothing Socket::flushQuicPendingData(int session_id) [flags=NAMED_ARGS] {
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID from the CONNECT request
-    @param status_code the HTTP status code to send (200 to accept, 4xx to reject)
+    @param status_code the HTTP status code to send (200 to accept, 4xx to reject); must be a final status
+        (200 - 599): an informational (1xx) status raises \c QUIC-HTTP3-ERROR (qoretechnologies/qore#7212)
     @param headers optional response headers
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active
@@ -9640,8 +9974,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    if (status_code < 100 || status_code >= 600) {
-        xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
+    if (socket_check_final_status(status_code, "QUIC-HTTP3-ERROR", xsink)) {
         return QoreValue();
     }
     s->submitQuicConnectResponse(session_id, stream_id, status_code, headers, xsink);
@@ -9786,6 +10119,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
     @throw QUIC-STREAM-TIMEOUT if the timeout expires before data arrives or the stream
     completes
     @throw HTTP-BODY-TOO-LARGE the request body exceeded the server's maximum request body size while it was buffered
+    @throw HTTP-HEADER-TOO-LARGE the trailer section of the body, or a chunk size line, is larger than the limit set with setMaxHeaderSize()
     before the request was dispatched; raised after all buffered data has been returned, instead of the end of the
     body
     @throw HTTP-BODY-INCOMPLETE the request body ended before the client sent FIN: the client reset the stream, the

@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! library code for caller-restriction-grants.qtest: its initialization calls the callbacks registered with GrantProbe
+
+%modern
+%requires GrantProbe
+
+module GrantFire {
+    version = "1.0";
+    desc = "test module whose initialization calls registered callbacks";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        GrantFire::Fired = GrantProbe::fire();
+    };
+}
+
+public namespace GrantFire {
+    our list<auto> Fired;
+
+    #! returns the results of the callbacks that the initialization called
+    public list<auto> sub fired() {
+        return Fired;
+    }
+}

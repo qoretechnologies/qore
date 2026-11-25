@@ -460,12 +460,17 @@ h->setKeyValue(name.c_str(), value, xsink);
     static const qore_type_t TYPE = NT_HASH;
 
     //! Increments the weak reference count for this object
-    /** @since %Qore 2.0
+    /** The caller must hold a reference to the hash (strong or weak); if the hash was freed and its weak holders
+        released their references, the weak holders take a strong reference to it again, which the last weakDeref()
+        releases
+
+        @since %Qore 2.0
     */
     DLLEXPORT void weakRef();
 
     //! Decrements the weak reference count for this object
-    /** @return if \c true then the object was deleted
+    /** @return if \c true then this was the last weak reference; the hash is deleted unless a strong reference to it
+        is held
 
         @since %Qore 2.0
     */

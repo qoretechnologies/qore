@@ -42,6 +42,7 @@
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
+#include "qore/intern/typed_hash_decl_private.h"
 
 #include <algorithm>
 #include <atomic>
@@ -528,6 +529,10 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         QoreParseContext parse_context;
         parse_context.setFlags(PF_CONST_EXPRESSION);
 
+        // the constant names only the type parameters of its class, if any, also when it is first used in generic
+        // code (qore#7136)
+        DeclarationTypeParamScopeHelper type_param_scope;
+
         // push parse class context
         qore_class_private* p = ptr.getClass();
         QoreParseClassHelper qpch(p ? p->cls : nullptr, ptr.getNs());
@@ -601,7 +606,9 @@ int ConstantEntry::parseInit(ClassNs ptr) {
             }
             for (; e; e = e->next) {
                 if (e->desc.getType() == NT_STRING) {
-                    QoreStringNodeHolder desc(e->desc.get<const QoreStringNode>()->copy());
+                    // the description can be an inline short string, which has no node (issue #7038)
+                    QoreStringNodeValueHelper desc_str(e->desc);
+                    QoreStringNodeHolder desc(desc_str->copy());
                     desc->sprintf(" (while initializing constant '%s')", name.c_str());
                     e->desc.discard(nullptr);
                     e->desc = desc.release();

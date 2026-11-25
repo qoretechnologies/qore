@@ -94,6 +94,9 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         #! True when the request write side remains open after startStreaming()
         bool request_body_streaming = False;
 
+        #! True once a send ended the request write side (see isRequestSideOpenLocked()); protected by @ref lock
+        bool request_end_sent = False;
+
         #! The reset of the stream by the server, as a send reported it; reported again by every later send
         *hash<ExceptionInfo> send_reset;
 
@@ -238,17 +241,23 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
             streaming = True;
             request_body_streaming = body_streaming;
             data_channel = new Channel(-1);
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
             if (notifier) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                     streaming = False;
                     request_body_streaming = False;
                     delete data_channel;
@@ -261,7 +270,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                     streaming = False;
                     request_body_streaming = False;
                     delete data_channel;
@@ -286,19 +298,23 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
+        bool cancelled;
         try {
             # Submit the streaming request — register the data_channel as the
             # completion action so each response chunk is pushed to it via
             # ChannelAction::trySend (pure C++ on I/O thread)
-            stream_id = h3conn.submitRequestStreamingWithChannel(method, path, headers,
-                body, data_channel, body_streaming, notifier, sse_install_eligible);
+            cancelled = recordSubmittedStream(h3conn.submitRequestStreamingWithChannel(method, path, headers,
+                body, data_channel, body_streaming, notifier, sse_install_eligible));
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
-                state = HttpClientStreamState::Pending;
+                # a stream cancelled meanwhile stays cancelled
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
                 streaming = False;
                 request_body_streaming = False;
                 delete data_channel;
@@ -308,6 +324,9 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 checkSubmissionRefused(ex);
             }
             rethrow;
+        }
+        if (cancelled) {
+            throwCancelledOnSubmission();
         }
 
         return stream_id;
@@ -327,8 +346,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     sprintf("stream already in use: state=%y", state);
             }
             state = HttpClientStreamState::Open;
+            submitting = True;
             streaming = True;
         }
+        # the submission ends with this call, whatever its result (see cancel())
+        on_exit endSubmission();
 
         Queue queue();
 
@@ -338,7 +360,10 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             if (!conn.waitForReady(timeout_ms: ready_wait)) {
                 {
                     AutoLock al(lock);
-                    state = HttpClientStreamState::Pending;
+                    # a stream cancelled meanwhile stays cancelled
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
                     streaming = False;
                 }
                 # the reservation is released; the connection keeps connecting for other waiters (#6429, #6430)
@@ -359,18 +384,25 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "starting SSE streaming request: %s %s", method, path);
 
+        bool cancelled;
         try {
-            stream_id = h3conn.submitRequestSse(method, path, headers, body, queue, notifier);
+            cancelled = recordSubmittedStream(h3conn.submitRequestSse(method, path, headers, body, queue, notifier));
             @assert(stream_id >= 0);
             releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
-                state = HttpClientStreamState::Pending;
+                # a stream cancelled meanwhile stays cancelled
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
                 streaming = False;
             }
             releaseReservationIfHeld();
             rethrow;
+        }
+        if (cancelled) {
+            throwCancelledOnSubmission();
         }
 
         return queue;
@@ -411,6 +443,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             sid = stream_id;
         }
         return h3conn.getSocket().waitForQuicClientStreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+    }
+
+    #! True while the request write side of a streamed request is open: it was not ended by a send (qore#7443)
+    /** @note the caller must hold @ref lock
+    */
+    private bool isRequestSideOpenLocked() {
+        return request_body_streaming && !request_end_sent;
     }
 
     #! Sends data on a streaming connection
@@ -475,6 +514,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     "cannot send data: request write side is closed";
             }
             sid = stream_id;
+        }
+        # a send that ends the request write side ends it (see isRequestSideOpenLocked())
+        on_success if (end_stream) {
+            AutoLock al(lock);
+            request_end_sent = True;
         }
 
         # Check connection state (lock-free atomic read) AFTER the stream-level

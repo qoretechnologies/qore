@@ -89,6 +89,7 @@ class McpClientDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \testNegative());
         addTestCase("corner case tests", \testCornerCases());
         addTestCase("provider info test", \testProviderInfo());
+        addTestCase("action catalogue test", \testActionCatalogue());
         set_return_value(main());
     }
 
@@ -546,6 +547,25 @@ class McpClientDataProviderTest inherits QUnit::Test {
         assertEq("events", eventsProvider.getName());
         assertTrue(info.supports_observable ?? False);
     }
+
+    testActionCatalogue() {
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionsEx(
+            McpClientDataProvider::AppName);
+        # the list, read, get, completion and ping requests of the MCP protocol only read: their actions
+        # declare that they are read-only, which the catalogue reports as such; call-tool runs a tool of the
+        # server, which may do anything, and is reported as changing state (qore#7454)
+        list<string> read_only = (
+            "complete", "get-prompt", "list-prompts", "list-resources", "list-tools", "ping", "read-resource",
+        );
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        hash<DataProviderActionInfo> call_tool = (select actions, $1.action == "call-tool")[0];
+        assertNothing(call_tool.mutates_state);
+        assertTrue(DataProviderActionCatalog::actionMutatesState(call_tool));
+    }
 }
 
 class McpEventObserver inherits Observer {
@@ -569,7 +589,7 @@ class McpEventObserver inherits Observer {
     }
 
     waitForEvent(string event_id) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         while (True) {
             m.lock();
             bool ready = (events{event_id} && events{event_id}.size() > 0);
@@ -577,7 +597,7 @@ class McpEventObserver inherits Observer {
             if (ready) {
                 return;
             }
-            if ((now_us() - start) > 5s) {
+            if ((microseconds(clock_get_monotonic_us() - start)) > 5s) {
                 throw "ERROR", sprintf("timeout waiting for event %s", event_id);
             }
             sleep(100ms);

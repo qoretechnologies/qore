@@ -86,7 +86,7 @@ int sub answer() {
 EOF
 CUSTOM_QO="${TMP}/custom-target.qo"
 "${QCC}" -c -o "${CUSTOM_QO}" "${TMP}/simple.qc" >/dev/null
-nm "${CUSTOM_QO}" | grep -qE "T _?qore_custom_target_custom_target_script_register"
+nm "${CUSTOM_QO}" | grep -E "T _?qore_custom_target_custom_target_script_register" >/dev/null
 LD_LIBRARY_PATH=build "${QCC}" -o "${TMP}/custom-app" -e answer "${CUSTOM_QO}" >/dev/null
 LD_LIBRARY_PATH=build "${TMP}/custom-app"
 echo "  confirmed: custom .qo filename controls qcc link glue symbols"
@@ -110,7 +110,7 @@ TARGET2_ID="$(source_id "${TMP}/target2.qc")"
 # Both targets must have .qo; stub must not.
 [ -f "${BATCH_DIR}/${TARGET_ID}.qo" ] || { echo "FAIL: ${TARGET_ID}.qo missing"; exit 1; }
 [ -f "${BATCH_DIR}/${TARGET2_ID}.qo" ] || { echo "FAIL: ${TARGET2_ID}.qo missing"; exit 1; }
-if find "${BATCH_DIR}" -maxdepth 1 -name '*host_stub*.qo' | grep -q .; then
+if find "${BATCH_DIR}" -maxdepth 1 -name '*host_stub*.qo' | grep . >/dev/null; then
     echo "FAIL: stub emitted a .qo"
     exit 1
 fi

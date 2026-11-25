@@ -8,6 +8,7 @@
 %requires QUnit
 # the tests that need a connection run against every database connection that is configured
 %requires ../../../DbTestConnections.qm
+%requires ../../../qlib/SqlUtil/TestRunIsolation.qm
 
 %exec-class DatasourceTest
 
@@ -21,6 +22,7 @@ public class DatasourceTest inherits QUnit::Test {
     }
 
     constructor() : Test("DatasourceTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("getPort reports the next connection port", \pendingPortTest());
         addTestCase("offline option test", \offlineOptionTest());
         addTestCase("invalid option test", \invalidOptionTest());
         addTestCase("Datasource string test", \datasourceStringTest());
@@ -38,6 +40,18 @@ public class DatasourceTest inherits QUnit::Test {
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"oracle:user/pass@db\")", OptionColumn);
+    }
+
+    pendingPortTest() {
+        Datasource ds("dbitest:u/p@db");
+        assertEq(NOTHING, ds.getPort());
+        ds.setPort(1001);
+        assertEq(1001, ds.getPort());
+        ds.open();
+        ds.setPort(1002);
+        assertEq(1002, ds.getPort(), "the next port is visible while the connection is open");
+        ds.setPort(0);
+        assertEq(NOTHING, ds.getPort(), "zero restores the driver's default");
     }
 
     offlineOptionTest() {
@@ -236,7 +250,17 @@ public class DatasourceTest inherits QUnit::Test {
             ds.open();
             return ds;
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("skipping test: " + ex.err + ": " + ex.desc);
+            # a datasource string of an environment variable whose database cannot be connected to fails the test
+            # case: a database outage is not a reason to skip (qore#6934); the error of a default datasource string,
+            # which names its user and database, is not printed
+            if (ex.err != "TEST-SKIPPED-EXCEPTION" && ex.err != "LOAD-MODULE-ERROR"
+                && TestRun::getVariable(connstr) != "the datasource string") {
+                TestRun::failUnreachable(connstr, ex);
+            }
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip("skipping test: " + ex.err);
         }
     }
 
@@ -257,7 +281,17 @@ public class DatasourceTest inherits QUnit::Test {
             ds.open();
             return ds;
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("skipping test: " + ex.err + ": " + ex.desc);
+            # a datasource string of an environment variable whose database cannot be connected to fails the test
+            # case: a database outage is not a reason to skip (qore#6934); the error of a default datasource string,
+            # which names its user and database, is not printed
+            if (ex.err != "TEST-SKIPPED-EXCEPTION" && ex.err != "LOAD-MODULE-ERROR"
+                && TestRun::getVariable(connstr) != "the datasource string") {
+                TestRun::failUnreachable(connstr, ex);
+            }
+            if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                rethrow;
+            }
+            testSkip("skipping test: " + ex.err);
         }
     }
 }

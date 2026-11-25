@@ -1,0 +1,402 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - unanswered WebSocket connection attempts, TLS connections and a helper process
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires HttpClientIo
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%try-module process >= 2.2
+%define NoProcess
+%endtry
+
+%exec-class WebSocketClientConnectTimeoutTest
+
+#! the I/O timeout of a WebSocketClient bounds the connection of a connect, including its retries (qore#6850)
+/** A connect to a server that does not answer ends when the \c timeout option runs out, with \c HTTPCLIENT-TIMEOUT,
+    which names the target, over HTTP/1.1 (\c ws://) and in the \c "auto" mode of \c wss:// alike: without
+    \c connect_timeout, the timeout ends the first attempt; with a \c connect_timeout that lets an attempt fail in the
+    timeout, the attempt is retried, and the error gives the error of the attempt before the last (qore#6849).  A
+    \c connect_timeout below <tt>timeout / (max_request_retries + 1)</tt> gives every attempt its time, and the
+    connect then fails with the error of the last attempt.  A \c wss:// connect waited for the whole default connect
+    timeout (30 seconds) whatever its \c timeout, and did not retry a connection that could not be established.
+
+    The target is a port whose connection attempts get no answer: on Linux a listener whose accept queue is full,
+    which drops the connection requests that it cannot queue, and on macOS a port that is bound and does not listen.
+    No TLS server is needed: no connection is established.
+
+    The timeout does not bound the answer to an HTTP/2 extended CONNECT once it was sent: a server that never answers
+    it is not taken for an unanswered connection, and the HTTP/1.1 Upgrade that the \c "auto" mode falls back to gets a
+    time of its own (a node server that advertises extended CONNECT and never answers it).
+*/
+class WebSocketClientConnectTimeoutTest inherits QUnit::Test {
+    public {
+        #! the schemes of the connects
+        const Schemes = ("ws", "wss");
+    }
+
+    private {
+        #! the socket of the target, kept for the test
+        Socket target();
+        #! the connections that fill the accept queue of the target on Linux
+        list<Socket> fill = ();
+        #! the port of the target
+        int port;
+    }
+
+    constructor() : QUnit::Test("WebSocketClientConnectTimeout", "1.0", \ARGV) {
+        addTestCase("the timeout ends a connect without a connect timeout", \testTimeout());
+        addTestCase("the timeout ends a connect whose attempts end at the connect timeout", \testRetriedTimeout());
+        addTestCase("the timeout ends a poll connect whose attempts end at the connect timeout",
+            \testPollConnectRetriedTimeout());
+        addTestCase("a connect timeout that fits every attempt in the timeout", \testAttemptsInTimeout());
+        addTestCase("an unanswered HTTP/2 CONNECT falls back to HTTP/1.1", \testUnansweredConnectFallback());
+        addTestCase("an attempt that fails when the time of the connect runs out", \testAttemptErrorAtDeadline());
+        addTestCase("an attempt of a request that fails when the time of the request runs out",
+            \testRequestAttemptErrorAtDeadline());
+        addTestCase("sandboxed or restricted code cannot set the attempt test hook", \testHookRefused());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        target.bind("127.0.0.1:0");
+        port = target.getSocketInfo().port;
+        if (PlatformOS == "Darwin") {
+            # macOS does not answer a connection to a port that is bound and does not listen
+            return;
+        }
+        # Linux refuses a connection to a port that is bound and does not listen, but drops the connection requests
+        # that a listener cannot queue: the queue is filled until a connection is not established
+        target.listen(0);
+        for (int i = 0; i < 16; ++i) {
+            Socket s();
+            try {
+                s.connect(sprintf("127.0.0.1:%d", port), 500ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-TIMEOUT") {
+                    return;
+                }
+                rethrow;
+            }
+            push fill, s;
+        }
+        throw "SETUP-ERROR", sprintf("the accept queue of the listener on port %d did not fill", port);
+    }
+
+    #! returns a client for the target with the given scheme and options
+    private WebSocketClient getClient(string scheme, hash<auto> opts) {
+        return new WebSocketClient(sub (*data msg) {}, {"url": sprintf("%s://127.0.0.1:%d/", scheme, port)} + opts);
+    }
+
+    #! returns the error of a connect of the client, or nothing
+    private *hash<ExceptionInfo> connect(WebSocketClient ws, bool poll = False) {
+        try {
+            if (poll) {
+                ws.startPollConnect();
+            } else {
+                ws.connect();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! checks the error of a connect that the timeout ended; returns the error
+    private hash<ExceptionInfo> checkTimeout(string scheme, *hash<ExceptionInfo> err, string label) {
+        label = scheme + " " + label;
+        if (!err) {
+            fail(label + ": the connect did not fail");
+            return <ExceptionInfo>{};
+        }
+        string got = sprintf("%s: %s", err.err, err.desc);
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, label + ": " + got);
+        if (scheme == "ws") {
+            # the wait for the HTTP/1.1 connection (qore#6849)
+            assertRegex(sprintf("^connection establishment timed out: the connection to 127\\.0\\.0\\.1:%d was not "
+                "established before the time of the request ran out \\(after a wait of [0-9]+ ms\\)", port),
+                err.desc, label + ": " + got);
+            assertEq("127.0.0.1", err.arg.host, label + ": the argument's host");
+            assertEq(port, err.arg.port, label + ": the argument's port");
+        } else {
+            # the acquisition of the connection, whose protocol is negotiated
+            assertRegex(sprintf("^no connection to 127\\.0\\.0\\.1:%d was acquired within the request's time", port),
+                err.desc, label + ": " + got);
+        }
+        return err;
+    }
+
+    #! checks the error of a connect that the timeout ended after a retried attempt
+    private checkRetriedTimeout(string scheme, *hash<ExceptionInfo> err, string label) {
+        err = checkTimeout(scheme, err, label);
+        label = scheme + " " + label;
+        # the transport's error, as the connection reports it
+        assertRegex("; the attempt before failed with HTTPCLIENT-CONNECT-ERROR: .*connection to 127\\.0\\.0\\.1:"
+            + port + " was not established within the connect timeout \\(300 ms\\)$", err.desc, label);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", err.arg.last_attempt_error.err, label + ": the earlier attempt's error");
+        assertEq(scheme == "ws" ? "HTTP1-CONNECT-TIMEOUT" : "HTTP2-CONNECT-TIMEOUT",
+            err.arg.last_attempt_error.arg.err, label + ": the transport's error");
+    }
+
+    testTimeout() {
+        foreach string scheme in (Schemes) {
+            # the connect timeout (30 s by default) is longer than the timeout: there is one attempt
+            date start = now_us();
+            WebSocketClient ws = getClient(scheme, {"timeout": 1000});
+            hash<ExceptionInfo> err = checkTimeout(scheme, connect(ws), "connect");
+            assertNRegex("attempt before", err.desc, scheme + ": no earlier attempt");
+            assertFalse(exists err.arg.last_attempt_error, scheme + ": no earlier attempt in the argument");
+            # the timeout, not the connect timeout of 30 s, ended it
+            date elapsed = now_us() - start;
+            assertGe(900ms, elapsed, scheme + ": the connect waited for its timeout");
+            assertLt(20s, elapsed, scheme + ": the connect ended at its timeout");
+            assertFalse(ws.isOpen(), scheme + ": the client is not connected");
+        }
+    }
+
+    testRetriedTimeout() {
+        foreach string scheme in (Schemes) {
+            # the first attempt ends at 300 ms, and the retries go on until the timeout ends the connect
+            WebSocketClient ws = getClient(scheme, {"timeout": 2000, "connect_timeout": 300,
+                "max_request_retries": 20});
+            checkRetriedTimeout(scheme, connect(ws), "connect");
+            assertFalse(ws.isOpen(), scheme + ": the client is not connected");
+        }
+    }
+
+    #! a connection error of an attempt when the time of the connect has run out is the timeout of the connect, with
+    #! the attempt's error, not the attempt's error as it is (qore#7475)
+    /** The attempt's own connect timeout and the connect's timeout could end the wait for the connection at the same
+        time: which one the connect reported depended on the order in which they were noticed.  A test hook of a debug
+        build holds the failed attempt until the time of the connect has run out, which makes that order certain: the
+        attempts fail at once (the port refuses connections), and the hook returns once the connect's time is over.
+    */
+    testAttemptErrorAtDeadline() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the attempt is held with a test hook of a debug build");
+        }
+        int refused_port = getRefusedPort();
+        Counter attempts();
+        setDeadlineHook(attempts);
+        on_exit call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook");
+
+        WebSocketClient ws(sub (*data msg) {}, {
+            "url": sprintf("ws://127.0.0.1:%d/", refused_port),
+            "timeout": 200,
+            "connect_timeout": 300,
+            "max_request_retries": 20,
+        });
+        *hash<ExceptionInfo> err = connect(ws);
+        assertEq(1, attempts.getCount(), "the deadline passed during the first attempt's hook");
+        checkAttemptTimeout(err, refused_port, "connect");
+        assertFalse(ws.isOpen(), "the client is not connected");
+    }
+
+    #! the same for a request of the connection manager (request(), qore#7475)
+    testRequestAttemptErrorAtDeadline() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the attempt is held with a test hook of a debug build");
+        }
+        int refused_port = getRefusedPort();
+        Counter attempts();
+        setDeadlineHook(attempts);
+        on_exit call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook");
+
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "request_timeout": 200,
+            "connect_timeout": 300,
+            "max_request_retries": 20,
+            "protocol": "h1",
+        });
+        on_exit delete mgr;
+        *hash<ExceptionInfo> err;
+        try {
+            mgr.request(sprintf("http://127.0.0.1:%d/", refused_port), "GET", "/");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq(1, attempts.getCount(), "the deadline passed during the first attempt's hook");
+        checkAttemptTimeout(err, refused_port, "request");
+    }
+
+    #! the process-wide test hook of the connection manager cannot be set by code that a sandbox governs, nor by code
+    #! that may not control the process (qore#7475)
+    testHookRefused() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test hook exists only in a debug build of the library");
+        }
+        on_exit call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook");
+        string src = "%modern
+%requires HttpClientIo
+string sub setHook() {
+    try {
+        call_static_method(\"HttpClientIo::HttpClientConnectionManager\", \"dbgSetAttemptFailedHook\",
+            sub (hash<ExceptionInfo> ex, *int deadline_us) {});
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse(src, "tenant");
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            p.setSandboxManager(sm);
+            assertEq("SANDBOX-REGISTRATION-ERROR", p.callFunction("setHook"), "a sandboxed Program");
+        }
+        {
+            Program p(PO_NO_PROCESS_CONTROL);
+            p.parse(src, "restricted");
+            # the method's functional domain refuses the call
+            assertEq("INVALID-FUNCTION-ACCESS", p.callFunction("setHook"), "a Program without process control");
+        }
+    }
+
+    #! returns a port of the local host that refuses connections
+    private int getRefusedPort() {
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
+    }
+
+    #! sets the test hook of the connection manager that holds a failed attempt until the deadline of its request
+    /** The hook is given the deadline of the request: it returns once the deadline has passed, so the first attempt
+        is the last; it is set by name, as it exists only in a debug build of the library
+
+        @param attempts counts the attempts
+    */
+    private setDeadlineHook(Counter attempts) {
+        code hook = sub (hash<ExceptionInfo> ex, *int deadline_us) {
+            attempts.inc();
+            if (!deadline_us) {
+                return;
+            }
+            # the wait ends at the deadline, a fixed time: nothing signals the condition
+            Mutex m();
+            Condition c();
+            m.lock();
+            on_exit m.unlock();
+            while (True) {
+                int left_us = deadline_us - clock_get_monotonic_us();
+                if (left_us < 0) {
+                    break;
+                }
+                c.wait(m, left_us / 1000 + 1);
+            }
+        };
+        call_static_method("HttpClientIo::HttpClientConnectionManager", "dbgSetAttemptFailedHook", hook);
+    }
+
+    #! checks the timeout of a request whose attempt failed when its time ran out
+    private checkAttemptTimeout(*hash<ExceptionInfo> err, int port, string label) {
+        if (!err) {
+            fail(label + ": did not fail");
+            return;
+        }
+        string got = sprintf("%s: %s", err.err, err.desc);
+        assertEq("HTTPCLIENT-TIMEOUT", err.err, label + ": the time ended it: " + got);
+        assertRegex(sprintf("^connection establishment timed out: the connection to 127\\.0\\.0\\.1:%d was not "
+            "established before the time of the request ran out \\(after a wait of [0-9]+ ms\\); the attempt before "
+            "failed with HTTPCLIENT-CONNECT-ERROR: ", port), err.desc, label + ": the description: " + got);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", err.arg.last_attempt_error.err, label + ": the attempt's error");
+        assertEq("127.0.0.1", err.arg.host, label + ": the argument's host");
+        assertEq(port, err.arg.port, label + ": the argument's port");
+    }
+
+    testPollConnectRetriedTimeout() {
+        foreach string scheme in (Schemes) {
+            WebSocketClient ws = getClient(scheme, {"timeout": 2000, "connect_timeout": 300,
+                "max_request_retries": 20});
+            checkRetriedTimeout(scheme, connect(ws, True), "poll connect");
+            assertFalse(ws.isOpen(), scheme + ": the client is not connected");
+        }
+    }
+
+    testAttemptsInTimeout() {
+        foreach string scheme in (Schemes) {
+            # three attempts of 200 ms fit in the timeout: the connect fails with the error of the last attempt
+            WebSocketClient ws = getClient(scheme, {"timeout": 10000, "connect_timeout": 200,
+                "max_request_retries": 2});
+            date start = now_us();
+            *hash<ExceptionInfo> err = connect(ws);
+            # each attempt waited for its connect timeout: the three attempts ran
+            assertGe(550ms, now_us() - start, scheme + ": three attempts of 200 ms ran");
+            if (!err) {
+                fail(scheme + ": the connect did not fail");
+                continue;
+            }
+            string got = sprintf("%s: %s", err.err, err.desc);
+            assertEq("HTTPCLIENT-CONNECT-ERROR", err.err, scheme + ": " + got);
+            assertRegex("connection to 127\\.0\\.0\\.1:" + port + " was not established within the connect timeout "
+                "\\(200 ms\\)", err.desc, scheme + ": " + got);
+            assertFalse(ws.isOpen(), scheme + ": the client is not connected");
+        }
+    }
+
+%ifdef NoProcess
+    testUnansweredConnectFallback() {
+        testSkip("the process module is not available");
+    }
+%else
+    testUnansweredConnectFallback() {
+        string node_bin = ENV.NODE_BIN ?? "node";
+        if (system(node_bin + " -e \"process.exit(require('http2').constants.NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL "
+                "? 0 : 1)\" > /dev/null 2>&1")) {
+            testSkip("node with RFC 8441 extended CONNECT support is not available");
+        }
+        TmpDir dir("ws-connect-timeout-");
+        foreach hash<auto> i in ({"cert.pem": TestCertificates::CertPem,
+                "key.pem": TestCertificates::KeyPem}.pairIterator()) {
+            File f();
+            f.open2(dir.path + "/" + i.key, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(i.value);
+            f.close();
+        }
+        Process p(node_bin, (get_script_dir() + "/http2-silent-connect-server.js", dir.path + "/cert.pem",
+            dir.path + "/key.pem"));
+        on_exit {
+            if (p.running()) {
+                p.terminate();
+            }
+            p.wait();
+        }
+        string line = "";
+        while (line !~ /\n/) {
+            *string s = p.readStdout(1024, 60s);
+            if (!exists s) {
+                throw "TEST-ERROR", sprintf("the node server did not start: %s", p.readStderr(4096, 0) ?? "");
+            }
+            line += s;
+        }
+        *string node_port = (line =~ x/READY ([0-9]+)/)[0];
+        if (!exists node_port) {
+            throw "TEST-ERROR", "the node server reported no port: " + line;
+        }
+
+        # the CONNECT is sent once the connection is established and gets no answer: its read ends at the timeout
+        # after it was sent, after the deadline of the connection, and the connect falls back to the HTTP/1.1 Upgrade;
+        # the timeout leaves the TLS handshake and the HTTP/2 negotiation time under load
+        WebSocketClient ws(sub (*data msg) {}, {"url": sprintf("wss://127.0.0.1:%s/", node_port), "timeout": 3000,
+            "ssl_verify_cert": False});
+        on_exit {
+            try {
+                ws.disconnect();
+            } catch () {
+            }
+        }
+        *hash<ExceptionInfo> err = connect(ws);
+        assertEq(NOTHING, err ? sprintf("%s: %s", err.err, err.desc) : NOTHING, "the connect falls back");
+        assertTrue(ws.isOpen(), "the client is connected over HTTP/1.1");
+    }
+%endif
+}

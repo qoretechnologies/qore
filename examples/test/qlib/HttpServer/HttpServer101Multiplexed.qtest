@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) requests, and sandboxed HTTP handlers
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServer
+%requires HttpServerUtil
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServer101MultiplexedTest
+
+#! the timeout of the client's requests: a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! Answers its requests
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, "ok");
+    }
+}
+
+#! A 101 response to an HTTP/2 or HTTP/3 request is refused (qore#7212)
+/** A protocol upgrade exists in HTTP/1.1 only; on a multiplexed connection the server answers a handler's 101
+    response with an error before it sends anything for the upgrade, and the connection and the listener go on
+*/
+class HttpServer101MultiplexedTest inherits QUnit::Test {
+    public {
+        #! a sandboxed tenant's socket handler that answers every request with 101
+        const TenantSource = "%modern
+%requires HttpServer
+%requires HttpServerUtil
+
+class UpgradeHandler inherits AbstractHttpSocketHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{\"code\": 101, \"hdr\": {\"Upgrade\": \"websocket\", \"Connection\": \"Upgrade\"}};
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        return False;
+    }
+}
+
+AbstractHttpSocketHandler sub get_handler() {
+    return new UpgradeHandler();
+}
+";
+    }
+
+    constructor() : QUnit::Test("101 on multiplexed requests", "1.0", \ARGV) {
+        addTestCase("HTTP/2: a 101 response is refused", \upgradeTest(), "2.0");
+        addTestCase("HTTP/3: a 101 response is refused", \upgradeTest(), "3.0");
+        set_return_value(main());
+    }
+
+    upgradeTest(string http_version) {
+        Program tenant(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        tenant.setSandboxManager(sm);
+        AbstractHttpSocketHandler handler = tenant.callFunction("get_handler");
+
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("up", "^up", NOTHING, handler);
+        server.setHandler("ok", "^ok", NOTHING, new OkHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        }).port;
+        server.waitForAsyncIo();
+
+        HTTPClient hc = getClient(port, http_version);
+        on_exit hc.disconnect();
+        # the request is answered with an error
+        *int code;
+        try {
+            hc.get("/up");
+        } catch (hash<ExceptionInfo> ex) {
+            code = ex.arg.status_code;
+        }
+        assertEq(500, code, "the 101 response is refused");
+        # the connection and the listener go on
+        assertEq("ok", hc.get("/ok"), "the connection goes on");
+        HTTPClient other = getClient(port, http_version);
+        on_exit other.disconnect();
+        assertEq("ok", other.get("/ok"), "the listener serves another client");
+    }
+
+    #! Returns a client of the given HTTP version
+    private static HTTPClient getClient(int port, string http_version) {
+        return new HTTPClient({
+            "url": "https://localhost:" + port,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+    }
+}

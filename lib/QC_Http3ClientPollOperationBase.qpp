@@ -121,11 +121,10 @@ Http3ClientPollOperationPriv::Http3ClientPollOperationPriv(QoreObject* self,
     // poll op as far as user code can observe — but it is NOT enough on its
     // own.  The I/O thread's continuePoll path can call
     // @c connection_priv->setClosed() (via @c handleConnecting →
-    // @c setError → @c Http3ClientConnection::onInnerHandshakeFailed) on
-    // its own raw pointer.  If the connection's last refcounted reference
-    // drops between the broadcast inside the FIRST setClosed and the I/O
-    // thread reaching its NEXT mutex acquisition (e.g., a happy-eyeballs
-    // peer attempt also calling setClosed, or the manager's
+    // @c setError) on its own raw pointer.  If the connection's last
+    // refcounted reference drops between the broadcast inside the FIRST
+    // setClosed and the I/O thread reaching its NEXT mutex acquisition
+    // (e.g., the manager's
     // createConnection timeout path doing closeConnection+deref after
     // waitForReadyOrError returns false), the AbstractHttpPollConnectionPriv
     // mutex is destroyed under us and the next pthread_mutex_lock returns
@@ -463,6 +462,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // Detect connection close.  inner_op transitions to "closed" via
         // QuicSession::isClosed() which has THREE distinct triggers:
         //   - local idle timer expired (NGTCP2_ERR_IDLE_CLOSE)
+        //   - the peer did not acknowledge a request within its peer response timeout (qore#6930, qore#7452)
         //   - we sent CONNECTION_CLOSE
         //   - peer sent CONNECTION_CLOSE
         // Surface each as a different error code so callers (retry policy,
@@ -481,6 +481,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                                    "expired before any response data arrived "
                                    "(NGTCP2_ERR_IDLE_CLOSE)";
                         break;
+                    case QuicSession::CloseReason::Unresponsive:
+                        // not even an acknowledgement of the request came back: it was not received
+                        err_code = "HTTP3-PEER-UNRESPONSIVE";
+                        err_desc = "QUIC connection closed: the server did not acknowledge the request "
+                                   "within its connect timeout; its connection state is gone (ex: it "
+                                   "restarted), and the request was not received";
+                        break;
                     case QuicSession::CloseReason::LocalClose:
                         err_code = "HTTP3-LOCAL-CLOSE";
                         err_desc = "QUIC connection closed locally during read";
@@ -488,6 +495,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     case QuicSession::CloseReason::PeerClose:
                         err_code = "HTTP3-PEER-CLOSE";
                         err_desc = "QUIC connection closed by peer during read";
+                        break;
+                    case QuicSession::CloseReason::StatelessReset:
+                        // the server has no state for the connection: it restarted, or dropped it (qore#6931)
+                        err_code = "HTTP3-STATELESS-RESET";
+                        err_desc = "QUIC connection reset by the server (stateless reset): it has no state for the "
+                                   "connection (ex: it restarted); the request may have been received by the server "
+                                   "before it went away";
                         break;
                     case QuicSession::CloseReason::Open:
                         // Race: inner_op observed closed but session re-opened
@@ -742,6 +756,21 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 }
 
 void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
+    // an operation that is closed has an error, as the HTTP/2 operation does: a connection that leaves the connecting
+    // state without one (closed before it connected, for example) gave a reader of the error nothing to report
+    // (issue #6970)
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode("HTTP3-ABORT"), xsink);
+            info->setKeyValue("desc", new QoreStringNode("connection aborted"), xsink);
+            if (!*xsink) {
+                error_info = info.release();
+                has_error.store(true, std::memory_order_release);
+            }
+        }
+    }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     failMigrations();
     wakeSettingsWaiters();
@@ -793,47 +822,6 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     wakeSettingsWaiters();
     // Socket cleanup is handled by the I/O controller's Phase3 close logic
     // via needsCloseOnComplete() returning true when h3_state == CLOSED.
-    // Happy-eyeballs: if an owner is armed (handshake-phase racing), hand
-    // the outcome to it instead of calling setClosed directly.  The owner
-    // decides whether to keep the connection CONNECTING (other attempts
-    // still pending) or transition to CLOSED (no candidates left).  Once
-    // reported, drop both back-pointers so a subsequent read-side error on
-    // this (losing) attempt does not re-enter the HE path.
-    Http3ClientConnection* owner = nullptr;
-    AbstractHttpPollConnectionPriv* owner_cp = nullptr;
-    {
-        AutoLocker al(stream_lock);
-        owner = h3_owner_;
-        h3_owner_ = nullptr;
-        if (owner && connection_priv) {
-            // Pin the owner before releasing stream_lock; closeConnection()
-            // can disarm this poll op and drop the permanent connection ref.
-            owner_cp = connection_priv;
-            owner_cp->ref();
-        } else {
-            owner = nullptr;
-        }
-    }
-    if (owner) {
-        // This branch does not close the connection, so it has nothing to
-        // settle before notifying: the owner decides the outcome, and a
-        // connection still racing its handshake never reached READY and so was
-        // never pooled.  Notify first, as before — onInnerHandshakeFailed()
-        // tears the losing attempts down, including this poll op.
-        notifyPendingStreams(err, desc, xsink);
-        owner->onInnerHandshakeFailed(this, err, desc);
-        AbstractHttpPollConnectionPriv* cp = nullptr;
-        {
-            AutoLocker al(stream_lock);
-            cp = connection_priv;
-            connection_priv = nullptr;
-        }
-        if (cp) {
-            cp->deref(xsink);  // release the ref taken in the constructor
-        }
-        owner_cp->deref(xsink);  // release the callback lifetime ref
-        return;
-    }
     // Close BEFORE notifying the pending streams: notifyPendingStreams()
     // resolves the waiting callers' Promises, and a caller that wakes while the
     // connection is still Ready in the manager's pool gets this dead connection
@@ -878,10 +866,23 @@ void Http3ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
     }
 
     // Pure C++ error dispatch — no execValue()
+    std::vector<int64_t> failed_streams;
     for (auto& [sid, action] : actions_copy) {
         if (action) {
             action->executeError(err, desc, xsink);
             action->deref(xsink);
+            failed_streams.push_back(std::strtoll(sid.c_str(), nullptr, 10));
+        }
+    }
+
+    // A stream that a listener reads (WebSocket/SSE over HTTP/3) gets the end of the stream as a sentinel in its queue:
+    // the listener is woken, as it is by the end of a stream that the peer ended; otherwise it learns that the
+    // connection is gone only when something else makes it look (its next heartbeat; issue #6965).  The registrations
+    // are not checked: the connection's close has cleared them, and a stream without a listener only has its
+    // notification kept, on a connection that is gone
+    for (int64_t sid64 : failed_streams) {
+        if (std::find(data_ready_streams.begin(), data_ready_streams.end(), sid64) == data_ready_streams.end()) {
+            data_ready_streams.push_back(sid64);
         }
     }
 }
@@ -954,39 +955,15 @@ int Http3ClientPollOperationPriv::waitForExtendedConnectSettings(ExceptionSink* 
     // connection, and the operation is closed with it, so that a retry finds a new connection
     if (rc == QuicSession::SettingsWait::Closed || isClosed()) {
         const char* err = session->raiseSettingsWaitCloseError(xsink);
-        QoreValue desc = xsink->getExceptionDesc();
-        setSubmitError(err, desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "");
+        // the description can be an inline short string, which has no node (issue #7038)
+        QoreStringDataHelper desc(xsink->getExceptionDesc());
+        setSubmitError(err, desc ? desc.c_str() : "");
         return -1;
     }
     return 0;
 }
 
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
-    // Happy-eyeballs: if an owner is armed, route the success through its
-    // coordinator so losing attempts can be cancelled atomically before the
-    // base-class condition is signaled.  The owner is responsible for
-    // calling @c connection_priv->onConnectionReady() on the winning path.
-    Http3ClientConnection* owner = nullptr;
-    AbstractHttpPollConnectionPriv* owner_cp = nullptr;
-    {
-        AutoLocker al(stream_lock);
-        owner = h3_owner_;
-        h3_owner_ = nullptr;
-        if (owner && connection_priv) {
-            // Pin the owner before releasing stream_lock; closeConnection()
-            // can disarm this poll op and drop the permanent connection ref.
-            owner_cp = connection_priv;
-            owner_cp->ref();
-        } else {
-            owner = nullptr;
-        }
-    }
-    if (owner) {
-        // the owner records the destinations of the attempt that wins
-        owner->onInnerHandshakeReady(this);
-        owner_cp->deref(xsink);  // release the callback lifetime ref
-        return;
-    }
     // where the connection leads, which a pool checks before it hands the connection to other code
     std::shared_ptr<const QoreConnectionDestinations> destinations
         = sock_obj ? qore_socket_object_private(sock_obj).getConnectedDestinations() : nullptr;
@@ -1075,8 +1052,8 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // RFC 9220: an extended CONNECT request waits for the server's SETTINGS, which say whether it may be sent
     if (headers) {
-        QoreValue protocol = headers->getKeyValue(":protocol");
-        if (protocol.getType() == NT_STRING && !protocol.get<const QoreStringNode>()->empty()
+        // the value can be an inline short string, which has no node (issue #7038)
+        if (!QoreStringDataHelper(headers->getKeyValue(":protocol")).empty()
                 && waitForExtendedConnectSettings(xsink)) {
             action->deref(xsink);
             return -1;
@@ -1108,18 +1085,16 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
     if (*xsink || stream_id < 0) {
         endSubmitFail();
-        // a request refused because the QUIC connection is closed (by its idle timer, locally or by the peer) was
-        // not sent: the connection is closed now, so that a retry finds a new one
+        // a request refused because the QUIC connection is closed (by its idle timer, for lack of a response from
+        // the peer, locally, by the peer or with a stateless reset) was not sent: the connection is closed now, so
+        // that a retry finds a new one (qore#7385)
         if (*xsink) {
-            QoreValue err = xsink->getExceptionErr();
-            if (err.getType() == NT_STRING) {
-                const char* err_str = err.get<const QoreStringNode>()->c_str();
-                if (!strcmp(err_str, "HTTP3-IDLE-CLOSE") || !strcmp(err_str, "HTTP3-LOCAL-CLOSE")
-                        || !strcmp(err_str, "HTTP3-PEER-CLOSE")) {
-                    QoreValue desc = xsink->getExceptionDesc();
-                    setSubmitError(err_str, desc.getType() == NT_STRING
-                        ? desc.get<const QoreStringNode>()->c_str() : "");
-                }
+            // the error code and description can be inline short strings, which have no node (issue #7038)
+            QoreStringDataHelper err(xsink->getExceptionErr());
+            if (err == "HTTP3-IDLE-CLOSE" || err == "HTTP3-PEER-UNRESPONSIVE" || err == "HTTP3-LOCAL-CLOSE"
+                    || err == "HTTP3-PEER-CLOSE" || err == "HTTP3-STATELESS-RESET") {
+                QoreStringDataHelper desc(xsink->getExceptionDesc());
+                setSubmitError(err.c_str(), desc ? desc.c_str() : "");
             }
         }
         action->deref(xsink);
@@ -1316,7 +1291,12 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         if (old_completed_action) {
             old_completed_action->deref(xsink);
         }
-        return false;  // already completed
+        // the response completed, but the stream may still be open: the request of an extended CONNECT tunnel, or a
+        // streamed request whose response ended before its body did; the stream is then reset by the caller, as
+        // otherwise it stays open and takes one of the peer's streams for the life of the connection, until no new
+        // stream can be opened on it (qore#7443)
+        int64_t sid = session_id.load(std::memory_order_acquire);
+        return sock_obj && sid && qore_socket_object_private(sock_obj).isQuicBidiStreamOpen(sid, stream_id);
     }
 
     // Notify the action of cancellation, then release
@@ -1584,11 +1564,11 @@ bool Http3ClientPollOperationPriv::getStoredError(std::string& err, std::string&
     if (!error_info) {
         return false;
     }
-    QoreValue ev = error_info->getKeyValue("err");
-    QoreValue dv = error_info->getKeyValue("desc");
-    err = ev.getType() == NT_STRING ? ev.get<const QoreStringNode>()->c_str() : "HTTP3-CONNECTION-CLOSED";
-    desc = dv.getType() == NT_STRING ? dv.get<const QoreStringNode>()->c_str()
-        : "connection closed before request could be submitted";
+    // the values can be inline short strings, which have no node (issue #7038)
+    QoreStringDataHelper ev(error_info->getKeyValue("err"));
+    QoreStringDataHelper dv(error_info->getKeyValue("desc"));
+    err = ev ? ev.c_str() : "HTTP3-CONNECTION-CLOSED";
+    desc = dv ? dv.c_str() : "connection closed before request could be submitted";
     return true;
 }
 
@@ -1615,6 +1595,22 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
     }
     failMigrations();
     wakeSettingsWaiters();
+    // the connection is closed as when the I/O thread finds the close (see setError()): its manager gives it out no
+    // more, and the other requests on it get the error; before, it stayed ready in the manager's pool, and every later
+    // request on it failed with HTTP3-STATE-ERROR (qore#7385)
+    AbstractHttpPollConnectionPriv* cp = nullptr;
+    {
+        AutoLocker al(stream_lock);
+        cp = connection_priv;
+        connection_priv = nullptr;
+    }
+    if (cp) {
+        cp->setClosed();
+        ExceptionSink xsink;
+        notifyPendingStreams(err, desc, &xsink);
+        // the constructor's ref is released only after the waiters have been notified (see setError())
+        cp->deref(&xsink);
+    }
 }
 
 int64_t Http3ClientPollOperationPriv::requestMigration(ExceptionSink* xsink) {
@@ -1703,16 +1699,17 @@ void Http3ClientPollOperationPriv::MigrationRequest::takeError(ExceptionSink& xs
     if (!ex) {
         return;
     }
-    QoreValue errv = ex->getKeyValue("err");
-    if (errv.getType() == NT_STRING) {
-        err = errv.get<const QoreStringNode>()->c_str();
+    // the values can be inline short strings, which have no node (issue #7038)
+    QoreStringDataHelper errv(ex->getKeyValue("err"));
+    if (errv) {
+        err = errv.c_str();
     }
     if (err.empty()) {
         err = "QUIC-MIGRATION-ERROR";
     }
-    QoreValue descv = ex->getKeyValue("desc");
-    if (descv.getType() == NT_STRING) {
-        desc = descv.get<const QoreStringNode>()->c_str();
+    QoreStringDataHelper descv(ex->getKeyValue("desc"));
+    if (descv) {
+        desc = descv.c_str();
     }
     arg = ex->getKeyValue("arg").refSelf();
 }
@@ -1819,8 +1816,8 @@ void Http3ClientPollOperationPriv::failMigrations() {
     @since %Qore 3.0
 */
 qclass Http3ClientPollOperationBase [
-    private_members=object sock,string goal,auto data_save;
     ns=Qore;
+    dom=NETWORK;
     arg=Http3ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase<auto>
 ];
@@ -1834,7 +1831,14 @@ qclass Http3ClientPollOperationBase [
     - <b>unbound</b> (a new @ref Qore::Socket "Socket"): once the host name is resolved, the operation binds the
       socket to the wildcard address of the family of the remote address, with a port assigned by the system;
       the bind is subject to the network policy of the @ref sandboxing "sandbox" of the code that creates the
-      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()"
+      operation, as for @ref Qore::Socket::bindINET() "Socket::bindINET()".  If the host name resolves to more than
+      one address, the connection attempts to the addresses race as RFC 8305 (Happy Eyeballs) describes: the
+      address families alternate, starting with the family of the first address (the families in \a avoid_families
+      come last); an attempt is started 250 ms after the previous one, or at once when the attempts started have
+      failed (an ICMP refusal fails an attempt at once while another one can still connect); each attempt has a UDP
+      socket and a QUIC handshake of its own, with the sandbox checks of its remote address and of its bind, and the
+      first attempt whose handshake completes wins: the socket takes its descriptor over, and the others are closed;
+      \a connect_timeout applies to the race as a whole
     - <b>bound</b> (for example with @ref Qore::Socket::bindINET() "Socket::bindINET()"): the socket is used as it
       is, and the host name is resolved in the socket's address family
 
@@ -1849,10 +1853,10 @@ qclass Http3ClientPollOperationBase [
         elapsed time raises \c QUIC-HANDSHAKE-TIMEOUT in \c continuePoll(), giving
         a diagnosable connect-phase error instead of waiting for the outer
         request_timeout (UDP has no OS-level connect-phase error like TCP).
-    @param avoid_families address families (AF_INET, AF_INET6) not to connect in, if the host name also resolves
-        to an address in another family; the connection is made to the first resolved address that is not in one of
-        these families, or to the first resolved address if all of them are.  Used for an unbound socket and the
-        default \a family only.  @ref getAddressFamily() returns the family the connection is made in.
+    @param avoid_families address families (AF_INET, AF_INET6) to try last, if the host name also resolves to an
+        address in another family: the connection attempts to the addresses in these families follow the attempts to
+        the others.  Used for an unbound socket only.  @ref getAddressFamily() returns the family the connection is
+        made in.
 
     @throw QUIC-ERROR the port is out of range, or an address family to avoid is not AF_INET or AF_INET6
 
@@ -1894,7 +1898,8 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     ReferenceHolder<SocketQuicClientPollOperation> inner(
         new SocketQuicClientPollOperation(xsink, sock_ptr, host->c_str(),
             static_cast<uint16_t>(port), static_cast<int>(family),
-            handshake_timeout_ns, /* not_before_ns_abs */ 0, /* bind_unbound */ true, std::move(avoid)),
+            handshake_timeout_ns, /* bind_unbound */ true, std::move(avoid),
+            /* http_client */ true),
         xsink
     );
     if (*xsink) {
@@ -1906,11 +1911,9 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
     QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_obj) {
-        self->setMemberValue("sock", QC_HTTP3CLIENTPOLLOPERATIONBASE,
-            sock_obj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_obj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP3CLIENTPOLLOPERATIONBASE,
-        new QoreStringNode("http3_client_multiplex"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http3_client_multiplex"), xsink);
 
     // Set self on the inner op so it can build SocketPollInfo hashes
     // (getSocketPollInfoHash reads "sock" from self)
@@ -1941,7 +1944,7 @@ Http3ClientPollOperationBase::destructor() {
 /** @return the goal string
 */
 string Http3ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -2006,6 +2009,12 @@ bool Http3ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
     \c arg, as for a TLS connection over TCP
 */
 *hash<auto> Http3ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+#ifdef DEBUG
+    // a test makes the operation report no error (see dbg_http3_client_hide_error())
+    if (qore_dbg_h3_client_error_hidden()) {
+        return QoreValue();
+    }
+#endif
     return priv->getErrorInfo();
 }
 
@@ -2056,10 +2065,14 @@ nothing Http3ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flag
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
 }
 
-//! Returns the address family the connection is made in, once the host name has been resolved
-/** Does not block and can be called from any thread
+//! Returns the address family the connection is made in, once it is known
+/** While the connection attempts to the addresses of the host race (see @ref constructor()), the family is not known
+    yet: it is the family of the attempt that wins, or, if every attempt fails, the family of the attempt whose error
+    is reported.
 
-    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if the host name has not been resolved yet
+    Does not block and can be called from any thread
+
+    @return @ref Qore::AF_INET or @ref Qore::AF_INET6, or @ref nothing if it is not known yet
 
     @since %Qore 3.0
 */
@@ -2460,7 +2473,10 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) [flags=N
 
 //! Cancel a stream
 /** @param stream_id the stream to cancel
-    @return True if the stream was found and cancelled
+    @return True if the stream was found and cancelled, or if its response had completed while the stream is still
+    open (an extended CONNECT tunnel, or a streamed request answered before its body ended): the caller resets the
+    stream then (see @ref Qore::Socket::cancelQuicStream()), so that it does not take one of the peer's streams for the
+    life of the connection
 */
 bool Http3ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS] {
     return priv->cancelStream(stream_id, xsink);
@@ -2487,6 +2503,8 @@ nothing Http3ClientPollOperationBase::waitStreamCapacity(int timeout_ms) [flags=
     @throw HTTP3-IDLE-CLOSE the QUIC connection was closed by its idle timer while the request waited; the operation
     is closed, and the request can be repeated on a new connection
     @throw HTTP3-PEER-CLOSE the QUIC connection was closed by the server while the request waited; as above
+    @throw HTTP3-STATELESS-RESET the server reset the QUIC connection with a stateless reset while the request waited: it
+    has no state for the connection (ex: it restarted) (since %Qore 3.0); as above
     @throw HTTP3-LOCAL-CLOSE the QUIC connection or the operation was closed locally while the request waited
     @throw THREAD-CANCELLED the thread was cancelled while it waited (see @ref Qore::cancel_thread() "cancel_thread()")
     @throw PROGRAM-INTERRUPTED the thread's @ref Qore::Program "Program" was interrupted while it waited
@@ -2509,7 +2527,7 @@ nothing Http3ClientPollOperationBase::setSubmitError(string error_code, string d
 /** @return the socket
 */
 Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Registers a stream for onStreamData() dispatch notifications

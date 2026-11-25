@@ -3,19 +3,22 @@
 # Opt-in: the caller supplies resource credentials privately through the environment.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../LiveProviderTest.qm
 %requires AzureDocumentIntelligenceDataProvider
 
-if (!ENV.AZURE_DI_ENDPOINT || !ENV.AZURE_DI_KEY) {
+if (!LiveProvider::get("azure", "AZURE_DI_ENDPOINT") || !LiveProvider::get("azure", "AZURE_DI_KEY")) {
     throw "AZURE-LIVE-CONFIG-ERROR", "live verification requires the endpoint and key environment variables";
 }
-hash<auto> opts = {"apikey": ENV.AZURE_DI_KEY};
+hash<auto> opts = {"apikey": LiveProvider::get("azure", "AZURE_DI_KEY")};
 AzureDocumentIntelligenceRestConnection connection("azure-live", "Synthetic fixture verification",
-    ENV.AZURE_DI_ENDPOINT, {}, opts);
+    LiveProvider::get("azure", "AZURE_DI_ENDPOINT"), {}, opts);
 if (!connection.ping(True).ok) { throw "AZURE-LIVE-ERROR", "valid-key connection ping failed"; }
-AzureDocumentIntelligenceRestConnection from_hash({"name": "azure-live-hash", "url": ENV.AZURE_DI_ENDPOINT,
+AzureDocumentIntelligenceRestConnection from_hash({"name": "azure-live-hash", "url":
+    LiveProvider::get("azure", "AZURE_DI_ENDPOINT"),
     "opts": opts});
 if (!from_hash.ping(True).ok) { throw "AZURE-LIVE-ERROR", "hash-constructor ping failed"; }
-AzureDocumentIntelligenceRestConnection invalid("azure-live-invalid", "Invalid fixture key", ENV.AZURE_DI_ENDPOINT,
+AzureDocumentIntelligenceRestConnection invalid("azure-live-invalid", "Invalid fixture key",
+    LiveProvider::get("azure", "AZURE_DI_ENDPOINT"),
     {}, {"apikey": "invalid-qore-5421-fixture-key"});
 if (invalid.ping(False).ok) { throw "AZURE-LIVE-ERROR", "invalid-key ping was accepted"; }
 print("live ping: both constructors authenticated; invalid key rejected\n");
@@ -32,8 +35,8 @@ if (started.status_code != 202 || !started.headers."operation-location".val()) {
 string path = AzureDocumentIntelligenceRestClientBase::servicePath(client.getUrl(), started.headers."operation-location");
 string result_id = split("?", split("/analyzeResults/", path)[1])[0];
 hash<auto> result;
-date deadline = now_us() + 2m;
-while (now_us() < deadline) {
+int deadline = clock_get_monotonic_us() + get_duration_microseconds(2m);
+while (clock_get_monotonic_us() < deadline) {
     result = provider.getChildProvider("get-analysis-result").doRequest({"model_id": "prebuilt-read", "result_id": result_id});
     if (inlist(result.status, TerminalStatuses)) { break; }
     usleep(1s);

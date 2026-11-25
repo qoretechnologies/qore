@@ -40,6 +40,7 @@
 #include "qore/intern/QC_Serializable.h"
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 // the method and request path are sent as C strings, which would be cut at a NUL character, and the method cannot
 // contain CR or LF, which would end the request line; the path is percent-encoded before it is sent; the request
@@ -149,8 +150,52 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     Whether the connection is kept after a response follows RFC 9112 section 9.3: an HTTP/1.1 response keeps it
     unless a \c Connection header has the \c close option, while an HTTP/1.0 response keeps it only if a
     \c Connection header has the \c keep-alive option and none has \c close.  Options are case-insensitive whole
-    tokens and are read from comma-separated lists and from every \c Connection header of the response.  The next
-    request after a response that does not keep the connection, including a redirect, opens a new connection.
+    tokens and are read from comma-separated lists and from every \c Connection header of the response.  An HTTP/1.x
+    connection is also not kept when more data follows the response on it, whether the response has no body (a
+    response to \c HEAD, or one with the status 204 or 304) or one that was read whole: data that the client has
+    already received after the end of the response, or that it can read at once, closes the connection, as does a
+    \c 101 response to a request that does not take the connection over, which ends HTTP on it.  The next
+    request after a response that does not keep the connection, including a redirect, opens a new connection.  The
+    HTTP/1.x connections of the @ref httpclientiointro "HttpClientIo" module are kept or closed alike.
+
+    @anchor httpclient_interim_responses
+    An HTTP/1.x interim response, which is any response with a \c 1xx status other than \c 101 (such as
+    <tt>100 Continue</tt>, <tt>102 Processing</tt> or <tt>103 Early Hints</tt>, and the \c 1xx codes not defined yet;
+    RFC 9110 section 15.2), is never returned as the response to a request: it is skipped, and the final response
+    that follows it on the connection is read and returned, and decides whether the connection is kept.  The header
+    of each interim response is reported to an event queue (see HTTPClient::setEventQueue()) as a
+    @ref EVENT_HTTP_MESSAGE_RECEIVED event, as that of any response is.  A request fails with an
+    \c HTTP1-RECV-ERROR exception, and the connection is closed, when the server sends more than 16 interim responses
+    before the final one, and when it sends a \c 101 response to a request that did not ask for a protocol upgrade with
+    an \c Upgrade header (RFC 9110 section 7.8), as such a request, streamed or not, has no use for the connection
+    after it.
+
+    @anchor httpclient_protocol_upgrade
+    A request that asks for a protocol upgrade with an \c Upgrade header other than a WebSocket upgrade, and is
+    answered with a \c 101 response, gets the \c 101 response as its response, which has no message body; the
+    connection, whose data is no longer HTTP after it, is then closed, as this class gives no way to use the new
+    protocol on it, and the next request opens a new connection.  A streamed request (such as with
+    HTTPClient::sendWithRecvCallback(), HTTPClient::sendWithCallbacks() or HTTPClient::sendAndStream()) ends at once
+    with the \c 101 response header, which is given to the receive callback followed by the end of the response,
+    instead of waiting for a message body until the request times out.  A non-streamed WebSocket upgrade request keeps
+    the connection for the WebSocket protocol; to use another protocol on an upgraded connection, use
+    @ref HttpClientIo::HttpClientConnectionManager::acquireAndStartStreaming()
+    "HttpClientConnectionManager::acquireAndStartStreaming()", whose caller takes the socket over (qore#7487).
+
+    @anchor httpclient_status_line
+    The status line of an HTTP/1.x response must be <tt>HTTP/</tt><em>digit</em><tt>.</tt><em>digit</em>, a space,
+    a status code of exactly three digits in the range \c 100 - \c 599, and either the end of the line or a space and
+    a reason phrase, which can be empty, without control characters other than tab (RFC 9112 section 4, RFC 9110
+    section 15; a line that ends right after the status code, which RFC 9112 does not allow, is accepted, as other
+    clients do), with nothing before it, not even whitespace or an empty line.  A response with any other first line, such as one with
+    data before the status line, a status code that is not three digits (such as \c 1000 or \c 10x) or one outside
+    the range \c 100 - \c 599 (such as \c 099 or \c 999), which was accepted before, fails the request with a
+    \c SOCKET-HTTP-ERROR exception, whose argument gives the start of the line (with its non-printable bytes
+    escaped), and the connection is closed, never reused; the request is not repeated, whatever
+    its method, as the response is an error of the server and not of the connection.  This applies to the response
+    of a proxy to a \c CONNECT request too, and to the HTTP/1.x connections of the
+    @ref httpclientiointro "HttpClientIo" module; Socket::readHTTPHeader() checks the status line of a header that
+    starts with \c "HTTP/" alike.
 
     HTTP redirect responses are supported and can be limited with the \c max_redirects constructor hash key or by
     using the HTTPClient::setMaxRedirects() method. The default maximum number of redirects allowed is 5; see
@@ -162,6 +207,17 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     HTTP proxies and basic proxy authentication are supported by setting the proxy constructor hash key to the proxy
     URL (with a proxy username and password if required) or by calling the HTTPClient::setProxyURL() method.
+
+    @anchor httpclient_proxy_connect
+    An HTTPS server is reached through a proxy with a \c CONNECT tunnel, which is made when the final response of the
+    proxy to the \c CONNECT request has a \c 2xx status (RFC 9110 section 9.3.6).  Interim responses of the proxy
+    (\c 1xx other than \c 101) are skipped as for any other request (see
+    @ref httpclient_interim_responses "interim responses"), up to 16 of them; with more, with a \c 101 response, or
+    with any final response other than \c 2xx, the connection fails, and no request is sent.  The client starts the
+    TLS connection to the server in the tunnel right after the proxy's \c 2xx response, so the connection fails too
+    when the proxy sends data after that response before the TLS connection is started, as such data would otherwise
+    be read as if the server had sent it.  The same applies to the connections of the
+    @ref httpclientiointro "HttpClientIo" module through a proxy, over HTTP/1.1 and HTTP/2.
 
     Objects of this class are thread-safe and support serializing multiple simultaneous requests from many threads. If
     a request is in progress and another thread attempts to make a request at the same time, the second thread will
@@ -350,6 +406,9 @@ foreach hash<HttpRedirectInfo> hop in (info.redirects) {
     credentials, the default headers, the event and warning queues, the HTTP version and protocol settings, the
     TLS verification settings, the timeouts, and the connection manager are all untouched, so requests to
     different targets can be made at the same time on one client and a failed request leaves nothing behind.
+
+    A client constructed with separate TLS credential objects raises \c HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR
+    if the target or a followed redirect selects a different scheme, host, or effective port.
 
     This is what a caller needs when a target is named by the data it processes — a WSDL port address with an
     operation reference, a service document that names its own endpoints — rather than configured up front.
@@ -594,6 +653,11 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - \c ssl_ca_path: a directory with CA certificates in PEM format named by the hash of their subject names; if
       set, the server's certificate is verified against these CA certificates instead of the default CA certificates
       of the system; the same restrictions apply as with \c ssl_ca_file
+    - \c ssl_trust_store: an @ref Qore::SSLTrustStore "SSLTrustStore" object: the server's certificate is verified
+      against its CA certificates, which were read when it was created, instead of \c ssl_ca_file, \c ssl_ca_path and
+      the default CA certificates of the system, on every connection path (HTTP/1.1, HTTP/2, HTTP/3); no file is read
+      and the environment is not consulted when a certificate is verified; it implies \c ssl_verify_cert unless that
+      option is given as @ref False; a client with a trust store cannot be serialized (since %Qore 3.0)
     - \c ssl_verify_cert: if @ref True "True" then the server's certificate will only be accepted if it's verified
     - \c timeout: The timeout value in milliseconds (also can be a @ref relative_dates "relative date-time value" for
       clarity, ex: \c 5m)
@@ -604,8 +668,8 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     @throw HTTP-CLIENT-OPTION-ERROR invalid or unknown option passed in option hash, or the \c username, \c password, \c default_path or \c http_version option or a name or value of the \c headers option contains a NUL or another control character than horizontal tab (since %Qore 3.0); passwords, paths and header values are not shown in the exception
     @throw HTTP-CLIENT-URL-ERROR invalid URL string, or the URL contains a NUL or another control character than horizontal tab (since %Qore 3.0); the URL is not shown in the exception, as it can contain a password
     @throw HTTP-CLIENT-UNKNOWN-PROTOCOL unknown protocol passed in URL
-    @throw ILLEGAL-FILESYSTEM-ACCESS if the calling context is restricted with the @ref Qore::PO_NO_FILESYSTEM
-    sandboxing restriction and one of the following options is used: \c ssl_cert_path or \c ssl_key_path
+    @throw ILLEGAL-FILESYSTEM-ACCESS if the current Program or a caller is restricted from filesystem access
+    and supplies \c ssl_cert_path or \c ssl_key_path (see @ref Qore::PO_NO_FILESYSTEM)
     @throw HTTP-CLIENT-URL-ERROR the URL host contains a NUL character; see @ref path_nul_characters
     @throw HTTP-CLIENT-OPTION-ERROR a path given with \c ssl_cert_path, \c ssl_key_path, \c ssl_ca_file or
     \c ssl_ca_path contains a NUL character; see @ref path_nul_characters
@@ -653,6 +717,7 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       - \c max_response_body_size
       - \c ssl_ca_file
       - \c ssl_ca_path
+      - \c ssl_trust_store
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
@@ -674,6 +739,49 @@ HTTPClient::constructor() {
     self->setPrivate(CID_HTTPCLIENT, new QoreHttpClientObject);
 }
 
+//! Creates an HTTP client with TLS credentials supplied for use by this client
+/** This overload takes positional arguments. For named credentials at the primary origin only, pass
+    \c additional_origins: () to the overload below.
+
+    @param options ordinary HTTP client constructor options
+    @param certificate when present, supplies the TLS certificate in place of the certificate options
+    @param private_key when present, supplies the TLS private key in place of the key options
+
+    Credentials supplied as objects can be used only at the configured URL's origin (scheme, host and effective
+    port). Supply a URL at construction to use the objects for a connection.
+    A request URL or redirect that changes origin raises \c HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR.
+    A credential supplied as an object here is omitted from getHttpConfig() and from serialization.
+    A deserialized client must be supplied that credential again to use it.
+    @since %Qore 3.0
+*/
+HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key) {
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), nullptr, xsink);
+    if (!client->setOptions(options, xsink)) {
+        self->setPrivate(CID_HTTPCLIENT, client.release());
+    }
+}
+
+//! Creates an HTTP client that may present the supplied TLS credentials at specified additional origins
+/** @param options ordinary HTTP client constructor options, including the primary URL
+    @param certificate client certificate omitted from configuration exports
+    @param private_key client key omitted from configuration exports
+    @param additional_origins absolute HTTP(S) URLs fixed by the credential owner at construction.
+    The scheme, host and effective port identify each permitted origin.
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR an origin is invalid or a request selects an unconfigured origin
+    @since %Qore 3.0
+*/
+HTTPClient::constructor(hash<auto> options, *SSLCertificate[QoreSSLCertificate] certificate,
+        *SSLPrivateKey[QoreSSLPrivateKey] private_key, list<string> additional_origins) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
+    qore_httpclient_set_owned_credentials(**client, certificate.release(), private_key.release(), additional_origins,
+        xsink);
+    if (!*xsink && !client->setOptions(options, xsink)) {
+        self->setPrivate(CID_HTTPCLIENT, client.release());
+    }
+}
+
 //! Copying objects of this class is not supported, an exception will be thrown
 /**
     @throw HTTPCLIENT-COPY-ERROR copying HTTPClient objects is not yet supported
@@ -691,7 +799,7 @@ delete httpclient;
  */
 HTTPClient::destructor() {
     // have to clear callbacks before destroying
-    client->cleanup(xsink);
+    qore_http_client_object_ops(client).cleanup(xsink);
     client->deref(xsink);
 }
 
@@ -1398,9 +1506,10 @@ httpclient.setSecure(True);
     @endcode
 
     @param secure if @ref True, a SSL/TLS connection will be attempted on the next connection. If @ref False, an unencrypted cleartext connection will be established
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR the new setting changes the scheme of connection-owned TLS credentials
  */
 nothing HTTPClient::setSecure(softbool secure = True) [flags=NAMED_ARGS] {
-    client->setSecure(secure);
+    qore_httpclient_set_secure(*client, secure, xsink);
 }
 
 //! Returns @ref True if the current connection is encrypted, @ref False if not
@@ -2009,6 +2118,7 @@ hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *h
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
         rv = client->sendAndStream(method->c_str(), pstr, headers,
+            // note: safe; qpp makes a node of an inline short string for a *data parameter
             *static_cast<const QoreStringNode*>(body), *ohrh, xsink);
     } else {
         const BinaryNode* b = reinterpret_cast<const BinaryNode*>(body);
@@ -2281,6 +2391,11 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
     @note
     - The \c "Transfer-Encoding: chunked" header is automatically set with this method if no \c "Transfer-Encoding" header is already present
     - For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or Socket::connectSSL() for secure connections)
+    - Over HTTP/2 and HTTP/3, the data returned by the callback waits for the server's flow control to let it go out:
+      the callback is called for more data only when the stream's send buffer has room for it, so no data is dropped
+      however slowly the server reads; the wait ends with the stream (ex: the server answers without reading the body)
+      or when the thread is cancelled, and raises \c HTTP2-FLOW-CONTROL or \c HTTP3-FLOW-CONTROL only if the server
+      took none of the stream's data for the request timeout
 
     @see @ref httpclient_get_with_body
 
@@ -2564,6 +2679,7 @@ nothing HTTPClient::send(Qore::OutputStream[OutputStream] output_stream, *data b
     OptHashRefHelper ohrh(info, xsink);
     const char* pstr = path && !path->empty() ? path->c_str() : nullptr;
     if (get_node_type(body) == NT_STRING) {
+        // note: safe; qpp makes a node of an inline short string for a *data parameter
         client->sendWithOutputStream(method->c_str(), pstr, headers, *static_cast<const QoreStringNode*>(body),
             read_response_body, *ohrh, timeout_ms, receive_callback, self, *output_stream, xsink);
     } else {
@@ -3138,6 +3254,8 @@ httpclient.setURL("https://user:password@hostname:8080/path");
     @throw HTTP-CLIENT-URL-ERROR the URL host (for example a decoded UNIX socket path) contains a NUL character;
     see @ref path_nul_characters
 
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR the new URL changes the origin of connection-owned TLS credentials
+
     @see HTTPClient::getURL()
 
     @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
@@ -3224,7 +3342,10 @@ nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
 }
 
 //! Returns the current proxy URL as a string or @ref nothing if no proxy URL is set
-/** @return the current proxy URL as a string or @ref nothing if no proxy URL is set
+/** @param code see @ref http_url_codes the values for this bitfield; \c UC_TARGET gives the scheme, address and port
+    (if not the default) only, without the user name and password
+
+    @return the current proxy URL as a string or @ref nothing if no proxy URL is set
 
     @par Example:
     @code{.py}
@@ -3232,9 +3353,11 @@ nothing HTTPClient::setProxyURL(string url) [flags=NAMED_ARGS] {
     @endcode
 
     @see getSafeProxyURL()
+
+    @since %Qore 3.0 the \a code parameter
 */
-*string HTTPClient::getProxyURL() [flags=CONSTANT] {
-    return client->getProxyURL();
+*string HTTPClient::getProxyURL(int code = URL_NORMAL) [flags=CONSTANT,NAMED_ARGS] {
+    return client->getProxyURL(code);
 }
 
 //! Returns the current proxy URL without the password field
@@ -3784,6 +3907,8 @@ string HTTPClient::getDefaultPath() [flags=CONSTANT] {
 httpclient.setConnectionPath(new_path);
     @endcode
 
+    @throw HTTP-CLIENT-CREDENTIAL-ORIGIN-ERROR the URI selects another origin for connection-owned TLS credentials
+
     @see getConnectionPath()
 
     @since %Qore 0.9.3.2
@@ -3793,7 +3918,7 @@ HTTPClient::setConnectionPath(*string uri_path) [flags=NAMED_ARGS] {
     if (uri_path && !path.set(uri_path, QCS_DEFAULT, xsink)) {
         return QoreValue();
     }
-    client->setConnectionPath(uri_path ? path->c_str() : nullptr);
+    qore_httpclient_set_connection_path(*client, uri_path ? path->c_str() : nullptr, xsink);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -4187,7 +4312,11 @@ bool HTTPClient::getPreEncodedUrls() [flags=CONSTANT] {
 }
 
 //! Returns the configuration of the HTTP client
-/** @return the configuration of the HTTP client
+/** TLS credentials passed separately as objects at construction are omitted from this configuration and from
+    serialization. Credentials passed through the options hash, including \c ssl_key_data, retain their ordinary
+    export behavior.
+
+    @return the configuration of the HTTP client
 
     @since %Qore 2.0
 */

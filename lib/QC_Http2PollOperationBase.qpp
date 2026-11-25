@@ -43,6 +43,7 @@
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 // Forward declarations for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -146,7 +147,7 @@ void Http2PollOperationPriv::abort(ExceptionSink* xsink) {
         qobj = persistent_session_queue_obj;
         persistent_session_queue = nullptr;
         persistent_session_queue_obj = nullptr;
-        h2_state = H2ServerState::CLOSED;
+        setClosed("the operation was aborted");
     }
     // Idempotent with the dedicated handler's own later deregister and ~cleanup()
     // (both find the binding already null).
@@ -308,7 +309,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     }
 
     if (!current_op) {
-        h2_state = H2ServerState::CLOSED;
+        setClosed("the operation had no read in progress");
         return nullptr;
     }
 
@@ -334,7 +335,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         drainStreamQueues(&clear_xsink);
         clear_xsink.clear();
         clearStreamQueues(&clear_xsink);
-        h2_state = H2ServerState::CLOSED;
+        setClosed("a read failed (see the error)");
         return nullptr;
     }
 
@@ -343,7 +344,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     // need to be delivered to handler threads via their registered Queues.
     drainStreamQueues(xsink);
     if (*xsink) {
-        h2_state = H2ServerState::CLOSED;
+        setClosed("the data of a CONNECT stream could not be delivered to its handler (see the error)");
         return nullptr;
     }
 
@@ -351,7 +352,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     // stream on this still-open connection (peer RST_STREAM) — see issue #5339.
     deliverPersistentSessionClose(xsink);
     if (*xsink) {
-        h2_state = H2ServerState::CLOSED;
+        setClosed("the end of a persistent request could not be delivered to its handler (see the error)");
         return nullptr;
     }
 
@@ -364,12 +365,12 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     {
         int srv = qore_socket_object_private(sock).flushHttp2PendingDataForAsyncPoll(xsink);
         if (*xsink) {
-            h2_state = H2ServerState::CLOSED;
+            setClosed("the data pending to be sent could not be flushed (see the error)");
             return nullptr;
         }
         if (srv < 0) {
             xsink->raiseException("HTTP2-FLUSH-ERROR", "error flushing pending HTTP/2 data");
-            h2_state = H2ServerState::CLOSED;
+            setClosed("the data pending to be sent could not be flushed");
             return nullptr;
         }
         // sendPendingData returns SOCK_POLLIN / SOCK_POLLOUT when the
@@ -380,7 +381,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
             int events = pi->getKeyValue("events").getAsBigInt();
             pi->setKeyValue("events", events | flush_events, xsink);
             if (*xsink) {
-                h2_state = H2ServerState::CLOSED;
+                setClosed("the poll events of the pending data could not be set (see the error)");
                 return nullptr;
             }
         }
@@ -391,7 +392,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         if (isDrainComplete()) {
             poll_info->deref(xsink);
             clearStreamQueues(xsink);
-            h2_state = H2ServerState::CLOSED;
+            setClosed("the connection was drained");
             return nullptr;
         }
         // Inner op needs more polling
@@ -426,13 +427,14 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
             QoreStringNode* desc = new QoreStringNode;
             desc->sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS);
             error_info->setKeyValue("desc", desc, xsink);
-            h2_state = H2ServerState::CLOSED;
+            setClosed("the client sent only control frames for more than the maximum of empty reads "
+                "(HTTP2-EMPTY-READ)");
             return nullptr;
         }
         // a drained connection is closed instead of waiting for more data (qore#5899)
         if (isDrainComplete()) {
             clearStreamQueues(xsink);
-            h2_state = H2ServerState::CLOSED;
+            setClosed("the connection was drained");
             return nullptr;
         }
         h2_state = H2ServerState::WAIT_READ;
@@ -448,13 +450,13 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     // Without this, handler threads block on Counter::waitForZero() forever because
     // nghttp2 doesn't know about TCP closure (it only sees HTTP/2 frames).
     clearStreamQueues(xsink);
-    h2_state = H2ServerState::CLOSED;
+    setClosed("the read ended without a request: the client closed the connection");
     return nullptr;
 }
 
 QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
     if (!current_op) {
-        h2_state = H2ServerState::CLOSED;
+        setClosed("the operation had no send in progress");
         return nullptr;
     }
 
@@ -474,7 +476,7 @@ QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
             error_info->setKeyValue("desc",
                 desc.getReferencedValue(), xsink);
         }
-        h2_state = H2ServerState::CLOSED;
+        setClosed("a send failed (see the error)");
         return nullptr;
     }
 
@@ -490,7 +492,7 @@ QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
     }
 
     // Operation failed
-    h2_state = H2ServerState::CLOSED;
+    setClosed("the send ended without completing: the client closed the connection");
     return nullptr;
 }
 
@@ -508,7 +510,7 @@ void Http2PollOperationPriv::pushStreamEnd(int32_t stream_id, const StreamQueueI
     // the queue takes the reference; the end is pushed even if the queue is full, after the stream's data, and a
     // queue that refuses it (one whose reader cancelled the body read, or a deleted queue) discards it (issue #5859)
     ExceptionSink push_xsink;
-    info.queue->tryPush(&push_xsink, info.request_body && !complete
+    qore_queue_ops(info.queue).tryPush(&push_xsink, info.request_body && !complete
         ? QoreValue(makeBodyIncompleteError(stream_id, reason, xsink))
         : QoreValue(), true);
     push_xsink.clear();
@@ -783,7 +785,7 @@ void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink)
         // state) has its error for the consumer already (issue #5840)
         ExceptionSink push_xsink;
         // pushed without waiting, even if the queue is bounded and full (issue #5859)
-        q->tryPush(&push_xsink, close_entry.release(), true);
+        qore_queue_ops(q).tryPush(&push_xsink, close_entry.release(), true);
         push_xsink.clear();
     }
     q->deref(xsink);
@@ -796,7 +798,7 @@ int Http2PollOperationPriv::pushStreamQueueData(StreamQueueInfo& info, BinaryNod
     assert(!info.pending);
     // the queue's exceptions are not raised: a queue that refuses data discards it (see drainStreamQueues())
     ExceptionSink push_xsink;
-    QoreQueue::TryPushResult rc = info.queue->tryPush(&push_xsink, data);
+    QoreQueue::TryPushResult rc = qore_queue_ops(info.queue).tryPush(&push_xsink, data);
     push_xsink.clear();
     if (rc != QoreQueue::QTP_FULL) {
         return 0;
@@ -805,11 +807,11 @@ int Http2PollOperationPriv::pushStreamQueueData(StreamQueueInfo& info, BinaryNod
     info.pending = data;
     if (!info.room) {
         info.room = std::make_shared<HttpStreamQueueRoomListener>(sock->getIoIdentityHash());
-        info.queue->addRoomListener(info.room);
+        qore_queue_ops(info.queue).addRoomListener(info.room);
         // room may have appeared before the listener was added
         info.pending = nullptr;
         ExceptionSink retry_xsink;
-        rc = info.queue->tryPush(&retry_xsink, data);
+        rc = qore_queue_ops(info.queue).tryPush(&retry_xsink, data);
         retry_xsink.clear();
         if (rc != QoreQueue::QTP_FULL) {
             return 0;
@@ -835,7 +837,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 // the old registration's room listener is removed from its queue; the data that it had no room for was
                 // taken from the stream, so it goes to the new registration's queue first (issue #5859)
                 if (it->second.room) {
-                    it->second.queue->removeRoomListener(it->second.room.get());
+                    qore_queue_ops(it->second.queue).removeRoomListener(it->second.room.get());
                 }
                 // a frame state gets the stream's data itself, so raw data for its queue is released
                 if (info.frame_state) {
@@ -953,7 +955,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 "maximum request body size", stream_id), xsink);
             // pushed even if the queue is full, after the stream's data (issue #5859)
             ExceptionSink push_xsink;
-            info.queue->tryPush(&push_xsink, err.release(), true);
+            qore_queue_ops(info.queue).tryPush(&push_xsink, err.release(), true);
             push_xsink.clear();
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
@@ -1000,7 +1002,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 it->second.pending->deref(xsink);
             }
             if (it->second.room) {
-                it->second.queue->removeRoomListener(it->second.room.get());
+                qore_queue_ops(it->second.queue).removeRoomListener(it->second.room.get());
             }
             // In frame-state mode the Queue ref is owned by the frame state
             // (its destructor derefs it when the shared_ptr drops).  Skip the
@@ -1041,7 +1043,7 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
                 // released, and the old one's pending data and room listener with them
                 StreamQueueInfo& old = it->second;
                 if (old.room) {
-                    old.queue->removeRoomListener(old.room.get());
+                    qore_queue_ops(old.queue).removeRoomListener(old.room.get());
                 }
                 if (old.pending) {
                     old.pending->deref(xsink);
@@ -1074,7 +1076,7 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
             info.pending = nullptr;
         }
         if (info.room) {
-            info.queue->removeRoomListener(info.room.get());
+            qore_queue_ops(info.queue).removeRoomListener(info.room.get());
         }
         pushStreamEnd(stream_id, info, false, "the connection was closed or the server stopped reading it", xsink);
         if (info.notifier) {
@@ -1123,7 +1125,6 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     @since %Qore 3.0
 */
 qclass Http2PollOperationBase [
-    private_members=object sock,string goal;
     ns=Qore;
     arg=Http2PollOperationPriv* priv;
     vparent=SocketPollOperationBase<*hash<auto>>
@@ -1162,10 +1163,9 @@ Http2PollOperationBase::constructor(Socket[QoreSocketObject] socket, object init
     QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
         ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
     if (sock_qobj) {
-        self->setMemberValue("sock", QC_HTTP2POLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+        qore_poll_op_set_member(self, "sock", sock_qobj->refSelf(), xsink);
     }
-    self->setMemberValue("goal", QC_HTTP2POLLOPERATIONBASE,
-        new QoreStringNode("http2_connection"), xsink);
+    qore_poll_op_set_member(self, "goal", new QoreStringNode("http2_connection"), xsink);
 
     // Ref the socket for the C++ priv
     QoreSocketObject* sock_ptr = *socket;
@@ -1201,7 +1201,7 @@ Http2PollOperationBase::copy() {
 /** @return "http2_connection"
 */
 string Http2PollOperationBase::getGoal() {
-    return self->getReferencedMemberNoMethod("goal", xsink);
+    return qore_poll_op_get_referenced_member(self, "goal", xsink);
 }
 
 //! Returns the current state
@@ -1354,6 +1354,17 @@ bool Http2PollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
     return priv->getErrorInfo();
 }
 
+//! Returns why the operation closed its HTTP/2 connection, or @ref nothing while it has not
+/** @return a description of where and why the connection was closed (the details of an error are given by
+    @ref getError()), or @ref nothing if the operation has not closed it
+
+    @since %Qore 3.0
+*/
+*string Http2PollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
+    const char* reason = priv->getCloseReason();
+    return reason ? new QoreStringNode(reason) : QoreValue();
+}
+
 //! Returns True if the connection should be kept alive
 /** @return True if keep_alive is set, state is not CLOSED, and no error occurred
 */
@@ -1372,7 +1383,7 @@ string Http2PollOperationBase::getH2State() [flags=RET_VALUE_ONLY] {
 /** @return the Socket object
 */
 Socket Http2PollOperationBase::getSocket() {
-    return self->getReferencedMemberNoMethod("sock", xsink);
+    return qore_poll_op_get_referenced_member(self, "sock", xsink);
 }
 
 //! Returns True if headers-only mode is enabled

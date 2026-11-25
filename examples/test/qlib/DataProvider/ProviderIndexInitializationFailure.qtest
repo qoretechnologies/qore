@@ -169,7 +169,9 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
 
     private environmentFailureTest() {
         string env_name = "QORE_DATA_PROVIDERS";
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         *string old_value = getenv(env_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         auto old_env_value = ENV{env_name};
         string module_name = "MissingDiscoveryModule_" + get_random_string(8);
         setenv(env_name, module_name);
@@ -222,10 +224,14 @@ public class ProviderIndexInitializationFailureTest inherits QUnit::Test {
 
     private environmentProviderFailureTest() {
         string env_name = "QORE_DATA_PROVIDERS";
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         *string old_value = getenv(env_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         auto old_env_value = ENV{env_name};
         string fixture_env_name = "QORE_PROVIDER_INDEX_FIXTURE_MODULE";
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         *string old_fixture_value = getenv(fixture_env_name);
+        # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
         auto old_fixture_env_value = ENV{fixture_env_name};
         string registration_module = "ProviderIndexEnvironmentMapFixture";
         string provider_root = make_tmp_dir();

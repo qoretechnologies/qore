@@ -27,6 +27,8 @@ class OracleTestIsolationTest inherits QUnit::Test {
         *string connstr;
         *string admin_connstr;
         *string skip_reason;
+        #! the reason to fail the cases: a configured server that cannot be connected to (qore#6934)
+        *string precondition;
         # users made for the leftover test, dropped at the end
         list<string> made;
     }
@@ -40,14 +42,18 @@ class OracleTestIsolationTest inherits QUnit::Test {
         if (!connstr || !admin_connstr) {
             skip_reason = "QORE_DB_CONNSTR_ORACLE and QORE_DB_CONNSTR_ORACLE_SYS are not both configured";
         } else if (!skip_reason) {
-            # a configured server that this host cannot reach skips the cases, as the other database tests do
+            # a configured server that this host cannot reach fails the cases: a database outage is not a reason to
+            # skip (qore#6934)
+            *string tried;
             try {
+                tried = connstr;
                 Datasource connstr_ds(connstr);
                 connstr_ds.open();
+                tried = admin_connstr;
                 Datasource admin_connstr_ds(admin_connstr);
                 admin_connstr_ds.open();
             } catch (hash<ExceptionInfo> ex) {
-                skip_reason = sprintf("no DB connection: %s: %s", ex.err, ex.desc);
+                precondition = TestRun::getPreconditionFailure(TestRun::getVariable(tried), tried, ex);
             }
         }
         addTestCase("a non-Oracle connection has no run schema", \notOracle());
@@ -72,6 +78,9 @@ class OracleTestIsolationTest inherits QUnit::Test {
     }
 
     private checkSkip() {
+        if (precondition) {
+            fail(precondition);
+        }
         if (skip_reason) {
             testSkip(skip_reason);
         }
@@ -113,7 +122,22 @@ class OracleTestIsolationTest inherits QUnit::Test {
             TestInterpreter::qore_interpreter(), script, dir, ready));
         File r();
         r.open2(ready);
+        # a write end of the test's own: the reader does not see the end of the FIFO between the write of the holder
+        # and that of its shell, so that the shell's line can be waited for
+        File keep();
+        keep.open2(ready, O_WRONLY);
         string line = r.readLine(False);
+        # the shell says "ended" when the holder has ended; the directory is removed only then: its redirection would
+        # create the FIFO again as a file in a directory that remove_tree() is removing
+        bool ended = (line == "ended");
+        on_exit {
+            while (!ended) {
+                *string l = r.readLine(False);
+                if (!exists l || l == "ended") {
+                    ended = True;
+                }
+            }
+        }
         if (line != "held") {
             File out();
             out.open2(dir + "/out");

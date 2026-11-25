@@ -296,6 +296,11 @@ if (laq.isFull()) {
     - the logging and level methods of @ref Logger::LoggerWrapper "LoggerWrapper" get the logger with the new private
       \c getInternalLogger(), which a subclass whose public \c getLogger() refuses callers overrides
       (<a href="https://github.com/qoretechnologies/qore/issues/7034">issue 7034</a>)
+    - @ref Logger::LoggerWrapper::logPreformatted() "LoggerWrapper::logPreformatted()" logs a message as it is, with no
+      formatting (<a href="https://github.com/qoretechnologies/qore/issues/3420">issue 3420</a>)
+    - @ref Logger::LoggerWrapper::assertLog() "LoggerWrapper::assertLog()" logs the message at the \c ERROR level when
+      the assertion fails, as \c Logger::assertLog() does, instead of raising \c METHOD-DOES-NOT-EXIST
+      (<a href="https://github.com/qoretechnologies/qore/issues/7190">issue 7190</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
       @ref Logger::StdoutAppender "StdoutAppender" writes with @ref Qore::stdout "stdout", which needs terminal I/O only
       when it is written (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -1990,6 +1995,11 @@ public class LoggerAppenderNull inherits LoggerAppender {
 /**
     Qore streams are not designed to accept input from multiple threads simultaneously, so writing must be serialized and processed
     in a dedicated thread
+
+    Nothing is written for code that is restricted from terminal I/O, also when the appender belongs to other code,
+    if its stream is a @ref Qore::StdoutOutputStream "StdoutOutputStream" or a
+    @ref Qore::StderrOutputStream "StderrOutputStream"; a stream that wraps one of them refuses the write (see
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
 */
 public class LoggerAppenderStream inherits LoggerAppenderWithLayout {
     private:internal {
@@ -2030,6 +2040,14 @@ public class LoggerAppenderStream inherits LoggerAppenderWithLayout {
                 throw "LOGGER-ERROR", "Cannot reopen stream";
             }
         } else {
+            # a stream to the terminal writes nothing for code that is restricted from terminal I/O, or that library
+            # code serves for it (qore#7140); its stream would refuse the write
+            if (type == EVENT_LOG && !SandboxManager::isTerminalIoAllowed()) {
+                OutputStream os = writer.getOutputStream();
+                if (os instanceof StdoutOutputStream || os instanceof StderrOutputStream) {
+                    return;
+                }
+            }
             if (assignThread) {
                 writer.getOutputStream().reassignThread();
             }
@@ -2053,7 +2071,9 @@ public class LoggerAppenderStream inherits LoggerAppenderWithLayout {
 #! Implements appender writing to a stdout file
 /**
     No multi-threading protection is implemented in the class; the @ref Qore::stdout "stdout" instance is reused.
-    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied.
+    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied; nothing is written for code that is
+    restricted from terminal I/O, also when the appender belongs to other code (see
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
 */
 public class LoggerAppenderStdOut inherits LoggerAppenderWithLayout {
     #! Creates the object
@@ -2072,7 +2092,11 @@ public class LoggerAppenderStdOut inherits LoggerAppenderWithLayout {
     public processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_LOG:
-                stdout.print(params);
+                # nothing is written for code that is restricted from terminal I/O, or that library code serves
+                # for it (qore#7140)
+                if (SandboxManager::isTerminalIoAllowed()) {
+                    stdout.print(params);
+                }
                 break;
         }
     }
@@ -2081,7 +2105,9 @@ public class LoggerAppenderStdOut inherits LoggerAppenderWithLayout {
 #! Implements appender writing to a stderr file
 /**
     No multi-threading protection is implemented in the class; the @ref Qore::stderr "stderr" instance is reused.
-    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied.
+    Unavailable when @ref Qore::PO_NO_TERMINAL_IO parse option is applied; nothing is written for code that is
+    restricted from terminal I/O, also when the appender belongs to other code (see
+    @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()").
 */
 public class LoggerAppenderStdErr inherits LoggerAppenderWithLayout {
     #! Creates the object
@@ -2100,7 +2126,11 @@ public class LoggerAppenderStdErr inherits LoggerAppenderWithLayout {
     public processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_LOG:
-                stderr.print(params);
+                # nothing is written for code that is restricted from terminal I/O, or that library code serves
+                # for it (qore#7140)
+                if (SandboxManager::isTerminalIoAllowed()) {
+                    stderr.print(params);
+                }
                 break;
         }
     }
@@ -2204,7 +2234,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
     constructor(*string name, LoggerLayout layout, string filename, int count = DEFAULT_ROTATION_COUNT,
             string archive = DEFAULT_ARCHIVE_PATTERN, *string encoding)
             : AbstractLoggerAppenderFileRotate(name, layout, encoding), LoggerPattern(filename) {
-        fileName = format(NOTHING);  # no dynamic vars as timestamp
+        setFileName(format(NOTHING));  # no dynamic vars as timestamp
         self.count = count;
         setPattern(archive);
     }
@@ -2267,7 +2297,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
     public processEventImpl(int type, auto params) {
         switch (type) {
             case EVENT_ROTATE:
-                if (count > 0 && is_file(fileName)) {
+                if (count > 0 && is_file(getFileName())) {
                     list<string> fn = ();
                     int i = 0;
                     while (True) {
@@ -2290,11 +2320,10 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                         writeLifecycleMarker("rotated", sprintf("-> %s", fn[0]));
                     }
                     # issue #4842: rotate atomically
-                    File f(encoding);
                     # first rename old file
-                    rename(fileName, fn[0]);
+                    rename(getFileName(), fn[0]);
                     # reopen file atomically
-                    file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                    getFile().open2(getFileName(), O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                     if (lifecycleMarkersEnabled()) {
                         writeLifecycleMarker("rotated", sprintf("<- %s", fn[0]));
                     }
@@ -2306,7 +2335,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                     writeLifecycleMarker("reopening", NOTHING);
                 }
                 # reopen file atomically
-                file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                getFile().open2(getFileName(), O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                 if (lifecycleMarkersEnabled()) {
                     writeLifecycleMarker("reopened", NOTHING);
                 }
@@ -2323,7 +2352,7 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
     */
     public string getArchiveFileName(int idx) {
         return format({
-            "filename": fileName,
+            "filename": getFileName(),
             "count": count,
             "index": idx,
         });
@@ -2379,7 +2408,7 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
         patternData.timestamp = now_us();
         patternData.count = count;
         patternData.index = 0;
-        fileName = format(patternData);
+        setFileName(format(patternData));
     }
 
     #! Returns a string for a format field for a pattern-based filename
@@ -2446,13 +2475,13 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
                     }
                 }
                 patternData.index = last_idx;
-                fileName = format(patternData);
+                setFileName(format(patternData));
                 LoggerAppenderFile::processEventImpl(type, params);
                 break;
             case EVENT_ROTATE:
                 if (patternData.count > 0) {
                     # issue #4842: rotate atomically
-                    string old_fn = fileName;
+                    string old_fn = getFileName();
                     patternData.index = (patternData.index + 1) % patternData.count;
                     patternData.timestamp = now_us();
                     string new_fn = format(patternData);
@@ -2460,9 +2489,9 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
                         # written via the still-open fd to old_fn; fileName member is still old_fn
                         writeLifecycleMarker("rotated", sprintf("-> %s", new_fn));
                     }
-                    fileName = new_fn;
+                    setFileName(new_fn);
                     # create new file and reopen atomically
-                    file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                    getFile().open2(getFileName(), O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
                     if (lifecycleMarkersEnabled()) {
                         writeLifecycleMarker("rotated", sprintf("<- %s", old_fn));
                     }
@@ -2545,7 +2574,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
     */
     constructor(*string name, LoggerLayout layout, string filename, string archive = DEFAULT_ARCHIVE_PATTERN,
             *string encoding): LoggerAppenderFile(name, layout, filename, encoding), LoggerPattern(filename) {
-        fileName = format(NOTHING);  # no dynamic vars as timestamp
+        setFileName(format(NOTHING));  # no dynamic vars as timestamp
         setPattern(archive);
     }
 
@@ -2614,13 +2643,13 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
                         writeLifecycleMarker("archived", sprintf("-> %s", params));
                     }
                     # issue #4842: do not close the file here, allow it to be reopened atomically
-                    rename(fileName, params);
+                    rename(getFileName(), params);
                     LoggerAppenderFile::processEventImpl(EVENT_OPEN);
                     if (lifecycleMarkersEnabled()) {
                         writeLifecycleMarker("archived", sprintf("<- %s", params));
                     }
                 } else {
-                    rename(fileName, params);
+                    rename(getFileName(), params);
                 }
                 break;
             default:
@@ -2640,7 +2669,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
         if (afn == "") {
             throw "LOGGER-ERROR", "Empty target filename";
         }
-        if (normalize_dir(afn) == normalize_dir(fileName)) {
+        if (normalize_dir(afn) == normalize_dir(getFileName())) {
             throw "LOGGER-ERROR", "Source and target path are equal";
         }
         if (is_dir(afn)) {
@@ -2661,7 +2690,7 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
     public string getArchiveFileName() {
         return format({
             "timestamp": now_us(),
-            "filename": fileName,
+            "filename": getFileName(),
         });
     }
 }
@@ -2965,6 +2994,51 @@ public class LoggerWrapper inherits LoggerInterface {
         }
     }
 
+    #! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+    /** Logging is only performed if a logger is set
+
+        @param level the logging level
+        @param message the message, which is logged as it is
+
+        @since Logger 1.1
+    */
+    logPreformatted(Qore::Logger::LoggerLevel level, string message) {
+        *LoggerInterface logger = getInternalLogger();
+        if (logger) {
+            logger.logPreformatted(level, message);
+        }
+    }
+
+    #! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+    /** Logging is only performed if a logger is set
+
+        @param level the logging level
+        @param message the message, which is logged as it is
+
+        @since Logger 1.1
+    */
+    logPreformatted(int level, string message) {
+        *LoggerInterface logger = getInternalLogger();
+        if (logger) {
+            logger.logPreformatted(level, message);
+        }
+    }
+
+    #! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+    /** Logging is only performed if a logger is set
+
+        @param level the logging level
+        @param message the message, which is logged as it is
+
+        @since Logger 1.1
+    */
+    logPreformatted(string level, string message) {
+        *LoggerInterface logger = getInternalLogger();
+        if (logger) {
+            logger.logPreformatted(level, message);
+        }
+    }
+
     #! Logs an already prepared logging event object
     /**
         @param event the event to log
@@ -3087,9 +3161,13 @@ public class LoggerWrapper inherits LoggerInterface {
         then it is considered "throwable" information.
     */
     assertLog(bool assertion, string message, ...) {
+        # as Logger::assertLog(): the message is logged at the ERROR level when the assertion fails (qore#7190)
+        if (assertion) {
+            return;
+        }
         *LoggerInterface logger = getInternalLogger();
         if (logger) {
-            logger.assertLogArgs(assertion, message, argv);
+            logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
         }
     }
 
@@ -3383,8 +3461,11 @@ public class StdoutAppender inherits LoggerAppenderWithLayout {
         switch (type) {
             case EVENT_LOG:
                 # the stdout constant needs terminal I/O only when it is written, so that the module can be loaded
-                # by code without it (qore#6438)
-                stdout.print(params);
+                # by code without it (qore#6438); nothing is written for code that is restricted from terminal I/O, or
+                # that library code serves for it (qore#7140)
+                if (SandboxManager::isTerminalIoAllowed()) {
+                    stdout.print(params);
+                }
                 break;
         }
     }

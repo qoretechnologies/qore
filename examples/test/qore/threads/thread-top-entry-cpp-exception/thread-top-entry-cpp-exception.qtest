@@ -126,8 +126,8 @@ class ThreadTopEntryCppExceptionTest inherits QUnit::Test {
         p.callFunction("raise_signal", SIGUSR2, True);
         # a signal sent before the signal thread has handled the first can be merged with it, so signals are sent
         # until the handler runs: the signal thread survived the failed entry
-        date deadline = now_us() + Timeout;
-        while (!q.size() && now_us() < deadline) {
+        date deadline = microseconds(clock_get_monotonic_us()) + Timeout;
+        while (!q.size() && microseconds(clock_get_monotonic_us()) < deadline) {
             usleep(200ms);
             p.callFunction("raise_signal", SIGUSR2, False);
         }
@@ -150,13 +150,13 @@ class ThreadTopEntryCppExceptionTest inherits QUnit::Test {
 
     #! returns the FINISHED event of the subscription's first thread
     private hash<auto> waitFinished(Queue events) {
-        date deadline = now_us() + Timeout;
+        date deadline = microseconds(clock_get_monotonic_us()) + Timeout;
         while (True) {
             auto ev = events.get(Timeout);
             if (ev.event == "FINISHED") {
                 return ev;
             }
-            if (now_us() > deadline) {
+            if (microseconds(clock_get_monotonic_us()) > deadline) {
                 fail("no FINISHED event");
                 return {};
             }
@@ -165,9 +165,9 @@ class ThreadTopEntryCppExceptionTest inherits QUnit::Test {
 
     #! waits until the process has no more threads than \a count
     private waitThreads(int count) {
-        date deadline = now_us() + Timeout;
+        date deadline = microseconds(clock_get_monotonic_us()) + Timeout;
         while (num_threads() > count) {
-            if (now_us() > deadline) {
+            if (microseconds(clock_get_monotonic_us()) > deadline) {
                 fail(sprintf("%d threads remain, expected %d", num_threads(), count));
                 return;
             }

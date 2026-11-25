@@ -183,9 +183,9 @@ class TestObserver inherits DataProvider::Observer {
     # Waits until at least \c count events have been received
     bool waitForCount(int count, timeout t = 10s) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        date end_time = microseconds(clock_get_monotonic_us()) + t;
         while (events.size() < count) {
-            date remaining = end_time - now_us();
+            date remaining = end_time - microseconds(clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -196,9 +196,9 @@ class TestObserver inherits DataProvider::Observer {
 
     bool waitForEvent(string event_id, int count = 1, timeout t = 10s) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        date end_time = microseconds(clock_get_monotonic_us()) + t;
         while ((select events, $1.event_id == event_id).size() < count) {
-            date remaining = end_time - now_us();
+            date remaining = end_time - microseconds(clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -330,9 +330,9 @@ class SseObservableTest inherits Test {
             done.dec();
         }();
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         assertTrue(observer.waitForCount(2, 3s), "partial-count wait returned");
-        int elapsed_us = (now_us() - start).durationMicroseconds();
+        int elapsed_us = (microseconds(clock_get_monotonic_us()) - start).durationMicroseconds();
         assertLt(2000000, elapsed_us, "partial-count wait woke before timeout");
         assertEq(0, done.waitForZero(2s), "producer completed");
     }

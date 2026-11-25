@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires Mime
 %requires DataProvider
@@ -336,6 +337,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
     constructor() : Test("DropboxDataProvider Test", "1.0", \ARGV, MyOpts) {
         addTestCase("sanity", \sanityTest());
         addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("read-only actions", \readOnlyActionsTest());
         addTestCase("action options", \actionOptionsTest());
         addTestCase("file API registration", \fileApiTest());
         addTestCase("data types", \dataTypesTest());
@@ -410,6 +412,27 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         # the summary info of every child must be retrievable; a child whose ProviderSummaryInfo constant is
         # missing or misnamed breaks the app browser rather than the action
         assertEq(29, prov.getChildProviderSummaryInfo().size(), "every child has summary info");
+    }
+
+    #! the actions that only read declare that they change nothing, and the write actions still do (qore#7454)
+    readOnlyActionsTest() {
+        # each of these makes only read-only RPC and content endpoints (a temporary link expires and stores nothing) and stores nothing
+        foreach string name in (("list-folder", "search", "get-metadata", "download-file", "get-file-link",
+                "list-file-revisions", "list-shared-links", "get-account-info", "get-space-usage",
+                "check-job-status", "get-thumbnail", "get-preview", "list-file-members")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(App, name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # the write actions keep the default of an API action, which changes state
+        foreach string name in (("upload-file", "delete-file", "create-shared-link", "save-url",
+                "restore-file-revision")) {
+            *hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(App, name);
+            assertEq(NT_HASH, action.typeCode(), name);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     actionCatalogTest() {
@@ -1842,12 +1865,12 @@ public class DropboxDataProviderTest inherits QUnit::Test {
     # --- live tests (require -c <connection>) ---
 
     private *AbstractConnection getConnection() {
-        *string conn_name = m_options.conn ?? ENV.DROPBOX_CONNECTION;
+        *string conn_name = LiveProvider::get("dropbox", "DROPBOX_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             testSkip("no connection specified; use -c,--connection=ARG or set DROPBOX_CONNECTION");
             return;
         }
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("dropbox", "DROPBOX_CONNECTION", m_options.conn);
         if (conn.getType() != "dropbox") {
             throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting \"dropbox\"", conn_name,
                 conn.getType());

@@ -57,6 +57,13 @@ Select the execution engine.
 \fBtiered\fP is the default and promotes hot functions from AST execution to
 IR and then to JIT-compiled native code.
 .TP
+.B \-\-module\-cleanup\-timeout =\fIms\fP
+The deadline, in milliseconds from its start, of the asynchronous I/O
+operations that the destructors of the data of the modules submit when the
+process ends (default: 5000): they are waited for until the deadline, then
+canceled; \fB0\fP cancels them at once.  Takes precedence over
+\fBQORE_MODULE_CLEANUP_TIMEOUT\fP.
+.TP
 .B \-\-ir\-dump
 Dump the IR representation before execution.
 .TP
@@ -253,6 +260,10 @@ Colon-separated list of directories to search for include files.
 .B QORE_LIBDIR
 Directory containing libqore, used by AOT-compiled programs and \fBqcc\fP
 when resolving the runtime library.
+.TP
+.B QORE_MODULE_CLEANUP_TIMEOUT
+The deadline in milliseconds of the asynchronous I/O work of the module cleanup
+when the process ends (default: 5000); see \fB\-\-module\-cleanup\-timeout\fP.
 .TP
 .B QORE_CHARSET
 Default character encoding if not specified with \fB\-c\fP.

@@ -429,20 +429,16 @@ QoreValue QoreSerializable::serializeValue(const QoreValue val, QoreInternalSeri
         }
 
         case NT_WEAKREF_HASH: {
-            const QoreHashNode* h = val.get<WeakHashReferenceNode>()->get();
-            if (!h) {
-                return QoreValue();
-            }
-            ValueHolder rv(serializeHashToData(*h, true, context, xsink), xsink);
+            // serialized with a reference of its own, or as a new empty hash if it was freed (qore#7198)
+            ReferenceHolder<QoreHashNode> h(val.get<WeakHashReferenceNode>()->lock(), xsink);
+            ValueHolder rv(serializeHashToData(**h, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
         case NT_WEAKREF_LIST: {
-            const QoreListNode* l = val.get<WeakListReferenceNode>()->get();
-            if (!l) {
-                return QoreValue();
-            }
-            ValueHolder rv(serializeListToData(*l, true, context, xsink), xsink);
+            // serialized with a reference of its own, or as a new empty list if it was freed (qore#7198)
+            ReferenceHolder<QoreListNode> l(val.get<WeakListReferenceNode>()->lock(), xsink);
+            ValueHolder rv(serializeListToData(**l, true, context, xsink), xsink);
             return *xsink ? QoreValue() : rv.release();
         }
 
@@ -1302,16 +1298,19 @@ int QoreSerializable::deserializeStaticClassVars(ExceptionSink* xsink, const Qor
             if (*xsink) {
                 return -1;
             }
-            ReferenceHolder<QoreHashNode> h(xsink);
-            ValueHolder vh(m->getValue(), xsink);
-            if (context.flags & QDF_MERGE_STATIC_CLASS_VARS && (vh->getType() == NT_HASH)
-                && (v->getType() == NT_HASH)) {
-                h = vh->get<const QoreHashNode>()->realCopy();
-                h->merge(v->get<const QoreHashNode>(), xsink);
-                if (*xsink) {
-                    return -1;
+            // QDF_MERGE_STATIC_CLASS_VARS includes the QDF_STATIC_CLASS_VARS bit, so all its bits must be set
+            if ((context.flags & QDF_MERGE_STATIC_CLASS_VARS) == QDF_MERGE_STATIC_CLASS_VARS
+                && v->getType() == NT_HASH) {
+                ValueHolder vh(m->getValue(), xsink);
+                if (vh->getType() == NT_HASH) {
+                    ReferenceHolder<QoreHashNode> h(vh->get<const QoreHashNode>()->realCopy(), xsink);
+                    h->merge(v->get<const QoreHashNode>(), xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    // the merged hash replaces the deserialized value; its reference passes to "v"
+                    v = h.release();
                 }
-                v = *h;
             }
             if (m->setValue(*v, xsink)) {
                 xsink->appendLastDescription(" (while setting static var '%s::%s')", cname, ci.getKey());

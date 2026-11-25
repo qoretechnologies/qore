@@ -104,6 +104,8 @@
     |\c %QoreVersionBits|32 or 64 depending on the library target
     |\c %QorePlatformCPU|The CPU targeted by the library
     |\c %QorePlatformOS|The OS targeted by the library
+    |\c %QORE_HAVE_DBI_SENSITIVE_OPTIONS|@ref True "True": DBI driver option information has the \c "sensitive" key (see @ref Qore::SQL::dbi_get_driver_options() "dbi_get_driver_options()"; since %Qore 3.0)
+    |\c %QORE_HAVE_DBI_SENSITIVE_DBNAME|@ref True "True": DBI drivers declare a database name that can hold credentials with @ref Qore::SQL::DBI_CAP_SENSITIVE_DBNAME (see @ref datasource_mask_options; since %Qore 3.0)
     |\c QORE_HAVE_SANDBOX_ENFORCEMENT_LEVEL|@ref True "True": the @ref sandbox_enforcement_level "enforcement level" of sandboxes is available (@ref Qore::SandboxManager::setEnforcementLevel() "SandboxManager::setEnforcementLevel()"; since %Qore 3.0)
     |\c QORE_HAVE_SANDBOX_OBJECT_OWNER_CHECK|@ref True "True": the owner check of objects is available (@ref Qore::SandboxManager::isObjectOwnedByCaller() "SandboxManager::isObjectOwnedByCaller()" and @ref Qore::SandboxManager::checkObjectOwnedByCaller() "SandboxManager::checkObjectOwnedByCaller()"; since %Qore 3.0)
     |\c QORE_HAVE_SANDBOX_OBJECT_TRANSFER|@ref True "True": the transfer of objects to the sandboxed code that trusted code serves is available (@ref Qore::SandboxManager::transferObjectToCaller() "SandboxManager::transferObjectToCaller()"; since %Qore 3.0)

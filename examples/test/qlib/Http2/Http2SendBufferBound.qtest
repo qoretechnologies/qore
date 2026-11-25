@@ -137,13 +137,13 @@ class RecordingHandler inherits ServerSentEventHandler::ServerSentEventHandler {
 
     #! Returns the socket and stream ID of the next HTTP/2 SSE stream
     hash<auto> waitStream() {
-        date deadline = now_us() + HangGuard;
+        date deadline = microseconds(clock_get_monotonic_us()) + HangGuard;
         AutoLock al(rm);
         while (!last) {
-            if (now_us() >= deadline) {
+            if (microseconds(clock_get_monotonic_us()) >= deadline) {
                 throw "TEST-ERROR", "the HTTP/2 SSE stream was not set up";
             }
-            rc.wait(rm, deadline - now_us());
+            rc.wait(rm, deadline - microseconds(clock_get_monotonic_us()));
         }
         return remove last;
     }
@@ -224,7 +224,7 @@ class Http2SendBufferBoundTest inherits QUnit::Test {
         binary conn_window = h2_frame(8, 0, 0, parse_hex_string(sprintf("%08x", 0x7fffffff - 65535)));
         # GET / with accept: text/event-stream (:scheme http or https: static index 6 or 7); no dynamic table and no
         # Huffman coding
-        binary block = (tls ? <8287> : <8286>) + <04> + b1(1) + binary("/") + <01> + b1(9) + binary("localhost")
+        binary block = (tls ? <8287> : <8286>) + <04> + b1(1) + binary("/") + <01> + b1(9) + binary("127.0.0.1")
             + <00> + b1(6) + binary("accept") + b1(17) + binary("text/event-stream");
         s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + conn_window + h2_frame(1, 0x5, 1, block));
 

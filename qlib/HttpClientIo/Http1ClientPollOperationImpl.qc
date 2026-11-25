@@ -60,14 +60,20 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         @param client_pk private key matching \a client_cert (optional)
         @param ssl_ca_file a PEM file with the CA certificates to verify the server with instead of the default CAs
         @param ssl_ca_path a directory with the CA certificates to verify the server with instead of the default CAs
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout,
             *LoggerInterface logger, *int ssl_verify_mode, bool accept_all_certs = False,
             *hash<auto> proxy_info, HttpClientConnection connection,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) :
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store) :
             Http1ClientPollOperationBase(
                 Http1ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
-                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path),
+                    accept_all_certs, client_cert, client_pk, ssl_ca_file, ssl_ca_path, ssl_trust_store),
                 Http1ClientPollOperation::computeConnectTarget(url_info, proxy_info),
                 url_info.host, url_info.port,
                 url_info.protocol == "https",
@@ -158,9 +164,11 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
     */
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
             bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file,
-            *string ssl_ca_path) {
-        Socket sock();
+            *string ssl_ca_path, *SSLTrustStore ssl_trust_store) {
+        # the caller check of the operation, which this method runs first (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
         bool ssl_required = url_info.protocol == "https";
+        Socket sock = ssl_required ? http_client_tls_socket(url_info, client_cert, client_pk) : new Socket();
         if (ssl_required) {
             if (exists ssl_verify_mode) {
                 sock.setSslVerifyMode(ssl_verify_mode);
@@ -168,14 +176,12 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
             if (accept_all_certs) {
                 sock.acceptAllCertificates(True);
             }
-            if (client_cert) {
-                sock.setCertificate(client_cert);
-            }
-            if (client_pk) {
-                sock.setPrivateKey(client_pk);
-            }
             if (ssl_ca_file || ssl_ca_path) {
                 sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
+            }
+            # an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+            if (ssl_trust_store) {
+                sock.setSslTrustStore(ssl_trust_store);
             }
         }
         return sock;

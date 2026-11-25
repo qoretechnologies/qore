@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -130,9 +131,10 @@ public class TogetherDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("TogetherDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.TOGETHER_CONNECTION;
+        conn_name = LiveProvider::get("together", "TOGETHER_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 197 actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("root provider lists 197 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
@@ -152,13 +154,13 @@ public class TogetherDataProviderTest inherits QUnit::Test {
             hash<auto> fixture = item;
             addTestCase("request: " + fixture.action, sub () { operationTest(fixture); });
         }
-        if (ENV.TOGETHERAI_LIVE) {
+        if (LiveProvider::get("together", "TOGETHERAI_LIVE")) {
             addTestCase("live read-only listings and dropdowns", \liveReadOnlyTest());
         }
-        if (ENV.TOGETHERAI_PAID_TESTS) {
+        if (LiveProvider::get("together", "TOGETHERAI_PAID_TESTS")) {
             addTestCase("live bounded chat, embedding, and rerank requests", \livePaidTest());
         }
-        if (ENV.TOGETHERAI_FILE_TESTS) {
+        if (LiveProvider::get("together", "TOGETHERAI_FILE_TESTS")) {
             addTestCase("live temporary file upload, metadata, download, and deletion", \liveFileTest());
         }
         set_return_value(main());
@@ -170,6 +172,24 @@ public class TogetherDataProviderTest inherits QUnit::Test {
             "use a saved Together AI connection for explicitly enabled live tests; "
             "otherwise use TOGETHERAI_APIKEY",
             OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("chat-completion", "text-completion", "create-embeddings", "generate-image", "estimate-fine-tune-price", "preview-fine-tune-data", "rerank", "generate-speech", "transcribe-audio", "translate-audio", "estimate-on-demand-model-resource-cost", "dedicated-preview-rollout-defaults",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("TogetherAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("create-fine-tune", "create-batch", "execute-code", "dedicated-create-rollout",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("TogetherAi", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {
@@ -530,9 +550,11 @@ public class TogetherDataProviderTest inherits QUnit::Test {
 
     private TogetherDataProvider::TogetherDataProvider liveRoot() {
         if (conn_name) {
+            # live-provider-optin: the connection name comes from LiveProvider
             return cast<TogetherDataProvider::TogetherDataProvider>(get_connection(conn_name).getDataProvider());
         }
-        return new TogetherDataProvider::TogetherDataProvider({"apikey": ENV.TOGETHERAI_APIKEY});
+        return new TogetherDataProvider::TogetherDataProvider({"apikey":
+            LiveProvider::get("together", "TOGETHERAI_APIKEY")});
     }
 
     private liveReadOnlyTest() {
@@ -576,22 +598,22 @@ public class TogetherDataProviderTest inherits QUnit::Test {
     private livePaidTest() {
         TogetherDataProvider::TogetherDataProvider root = liveRoot();
         # Models are explicitly chosen after reviewing live availability and pricing.
-        assertTrue(ENV.TOGETHERAI_CHAT_MODEL.val());
+        assertTrue(LiveProvider::get("together", "TOGETHERAI_CHAT_MODEL").val());
         auto chat = root.getChildProvider("chat-completion").doRequest({
-            "model": ENV.TOGETHERAI_CHAT_MODEL,
+            "model": LiveProvider::get("together", "TOGETHERAI_CHAT_MODEL"),
             "messages": ({"role": "user", "content": "Say hi."},), "max_tokens": 8,
         });
         assertTrue(chat.choices[0].message.content.val());
         assertTrue(chat.usage.completion_tokens <= 8);
-        if (ENV.TOGETHERAI_EMBED_MODEL) {
+        if (LiveProvider::get("together", "TOGETHERAI_EMBED_MODEL")) {
             auto embedding = root.getChildProvider("create-embeddings").doRequest({
-                "model": ENV.TOGETHERAI_EMBED_MODEL, "input": "Invoice paid",
+                "model": LiveProvider::get("together", "TOGETHERAI_EMBED_MODEL"), "input": "Invoice paid",
             });
             assertTrue(embedding.data[0].embedding.size() > 0);
         }
-        if (ENV.TOGETHERAI_RERANK_MODEL) {
+        if (LiveProvider::get("together", "TOGETHERAI_RERANK_MODEL")) {
             auto ranked = root.getChildProvider("rerank").doRequest({
-                "model": ENV.TOGETHERAI_RERANK_MODEL, "query": "invoice",
+                "model": LiveProvider::get("together", "TOGETHERAI_RERANK_MODEL"), "query": "invoice",
                 "documents": ("Invoice paid", "Sunny day"), "top_n": 1,
             });
             assertEq(0, ranked.results[0].index);

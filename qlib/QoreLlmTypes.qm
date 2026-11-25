@@ -35,8 +35,9 @@ module QoreLlmTypes {
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
-    # the module's own code waits between request retries with usleep()
-    domains = "PROCESS_CONTROL";
+    # the module's own code waits between request retries with usleep(), and the asynchronous calls use timers of
+    # the async I/O controller and the worker threads of LlmThreadPoolExecutor
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage QoreLlmTypes Module
@@ -82,6 +83,29 @@ module QoreLlmTypes {
 
     - @ref QoreLlmUtils::LlmCancellation — cancellation token for a request,
       set in @ref QoreLlmUtils::LlmRequestOptions::cancellation "LlmRequestOptions::cancellation"
+    - @ref QoreLlmUtils::LlmAsyncOperation — an asynchronous call in flight
+    - @ref QoreLlmUtils::LlmAsyncExecutor — runs the steps and callbacks of asynchronous calls, and
+      @ref QoreLlmUtils::LlmThreadPoolExecutor "LlmThreadPoolExecutor", a simple implementation
+    - @ref QoreLlmUtils::LlmAsyncSseRequest — a streamed request of an asynchronous call, for providers
+
+    @section qorellmtypesasync Asynchronous Calls
+
+    @ref QoreLlmUtils::AbstractLlmProvider::chatAsync() "AbstractLlmProvider::chatAsync()" and
+    @ref QoreLlmUtils::AbstractLlmProvider::chatStreamAsync() "chatStreamAsync()" make the request of
+    @ref QoreLlmUtils::AbstractLlmProvider::chat() "chat()" and @ref QoreLlmUtils::AbstractLlmProvider::chatStream()
+    "chatStream()" without holding a thread while the provider is awaited, and return an
+    @ref QoreLlmUtils::LlmAsyncOperation "LlmAsyncOperation".  The request waits in the async I/O controller, a retry
+    waits on a timer of the controller, and every step that runs %Qore code (preparing the credentials and the body
+    of a request, reading a response, delivering a stream event, the caller's callbacks) runs in a thread of the
+    @ref QoreLlmUtils::LlmAsyncExecutor "executor" that the caller gives with the call.  The retry policy, the errors,
+    the cancellation and the results are those of the synchronous calls.
+
+    Providers implement the asynchronous transport by overriding
+    @ref QoreLlmUtils::AbstractLlmProvider::startChatAsync() "startChatAsync()" and
+    @ref QoreLlmUtils::AbstractLlmProvider::startChatStreamAsync() "startChatStreamAsync()" with
+    @ref QoreLlmUtils::AbstractLlmProvider::startRequestAsync() "startRequestAsync()" and
+    @ref QoreLlmUtils::LlmAsyncSseRequest "LlmAsyncSseRequest"; a provider that does not runs its synchronous call in a
+    thread of the executor (@ref QoreLlmUtils::AbstractLlmProvider::supportsAsyncChat() "supportsAsyncChat()").
 
     @section qorellmtypesrelnotes Release Notes
 
@@ -1390,6 +1414,16 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
         return opts.cancellation ? opts.cancellation.addHandler(handler) : 0;
     }
 
+    #! Returns a transport registration function for a request with a cancellation token
+    /** The transport supplies its abort callback on submission and calls the returned cleanup on every exit. */
+    private code<code<nothing()>(code<nothing()>)> getRequestCancelRegistration(*hash<LlmRequestOptions> opts) {
+        LlmCancellation token = opts.cancellation;
+        return code<nothing()> sub (code<nothing()> abort_request) {
+            int id = token.addHandler(abort_request);
+            return sub () { token.removeHandler(id); };
+        };
+    }
+
     #! Removes a handler registered with @ref addRequestCancelHandler()
     /** @param opts the per-call request overrides given to @ref addRequestCancelHandler()
         @param id the ID returned by @ref addRequestCancelHandler()
@@ -1485,56 +1519,30 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
         (@c RESOURCE_EXHAUSTED).
     */
     auto withRetry(code call, *hash<LlmRequestOptions> opts = NOTHING, *reference<hash<auto>> retry_info) {
-        int attempt = 0;
-        int max_retries = getRequestMaxRetries(opts);
-        int rate_limit_retries = getRequestRateLimitRetries(opts);
-        int request_timeout_ms = opts.timeout_ms ?? config_h.timeout_ms;
-        hash<auto> record = {"attempts": 0, "waits_ms": (), "failures": ()};
+        hash<auto> state = newRetryState(opts);
         while (True) {
-            ++record.attempts;
+            ++state.record.attempts;
             try {
                 auto rv = callCancellable(call, opts);
-                retry_info = record;
+                retry_info = state.record;
                 return rv;
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "LLM-CANCELLED") {
-                    retry_info = record;
+                    retry_info = state.record;
                     rethrow;
                 }
-                hash<auto> failure = getRetryFailureEvidence(ex);
-                record.failures += failure;
-                int status = failure.status ?? 0;
-                *string stopped;
-                if (status != 429 && status < 500) {
-                    stopped = "not_retryable";
-                } else if (attempt >= (status == 429 ? rate_limit_retries : max_retries)) {
-                    stopped = "retries_spent";
-                }
-                int delay;
-                if (!stopped) {
-                    delay = exists failure.retry_after_ms
-                        ? failure.retry_after_ms
-                        : config_h.retry_delay_ms * (1 << attempt);
-                    if (exists failure.retry_after_ms && failure.retry_after_ms > request_timeout_ms) {
-                        stopped = "retry_after_too_long";
-                    } else if (opts.deadline && now_us() + milliseconds(delay) >= opts.deadline) {
-                        stopped = "deadline";
-                    }
-                }
-                if (stopped) {
-                    record.stopped = stopped;
-                    retry_info = record;
+                *int delay = nextRetryDelay(\state, ex, opts);
+                if (!exists delay) {
+                    retry_info = state.record;
                     if (ex.arg.typeCode() == NT_HASH) {
-                        throw ex.err, ex.desc, ex.arg + {"retry": record};
+                        throw ex.err, ex.desc, ex.arg + {"retry": state.record};
                     }
                     rethrow;
                 }
-                ++attempt;
-                record.waits_ms += delay;
                 if (opts.cancellation) {
                     # a cancellation ends the wait at once
                     if (opts.cancellation.waitCancelled(delay)) {
-                        retry_info = record;
+                        retry_info = state.record;
                         opts.cancellation.check();
                     }
                 } else {
@@ -1542,6 +1550,67 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
                 }
             }
         }
+    }
+
+    #! Returns the state of the retry policy of @ref withRetry() for a new call
+    /** The state is updated by @ref nextRetryDelay() after each failed request; its \c record key holds the record
+        of the call's attempts described for @ref withRetry(), whose \c attempts count the caller increments before
+        each request.
+
+        @param opts optional per-call request overrides
+
+        @return the retry state of a call that has made no request yet
+
+        @see @ref startWithRetryAsync(), which applies the same policy to an asynchronous call
+    */
+    hash<auto> newRetryState(*hash<LlmRequestOptions> opts) {
+        return {
+            "attempt": 0,
+            "max_retries": getRequestMaxRetries(opts),
+            "rate_limit_retries": getRequestRateLimitRetries(opts),
+            "request_timeout_ms": opts.timeout_ms ?? config_h.timeout_ms,
+            "record": {"attempts": 0, "waits_ms": (), "failures": ()},
+        };
+    }
+
+    #! Applies the retry policy of @ref withRetry() to a failed request
+    /** Records the failure in \c state.record and decides whether the request is retried.
+
+        @param state the retry state from @ref newRetryState(), updated in place
+        @param ex the error of the failed request
+        @param opts the per-call request overrides given to @ref newRetryState()
+
+        @return the time to wait in milliseconds before the next request, or @ref nothing if no further request is
+        made, in which case \c state.record.stopped gives the reason
+    */
+    *int nextRetryDelay(reference<hash<auto>> state, hash<ExceptionInfo> ex, *hash<LlmRequestOptions> opts) {
+        hash<auto> failure = getRetryFailureEvidence(ex);
+        state.record.failures += failure;
+        int status = failure.status ?? 0;
+        *string stopped;
+        if (status != 429 && status < 500) {
+            stopped = "not_retryable";
+        } else if (state.attempt >= (status == 429 ? state.rate_limit_retries : state.max_retries)) {
+            stopped = "retries_spent";
+        }
+        int delay;
+        if (!stopped) {
+            delay = exists failure.retry_after_ms
+                ? failure.retry_after_ms
+                : config_h.retry_delay_ms * (1 << state.attempt);
+            if (exists failure.retry_after_ms && failure.retry_after_ms > state.request_timeout_ms) {
+                stopped = "retry_after_too_long";
+            } else if (opts.deadline && now_us() + milliseconds(delay) >= opts.deadline) {
+                stopped = "deadline";
+            }
+        }
+        if (stopped) {
+            state.record.stopped = stopped;
+            return NOTHING;
+        }
+        ++state.attempt;
+        state.record.waits_ms += delay;
+        return delay;
     }
 
     #! Returns the evidence of a failed request that @ref withRetry() records
@@ -1590,6 +1659,265 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
             }
         }
         return rv;
+    }
+
+    #! Returns @ref True if the provider makes asynchronous chat calls without holding a thread
+    /** Providers that override @ref startChatAsync() and @ref startChatStreamAsync() with an asynchronous transport
+        return @ref True.  The asynchronous API (@ref chatAsync() and @ref chatStreamAsync()) works with every
+        provider: one that returns @ref False runs its synchronous @ref chat() or @ref chatStream() in a thread of the
+        call's executor, which it then holds while it waits for the provider.
+
+        @return @ref False in the base class
+    */
+    bool supportsAsyncChat() {
+        return False;
+    }
+
+    #! Starts a multi-turn chat call that holds no thread while it waits for the provider
+    /** The request is the request of @ref chat(), with the same retry policy, errors, cancellation and result: its
+        steps run in threads of the executor given in \a async_opts, and the result is available from the returned
+        operation when it is done.
+
+        @param messages conversation history including system, user, assistant and tool messages
+        @param tools optional tool definitions the LLM may call
+        @param opts per-call request overrides; when @ref LlmRequestOptions::cancellation is not given, the
+        operation creates a token of its own, so that @ref LlmAsyncOperation::cancel() can stop the call
+        @param async_opts the executor of the call and its optional completion callback
+
+        @return the operation of the call; its result is a @ref ChatResponse
+
+        @par Example
+        @code{.py}
+LlmThreadPoolExecutor executor(2);
+LlmAsyncOperation op = provider.chatAsync(messages, NOTHING, NOTHING, <LlmAsyncCallOptions>{
+    "executor": executor,
+    "on_complete": sub (LlmAsyncOperation op) {
+        if (!op.isError()) {
+            hash<ChatResponse> response = op.getResult();
+        }
+    },
+});
+        @endcode
+    */
+    LlmAsyncOperation chatAsync(list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts, hash<LlmAsyncCallOptions> async_opts) {
+        hash<LlmRequestOptions> call_opts = opts ?? <LlmRequestOptions>{};
+        LlmAsyncOperation op = LlmAsyncOperation::forCall(\call_opts, async_opts);
+        op.post(sub () {
+            startChatAsync(op, messages, tools, call_opts, sub (hash<ChatResponse> response) {
+                op.complete(response);
+            }, sub (hash<ExceptionInfo> ex) {
+                op.fail(ex);
+            });
+        });
+        return op;
+    }
+
+    #! Starts a streamed chat call that holds no thread while it waits for the provider
+    /** The request is the request of @ref chatStream(), with the same events, errors and cancellation: \a callback
+        receives each event in order, in a thread of the executor given in \a async_opts, and never two at once.  The
+        operation is done after the final event (the one with \c done set) or when the call fails; its result is
+        @ref nothing.
+
+        @param messages conversation history
+        @param callback receives each @ref ChatStreamEvent; an exception it raises stops the call, which then fails
+        with that exception, as it does in @ref chatStream()
+        @param tools optional tool definitions
+        @param opts per-call overrides; when @ref LlmRequestOptions::cancellation is not given, the operation creates
+        a token of its own
+        @param async_opts the executor of the call and its optional completion callback
+
+        @return the operation of the call
+    */
+    LlmAsyncOperation chatStreamAsync(list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback, *list<hash<ToolDefinition>> tools,
+            *hash<LlmRequestOptions> opts, hash<LlmAsyncCallOptions> async_opts) {
+        hash<LlmRequestOptions> call_opts = opts ?? <LlmRequestOptions>{};
+        LlmAsyncOperation op = LlmAsyncOperation::forCall(\call_opts, async_opts);
+        op.post(sub () {
+            startChatStreamAsync(op, messages, callback, tools, call_opts, sub () {
+                op.complete();
+            }, sub (hash<ExceptionInfo> ex) {
+                op.fail(ex);
+            });
+        });
+        return op;
+    }
+
+    #! Starts the request of @ref chat() as a step of an asynchronous operation
+    /** Called in a task of \a op (see @ref LlmAsyncOperation::post()); exactly one of \a on_response and
+        \a error_cb is called later, in a task of \a op, also for an error raised before the request is sent.
+
+        Providers with an asynchronous transport override this method and @ref supportsAsyncChat(); the default
+        runs @ref chat() in the calling task, so it holds a thread of the executor while it waits.
+
+        @param op the operation the request is a step of
+        @param messages conversation history
+        @param tools optional tool definitions
+        @param opts per-call request overrides
+        @param on_response receives the response
+        @param error_cb receives the error of the request, as @ref chat() would raise it
+    */
+    startChatAsync(LlmAsyncOperation op, list<hash<ChatMessage>> messages, *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> opts, code<nothing(hash<ChatResponse>)> on_response,
+            code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<ChatResponse> response;
+        try {
+            response = chat(messages, tools, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        on_response(response);
+    }
+
+    #! Starts the request of @ref chatStream() as a step of an asynchronous operation
+    /** Called in a task of \a op (see @ref LlmAsyncOperation::post()); \a callback receives each event in a task of
+        \a op, and exactly one of \a on_end and \a error_cb is called later, in a task of \a op.
+
+        Providers with an asynchronous transport override this method and @ref supportsAsyncChat(); the default
+        runs @ref chatStream() in the calling task, so it holds a thread of the executor while it waits.
+
+        @param op the operation the request is a step of
+        @param messages conversation history
+        @param callback receives each event
+        @param tools optional tool definitions
+        @param opts per-call request overrides
+        @param on_end called after the final event
+        @param error_cb receives the error of the request, as @ref chatStream() would raise it
+    */
+    startChatStreamAsync(LlmAsyncOperation op, list<hash<ChatMessage>> messages,
+            code<nothing(hash<ChatStreamEvent>)> callback, *list<hash<ToolDefinition>> tools,
+            hash<LlmRequestOptions> opts, code<nothing()> on_end, code<nothing(hash<ExceptionInfo>)> error_cb) {
+        try {
+            chatStream(messages, callback, tools, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        on_end();
+    }
+
+    #! Returns the \c LLM-CANCELLED error of a call whose cancellation token has been cancelled
+    /** @param opts optional per-call request overrides
+
+        @return the error that @ref checkRequestCancelled() would raise, or @ref nothing if the call has not been
+        cancelled
+    */
+    *hash<ExceptionInfo> getRequestCancelledError(*hash<LlmRequestOptions> opts) {
+        if (!opts.cancellation || !opts.cancellation.isCancelled()) {
+            return NOTHING;
+        }
+        try {
+            opts.cancellation.check();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        return NOTHING;
+    }
+
+    #! Sends a request asynchronously with the retry policy of @ref withRetry()
+    /** Each attempt is made in a task of \a op; a failed attempt is retried as @ref withRetry() retries it, after a
+        wait on a timer of the async I/O controller, which holds no thread.  A cancellation of the call's token aborts
+        the attempt in flight or ends the wait at once, and the call then fails with \c LLM-CANCELLED; an attempt
+        that ends after the token is cancelled also fails with \c LLM-CANCELLED, as with @ref callCancellable().
+
+        Must be called in a task of \a op.
+
+        @param op the operation the request is a step of
+        @param opts per-call request overrides
+        @param attempt called in a task of \a op for each attempt with the code that reports its end; it starts the
+        request and returns the code that aborts it.  The request reports its end exactly once, in a task of
+        \a op, with its error or with its value; an exception raised by \a attempt is the error of the attempt
+        @param success_cb receives the value of the successful attempt, in a task of \a op
+        @param error_cb receives the error of the call, in a task of \a op: the error of the last attempt, with the
+        record of the call's attempts as \c retry in its argument when the argument is a hash, as with
+        @ref withRetry(), or \c LLM-CANCELLED
+    */
+    startWithRetryAsync(LlmAsyncOperation op, *hash<LlmRequestOptions> opts,
+            code<code<nothing()>(code<nothing(*hash<ExceptionInfo>, auto)>)> attempt,
+            code<nothing(auto)> success_cb, code<nothing(hash<ExceptionInfo>)> error_cb) {
+        Priv::LlmAsyncRetry retry(self, op, opts, attempt, success_cb, error_cb);
+        retry.start();
+    }
+
+    #! Sends a non-streamed request asynchronously with the retry policy of @ref withRetry()
+    /** Like @ref startWithRetryAsync() for a request whose end is signaled by an
+        @ref Qore::EventNotifier "EventNotifier": the notifier is watched by the async I/O controller, and the
+        response is read in a task of \a op.
+
+        Must be called in a task of \a op.
+
+        @param op the operation the request is a step of
+        @param opts per-call request overrides
+        @param submit called in a task of \a op for each attempt with a new notifier; it submits the request, which
+        signals the notifier when it ends, and returns its @ref LlmAsyncSubmission
+        @param success_cb receives the response, in a task of \a op
+        @param error_cb receives the error of the call, in a task of \a op
+
+        @par Example
+        @code{.py}
+startRequestAsync(op, opts, hash<LlmAsyncSubmission> sub (EventNotifier notifier) {
+    RestClientIo::RestFuture future = rest.restDoRequestAsyncTargetWithNotifier("POST", target, body, hdr,
+        getRequestTimeoutMs(opts), notifier);
+    return <LlmAsyncSubmission>{
+        "cancel": sub () { future.cancel(); },
+        "is_done": bool sub () { return future.isDone(); },
+        "get": auto sub () { return future.get(); },
+    };
+}, sub (auto response) { ... }, sub (hash<ExceptionInfo> ex) { ... });
+        @endcode
+    */
+    startRequestAsync(LlmAsyncOperation op, *hash<LlmRequestOptions> opts,
+            code<hash<LlmAsyncSubmission>(EventNotifier)> submit, code<nothing(auto)> success_cb,
+            code<nothing(hash<ExceptionInfo>)> error_cb) {
+        startWithRetryAsync(op, opts, code<nothing()> sub (code<nothing(*hash<ExceptionInfo>, auto)> done) {
+            EventNotifier notifier();
+            hash<LlmAsyncSubmission> submission = submit(notifier);
+            code<nothing()> cancel_request = submission.cancel;
+            code<bool()> request_done = submission.is_done;
+            code<auto()> get_result = submission.get;
+            try {
+                Priv::LlmAsyncNotifierWatch::watch(notifier, sub () {
+                    op.post(sub () {
+                        auto value;
+                        try {
+                            # the watch also ends when the controller cancels it; the request is then aborted, so
+                            # that reading its result does not wait
+                            if (!request_done()) {
+                                cancel_request();
+                            }
+                            value = get_result();
+                        } catch (hash<ExceptionInfo> ex) {
+                            done(ex);
+                            return;
+                        }
+                        done(NOTHING, value);
+                    });
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                cancel_request();
+                rethrow;
+            }
+            return cancel_request;
+        }, success_cb, error_cb);
+    }
+
+    #! Returns an exception hash with the given values, as a @c throw statement creates it in the calling code
+    /** Used by asynchronous calls to report the same errors as their synchronous counterparts raise.
+
+        @param err the error code
+        @param desc the description
+        @param arg the argument
+
+        @return the exception
+    */
+    static hash<ExceptionInfo> makeException(string err, string desc, auto arg) {
+        try {
+            throw err, desc, arg;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
     }
 
     #! OpenAI-facade hook: adapts an OpenAI tool_choice to provider-native form
@@ -1766,5 +2094,1434 @@ deliverStreamEvent(callback, <ChatStreamEvent>{"done": True}, opts);
         return streamed;
     }
 }
+
+#! Runs the steps and callbacks of asynchronous LLM calls
+/** An asynchronous call (see @ref AbstractLlmProvider::chatAsync() and
+    @ref QoreLlmUtils::LlmBackend::chatCompletionsAsync() "LlmBackend::chatCompletionsAsync()") holds no thread while
+    it waits for the provider: the request waits in the async I/O controller, and a retry waits on a timer of the
+    controller.  Every step that runs %Qore code between the waits (preparing the credentials and the body of the next
+    request, reading a response, delivering a stream event, the caller's callbacks) is handed to the executor given
+    with the call, so the threads that run the calls are the threads of the caller's own pool.
+
+    An implementation runs each task later, in a thread of its own, and never in the thread that calls
+    @ref execute(): tasks are handed over from the threads of the async I/O controller, which must not run them.
+    Tasks may run in any order and in several threads at once: each operation runs its own tasks one at a time and in
+    the order they were handed over.
+
+    @par Example
+    @code{.py}
+# runs the tasks on an application's own worker pool
+class MyExecutor inherits LlmAsyncExecutor {
+    private { MyWorkerPool pool; }
+    constructor(MyWorkerPool pool) { self.pool = pool; }
+    execute(code<nothing()> task) { pool.submit(task); }
+}
+    @endcode
+
+    @see @ref LlmThreadPoolExecutor, a simple implementation
+*/
+public class LlmAsyncExecutor {
+    #! Runs a task later in a thread of the executor
+    /** @param task the task to run; tasks handed over by an operation handle their own errors
+
+        @throw any exception: the task is then not run, and the operation that handed it over fails with this
+        exception
+    */
+    abstract execute(code<nothing()> task);
+}
+
+#! A simple @ref LlmAsyncExecutor with a fixed number of worker threads
+/** The tasks run in the order they are handed over, each in the first free worker.  An exception raised by a task
+    is ignored, so that it cannot stop a worker; the tasks of an asynchronous operation handle their own errors.
+
+    @par Example
+    @code{.py}
+LlmThreadPoolExecutor executor(2);
+on_exit executor.shutdown();
+LlmAsyncOperation op = backend.chatCompletionsAsync(body, <LlmAsyncCallOptions>{"executor": executor});
+hash<auto> response = op.get();
+    @endcode
+
+    @note All methods are thread-safe.
+*/
+public class LlmThreadPoolExecutor inherits LlmAsyncExecutor {
+    private:internal {
+        #! The state shared with the workers, which do not reference the executor
+        Priv::LlmThreadPoolState state;
+    }
+
+    #! Starts the worker threads
+    /** @param threads the number of worker threads; at least 1
+
+        @throw LLM-ASYNC-EXECUTOR-ERROR \a threads is less than 1
+    */
+    constructor(int threads = 1) [dom=THREAD_CONTROL] {
+        if (threads < 1) {
+            throw "LLM-ASYNC-EXECUTOR-ERROR", sprintf("an executor needs at least one thread; got %d", threads);
+        }
+        state = new Priv::LlmThreadPoolState(threads);
+        try {
+            for (int i = 0; i < threads; ++i) {
+                state.startWorker();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            state.shutdown();
+            rethrow;
+        }
+    }
+
+    #! Stops the worker threads; see @ref shutdown()
+    destructor() {
+        state.shutdown();
+    }
+
+    #! Hands a task over to the workers
+    /** @param task the task to run
+
+        @throw LLM-ASYNC-EXECUTOR-ERROR the executor has been shut down
+    */
+    execute(code<nothing()> task) {
+        state.push(task);
+    }
+
+    #! Returns the number of worker threads
+    int getThreadCount() {
+        return state.getThreadCount();
+    }
+
+    #! Stops the workers once the tasks already handed over have run, and waits for them to end
+    /** Tasks handed over afterwards are refused.  Called from a task of the executor, it does not wait for the
+        calling worker.  Calls after the first have no effect.
+    */
+    shutdown() {
+        state.shutdown();
+    }
+}
+
+#! The options of an asynchronous LLM call
+public hashdecl LlmAsyncCallOptions {
+    #! Runs the steps of the call and its callbacks
+    LlmAsyncExecutor executor;
+
+    #! Called once with the operation when the call has ended, in a thread of the executor
+    /** The operation's result or error is set when it is called, and @ref LlmAsyncOperation::wait() returns after it
+        has returned.  An exception that it raises is ignored: the result of the operation is not changed.
+    */
+    *code<nothing(LlmAsyncOperation)> on_complete;
+}
+
+#! A request submitted by a step of an asynchronous call; see @ref AbstractLlmProvider::startRequestAsync()
+public hashdecl LlmAsyncSubmission {
+    #! Aborts the request; the request then ends with an error and signals its notifier
+    code<nothing()> cancel;
+
+    #! Returns @ref True if the request has ended
+    code<bool()> is_done;
+
+    #! Returns the response of a request that has ended, or raises its error
+    code<auto()> get;
+}
+
+#! An asynchronous LLM call in flight
+/** Returned by the asynchronous calls (@ref AbstractLlmProvider::chatAsync(),
+    @ref AbstractLlmProvider::chatStreamAsync() and the
+    @ref QoreLlmUtils::LlmBackend "LlmBackend" methods ending in \c Async).  The call holds no thread while it waits
+    for the provider; its steps and callbacks run in threads of the executor of the call (see @ref LlmAsyncExecutor).
+
+    The call ends once: with a result (@ref getResult()) or with an error (@ref getError()), which are those the
+    synchronous call would return or raise for the same responses of the provider.  @ref cancel() stops the call as
+    @ref LlmCancellation::cancel() stops a synchronous call: the request in flight is aborted, no retry or repair
+    request follows, and the call ends with \c LLM-CANCELLED.
+
+    @par Example
+    @code{.py}
+LlmThreadPoolExecutor executor(4);
+LlmCancellation stop();
+LlmAsyncOperation op = backend.chatCompletionsAsync(body, <LlmAsyncCallOptions>{
+    "executor": executor,
+    "on_complete": sub (LlmAsyncOperation op) {
+        # runs in a thread of the executor
+        if (*hash<ExceptionInfo> ex = op.getError()) {
+            printf("failed: %s: %s\n", ex.err, ex.desc);
+        } else {
+            printf("usage: %y\n", op.getResult().usage);
+        }
+    },
+}, <LlmFacadeCallOptions>{"cancellation": stop});
+# another thread may call stop.cancel() or op.cancel() at any time
+    @endcode
+
+    @par Implementing an asynchronous step
+    The steps of an operation are tasks given to @ref post(): they run one at a time, in the order given, in threads
+    of the executor; an exception that a task raises ends the operation with that error.  A step that waits hands
+    the wait to the async I/O controller and posts the next step when the wait ends; the last step calls
+    @ref complete() or @ref fail().
+
+    @note All methods are thread-safe.
+*/
+public class LlmAsyncOperation {
+    private:internal {
+        #! Runs the tasks
+        LlmAsyncExecutor executor;
+
+        #! The token that stops the call
+        LlmCancellation cancellation;
+
+        #! Called when the call has ended
+        *code<nothing(LlmAsyncOperation)> on_complete;
+
+        #! Guards the state
+        Mutex m();
+
+        #! Signaled when the operation is done
+        Condition cond();
+
+        #! True once the result or the error is set
+        bool finished = False;
+
+        #! True once the completion callback has returned
+        bool done = False;
+
+        #! The result of the call
+        auto result;
+
+        #! The error of the call
+        *hash<ExceptionInfo> error;
+
+        #! Tasks waiting to run, in order; each is a hash with "task", "is_final" and "handle" keys
+        /** \c handle is a handle of the work of the module cleanup that posted the task (0 outside of such work),
+            released once the task has run or is dropped, so that the cleanup at the end of the process waits for the
+            task as for the work itself (see
+            @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7339)
+        */
+        list<hash<auto>> pending = ();
+
+        #! True while a task of the executor runs the pending tasks
+        bool draining = False;
+
+        #! Code run once when the result or the error is set, keyed by ID
+        hash<string, code> finish_hooks = {};
+
+        #! The last finish hook ID issued
+        int hook_seq = 0;
+
+        #! The thread that runs the completion callback while it runs
+        int completing_tid = 0;
+
+        #! The thread that runs the tasks while it runs them
+        int task_tid = 0;
+    }
+
+    #! Creates the operation of a call
+    /** @param executor runs the tasks of the call
+        @param cancellation the token that stops the call; a new token is created if not given
+        @param on_complete called once with the operation when the call has ended, in a thread of the executor
+    */
+    constructor(LlmAsyncExecutor executor, *LlmCancellation cancellation,
+            *code<nothing(LlmAsyncOperation)> on_complete) {
+        self.executor = executor;
+        self.cancellation = cancellation ?? new LlmCancellation();
+        self.on_complete = on_complete;
+    }
+
+    #! Releases the handles of work of the module cleanup of the tasks that did not run
+    /** Tasks are left only if the executor dropped the task that runs them (qore#7339): the cleanup at the end of the
+        process does not then wait for them
+    */
+    destructor() {
+        foreach hash<auto> item in (pending) {
+            AsyncIoController::releaseModuleCleanupWork(item.handle);
+        }
+    }
+
+    #! Creates the operation of a call and gives the call the operation's token
+    /** @param opts the per-call options of the call; @ref LlmRequestOptions::cancellation is set to a new token if
+        it is not given
+        @param async_opts the executor of the call and its optional completion callback
+
+        @return the operation of the call, whose token is @ref LlmRequestOptions::cancellation of \a opts
+    */
+    static LlmAsyncOperation forCall(reference<hash<LlmRequestOptions>> opts, hash<LlmAsyncCallOptions> async_opts) {
+        if (!async_opts.executor) {
+            throw "LLM-REQUEST-ERROR", "an asynchronous call needs an executor (LlmAsyncCallOptions::executor)";
+        }
+        if (!opts.cancellation) {
+            opts.cancellation = new LlmCancellation();
+        }
+        return new LlmAsyncOperation(async_opts.executor, opts.cancellation, async_opts.on_complete);
+    }
+
+    #! Returns the executor of the call
+    LlmAsyncExecutor getExecutor() {
+        return executor;
+    }
+
+    #! Returns the token that stops the call
+    LlmCancellation getCancellation() {
+        return cancellation;
+    }
+
+    #! Stops the call
+    /** Cancels the call's token (see @ref LlmCancellation::cancel()): the request in flight is aborted at once, a
+        retry wait ends, no further request is made, and the call ends with \c LLM-CANCELLED unless it has already
+        ended.  A token given by the caller is cancelled with it, which stops every call that it was given to.
+
+        @param reason an optional reason reported in the \c LLM-CANCELLED error
+    */
+    cancel(*string reason) {
+        cancellation.cancel(reason);
+    }
+
+    #! Returns @ref True if the call has ended and its completion callback has returned
+    bool isDone() {
+        AutoLock al(m);
+        return done;
+    }
+
+    #! Returns @ref True if the call has ended with an error
+    /** Valid in the completion callback, which runs once the call has ended.
+    */
+    bool isError() {
+        AutoLock al(m);
+        return finished && exists error;
+    }
+
+    #! Returns the error of a call that has ended with an error, or @ref nothing
+    /** Valid in the completion callback, which runs once the call has ended.
+    */
+    *hash<ExceptionInfo> getError() {
+        AutoLock al(m);
+        return finished ? error : NOTHING;
+    }
+
+    #! Returns the result of a call that has ended
+    /** Valid in the completion callback, which runs once the call has ended.
+
+        @return the result of the call: what the synchronous call returns
+
+        @throw LLM-ASYNC-NOT-DONE the call has not ended yet
+        @throw any the error of a call that has ended with an error is raised
+    */
+    auto getResult() {
+        AutoLock al(m);
+        if (!finished) {
+            throw "LLM-ASYNC-NOT-DONE", "the asynchronous LLM call has not ended yet";
+        }
+        if (error) {
+            throw error.err, error.desc, error.arg;
+        }
+        return result;
+    }
+
+    #! Waits until the call has ended and its completion callback has returned
+    /** For tests and for callers that are synchronous themselves; a caller of an asynchronous call normally uses
+        the completion callback instead.  Called from the completion callback, it returns at once.
+
+        @param timeout_ms the maximum time to wait; not given or negative: waits until the call has ended
+
+        @return @ref True if the call has ended, @ref False if the timeout expired first
+    */
+    bool wait(*timeout timeout_ms) {
+        *date deadline = exists timeout_ms && timeout_ms >= 0 ? now_us() + milliseconds(timeout_ms) : NOTHING;
+        AutoLock al(m);
+        # the completion callback itself (or code it calls) sees the call as ended: it is done once it returns
+        if (finished && completing_tid == gettid()) {
+            return True;
+        }
+        while (!done) {
+            if (!deadline) {
+                cond.wait(m);
+                continue;
+            }
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                break;
+            }
+            cond.wait(m, remaining);
+        }
+        return done;
+    }
+
+    #! Waits until the call has ended and returns its result or raises its error
+    /** @param timeout_ms the maximum time to wait; not given or negative: waits until the call has ended
+
+        @return the result of the call
+
+        @throw LLM-ASYNC-TIMEOUT the call has not ended within \a timeout_ms
+        @throw any the error of a call that has ended with an error is raised
+    */
+    auto get(*timeout timeout_ms) {
+        if (!wait(timeout_ms)) {
+            throw "LLM-ASYNC-TIMEOUT", sprintf("the asynchronous LLM call has not ended within %d ms", timeout_ms);
+        }
+        return getResult();
+    }
+
+    #! Returns @ref True once the result or the error of the call is set
+    /** Steps of the call use it to see that the call has ended; the completion callback may not have run yet.
+    */
+    bool isFinished() {
+        AutoLock al(m);
+        return finished;
+    }
+
+    #! Runs a step of the call in a thread of the executor
+    /** The tasks of an operation run one at a time, in the order they are given; an exception that a task raises
+        ends the call with that error.  Tasks given after the result or the error is set are not run.  This method
+        does not wait, and it can be called in any thread, also in the threads of the async I/O controller.
+
+        @param task the step to run
+    */
+    post(code<nothing()> task) {
+        postIntern(task, False);
+    }
+
+    #! Ends the call with a result
+    /** Runs the finish hooks, then the completion callback in a thread of the executor.
+
+        @param value the result of the call
+
+        @return @ref True if the call has ended with this result, @ref False if it had already ended
+    */
+    bool complete(auto value) {
+        return finish(value, NOTHING);
+    }
+
+    #! Ends the call with an error
+    /** Runs the finish hooks, then the completion callback in a thread of the executor.
+
+        @param ex the error of the call
+
+        @return @ref True if the call has ended with this error, @ref False if it had already ended
+    */
+    bool fail(hash<ExceptionInfo> ex) {
+        return finish(NOTHING, ex);
+    }
+
+    #! Adds code that runs once when the result or the error of the call is set
+    /** Steps use it to release what they hold (a cancellation handler, a timer, a request in flight) whatever ends
+        the call.  The code runs in the thread that ends the call; an exception that it raises is ignored.
+
+        @param hook the code to run; it runs at once if the call has already ended
+
+        @return an ID for @ref removeFinishHook(), or 0 if the hook has already run
+    */
+    int addFinishHook(code<nothing()> hook) {
+        {
+            AutoLock al(m);
+            if (!finished) {
+                int id = ++hook_seq;
+                finish_hooks{id} = hook;
+                return id;
+            }
+        }
+        runHook(hook);
+        return 0;
+    }
+
+    #! Removes a hook added with @ref addFinishHook()
+    /** @param id the ID returned by @ref addFinishHook()
+    */
+    removeFinishHook(int id) {
+        if (!id) {
+            return;
+        }
+        AutoLock al(m);
+        remove finish_hooks{id};
+    }
+
+    #! Returns @ref True if the calling thread is running a task of this operation
+    /** Steps use it to tell whether they may wait: a task runs in a thread of the executor, which may wait, while
+        other code of a call (a cancellation handler, a finish hook) can run in a thread of the async I/O controller,
+        which must not wait.
+    */
+    bool inTask() {
+        AutoLock al(m);
+        return task_tid == gettid();
+    }
+
+    #! Runs the pending tasks in a thread of the executor
+    private:internal drain() {
+        {
+            AutoLock al(m);
+            task_tid = gettid();
+        }
+        on_exit {
+            AutoLock al(m);
+            task_tid = 0;
+        }
+        while (True) {
+            hash<auto> item;
+            {
+                AutoLock al(m);
+                if (!pending) {
+                    draining = False;
+                    return;
+                }
+                item = shift pending;
+                # a step given after the call has ended is not run
+                if (finished && !item.is_final) {
+                    AsyncIoController::releaseModuleCleanupWork(item.handle);
+                    continue;
+                }
+            }
+            try {
+                code<nothing()> task = item.task;
+                # the task runs as the work of the module cleanup that posted it, if any, which then waits for it; the
+                # handle is released when it has run (qore#7339)
+                if (item.handle) {
+                    AsyncIoController::runModuleCleanupWork(item.handle, task);
+                } else {
+                    task();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (item.is_final) {
+                    # the completion callback is the caller's code, whose error cannot change the result
+                    markDone();
+                } else {
+                    fail(ex);
+                }
+            }
+        }
+    }
+
+    #! Queues a task and starts a drain if none is running
+    private:internal postIntern(code<nothing()> task, bool is_final) {
+        {
+            AutoLock al(m);
+            if (done) {
+                return;
+            }
+            # work of the module cleanup at the end of the process that posts the task (an HTTP or SSE callback of a
+            # canceled request, for example) hands itself over to the thread of the executor that runs it (0 outside
+            # of such work) (qore#7339)
+            pending += {"task": task, "is_final": is_final, "handle": AsyncIoController::holdModuleCleanupWork()};
+            if (draining) {
+                return;
+            }
+            draining = True;
+        }
+        # the executor's task references the operation, which stays alive until its tasks have run
+        LlmAsyncOperation op = self;
+        try {
+            executor.execute(sub () { op.drain(); });
+        } catch (hash<ExceptionInfo> ex) {
+            executorFailed(ex);
+        }
+    }
+
+    #! Ends the call when the executor refuses its tasks; the completion callback, which needs a thread of the
+    #! executor, is not run
+    private:internal executorFailed(hash<ExceptionInfo> ex) {
+        list<hash<auto>> dropped;
+        {
+            AutoLock al(m);
+            dropped = pending;
+            pending = ();
+            draining = False;
+        }
+        # the tasks do not run: the cleanup does not wait for them
+        map AsyncIoController::releaseModuleCleanupWork($1.handle), dropped;
+        setFinished(NOTHING, ex);
+        markDone();
+    }
+
+    #! Sets the result or the error and runs the finish hooks; returns False if the call had already ended
+    private:internal bool setFinished(auto value, *hash<ExceptionInfo> ex) {
+        hash<string, code> hooks;
+        {
+            AutoLock al(m);
+            if (finished) {
+                return False;
+            }
+            finished = True;
+            result = value;
+            error = ex;
+            hooks = finish_hooks;
+            finish_hooks = {};
+        }
+        foreach code hook in (hooks.iterator()) {
+            runHook(hook);
+        }
+        return True;
+    }
+
+    #! Ends the call
+    private:internal bool finish(auto value, *hash<ExceptionInfo> ex) {
+        if (!setFinished(value, ex)) {
+            return False;
+        }
+        LlmAsyncOperation op = self;
+        postIntern(sub () {
+            on_exit op.markDone();
+            if (op.on_complete) {
+                op.setCompleting(True);
+                on_exit op.setCompleting(False);
+                op.on_complete(op);
+            }
+        }, True);
+        return True;
+    }
+
+    #! Records the thread that runs the completion callback
+    private:internal setCompleting(bool completing) {
+        AutoLock al(m);
+        completing_tid = completing ? gettid() : 0;
+    }
+
+    #! Marks the operation done and wakes the waiting threads
+    private:internal markDone() {
+        AutoLock al(m);
+        if (done) {
+            return;
+        }
+        done = True;
+        cond.broadcast();
+    }
+
+    #! Runs a finish hook
+    private:internal static runHook(code<nothing()> hook) {
+        try {
+            hook();
+        } catch (hash<ExceptionInfo> ex) {
+            # a hook releases resources; its failure cannot change how the call ended
+        }
+    }
+}
+
+#! A streamed request of an asynchronous call: one Server-Sent Events stream with the retry policy of the call
+/** Providers use this class to implement @ref AbstractLlmProvider::startChatStreamAsync(): the transport delivers
+    the start, the events and the end of each attempt's stream with @ref sseConnected(), @ref sseEvent() and
+    @ref sseClosed(), from any thread; the provider's event handler runs in tasks of the operation, in order.
+
+    A stream that fails before it starts (for example with an HTTP 429 answer) is retried as
+    @ref AbstractLlmProvider::withRetry() retries it; once the stream has started, an error ends the call.  A
+    cancellation of the call's token stops the stream at once, and the call ends with \c LLM-CANCELLED.  The stream
+    fails when no event arrives within the idle timeout given to the transport, and with the deadline given here.
+
+    @note All methods are thread-safe.
+*/
+public class LlmAsyncSseRequest {
+    public {
+        #! The stream has ended normally
+        const ClosedEnd = "end";
+        #! No event arrived within the idle timeout
+        const ClosedIdleTimeout = "idle-timeout";
+        #! The stream reported an error
+        const ClosedError = "error";
+    }
+
+    private:internal {
+        AbstractLlmProvider provider;
+        LlmAsyncOperation op;
+        *hash<LlmRequestOptions> opts;
+        code<code<nothing()>(LlmAsyncSseRequest, int)> open;
+        code<bool(hash<auto>)> on_event;
+        code<nothing()> on_eof;
+        code<hash<ExceptionInfo>()> timeout_error;
+        code<nothing()> on_end;
+        code<nothing(hash<ExceptionInfo>)> error_cb;
+        code<hash<ExceptionInfo>(hash<ExceptionInfo>)> start_error;
+        *int deadline_ms;
+        *string start_desc;
+
+        #! Guards the fields that cancellation handlers and finish hooks read
+        Mutex m();
+        #! The sequence number of the current attempt
+        int attempt_seq = 0;
+        #! Reports the end of the current attempt's start to the retry policy
+        *code<nothing(*hash<ExceptionInfo>, auto)> attempt_done;
+        #! Stops the transport of the current attempt
+        *code<nothing()> stop;
+        #! True once the stream of the current attempt has started
+        bool streaming = False;
+        #! True once the request has ended
+        bool ended = False;
+        int cancel_id = 0;
+        int deadline_timer = 0;
+        int hook_id = 0;
+    }
+
+    #! Creates the request
+    /** @param provider the provider making the request
+        @param op the operation the request is a step of
+        @param opts per-call request overrides
+        @param open opens the stream of an attempt, in a task of \a op, and returns the code that stops it; it
+        receives this object and the attempt number to give to @ref sseConnected(), @ref sseEvent() and
+        @ref sseClosed()
+        @param on_event handles an event of the stream in a task of \a op; returns @ref True if the stream is complete,
+        and may raise an exception, which ends the call with it
+        @param on_eof called in a task of \a op when the stream is complete, before \a on_end; may raise an exception,
+        which ends the call with it
+        @param timeout_error returns the error of a stream that delivered no event in time
+        @param start_error returns the error of the call when the stream could not be started, given the error of the
+        last attempt (an \c LLM-CANCELLED error is never given to it)
+        @param on_end called in a task of \a op when the stream is complete
+        @param error_cb receives the error of the call in a task of \a op
+        @param deadline_ms if given, the time in milliseconds by which the stream must be complete
+        @param start_desc the method and path of the request, as in \c "POST /v1/messages", for the error of a stream
+        whose response does not start in time, which is then the one that a synchronous stream reader raises
+    */
+    constructor(AbstractLlmProvider provider, LlmAsyncOperation op, *hash<LlmRequestOptions> opts,
+            code<code<nothing()>(LlmAsyncSseRequest, int)> open, code<bool(hash<auto>)> on_event,
+            code<nothing()> on_eof, code<hash<ExceptionInfo>()> timeout_error,
+            code<hash<ExceptionInfo>(hash<ExceptionInfo>)> start_error, code<nothing()> on_end,
+            code<nothing(hash<ExceptionInfo>)> error_cb, *int deadline_ms, *string start_desc) {
+        self.provider = provider;
+        self.op = op;
+        self.opts = opts;
+        self.open = open;
+        self.on_event = on_event;
+        self.on_eof = on_eof;
+        self.timeout_error = timeout_error;
+        self.start_error = start_error;
+        self.on_end = on_end;
+        self.error_cb = error_cb;
+        self.deadline_ms = deadline_ms;
+        self.start_desc = start_desc;
+    }
+
+    #! Returns the error of a stream whose response has not started in time
+    private:internal hash<ExceptionInfo> startTimeoutError(*hash<ExceptionInfo> ex) {
+        if (start_desc) {
+            return AbstractLlmProvider::makeException("HTTPCLIENT-TIMEOUT",
+                sprintf("timeout waiting for SSE response headers for %s", start_desc), NOTHING);
+        }
+        return ex ?? AbstractLlmProvider::makeException("HTTPCLIENT-TIMEOUT", "LLM call deadline exhausted", NOTHING);
+    }
+
+    #! Returns the error of a stream that an SSE observable closed
+    /** @param info the data of the observable's close event: a \c reason key, absent when the stream ended normally,
+        and an \c error key with the error of a stream that failed
+
+        @return the error to give to @ref sseClosed(), or @ref nothing for a stream that ended normally or whose idle
+        timeout expired
+    */
+    static *hash<ExceptionInfo> getCloseError(hash<auto> info) {
+        if (!exists info.reason || info.reason == "idle-timeout") {
+            return NOTHING;
+        }
+        auto error = info.error;
+        if (info.reason == "stream-error") {
+            # an event larger than the maximum event size, as a synchronous stream reader reports it
+            if (error.typeCode() == NT_HASH && error.err == "SSE-EVENT-TOO-LARGE") {
+                return AbstractLlmProvider::makeException(error.err, error.desc ?? "", NOTHING);
+            }
+            # the error item of the stream (a hash with "err" and "desc" keys), reported as a synchronous stream
+            # reader reports it
+            return AbstractLlmProvider::makeException("SSE-STREAM-ERROR", sprintf("stream error: %y", error),
+                NOTHING);
+        }
+        if (error.typeCode() == NT_HASH && error.err.typeCode() == NT_STRING) {
+            # the error itself, with its call stack and chained errors
+            return cast<hash<ExceptionInfo>>(error);
+        }
+        return AbstractLlmProvider::makeException("SSE-STREAM-ERROR", sprintf("the event stream was closed: %s",
+            info.reason), NOTHING);
+    }
+
+    #! Starts the request; must be called in a task of the operation
+    start() {
+        LlmAsyncSseRequest req = self;
+        hook_id = op.addFinishHook(sub () { req.release(); });
+        if (deadline_ms) {
+            LlmAsyncOperation o = op;
+            deadline_timer = Qore::AsyncIoController::addTimerDelay(deadline_ms, sub () {
+                o.post(sub () { req.deadlineReached(); });
+            });
+        }
+        provider.startWithRetryAsync(op, opts, code<nothing()> sub (code<nothing(*hash<ExceptionInfo>, auto)> done) {
+            return req.startAttempt(done);
+        }, sub (auto v) {
+            req.started();
+        }, sub (hash<ExceptionInfo> ex) {
+            req.startFailed(ex);
+        });
+    }
+
+    #! Reports that the stream of an attempt has started; can be called in any thread
+    /** @param attempt the attempt number given to the code that opened the stream
+    */
+    sseConnected(int attempt) {
+        LlmAsyncSseRequest req = self;
+        op.post(sub () { req.handleConnected(attempt); });
+    }
+
+    #! Reports an event of the stream of an attempt; can be called in any thread
+    /** @param attempt the attempt number given to the code that opened the stream
+        @param event the event: a hash with \c event and \c data keys, as in @ref Qore::SseMessageInfo
+    */
+    sseEvent(int attempt, hash<auto> event) {
+        LlmAsyncSseRequest req = self;
+        op.post(sub () { req.handleEvent(attempt, event); });
+    }
+
+    #! Reports the end of the stream of an attempt; can be called in any thread
+    /** @param attempt the attempt number given to the code that opened the stream
+        @param how @ref ClosedEnd, @ref ClosedIdleTimeout or @ref ClosedError
+        @param ex the error, for a stream that failed
+    */
+    sseClosed(int attempt, string how, *hash<ExceptionInfo> ex) {
+        LlmAsyncSseRequest req = self;
+        op.post(sub () { req.handleClosed(attempt, how, ex); });
+    }
+
+    #! Starts an attempt; called by the retry policy in a task of the operation
+    private:internal code<nothing()> startAttempt(code<nothing(*hash<ExceptionInfo>, auto)> done) {
+        int attempt;
+        {
+            AutoLock al(m);
+            attempt = ++attempt_seq;
+            attempt_done = done;
+            streaming = False;
+        }
+        code<nothing()> stop_attempt = open(self, attempt);
+        {
+            AutoLock al(m);
+            if (attempt == attempt_seq && !ended) {
+                stop = stop_attempt;
+            }
+        }
+        LlmAsyncSseRequest req = self;
+        LlmAsyncOperation o = op;
+        return sub () {
+            req.stopTransport();
+            # the attempt ends even if the transport reports nothing after it was stopped
+            o.post(sub () { req.handleClosed(attempt, ClosedEnd); });
+        };
+    }
+
+    #! The stream has started: cancellation now stops it
+    private:internal started() {
+        LlmAsyncSseRequest req = self;
+        LlmAsyncOperation o = op;
+        int id = provider.addRequestCancelHandler(opts, sub () {
+            req.stopTransport();
+            o.post(sub () { req.cancelled(); });
+        });
+        {
+            AutoLock al(m);
+            if (!ended) {
+                cancel_id = id;
+                return;
+            }
+        }
+        # the request ended while the handler was added
+        provider.removeRequestCancelHandler(opts, id);
+    }
+
+    #! The stream could not be started
+    private:internal startFailed(hash<ExceptionInfo> ex) {
+        if (!end()) {
+            return;
+        }
+        error_cb(ex.err == "LLM-CANCELLED" ? ex : start_error(ex));
+    }
+
+    private:internal handleConnected(int attempt) {
+        *code<nothing(*hash<ExceptionInfo>, auto)> done;
+        {
+            AutoLock al(m);
+            if (ended || attempt != attempt_seq || !attempt_done) {
+                return;
+            }
+            done = remove attempt_done;
+            streaming = True;
+        }
+        done(NOTHING, True);
+    }
+
+    private:internal handleEvent(int attempt, hash<auto> event) {
+        {
+            AutoLock al(m);
+            if (ended || attempt != attempt_seq || !streaming) {
+                return;
+            }
+        }
+        bool complete;
+        try {
+            complete = on_event(event);
+        } catch (hash<ExceptionInfo> ex) {
+            failStream(ex);
+            return;
+        }
+        if (complete) {
+            completeStream();
+        }
+    }
+
+    private:internal handleClosed(int attempt, string how, *hash<ExceptionInfo> ex) {
+        *code<nothing(*hash<ExceptionInfo>, auto)> done;
+        {
+            AutoLock al(m);
+            if (ended || attempt != attempt_seq) {
+                return;
+            }
+            if (!streaming) {
+                if (!attempt_done) {
+                    return;
+                }
+                done = remove attempt_done;
+            }
+        }
+        if (done) {
+            # the stream ended before it started: an error of the attempt, which the retry policy handles
+            if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                ex = startTimeoutError(ex);
+            }
+            done(ex ?? AbstractLlmProvider::makeException("HTTPCLIENT-CANCELLED",
+                "the event stream was closed before it started", NOTHING));
+            return;
+        }
+        # an error of the transport is reported as LLM-CANCELLED once the call is cancelled, as in a synchronous call
+        if (*hash<ExceptionInfo> cancel_ex = provider.getRequestCancelledError(opts)) {
+            failStream(cancel_ex);
+            return;
+        }
+        switch (how) {
+            case ClosedEnd:
+                completeStream();
+                break;
+            case ClosedIdleTimeout:
+                failStream(timeout_error());
+                break;
+            default:
+                failStream(ex ?? AbstractLlmProvider::makeException("SSE-STREAM-ERROR", "the event stream failed",
+                    NOTHING));
+                break;
+        }
+    }
+
+    #! The call's token has been cancelled while the stream runs
+    private:internal cancelled() {
+        if (*hash<ExceptionInfo> cancel_ex = provider.getRequestCancelledError(opts)) {
+            failStream(cancel_ex);
+        }
+    }
+
+    #! The deadline of the stream has passed
+    private:internal deadlineReached() {
+        *code<nothing(*hash<ExceptionInfo>, auto)> done;
+        {
+            AutoLock al(m);
+            if (ended) {
+                return;
+            }
+            deadline_timer = 0;
+            if (!streaming) {
+                done = remove attempt_done;
+            }
+        }
+        if (done) {
+            stopTransport();
+            done(startTimeoutError());
+            return;
+        }
+        if (!streaming) {
+            # between attempts: the retry policy's own deadline ends the call
+            return;
+        }
+        failStream(timeout_error());
+    }
+
+    #! The stream is complete
+    private:internal completeStream() {
+        try {
+            on_eof();
+        } catch (hash<ExceptionInfo> ex) {
+            failStream(ex);
+            return;
+        }
+        if (!end()) {
+            return;
+        }
+        stopTransport();
+        on_end();
+    }
+
+    #! The stream has failed
+    private:internal failStream(hash<ExceptionInfo> ex) {
+        if (!end()) {
+            return;
+        }
+        stopTransport();
+        error_cb(ex);
+    }
+
+    #! Ends the request; returns False if it had already ended
+    private:internal bool end() {
+        int id;
+        int timer;
+        {
+            AutoLock al(m);
+            if (ended) {
+                return False;
+            }
+            ended = True;
+            id = cancel_id;
+            cancel_id = 0;
+            timer = deadline_timer;
+            deadline_timer = 0;
+        }
+        provider.removeRequestCancelHandler(opts, id);
+        if (timer) {
+            Qore::AsyncIoController::cancelTimer(timer);
+        }
+        op.removeFinishHook(hook_id);
+        return True;
+    }
+
+    #! Stops the transport of the current attempt; can be called in any thread
+    /** Stopping a stream can wait until the async I/O controller has stopped reading it, so it waits only in a task
+        of the operation, which runs in a thread of the executor.  Anywhere else (a cancellation handler, or a finish
+        hook run in a thread of the controller when the executor refuses a task) it is stopped in a thread of its own,
+        so that a thread of the controller never waits for the controller.
+    */
+    private:internal stopTransport() {
+        *code<nothing()> s;
+        {
+            AutoLock al(m);
+            s = remove stop;
+        }
+        if (!s) {
+            return;
+        }
+        if (op.inTask()) {
+            LlmAsyncSseRequest::runStop(s);
+            return;
+        }
+        # work of the module cleanup that releases the request hands itself over to the thread that stops the
+        # transport (qore#7339); wrapped here, in this thread, as background evaluates its expression in the new
+        # thread; the call is created by a static method, so that it does not refer to this object
+        code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(LlmAsyncSseRequest::getStop(s));
+        background c();
+    }
+
+    #! Returns a call that stops a transport; static, so that it does not refer to an object
+    private:internal static code<nothing()> getStop(code<nothing()> stop_transport) {
+        return sub () { LlmAsyncSseRequest::runStop(stop_transport); };
+    }
+
+    #! Stops a transport
+    private:internal static runStop(code<nothing()> stop_transport) {
+        try {
+            stop_transport();
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream is being abandoned; a failure to close it cannot change how the call ends
+        }
+    }
+
+    #! Releases the request when the operation ends otherwise
+    private:internal release() {
+        if (end()) {
+            stopTransport();
+        }
+    }
+}
+
+#! Private implementation classes of the asynchronous LLM API
+namespace Priv {
+#! The state of an LlmThreadPoolExecutor, shared with its workers
+class LlmThreadPoolState {
+    private:internal {
+        Queue tasks();
+        Counter running();
+        Mutex m();
+        bool stopped = False;
+        int size;
+        #! The thread IDs of the workers
+        hash<string, bool> worker_tids = {};
+    }
+
+    constructor(int size) {
+        self.size = size;
+    }
+
+    startWorker() {
+        running.inc();
+        try {
+            background LlmThreadPoolState::runWorker(self);
+        } catch (hash<ExceptionInfo> ex) {
+            running.dec();
+            rethrow;
+        }
+    }
+
+    push(code<nothing()> task) {
+        AutoLock al(m);
+        if (stopped) {
+            throw "LLM-ASYNC-EXECUTOR-ERROR", "the executor has been shut down";
+        }
+        tasks.push(task);
+    }
+
+    int getThreadCount() {
+        return size;
+    }
+
+    shutdown() {
+        bool own_worker;
+        {
+            AutoLock al(m);
+            if (stopped) {
+                return;
+            }
+            stopped = True;
+            own_worker = worker_tids{gettid()} ?? False;
+        }
+        for (int i = 0; i < size; ++i) {
+            tasks.push(NOTHING);
+        }
+        if (own_worker) {
+            # a worker cannot wait for itself; it ends when its task returns
+            return;
+        }
+        running.waitForZero();
+    }
+
+    private:internal setWorker(bool active) {
+        AutoLock al(m);
+        if (active) {
+            worker_tids{gettid()} = True;
+        } else {
+            remove worker_tids{gettid()};
+        }
+    }
+
+    static runWorker(LlmThreadPoolState state) {
+        state.setWorker(True);
+        on_exit {
+            state.setWorker(False);
+            state.running.dec();
+        }
+        while (True) {
+            auto task = state.tasks.get();
+            if (!exists task) {
+                break;
+            }
+            try {
+                task();
+            } catch (hash<ExceptionInfo> ex) {
+                # a task handles its own errors; one that does not cannot stop the worker
+            }
+        }
+    }
+}
+
+#! Watches an EventNotifier with the async I/O controller and calls code once when it is signaled or the watch ends
+class LlmAsyncNotifierWatch inherits Qore::AbstractPollOperation<auto> {
+    private:internal {
+        EventNotifier notifier;
+        code<nothing()> on_signal;
+        bool started = False;
+        bool signaled = False;
+        Mutex m();
+    }
+
+    constructor(EventNotifier notifier, code<nothing()> on_signal) {
+        self.notifier = notifier;
+        self.on_signal = on_signal;
+    }
+
+    #! Watches the notifier; \a on_signal is called once, in a thread of the controller, and must not wait
+    static watch(EventNotifier notifier, code<nothing()> on_signal) {
+        LlmAsyncNotifierWatch op(notifier, on_signal);
+        Qore::AsyncIoController::submit(operation_info: <SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": "QoreLlmUtils::LlmAsyncOperation:" + op.uniqueHash(),
+            # the request that signals the notifier has its own deadline
+            "to": -1s,
+            "has_on_complete": True,
+        });
+    }
+
+    string getGoal() {
+        return "llm-request-ended";
+    }
+
+    string getState() {
+        return signaled ? "signaled" : (started ? "waiting" : "pending");
+    }
+
+    bool goalReached() {
+        AutoLock al(m);
+        return signaled;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (!started) {
+            started = True;
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": notifier,
+            };
+        }
+        fire();
+        return NOTHING;
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        # also when the controller cancels the watch: the caller then aborts the request and reads its error
+        fire();
+    }
+
+    private:internal fire() {
+        {
+            AutoLock al(m);
+            if (signaled) {
+                return;
+            }
+            signaled = True;
+        }
+        on_signal();
+    }
+}
+
+#! Applies the retry policy of AbstractLlmProvider::withRetry() to an asynchronous request; all methods except the
+#! cancellation handlers and the finish hook run in tasks of the operation
+class LlmAsyncRetry {
+    private:internal {
+        AbstractLlmProvider provider;
+        LlmAsyncOperation op;
+        *hash<LlmRequestOptions> opts;
+        code<code<nothing()>(code<nothing(*hash<ExceptionInfo>, auto)>)> attempt;
+        code<nothing(auto)> success_cb;
+        code<nothing(hash<ExceptionInfo>)> error_cb;
+        hash<auto> state;
+
+        #! Guards the fields that cancellation handlers and the finish hook read
+        Mutex m();
+        #! The sequence number of the current attempt or wait
+        int seq = 0;
+        #! True while an attempt is in flight
+        bool in_flight = False;
+        #! True while a backoff wait runs
+        bool waiting = False;
+        #! True once the request has ended
+        bool ended = False;
+        int cancel_id = 0;
+        int timer_id = 0;
+        int hook_id = 0;
+        #! Aborts the attempt in flight
+        *code<nothing()> abort;
+    }
+
+    constructor(AbstractLlmProvider provider, LlmAsyncOperation op, *hash<LlmRequestOptions> opts,
+            code<code<nothing()>(code<nothing(*hash<ExceptionInfo>, auto)>)> attempt,
+            code<nothing(auto)> success_cb, code<nothing(hash<ExceptionInfo>)> error_cb) {
+        self.provider = provider;
+        self.op = op;
+        self.opts = opts;
+        self.attempt = attempt;
+        self.success_cb = success_cb;
+        self.error_cb = error_cb;
+        state = provider.newRetryState(opts);
+    }
+
+    start() {
+        LlmAsyncRetry retry = self;
+        hook_id = op.addFinishHook(sub () { retry.release(); });
+        runAttempt();
+    }
+
+    private:internal runAttempt() {
+        {
+            AutoLock al(m);
+            if (ended) {
+                return;
+            }
+        }
+        # a cancelled call does not start an attempt
+        if (*hash<ExceptionInfo> cancel_ex = provider.getRequestCancelledError(opts)) {
+            finishError(cancel_ex);
+            return;
+        }
+        ++state.record.attempts;
+        int my_seq;
+        {
+            AutoLock al(m);
+            my_seq = ++seq;
+            in_flight = True;
+        }
+        LlmAsyncRetry retry = self;
+        code<nothing()> abort_attempt;
+        try {
+            abort_attempt = attempt(sub (*hash<ExceptionInfo> ex, auto value) {
+                retry.attemptDone(my_seq, ex, value);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            attemptDone(my_seq, ex);
+            return;
+        }
+        code<nothing()> safe_abort = sub () {
+            try {
+                abort_attempt();
+            } catch (hash<ExceptionInfo> ex) {
+                # the attempt reports its end whatever the abort does
+            }
+        };
+        bool released = False;
+        {
+            AutoLock al(m);
+            if (!in_flight || my_seq != seq) {
+                return;
+            }
+            # release() ran while the attempt was being started, and found no attempt to abort
+            released = ended;
+            if (!released) {
+                abort = safe_abort;
+            }
+        }
+        if (released) {
+            safe_abort();
+            return;
+        }
+        # runs the abort at once if the call has already been cancelled
+        setCancelHandler(provider.addRequestCancelHandler(opts, safe_abort));
+    }
+
+    #! Keeps the ID of a cancellation handler, or removes the handler if the request has ended meanwhile
+    private:internal setCancelHandler(int id) {
+        {
+            AutoLock al(m);
+            if (!ended) {
+                cancel_id = id;
+                return;
+            }
+        }
+        provider.removeRequestCancelHandler(opts, id);
+    }
+
+    attemptDone(int my_seq, *hash<ExceptionInfo> ex, auto value) {
+        int id;
+        {
+            AutoLock al(m);
+            if (ended || my_seq != seq || !in_flight) {
+                return;
+            }
+            in_flight = False;
+            remove abort;
+            id = cancel_id;
+            cancel_id = 0;
+        }
+        provider.removeRequestCancelHandler(opts, id);
+        # an attempt that ends after the call is cancelled is reported as LLM-CANCELLED, as with callCancellable()
+        if (*hash<ExceptionInfo> cancel_ex = provider.getRequestCancelledError(opts)) {
+            finishError(cancel_ex);
+            return;
+        }
+        if (!ex) {
+            if (finish()) {
+                success_cb(value);
+            }
+            return;
+        }
+        if (ex.err == "LLM-CANCELLED") {
+            finishError(ex);
+            return;
+        }
+        *int delay = provider.nextRetryDelay(\state, ex, opts);
+        if (!exists delay) {
+            finishError(ex.arg.typeCode() == NT_HASH
+                ? AbstractLlmProvider::makeException(ex.err, ex.desc, ex.arg + {"retry": state.record})
+                : ex);
+            return;
+        }
+        # the wait is a timer of the async I/O controller; a cancellation ends it at once
+        LlmAsyncRetry retry = self;
+        LlmAsyncOperation o = op;
+        int wait_seq;
+        {
+            AutoLock al(m);
+            wait_seq = ++seq;
+            waiting = True;
+        }
+        int timer = Qore::AsyncIoController::addTimerDelay(delay, sub () {
+            o.post(sub () { retry.waitEnded(wait_seq); });
+        });
+        {
+            AutoLock al(m);
+            if (!ended) {
+                timer_id = timer;
+                timer = 0;
+            }
+        }
+        if (timer) {
+            # the request ended while the timer was added
+            Qore::AsyncIoController::cancelTimer(timer);
+            return;
+        }
+        setCancelHandler(provider.addRequestCancelHandler(opts, sub () {
+            o.post(sub () { retry.waitEnded(wait_seq); });
+        }));
+    }
+
+    private:internal waitEnded(int wait_seq) {
+        int id;
+        int timer;
+        {
+            AutoLock al(m);
+            if (ended || wait_seq != seq || !waiting) {
+                return;
+            }
+            waiting = False;
+            id = cancel_id;
+            cancel_id = 0;
+            timer = timer_id;
+            timer_id = 0;
+        }
+        provider.removeRequestCancelHandler(opts, id);
+        if (timer) {
+            Qore::AsyncIoController::cancelTimer(timer);
+        }
+        # a cancelled wait ends the call with LLM-CANCELLED here
+        runAttempt();
+    }
+
+    private:internal finishError(hash<ExceptionInfo> ex) {
+        if (finish()) {
+            error_cb(ex);
+        }
+    }
+
+    #! Ends the request; returns False if it had already ended
+    private:internal bool finish() {
+        int id;
+        int timer;
+        {
+            AutoLock al(m);
+            if (ended) {
+                return False;
+            }
+            ended = True;
+            id = cancel_id;
+            cancel_id = 0;
+            timer = timer_id;
+            timer_id = 0;
+            remove abort;
+        }
+        provider.removeRequestCancelHandler(opts, id);
+        if (timer) {
+            Qore::AsyncIoController::cancelTimer(timer);
+        }
+        op.removeFinishHook(hook_id);
+        return True;
+    }
+
+    #! Releases the request when the operation ends otherwise: aborts the attempt in flight
+    release() {
+        *code<nothing()> abort_attempt;
+        {
+            AutoLock al(m);
+            abort_attempt = abort;
+        }
+        if (finish() && abort_attempt) {
+            abort_attempt();
+        }
+    }
+}
+} # namespace Priv
 
 } # namespace QoreLlmUtils

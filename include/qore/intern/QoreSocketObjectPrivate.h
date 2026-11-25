@@ -37,6 +37,9 @@
 #include <utility>
 #include "qore/intern/QC_Socket.h"
 
+// an in-memory set of trusted CA certificates (include/qore/intern/QC_SSLTrustStore.h)
+class QoreSSLTrustStore;
+
 //! The library-internal operations of QoreSocketObject (qore#4380)
 /** These functions were non-inline DLLLOCAL members of the public QoreSocketObject class: they are not part of the
     module API (they were never exported), so they live here, in the implementation of the library.  Construct the
@@ -69,6 +72,9 @@ public:
             : so(const_cast<QoreSocketObject*>(n_so)), priv(const_cast<QoreSocketObject*>(n_so)->priv) {
     }
 
+    //! Returns the bytes of the socket's send buffer that the peer has not acknowledged, or 0 if unknown
+    DLLLOCAL int64 getUnacknowledgedSendBytes() const;
+
     //! Shuts down the sending side of the connection only (a half-close); see Socket::shutdownWrite()
     /** @return 0 for success, -1 for error (exception raised)
     */
@@ -97,8 +103,8 @@ public:
 
         @param xsink exception sink; set on SSL error
         @param buffered_is_data if true, bytes that the socket has already read from the descriptor count as data
-        (a server whose client sent its next request before the response to the previous one, pipelining); a client
-        does not set it, as for it such bytes are not a new message
+        (a server whose client sent its next request before the response to the previous one, pipelining, or an HTTP
+        client that has bytes after the end of a response, which keep the connection from being reused)
 
         @return > 0  application-layer data is available
         @return   0  no application data; any TLS post-handshake record was drained
@@ -107,6 +113,16 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink, bool buffered_is_data = false);
+
+    //! Returns the number of bytes that the socket has read from its descriptor and not yet returned to a reader
+    /** Such bytes are returned before any other by the next read, also after a TLS connection is started on the
+        socket, which never reads them: an HTTP client checks that none follow a proxy's response to \c CONNECT
+        before it starts the TLS connection to the target server through the tunnel (qore#7486).  Acquires the
+        socket lock.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL size_t getBufferedReadBytes() const;
 
     //! Error-reporting variant of @ref setNoDelay() for poll operation code.
     /** @ref setNoDelay() is already safe on async I/O execution paths -- libqore selects the
@@ -138,6 +154,15 @@ public:
 
     //! Sets the CA locations from the async I/O thread; see setSslCaLocations()
     DLLLOCAL void setSslCaLocationsForAsyncPoll(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
+
+    //! Sets or clears the in-memory trust store that peer certificates are verified against (qoretechnologies/qore#7248)
+    /** On the async I/O thread it is set directly, otherwise with a TLS state poll operation, as
+        QoreSocketObject::setSslCaLocations() sets the CA locations
+    */
+    DLLLOCAL void setSslTrustStore(QoreSSLTrustStore* ts, ExceptionSink* xsink);
+
+    //! Sets the in-memory trust store from the async I/O thread; see setSslTrustStore()
+    DLLLOCAL void setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink);
 
     DLLLOCAL QoreStringNode* getAlpnProtocol(ExceptionSink* xsink) const;
 
@@ -255,6 +280,9 @@ public:
     //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
     DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
 
+    //! True if this endpoint has not ended its side of an HTTP/2 stream (see Http2Session::isStreamLocalOpen())
+    DLLLOCAL bool isHttp2StreamLocalOpen(int32_t stream_id) const;
+
     //! Returns true if the HTTP/2 stream is known and was reset (issue #5859)
     DLLLOCAL bool isHttp2StreamResetForAsyncPoll(int32_t stream_id) const;
 
@@ -311,6 +339,9 @@ public:
         holds the lock of the socket.
     */
     DLLLOCAL void releaseQuicStream(int64_t session_id, int64_t stream_id);
+
+    //! True if the QUIC session still has the bidirectional stream open (see QuicSession::isBidiStreamOpen())
+    DLLLOCAL bool isQuicBidiStreamOpen(int64_t session_id, int64_t stream_id) const;
 
     //! Watches the response on an HTTP/2 server stream so that the result of its transmission is reported
     /** Must be called before the response is submitted; see Http2Session::watchResponseSend().  The result is
@@ -567,6 +598,10 @@ public:
     //! Debug-only: the next SSL write fails with SSL_ERROR_SSL while errno holds EPIPE
     DLLLOCAL void dbgForceSslErrorSslAtNextWrite();
 
+    //! Debug-only: the next TLS write stages its ciphertext, as with a full socket buffer, and the drain of it fails as
+    //! when the peer reset the connection
+    DLLLOCAL void dbgForceStagedWriteFailure();
+
     //! Debug-only: returns the number of records that a session of the socket keeps for its streams, by kind
     /** Called via the @c dbg_socket_stream_records() debug builtin in @ref lib/ql_debug.cpp, so tests can show that
         a long-lived session does not keep records for the streams it has finished.
@@ -577,6 +612,24 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL QoreHashNode* dbgGetStreamRecordCounts(int64_t session_id, ExceptionSink* xsink);
+
+    //! Debug-only: writes data on the TLS connection of the socket in the calling thread, without the I/O thread
+    /** Called via the @c dbg_tls_answer_and_reset() debug builtin in @ref lib/ql_debug.cpp, so a test peer can answer
+        while the I/O thread of its socket is held by a debug hook (issue #7523).  The socket must have no I/O
+        operation in progress.
+
+        @param data the data to write
+        @param size the size of the data
+        @param timeout_ms the time the write may wait for the socket
+        @param fd set to the socket's descriptor
+        @param xsink raises \c DBG-ARGUMENT-ERROR if the socket has no TLS connection, \c DBG-TLS-WRITE-ERROR if the
+        write fails or does not complete in time
+
+        @return 0 if all the data was written, -1 if not (exception raised)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL int dbgTlsWriteNow(const char* data, size_t size, int timeout_ms, int& fd, ExceptionSink* xsink);
 #endif
 };
 

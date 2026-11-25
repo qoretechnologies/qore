@@ -27,6 +27,7 @@
 
 %requires yaml
 %requires Mime >= 1.7
+%requires HttpUtil
 
 %try-module xml
 %define NoXml
@@ -315,6 +316,10 @@ message: "Hello, Hello, World!!"
 
 
     @section datastreamutil_v1_4 DataStreamUtil v1.4
+    - the receive callbacks and @ref DataStreamUtil::connect_detect_protocol() "connect_detect_protocol()" read the
+      fields of a message from the \c "headers" key of its hash, or from its top level (see
+      @ref HttpUtil::http_get_field() "http_get_field()")
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - fixed @ref DataStreamUtil::ds_set_chunked_headers() "ds_set_chunked_headers()",
       @ref DataStreamUtil::ds_set_non_chunked_headers() "ds_set_non_chunked_headers()",
       @ref DataStreamUtil::connect_set_chunked_headers() "connect_set_chunked_headers()" and
@@ -471,7 +476,7 @@ public namespace DataStreamUtil {
 
         @par Example:
         @code{.py}
-bool yaml = ds_is_yaml_type(hdr."content-type");
+bool yaml = ds_is_yaml_type(http_get_field(hdr, "content-type"));
         @endcode
 
         @since DataStreamUtil 1.4
@@ -489,7 +494,7 @@ bool yaml = ds_is_yaml_type(hdr."content-type");
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for decoding HTTP encoded data
     /** @par Example:
         @code{.py}
-*code decode = ds_get_content_decode(hdr."content-encoding");
+*code decode = ds_get_content_decode(http_get_field(hdr, "content-encoding"));
         @endcode
 
         The following \c "Content-Encoding" values are recognized:
@@ -635,50 +640,54 @@ bool yaml = ds_is_yaml_type(hdr."content-type");
                 rethrow;
             }
         }
-        # Boundary-scan slow path.
+        # Boundary-scan slow path: the candidate splits after each stream are found one at a time, nearest first, and
+        # the scan for the next one continues after the last one tried, so that the buffer is scanned once in all;
+        # collecting every candidate up to the end of the buffer for each stream made a body of many streams take
+        # time quadratic in its size (qore#7323)
         list<string> out = ();
+        int size = data.size();
         int pos = 0;
-        while (pos < data.size()) {
-            list<int> cands = ();
+        while (pos < size) {
+            # the offset that the scan for the next candidate split starts at
             int p = pos + 2;
-            while (p + 1 < data.size()) {
-                bool is_magic = False;
-                # gzip magic
-                if (data[p] == 0x1f && data[p+1] == 0x8b) {
-                    is_magic = True;
-                }
-                # zlib (deflate) magic: 0x78 followed by 0x01/0x9c/0xda
-                if (data[p] == 0x78 && (data[p+1] == 0x01
-                        || data[p+1] == 0x9c || data[p+1] == 0xda)) {
-                    is_magic = True;
-                }
-                if (is_magic) {
-                    cands += p;
-                }
-                p++;
-            }
-            cands += data.size();
-            bool found = False;
-            foreach int c in (cands) {
+            while (True) {
+                int c = ds_next_compressed_stream_start(data, p);
                 try {
                     out += dce(data.substr(pos, c - pos), enc);
                     pos = c;
-                    found = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err != "ZLIB-ERROR") {
                         rethrow;
                     }
+                    if (c == size) {
+                        throw "ZLIB-ERROR",
+                            sprintf("could not decompose %d-byte buffer into "
+                                "concatenated compressed streams", size - pos);
+                    }
                     # candidate split is inside a deflate block — try next
+                    p = c + 1;
                 }
-            }
-            if (!found) {
-                throw "ZLIB-ERROR",
-                    sprintf("could not decompose %d-byte buffer into "
-                        "concatenated compressed streams", data.size() - pos);
             }
         }
         return out;
+    }
+
+    #! Returns the offset of the next gzip or zlib (deflate) stream header at or after the given offset, or the size of the buffer if there is none
+    /** a helper of ds_decode_content_streams(), not exported from the module
+    */
+    int sub ds_next_compressed_stream_start(binary data, int p) {
+        int size = data.size();
+        while (p + 1 < size) {
+            int b = data[p];
+            int n = data[p + 1];
+            # gzip magic, or zlib (deflate) magic: 0x78 followed by 0x01/0x9c/0xda
+            if ((b == 0x1f && n == 0x8b) || (b == 0x78 && (n == 0x01 || n == 0x9c || n == 0xda))) {
+                return p;
+            }
+            ++p;
+        }
+        return size;
     }
 
     #! returns a @ref call_reference "call reference" (or @ref nothing) based on an optional \c "Content-Encoding" header value for encoding HTTP encoded data
@@ -874,7 +883,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                         }
                     }
                     # call "end of data" callback with any error message reported by the sender
-                    eod_callback(h.hdr{DataStreamError.lwr()});
+                    eod_callback(http_get_field(h.hdr, DataStreamError.lwr()));
                     return;
                 }
 
@@ -888,16 +897,17 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
                 }
 
                 # parse content type and optionally any content encoding
+                hash<auto> fields = h.hdr.headers ?? h.hdr;
                 *string ce;
 
                 # set chunked flag
-                chunked = (h.hdr."transfer-encoding" == "chunked");
+                chunked = (fields."transfer-encoding" == "chunked");
 
                 # always check DataStream-Content-Type first; HTTP/2 and HTTP/3 don't use
                 # chunked transfer encoding, so the DataStream headers must be checked
                 # regardless of the transfer-encoding
-                ct = h.hdr{DataStreamContentType.lwr()} ?? h.hdr."content-type";
-                ce = h.hdr{DataStreamContentEncoding.lwr()} ?? h.hdr."content-encoding";
+                ct = fields{DataStreamContentType.lwr()} ?? fields."content-type";
+                ce = fields{DataStreamContentEncoding.lwr()} ?? fields."content-encoding";
 
                 # remove any ";charset=utf-8" from the end of the content-type header
                 ct =~ s/; *charset=utf-?8$//i;
@@ -907,7 +917,7 @@ httpclient.sendWithRecvCallback(ds_get_recv(recv_callback), body, method, path, 
 
                 # set datastream flag if DataStream-Content-Type header is present
                 # NOTE: HTTP/2 and HTTP/3 don't use chunked transfer encoding
-                datastream = h.hdr.hasKey(DataStreamContentType.lwr());
+                datastream = fields.hasKey(DataStreamContentType.lwr());
 
                 dce = ds_get_content_decode(ce);
 
@@ -1279,7 +1289,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
     public bool sub connect_detect_protocol(hash<auto> hdr) {
         # Check for Connect protocol version header — both unary and streaming Connect
         # always set this header, so it is the primary detection mechanism
-        if (hdr{ConnectProtocolVersionHdr}.val()) {
+        if (http_get_field(hdr, ConnectProtocolVersionHdr).val()) {
             return True;
         }
         # Check for the explicit Connect streaming content type as a fallback;
@@ -1287,7 +1297,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
         # IANA YAML MIME type (RFC 9512) used by RestClientIo for all YAML requests,
         # not just Connect; matching it would incorrectly enable Connect mode on regular
         # REST calls
-        *string ct = hdr."content-type";
+        *string ct = http_get_field(hdr, "content-type");
         if (ct.val()) {
             ct = ct.lwr();
             if (ct =~ /^application\/connect\+/) {
@@ -1457,15 +1467,16 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
                 # HTTP error handler), throw immediately rather than trying to parse the
                 # body as Connect frames — plain text would be misinterpreted as frame
                 # headers, causing spurious CONNECT-MESSAGE-SIZE-ERROR
-                int resp_status = h.hdr.":status" ?? h.hdr.status_code ?? 200;
-                *string ct = h.hdr."content-type";
+                hash<auto> fields = h.hdr.headers ?? h.hdr;
+                int resp_status = h.hdr.status_code ?? fields.":status" ?? 200;
+                *string ct = fields."content-type";
                 if (resp_status >= 400 && ct.val() && ct !~ /^application\/connect\+/i) {
                     throw "CONNECT-HTTP-ERROR",
                         sprintf("server returned HTTP %d with non-Connect content type %y",
                             resp_status, ct);
                 }
                 # Parse content encoding for compressed frames
-                *string ce = h.hdr{ConnectContentEncodingHdr} ?? h.hdr."content-encoding";
+                *string ce = fields{ConnectContentEncodingHdr} ?? fields."content-encoding";
                 dce = ds_get_content_decode(ce);
                 # Do NOT return here — for non-chunked HTTP/2 responses, the body data may
                 # be delivered in the same callback invocation as the headers. Fall through

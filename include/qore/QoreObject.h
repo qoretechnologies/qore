@@ -173,38 +173,52 @@ public:
     DLLEXPORT QoreListNode* getMemberList(ExceptionSink* xsink) const;
 
     //! removes a member from the object, if the member's value is an object it is deleted as well (destructor is called)
-    /**
+    /** The member is removed as by the Qore \c delete operator: the key of a member that the class does not declare
+        is removed, a declared member keeps its slot with no value, and a member that is not set is not created
+        (qore#7179, qore#7208)
+
         An object that the current code may not delete is not deleted: a system constant object is refused with
         \c SYSTEM-OBJECT-ERROR, and the member is left as it is, unless the member is held in external storage, which
         its accessor clears; for sandboxed code at the enforcement level of tenant isolation, an object that its
         sandbox does not own is refused with \c SANDBOX-OBJECT-ACCESS-ERROR after the member is removed: the object
         is released, not deleted.
+
         @param key the name of the member to delete
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void deleteMemberValue(const QoreString* key, ExceptionSink* xsink);
 
     //! removes a member from the object, if the member's value is an object it is deleted as well (destructor is called)
-    /**
+    /** The member is removed as by the Qore \c delete operator: the key of a member that the class does not declare
+        is removed, a declared member keeps its slot with no value, and a member that is not set is not created
+        (qore#7179, qore#7208)
+
         An object that the current code may not delete is not deleted: a system constant object is refused with
         \c SYSTEM-OBJECT-ERROR, and the member is left as it is, unless the member is held in external storage, which
         its accessor clears; for sandboxed code at the enforcement level of tenant isolation, an object that its
         sandbox does not own is refused with \c SANDBOX-OBJECT-ACCESS-ERROR after the member is removed: the object
         is released, not deleted.
+
         @param key the name of the member to delete, assumed to be in the default encoding (QCS_DEFAULT)
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void deleteMemberValue(const char* key, ExceptionSink* xsink);
 
     //! removes a member from the object without explicitly calling destructors; the value is only dereferenced
-    /** objects will be destructed if they go out of scope, however
+    /** objects will be destructed if they go out of scope, however; the member is removed as by the Qore \c remove
+        operator: the key of a member that the class does not declare is removed, a declared member keeps its slot
+        with no value, and a member that is not set is not created (qore#7179)
+
         @param key the name of the member to remove
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
     DLLEXPORT void removeMember(const QoreString* key, ExceptionSink* xsink);
 
     //! removes a member from the object without explicitly calling destructors; the value is only dereferenced
-    /** objects will be destructed if they go out of scope, however
+    /** objects will be destructed if they go out of scope, however; the member is removed as by the Qore \c remove
+        operator: the key of a member that the class does not declare is removed, a declared member keeps its slot
+        with no value, and a member that is not set is not created (qore#7179)
+
         @param key the name of the member to remove, assumed to be in the default encoding (QCS_DEFAULT)
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
@@ -625,6 +639,37 @@ public:
         @since %Qore 0.9
     */
     DLLEXPORT int setMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
+
+    //! sets the value of a private:internal member of the given class as it is, without a type check
+    /** for the members that the library keeps for a system class, such as the weak reference to the socket of a
+        poll operation (qore#6839); the class must declare the member with private:internal access
+
+        @param key the name of the member
+        @param cls the class that declares the member
+        @param val the value to set; its reference is consumed by this call
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return 0 = no errors, -1 = Qore-language exception raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setInternalMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink);
+
+    //! returns the referenced value of a private:internal member of the given class
+    /** for the members that the library keeps for a system class (qore#6839); the read is made in the storage of the
+        class directly, without a class context of the thread; the class must declare the member with private:internal
+        access
+
+        @param key the name of the member
+        @param cls the class that declares the member
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return the referenced value of the member, or no value if it is not set
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getReferencedInternalMemberValue(const char* key, const QoreClass* cls,
+            ExceptionSink* xsink) const;
 
     //! call this function when an object's private data is deleted externally
     /** this function will clear the private data and delete the object

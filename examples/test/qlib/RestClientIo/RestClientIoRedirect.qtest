@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - cookies are scoped by host name, not by port, so server b is reached with the name localhost as another host than server a (127.0.0.1); server b listens on both loopback addresses with the same port
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -138,9 +139,9 @@ class RedirectObserver inherits DataProvider::Observer {
 
     bool waitForEvents(timeout t) {
         AutoLock al(m);
-        date end = now_us() + t;
+        int end = clock_get_monotonic_us() + t * 1000;
         while (events.size() < expected) {
-            date remaining = end - now_us();
+            date remaining = microseconds(end - clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -212,10 +213,10 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
         server_b.setDefaultHandler("b", peer_b);
         url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1", "service": 0}).port);
-        # server b is reached with another host name, so that cookies of server a are not sent to it
-        url_b = sprintf("http://localhost:%d", server_b.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
-            "service": 0}).port);
+        # server b is reached with another host name, so that cookies of server a are not sent to it; "localhost"
+        # resolves to ::1 first, so server b listens on both loopback addresses with the same port, and a client
+        # cannot reach a server of a test running beside this one on ::1 (qore#7469)
+        url_b = sprintf("http://localhost:%d", addLoopbackListeners(server_b));
         on_exit {
             server_a.stop();
             server_b.stop();
@@ -408,6 +409,29 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
         assertThrows("REST-RESPONSE-ERROR", "HTTP 302", \f.get());
     }
 
+    #! adds listeners on 127.0.0.1 and, if the host has IPv6 on its loopback interface, on ::1 with the same port
+    private static int addLoopbackListeners(HttpServer server) {
+        for (int attempt = 1; ; ++attempt) {
+            hash<auto> v6;
+            try {
+                v6 = server.addListener(<HttpListenerOptionInfo>{"node": "::1", "service": 0});
+            } catch (hash<ExceptionInfo> ex) {
+                # without IPv6 on the loopback interface, no server can listen on ::1
+                return server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+            }
+            try {
+                server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": v6.port});
+                return v6.port;
+            } catch (hash<ExceptionInfo> ex) {
+                server.stopListenerID(v6.id);
+                # the port number is in use on 127.0.0.1: another one is tried
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == 20) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     testCookies() {
         RestClientIo rest({"url": url_a, "data": "json"});
         on_exit rest.close();
@@ -498,13 +522,13 @@ public class RestClientIoRedirectTest inherits QUnit::Test {
     }
 
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(30s);
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (op.goalReached()) {
                 break;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - clock_get_monotonic_us()) / 1000;
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

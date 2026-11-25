@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -185,9 +186,9 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
 
     #! Sets up the WooCommerce client for integration tests
     private setupConnection() {
-        *string store_url = m_options.storeurl ?? ENV.WC_STORE_URL;
-        *string consumer_key = m_options.consumerkey ?? ENV.WC_CONSUMER_KEY;
-        *string consumer_secret = m_options.consumersecret ?? ENV.WC_CONSUMER_SECRET;
+        *string store_url = m_options.storeurl ?? LiveProvider::get("woocommerce", "WC_STORE_URL");
+        *string consumer_key = LiveProvider::get("woocommerce", "WC_CONSUMER_KEY", m_options.consumerkey);
+        *string consumer_secret = LiveProvider::get("woocommerce", "WC_CONSUMER_SECRET", m_options.consumersecret);
         if (!store_url || !consumer_key || !consumer_secret) {
             if (m_options.verbose) {
                 printf("No API credentials provided (use -u/-k/-s options or "
@@ -519,6 +520,20 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
             assertEq(DPAT_EVENT, orderCreated.action_code);
             assertTrue(orderCreated.groups.contains("Triggers"));
         }
+
+        # these actions only make GET requests: they declare that they are read-only, which the catalogue reports
+        # as such (qore#7454)
+        list<string> read_only = ("get-customers-totals", "get-orders-totals", "get-products-totals",
+            "get-sales-report", "get-setting", "get-system-status", "get-tax-rate", "get-top-sellers-report",
+            "get-variation", "list-order-notes", "list-refunds", "list-shipping-methods", "list-shipping-zones",
+            "list-variations");
+        list<hash<DataProviderActionInfo>> ro_actions = select actions, inlist($1.action, read_only);
+        assertEq(read_only, sort(map $1.action, ro_actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), ro_actions;
+        map assertFalse($1.mutates_state, $1.action), ro_actions;
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action), ro_actions;
+        # an action that creates a resource still changes state
+        assertTrue(DataProviderActionCatalog::actionMutatesState(createOrder));
     }
 
     #! Verify every event provider can produce fake example data without a live API

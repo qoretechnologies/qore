@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QorePseudoMethods.h"
 
 //! Methods in this pseudo-class can be executed on @ref char "char values"
 /**
@@ -41,7 +42,7 @@ printf("%d %s\n", c.ord(), c.toString());  # 233 é
 
     @since %Qore 3.0
  */
-qclass <char> [arg=unsigned c = v.getChar();vparent=<value>];
+qclass <char> [arg=unsigned c = qore_pseudo_char_receiver(v, xsink);argcheck=c != QORE_PSEUDO_CHAR_REFUSED;vparent=<value>];
 
 //! Returns Qore::NT_CHAR
 /**

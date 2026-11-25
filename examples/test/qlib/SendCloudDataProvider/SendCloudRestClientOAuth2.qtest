@@ -139,7 +139,8 @@ public class SendCloudRestClientOAuth2Test inherits QUnit::Test {
         assertEq("https://account.sendcloud.com/oauth2/token", opts.oauth2_token_url);
         assertEq(("api",), opts.oauth2_scopes);
         assertEq(True, opts.oauth2_token_use_basic_auth);
-        assertTrue(conn.getInfo().up);
+        # not marked down by a configuration that cannot connect; never checked, so not up (issue #7236)
+        assertEq("not checked", conn.getInfo().status);
 
         SendCloudRestConnection basic({
             "name": "sendcloud-basic",
@@ -150,7 +151,7 @@ public class SendCloudRestClientOAuth2Test inherits QUnit::Test {
         });
         assertEq("none", basic.getExtendedInfo().oauth2_grant_type);
         assertFalse(basic.getFeatures(){RestConnection::RCF_OAUTH2} ?? False);
-        assertTrue(basic.getInfo().up);
+        assertEq("not checked", basic.getInfo().status);
         assertFalse(basic.needsAuth());
     }
 
@@ -163,7 +164,8 @@ public class SendCloudRestClientOAuth2Test inherits QUnit::Test {
                 "secret_key": "sk-1",
             },
         });
-        assertTrue(conn.getInfo().up);
+        # not marked down by a configuration that cannot connect; never checked, so not up (issue #7236)
+        assertEq("not checked", conn.getInfo().status);
         hash<auto> client_opts = SendCloudRestClientBase::getOptions(conn.getConnectionOptions());
         assertEq("pk-1", client_opts.username);
         assertEq("sk-1", client_opts.password);

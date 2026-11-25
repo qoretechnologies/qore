@@ -55,15 +55,85 @@ public:
 
 typedef std::list<HashMember*> qhlist_t;
 
-#ifdef HAVE_QORE_HASH_MAP
-//#warning compiling with hash_map
-#include <qore/hash_map_include.h>
+#include <unordered_map>
 #include "qore/intern/xxhash.h"
 #include "qore/intern/qore_container_free.h"
+#include "qore/intern/QoreKeyCompare.h"
 
-typedef HASH_MAP<const char*, qhlist_t::iterator, qore_hash_str, eqstr> hm_hm_t;
+//! A key to look up in the key map of a hash: the key, its length and its hash (qore#7194)
+/** The hash is the one that qore_hash_str gives for the key, so that a hash computed in advance with qore_hash_str
+    (ex: by the JIT for a constant key) finds the key.
+*/
+struct qore_hash_lookup_key {
+    const char* str;
+    size_t len;
+    size_t hash;
+
+    //! returns the hash of the key of \a len bytes at \a str; the same as qore_hash_str for the key
+    DLLLOCAL static size_t hashBytes(const char* str, size_t len) {
+#if TARGET_BITS == 64
+        return XXH64(str, len, 0);
 #else
-typedef std::map<const char*, qhlist_t::iterator, ltstr> hm_hm_t;
+        return XXH32(str, len, 0);
+#endif
+    }
+
+    DLLLOCAL explicit qore_hash_lookup_key(const char* str) : str(str), len(strlen(str)), hash(hashBytes(str, len)) {
+    }
+
+    DLLLOCAL qore_hash_lookup_key(const char* str, size_t len) : str(str), len(len), hash(hashBytes(str, len)) {
+        assert(strlen(str) == len);
+    }
+
+    DLLLOCAL qore_hash_lookup_key(const char* str, size_t len, size_t hash) : str(str), len(len), hash(hash) {
+        assert(strlen(str) == len);
+        assert(hash == hashBytes(str, len));
+    }
+};
+
+//! The hash function of the key map of a hash (qore#7194)
+/** Not noexcept: libstdc++ then keeps the hash of each key in its node and compares it before the keys, so that the
+    keys of a lookup are compared only when their hashes are equal (see the static_assert after hm_hm_t)
+*/
+struct qore_hash_member_key_hash {
+    using is_transparent = void;
+
+    DLLLOCAL size_t operator()(const std::string* key) const {
+        return qore_hash_lookup_key::hashBytes(key->data(), key->size());
+    }
+
+    DLLLOCAL size_t operator()(const qore_hash_lookup_key& key) const {
+        return key.hash;
+    }
+};
+
+//! The key comparison of the key map of a hash: by length, then inline (qore#7194)
+struct qore_hash_member_key_eq {
+    using is_transparent = void;
+
+    DLLLOCAL bool operator()(const std::string* a, const std::string* b) const {
+        return a == b || qore_key_equal(a->data(), a->size(), b->data(), b->size());
+    }
+
+    DLLLOCAL bool operator()(const qore_hash_lookup_key& a, const std::string* b) const {
+        return qore_key_equal(a.str, a.len, b->data(), b->size());
+    }
+
+    DLLLOCAL bool operator()(const std::string* a, const qore_hash_lookup_key& b) const {
+        return qore_key_equal(a->data(), a->size(), b.str, b.len);
+    }
+};
+
+//! The key map of a hash: the key of each member (the key string of its HashMember) to its place in the member list
+/** The map refers to the key of the member (HashMember::key), which is not changed while the member is in the hash,
+    so that a key comparison knows the length of the key (qore#7194)
+*/
+typedef std::unordered_map<const std::string*, qhlist_t::iterator, qore_hash_member_key_hash,
+    qore_hash_member_key_eq> hm_hm_t;
+#ifdef __GLIBCXX__
+// the hash of each key is kept in its node and compared before the keys (see qore_hash_member_key_hash)
+static_assert(std::__cache_default<const std::string*, qore_hash_member_key_hash>::value,
+    "the key map of a hash must keep the hash of each key");
 #endif
 
 // QoreHashIterator private class
@@ -130,11 +200,17 @@ public:
     const TypedHashDecl* hashdecl = nullptr;
     const QoreTypeInfo* complexTypeInfo = nullptr;
     unsigned obj_count = 0;
-    QoreReferenceCounter weakRefs;
+    QoreContainerWeakRefs weakRefs;
 #ifdef DEBUG
     bool is_obj = false;
 #endif
+    //! false if the hash cannot be changed: it was freed, or it is a copy of a freed hash (see copyFreedState())
     bool valid = true;
+    //! true once the hash has been freed (see QoreHashNode::derefImpl())
+    bool freed = false;
+    //! true if the weak holders of the hash hold one reference of their own since its free started (see
+    //! QoreContainerWeakRefs)
+    bool weak_hold = false;
     //! the estimated memory of the members (see sbMemberSize()); always kept, so that it is right when charged
     size_t sb_bytes = 0;
     //! the sandbox memory charge of the members (see design/sandbox-resource-limits.md); synced with sb_bytes
@@ -201,10 +277,95 @@ public:
 
     DLLLOCAL int checkValid(ExceptionSink* xsink) {
         if (!valid) {
-            xsink->raiseException("HASH-ERROR", "Cannot modify a hash that has already gone out of scope");
+            // as qore_list_private::checkValid(): a caller can have no exception sink (the merge of the public API)
+            if (xsink) {
+                xsink->raiseException("HASH-ERROR", "Cannot modify a hash that has already gone out of scope");
+            }
             return -1;
         }
         return 0;
+    }
+
+    //! returns the key map entry of \a key, or hm.end()
+    /** An empty hash is not searched, so that its key is not hashed (qore#7194)
+    */
+    DLLLOCAL hm_hm_t::const_iterator findIter(const char* key) const {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key));
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIter(const char* key) {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key));
+    }
+
+    //! returns the key map entry of \a key of \a len bytes, or hm.end()
+    DLLLOCAL hm_hm_t::const_iterator findIter(const char* key, size_t len) const {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, len));
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIter(const char* key, size_t len) {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, len));
+    }
+
+    //! returns the key map entry of \a key, or hm.end()
+    DLLLOCAL hm_hm_t::const_iterator findIter(const qore_hash_lookup_key& key) const {
+        return hm.empty() ? hm.end() : hm.find(key);
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIter(const qore_hash_lookup_key& key) {
+        return hm.empty() ? hm.end() : hm.find(key);
+    }
+
+    //! returns the key map entry of \a key, whose hash is \a hash, or hm.end()
+    DLLLOCAL hm_hm_t::const_iterator findIterPrehashed(const char* key, size_t hash) const {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
+    }
+
+    DLLLOCAL hm_hm_t::iterator findIterPrehashed(const char* key, size_t hash) {
+        return hm.empty() ? hm.end() : hm.find(qore_hash_lookup_key(key, strlen(key), hash));
+    }
+
+    //! Returns true if each member of this hash has a member of \a other with the same key whose value is equal to
+    //! its value by \a value_equal (qore#7266)
+    /** Compares the members of two hashes of the same size for the equality operators.  It walks both member lists
+        together while the keys of the members are the same (by length and inline, without hashing the key); from
+        the first pair of members whose keys differ on, it looks each remaining key of this hash up in the key map of
+        \a other.  The values are compared in the order of the members of this hash, with the value of this hash as
+        the first argument of \a value_equal, as a lookup of every key in \a other does, so that the result, the
+        exceptions raised and the order of the comparisons are the same.
+
+        @param other the other hash; the caller has checked that it has as many members as this hash
+        @param value_equal a function taking the value of a member of this hash and the value of the member of
+        \a other with the same key, returning true if they are equal; the comparison ends with false as soon as it
+        returns false
+
+        @return true if every member of this hash has a member of \a other with the same key and an equal value
+    */
+    template <typename F>
+    DLLLOCAL bool membersEqual(const qore_hash_private& other, F&& value_equal) const {
+        assert(member_list.size() == other.member_list.size());
+        qhlist_t::const_iterator i = member_list.begin();
+        const qhlist_t::const_iterator e = member_list.end();
+        // the other list's end is tested too, so that the walk cannot pass it whatever the sizes are
+        for (qhlist_t::const_iterator j = other.member_list.begin(), oe = other.member_list.end(); i != e && j != oe;
+                ++i, ++j) {
+            const HashMember* m = *i;
+            const HashMember* om = *j;
+            if (!qore_key_equal(m->key.data(), m->key.size(), om->key.data(), om->key.size())) {
+                break;
+            }
+            // the keys are unique, so the member with the same key is the member at the same place
+            if (!value_equal(m->val, om->val)) {
+                return false;
+            }
+        }
+        for (; i != e; ++i) {
+            const HashMember* m = *i;
+            hm_hm_t::const_iterator found = other.findIter(m->key.data(), m->key.size());
+            if (found == other.hm.end() || !value_equal(m->val, (*found->second)->val)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
@@ -233,8 +394,32 @@ public:
 
     DLLLOCAL QoreValue getReferencedKeyValueIntern(const char* key, bool& exists) const {
         assert(key);
+        hm_hm_t::const_iterator i = findIter(key);
+        if (i != hm.end()) {
+            exists = true;
+            return (*(i->second))->val.refSelf();
+        }
 
-        hm_hm_t::const_iterator i = hm.find(key);
+        exists = false;
+        return QoreValue();
+    }
+
+    //! returns the value of the key \a key of \a len bytes with a reference, or no value; \a exists is set if the
+    //! key exists
+    DLLLOCAL QoreValue getReferencedKeyValueIntern(const char* key, size_t len, bool& exists) const {
+        hm_hm_t::const_iterator i = findIter(key, len);
+        if (i != hm.end()) {
+            exists = true;
+            return (*(i->second))->val.refSelf();
+        }
+
+        exists = false;
+        return QoreValue();
+    }
+
+    //! returns the value of the key with a reference, or no value; \a exists is set if the key exists
+    DLLLOCAL QoreValue getReferencedKeyValueIntern(const qore_hash_lookup_key& key, bool& exists) const {
+        hm_hm_t::const_iterator i = findIter(key);
         if (i != hm.end()) {
             exists = true;
             return (*(i->second))->val.refSelf();
@@ -247,18 +432,13 @@ public:
     DLLLOCAL QoreValue getReferencedKeyValuePrehashedIntern(
             const char* key, size_t hash) const {
         assert(key);
-#ifdef HAVE_QORE_HASH_MAP
-        hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
-#else
-        (void)hash;
-        hm_hm_t::const_iterator i = hm.find(key);
-#endif
+        hm_hm_t::const_iterator i = findIterPrehashed(key, hash);
         return i != hm.end() ? (*(i->second))->val.refSelf() : QoreValue();
     }
 
     DLLLOCAL int64 getKeyAsBigInt(const char* key, bool &found) const {
         assert(key);
-        hm_hm_t::const_iterator i = hm.find(key);
+        hm_hm_t::const_iterator i = findIter(key);
 
         if (i != hm.end()) {
             found = true;
@@ -271,7 +451,7 @@ public:
 
     DLLLOCAL bool getKeyAsBool(const char* key, bool& found) const {
         assert(key);
-        hm_hm_t::const_iterator i = hm.find(key);
+        hm_hm_t::const_iterator i = findIter(key);
 
         if (i != hm.end()) {
             found = true;
@@ -284,12 +464,12 @@ public:
 
     DLLLOCAL bool existsKey(const char* key) const {
         assert(key);
-        return hm.find(key) != hm.end();
+        return findIter(key) != hm.end();
     }
 
     DLLLOCAL bool existsKeyValue(const char* key) const {
         assert(key);
-        hm_hm_t::const_iterator i = hm.find(key);
+        hm_hm_t::const_iterator i = findIter(key);
         if (i == hm.end())
             return false;
         return !(*(i->second))->val.isNothing();
@@ -297,18 +477,24 @@ public:
 
     DLLLOCAL HashMember* findMember(const char* key) {
         assert(key);
-        hm_hm_t::iterator i = hm.find(key);
+        hm_hm_t::iterator i = findIter(key);
+        return i != hm.end() ? (*(i->second)) : nullptr;
+    }
+
+    //! returns the member with the key \a key of \a len bytes, or nullptr
+    DLLLOCAL HashMember* findMember(const char* key, size_t len) {
+        hm_hm_t::iterator i = findIter(key, len);
+        return i != hm.end() ? (*(i->second)) : nullptr;
+    }
+
+    DLLLOCAL HashMember* findMember(const qore_hash_lookup_key& key) {
+        hm_hm_t::iterator i = findIter(key);
         return i != hm.end() ? (*(i->second)) : nullptr;
     }
 
     DLLLOCAL HashMember* findMemberPrehashed(const char* key, size_t hash) {
         assert(key);
-#ifdef HAVE_QORE_HASH_MAP
-        hm_hm_t::iterator i = hm.find(qore_prehashed_str{key, hash});
-#else
-        (void)hash;
-        hm_hm_t::iterator i = hm.find(key);
-#endif
+        hm_hm_t::iterator i = findIterPrehashed(key, hash);
         return i != hm.end() ? (*(i->second)) : nullptr;
     }
 
@@ -347,7 +533,7 @@ public:
         // add to the map
         qhlist_t::iterator i = member_list.end();
         --i;
-        hm[om->key.c_str()] = i;
+        hm[&om->key] = i;
 
         // return the new member
         return om;
@@ -372,7 +558,7 @@ public:
     DLLLOCAL void deleteKey(const char* key, ExceptionSink *xsink) {
         assert(key);
 
-        hm_hm_t::iterator i = hm.find(key);
+        hm_hm_t::iterator i = findIter(key);
 
         if (i == hm.end())
             return;
@@ -407,10 +593,29 @@ public:
 
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, qore_object_private* obj = nullptr);
 
+    //! Takes the value of a key for delete or remove (qore#7306)
+    /** a hash freed under a weak reference and a copy of one (qore#7163) are empty: the key is not found, and
+        HASH-ERROR is raised then, which costs nothing when the key is removed; the hash can be shared (the hash of a
+        weak reference), so its uniqueness is not asserted
+
+        @return the value of the key, or NOTHING if it does not exist or an exception was raised
+    */
+    DLLLOCAL QoreValue takeRemovedKey(const char* key, ExceptionSink* xsink);
+
+    //! Raises HASH-ERROR for delete or remove that removes nothing from a hash freed under a weak reference or from a
+    //! copy of one (qore#7163), which is empty; the removers call it only when they remove nothing (qore#7306)
+    /** @return -1 if the hash cannot be changed and HASH-ERROR was raised, 0 if not
+    */
+    DLLLOCAL int checkRemovalValid(ExceptionSink* xsink) {
+        // a hash whose last reference was released is empty, and so is a copy of it
+        assert(valid || hm.empty());
+        return checkValid(xsink);
+    }
+
     DLLLOCAL QoreValue takeKeyValueIntern(const char* key, bool& exists) {
         assert(key);
 
-        hm_hm_t::iterator i = hm.find(key);
+        hm_hm_t::iterator i = findIter(key);
 
         if (i == hm.end()) {
             exists = false;
@@ -495,7 +700,9 @@ public:
 
     //! returns a copy of the hash with the type of its sum with \a other (ex: <tt>h + other</tt>)
     DLLLOCAL QoreHashNode* copyCheckNewType(const qore_hash_private& other) const {
-        QoreHashNode* rv = copy();
+        // a new value, which can be changed also when this hash was freed (see copyFreedState())
+        QoreHashNode* rv = getCopy();
+        copyIntern(*rv->priv);
         if (hashdecl || other.hashdecl) {
             if (!hashdecl || !other.hashdecl || !hashdecl->equal(other.hashdecl)) {
                 // issue #6023: if one hashdecl inherits the other, the result is a hash of the child, which declares
@@ -525,6 +732,8 @@ public:
         return rv;
     }
 
+    //! returns a copy of the hash converted to another type: a new hash, which can be changed also when this hash was
+    //! freed under a weak reference (qore#7199; see copyFreedState())
     DLLLOCAL QoreHashNode* copy(const QoreTypeInfo* newComplexTypeInfo) const {
         QoreHashNode* h = new QoreHashNode;
         h->priv->complexTypeInfo = newComplexTypeInfo;
@@ -538,6 +747,7 @@ public:
         if (!strip || (!complexTypeInfo && !hashdecl)) {
             QoreHashNode* h = getCopy();
             copyIntern(*h->priv);
+            copyFreedState(*h->priv);
             return h;
         }
         QoreHashNode* h = new QoreHashNode;
@@ -551,7 +761,36 @@ public:
             ha.swap(v);
 #endif
         }
+        copyFreedState(*h->priv);
+        return h;
+    }
 
+    //! A copy of a freed hash cannot be changed either (qore#7163)
+    /** A hash freed under weak references is held by its weak holders (see QoreContainerWeakRefs), so a new
+        reference to it is never its only one, and changing the hash through that reference copies it; the copy reads
+        as empty, as the hash does, and changing it raises \c HASH-ERROR, as changing the hash itself does.  A value
+        computed from it (its sum with another hash) is a new hash, and so are its conversion to another hash type (a
+        cast or the hash given to a variable or parameter of another type: getPlainHash(), newComplexHashFromHash())
+        and a new expression made from it (makeNewValid()), which can be changed (qore#7199).
+
+        The copy is not freed: it is freed as any other hash when its last reference is released.
+    */
+    DLLLOCAL void copyFreedState(qore_hash_private& h) const {
+        if (!valid) {
+            h.valid = false;
+        }
+    }
+
+    //! returns a new hash with the members of this one, which can be changed also when this hash was freed
+    /** For a value computed from the hash (ex: <tt>h - "key"</tt>, <tt>h + obj</tt>), which is a new hash, as the sum
+        with another hash is (copyCheckNewType()); copy() keeps the freed state, for a copy that stands for the hash
+        itself (qore#7199)
+
+        @param strip true to copy without type information, as copy() does
+    */
+    DLLLOCAL QoreHashNode* copyValue(bool strip = false) const {
+        QoreHashNode* h = copy(strip);
+        h->priv->valid = true;
         return h;
     }
 
@@ -669,11 +908,12 @@ public:
     }
 
     //! Frees all members of a hash whose last reference was released, and marks it as freed
-    /** A weak reference can keep the node allocated after this; \c valid then tells that it was freed.
+    /** A weak reference can keep the node allocated after this; \c freed then tells that it was freed.
     */
     DLLLOCAL bool derefImpl(ExceptionSink* xsink, bool reverse = false) {
         freeMembers(xsink, reverse);
         valid = false;
+        freed = true;
         return true;
     }
 
@@ -701,7 +941,20 @@ public:
         p->hm.clear();
         p->obj_count = 0;
         p->sbClear();
+        finishFreeMembers(h);
+    }
+
+    //! Finishes freeing a hash after its members have been freed and its member index cleared
+    DLLLOCAL static void finishFreeMembers(QoreHashNode& h) {
+        qore_hash_private* p = h.priv;
+        if (!p->weak_hold) {
+            // no weak holder can take a reference to the hash (see QoreContainerWeakRefs)
+            delete &h;
+            return;
+        }
+        // its weak holders keep the node allocated, and read it as an empty hash
         p->valid = false;
+        p->freed = true;
         h.weakDeref();
     }
 
@@ -714,6 +967,9 @@ public:
         exists = true;
         return ha.swap(val);
     }
+
+    //! Removes the key and returns its value, if the key exists; \a o is the object whose members this hash holds
+    DLLLOCAL QoreValue takeKeyValueIfExists(const char* key, qore_object_private* o, bool& exists);
 
     DLLLOCAL QoreValue swapKeyValue(const char* key, QoreValue val, qore_object_private* o) {
         //printd(0, "qore_hash_private::swapKeyValue() this: %p key: %s val: %p (%s) deprecated API called\n", this, key, val, get_node_type(val));
@@ -764,10 +1020,6 @@ public:
         return hashdecl;
     }
 
-    DLLLOCAL void weakRef() {
-        weakRefs.ROreference();
-    }
-
     DLLLOCAL bool weakDeref() {
         if (weakRefs.ROdereference()) {
             return true;
@@ -777,13 +1029,66 @@ public:
 
     DLLLOCAL void setHashDecl(const TypedHashDecl* hd);
 
+    //! Returns a new reference to a hash that a weak reference holds, or a new empty hash that cannot be changed if
+    //! its last reference was released (qore#7198; see WeakHashReferenceNode::lock() and qore_list_private::lockWeak())
+    DLLLOCAL static QoreHashNode* lockWeak(QoreHashNode& h) {
+        // the reference is taken as QoreReferenceCounter::optRef() takes it, inline
+        int count = h.references.load();
+        while (count > 0) {
+            if (h.references.compare_exchange_weak(count, count + 1)) {
+                return !h.priv->weak_hold ? &h : lockWeakFreeing(h);
+            }
+        }
+        return getFreedStandIn(h);
+    }
+
+    //! Releases the reference that lockWeak() took to a hash whose free has started, and returns a new empty hash
+    //! (see qore_list_private::lockWeakFreeing())
+    DLLLOCAL static __attribute__((noinline)) QoreHashNode* lockWeakFreeing(QoreHashNode& h) {
+#ifdef DEBUG
+        bool last =
+#endif
+        h.ROdereference();
+        assert(!last);
+        return getFreedStandIn(h);
+    }
+
+    //! Returns a new empty hash with the type of a hash whose last reference was released, which cannot be changed
+    //! (qore#7198; see lockWeak())
+    DLLLOCAL static __attribute__((noinline)) QoreHashNode* getFreedStandIn(const QoreHashNode& h) {
+        QoreHashNode* rv = h.priv->getCopy();
+        rv->priv->valid = false;
+        return rv;
+    }
+
+    //! Returns the hash that a new expression gives (new hash<...>(h)): a new hash, which can be changed also when the
+    //! hash it is made from was freed under a weak reference (qore#7199)
+    /** @param h the hash made by the new expression, which the caller owns, or nullptr if an exception was raised;
+        a hash that cannot be changed is the hash made from or a copy of it: it is copied if another holder shares it
+    */
+    DLLLOCAL static QoreHashNode* makeNewValid(QoreHashNode* h) {
+        if (!h || h->priv->valid) [[likely]] {
+            return h;
+        }
+        if (!h->is_unique()) {
+            ReferenceHolder<QoreHashNode> holder(h, nullptr);
+            h = h->priv->copy();
+        }
+        h->priv->valid = true;
+        return h;
+    }
+
     DLLLOCAL static QoreHashNode* getPlainHash(QoreHashNode* h) {
         if (!h->priv->hashdecl && !h->priv->complexTypeInfo) {
             return h;
         }
         // no exception is possible
         ReferenceHolder<QoreHashNode> holder(h, nullptr);
-        return h->priv->copy(true);
+        // the hash converted to a plain hash is a new hash, which can be changed also when the hash was freed under
+        // a weak reference (qore#7199; see copyFreedState())
+        QoreHashNode* rv = h->priv->copy(true);
+        rv->priv->valid = true;
+        return rv;
     }
 
     DLLLOCAL static QoreHashNode* newHashDecl(const TypedHashDecl* hd) {

@@ -140,6 +140,9 @@ sse.observersReady();
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
+    - a successful ping of a @ref ServerSentEventClient::ServerSentEventConnection "ServerSentEventConnection" marks the
+      connection up with the status \c "OK"; the status stayed \c "not checked"
+      (<a href="https://github.com/qoretechnologies/qore/issues/7236">issue 7236</a>)
     - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
@@ -147,8 +150,9 @@ sse.observersReady();
       used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
-      terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
-      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      terminal I/O, nor the code that calls it (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"), instead of raising an
+      exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7140">issue 7140</a>)
     - fixed the \c token option with a \c headers option whose values all have the same type, such as a literal
       <tt>{"X-Count": 1}</tt>: adding the \c Authorization header raised \c RUNTIME-TYPE-ERROR in
       @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient" and

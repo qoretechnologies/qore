@@ -84,6 +84,9 @@ module FileLocationTestConnectionProvider {
 */
 
 public ConnectionProvider::AbstractConnection sub get_mod_connection(string name) {
+    if (name == "rest-tls" && FileLocationTestDataProvider::TestStore::rest_tls) {
+        return FileLocationTestDataProvider::TestStore::rest_tls;
+    }
     *hash<auto> conf = ConnectionMap(){name};
     if (!conf) {
         throw "CONNECTION-ERROR", sprintf("connection %y is unknown to the test connection provider; known "
@@ -136,6 +139,15 @@ hash<string, hash<auto>> sub ConnectionMap() {
                 "name": "ftp-secret",
                 "desc": "test FTP connection with a password in the URL",
                 "url": "ftp://ftpuser:" + PasswordMarker + "@localhost:1/base",
+            },
+        },
+        # an HTTPS connection to a port on which nothing listens; its locations go to the https handler (qore#6959)
+        "web": {
+            "class_name": "ConnectionProvider::HttpConnection",
+            "config": {
+                "name": "web",
+                "desc": "test HTTPS connection",
+                "url": "https://localhost:1/base",
             },
         },
         # a connection type with no file location support at all
@@ -196,6 +208,9 @@ public namespace FileLocationTestDataProvider {
 #! In-memory state shared between the test and the providers
 public class TestStore {
     public {
+        #! REST connection created by the trusted TLS fixture before entering its restricted Program
+        static *ConnectionProvider::AbstractConnection rest_tls;
+
         #! key -> content
         static hash<string, data> files;
 

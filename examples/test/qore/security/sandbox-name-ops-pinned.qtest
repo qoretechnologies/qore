@@ -1,0 +1,313 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - file operations relative to directory descriptors (the *at() functions, O_NOFOLLOW)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The name-based file operations of sandboxed code act on the path that the sandbox file-system policy checked: a
+# component of the path that is replaced by a link to a directory outside of the allowed directory after the check
+# does not make the operation act there (qore#7518).  The replacement is made with dbg_fs_swap_on_open() (debug builds)
+# at the point between the check and the operation.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxNameOpsPinnedTest
+
+class SandboxNameOpsPinnedTest inherits QUnit::Test {
+    private {
+        #! the test directory
+        string dir;
+        #! the directory that the sandbox allows
+        string allowed;
+        #! the directory in the allowed directory that the link names when the policy checks it
+        string real;
+        #! the link in the allowed directory through which the operations are made
+        string link;
+        #! the directory outside of the allowed directory that the link is replaced with
+        string outside;
+        #! the sandbox
+        Program sandbox;
+    }
+
+    #! the code of the sandbox: each operation returns what the function returns
+    const SandboxCode = '
+auto sub run(string op, string a, *string b) {
+    switch (op) {
+        case "unlink": return unlink(a);
+        case "rmdir": return rmdir(a);
+        case "mkdir": return mkdir(a, 0755);
+        case "mkdir-parents": return mkdir(a, 0755, True);
+        case "rename": rename(a, b); return 0;
+        case "chmod": return chmod(a, 0600);
+        case "mkfifo": return mkfifo(a, 0600);
+        case "symlink": symlink(b, a); return 0;
+        case "Dir::mkdir": { Dir d(); d.chdir(dirname(a)); return d.mkdir(basename(a), 0755); }
+        case "Dir::rmdir": { Dir d(); d.chdir(dirname(a)); return d.rmdir(basename(a)); }
+        case "Dir::removeFile": { Dir d(); d.chdir(dirname(a)); return d.removeFile(basename(a)); }
+        case "Dir::chmod": { Dir d(); d.chdir(a); return d.chmod(0700); }
+        case "mkdir_ex": mkdir_ex(a, 0755); return 0;
+        case "Dir::create": { Dir d(); d.chdir(a); return d.create(0755); }
+        case "unlink-errno": { int rc = unlink(a); return (rc, errno()); }
+        case "mkdir-errno": { int rc = mkdir(a, 0755); return (rc, errno()); }
+        case "is_writable": return is_writable(a);
+    }
+    throw "TEST-ERROR", sprintf("unknown operation %y", op);
+}
+';
+
+    constructor() : QUnit::Test("sandbox name-based operations pinned", "1.0", \ARGV) {
+        addTestCase("unlink() removes the file of the directory checked", \unlinkTest());
+        addTestCase("rmdir() removes the directory of the directory checked", \rmdirTest());
+        addTestCase("mkdir() creates the directory in the directory checked", \mkdirTest());
+        addTestCase("mkdir() with parents creates the directories in the directory checked", \mkdirParentsTest());
+        addTestCase("rename() renames in the directory checked", \renameTest());
+        addTestCase("rename() is denied if the path changes between its source and its target",
+            \renameSwapBetweenTest());
+        addTestCase("chmod() changes the file checked", \chmodTest());
+        addTestCase("mkfifo() creates the FIFO in the directory checked", \mkfifoTest());
+        addTestCase("symlink() creates the link in the directory checked", \symlinkTest());
+        addTestCase("Dir::mkdir() creates the directory in the directory checked", \dirMkdirTest());
+        addTestCase("Dir::rmdir() removes the directory of the directory checked", \dirRmdirTest());
+        addTestCase("Dir::removeFile() removes the file of the directory checked", \dirRemoveFileTest());
+        addTestCase("Dir::chmod() changes the directory checked", \dirChmodTest());
+        addTestCase("mkdir_ex() creates the directory in the directory checked", \mkdirExTest());
+        addTestCase("Dir::create() creates the directories in the directory checked", \dirCreateTest());
+        addTestCase("a parent that is not a directory is the error of the operation", \notDirTest());
+        addTestCase("a name ending with a slash names a directory", \trailingSlashTest());
+        addTestCase("is_writable() of a directory neither opens nor removes an existing file", \writableProbeTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("qore-name-ops-pinned-");
+        allowed = dir + DirSep + "allowed";
+        real = allowed + DirSep + "real";
+        link = allowed + DirSep + "dlink";
+        outside = dir + DirSep + "outside";
+        mkdir(allowed);
+        mkdir(real);
+        mkdir(outside);
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link needs dbg_fs_swap_on_open()");
+        }
+        # the link names the directory in the allowed directory when the policy checks it
+        unlink(link);
+        symlink(real, link);
+    }
+
+    tearDown() {
+        # disarms the hook if the operation did not consume it
+        call_function("dbg_fs_swap_on_open", "", "");
+    }
+
+    unlinkTest() {
+        writeFile(real + DirSep + "f", "inside");
+        writeFile(outside + DirSep + "f", "outside");
+        arm();
+        assertEq(0, sandbox.callFunction("run", "unlink", link + DirSep + "f"));
+        assertFalse(is_file(real + DirSep + "f"), "the file in the directory checked is removed");
+        assertTrue(is_file(outside + DirSep + "f"), "the file outside is not removed");
+    }
+
+    rmdirTest() {
+        mkdir(real + DirSep + "d");
+        mkdir(outside + DirSep + "d");
+        arm();
+        assertEq(0, sandbox.callFunction("run", "rmdir", link + DirSep + "d"));
+        assertFalse(is_dir(real + DirSep + "d"), "the directory in the directory checked is removed");
+        assertTrue(is_dir(outside + DirSep + "d"), "the directory outside is not removed");
+    }
+
+    #! a replacement between the pinning of the source and of the target of rename() is seen by the second one, which
+    #! denies the operation
+    renameSwapBetweenTest() {
+        writeFile(real + DirSep + "a2", "inside");
+        writeFile(outside + DirSep + "a2", "outside");
+        arm();
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            sandbox.callFunction("run", "rename", link + DirSep + "a2", link + DirSep + "b2");
+        });
+        assertTrue(is_file(real + DirSep + "a2"), "the file in the directory checked is not renamed");
+        assertTrue(is_file(outside + DirSep + "a2"), "the file outside is not renamed");
+        assertFalse(is_file(outside + DirSep + "b2"), "no file is renamed outside");
+    }
+
+    mkdirTest() {
+        arm();
+        assertEq(0, sandbox.callFunction("run", "mkdir", link + DirSep + "new"));
+        assertTrue(is_dir(real + DirSep + "new"), "the directory is created in the directory checked");
+        assertFalse(is_dir(outside + DirSep + "new"), "no directory is created outside");
+    }
+
+    mkdirParentsTest() {
+        # each missing directory is pinned in turn: the link is replaced after the last one was pinned (a replacement
+        # before is seen by the next resolution, which then denies the operation)
+        arm(1);
+        assertEq(0, sandbox.callFunction("run", "mkdir-parents", link + DirSep + "p" + DirSep + "q"));
+        assertTrue(is_dir(real + DirSep + "p" + DirSep + "q"), "the directories are created in the directory checked");
+        assertFalse(is_dir(outside + DirSep + "p"), "no directory is created outside");
+    }
+
+    renameTest() {
+        writeFile(real + DirSep + "a", "inside");
+        writeFile(outside + DirSep + "a", "outside");
+        # the source and the target are pinned in turn: the link is replaced after both were pinned
+        arm(1);
+        assertEq(0, sandbox.callFunction("run", "rename", link + DirSep + "a", link + DirSep + "b"));
+        assertTrue(is_file(real + DirSep + "b"), "the file in the directory checked is renamed");
+        assertTrue(is_file(outside + DirSep + "a"), "the file outside is not renamed");
+        assertFalse(is_file(outside + DirSep + "b"), "no file is renamed outside");
+    }
+
+    chmodTest() {
+        writeFile(real + DirSep + "m", "inside");
+        writeFile(outside + DirSep + "m", "outside");
+        chmod(real + DirSep + "m", 0644);
+        chmod(outside + DirSep + "m", 0644);
+        arm();
+        assertEq(0, sandbox.callFunction("run", "chmod", link + DirSep + "m"));
+        assertEq(0600, hstat(real + DirSep + "m").mode & 0777, "the file in the directory checked is changed");
+        assertEq(0644, hstat(outside + DirSep + "m").mode & 0777, "the file outside is not changed");
+    }
+
+    mkfifoTest() {
+        if (!Option::HAVE_UNIX_FILEMGT) {
+            testSkip("no FIFOs");
+        }
+        arm();
+        assertEq(0, sandbox.callFunction("run", "mkfifo", link + DirSep + "fifo"));
+        assertTrue(exists hstat(real + DirSep + "fifo"), "the FIFO is created in the directory checked");
+        assertNothing(hlstat(outside + DirSep + "fifo"), "no FIFO is created outside");
+    }
+
+    symlinkTest() {
+        arm();
+        assertEq(0, sandbox.callFunction("run", "symlink", link + DirSep + "l", "target"));
+        assertTrue(is_link(real + DirSep + "l"), "the link is created in the directory checked");
+        assertFalse(is_link(outside + DirSep + "l"), "no link is created outside");
+    }
+
+    dirMkdirTest() {
+        arm();
+        sandbox.callFunction("run", "Dir::mkdir", link + DirSep + "dnew");
+        assertTrue(is_dir(real + DirSep + "dnew"), "the directory is created in the directory checked");
+        assertFalse(is_dir(outside + DirSep + "dnew"), "no directory is created outside");
+    }
+
+    dirRmdirTest() {
+        mkdir(real + DirSep + "dd");
+        mkdir(outside + DirSep + "dd");
+        arm();
+        sandbox.callFunction("run", "Dir::rmdir", link + DirSep + "dd");
+        assertFalse(is_dir(real + DirSep + "dd"), "the directory in the directory checked is removed");
+        assertTrue(is_dir(outside + DirSep + "dd"), "the directory outside is not removed");
+    }
+
+    dirRemoveFileTest() {
+        writeFile(real + DirSep + "rf", "inside");
+        writeFile(outside + DirSep + "rf", "outside");
+        arm();
+        assertTrue(sandbox.callFunction("run", "Dir::removeFile", link + DirSep + "rf"));
+        assertFalse(is_file(real + DirSep + "rf"), "the file in the directory checked is removed");
+        assertTrue(is_file(outside + DirSep + "rf"), "the file outside is not removed");
+    }
+
+    dirChmodTest() {
+        chmod(real, 0755);
+        chmod(outside, 0755);
+        # the directory itself is the object: the link is replaced as a whole
+        call_function("dbg_fs_swap_on_open", link, outside);
+        sandbox.callFunction("run", "Dir::chmod", link);
+        assertEq(0700, hstat(real).mode & 0777, "the directory checked is changed");
+        assertEq(0755, hstat(outside).mode & 0777, "the directory outside is not changed");
+        chmod(real, 0755);
+    }
+
+    mkdirExTest() {
+        arm();
+        assertEq(0, sandbox.callFunction("run", "mkdir_ex", link + DirSep + "xnew"));
+        assertTrue(is_dir(real + DirSep + "xnew"), "the directory is created in the directory checked");
+        assertFalse(is_dir(outside + DirSep + "xnew"), "no directory is created outside");
+    }
+
+    dirCreateTest() {
+        # two directories are missing: the link is replaced after the last one was pinned
+        arm(1);
+        assertEq(2, sandbox.callFunction("run", "Dir::create", link + DirSep + "c1" + DirSep + "c2"));
+        assertTrue(is_dir(real + DirSep + "c1" + DirSep + "c2"), "the directories are created in the directory checked");
+        assertFalse(is_dir(outside + DirSep + "c1"), "no directory is created outside");
+    }
+
+    notDirTest() {
+        string file = real + DirSep + "plain";
+        writeFile(file, "x");
+        assertEq((-1, ENOTDIR), sandbox.callFunction("run", "unlink-errno", file + DirSep + "x"), "unlink()");
+        assertEq((-1, ENOTDIR), sandbox.callFunction("run", "mkdir-errno", file + DirSep + "x"), "mkdir()");
+    }
+
+    trailingSlashTest() {
+        string file = real + DirSep + "plain2";
+        writeFile(file, "x");
+        assertEq((-1, ENOTDIR), sandbox.callFunction("run", "unlink-errno", file + DirSep), "unlink() of a file");
+        assertTrue(is_file(file), "the file is not removed");
+        # the operating system applies its rules to the name with the slash, as without a policy (the error differs
+        # between systems)
+        string ref = real + DirSep + "plain3";
+        writeFile(ref, "x");
+        int rc = mkdir(ref + DirSep, 0755);
+        list<int> expected = (rc, errno());
+        assertEq(expected, sandbox.callFunction("run", "mkdir-errno", file + DirSep), "mkdir() of a file");
+    }
+
+    writableProbeTest() {
+        string probe = real + DirSep + "xxx_qore_tmp_test_xxx";
+        writeFile(probe, "keep");
+        assertTrue(sandbox.callFunction("run", "is_writable", real), "the directory is writable");
+        assertTrue(is_file(probe), "the existing file is not removed");
+        unlink(probe);
+        assertTrue(sandbox.callFunction("run", "is_writable", real), "the directory is writable");
+        assertFalse(is_file(probe), "the probe file is removed");
+        # a directory that cannot be written to is not writable, also with an entry of the name of the probe file
+        if (getuid()) {
+            string ro = real + DirSep + "ro";
+            mkdir(ro);
+            writeFile(ro + DirSep + "xxx_qore_tmp_test_xxx", "keep");
+            chmod(ro, 0555);
+            on_exit chmod(ro, 0755);
+            assertFalse(sandbox.callFunction("run", "is_writable", ro), "a read-only directory is not writable");
+        }
+    }
+
+    #! replaces the link with one to the directory outside, between the check and the operation
+    private arm(int skip = 0) {
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", outside, skip);
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

@@ -167,6 +167,11 @@ DebugProgram::destructor() {
  *
  */
 nothing DebugProgram::waitForTerminationAndClear() {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
    dpgm->waitForTerminationAndClear(xsink);
 }
 
@@ -175,6 +180,11 @@ nothing DebugProgram::waitForTerminationAndClear() {
  *
  */
 int DebugProgram::getInterruptedCount() [flags=CONSTANT] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
    return dpgm->getInterruptedCount();
 }
 
@@ -183,6 +193,15 @@ int DebugProgram::getInterruptedCount() [flags=CONSTANT] {
  * @param program the program to add to debugging
  */
 nothing DebugProgram::addProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    dpgm->addProgram(*program, xsink);
 }
 
@@ -191,6 +210,15 @@ nothing DebugProgram::addProgram(ProgramControl[QoreProgram] program) [flags=NAM
  * @param program the program to remove from debugging
  */
 nothing DebugProgram::removeProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    dpgm->removeProgram(*program);
 }
 
@@ -199,7 +227,20 @@ nothing DebugProgram::removeProgram(ProgramControl[QoreProgram] program) [flags=
  *
  */
 list DebugProgram::getAllPrograms() {
-   return dpgm->getAllProgramObjects();
+    ReferenceHolder<QoreListNode> l(dpgm->getAllProgramObjects(), xsink);
+    // the Programs that are returned are checked, not the ones bound before: a Program of another tenant is not used
+    // in a trusted build that a tenant called (qore#6958)
+    if (qore_sandbox_isolation_active()) {
+        ConstListIterator i(*l);
+        while (i.next()) {
+            ReferenceHolder<QoreProgram> pgm(reinterpret_cast<QoreProgram*>(i.getValue().get<const QoreObject>()
+                ->getReferencedPrivateData(CID_PROGRAMCONTROL, xsink)), xsink);
+            if (*xsink || (pgm && qore_sandbox_check_program_isolation(*pgm, xsink, "accessing a Program"))) {
+                return QoreValue();
+            }
+        }
+    }
+    return l.release();
 }
 //! Executed when new thread is attached to program being debugged
 /**
@@ -311,6 +352,15 @@ abstract nothing DebugProgram::onExit(ProgramControl[QoreProgram] program, int s
     @since %Qore 3.0
 */
 bool DebugProgram::attachThread(ProgramControl[QoreProgram] program, int thread_id) [flags=NAMED_ARGS] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return dpgm->attachThread(*program, thread_id);
 }
 
@@ -340,6 +390,15 @@ nothing DebugProgram::onRunExit(ProgramControl[QoreProgram] program, int[doc] st
   * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if the given thread is not active in the target program or cannot run debugger callbacks
   */
 int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] program, int thread_id) [flags=NAMED_ARGS] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return dpgm->breakProgramThread(*program, thread_id);
 }
 
@@ -358,6 +417,15 @@ int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] program, int th
     @since %Qore 3.0
  */
 int DebugProgram::setProgramTerminating(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return dpgm->setProgramTerminating(*program);
 }
 
@@ -368,5 +436,14 @@ int DebugProgram::setProgramTerminating(ProgramControl[QoreProgram] program) [fl
   * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if no active target program thread can run debugger callbacks
   */
 int DebugProgram::breakProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+    // the Programs of another tenant that the debugger is bound to are not used in a trusted build that a tenant
+    // called (qore#6958)
+    if (qore_debug_program_private::checkProgramIsolation(dpgm, xsink)) {
+        return QoreValue();
+    }
+    // another tenant's Program is not used in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(*program, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
    return dpgm->breakProgram(*program);
 }

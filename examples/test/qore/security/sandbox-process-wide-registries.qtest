@@ -111,8 +111,8 @@ class SandboxProcessWideRegistriesTest inherits QUnit::Test {
         Program tenant_b = SandboxProcessWideRegistriesTest::tenant("tenant-b", "read",
             sprintf("return get_app_registry(%y);", Key));
         assertThrows("SANDBOX-REGISTRATION-ERROR", \tenant_a.callFunction(), "t_set_app_registry");
-        # the other tenant and the host still see the host's value
-        assertEq("host", tenant_b.callFunction("t_read"));
+        # the host still sees its value; the other tenant does not get the registry (issue #6749)
+        assertNothing(tenant_b.callFunction("t_read"));
         assertEq("host", get_app_registry(Key));
 
         if (HAVE_SIGNAL_HANDLING) {

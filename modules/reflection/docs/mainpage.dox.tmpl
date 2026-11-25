@@ -171,7 +171,10 @@
       the language (a system typed hash, or one that the caller's %Program declares, imports or inherits) or a user
       module exports it (a \c public typed hash in a namespace that the module exports, as for the classes that it
       exports); they then run under the caller's sandbox and restrictions, as a cast by the caller does; a typed hash
-      that a module does not export, or a parent's that a child %Program does not inherit, is refused
+      that a module does not export, or a parent's that a child %Program does not inherit, is refused; the code of a
+      module found in the module path also evaluates them for the %Program that calls it, through a handle of that
+      %Program, if that %Program could name the typed hash (as DataProvider's data types do for the typed hashes of a
+      sandboxed %Program), but not while a module is initialized, nor in a thread that module code started
     - a @ref call_reference "call reference" to a method of a reflection handle (<tt>\\f.call()</tt>) is checked
       as a direct call of the method by the code that created the reference
     - a class that the module does not export cannot be constructed, and its static methods, static members,

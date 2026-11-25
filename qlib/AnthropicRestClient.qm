@@ -37,6 +37,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires DataProvider
 %requires QoreLlmTypes
 
 module AnthropicRestClient {
@@ -520,6 +521,40 @@ public class AnthropicSseStreamIo {
     }
 }
 
+#! Passes the events of the SSE observable of an asynchronous stream to its request
+class AnthropicAsyncSseObserver inherits DataProvider::Observer {
+    private {
+        #! The request of the stream
+        QoreLlmUtils::LlmAsyncSseRequest req;
+        #! The attempt that opened the stream
+        int attempt;
+    }
+
+    constructor(QoreLlmUtils::LlmAsyncSseRequest req, int attempt) {
+        self.req = req;
+        self.attempt = attempt;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        switch (event_id) {
+            case HttpClientStreamingIo::EVENT_SSE_CONNECTED:
+                req.sseConnected(attempt);
+                break;
+            case HttpClientStreamingIo::EVENT_SSE_DATA:
+                req.sseEvent(attempt, data_);
+                break;
+            case HttpClientStreamingIo::EVENT_SSE_CLOSED:
+                req.sseClosed(attempt, data_.reason == "idle-timeout"
+                    ? QoreLlmUtils::LlmAsyncSseRequest::ClosedIdleTimeout
+                    : (exists data_.reason
+                        ? QoreLlmUtils::LlmAsyncSseRequest::ClosedError
+                        : QoreLlmUtils::LlmAsyncSseRequest::ClosedEnd),
+                    QoreLlmUtils::LlmAsyncSseRequest::getCloseError(data_));
+                break;
+        }
+    }
+}
+
 #! LLM provider that dispatches to the Anthropic Messages API
 /** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract using
     @ref RestClientIo::RestClientIo against \c /v1/messages.  Supports
@@ -623,6 +658,10 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             resp = withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableRequestTarget("POST", getMessagesTarget(), body,
+                        buildAuthHeaders(), getRequestTimeoutMs(opts), getRequestCancelRegistration(opts));
+                }
                 return rest_client.restDoRequestTargetWithTimeout("POST", getMessagesTarget(), body,
                     buildAuthHeaders(), getRequestTimeoutMs(opts));
             }, opts);
@@ -635,6 +674,11 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     AnthropicLlmProvider::requestErrorDetail(ex)), ex;
         }
 
+        return parseChatResponse(resp);
+    }
+
+    #! Returns the response of a chat request
+    private static hash<QoreLlmUtils::ChatResponse> parseChatResponse(hash<auto> resp) {
         *string text_content;
         *list<hash<QoreLlmUtils::ChatToolCall>> parsed_tool_calls;
         *list<auto> reasoning_blocks;
@@ -753,52 +797,164 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
                 return;
             }
-            if (!evt.data.val()) {
-                continue;
-            }
-            auto parsed;
-            try {
-                parsed = parse_json(evt.data);
-            } catch (hash<ExceptionInfo> ex) {
-                throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
-                    "contained an event that is not valid JSON: %s", ex.desc),
-                    ex;
-            }
-            if (parsed.typeCode() != NT_HASH) {
-                throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
-                    "contained an event that is not a JSON object: %y",
-                    parsed);
-            }
-            hash<auto> event_data = cast<hash>(parsed);
-            if (event_data.type == "error") {
-                throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
-                    "reported an error: %s: %s",
-                    event_data.error.type ?? "error",
-                    event_data.error.message ?? "no message"),
-                    event_data.error;
-            }
-            if (event_data.type == "ping") {
-                # keep-alive with no content
-                continue;
-            }
-            bool done = event_data.type == "message_stop";
-            hash<QoreLlmUtils::ChatStreamEvent> event =
-                <QoreLlmUtils::ChatStreamEvent>{
-                "done": done,
-                "raw": event_data,
-            };
-            if (evt.event.val()) {
-                event.event = evt.event;
-            }
-            if (event_data.type == "content_block_delta"
-                    && event_data.delta.text.val()) {
-                event.delta = event_data.delta.text;
-            }
-            deliverStreamEvent(callback, event, opts);
-            if (done) {
+            if (handleStreamEvent(evt, callback, opts)) {
                 return;
             }
         }
+    }
+
+    #! Handles an event of a Messages API stream; returns True after the final event (message_stop)
+    private bool handleStreamEvent(hash<auto> evt, code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        if (!evt.data.val()) {
+            return False;
+        }
+        auto parsed;
+        try {
+            parsed = parse_json(evt.data);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
+                "contained an event that is not valid JSON: %s", ex.desc),
+                ex;
+        }
+        if (parsed.typeCode() != NT_HASH) {
+            throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
+                "contained an event that is not a JSON object: %y",
+                parsed);
+        }
+        hash<auto> event_data = cast<hash>(parsed);
+        if (event_data.type == "error") {
+            throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
+                "reported an error: %s: %s",
+                event_data.error.type ?? "error",
+                event_data.error.message ?? "no message"),
+                event_data.error;
+        }
+        if (event_data.type == "ping") {
+            # keep-alive with no content
+            return False;
+        }
+        bool done = event_data.type == "message_stop";
+        hash<QoreLlmUtils::ChatStreamEvent> event =
+            <QoreLlmUtils::ChatStreamEvent>{
+            "done": done,
+            "raw": event_data,
+        };
+        if (evt.event.val()) {
+            event.event = evt.event;
+        }
+        if (event_data.type == "content_block_delta"
+                && event_data.delta.text.val()) {
+            event.delta = event_data.delta.text;
+        }
+        deliverStreamEvent(callback, event, opts);
+        return done;
+    }
+
+    #! Returns @ref True: the asynchronous chat calls of this provider hold no thread while they wait
+    bool supportsAsyncChat() {
+        return True;
+    }
+
+    #! Starts the request of @ref chat() as a step of an asynchronous operation, without holding a thread
+    /** The request, its retries and its errors are those of @ref chat(); the response is awaited by the async I/O
+        controller, and a retry waits on a timer.  See
+        @ref QoreLlmUtils::AbstractLlmProvider::startChatAsync() "AbstractLlmProvider::startChatAsync()".
+    */
+    startChatAsync(QoreLlmUtils::LlmAsyncOperation op, list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, hash<QoreLlmUtils::LlmRequestOptions> opts,
+            code<nothing(hash<QoreLlmUtils::ChatResponse>)> on_response,
+            code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<auto> body;
+        try {
+            ensureRestClient();
+            body = buildAnthropicBody(messages, tools, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        startRequestAsync(op, opts, hash<QoreLlmUtils::LlmAsyncSubmission> sub (EventNotifier notifier) {
+            # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+            return AnthropicLlmProvider::submission(rest_client.restDoRequestAsyncTargetWithNotifier("POST",
+                getMessagesTarget(), body, buildAuthHeaders(), getRequestTimeoutMs(opts), notifier));
+        }, sub (auto resp) {
+            hash<QoreLlmUtils::ChatResponse> response;
+            try {
+                response = AnthropicLlmProvider::parseChatResponse(resp);
+            } catch (hash<ExceptionInfo> ex) {
+                error_cb(ex);
+                return;
+            }
+            on_response(response);
+        }, sub (hash<ExceptionInfo> ex) {
+            error_cb(ex.err == "LLM-CANCELLED" ? ex : makeException("LLM-ERROR",
+                sprintf("Anthropic chat request failed: %s", AnthropicLlmProvider::requestErrorDetail(ex)), ex));
+        });
+    }
+
+    #! Starts the request of @ref chatStream() as a step of an asynchronous operation, without holding a thread
+    /** The request, its events, its retries and its errors are those of @ref chatStream(); the stream is read by the
+        async I/O controller, and each event is delivered in a task of \a op.  See
+        @ref QoreLlmUtils::AbstractLlmProvider::startChatStreamAsync() "AbstractLlmProvider::startChatStreamAsync()".
+    */
+    startChatStreamAsync(QoreLlmUtils::LlmAsyncOperation op, list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, hash<QoreLlmUtils::LlmRequestOptions> opts,
+            code<nothing()> on_end, code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<auto> body;
+        hash<auto> hdr;
+        try {
+            ensureRestClient();
+            body = buildAnthropicBody(messages, tools, opts);
+            body.stream = True;
+            hdr = buildAuthHeaders() + {
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        # True once message_stop has been delivered
+        bool stopped = False;
+        int timeout_ms;
+        QoreLlmUtils::LlmAsyncSseRequest req(self, op, opts,
+            code<nothing()> sub (QoreLlmUtils::LlmAsyncSseRequest r, int attempt) {
+                timeout_ms = getRequestTimeoutMs(opts);
+                HttpClientStreamingIo::SseObservable obs = rest_client.restObserveSseTarget("POST",
+                    getMessagesTarget(), body, hdr, {"idle_timeout": timeout_ms, "emit_heartbeat": False});
+                obs.registerObserver(new AnthropicAsyncSseObserver(r, attempt));
+                obs.observersReady();
+                return sub () { obs.stopEvents(); };
+            },
+            bool sub (hash<auto> evt) {
+                stopped = handleStreamEvent(evt, callback, opts);
+                return stopped;
+            },
+            sub () {
+                if (!stopped) {
+                    deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{"done": True}, opts);
+                }
+            },
+            hash<ExceptionInfo> sub () {
+                return makeException("LLM-ERROR", sprintf("Anthropic streaming chat response timed out: no event "
+                    "arrived within %d ms", timeout_ms), NOTHING);
+            },
+            hash<ExceptionInfo> sub (hash<ExceptionInfo> ex) {
+                return makeException("LLM-ERROR", sprintf("Anthropic streaming chat request failed: %s",
+                    AnthropicLlmProvider::requestErrorDetail(ex)), ex);
+            },
+            on_end, error_cb, NOTHING, "POST " + getMessagesTarget().path);
+        req.start();
+    }
+
+    #! Returns the submission of an asynchronous request
+    private static hash<QoreLlmUtils::LlmAsyncSubmission> submission(RestClientIo::RestFuture future) {
+        return <QoreLlmUtils::LlmAsyncSubmission>{
+            "cancel": sub () { future.cancel(); },
+            "is_done": bool sub () { return future.isDone(); },
+            "get": auto sub () { return future.get(); },
+        };
     }
 
     #! Updates OpenAI stream state from a Messages API stream event

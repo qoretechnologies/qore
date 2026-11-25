@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - all checks run in workers with explicit execution modes or as qcc executables
+# test-platform: macos - JIT and AOT code generation and qcc executables of calls into module Programs
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class TerminalIoCallerTest
+
+#! Library code writes to the terminal for its caller only if the caller may (qore#7140)
+/** SandboxManager::isTerminalIoAllowed() is False for code restricted from terminal I/O and for library code that
+    serves such code; the standard modules use it, so they write nothing to stdout or stderr for such a caller (the
+    verbose errors of DatasourceProvider and ConnectionProvider, the Logger appenders, the console debug collector and
+    the progress display that it creates, a logger that the host created and gave it) and do not read the terminal
+    for it (the window size of TelnetClient); the builtins that use the terminal refuse it also in library code
+    (print(), printf(), the stdout and stderr files, StdoutOutputStream, TermIOS::getWindowSize()).  The checks are
+    in terminal-io-caller/terminal-io-caller-worker.q, whose output must be exactly the host logger's own line and one
+    "ok" line per check, in each execution mode and as a program compiled with qcc.
+*/
+class TerminalIoCallerTest inherits QUnit::Test {
+    public {
+        #! the cases of the worker, in the order it runs them
+        const Cases = ("host", "host-module", "restricted-direct", "restricted-module", "restricted-ds",
+            "restricted-connections", "restricted-window-size", "restricted-builtin-printf",
+            "restricted-builtin-print", "restricted-builtin-stdout", "restricted-builtin-stderr",
+            "restricted-builtin-stream", "restricted-builtin-streamwriter", "restricted-builtin-window",
+            "restricted-getopt", "restricted-own-writers", "restricted-host-logger", "restricted-host-stream-logger",
+            "restricted-object-host-code", "restricted-object-own-code",
+            "sandboxed-direct",
+            "sandboxed-module");
+        #! the only terminal output of the worker before its results: the host's own logger lines
+        const HostOutput = "host logger line\nhost stream logger line\nhost code under a restricted object\n";
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string worker = get_script_dir() + DirSep + "terminal-io-caller" + DirSep + "terminal-io-caller-worker.q";
+        string prefix;
+    }
+
+    constructor() : QUnit::Test("TerminalIoCallerTest", "1.0", \ARGV) {
+        # provider modules that cannot be loaded: the provider modules write their errors to stdout in verbose mode
+        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
+            + " QORE_LIBDIR=" + quote(libdir) + " QORE_DATASOURCE_PROVIDERS=qore-7140-no-such-module"
+            + " QORE_CONNECTION_PROVIDERS=qore-7140-no-such-module ";
+        addTestCase("each execution mode", \testModes());
+        addTestCase("qcc executables", \testCompiled());
+        set_return_value(main());
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    #! the expected output of the worker
+    private static string expected() {
+        return HostOutput + (map $1 + "=ok\n", Cases).join("");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the Programs that the worker creates run with its execution mode
+            assertEq(expected(), ExecModeHarness::run(prefix + quote(qore_bin) + " -b --enable-debug --exec-mode="
+                + mode + " " + quote(worker), ExecModeHarness::NativeCheck::None), mode);
+        }
+        assertEq(expected(), ExecModeHarness::run_ir_tier(prefix + quote(qore_bin)
+            + " -b --enable-debug --exec-mode=tiered " + quote(worker)), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-terminal-io-caller-exe-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "terminal-io-caller" + opt;
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            assertTrue(is_file(exe), "qcc " + opt + " produced the executable");
+            assertEq(expected(), ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "qcc " + opt);
+        }
+    }
+}

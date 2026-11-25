@@ -60,6 +60,7 @@ class QoreIoUring;
 #include "qore/intern/WebSocketCloseRecord.h"
 
 // Forward declarations
+class SocketRecvSomePollState;
 struct qore_socket_private;
 
 //! HTTP/2 stream state
@@ -103,6 +104,13 @@ struct Http2StreamInfo {
 
     //! True when receiving trailer headers (after initial headers + body)
     bool receiving_trailers = false;
+
+    //! The size of the header list received so far in the current header block (RFC 9113 section 6.5.2: the length
+    //! of each name and value plus 32 bytes) (qore#6867)
+    size_t header_list_size = 0;
+
+    //! True if the header list received exceeded the maximum header size of the socket and the stream was rejected
+    bool header_list_too_large = false;
 
     // Body data
     std::vector<char> body;
@@ -160,6 +168,9 @@ struct Http2StreamInfo {
     */
     bool rst_submitted = false;
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
+    //! server: true once a response has been submitted on the stream; trailers are refused before it, as they would
+    //! be a header block without :status (qoretechnologies/qore#7212)
+    bool response_submitted = false;
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
     //! True if a fast route answered the request on the I/O thread (see Http2Session::serveFastRoute()): the stream is
@@ -637,9 +648,10 @@ public:
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
         @param xsink Exception sink for error reporting
+        @param poll_events returns the transport readiness mask on a wait, zero on progress
         @return 0 on success/timeout (data may have been received), 1 if connection was closed by peer, -1 on error
     */
-    DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink);
+    DLLLOCAL int receiveData(int timeout_ms, ExceptionSink* xsink, int* poll_events = nullptr);
 
     //! Returns true if there is pending request/response body data for stream_id
     DLLLOCAL bool hasPendingBodyData(int32_t stream_id) const;
@@ -729,6 +741,14 @@ public:
         notifyStreamDrain();
     }
 
+#ifdef DEBUG
+    //! Resumes the streams deferred while dbg_http2_hold_stream_data() held them
+    /** A deferred stream is otherwise resumed only by its next send, which a connection that has stopped sending never
+        makes: its data and its end stayed unsent, and the peer's close waited for its timeout
+    */
+    DLLLOCAL static void dbgResumeHeldStreams();
+#endif
+
     //! Returns true once @ref markClosed has been called.
     DLLLOCAL bool isSessionClosed() const {
         return session_closed_.load(std::memory_order_acquire);
@@ -752,6 +772,16 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
+
+    //! Returns True if this endpoint has not ended its side of the stream (it has not sent END_STREAM or RST_STREAM)
+    /** A client stream whose response ended while its request side is still open (an extended CONNECT tunnel or a
+        streamed request that the server answered whole) stays half-closed until the client ends it: it then counts
+        against the peer's limit of concurrent streams for the life of the connection (qore#7443)
+
+        @param stream_id the stream to check
+        @return True if the stream exists and its local side is open
+    */
+    DLLLOCAL bool isStreamLocalOpen(int32_t stream_id) const;
 
     //! Returns True if the request body received on the stream exceeded the maximum request body size
     /** @param stream_id the stream to check
@@ -1097,6 +1127,10 @@ public:
     //! Get remote peer settings
     DLLLOCAL Http2Settings getRemoteSettings() const { return remote_settings; }
 
+    //! Returns the maximum size of the header list of a received header block: the maximum header size of the socket
+    //! (see Socket::setMaxHeaderSize(); qore#6867)
+    DLLLOCAL uint32_t getMaxHeaderListSize() const;
+
     //! Get the underlying nghttp2 session handle
     DLLLOCAL nghttp2_session* getSession() const { return session; }
 
@@ -1187,6 +1221,10 @@ private:
     // Send buffer
     std::vector<char> send_buffer;
     size_t send_offset = 0;
+    //! An incomplete SSL write is retried with its original data and length.
+    size_t tls_awaiting_drain = 0;
+    // The I/O thread owns this read across retries, including its TLS buffer.
+    std::unique_ptr<SocketRecvSomePollState> io_read;
     //! The absolute position in the outgoing byte stream of send_buffer[0]; advanced when consumed data is removed
     uint64_t send_buffer_base = 0;
 
@@ -1250,6 +1288,9 @@ private:
     //! the length of the data that a stream's own limit refused last (none once data was taken again): the stream is
     //! drained when that data fits (waitForStreamDrain(); issue #6907)
     std::unordered_map<int32_t, size_t> stream_refused_len;
+    //! the bytes of each stream's buffered data that nghttp2 has taken so far (never decreases; erased with the
+    //! stream): the progress that a sender waiting for the buffer to drain measures (issue #6968)
+    std::unordered_map<int32_t, uint64_t> stream_taken_total;
     //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
     std::unordered_map<int32_t, size_t> deferred_stream_credit;
 
@@ -1322,6 +1363,36 @@ private:
         uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
         void* user_data);
 
+    //! Provides the data of a stream's DATA frames; dataProviderReadCallback() applies the stream's body rule to it
+    DLLLOCAL static ssize_t dataProviderReadCallbackIntern(nghttp2_session* session, int32_t stream_id,
+        uint8_t* buf, size_t length, uint32_t* data_flags, nghttp2_data_source* source,
+        void* user_data);
+
+    //! The body rule of a streamed server response (qore#7212; see QoreHttpResponseBodyRule)
+    struct StreamedResponseRule {
+        //! a response without content (to HEAD, or with status 204 or 304): its data is not sent
+        bool no_body = false;
+        //! the declared length of the content, -1 if not declared
+        int64_t content_length = -1;
+        //! the bytes of content provided so far
+        uint64_t provided = 0;
+    };
+    //! The body rules of the streamed responses, by stream; erased when the stream closes
+    std::unordered_map<int32_t, StreamedResponseRule> streamed_response_rules;
+
+    //! Checks a server response's header block against the body rules; returns -1 with an exception if it is refused
+    /** The caller holds the lock
+
+        @param stream_id the stream of the response
+        @param status_code the status of the response
+        @param nva the response's header block, with :status first
+        @param body_len the length of the complete body, or -1 for a body that is streamed
+        @param rule the rule, for the caller to apply
+        @param xsink for the exception
+    */
+    DLLLOCAL int checkResponseLocked(int32_t stream_id, int status_code, const std::vector<nghttp2_nv>& nva,
+        int64 body_len, QoreHttpResponseBodyRule& rule, ExceptionSink* xsink);
+
     //! Info about an InputStream being streamed on an HTTP/2 response
     /** @since %Qore 3.0
     */
@@ -1343,6 +1414,9 @@ private:
         std::unique_ptr<char[]> pending_iouring_buf;
         //! Length of data in pending_iouring_buf
         size_t pending_iouring_len = 0;
+        //! A chunk read on the other paths that the stream's send limit refused, sent before anything more is read
+        //! (qore#7460)
+        SimpleRefHolder<BinaryNode> retained_chunk;
         //! Declared Content-Length from response headers (-1 if not declared)
         //! and cumulative bytes sent.  Used to detect short-stream bugs (the
         //! InputStream EOFs before the declared byte count) so the server
@@ -1376,6 +1450,10 @@ private:
             }
         }
     };
+    DLLLOCAL void processStreamInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink);
+    DLLLOCAL void resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
+        ExceptionSink* xsink);
+
     std::unordered_map<int32_t, StreamInputStreamInfo> stream_input_streams_;
 
     //! Atomic flag for lock-free hasActiveStreamInputStreams() checks in the I/O hot path
@@ -1417,6 +1495,14 @@ public:
         return has_active_input_streams_.load(std::memory_order_acquire);
     }
 
+    //! Returns true if a pass of processStreamInputStreams() can make progress without a socket event (qore#7435)
+    /** A stream whose send buffer is full waits for the peer's credit, which arrives as a frame (a read event); one
+        whose InputStream is a monitored descriptor, or which has an io_uring read in flight, waits for that.  Asking
+        to be woken for writability for such streams only made the connection's operation run again and again while
+        the socket was writable.
+    */
+    DLLLOCAL bool needsInputStreamPass() const;
+
     //! Process one chunk from each active InputStream (called by I/O thread)
     /** @since %Qore 3.0
     */
@@ -1444,6 +1530,11 @@ public:
     //! Returns 0 if the stream has no data buffered to be sent (all of it was handed to the transport, or the stream
     //! is gone), 1 otherwise; waiters are woken by notifyStreamDrain() when data is handed over or the stream closes
     DLLLOCAL int streamSendFlushed(int32_t stream_id);
+
+    //! Returns the bytes of the stream's buffered data that nghttp2 has taken so far (never decreases)
+    /** @return the byte count, or -1 if the session is closed or nghttp2 no longer has the stream
+    */
+    DLLLOCAL int64_t streamTakenBytes(int32_t stream_id);
 
     //! Wake controller poll operations waiting for stream drain
     /** Called by dataProviderReadCallback, onStreamCloseCallback and sendPendingData with the session mutex m held,

@@ -38,6 +38,11 @@ public namespace AsyncSocketIo {
 */
 public class AbstractStreamContext {
     private {
+        #! the minimum rate of the sends on the stream, if any (see @ref setSendMinRate())
+        *SendRateMonitor send_rate;
+    }
+
+    private {
         #! True once this context sent the close frame of a WebSocket connection (@ref sendWebSocketClose())
         bool ws_close_sent = False;
 
@@ -84,17 +89,53 @@ public class AbstractStreamContext {
     */
     abstract sendData(binary data, bool end_stream = False);
 
+    #! Sets the minimum average rate at which the peer must take data while a send waits for it
+    /** The rate is measured over a sliding window of the time spent waiting for the peer, kept across the sends on the
+        stream; a send that waits for a peer below it raises \c STREAM-SEND-TIMEOUT.
+
+        @param min_rate the minimum rate in bytes per second; 0 disables the check
+        @param window the length of the sliding window
+
+        @throw SEND-RATE-ERROR invalid arguments
+
+        @since AsyncSocketIo 1.0
+    */
+    setSendMinRate(int min_rate, timeout window) {
+        send_rate = min_rate > 0 ? new SendRateMonitor(min_rate, window) : NOTHING;
+        if (send_rate) {
+            # the transport shows a peer's progress in steps of its flow-control window; the sender wakes at least
+            # every check interval, so a longer time between updates is its own delay
+            send_rate.enableProgressSteps();
+            send_rate.setMaxWaitCharge(2 * send_rate.getCheckInterval());
+        }
+    }
+
+    #! Ends the measurement of a send that waited; a wait that used up the credit between two checks is decided here
+    /** @param taken the bytes that the peer has taken, or -1 if that is not known
+        @param end_stream @ref True if the send ended the stream, which leaves nothing more to bound
+        @param stream_desc the description of the stream for the error
+
+        @throw STREAM-SEND-TIMEOUT the peer took less than the minimum rate
+    */
+    private endRateWait(int taken, bool end_stream, string stream_desc) {
+        if (send_rate.update(taken, False) && !end_stream) {
+            throw "STREAM-SEND-TIMEOUT", sprintf("%s: the peer took less than the minimum rate of %d bytes/s",
+                stream_desc, send_rate.getMinRate());
+        }
+    }
+
     #! Sends data on the stream, waiting at most the given time for a full stream send buffer to drain
     /** Transports with a bounded stream send buffer (HTTP/2 and HTTP/3) override this to wait for the buffer to
         drain when it is full, which happens when the peer does not read as fast as data is sent, instead of
         failing; the default implementation calls @ref sendData().
 
         @param data the binary payload to send
-        @param timeout_ms the maximum time to wait for the stream send buffer to drain; a value less than or equal to
-        zero waits without a limit
+        @param timeout_ms the maximum time that the stream send buffer may make no progress (the peer takes none of
+        the stream's data); a value less than or equal to zero waits without a limit
         @param end_stream if @ref True, signals end of stream after this data
 
-        @throw STREAM-SEND-TIMEOUT the stream send buffer did not drain in time; the data was not sent
+        @throw STREAM-SEND-TIMEOUT the peer took none of the data for this time, or the stream ended with its send
+        buffer full; the data was not sent
 
         @since AsyncSocketIo 1.0
     */
@@ -221,6 +262,22 @@ public class AbstractStreamContext {
     */
     close() {
         # no-op by default; Http3StreamContext overrides
+    }
+
+    #! Aborts the stream: the data not yet sent is discarded and the peer is told that the stream was cancelled
+    /** For a connection that is dropped without delivering what it has not sent yet, for example a client that took
+        none of the data for the send timeout (qore#7325): unlike @ref close(), which ends the stream after the data
+        already queued, so that a peer that grants no flow-control credit is never told, and the stream and its send
+        buffer stay until the session ends, the stream is reset at once (HTTP/2 \c RST_STREAM, HTTP/3
+        \c RESET_STREAM and \c STOP_SENDING) and its state and buffered data are released.  Errors are ignored, as
+        the peer or the session may have ended the stream already.
+
+        The default implementation calls @ref close()
+
+        @since AsyncSocketIo 1.0
+    */
+    abort() {
+        close();
     }
 }
 

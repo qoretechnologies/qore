@@ -51,6 +51,7 @@ class ExceptionSink;
 class QoreHashNode;
 class QoreSSLCertificate;
 class QoreSSLPrivateKey;
+class QoreSSLTrustStore;
 class HttpClientEventSink;
 
 //! C++ HTTP client connection manager — Phase P3 of the porting plan.
@@ -98,6 +99,7 @@ class HttpClientEventSink;
     @since %Qore 3.0
 */
 class HttpClientConnectionManagerBase : public AbstractPrivateData {
+    friend class qore_http_manager_ops;
 public:
     //! Configuration options for the manager.
     struct Options {
@@ -210,6 +212,13 @@ public:
         /** @since %Qore 3.0
         */
         std::string ssl_ca_path;
+
+        //! An in-memory trust store that server certificates are verified against; takes precedence over
+        //! ssl_ca_file and ssl_ca_path; the manager holds a reference while it exists
+        /** @since %Qore 3.0 (qoretechnologies/qore#7248)
+        */
+        QoreSSLTrustStore* ssl_trust_store = nullptr;
+
         //! Maximum size in bytes of a response body received into memory; 0 = no limit
         /** A response body that is returned whole and exceeds it fails the request with
             \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; a body delivered incrementally to a streaming consumer is not
@@ -579,38 +588,8 @@ public:
         QoreChannel*& channel_out, ExceptionSink* xsink,
         HttpClientEventSink* event_sink, bool* reused, HttpClientConnectionBase** conn_out);
 
-    //! Returns true if the HTTP method is idempotent (RFC 9110 section 9.2.2), so a request with it can be repeated
-    //! automatically when the connection fails before a response is received
-    /** @since %Qore 3.0
-    */
-    DLLLOCAL static bool isIdempotentMethod(const char* method);
 
-    //! Returns true if the exception means that the peer closed the connection before a response was received
-    /** @since %Qore 3.0
-    */
-    DLLLOCAL static bool isConnectionClosedError(ExceptionSink& xsink);
 
-    //! Replaces the error of a request with the calling thread's pending cancellation, if any
-    /** A cancellation of the thread that waits for a request can end the request before the wait sees the
-        cancellation, whatever ends it: the code that the cancellation ends closes the transport, and the request
-        fails with a closed connection, or with a send or receive error when the peer resets the connection that it
-        sees closed (issue #5793); the caller must see the cancellation, not the error that it caused, and the
-        request is not repeated.  An error that the request raised for another reason (before any I/O, for example)
-        is replaced as well, as the next cancellation point would raise the cancellation in any case
-
-        @return true if the error was replaced
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL static bool replaceErrorWithPendingCancel(ExceptionSink& xsink);
-
-    //! Returns true if a cancellation of the calling thread is pending, without raising it
-    /** A request that a pending cancellation ended is not repeated; the next cancellation point raises the
-        cancellation
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL static bool isCancelPending();
 
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 
@@ -651,12 +630,6 @@ public:
     }
 
 protected:
-    //! Parsed proxy info; @c nullptr if no proxy configured.
-    //! Pushes the per-connection options to a connection
-    /** Called for a new connection and again for the concrete connection that replaces a negotiating one, as a
-        negotiating connection does not keep them.
-    */
-    DLLLOCAL void applyConnectionOptions(HttpClientConnectionBase* conn);
 
     struct ProxyInfo {
         std::string host;
@@ -732,16 +705,6 @@ protected:
     */
     std::atomic<int> attached_connections_{0};
 
-    //! Releases a reference to a connection that the manager does not keep in its pool
-    /** Clears the connection's manager back-pointer before the reference is released: the reference may not be
-        the last one, as the async I/O thread holds the connection while it is closing it, and the close
-        notification of a connection that the manager has released can come after the manager has been destroyed.
-
-        @param conn the connection; may be nullptr
-        @param xsink for exceptions raised by the release
-    */
-    DLLLOCAL void detachAndDeref(HttpClientConnectionBase* conn, ExceptionSink* xsink);
-
     //! The time added to @c connect_timeout_ms for a caller waiting for a new connection, in milliseconds
     static constexpr int ConnectWaitGraceMs = 30000;
 
@@ -757,16 +720,6 @@ protected:
             : (int64_t)opts_.connect_timeout_ms;
     }
 
-    //! Computes the pool key for the given target (with proxy info baked in).
-    /** The key includes the scheme: a connection with TLS must never be used for a target without TLS or the
-        reverse, as when a redirect changes the scheme but not the host and port.
-    */
-    DLLLOCAL std::string poolKey(const char* host, int port, bool ssl) const;
-
-    //! Drains closed-connection notifications from onConnectionClosed.
-    /** Must be called from an app thread, not the I/O thread.
-    */
-    DLLLOCAL void processClosedConnections(ExceptionSink* xsink);
 
     //! Creates a new connection (must be called outside @c pool_lock_
     //! since the connection constructor blocks on the controller submit).
@@ -789,114 +742,19 @@ protected:
         const std::string& key, const char* host, int port,
         bool ssl_required, ExceptionSink* xsink, bool wait_for_ready = true);
 
-    //! Replaces the pooled transitional connection of an ALPN negotiation with its concrete connection
-    /** The last step of @ref finalizeAsyncConnection: the concrete connection takes the transitional one's place
-        in the pool, unless the transitional one has left the pool already or the concrete one's close notification
-        has been sent (HttpClientConnectionBase::setPoolKey() refuses its key), in which case the concrete
-        connection is returned to the caller without being pooled, and a transitional connection still in the pool
-        is removed from it.
-
-        @param neg the transitional connection; the caller keeps its reference
-        @param concrete the concrete connection; the reference of the caller is taken
-        @param reserve_stream true to reserve a stream on the concrete connection for the caller
-        @param xsink exception sink
-
-        @return the concrete connection, with a reference for the caller
-
-        @since %Qore 3.0
-    */
-    DLLLOCAL HttpClientConnectionBase* swapNegotiatedConnection(HttpClientConnectionBase* neg,
-        HttpClientConnectionBase* concrete, bool reserve_stream, ExceptionSink* xsink);
-
 private:
     friend class HttpClientConnectionBase;
 
     HttpClientConnectionManagerBase(const HttpClientConnectionManagerBase&) = delete;
 
-    //! Makes one attempt of @ref request
-    /** @param retry if not nullptr, set to true if the request failed because the peer closed a connection that
-        had served a request, in which case the request can be repeated on a new connection; nullptr if the
-        request must not be repeated
-    */
-    DLLLOCAL QoreHashNode* requestOnce(const char* method, const char* scheme, const char* host, int port,
-        const char* path, const QoreHashNode* headers, const void* body, size_t body_len, int timeout_ms,
-        ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry);
-
-    //! Makes one attempt of @ref requestStreaming
-    /** @param reused if not nullptr, set to true if the request was submitted on a connection that had been used
-        before
-        @param retry if not nullptr, set to true if the request could not be submitted because the connection that
-        it was given, which had served a request, is closed, in which case the request can be repeated on a new
-        connection; nullptr if the request must not be repeated
-        @param conn_out if not nullptr, receives the connection that the request was submitted on, with a reference
-    */
-    DLLLOCAL int64_t requestStreamingOnce(const char* method, const char* scheme, const char* host, int port,
-        const char* path, const QoreHashNode* headers, const void* body, size_t body_len, QoreChannel*& channel_out,
-        ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* reused, bool* retry,
-        HttpClientConnectionBase** conn_out);
-    HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
+        HttpClientConnectionManagerBase& operator=(const HttpClientConnectionManagerBase&) = delete;
 
     //! Internal: the network sandbox of the calling code and its decisions on the connections of a pool scan
     struct SandboxScan;
 
-    //! Internal: shared implementation for the acquire methods; returns a connection with a reference of the
-    //! caller, taken under the pool lock.  When @a wait_for_ready is @c false,
-    //! newly-created connections are returned in CONNECTING state.  When
-    //! @a streaming_send is true, the reservation also claims the
-    //! per-connection incremental-body sender slot.
-    DLLLOCAL HttpClientConnectionBase* acquireConnectionImpl(
-        const char* scheme, const char* host, int port,
-        bool wait_for_ready, bool streaming_send, ExceptionSink* xsink);
 
-    //! Internal: calls @ref acquireConnectionImpl, which returns a referenced connection, and returns the connection
-    //! only when no exception was raised; otherwise gives back its stream slot and reference
-    DLLLOCAL HttpClientConnectionBase* acquireConnectionChecked(const char* scheme, const char* host, int port,
-        bool wait_for_ready, bool streaming_send, ExceptionSink* xsink);
 
-    //! Internal: scans the pool for a reusable connection (caller must
-    //! hold a shared or unique lock).  Returns @c nullptr if no live
-    //! connection has capacity.  Reservation is atomic via
-    //! @c tryReserveStream — see open question 7.6 in the design doc.
-    /** A connection is reused only by code whose network sandbox allows it, as checked by
-        HttpClientConnectionBase::checkSandboxUse().
 
-        @param key the pool key
-        @param streaming_send true to claim the incremental-body sender slot as well
-        @param scan the network sandbox of the calling code, which receives the decisions of the scan
-        @param check_age true to skip the connections that have reached @ref Options::max_age_ms (the lock-free scan
-        of a checkout); false after evictDeadLocked() has removed them under the same lock, so that a connection that
-        it kept is not then left out of both reuse and eviction (#6150)
-
-        @return a connection with a stream reserved, or nullptr
-    */
-    DLLLOCAL HttpClientConnectionBase* findReusableLocked(const std::string& key,
-        bool streaming_send, SandboxScan& scan, bool check_age = true);
-
-    //! Internal: removes closed and (optionally) max-age-expired connections
-    //! from @c pool_[key] (caller must hold the unique lock).
-    /** Pool references for closed connections are transferred to
-        @a out_to_deref so destruction cannot run under @c pool_lock_.
-        Max-age-expired connections are not yet closed and are transferred
-        to @a out_to_close.  After releasing @c pool_lock_, the caller MUST
-        deref every closed entry and invoke @ref closeAndDerefAfterLockDrop
-        for every max-age entry.
-
-        @param key the pool key
-        @param out_to_close out-vector receiving max-age-expired connections
-            that need close-after-lock-drop
-        @param out_to_deref out-vector receiving already-closed connections
-            whose pool references must be released after the lock drops
-    */
-    DLLLOCAL void evictDeadLocked(const std::string& key,
-        std::vector<HttpClientConnectionBase*>* out_to_close,
-        std::vector<HttpClientConnectionBase*>* out_to_deref);
-
-    //! Closes and derefs a connection that was identified for eviction
-    //! while a pool-lock was held.  Caller must NOT hold @c pool_lock_.
-    /** Mirrors the close+deref pattern used by the shutdown branch of
-        @ref acquireConnectionImpl (line ~360).
-    */
-    DLLLOCAL void closeAndDerefAfterLockDrop(HttpClientConnectionBase* conn);
-};
+    };
 
 #endif // _QORE_HTTPCLIENTCONNECTIONMANAGER_H

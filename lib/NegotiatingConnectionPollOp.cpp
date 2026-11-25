@@ -41,6 +41,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cstdio>
 
@@ -400,6 +401,13 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
         ssl_config.key->ref();
         sock_priv_raw->setPrivateKey(ssl_config.key);
     }
+    if (ssl_config.trust_store) {
+        // an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        qore_socket_object_private(sock_priv_raw).setSslTrustStoreForAsyncPoll(ssl_config.trust_store, xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
     if (!ssl_config.ca_file.empty() || !ssl_config.ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
         qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(
@@ -465,11 +473,11 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
 
     // 9. Set the poll op's "sock" and "goal" members so SocketPollInfo
     //    hashes from inner ops have the right socket ref.
-    poll_obj_holder->setValue("sock", sock_obj_holder->refSelf(), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "sock", sock_obj_holder->refSelf(), xsink);
     if (*xsink) {
         return -1;
     }
-    poll_obj_holder->setValue("goal", new QoreStringNode("negotiate"), xsink);
+    qore_poll_op_set_member(poll_obj_holder, "goal", new QoreStringNode("negotiate"), xsink);
     if (*xsink) {
         return -1;
     }
@@ -656,7 +664,7 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
     }
 
     // the concrete connection can be created on another thread than this one; it was opened for the same code
-    concrete->inheritOpener(*this);
+    qore_http_client_connection_base_ops(concrete).inheritOpener(*this);
     return concrete;
 }
 

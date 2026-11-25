@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 (QUIC) client connections that fail or are closed before they connect
+
+/*  HttpClientH3SettledError.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#6970: a connection of an HTTP/3 client that was closed before it connected (aborted) recorded no error, so
+    the race between the protocols (happy eyeballs) that found the HTTP/3 candidate settled without an error left it
+    out of the description of why no protocol connected: the failure then named only the refused TCP connection
+    ("could not connect to ...: H2/TCP: Connection refused"), as if HTTP/3 had never been tried.  An aborted
+    connection now records the error HTTP3-ABORT, as the HTTP/2 connection does, and a candidate that settles without
+    an error anyway is reported as "closed without an error" (in a debug build it is also an assertion failure, so
+    that the defect is not hidden).  The aborted connection is deterministic here: a UDP socket that is held on the
+    port makes the QUIC handshake wait, and the connection is closed meanwhile; the candidate that has no error is
+    made with the debug hook dbg_http3_client_hide_error().
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpClientIo
+
+%exec-class HttpClientH3SettledErrorTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+class HttpClientH3SettledErrorTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientH3SettledError", "1.0") {
+        addTestCase("an HTTP/3 connection that is closed before it connects records an error", \testAbortError());
+        addTestCase("a race candidate that settled without an error is reported as such", \testRaceReportsSilentLeg());
+        addTestCase("a race whose candidates failed with errors reports them", \testRaceReportsErrors());
+        set_return_value(main());
+    }
+
+    #! Returns a port number that no TCP or UDP socket uses, with a UDP socket held on it, so that no datagram answers
+    /** @param hold set to the UDP socket that holds the port
+    */
+    private int heldUdpPort(reference<Socket> hold) {
+        const int MaxPortAttempts = 20;
+        for (int attempt = 1; ; ++attempt) {
+            Socket tmp();
+            tmp.bind("127.0.0.1:0");
+            int port = tmp.getSocketInfo().port;
+            delete tmp;
+            hold = new Socket();
+            try {
+                hold.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
+                return port;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "SOCKET-BIND-ERROR" || attempt == MaxPortAttempts) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
+    testAbortError() {
+        Socket hold;
+        int port = heldUdpPort(\hold);
+        on_exit delete hold;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "connect_timeout": HangGuard,
+            "request_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        # the handshake has no answer: the connection is connecting when it is closed
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://127.0.0.1:%d/", port));
+        HttpClientIo::HttpClientConnection conn = stream.getConnection();
+        assertEq("h3", conn.getProtocol(), "the connection uses HTTP/3");
+        conn.close();
+        *hash<auto> err = conn.getPollOperation().getError();
+        assertTrue(exists err, "the closed connection has an error");
+        assertEq("HTTP3-ABORT", err.err, "the error is that of an aborted connection");
+    }
+
+    testRaceReportsSilentLeg() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_http3_client_hide_error() is only registered in a library debug build");
+        }
+        # nothing listens on the port for TCP or UDP: both candidates are refused
+        Socket tmp();
+        tmp.bind("127.0.0.1:0");
+        int port = tmp.getSocketInfo().port;
+        delete tmp;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+        on_exit delete mgr;
+        # the HTTP/3 candidate's error is not readable, as if it had left the connecting state without one
+        bool previous = call_function("dbg_http3_client_hide_error", True);
+        on_exit call_function("dbg_http3_client_hide_error", previous);
+        try {
+            mgr.request(sprintf("https://127.0.0.1:%d", port), "GET", "/");
+            fail("the connection must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.desc =~ /H3\/QUIC: closed without an error/,
+                sprintf("the HTTP/3 candidate is in the description: %s: %s", ex.err, ex.desc));
+            assertTrue(ex.desc =~ /H2\/TCP: /, "and so is the TCP candidate: " + ex.desc);
+        }
+    }
+
+    testRaceReportsErrors() {
+        Socket tmp();
+        tmp.bind("127.0.0.1:0");
+        int port = tmp.getSocketInfo().port;
+        delete tmp;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "connect_timeout": 10s,
+            "request_timeout": 20s,
+        });
+        on_exit delete mgr;
+        try {
+            mgr.request(sprintf("https://127.0.0.1:%d", port), "GET", "/");
+            fail("the connection must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            # the errors that the candidates recorded themselves are reported, and the stand-in is not used
+            assertTrue(ex.err != "ASSERTION-ERROR", "no candidate settled without an error: " + ex.desc);
+            assertTrue(ex.desc !~ /closed without an error/, "the stand-in is not used: " + ex.desc);
+            assertTrue(ex.desc =~ /H2\/TCP: /, "the TCP candidate's error is reported: " + ex.desc);
+        }
+    }
+}

@@ -463,9 +463,13 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         @param oh deserialized hash from the source schema description
      */
     public constructor(string obj_type, hash<auto> oh) {
-        optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
-        optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
-        normalizeNumericBounds(oh);
+        # Most schemas declare few constraints. Only prepare a target reference or validate a value for a
+        # keyword the schema actually declares; hasKey also retains explicitly null values for validation.
+        if (oh.hasKey("minimum") || oh.hasKey("maximum")) {
+            optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
+            optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
+            normalizeNumericBounds(oh);
+        }
 
         # Handle exclusiveMaximum - can be boolean (3.0) or numeric (3.1)
         if (oh.hasKey("exclusiveMaximum")) {
@@ -493,22 +497,38 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
             }
         }
 
-        optional_field(obj_type, oh, "maxLength", NT_INT, \maxLength);
-        optional_field(obj_type, oh, "minLength", NT_INT, \minLength);
-        optional_field(obj_type, oh, "pattern", NT_STRING, \pattern);
-        # a pattern that is not valid is an error of the schema, not of each request (qore#6603)
-        checkPattern();
-        optional_field(obj_type, oh, "maxItems", NT_INT, \maxItems);
-        optional_field(obj_type, oh, "minItems", NT_INT, \minItems);
-        optional_field(obj_type, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
-        optional_field(obj_type, oh, "enum", OpenApi3ListToAnySet, \enumValues);
-        # the values of an enumeration can be of any type; one that is a list or a hash cannot be a key of
-        # enumValues, so the enumeration is kept as declared too
-        if (oh."enum".typeCode() == NT_LIST && (select oh."enum", inlist($1.typeCode(), (NT_LIST, NT_HASH)))) {
-            # a null value says that the value is nullable, as for the set (see get_value())
-            enumValueList = select oh."enum", exists $1;
+        if (oh.hasKey("maxLength")) {
+            maxLength = checked_field_value(obj_type, oh, "maxLength", NT_INT);
         }
-        optional_field(obj_type, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
+        if (oh.hasKey("minLength")) {
+            minLength = checked_field_value(obj_type, oh, "minLength", NT_INT);
+        }
+        if (oh.hasKey("pattern")) {
+            pattern = checked_field_value(obj_type, oh, "pattern", NT_STRING);
+            # a pattern that is not valid is an error of the schema, not of each request (qore#6603)
+            checkPattern();
+        }
+        if (oh.hasKey("maxItems")) {
+            maxItems = checked_field_value(obj_type, oh, "maxItems", NT_INT);
+        }
+        if (oh.hasKey("minItems")) {
+            minItems = checked_field_value(obj_type, oh, "minItems", NT_INT);
+        }
+        if (oh.hasKey("uniqueItems")) {
+            uniqueItems = checked_field_value(obj_type, oh, "uniqueItems", NT_BOOLEAN);
+        }
+        if (oh.hasKey("enum")) {
+            optional_field(obj_type, oh, "enum", OpenApi3ListToAnySet, \enumValues);
+            # the values of an enumeration can be of any type; one that is a list or a hash cannot be a key of
+            # enumValues, so the enumeration is kept as declared too
+            if (oh."enum".typeCode() == NT_LIST && (select oh."enum", inlist($1.typeCode(), (NT_LIST, NT_HASH)))) {
+                # a null value says that the value is nullable, as for the set (see get_value())
+                enumValueList = select oh."enum", exists $1;
+            }
+        }
+        if (oh.hasKey("multipleOf")) {
+            optional_field(obj_type, oh, "multipleOf", (NT_FLOAT: True, NT_INT: True), \multipleOf);
+        }
     }
 
     #! Copy constructor
@@ -1386,16 +1406,12 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
                 throw "INVALID-REFERENCE", sprintf("cannot resolve SchemaObject %y reference %y (%y)", name, refstr);
             }
         }
-        # get all non "x-" attributes
-        *hash<auto> attr = map {$1.key: $1.value}, oh.pairIterator(), $1.key !~ /^x-/ && $1.key != "$ref";
-        *hash<auto> xmlObj;
-        # process additional attributes
-        if (optional_field("OpenApi", attr, "xml", NT_HASH, \xmlObj)) {
-            attr -= "xml";
+        # Only the XML override needs a copy of the referenced schema.
+        if (oh.hasKey("xml")) {
+            hash<auto> xmlObj = checked_field_value("OpenApi", oh, "xml", NT_HASH);
             ref = ref.copy();
             ref.xml = new XmlObject(xmlObj);
         }
-        # additional subling elements are ignored...
         return ref;
     }
 
@@ -1538,10 +1554,12 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         auto body;
         # deserialize body according to Content-Type
         if (exists http_body) {
-            if (!headers.hasKey("content-type")) {
+            # the fields of a request received are read from its "headers" key (qore#6851)
+            auto ct_field = http_get_field(headers, "content-type");
+            if (!exists ct_field) {
                 throw "DESERIALIZATION-ERROR", "message includes body but is missing Content-Type header";
             }
-            string ct = headers."content-type";
+            string ct = ct_field;
             if (ct =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
                     MultiPartFormDataMessage::parseMessage(ct, http_body.toString());
@@ -1643,7 +1661,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
             "hdr": hdr,
         ));
 
-        auto content = hdr."content-type" ?? hdr."Content-Type";
+        auto content = http_get_field(hdr, "content-type") ?? hdr."Content-Type";
         if (content.typeCode() == NT_LIST) {
             content = content[0];
         }
@@ -1654,7 +1672,8 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
         if (exists response_body && content) {
             if (content =~ /^multipart\/form-data/) {
                 hash<string, hash<FormDataMessageInfo>> h =
-                    MultiPartFormDataMessage::parseMessage(hdr."content-type", response_body.toString());
+                    MultiPartFormDataMessage::parseMessage(http_get_field(hdr, "content-type"),
+                        response_body.toString());
                 rv.body = map {$1.key: $1.value.body}, h.pairIterator();
                 content = MimeTypeMultipartFormData;
             } else {
@@ -3745,8 +3764,10 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
             h.params = remove h.params{query_obj};
         }
 
-        # check header parameters
-        foreach string key in (keys headers) {
+        # check header parameters; the fields of a request received are under its "headers" key, and also at its
+        # top level if they are given there (deprecated; qore#6851)
+        bool msg_fields = headers.headers.typeCode() == NT_HASH;
+        foreach string key in (keys (msg_fields ? headers.headers : headers)) {
             # find URI parameter object
             *ParameterObject po = parameters{key} ?? real_pio.parameters{key};
             # extra headers are OK
@@ -3754,7 +3775,14 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                 continue;
             }
 
-            po.check(serialize, True, path, method, key, \headers{key});
+            if (msg_fields) {
+                po.check(serialize, True, path, method, key, \headers.headers{key});
+                if (headers.hasKey(key) && !HttpUtil::HttpReservedFieldNames{key}) {
+                    headers{key} = headers.headers{key};
+                }
+            } else {
+                po.check(serialize, True, path, method, key, \headers{key});
+            }
         }
 
         # check body parameters
@@ -3839,7 +3867,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
 
         # check content-type
         if (exists body && mime_types) {
-            string content = headers."content-type" ?? headers."Content-Type";
+            string content = http_get_field(headers, "content-type") ?? headers."Content-Type";
             int pos = content.find(";");
             if (pos != -1)
                 content = content.substr(0, pos);
@@ -4049,8 +4077,9 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                             h.params{ph.key} = val;
                         break;
                     case "header":
-                        if (!exists headers{ph.key})
-                            headers{ph.key} = val;
+                        # the fields of a request received are under its "headers" key (qore#6851)
+                        if (!exists http_get_field(headers, ph.key))
+                            http_set_field(\headers, ph.key, val);
                         break;
                     case "formData":
                         if (!exists body{ph.key})
@@ -4077,7 +4106,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                                 ph.key);
                         break;
                     case "header":
-                        if (!exists headers{ph.key})
+                        if (!exists http_get_field(headers, ph.key))
                             error("SCHEMA-VALIDATION-ERROR", "request is missing required header parameter %y",
                                 ph.key);
                         break;
@@ -5937,10 +5966,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
 
         # check for x-nullable (3.0 style) and nullable (standard)
-        optional_field(obj_type, oh, "x-nullable", NT_BOOLEAN, \nullable);
+        if (oh.hasKey("x-nullable")) {
+            nullable = checked_field_value(obj_type, oh, "x-nullable", NT_BOOLEAN);
+        }
         # Also support standard nullable keyword (OpenAPI 3.0)
-        if (!nullable) {
-            optional_field(obj_type, oh, "nullable", NT_BOOLEAN, \nullable);
+        if (!nullable && oh.hasKey("nullable")) {
+            nullable = checked_field_value(obj_type, oh, "nullable", NT_BOOLEAN);
         }
 
         if (optional_field(obj_type, oh, "format", NT_STRING, \format)) {
@@ -5951,8 +5982,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
-        optional_field(obj_type, oh, "title", NT_STRING, \title);
-        optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
+        if (oh.hasKey("title")) {
+            title = checked_field_value(obj_type, oh, "title", NT_STRING);
+        }
+        if (oh.hasKey("description")) {
+            optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
+        }
 
         if (optional_field(obj_type, oh, "maxProperties", NT_INT, \maxProperties)) {
             checkObjectProperty(name, "maxProperties");
@@ -5965,25 +6000,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'minProperties' field less than 0", name);
         }
 
-        {
-            hash props;
-            if (optional_field(obj_type, oh, "properties", NT_HASH, \props)) {
-                checkObjectProperty(name, "properties");
-                foreach string k in (keys props) {
-                    auto val = props{k};
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
-                            "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
-                    properties{k} = SchemaObject::newSchemaObject(k, val, openapi3, NOTHING, NOTHING,
-                        AbstractRestSchemaObject::childSchemaIdentity(
-                            AbstractRestSchemaObject::childSchemaIdentity(location, "properties"), k));
-                    if (!properties{k}.nullable && val."x-nullable") {
-                        nullable_properties{k} = True;
-                    }
+        if (oh.hasKey("properties")) {
+            hash props = checked_field_value(obj_type, oh, "properties", NT_HASH);
+            checkObjectProperty(name, "properties");
+            *string props_location = AbstractRestSchemaObject::childSchemaIdentity(location, "properties");
+            foreach string k in (keys props) {
+                auto val = props{k};
+                if (val.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'properties' field is not a hash of "
+                        "Schema Objects (got type %y; expecting \"hash\": %y)", name, val.fullType(), val);
+                properties{k} = SchemaObject::newSchemaObject(k, val, openapi3, NOTHING, NOTHING,
+                    AbstractRestSchemaObject::childSchemaIdentity(props_location, k));
+                if (!properties{k}.nullable && val."x-nullable") {
+                    nullable_properties{k} = True;
                 }
-            } else {
-                additionalProperties = True;
             }
+        } else {
+            additionalProperties = True;
         }
 
         if (optional_field(obj_type, oh, "additionalProperties", (NT_BOOLEAN: True, NT_HASH: True),
@@ -6040,17 +6073,27 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     "'required' list", name);
         }
 
-        optional_field(obj_type, oh, "readOnly", NT_BOOLEAN, \readOnly);
-        optional_field(obj_type, oh, "writeOnly", NT_BOOLEAN, \writeOnly);
-        optional_field(obj_type, oh, "deprecated", NT_BOOLEAN, \deprec);
+        if (oh.hasKey("readOnly")) {
+            readOnly = checked_field_value(obj_type, oh, "readOnly", NT_BOOLEAN);
+        }
+        if (oh.hasKey("writeOnly")) {
+            writeOnly = checked_field_value(obj_type, oh, "writeOnly", NT_BOOLEAN);
+        }
+        if (oh.hasKey("deprecated")) {
+            deprec = checked_field_value(obj_type, oh, "deprecated", NT_BOOLEAN);
+        }
 
         # OpenAPI 3.1+: contentEncoding and contentMediaType for binary data
-        optional_field(obj_type, oh, "contentEncoding", NT_STRING, \contentEncoding);
-        optional_field(obj_type, oh, "contentMediaType", NT_STRING, \contentMediaType);
+        if (oh.hasKey("contentEncoding")) {
+            contentEncoding = checked_field_value(obj_type, oh, "contentEncoding", NT_STRING);
+        }
+        if (oh.hasKey("contentMediaType")) {
+            contentMediaType = checked_field_value(obj_type, oh, "contentMediaType", NT_STRING);
+        }
 
         {
-            *list allOfList;
-            if (optional_field(obj_type, oh, "allOf", NT_LIST, \allOfList)) {
+            if (oh.hasKey("allOf")) {
+                list allOfList = checked_field_value(obj_type, oh, "allOf", NT_LIST);
                 if (allOfList.size() < 1)
                     throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'allOf' is an empty list", name);
                 foreach auto val in (allOfList) {
@@ -6144,54 +6187,48 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
         }
 
-        {
-            *list oneOfList;
-            if (optional_field(obj_type, oh, "oneOf", NT_LIST, \oneOfList)) {
-                if (oneOfList.size() < 1)
-                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'oneOf' is an empty list", name);
-                foreach auto val in (oneOfList) {
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
-                            "datatype: %y", name, val.type());
-                    SchemaObject member = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3,
-                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
-                            "oneOf/" + oneOf.size()));
-                    oneOf[oneOf.size()] = member;
-                    # a "null"-typed member expresses nullability of the composition itself
-                    if (member.nullType) {
-                        nullable = True;
-                    }
+        if (oh.hasKey("oneOf")) {
+            list oneOfList = checked_field_value(obj_type, oh, "oneOf", NT_LIST);
+            if (oneOfList.size() < 1)
+                throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'oneOf' is an empty list", name);
+            foreach auto val in (oneOfList) {
+                if (val.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'oneOf' list value "
+                        "datatype: %y", name, val.type());
+                SchemaObject member = SchemaObject::newSchemaObject(name + "OneOf", val, openapi3,
+                    NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                        "oneOf/" + oneOf.size()));
+                oneOf[oneOf.size()] = member;
+                # a "null"-typed member expresses nullability of the composition itself
+                if (member.nullType) {
+                    nullable = True;
                 }
             }
         }
 
-        {
-            *list anyOfList;
-            if (optional_field(obj_type, oh, "anyOf", NT_LIST, \anyOfList)) {
-                if (anyOfList.size() < 1)
-                    throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'anyOf' is an empty list", name);
-                foreach auto val in (anyOfList) {
-                    if (val.typeCode() != NT_HASH)
-                        throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
-                            "datatype: %y", name, val.type());
-                    SchemaObject member = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3,
-                        NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
-                            "anyOf/" + anyOf.size()));
-                    anyOf[anyOf.size()] = member;
-                    # a "null"-typed member expresses nullability of the composition itself
-                    if (member.nullType) {
-                        nullable = True;
-                    }
+        if (oh.hasKey("anyOf")) {
+            list anyOfList = checked_field_value(obj_type, oh, "anyOf", NT_LIST);
+            if (anyOfList.size() < 1)
+                throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: field 'anyOf' is an empty list", name);
+            foreach auto val in (anyOfList) {
+                if (val.typeCode() != NT_HASH)
+                    throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'anyOf' list value "
+                        "datatype: %y", name, val.type());
+                SchemaObject member = SchemaObject::newSchemaObject(name + "AnyOf", val, openapi3,
+                    NOTHING, True, AbstractRestSchemaObject::childSchemaIdentity(location,
+                        "anyOf/" + anyOf.size()));
+                anyOf[anyOf.size()] = member;
+                # a "null"-typed member expresses nullability of the composition itself
+                if (member.nullType) {
+                    nullable = True;
                 }
             }
         }
 
-        {
-            *hash notObj;
-            if (optional_field(obj_type, oh, "not", NT_HASH, \notObj)) {
-                notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3, NOTHING, True,
-                    AbstractRestSchemaObject::childSchemaIdentity(location, "not"));
-            }
+        if (oh.hasKey("not")) {
+            hash notObj = checked_field_value(obj_type, oh, "not", NT_HASH);
+            notSchema = SchemaObject::newSchemaObject(name + "Not", notObj, openapi3, NOTHING, True,
+                AbstractRestSchemaObject::childSchemaIdentity(location, "not"));
         }
 
         # a composition that is only a wrapper around one schema describes whatever that schema describes
@@ -7411,9 +7448,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     */
     static SchemaObject newSchemaObject(string name, hash<auto> oh, OpenApi3Schema openapi3, *bool require_items,
             *bool composed, *string location) {
-        string refstr;
-        if (optional_field("Schema", oh, "$ref", NT_STRING, \refstr))
-            return openapi3.resolveSchemaObject(name, refstr, oh);
+        if (oh.hasKey("$ref")) {
+            return openapi3.resolveSchemaObject(name, checked_field_value("Schema", oh, "$ref", NT_STRING), oh);
+        }
 
         string hash_str;
         *SchemaObject rv = openapi3.tryGetSchemaObject(name, oh, \hash_str);
@@ -7859,6 +7896,15 @@ namespace Priv {
         OpenApi3ListToAnySet: "list<auto>",
     );
 
+    #! Get a present field of a concrete type, reporting the same errors as required_field().
+    auto sub checked_field_value(string obj_type, hash<auto> oh, string name, int typeCode) {
+        auto val = oh{name};
+        if (val.typeCode() != typeCode) {
+            check_type_code(obj_type, oh, name, val, typeCode);
+        }
+        return val;
+    }
+
     #! Check and assign a required field.
     /**
         @param obj_type type of object (e.g. "External Documentation")
@@ -7921,6 +7967,11 @@ namespace Priv {
         if (!oh || !oh.hasKey(name))
             return False;
         auto val = oh{name};
+        # Concrete types need no conversion. Only the list-to-set and security requirement codes require get_value().
+        if (val.typeCode() == typeCode) {
+            target = val;
+            return True;
+        }
         if (check_type_code(obj_type, oh, name, val, typeCode, opt_flags)) {
             return False;
         }
@@ -7948,7 +7999,7 @@ namespace Priv {
         if (!typeCodes{val.typeCode()})
             throw "INVALID-FIELD-TYPE", sprintf("%s Object%s: %y field has invalid type %y (val: %y)", obj_type,
                 oh.name ? sprintf(" %y", oh.name) : "", name, val.type(), val);
-        get_value(obj_type, name, val.typeCode(), val, \target);
+        target = val;
         return True;
     }
 

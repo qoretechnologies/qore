@@ -695,6 +695,7 @@ module BaseLinkerDataProvider {
             "desc": "Retrieve a shipping label for a courier package via `getLabel`. "
                 "The label is returned as a base64-encoded blob (typically a PDF).",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "action_val": "getLabel",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BaseLinkerGetLabelRequestDataType::Fields),

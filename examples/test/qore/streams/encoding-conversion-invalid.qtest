@@ -94,19 +94,11 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         );
     }
 
-    #! why the cases of the invalid Shift_JIS bytes 81 20 are skipped, or nothing
-    /** The conversions from Shift_JIS take the validity of the input from iconv; the iconv of some platforms (musl's)
-        decodes a lead byte followed by a byte that is not a trail byte without an error
-    */
-    static *string sjisIconvAccepts() {
-        return encoding_decodes_invalid("Shift_JIS", <41812042>);
-    }
-
     constructor() : QUnit::Test("EncodingConversionInvalid", "1.0", \ARGV) {
         addTestCase("malformed UTF-8 in an input stream", \malformedUtf8InputTest());
         addTestCase("malformed UTF-8 in an output stream", \malformedUtf8OutputTest());
         addTestCase("malformed UTF-8 after the first block", \largeInputTest());
-        addTestCase("the iconv of the platform refuses invalid Shift_JIS", \sjisIconvTest());
+        addTestCase("a conversion from Shift_JIS refuses invalid input on every platform", \sjisIconvTest());
         addTestCase("invalid input in other encodings", \otherInvalidTest());
         addTestCase("a character the target cannot hold", \unrepresentableTest());
         addTestCase("valid input converts", \validTest());
@@ -122,6 +114,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         addTestCase("the first error in stateful input", \statefulOrderTest());
         addTestCase("latin1 mode with many invalid bytes", \latin1ManyTest());
         addTestCase("bytes not defined in the source encoding", \undefinedTest());
+        addTestCase("a multi-byte encoding by its other names, and a probed one", \multiByteValidTest());
         set_return_value(main());
     }
 
@@ -223,24 +216,27 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             "cut off");
     }
 
-    #! the cases of the invalid Shift_JIS bytes 81 20 need an iconv that refuses them
+    #! the input of a conversion from a multi-byte encoding is checked by Qore, not only by the platform's iconv, which
+    #! can decode an invalid sequence (musl's before 1.2.6 decodes the Shift_JIS bytes 81 20 as U+301C, Apple's the lead
+    #! bytes f0 - f9 of the user-defined area of CP932, which are no characters of Shift_JIS) (qore#6796)
     sjisIconvTest() {
-        *string reason = sjisIconvAccepts();
-        if (reason) {
-            testSkip(reason);
+        foreach binary data in (<41812042>, <41f04042>, <41f9fc42>) {
+            string s = binary_to_string(data, "Shift_JIS");
+            assertFalse(s.isEncodingValid(), data.toHex());
+            *hash<ExceptionInfo> ex = getError(string sub () { return convert_encoding(s, "UTF-8"); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, data.toHex());
+            assertRegex("byte offset 1", ex.desc, data.toHex());
         }
-        *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(binary_to_string(<41812042>, "Shift_JIS"),
-            "UTF-8"); });
-        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+        # CP932 has the user-defined area: its character functions, which are selected by name, accept it (not
+        # isEncodingValid(), a conversion, which iconv implementations differ for: musl 1.2.5's CP932 is its Shift_JIS,
+        # which refuses it; that the character functions accept what glibc's and Apple's iconv decode is checked by
+        # multibyte-iconv-parity.qtest)
+        string s = binary_to_string(<41f04042>, "CP932");
+        assertEq(3, s.length());
     }
 
     otherInvalidTest() {
-        bool sjis_accepted = exists sjisIconvAccepts();
         foreach hash<auto> i in (OtherInvalid) {
-            # the iconv of the platform decodes these bytes (see sjisIconvTest())
-            if (sjis_accepted && i.enc == "Shift_JIS" && i.data == <41812042>) {
-                continue;
-            }
             foreach string to in ("UTF-8", "UTF-16LE", "ISO-8859-1") {
                 if (to == i.enc) {
                     continue;
@@ -393,10 +389,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         binary prefix = binary(convert_encoding(strmul("é", 2049), "UTF-16LE"));
         assertEq(binary(strmul("é", 2049) + "\u{0}\u{dc}A"), readAll(prefix + <00dc4100>, "UTF-16LE", "UTF-8",
             4095, ENCODING_ERRORS_LATIN1));
-        # the iconv of the platform decodes these bytes (see sjisIconvTest())
-        if (!sjisIconvAccepts()) {
-            assertEq(binary("A\u{81} B"), readAll(<41812042>, "Shift_JIS", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
-        }
+        assertEq(binary("A\u{81} B"), readAll(<41812042>, "Shift_JIS", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
         assertEq(binary("A\u{80}AB"), readAll(<41804142>, "US-ASCII", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
         # a substituted character that the target encoding cannot hold
         *hash<ExceptionInfo> ex = getError(sub () { readAll(<61ff>, "UTF-8", "US-ASCII", 1,
@@ -576,6 +569,96 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         string high_text = binary_to_string(high, "ISO-8859-1");
         assertEq(binary(convert_encoding(high_text, "UTF-8")), readAll(high, "UTF-8", "UTF-8", 7,
             ENCODING_ERRORS_LATIN1));
+    }
+
+    #! the other names of the multi-byte encodings that Qore defines (qore#6796, #6665, #6900)
+    multiByteValidTest() {
+        # an encoding of a multi-byte family whose definition Qore knows, by the names that iconv implementations know
+        # for it, also with conversion flags, has the character functions of its definition where the platform's iconv
+        # converts to and from it (an encoding that iconv only decodes is not probed: musl's GB2312), and they check the
+        # input of its conversions (qore#6796): the encoding, its bytes, the number of characters that they
+        # are, or -1 if they are no characters of the encoding, which its conversions refuse, and True if every iconv
+        # that has the encoding converts them (isEncodingValid() is a conversion to UTF-8, so it is checked only then)
+        list<list<auto>> defined = (
+            # JOHAB (glibc: also MSCP1361): "D9 31" is U+3000, whose trail byte 0x31 is in the JOHAB range 0x31 - 0x7e
+            ("JOHAB", <41d93142>, 3, True), ("MSCP1361", <41d93142>, 3, True),
+            # a C1 control character of EUC-JP and EUC-KR (JIS X 0208:1997 Annex 1, KS X 2901), which glibc's iconv
+            # decodes; GNU libiconv's (macOS) and musl's EUC-JP refuse it (musl cannot encode EUC-KR, which is
+            # skipped there)
+            ("EUCJP", <418142>, 3), ("UJIS", <418142>, 3), ("eucJP-win", <418142>, 3), ("OSF00030010", <418142>, 3),
+            ("EUCKR", <418142>, 3), ("OSF0004000A", <418142>, 3),
+            # EUC-CN has no C1 character
+            ("GB2312", <418142>, -1), ("EUC-CN", <418142>, -1), ("CN-GB", <418142>, -1),
+            ("GB2312", <41b0a142>, 3, True),
+            # glibc's iconv decodes the byte 0x80 of Big5 (also CN-BIG5) as U+0080
+            ("CN-BIG5", <418042>, -1), ("GB18030", <41812042>, -1), ("GB13000", <41814042>, 3),
+            ("MSCP949", <41814142>, 3),
+            # the Shift_JIS forms, also with conversion flags: musl's iconv before 1.2.6 decodes 81 20 as U+301C,
+            # Apple's the user-defined area f0 - f9 of CP932
+            ("SJIS//IGNORE", <41812042>, -1), ("Shift_JIS//TRANSLIT", <41f04042>, -1), ("MS932", <41f04042>, 3),
+            ("SJIS-WIN", <41f04042>, 3),
+            # T.61 (ISO 6937): a C1 control character is a character, and a non-spacing diacritical mark is one with
+            # the letter that follows it (C2 65: e with acute accent); the double-byte family that probing found for
+            # glibc's T.61 refused the C1 control characters (qore#6900)
+            ("T.61", <41804142>, 4, True), ("T.61", <85c2659f>, 3, True), ("T.61", <41c2>, -1),
+        );
+        # the definition is found by the letters and digits of the name, as musl's iconv ignores all punctuation in
+        # names: the Shift_JIS forms are selected by their name, whether or not the platform's iconv knows the
+        # spelling (one character for a double-byte one); the other families where the platform's iconv converts the
+        # encoding by that spelling (musl), by a character of the definition that the family found by probing the
+        # encoding does not have (the C1 control character 0x81 of EUC-JP: three characters)
+        foreach list<auto> c in (("Shift.JIS", <8140>, 1, True), ("MS.932", <f040>, 1, True),
+                ("S.J.I.S", <8140>, 1, True), ("EUC.JP", <418142>, 3)) {
+            if (c[3] || converts(c[0])) {
+                assertEq(c[2], binary_to_string(c[1], c[0]).length(), c[0] + ": the characters of the definition");
+            }
+        }
+        list<string> unavailable = ();
+        foreach list<auto> c in (defined) {
+            string label = c[0] + " " + c[1].toHex();
+            if (!converts(c[0])) {
+                unavailable += c[0];
+                continue;
+            }
+            string s = binary_to_string(c[1], c[0]);
+            if (c[2] < 0) {
+                assertFalse(s.isEncodingValid(), label);
+                *hash<ExceptionInfo> ex = getError(string sub () { return convert_encoding(s, "UTF-8"); });
+                assertEq("ENCODING-CONVERSION-ERROR", ex.err, label);
+                assertRegex("byte offset 1", ex.desc, label);
+            } else {
+                assertEq(c[2], s.length(), label);
+                if (c[3]) {
+                    assertTrue(s.isEncodingValid(), label);
+                }
+            }
+        }
+        # the conversions that every iconv that has the encoding decodes
+        foreach list<auto> c in (("JOHAB", <41d93142>, "A\u{3000}B"), ("MSCP1361", <41d93142>, "A\u{3000}B")) {
+            if (converts(c[0])) {
+                assertEq(c[2], convert_encoding(binary_to_string(c[1], c[0]), "UTF-8"), c[0]);
+            }
+        }
+        # the conversion of T.61 text with a C1 control character and a letter with a diacritical mark
+        if (converts("T.61")) {
+            assertEq("A\u{80}éB", convert_encoding(binary_to_string(<4180c26542>, "T.61"), "UTF-8"));
+        }
+        if (unavailable.size() == defined.size()) {
+            testSkip("the iconv of the platform has none of the encodings: " + unavailable.join(", "));
+        }
+    }
+
+    #! returns True if the platform's iconv converts to and from the encoding
+    static bool converts(string enc) {
+        try {
+            return convert_encoding(binary_to_string(<41>, enc), "UTF-8") == "A"
+                && binary(convert_encoding("A", enc)) == <41>;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR" && ex.desc =~ /cannot convert from/) {
+                return False;
+            }
+            rethrow;
+        }
     }
 
     undefinedTest() {

@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes, and in qcc executables
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+%exec-class ObjectConstructionShortcutsTest
+
+#! qore#7336: the shortcuts that create and destroy objects do what the general call path does
+/** Each script runs in every execution mode, on the IR tier, and compiled with qcc (-O0 and -O3), with the shortcuts
+    and without them (\c QORE_DISABLE_DIRECT_OBJECT_CALLS), and its output must be the same in every run and the
+    output that the general call path gives, which the script's \c .expected file holds:
+    - \c members.q: the members of objects of classes without member initializers
+    - \c builtin.q: builtin base class constructors and destructors without arguments, their exceptions, their call
+      stack frames and the call stacks of the code that runs around them
+    - \c domains.q: builtin base class constructors that the functional domains of a restricted or sandboxed caller
+      refuse, with \c DCMod.qm
+    - \c users.q: user constructors called directly and through the general path (arguments that are converted,
+      default arguments, extra arguments, arguments that do not match), base class constructor arguments and implicit
+      base class constructors, constructors and destructors that throw, abstract methods, copies, call stacks, and
+      classes imported into a child Program
+    - \c debug.q: the debugger events of constructors and destructors, with the call stacks of their code
+    - \c nonet.q: the builtin base class constructor of classes with user constructors (called directly, and as the
+      implicit constructor of a base class) refused by the runtime parse options of their Program
+*/
+class ObjectConstructionShortcutsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? libdir + DirSep + "qcc";
+        TmpDir tmp("object-construction-shortcuts-");
+
+        #! the scripts run
+        const Scripts = (
+            "members",
+            "builtin",
+            "domains",
+            "users",
+            "debug",
+            "nonet",
+        );
+
+        #! the scripts that do not run on the IR tier: a call that starts while a debugger is attached runs on the AST
+        #! interpreter (see UserVariantBase::evalTiered())
+        const NoIrTier = {
+            "debug": True,
+        };
+
+        #! the environment that turns the shortcuts off
+        const NoShortcuts = "QORE_DISABLE_DIRECT_OBJECT_CALLS=1 ";
+    }
+
+    constructor() : QUnit::Test("ObjectConstructionShortcuts", "1.0", \ARGV) {
+        foreach string script in (Scripts) {
+            string name = script;
+            addTestCase(sprintf("%s in every execution mode", name), sub () { testModes(name); });
+            addTestCase(sprintf("%s compiled with qcc", name), sub () { testQcc(name); });
+        }
+        set_return_value(main());
+    }
+
+    private string scriptPath(string name) {
+        return get_script_dir() + DirSep + name + ".q";
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(get_script_dir() + DirSep + name + ".expected");
+    }
+
+    #! the environment of every run: the module path of the test's own modules
+    private string env() {
+        return "QORE_MODULE_DIR=" + quote(get_script_dir()) + (ENV.QORE_MODULE_DIR ? ":" + quote(ENV.QORE_MODULE_DIR)
+            : "") + " ";
+    }
+
+    private testModes(string name) {
+        string exp = expected(name);
+        string path = scriptPath(name);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            foreach string off in (("", NoShortcuts)) {
+                string label = sprintf("%s %s%s", name, mode, off ? " without shortcuts" : "");
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s%s --exec-mode=%s %s",
+                    env(), off, quote(qore_bin), mode, quote(path)));
+                ExecModeHarness::check_loader_warnings(r);
+                ExecModeHarness::check_native(r, ExecModeHarness::NativeCheck::Jit);
+                assertEq(0, r.rc, label + ": exit status: " + r.out);
+                assertEq(exp, r.out, label);
+            }
+        }
+        if (NoIrTier{name}) {
+            return;
+        }
+        foreach string off in (("", NoShortcuts)) {
+            string out = ExecModeHarness::run_ir_tier(sprintf("%s%s%s --exec-mode=tiered %s", env(), off,
+                quote(qore_bin), quote(path)));
+            assertEq(exp, out, sprintf("%s %s%s", name, ExecModeHarness::IRTierName, off ? " without shortcuts" : ""));
+        }
+    }
+
+    private testQcc(string name) {
+        if (!is_executable(qcc_bin)) {
+            testSkip("no qcc");
+        }
+        string exp = expected(name);
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + name + opt;
+            int rc;
+            string out = backquote(sprintf("%s%s %s -o %s %s 2>&1", env(), quote(qcc_bin), opt, quote(exe),
+                quote(scriptPath(name))), \rc);
+            assertEq(0, rc, sprintf("%s qcc %s: %s", name, opt, out));
+            foreach string off in (("", NoShortcuts)) {
+                string label = sprintf("%s qcc %s%s", name, opt, off ? " without shortcuts" : "");
+                hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s%s%s",
+                    env(), off, quote(exe)));
+                ExecModeHarness::check_loader_warnings(r);
+                assertEq(0, r.rc, label + ": exit status: " + r.out);
+                assertEq(exp, r.out, label);
+            }
+        }
+    }
+
+    private static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

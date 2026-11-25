@@ -1,0 +1,35 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - qcc AOT code generation and JIT native code of inline strings passed to the tokenizer module
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires ../../../examples/test/TestInterpreter.qm
+
+%include ../../../examples/test/ShortStringProbeTest.qc
+
+%exec-class TokenizerShortStringAccessTest
+
+#! the tokenizer module reads the strings of its configuration and options in both representations (qore#7062)
+/** A value holds a string of up to 6 bytes inline, with no QoreStringNode behind it; the module read the strings of
+    its configuration, options and token lists as QoreStringNodes after checking only their type, which dereferenced a
+    null pointer for such a value (and a debug build aborted on an assertion).  The probes
+    (short-string-access/probes.q) run in each execution mode and as qcc-compiled executables.
+*/
+class TokenizerShortStringAccessTest inherits ShortStringProbeTest {
+    constructor() : ShortStringProbeTest("tokenizer short string access",
+            get_script_dir() + DirSep + "short-string-access" + DirSep + "probes.q",
+            "constructor: [2, 1, 3]\n"
+            "encodeAdvanced text_pair: [2, 4, 3, 6, 3]\n"
+            "encodeForModel text_pair: [2, 4, 3, 6, 3]\n"
+            "encodeAdvanced words: [2, 4, 6, 3]\n"
+            "addTokens: 1 7\n") {
+        set_return_value(main());
+    }
+}

@@ -40,6 +40,7 @@
 
 class QoreSocketObject;
 class QoreSSLCertificate;
+class QoreSSLTrustStore;
 class QoreSSLPrivateKey;
 class Http1ClientPollOperationPriv;
 
@@ -59,6 +60,7 @@ struct Http1SslConfig {
     bool negotiate_alpn = false; //!< if true, configure ALPN {"h2","http/1.1"} on the socket
     std::string ca_file;        //!< PEM file with the CA certificates to verify the server with, if set
     std::string ca_path;        //!< directory with the CA certificates to verify the server with, if set
+    QoreSSLTrustStore* trust_store = nullptr; //!< in-memory trust store, if set (NOT ref'd by this struct)
 };
 
 //! HTTP/1.1 C++ client connection
@@ -167,6 +169,9 @@ public:
 
     DLLLOCAL virtual ~Http1ClientConnection();
 
+    //! Transfers the socket and poll operation to their Qore wrapper's internal members during construction.
+    DLLLOCAL void moveTransportToMembers(QoreObject* owner, ExceptionSink* xsink);
+
     //! Sets the controller-submission owner string before submission to
     //! the AsyncIoController.
     /** Must be called BEFORE construction submits the poll op (i.e., the
@@ -251,6 +256,18 @@ public:
     */
     DLLEXPORT void pushSendData(const QoreStringNode* data, ExceptionSink* xsink);
 
+    //! Sets the time to wait for a write of the request body after a 101 response
+    /** After a 101 response that the server sent before the request body was complete, the rest of the body is
+        written in the thread that pushes it (qore#7503); this bounds each of these writes.
+
+        @param timeout_ms the time to wait in milliseconds; <= 0 means no limit
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setSwitchedSendTimeout(int timeout_ms) {
+        switched_send_timeout_ms.store(timeout_ms > 0 ? timeout_ms : -1, std::memory_order_relaxed);
+    }
+
     //! Sets HTTP trailers for a streaming send request
     /** Must be called before pushSendData(nullptr).
         @param trailers hash of trailer key-value pairs
@@ -327,33 +344,18 @@ protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
 private:
-    //! @name QoreObject refs — standalone C++ lifecycle, NOT DGC-visible
-    /** @c sock_obj and @c poll_op_obj hold strong refs on the socket /
-        poll-op QoreObjects.  They are raw, not stored in any qclass's
-        @c internal_members slot — because @c Http1ClientConnection is
-        itself a pure C++ class (not wrapped in a QoreObject) and so is
-        not a participant in DGC cycle collection.
+    //! The time to wait for a write of the request body after a 101 response; -1 means no limit (qore#7503)
+    std::atomic<int> switched_send_timeout_ms{-1};
 
-        Lifetime is managed by the @ref Http1ClientConnection destructor,
-        which derefs both when the connection is released.  See
-        @c design/dgc.md — Pattern A (internal_members) does not apply
-        here because there is no enclosing QoreObject whose data/cdmap
-        the scanner could walk.  If a future refactor wraps this class
-        in a @c qclass, both refs should move into @c internal_members
-        at that point.
-
+    //! @name Transport ownership
+    /** A manager-created connection owns the two wrapper objects. A Qore-created connection transfers
+        them to the Http1Connection internal members and retains references only to their private data.
+        The private data must survive even if a cycle is collected starting at a transport object.
         @{
     */
-    //! The socket QoreObject (ref'd).  Owns a QoreSocketObject priv.
     QoreObject* sock_obj = nullptr;
-
-    //! The socket priv (raw pointer — ownership via sock_obj)
     QoreSocketObject* sock_priv = nullptr;
-
-    //! The poll op QoreObject (ref'd).  Owns a Http1ClientPollOperationPriv.
     QoreObject* poll_op_obj = nullptr;
-
-    //! The poll op priv (raw pointer — ownership via poll_op_obj).
     Http1ClientPollOperationPriv* poll_op_priv = nullptr;
     //! @}
 
@@ -401,6 +403,8 @@ private:
     //! CA certificates to verify the server with instead of the default CAs, if set
     std::string ssl_ca_file;
     std::string ssl_ca_path;
+    //! An in-memory trust store, if set; the connection holds a reference
+    QoreSSLTrustStore* ssl_trust_store = nullptr;
 
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.

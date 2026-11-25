@@ -235,7 +235,7 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
 - an asynchronous I/O operation that another thread submitted and the cleanup cancels, directly or with a command it
   queues to an I/O thread (`Command::module_cleanup_delegate`, taken when the command is created and applied while
   the I/O thread processes it): `applyModuleCleanupCancel()` gives the operation a copy of its context with the flag
-  (`QoreSandboxContext(const QoreSandboxContext*, bool)`, which keeps its sandbox), so its `abort()`, its
+  (`QoreSandboxContext(const QoreSandboxContext*, ModuleCleanupWork)`, which keeps its sandbox), so its `abort()`, its
   `onComplete()` and the release of its references, which run on a callback worker, are part of the cleanup.  It is
   applied by `doCancelIntern()` and also when the cancel finds a `continuePoll()` step of the operation in flight and
   waits for its result (`pending_aborts`): the deferred cancel keeps the context, whether the command that brings the
@@ -247,7 +247,128 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
   module's Program and reported `PROGRAM-ERROR` on stderr at every exit (qore#6510,
   `examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest`).  An operation that ends on its own after the close,
   without the cleanup canceling it, is still refused, as is one that another thread canceled in its step before the
-  cleanup stops the I/O thread (its deferred cancel is completed then with the context it had)
+  cleanup stops the I/O thread (its deferred cancel is completed then with the context it had).
+  The cleanup waits for that work before it goes on with the next module (qore#6928): the cancel is processed on an
+  I/O thread and the operation's `onComplete()` runs on a callback worker, with the references of the operation
+  (whose release ran the manager's destructor), so under load it ran after the HttpClientIo module's Program had
+  passed its teardown barrier (`AsyncIoControllerPriv::cancelByProgram()`, a point in time) and been deleted, and
+  `PROGRAM-ERROR` was printed.  The work is counted while it exists (`QoreModuleCleanupWorkFlag`: the commands that the
+  cleanup and its delegates create, the operation's context that `applyModuleCleanupCancel()` creates, which its work
+  items share, and the deferred releases with the flag), and `qore_module_cleanup_drain_work()` waits until the count
+  is zero after the data of each module is cleared in Phase 1 and after each module is deleted in Phase 2.  An
+  operation whose context is delegated but not counted (submitted by work of the cleanup, which captured its context)
+  gets a counted copy when the cleanup cancels it; a command that an I/O thread creates while it processes a command
+  of the cleanup is the cleanup's too; a counted work item that no callback worker can run (none runs and none can be
+  started) has its references released at once, as `stop()` releases them, as `stop()` comes after the cleanup; and a
+  child process created with `fork()` starts with no work counted; the placeholder command that each I/O thread's
+  command queue keeps (`MpscQueue`'s sentinel node) is not counted, also when the cleanup creates the controller
+  itself (a destructor that submits the first operation of the process, or that sets the number of I/O threads).
+  Operations, timers and tasks that the cleanup's own work starts (qore#7027, `ModuleCleanupCancel.qtest`, follow-up
+  and deadline cases; documented under `asynciocontroller_module_cleanup`):
+  - an operation that the cleanup thread (a destructor) or work that it handed over submits is counted, whatever its
+    own timeout (`AsyncIoControllerPriv::submit()` gives it a counted context,
+    `QoreSandboxContext::ModuleCleanupWork::Submitted`), and waited for until the deadline of the cleanup: one
+    deadline for the whole cleanup, measured from `qore_close_module_programs()`, 5 s by default
+    (`QORE_MODULE_CLEANUP_TIMEOUT`, read and validated by `qore_init()`; `qore_set_module_cleanup_timeout()`, which
+    the `--module-cleanup-timeout` option of `qore` calls, takes precedence).  The drain's wait is one timed
+    condition wait (`qore_module_cleanup_wait_work()`); when it times out, the cleanup sets
+    `qore_module_cleanup_deadline_passed()` and runs one cancel round of everything of its work that it has not
+    canceled (`async_io_module_cleanup_cancel_match()` with `deadline`), whose `onComplete()` then runs as counted
+    work; after the deadline, its waits are not timed, and an operation that the work that it handed over submits is
+    canceled when an I/O thread admits it (`cancelAdmittedAfterModuleCleanupDeadline()`, where the operation enters the
+    cache: the flag is set before the round sends its commands, so an operation that an I/O thread admits after the
+    round's command, or while it does not read commands yet, sees it; a later round alone would run only when the
+    drain's untimed wait ends, which a synchronous wait for that operation in counted work would prevent; the
+    `Command`'s `submit_module_cleanup_handed_over`, `qore_module_cleanup_handed_over_work()` in the submitting thread);
+    an operation of the cleanup thread itself is canceled by its next round, which it runs after the destructor that
+    submitted it, so a synchronous wait of that destructor keeps the operation's own timeout; the operations canceled at
+    or after the deadline are named in a warning on stderr (`qore_module_cleanup_report_canceled()`).  An operation
+    whose own timeout is renewed as it makes progress (`renewsTimeout()`) does not extend the deadline
+  - a timer that such work adds, and an operation that the controller starts for it without `submit()`, have a
+    delegated but uncounted context: each drain, once the count is zero, cancels them for the cleanup
+    (`AsyncIoControllerPriv::cancelModuleCleanupUncounted()`: the timers first, then a `CancelByProgram` command
+    without a Program on each I/O thread, which also reports the operations whose step is in flight), and repeats; it
+    ends when a round cancels nothing and the count is still zero after it: the round is a command round-trip with
+    every I/O thread, so an operation that completed on its own and a timer that fired before an I/O thread processed
+    it have their completion items queued, and counted (`AsyncWorkItem::module_cleanup_work`, set when an
+    `abort()`, `onComplete()`, timer callback or native task item with a delegated but uncounted context is queued;
+    the steps of such an operation are not counted, as the cleanup cancels the operation)
+  - a timer that the cleanup cancels runs its cancel callback, if it was added with one (`addTimer*()` with an owner
+    and a cancel callback; `TimerInfo::cancel_cb`, dispatched by `cancelTimerForModuleCleanup()` as the work of a
+    canceled operation), and a task that the cleanup refuses runs its cancel callback, so that an owner that counts
+    its scheduled timers or tasks balances its count (`PollingConnectionMonitor`'s ping timers; qore#7116)
+  - a task that such work submits with `AsyncIoController::submitTask()` is counted until it ends (`ThreadTask` with
+    `count_module_cleanup`); it is not canceled; the `dbg_async_io_hold_module_cleanup_work()` hook holds such
+    tasks too, and the cleanup releases those that it counts when it waits for its work
+  - the work of an operation that the cleanup canceled (its `abort()`, its `onComplete()` and the destructors that
+    the release of its references runs, marked by `QoreSandboxContext::module_cleanup_canceled`, which
+    `applyModuleCleanupCancel()` sets with `ModuleCleanupWork::Canceled`, and by
+    `AsyncIoDeferredRelease::module_cleanup_canceled`; also an `abort()` that `doCancelIntern()` calls on the thread
+    that cancels, as when the cleanup tears down a module's Program), and the cancel rounds themselves, cannot start
+    new
+    asynchronous work: the %Qore-level `AsyncIoController::submit()`, `addTimer*()` and `submitTask()` raise
+    `ASYNC-IO-SHUTDOWN-ERROR` (`checkModuleCleanupNewWork()`), so an `onComplete()` that re-arms itself, a timer that
+    re-adds itself or a destructor that resubmits cannot make the end of the process wait forever; nor can the work
+    that the cleanup handed over add a timer after its deadline (a timer callback or a heartbeat that re-arms itself),
+    nor a task of the cleanup submit a task then (`qore_module_cleanup_task_running`: a task that submits itself);
+    its operations are canceled when admitted and its tasks waited for (a message delivery), and the cleanup thread
+    itself can do all of it (its operations are canceled by its next round).
+    Synchronous I/O and `AsyncIoController::exec()`, which use the internal `submit()`, are not refused
+  - work that the cleanup counts and that module code hands over to a thread that is already running, or to a thread of
+    its own, stays counted until that thread has done it (qore#7239, qore#7339): the work takes a handle with
+    `AsyncIoController::holdModuleCleanupWork()` (`qore_module_cleanup_hold_work()`; 0 outside of counted work, which
+    `QoreModuleCleanupCountedWorkScope` marks on a dispatcher worker, in `releaseWorkItem()`,
+    `QoreCallDispatcher::stop()` and `AsyncIoDeferredRelease::release()`, and `qore_module_cleanup_task_running` in a
+    task), which the other thread releases with `releaseModuleCleanupWork()`, or runs the code with
+    `runModuleCleanupWork()`, which marks it as counted work while it runs (so that it can hand work over in turn) and
+    releases the handle when it returns (or not, with `release` False, for a thread that releases its handles itself).
+    Code given to another thread is wrapped with `AsyncIoController::wrapModuleCleanupWork()`: outside of counted work
+    it returns the code as it is (and code it wrapped already), and in counted work it checks the code with
+    `qore_check_thread_callable()`, takes a handle and returns a native call reference
+    (`ModuleCleanupWorkReferenceNode`) that runs the code as counted work and releases the handle when the code returns,
+    raises an exception, or when the reference is destroyed without having run.  The wrapped code runs once: the first
+    call takes the code and releases it (with what only it keeps alive) as counted work before it releases the handle,
+    and a later call raises `MODULE-CLEANUP-WORK-ERROR`; unrun code is released as counted work too.  Code is wrapped in
+    the thread that hands it over, into a local, before `background` (which evaluates its whole expression, the wrap
+    included, in the new thread, where it is not counted work); and a closure handed over from a method that can run in
+    its object's destructor is created by a static method (`ResponseAfterSendNotifier::getCall()`,
+    `HttpAsyncSocketIoController::getSendResultCall()` and `getPoolStop()`, `LlmAsyncSseRequest::getStop()`), as
+    `background` refuses a closure that refers to an object being destroyed (`BACKGROUND-CLOSURE-INVALID-CAPTURE`),
+    which the wrap returns as it is outside of counted work.  The handover sites: the admission gates that leave a
+    notification to the thread already processing (`WebSocketStreamProcessor::notifyIo()`,
+    `HttpWebSocketPollOperation::onPollComplete()` and `onComplete()`, WebSocketClient's delivery task, the draining
+    gate of QoreLlmTypes' `LlmAsyncOperation`, whose posted tasks carry their own handles), which push a handle and run
+    each pass (or frame, or message round) as counted work under the first handle left to them, then release the
+    handles; and the code given to another thread through `wrapModuleCleanupWork()`:
+    `HttpAsyncSocketIoController::submitToHandlerPool()` (centrally), `runOnThreadOfItsOwn()`, `runOnHandlerPool()`,
+    `dispatchResponseSendResult()` (after_send), the end of an HTTP/1.1 WebSocket connection
+    (`HttpWebSocketPollOperation::scheduleDoneCallback()`), `HttpPersistentRequestEnd::notify()`, the pool stop in the
+    controller's `stop()`, HttpServer's handler-pool submitter and `ResponseAfterSendNotifier`, QoreLlmTypes' transport
+    stop and McpClient's server-request thread.  The gates release the handles left to them when their object is
+    destroyed.  Each handle is counted in the cleanup's count and listed with who took it and where; after the deadline
+    the cleanup waits for handles at most the grace period (`qore_get_module_cleanup_handover_grace()`:
+    `QORE_MODULE_CLEANUP_HANDOVER_GRACE` or `--module-cleanup-handover-grace`, by default the deadline but at least 5 s,
+    measured from the deadline); then it names the handles still held in a warning, stops counting them, and sets
+    `qore_module_cleanup_abandoned()`, after which `delUser()` deletes no further module and `qore_cleanup()` leaves the
+    modules and their Programs as they are, as for a foreign thread in module code, instead of tearing them down under
+    the threads that hold the handles.  Other counted work is waited for as before.  `ModuleCleanupCancel.qtest` checks:
+    the servers case (the end of the canceled server connection runs with a handle held); the gate cases (HTTP/2 and
+    HTTP/1.1: the held notification of the next frame hands the cleanup's work over at the gate, the frame is processed
+    as that work and before the next module's data is deleted, and the end of the connection is handed over); the
+    WebSocketClient delivery gate, the LLM post and the after_send cases; and the handover cases (release twice, a
+    handle outside counted work, a handle never released, discarded handed-over code, wrapped code run on another thread
+    and wrapped code that raises an exception)
+  - the three windows of the drain (a step in flight at the cancel, an operation that completes after the wait and
+    before the cancel round, a timer that fires after the scan of the timers) are pinned by debug hooks
+    (`dbg_async_io_module_cleanup_drain_releases()` with the step-result and timer-callback holds; the first two at
+    the deadline, with a deadline of 0): their work ends before the cleanup goes on with the next module, which a
+    drain that does not report in-flight cancels or does not check its count after the round gets wrong
+  A debug test that holds step results or releases
+  with the other test hooks must release them before the end of the process, as the cleanup waits for the work they
+  keep.  A debug build's `dbg_async_io_hold_module_cleanup_work()` hook holds the `onComplete()` items until the
+  cleanup releases them, when it waits for its work (or else after the user modules have been deleted), which makes
+  the race deterministic (`ModuleCleanupCancel.qtest`, hold cases, which check that the item runs and ends before the
+  user modules have been deleted)
 - in turn, such work of a thread that runs such work
 
 The destructors that the cleanup runs (of the objects in the module Programs' data in Phase 1, and of the objects in

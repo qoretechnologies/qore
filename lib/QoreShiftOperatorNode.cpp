@@ -41,7 +41,7 @@ QoreString *QoreShiftOperatorNode::getAsString(bool& del, int foff, ExceptionSin
 }
 
 int QoreShiftOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-    qore_string_private::get(str)->concat(&shift_str);
+    qore_string_private::get(str)->concatAsciiName(shift_str);
     return 0;
 }
 
@@ -127,5 +127,8 @@ QoreValue QoreShiftOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     printd(5, "QoreShiftOperatorNode::evalImpl() about to call QoreListNode::shift() on list node %p (%d)\n", l, (int)(l->size()));
     // the list reference will now be the reference for the return value
     // therefore no need to reference again
-    return l->shift();
+    QoreValue rv = l->shift();
+    // a value taken out of a list reached through a weak reference (qore#7373)
+    val.removedValueThroughWeak(rv);
+    return rv;
 }

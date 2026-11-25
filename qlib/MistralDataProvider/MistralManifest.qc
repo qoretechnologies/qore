@@ -2225,6 +2225,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "chat-completion",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/chat/completions",
                 "response_content_type": "application/json",
                 "operation_id": "chat_completion_v1_chat_completions_post",
@@ -2431,6 +2432,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "complete-code",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/fim/completions",
                 "response_content_type": "application/json",
                 "operation_id": "fim_completion_v1_fim_completions_post",
@@ -2499,6 +2501,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "create-embeddings",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/embeddings",
                 "operation_id": "embeddings_v1_embeddings_post",
                 "display_name": "Create Embeddings",
@@ -2573,6 +2576,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "moderate-text",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/moderations",
                 "operation_id": "moderations_v1_moderations_post",
                 "display_name": "Moderate Text",
@@ -2601,6 +2605,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "moderate-chat",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/chat/moderations",
                 "operation_id": "chat_moderations_v1_chat_moderations_post",
                 "display_name": "Moderate Chat",
@@ -2625,6 +2630,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "ocr",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/ocr",
                 "operation_id": "ocr_v1_ocr_post",
                 "display_name": "Document OCR",
@@ -2787,6 +2793,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "classify-text",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/classifications",
                 "operation_id": "classifications_v1_classifications_post",
                 "display_name": "Classify Text",
@@ -2815,6 +2822,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "classify-chat",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/chat/classifications",
                 "operation_id": "chat_classifications_v1_chat_classifications_post",
                 "display_name": "Classify Chat",
@@ -2839,6 +2847,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "transcribe-audio",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/audio/transcriptions",
                 "operation_id": "audio_api_v1_transcriptions_post",
                 "display_name": "Transcribe Audio",
@@ -2919,6 +2928,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "generate-speech",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/audio/speech",
                 "response_content_type": "application/json",
                 "operation_id": "speech_v1_audio_speech_post",
@@ -4235,6 +4245,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "query-workflow-execution",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/workflows/executions/{execution_id}/queries",
                 "operation_id": "query_workflow_execution_v1_workflows_executions__execution_id__queries_post",
                 "display_name": "Query Workflow Execution",
@@ -5794,6 +5805,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "search-logs",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/logs/search",
                 "operation_id": "search_logs_v1_observability_logs_search_post",
                 "display_name": "Search Logs",
@@ -5867,6 +5879,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "search-traces",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/traces/search",
                 "operation_id": "search_traces_v1_observability_traces_search_post",
                 "display_name": "Search Traces",
@@ -5900,6 +5913,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "aggregate-traces",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/traces/aggregate",
                 "operation_id": "aggregate_traces_v1_observability_traces_aggregate_post",
                 "display_name": "Aggregate Traces",
@@ -6053,6 +6067,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "search-spans",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/spans/search",
                 "operation_id": "search_spans_v1_observability_spans_search_post",
                 "display_name": "Search Spans",
@@ -6086,6 +6101,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "aggregate-spans",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/spans/aggregate",
                 "operation_id": "aggregate_spans_v1_observability_spans_aggregate_post",
                 "display_name": "Aggregate Spans",
@@ -6148,6 +6164,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "search-span-evaluations",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/spans/evaluations/search",
                 "operation_id": "search_span_evaluations_v1_observability_spans_evaluations_search_post",
                 "display_name": "Search Span Evaluations",
@@ -6181,6 +6198,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "search-latest-span-evaluations",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/spans/evaluations/search/latest",
                 "operation_id": "search_latest_span_evaluations_v1_observability_spans_evaluations_search_latest_post",
                 "display_name": "Search Latest Span Evaluations",
@@ -6214,6 +6232,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "aggregate-span-evaluations",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/spans/evaluations/aggregate",
                 "operation_id": "aggregate_span_evaluations_v1_observability_spans_evaluations_aggregate_post",
                 "display_name": "Aggregate Span Evaluations",
@@ -6410,6 +6429,7 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "search-pipeline-results",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/v1/observability/pipeline-results/search",
                 "operation_id": "search_pipeline_results_v1_observability_pipeline_results_search_post",
                 "display_name": "Search Pipeline Results",

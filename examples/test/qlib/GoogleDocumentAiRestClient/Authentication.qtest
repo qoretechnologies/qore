@@ -5,6 +5,7 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires GoogleDocumentAiRestClient
 %requires HttpServer
 %requires HttpServerUtil
@@ -214,9 +215,9 @@ class AuthenticationTest inherits QUnit::Test {
 
     private pollPingTest() {
         auto poll = connection().startPollConnect();
-        date deadline = now_us() + 15s;
+        date deadline = microseconds(clock_get_monotonic_us()) + 15s;
         while (auto info = poll.continuePoll()) {
-            assertTrue(now_us() < deadline, "ping has a bounded deadline");
+            assertTrue(microseconds(clock_get_monotonic_us()) < deadline, "ping has a bounded deadline");
             Socket::poll((info,), 1s);
         }
         assertTrue(poll.goalReached());
@@ -224,8 +225,10 @@ class AuthenticationTest inherits QUnit::Test {
     }
 
     private liveTest() {
-        *string project = getenv("QORE_DOCUMENTAI_LIVE_PROJECT");
-        if (!project.val()) { testSkip("set QORE_DOCUMENTAI_LIVE_PROJECT for live authenticated ping"); }
+        *string project = LiveProvider::get("google", "QORE_DOCUMENTAI_LIVE_PROJECT");
+        if (!project.val()) { testSkip(LiveProvider::enabled("google") ?
+            "set QORE_DOCUMENTAI_LIVE_PROJECT for live authenticated ping"
+                : LiveProvider::skipReason("google", "QORE_DOCUMENTAI_LIVE_PROJECT")); }
         hash<auto> opts = {"gcp_project_id": project, "gcp_region": "us", "timeout": 30s, "connect_timeout": 10s};
         GoogleDocumentAiRestConnection conn({"name": "5426-live", "opts": opts});
         assertTrue(conn.ping(False).ok, "live Qore ADC ping succeeds");

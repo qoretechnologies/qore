@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - the argument lifetime checks run in child interpreters and standalone executables
+# test-platform: macos - native entry and reference handling in JIT and AOT code generation
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+%exec-class OwnedParameterEntryTest
+
+class OwnedParameterEntryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("OwnedParameterEntryTest", "1.0", \ARGV) {
+        addTestCase("caller and callee release their arguments on unwind", \sourceModes());
+        foreach int opt in (0, 3) {
+            addTestCase(sprintf("qcc -O%d claims its argument after entry is accepted", opt), \compiled(), opt);
+        }
+        set_return_value(main());
+    }
+
+    private string counts(string mode) {
+        return ExecModeHarness::run(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 QORE_IR_THRESHOLD=1 "
+            "%s -b --exec-mode=%s %s/arguments.q", TestInterpreter::qore_interpreter(), mode, get_script_dir()));
+    }
+
+    sourceModes() {
+        string ast = counts("ast");
+        assertEq("made 6 destroyed 6\ndepth 0 made 2 destroyed 2\ndepth 1 made 3 destroyed 3\n"
+            "depth 4 made 6 destroyed 6\ndepth 12 made 14 destroyed 14\n", ast, "AST destroys every marker");
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, counts(mode), mode);
+        }
+    }
+
+    compiled(int opt) {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("requires qcc");
+        }
+        TmpDir tmp();
+        string exe = sprintf("%s/args-%d", tmp.path, opt);
+        string dump = ExecModeHarness::run_any(sprintf("QORE_DUMP_LLVM_IR=1 %s -O%d -o %s %s/arguments.q",
+            qcc, opt, exe, get_script_dir()));
+        assertEq(counts("ast"), ExecModeHarness::run_any(exe + " -b"), sprintf("qcc -O%d", opt));
+        assertEq({"fast": True, "regular": True}, {
+            "fast": ownsOnEntry(dump, True), "regular": ownsOnEntry(dump, False),
+        }, "both the retained fast argument and the transferred regular argument are acquired after admission");
+    }
+
+    private bool ownsOnEntry(string dump, bool fast) {
+        bool in_function = False;
+        bool guard = False;
+        string block;
+        *string success;
+        bool acquired = False;
+        foreach string line in (dump.split("\n")) {
+            if (!in_function) {
+                in_function = line =~ /^define .*\@replaceArgument_[^(]+\(/
+                    && (line =~ /_fast_[^(]+\(/) == fast;
+                continue;
+            }
+            if (line == "}") {
+                break;
+            }
+            *list<string> label = line =~ x/^([a-zA-Z0-9_.]+):/;
+            if (label) {
+                block = label[0];
+            }
+            if (line =~ /call .*\@qore_rt_(enter_aot_fast_function|check_stack)\(/) {
+                guard = True;
+            }
+            if (guard && !success) {
+                *list<string> branch = line =~ x/^  br i1 [^,]+, label %([a-zA-Z0-9_.]+),/;
+                if (branch) {
+                    success = branch[0];
+                }
+            }
+            if ((fast && line =~ /call void \@qore_rt_incref\(i64 %arg0\)/)
+                    || (!fast && line =~ /call .*\@qore_rt_take_param_aot\(/)) {
+                if (!success || success != block) {
+                    return False;
+                }
+                acquired = True;
+            }
+        }
+        return acquired;
+    }
+}

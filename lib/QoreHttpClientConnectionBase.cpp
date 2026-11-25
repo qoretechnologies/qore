@@ -37,6 +37,7 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -68,27 +69,27 @@ HttpClientConnectionBase::~HttpClientConnectionBase() {
     }
 }
 
-void HttpClientConnectionBase::inheritOpener(const HttpClientConnectionBase& from) {
+void qore_http_client_connection_base_ops::inheritOpenerImpl(HttpClientConnectionBase* b, const HttpClientConnectionBase& from) {
     if (from.opener_policy) {
         from.opener_policy->ref();
     }
-    if (opener_policy) {
-        opener_policy->deref();
+    if (b->opener_policy) {
+        b->opener_policy->deref();
     }
-    opener_policy = from.opener_policy;
+    b->opener_policy = from.opener_policy;
 }
 
-int HttpClientConnectionBase::checkSandboxUse(QoreSandboxManager* sm, ExceptionSink* xsink) const {
+int qore_http_client_connection_base_ops::checkSandboxUseImpl(HttpClientConnectionBase* b, QoreSandboxManager* sm, ExceptionSink* xsink) {
     if (!sm) {
         return 0;
     }
-    std::shared_ptr<const QoreConnectionDestinations> d = getDestinations();
+    std::shared_ptr<const QoreConnectionDestinations> d = b->getDestinations();
     if (d) {
         return d->check(*sm, xsink);
     }
     // the connection is still being made: its connect checks it against the sandbox it was opened for, so it can be
     // used by code under the same sandbox only
-    return QoreSandboxComposition::same(opener_policy, sm) ? 0 : 1;
+    return QoreSandboxComposition::same(b->opener_policy, sm) ? 0 : 1;
 }
 
 bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {

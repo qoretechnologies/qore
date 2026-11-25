@@ -44,6 +44,7 @@
 #include <memory>
 #include "qore/intern/QoreConsumeHook.h"
 #include "qore/intern/HttpStreamConsumeHook.h"
+#include "qore/intern/QoreIoClassesOps.h"
 #include <mutex>
 
 #ifdef DEBUG
@@ -170,13 +171,33 @@ public:
 
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
+        executeErrorIntern(err, desc, QoreValue(), xsink);
+    }
+
+    //! Reports the error with its argument, which is given under the \c "arg" key of the error hash (qore#7485)
+    /** @param arg the exception argument; the action takes ownership of the reference
+    */
+    DLLLOCAL void executeErrorArg(const char* err, const char* desc, QoreValue arg,
+            ExceptionSink* xsink) override {
+        executeErrorIntern(err, desc, arg, xsink);
+    }
+
+private:
+    //! Reports the error; takes ownership of the reference of \a arg
+    DLLLOCAL void executeErrorIntern(const char* err, const char* desc, QoreValue arg, ExceptionSink* xsink) {
+        // the argument is released on every path that does not give it away
+        ValueHolder arg_holder(arg, xsink);
         AsyncActionLocker lg(mtx);
         if (completed) {
             return;
         }
         completed = true;
         if (sse_state) {
-            sse_state->executeError(err, desc, xsink);
+            if (arg_holder->isNothing()) {
+                sse_state->executeError(err, desc, xsink);
+            } else {
+                sse_state->executeErrorArg(err, desc, arg_holder.release(), xsink);
+            }
             return;
         }
         if (frame_state) {
@@ -185,6 +206,9 @@ public:
                 ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
                 err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
                 err_hash->setKeyValue("desc", new QoreStringNode(desc), xsink);
+                if (!arg_holder->isNothing()) {
+                    err_hash->setKeyValue("arg", arg_holder.release(), xsink);
+                }
                 q->pushAndTakeRef(err_hash.release());
                 q->pushAndTakeRef(QoreValue());  // NOTHING sentinel
             }
@@ -194,6 +218,9 @@ public:
         ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
         err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
         err_hash->setKeyValue("desc", new QoreStringNode(desc), xsink);
+        if (!arg_holder->isNothing()) {
+            err_hash->setKeyValue("arg", arg_holder.release(), xsink);
+        }
         QoreHashNode* h = err_hash.release();
         if (!channel->trySend(h)) {
             h->deref(xsink);
@@ -205,6 +232,7 @@ public:
         notify();
     }
 
+public:
     DLLLOCAL void cleanup(ExceptionSink* xsink) override {
         // the references are taken under the lock and released after it, in the same order: releasing them can run
         // user code (the destructor of a user EventNotifier object, also the one of the SSE state), which can block
@@ -655,7 +683,7 @@ public:
         // the queue's hook serves every stream whose events it receives; without a queue, no event is kept, and the
         // data is credited as it is parsed
         if (queue) {
-            item_hook = queue->getItemConsumeHook();
+            item_hook = qore_queue_ops(queue).getItemConsumeHook();
         }
         stream_hook = std::move(hook);
         return true;

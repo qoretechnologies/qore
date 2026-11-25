@@ -40,6 +40,7 @@
 #include <unistd.h>
 #include "qore/OutputStream.h"
 #include "qore/intern/FileStreamIo.h"
+#include "qore/intern/QoreIoClassesOps.h"
 
 /**
  * @brief Private data for the Qore::FileOutputStream class.
@@ -64,7 +65,7 @@ public:
    }
 
    DLLLOCAL FileOutputStream(int fd) {
-      f.makeSpecial(fd);
+      qore_file_ops(f).makeSpecial(fd);
    }
 
    DLLLOCAL const char *getName() override {
@@ -73,6 +74,11 @@ public:
 
    DLLLOCAL bool isClosed() override {
       return !f.isOpen();
+   }
+
+   //! returns the descriptor of the file, or -1 if it is not open
+   DLLLOCAL int getFD() const {
+      return f.getFD();
    }
 
    DLLLOCAL void close(ExceptionSink* xsink) override {

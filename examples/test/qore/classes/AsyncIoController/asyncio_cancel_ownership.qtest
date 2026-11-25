@@ -1,0 +1,1317 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - cancellation of async I/O operations by key and owner across Programs and sandboxes
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/aio-cancel-modules"
+%requires QUnit
+%requires AioCancelTestLib
+# loaded before the module that requires it, so that it does not take the restriction of that module
+%requires AioCancelChainM2
+%requires AioCancelChainM1
+%requires AioCancelBgLib
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class AsyncIoCancelOwnershipTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! An operation that waits for an event of its notifier, which never comes
+class WaitingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+}
+
+#! An operation that completes at once; its completion reports itself, after an optional gate
+class CompletingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+        Queue completed;
+        *Counter gate;
+    }
+
+    constructor(EventNotifier notifier, Queue completed, *Counter gate) {
+        self.notifier = notifier;
+        self.completed = completed;
+        self.gate = gate;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        completed.push(True);
+        if (gate) {
+            gate.waitForZero(HangGuard);
+        }
+    }
+}
+
+#! An operation of the host's code that completes at once; its completion cancels an operation by key
+class HostCancellingOperation inherits AbstractPollOperation<auto> {
+    public {
+        Queue report();
+    }
+
+    private {
+        EventNotifier notifier;
+        bool done;
+        string cancel_key;
+    }
+
+    constructor(EventNotifier notifier, string cancel_key) {
+        self.notifier = notifier;
+        self.cancel_key = cancel_key;
+    }
+
+    string getGoal() {
+        return "ready";
+    }
+
+    string getState() {
+        return done ? "ready" : "waiting";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{"events": SOCK_POLLIN, "socket": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        report.push(AsyncIoController::cancelByKey(cancel_key));
+    }
+}
+
+#! sandboxed code cancels only the async I/O operations of its own application (qore#7010)
+/** The keys and owners of operations can be guessed, so sandboxed code that cancels, flushes or replaces by key or
+    owner acts only on the operations of its own application; trusted code acts on any.  Before the change, the
+    tenant canceled the host's operations.
+*/
+class AsyncIoCancelOwnershipTest inherits QUnit::Test {
+    public {
+        #! the tenant's code: its own operations, and cancels by key and owner
+        const TenantSource = "%modern
+
+class TenantOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return \"waiting\";
+    }
+
+    string getState() {
+        return \"waiting\";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            \"events\": SOCK_POLLIN,
+            \"socket\": notifier,
+        };
+    }
+}
+
+# an operation that completes at once; its completion (the tenant's code) tries to cancel an operation of the
+# host's, and submits a waiting operation
+class TenantReportingOperation inherits AbstractPollOperation<auto> {
+    private {
+        EventNotifier notifier;
+        bool done;
+        string host_key;
+        string follow_key;
+        Queue report;
+    }
+
+    constructor(EventNotifier notifier, string host_key, string follow_key, Queue report) {
+        self.notifier = notifier;
+        self.host_key = host_key;
+        self.follow_key = follow_key;
+        self.report = report;
+    }
+
+    string getGoal() {
+        return \"ready\";
+    }
+
+    string getState() {
+        return done ? \"ready\" : \"waiting\";
+    }
+
+    bool goalReached() {
+        return done;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return;
+        }
+        done = True;
+        return <SocketPollInfo>{\"events\": SOCK_POLLIN, \"socket\": notifier};
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        hash<auto> h;
+        try {
+            h.cancel_host = AsyncIoController::cancelByKey(host_key);
+            EventNotifier n();
+            push notifiers, n;
+            AsyncIoController::submit(<SocketPollOperationInfo>{
+                \"sock\": n,
+                \"spop\": keep(new TenantOperation(n)),
+                \"owner\": follow_key,
+                \"key\": follow_key,
+                \"to\": -1s,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            h.error = sprintf(\"%s: %s\", ex.err, ex.desc);
+        }
+        report.push(h);
+    }
+}
+
+# the notifiers and the operation objects of the tenant's operations: an operation whose object is deleted is
+# canceled
+list<auto> notifiers;
+
+# keeps an object for the life of the tenant, and returns it
+auto sub keep(auto o) {
+    push notifiers, o;
+    return o;
+}
+
+# submits an operation object that the tenant is given
+sub submit_given(object op, EventNotifier n, string key) {
+    push notifiers, n;
+    AsyncIoController::submit(<SocketPollOperationInfo>{\"sock\": n, \"spop\": op, \"owner\": key, \"key\": key,
+        \"to\": 30s});
+}
+
+# returns an operation object of the tenant's code
+object sub make_reporting(EventNotifier n, string host_key, string follow_key, Queue report) {
+    return new TenantReportingOperation(n, host_key, follow_key, report);
+}
+
+auto sub submit_own(string owner, string key) {
+    EventNotifier n();
+    push notifiers, n;
+    return AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": keep(new TenantOperation(n)),
+        \"owner\": owner,
+        \"key\": key,
+        \"to\": -1s,
+    });
+}
+
+bool sub cancel_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
+int sub cancel_owner(string owner) {
+    return AsyncIoController::cancelByOwner(owner);
+}
+
+# submits its own operations with the given key; returns the results or errors
+list<auto> sub collide(string key, int n, bool replace) {
+    list<auto> rv = ();
+    for (int i = 0; i < n; ++i) {
+        EventNotifier en();
+        push notifiers, en;
+        try {
+            auto rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+                \"sock\": en, \"spop\": keep(new TenantOperation(en)), \"owner\": key + \"-tenant\", \"key\": key,
+                \"to\": -1s,
+            }, replace);
+            push rv, rq;
+        } catch (hash<ExceptionInfo> ex) {
+            push rv, ex.err;
+        }
+    }
+    return rv;
+}
+
+hash<auto> sub get_info() {
+    return AsyncIoController::getInfo();
+}
+
+sub flush_owner(string owner) {
+    AsyncIoController::flushCallbacksByOwner(owner);
+}
+
+int sub add_timer() {
+    return AsyncIoController::addTimerDelay(1D, True);
+}
+
+bool sub cancel_timer(int id) {
+    return AsyncIoController::cancelTimer(id);
+}
+";
+
+        #! the child of libraryInitTest(): its tenant loads the library whose initialization submits an operation
+        const ChildSource = "%modern
+%no-child-restrictions
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(True);
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires AioCancelInitLib\\n\"
+    \"string sub key() { return AioCancelInitLib::Lib::getKey(); }\\n\"
+    \"bool sub direct(string k) { return AsyncIoController::cancelByKey(k); }\\n\"
+    \"bool sub wrapper(string k) { return AioCancelInitLib::Lib::cancelByKey(k); }\\n\", \"tenant\");
+string k = p.callFunction(\"key\");
+printf(\"direct: %y\\n\", p.callFunction(\"direct\", k));
+printf(\"wrapper: %y\\n\", p.callFunction(\"wrapper\", k));
+printf(\"trusted: %y\\n\", AsyncIoController::cancelByKey(k));
+";
+
+        #! the child of libraryInitTimerTest(): its tenant loads the library whose initialization adds a timer
+        const InitTimerChildSource = "%modern
+%no-child-restrictions
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(True);
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires AioCancelInitLib\\n\"
+    \"int sub timer() { return AioCancelInitLib::Lib::getTimerId(); }\\n\"
+    \"int sub own() { return AsyncIoController::addTimerDelay(1D, True); }\\n\", \"tenant\");
+int init_timer = p.callFunction(\"timer\");
+int own_timer = p.callFunction(\"own\");
+printf(\"init: %y\\n\", call_function(\"dbg_async_io_timer_adder_gen\", init_timer));
+printf(\"own: %y\\n\", call_function(\"dbg_async_io_timer_adder_gen\", own_timer) > 0);
+printf(\"canceled: %y\\n\", AsyncIoController::cancelTimer(init_timer) && AsyncIoController::cancelTimer(own_timer));
+";
+
+        #! the child of callbackLibraryInitTest(): the callback of the tenant's operation loads the library whose
+        #! initialization submits an operation
+        const CallbackChildSource = "%modern
+%no-child-restrictions
+Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(True);
+p.setSandboxManager(sm);
+p.parse(\"%modern\\n%requires AioCancelTestLib\\n\"
+    \"Queue sub load(string k) { return AioCancelTestLib::Lib::submitLoading(k, 'AioCancelInitLib'); }\\n\"
+    \"bool sub direct(string k) { return AsyncIoController::cancelByKey(k); }\\n\"
+    \"bool sub wrapper(string k) { return AioCancelTestLib::Lib::cancelByKey(k); }\\n\", \"tenant\");
+printf(\"loaded: %y\\n\", p.callFunction(\"load\", sprintf(\"aio-cancel-loader-%d\", getpid())).get(60s));
+string k = sprintf(\"aio-cancel-init-lib-%d\", getpid());
+printf(\"direct: %y\\n\", p.callFunction(\"direct\", k));
+printf(\"wrapper: %y\\n\", p.callFunction(\"wrapper\", k));
+printf(\"trusted: %y\\n\", AsyncIoController::cancelByKey(k));
+";
+
+        #! the tenant's code that uses a library module that submits operations and wraps the cancel calls
+        const TenantModuleSource = "%modern
+%requires AioCancelTestLib
+
+bool sub wrapper_key(string key) {
+    return AioCancelTestLib::Lib::cancelByKey(key);
+}
+
+int sub wrapper_owner(string owner) {
+    return AioCancelTestLib::Lib::cancelByOwner(owner);
+}
+
+bool sub direct_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
+Queue sub chain(string key, string follow_key) {
+    return AioCancelTestLib::Lib::submitChained(key, follow_key);
+}
+
+Queue sub reporting(string key, string follow_key) {
+    return AioCancelTestLib::Lib::submitReporting(key, follow_key);
+}
+";
+
+        #! the code of a tenant that uses a module that acts in threads that it starts
+        const TenantBgSource = "%modern
+%requires AioCancelBgLib
+
+auto sub submit_bg(string key) {
+    return AioCancelBgLib::Lib::submitBg(key);
+}
+
+auto sub replace_bg(string key) {
+    return AioCancelBgLib::Lib::replaceBg(key);
+}
+
+auto sub cancel_bg(string key) {
+    return AioCancelBgLib::Lib::cancelBg(key);
+}
+
+auto sub cancel_owner_bg(string owner) {
+    return AioCancelBgLib::Lib::cancelOwnerBg(owner);
+}
+
+hash<auto> sub add_timer_bg_tid() {
+    return AioCancelBgLib::Lib::addTimerBgTid();
+}
+
+hash<auto> sub cancel_timer_bg_tid(int id) {
+    return AioCancelBgLib::Lib::cancelTimerBgTid(id);
+}
+
+sub start_service() {
+    AioCancelBgLib::Lib::startService();
+}
+
+bool sub cancel_timer_call(int id) {
+    return AioCancelBgLib::Lib::cancelTimerCall(id);
+}
+
+bool sub direct_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+
+auto sub add_timer_bg() {
+    return AioCancelBgLib::Lib::addTimerBg();
+}
+
+auto sub cancel_timer_bg(int id) {
+    return AioCancelBgLib::Lib::cancelTimerBg(id);
+}
+
+int sub add_timer_call() {
+    return AioCancelBgLib::Lib::addTimerCall();
+}
+
+bool sub cancel_timer_direct(int id) {
+    return AsyncIoController::cancelTimer(id);
+}
+
+auto sub add_timer_pool_bg() {
+    return AioCancelBgLib::Lib::addTimerPoolBg();
+}
+
+auto sub cancel_timer_pool_bg(int id) {
+    return AioCancelBgLib::Lib::cancelTimerPoolBg(id);
+}
+
+auto sub add_cancel_timer_pool_bg() {
+    return AioCancelBgLib::Lib::addCancelTimerPoolBg();
+}
+";
+
+        #! the child of timerCallbackWorkerTest(): the callbacks of the timers of the threads of a module for two tenants
+        #! run on the one callback worker of the controller
+        const TimerCallbackChildSource = "%modern
+%no-child-restrictions
+AsyncIoController::setMaxCallbackWorkers(1);
+Program sub tenant(int po) {
+    Program p(PO_NO_CHILD_PO_RESTRICTIONS | po);
+    SandboxManager sm();
+    sm.setNetworkDefaultPolicy(True);
+    p.setSandboxManager(sm);
+    p.parse(\"%modern\\n%requires AioCancelBgLib\\n\"
+        \"auto sub add() { return AioCancelBgLib::Lib::addTimerInCallbackBg(); }\\n\"
+        \"auto sub cancel(int id) { return AioCancelBgLib::Lib::cancelTimerInCallbackBg(id); }\\n\"
+        \"auto sub own() { return AioCancelBgLib::Lib::addCancelTimerInCallbackBg(); }\\n\", \"tenant\");
+    return p;
+}
+foreach int po in ((0, PO_NO_LOCALE_CONTROL)) {
+    Program a = tenant(po);
+    Program b = tenant(po);
+    hash<auto> added = a.callFunction(\"add\");
+    hash<auto> c = b.callFunction(\"cancel\", added.id);
+    printf(\"%d: same worker: %y\\n\", po, added.tid == c.tid);
+    printf(\"%d: other: %y\\n\", po, c.result);
+    printf(\"%d: own: %y\\n\", po, a.callFunction(\"own\"));
+    printf(\"%d: host: %y\\n\", po, AsyncIoController::cancelTimer(added.id));
+}
+";
+
+        #! the code of a tenant that calls a module (with a restriction of its own) that calls another module
+        const TenantChainSource = "%modern
+%requires AioCancelChainM1
+
+auto sub chain_submit(string owner, string key) {
+    return AioCancelChainM1::Lib::submit(owner, key);
+}
+
+bool sub chain_cancel(string key) {
+    return AioCancelChainM1::Lib::cancelByKey(key);
+}
+
+bool sub direct_key(string key) {
+    return AsyncIoController::cancelByKey(key);
+}
+";
+    }
+
+    private {
+        int serial;
+        #! the operation objects of the host's operations: an operation whose object is deleted is canceled
+        list<auto> held;
+        Mutex held_lock();
+    }
+
+    constructor() : QUnit::Test("AsyncIoController cancel ownership", "1.0", \ARGV) {
+        # one I/O thread: every operation runs on it, so a submission with the key of another operation always meets
+        # that operation (the count can be set only before the controller's first operation)
+        AsyncIoController::setMaxIoThreads(1);
+        addTestCase("a sandboxed caller cannot cancel another code's operation by its key", \keyTest());
+        addTestCase("a sandboxed caller cannot cancel another code's operations by their owner", \ownerTest());
+        addTestCase("a sandboxed caller cancels its own operations", \ownTest());
+        addTestCase("a sandboxed submit does not take the key of another code's operation", \collisionTest());
+        addTestCase("trusted code's submissions with the key of another operation are unchanged",
+            \trustedCollisionTest());
+        addTestCase("sandboxed code gets the settings of the controller only", \infoTest());
+        addTestCase("a sandboxed flush does not discard another code's callbacks", \flushTest());
+        addTestCase("module code acting for a sandboxed caller cancels only that caller's operations",
+            \moduleWrapperTest());
+        addTestCase("an operation of a library's initialization belongs to no tenant", \libraryInitTest());
+        addTestCase("a cancel by owner on the I/O thread refuses the queued submissions of the owner",
+            \ioThreadOwnerRefusalTest());
+        addTestCase("a restricted cancel by owner on the I/O thread refuses no other application's submissions",
+            \ioThreadOwnerOtherAppTest());
+        addTestCase("a cancel that an I/O thread processes refuses the queued submissions of the canceled key",
+            \ioThreadKeyRefusalTest());
+        addTestCase("a timer of a library's initialization has no generation that sandboxed code can match",
+            \libraryInitTimerTest());
+        addTestCase("an operation submitted by a callback belongs to the callback's operation's application",
+            \callbackTest());
+        addTestCase("an operation of a library's initialization in a tenant's callback belongs to no tenant",
+            \callbackLibraryInitTest());
+        addTestCase("module code that module code calls for a tenant acts for that tenant", \moduleChainTest());
+        addTestCase("the callback of the host's operation with a tenant's object acts for the tenant",
+            \tenantObjectTest());
+        addTestCase("sandboxed code with no known application replaces only its own operation",
+            \unknownAppReplaceTest());
+        addTestCase("the canceled result of a refused submission runs for the submitter", \refusedResultTest());
+        addTestCase("a submission that is not started leaves no registration of its object behind",
+            \refusedRegistrationTest());
+        addTestCase("the threads that a module starts for tenants act for those tenants", \moduleThreadTest());
+        addTestCase("a tenant does not cancel the operation of a listener of the host by its key or owner",
+            \listenerOperationTest());
+        addTestCase("the work of a module's service thread belongs to no tenant", \serviceThreadTest());
+        addTestCase("the timers of the threads that a module starts for tenants are those tenants'",
+            \moduleThreadTimerTest());
+        addTestCase("the host's code in the callback of a tenant's operation acts for the tenant",
+            \hostCodeInTenantCallbackTest());
+        addTestCase("a sandboxed caller cancels only the timers of its own application", \tenantTimerTest());
+        addTestCase("a tenant sandboxed by its SandboxManager only cancels only its own timers",
+            \sandboxManagerTimerTest());
+        addTestCase("the tasks of a shared pool for the threads of a module for tenants do not cancel each other's timers",
+            \poolWorkerTimerTest());
+        addTestCase("the timer callbacks of the threads of a module for tenants do not cancel each other's timers",
+            \timerCallbackWorkerTest());
+        set_return_value(main());
+    }
+
+    keyTest() {
+        Program tenant = getTenant();
+        string owner = getName("host-key");
+        EventNotifier n();
+        auto rq = submitHost(owner, owner + "-key", n);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        assertFalse(tenant.callFunction("cancel_key", owner + "-key"), "the tenant's cancel finds no operation");
+        assertEq(0, rq.size(), "the host's operation was not canceled");
+        # the host cancels its own operation
+        assertTrue(AsyncIoController::cancelByKey(owner + "-key"));
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    ownerTest() {
+        Program tenant = getTenant();
+        string owner = getName("host-owner");
+        EventNotifier n();
+        auto rq = submitHost(owner, owner + "-key", n);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        assertEq(0, tenant.callFunction("cancel_owner", owner), "the tenant's cancel finds no operation");
+        assertEq(0, rq.size(), "the host's operation was not canceled");
+        assertEq(1, AsyncIoController::cancelByOwner(owner));
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    ownTest() {
+        Program tenant = getTenant();
+        string owner = getName("tenant");
+        auto rq1 = tenant.callFunction("submit_own", owner + "-1", owner + "-1-key");
+        auto rq2 = tenant.callFunction("submit_own", owner + "-2", owner + "-2-key");
+        on_exit {
+            AsyncIoController::cancelByOwner(owner + "-1");
+            AsyncIoController::cancelByOwner(owner + "-2");
+        }
+        assertTrue(tenant.callFunction("cancel_key", owner + "-1-key"), "by key");
+        assertTrue(rq1.get(HangGuard).canceled);
+        assertEq(1, tenant.callFunction("cancel_owner", owner + "-2"), "by owner");
+        assertTrue(rq2.get(HangGuard).canceled);
+    }
+
+    collisionTest() {
+        Program tenant = getTenant();
+        foreach bool replace in ((False, True)) {
+            string key = getName("host-collision");
+            EventNotifier n();
+            auto rq = submitHost(key, key, n);
+            on_exit AsyncIoController::cancelByOwner(key);
+            on_exit AsyncIoController::cancelByOwner(key + "-tenant");
+            list<auto> r = tenant.callFunction("collide", key, 8, replace);
+            # each of the tenant's submissions (from a thread that is not the I/O thread) is refused: its operation is
+            # not started, and its result is a canceled result; without replace_existing it is refused as any caller's
+            # is (qore#7108), with it as one that may not replace another application's operation
+            foreach auto i in (r) {
+                assertEq(NT_OBJECT, i.typeCode(), sprintf("replace %y: %y", replace, i));
+                hash<auto> res = i.get(HangGuard);
+                assertTrue(res.canceled, "replace: " + replace);
+                assertEq(replace ? "ASYNC-IO-KEY-ERROR" : "ASYNC-IO-ERROR", res.ex.err, "replace: " + replace);
+            }
+            assertEq(0, rq.size(), "the host's operation was not canceled (replace: " + replace + ")");
+            assertTrue(AsyncIoController::cancelByKey(key), "the host's operation is still there");
+            assertTrue(rq.get(HangGuard).canceled);
+        }
+    }
+
+    #! trusted code that submits an operation with the key of another operation from a thread that is not the I/O
+    #! thread: with replace_existing False its submission is refused with an error (qore#7108), with True it replaces the
+    #! operation
+    trustedCollisionTest() {
+        string key = getName("host-trusted-collision");
+        EventNotifier n();
+        auto rq = submitHost(key, key, n);
+        on_exit AsyncIoController::cancelByOwner(key);
+        on_exit AsyncIoController::cancelByOwner(key + "-2");
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
+        EventNotifier n2();
+        auto rq2 = AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n2, "spop": hold(new WaitingOperation(n2)),
+            "owner": key + "-2", "key": key, "to": -1s}, False);
+        hash<auto> res = rq2.get(HangGuard);
+        assertTrue(res.canceled, "refused with replace_existing False");
+        assertEq("ASYNC-IO-ERROR", res.ex.err);
+        assertEq(0, rq.size(), "the operation with the key is left alone");
+        EventNotifier n3();
+        auto rq3 = AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n3, "spop": hold(new WaitingOperation(n3)),
+            "owner": key + "-2", "key": key, "to": -1s}, True);
+        assertTrue(rq.get(HangGuard).canceled, "replaced with replace_existing True");
+        assertEq(0, rq3.size(), "the replacing operation runs");
+    }
+
+    infoTest() {
+        Program tenant = getTenant();
+        string owner = getName("host-info");
+        EventNotifier n();
+        auto rq = submitHost(owner, owner + "-key", n);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        hash<auto> host_info = AsyncIoController::getInfo();
+        assertTrue(inlist(owner + "-key", host_info.cache_keys), "the host sees its operation");
+        hash<auto> info = tenant.callFunction("get_info");
+        # the tenant gets the settings only, which give no operation of any caller
+        assertEq(("autostop", "io_threads", "running", "shutting_down"), sort(keys info));
+        assertEq(host_info.io_threads, info.io_threads);
+        assertEq(host_info.autostop, info.autostop);
+        assertEq(0, rq.size(), "the host's operation is still there");
+    }
+
+    #! the tenant flushes an owner while the host's callbacks of the owner run; the host's later callback is not
+    #! discarded
+    flushTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the flush is observed with a test hook of a debug build");
+        }
+        Program tenant = getTenant();
+        string owner = getName("host-flush");
+        Counter gate(1);
+        on_exit if (gate.getCount()) {
+            gate.dec();
+        }
+        # the host's first callback of the owner runs and is held: the tenant's flush waits for it
+        Queue c1();
+        EventNotifier n1();
+        n1.notify();
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n1,
+            "spop": hold(new CompletingOperation(n1, c1, gate)), "owner": owner, "to": HangGuard});
+        assertTrue(c1.get(HangGuard), "the first callback runs");
+        Queue flushed();
+        background sub () {
+            try {
+                tenant.callFunction("flush_owner", owner);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            flushed.push(True);
+        }();
+        # the tenant's flush has marked the owner and waits
+        assertTrue(call_function("dbg_async_io_wait_owner_flush_blocked", HangGuard));
+        # the host's next callback of the owner runs while the tenant's flush waits
+        Queue c2();
+        EventNotifier n2();
+        n2.notify();
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n2,
+            "spop": hold(new CompletingOperation(n2, c2)), "owner": owner, "to": HangGuard});
+        bool got;
+        try {
+            got = c2.get(HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        assertTrue(got, "the host's callback is not discarded by the tenant's flush");
+        gate.dec();
+        assertTrue(flushed.get(HangGuard));
+    }
+
+    #! module code (a library module) that a sandboxed caller calls cancels only that caller's operations
+    moduleWrapperTest() {
+        Program tenant = getTenantModule();
+        string base = getName("host-module");
+        EventNotifier n1();
+        auto rq1 = AioCancelTestLib::Lib::submit(n1, base + "-o1", base + "-k1");
+        EventNotifier n2();
+        auto rq2 = AioCancelTestLib::Lib::submit(n2, base + "-o2", base + "-k2");
+        on_exit {
+            AsyncIoController::cancelByOwner(base + "-o1");
+            AsyncIoController::cancelByOwner(base + "-o2");
+        }
+        assertFalse(tenant.callFunction("direct_key", base + "-k1"), "direct");
+        assertFalse(tenant.callFunction("wrapper_key", base + "-k1"), "the module's cancel by key");
+        assertEq(0, tenant.callFunction("wrapper_owner", base + "-o2"), "the module's cancel by owner");
+        assertEq(0, rq1.size());
+        assertEq(0, rq2.size());
+    }
+
+    #! the operation that a library module's initialization submits, also when a tenant loads the module first,
+    #! belongs to no tenant: the tenant does not cancel it, directly or through the module's code
+    /** The module must be in the process-wide module path for its initialization to be that of library code, so the
+        check runs in a child process with that module path
+    */
+    libraryInitTest() {
+        string out = runChild(ChildSource);
+        assertRegex("^direct: False\\n", out, out);
+        assertRegex("\nwrapper: False\n", out, out);
+        assertRegex("\ntrusted: True\n", out, out);
+    }
+
+    #! holds the one I/O thread before it processes its queued commands, for the code given, and releases it
+    /** The code queues submissions and runs cancels on the held thread, which processes the queued submissions
+        after them, as when the callback of an operation cancels on the I/O thread while submissions are queued.
+        The test runs one I/O thread (set in the constructor, before the controller's first operation): the commands
+        queued while it is held and the command of a later getInfo() are in the queue of that one thread, which
+        processes them in order, so getInfo() reports the cache after the queued commands
+    */
+    private holdIoThread(code c) {
+        assertEq(1, AsyncIoController::getInfo().io_threads, "the test runs one I/O thread");
+        call_function("dbg_async_io_hold_io_commands", True);
+        on_exit call_function("dbg_async_io_hold_io_commands", False);
+        if (!call_function("dbg_async_io_wait_io_commands_held", HangGuard)) {
+            throw "TEST-ERROR", "the I/O thread was not held";
+        }
+        c();
+    }
+
+    #! a cancel by owner that runs on the I/O thread refuses the submissions of the owner queued before it, as stale
+    #! ones (the canceled-owner tombstone); a restricted cancel does so for the submissions of its own application
+    ioThreadOwnerRefusalTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        string owner = getName("io-owner-refusal");
+        on_exit AsyncIoController::cancelByOwner(owner);
+        auto rq1 = a.callFunction("submit_own", owner, owner + "-1");
+        assertTrue(inlist(owner + "-1", AsyncIoController::getInfo().cache_keys));
+        auto rq2;
+        int count;
+        holdIoThread(sub () {
+            # the tenant's next submission of the owner is queued, then it cancels the owner on the I/O thread
+            rq2 = a.callFunction("submit_own", owner, owner + "-2");
+            count = call_function("dbg_async_io_cancel_owner_on_io_thread", owner, a.getProgramId(), HangGuard);
+        });
+        assertEq(1, count, "the cancel on the I/O thread cancels the tenant's operation");
+        # checked first, so that a submission wrongly accepted fails at once (it would wait for ever): getInfo() is
+        # answered after the commands queued before it
+        assertFalse(inlist(owner + "-2", AsyncIoController::getInfo().cache_keys),
+            "submission accepted, expected the canceled-owner refusal");
+        assertTrue(rq1.get(HangGuard).canceled, "the tenant's operation is canceled");
+        assertTrue(rq2.get(HangGuard).canceled, "the tenant's queued submission of the owner is refused");
+    }
+
+    #! a tenant's cancel by owner that runs on the I/O thread and cancels its own operation of the owner does not
+    #! refuse another tenant's submission of the same owner queued before it: the tombstone of a restricted cancel is
+    #! its application's (qore#7010)
+    ioThreadOwnerOtherAppTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        Program b = getTenant();
+        string owner = getName("io-owner-other-app");
+        on_exit AsyncIoController::cancelByOwner(owner);
+        auto a1 = a.callFunction("submit_own", owner, owner + "-a1");
+        auto b1 = b.callFunction("submit_own", owner, owner + "-b1");
+        auto a2;
+        int count;
+        holdIoThread(sub () {
+            # a's next submission of the owner is queued, then b cancels the owner on the I/O thread
+            a2 = a.callFunction("submit_own", owner, owner + "-a2");
+            count = call_function("dbg_async_io_cancel_owner_on_io_thread", owner, b.getProgramId(), HangGuard);
+        });
+        assertEq(1, count, "b's cancel cancels its own operation only");
+        assertTrue(b1.get(HangGuard).canceled, "b's operation is canceled");
+        list<string> ck = AsyncIoController::getInfo().cache_keys;
+        assertTrue(inlist(owner + "-a2", ck), "a's queued submission of the owner is not refused");
+        assertTrue(inlist(owner + "-a1", ck), "a's operation is not canceled");
+        assertEq(0, a1.size());
+        assertEq(0, a2.size());
+    }
+
+    #! a cancel by owner that an I/O thread processes as a queued command refuses a submission of the key of an
+    #! operation that it cancels, with another owner, that was pushed before the cancel was processed (after it was
+    #! requested), as a stale one (the canceled-key tombstone; the canceled-owner tombstone of a queued cancel refuses
+    #! only the submissions pushed before the cancel was requested)
+    ioThreadKeyRefusalTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the I/O thread is held with a test hook of a debug build");
+        }
+        Program a = getTenant();
+        string key = getName("io-key-refusal");
+        on_exit {
+            AsyncIoController::cancelByOwner(key + "-1");
+            AsyncIoController::cancelByOwner(key + "-2");
+        }
+        auto rq1 = a.callFunction("submit_own", key + "-1", key);
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
+        auto rq2;
+        holdIoThread(sub () {
+            # the tenant's cancel of the owner of its operation is queued (as an I/O thread requests it of another),
+            # then its next submission of the operation's key, with another owner
+            call_function("dbg_async_io_queue_cancel_owner", key + "-1", a.getProgramId());
+            rq2 = a.callFunction("submit_own", key + "-2", key);
+        });
+        # checked first, so that a submission wrongly accepted fails at once (it would wait for ever): getInfo() is
+        # answered after the commands queued before it
+        assertFalse(inlist(key, AsyncIoController::getInfo().cache_keys),
+            "submission accepted, expected the stale-key refusal");
+        assertTrue(rq1.get(HangGuard).canceled, "the tenant's operation is canceled");
+        assertTrue(rq2.get(HangGuard).canceled, "the tenant's queued submission of the key is refused");
+    }
+
+    #! the timer that a library module's initialization adds, also when a tenant loads the module first, has no
+    #! generation (0): it belongs to no application, and no sandboxed code can match the generation of its work, not
+    #! even later work of the tenant's thread that loaded the module (qore#7010); the tenant's own timer has one
+    libraryInitTimerTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the generation of a timer is read with a test hook of a debug build");
+        }
+        string out = runChild(InitTimerChildSource);
+        assertRegex("^init: 0\n", out, out);
+        assertRegex("\nown: True\n", out, out);
+        assertRegex("\ncanceled: True\n", out, out);
+    }
+
+    #! an operation that the completion of a tenant's operation submits (module code, with no Program of the tenant on
+    #! the stack) belongs to the tenant: the tenant cancels it, another tenant does not
+    callbackTest() {
+        Program tenant = getTenantModule();
+        Program other = getTenantModule();
+        string key = getName("tenant-chain");
+        on_exit {
+            AsyncIoController::cancelByOwner(key);
+            AsyncIoController::cancelByOwner(key + "-follow");
+        }
+        Queue submitted = tenant.callFunction("chain", key, key + "-follow");
+        assertTrue(submitted.get(HangGuard), "the completion submitted the follow-up operation");
+        assertFalse(other.callFunction("direct_key", key + "-follow"), "another tenant does not cancel it");
+        assertTrue(tenant.callFunction("direct_key", key + "-follow"), "the tenant cancels it");
+    }
+
+    #! the operation that a library's initialization submits in the callback of a tenant's operation belongs to no
+    #! tenant (N1)
+    callbackLibraryInitTest() {
+        string out = runChild(CallbackChildSource);
+        assertRegex("^loaded: True\n", out, out);
+        assertRegex("\ndirect: False\n", out, out);
+        assertRegex("\nwrapper: False\n", out, out);
+        assertRegex("\ntrusted: True\n", out, out);
+    }
+
+    #! a tenant's operation that module code submits through other module code belongs to the tenant: another
+    #! tenant that calls the same modules does not cancel it (N3)
+    moduleChainTest() {
+        Program tenant = getTenantChain();
+        Program other = getTenantChain();
+        string key = getName("tenant-module-chain");
+        auto rq = tenant.callFunction("chain_submit", key, key);
+        on_exit AsyncIoController::cancelByOwner(key);
+        assertFalse(other.callFunction("chain_cancel", key), "another tenant's cancel through the modules");
+        assertFalse(other.callFunction("direct_key", key), "another tenant's cancel");
+        assertEq(0, rq.size(), "the tenant's operation was not canceled");
+        assertTrue(tenant.callFunction("chain_cancel", key), "the tenant's cancel through the modules");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    #! the callback of an operation that the host submits with an object of a tenant's code runs for the tenant: it
+    #! does not cancel the host's operations, and the operation that it submits belongs to the tenant (N2)
+    tenantObjectTest() {
+        Program tenant = getTenant();
+        Program other = getTenant();
+        string key = getName("host-tenant-object");
+        EventNotifier hn();
+        auto host_rq = submitHost(key, key + "-host", hn);
+        on_exit {
+            AsyncIoController::cancelByOwner(key);
+            AsyncIoController::cancelByOwner(key + "-follow");
+        }
+        EventNotifier n();
+        n.notify();
+        Queue report();
+        object op = tenant.callFunction("make_reporting", n, key + "-host", key + "-follow", report);
+        AsyncIoController::submit(<SocketPollOperationInfo>{"sock": n, "spop": op, "owner": key, "key": key,
+            "to": HangGuard});
+        hash<auto> h = report.get(HangGuard);
+        assertEq({"cancel_host": False}, h, "the tenant's callback");
+        assertEq(0, host_rq.size(), "the host's operation was not canceled");
+        assertFalse(other.callFunction("cancel_key", key + "-follow"), "another tenant does not cancel it");
+        assertTrue(tenant.callFunction("cancel_key", key + "-follow"), "the tenant cancels its operation");
+    }
+
+    #! a submission of sandboxed code that runs for no known application takes the key of no other operation (N4)
+    unknownAppReplaceTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the rule is checked with a test hook of a debug build");
+        }
+        code takes = bool sub (bool sandboxed, int app_id, int other_app_id, bool same_object) {
+            return call_function("dbg_async_io_submit_takes_key_of_other", sandboxed, app_id, other_app_id,
+                same_object);
+        };
+        # no known application: -1 (none) and 0
+        foreach int unknown in ((-1, 0)) {
+            assertTrue(takes(True, unknown, -1, False), "an operation of no application: " + unknown);
+            assertTrue(takes(True, unknown, 0, False), "an operation of application 0: " + unknown);
+            assertTrue(takes(True, unknown, 5, False), "an operation of an application: " + unknown);
+            assertFalse(takes(True, unknown, -1, True), "its own operation object: " + unknown);
+        }
+        assertFalse(takes(True, 5, 5, False), "an operation of its own application");
+        assertTrue(takes(True, 5, 6, False), "an operation of another application");
+        assertFalse(takes(False, -1, 6, False), "trusted code");
+    }
+
+    #! the canceled result of a submission that is refused (from a thread that is not the I/O thread) runs in the
+    #! submitter's sandbox and for its application, as the result of a started operation does (N5)
+    refusedResultTest() {
+        # a tenant that has no network access
+        Program tenant = getTenantModule(False);
+        string key = getName("host-refused");
+        EventNotifier n();
+        auto rq = submitHost(key, key, n);
+        on_exit {
+            AsyncIoController::cancelByOwner(key);
+            AsyncIoController::cancelByOwner(key + "-follow");
+        }
+        # the tenant's submission meets the host's operation: there is one I/O thread, and the host's operation is in
+        # its cache (getInfo() is answered by the I/O thread after the commands sent before it)
+        hash<auto> info = AsyncIoController::getInfo();
+        assertEq(1, info.io_threads);
+        assertTrue(inlist(key, info.cache_keys), "the host's operation is in the cache");
+        Queue report = tenant.callFunction("reporting", key, key + "-follow");
+        hash<auto> h = report.get(HangGuard);
+        assertTrue(h.canceled, "the submission was refused");
+        assertFalse(h.sees_keys, "the module's callback runs in the tenant's sandbox");
+        assertEq("NETWORK-ACCESS-DENIED", h.connect_err, "the tenant's sandbox governs the module's callback");
+        assertEq(0, rq.size(), "the host's operation was not canceled");
+        assertTrue(tenant.callFunction("direct_key", key + "-follow"), "the callback's operation is the tenant's");
+    }
+
+    #! a submission that is not started (another code's key) ends the registration of its operation object: one left
+    #! behind would outlive the object, and the operation of an object later made at its address would be canceled
+    #! (qore#7167)
+    refusedRegistrationTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the registrations are counted with a test hook of a debug build");
+        }
+        Program tenant = getTenant();
+        string key = getName("host-registration");
+        EventNotifier n();
+        auto rq = submitHost(key, key, n);
+        on_exit {
+            AsyncIoController::cancelByOwner(key);
+            AsyncIoController::cancelByOwner(key + "-tenant");
+        }
+        # the host's operation is in the cache of the one I/O thread
+        assertTrue(inlist(key, AsyncIoController::getInfo().cache_keys));
+        int before = call_function("dbg_async_io_qop_registered_count");
+        # refused without replace_existing (qore#7108) and with it (another application's operation, qore#7010)
+        list<auto> r = tenant.callFunction("collide", key, 4, False) + tenant.callFunction("collide", key, 4, True);
+        foreach auto i in (r) {
+            assertTrue(i.get(HangGuard).canceled, "the submission is refused");
+        }
+        # the I/O thread has processed the refusals (getInfo() is answered after the commands sent before it)
+        AsyncIoController::getInfo();
+        assertEq(before, call_function("dbg_async_io_qop_registered_count"), "no registration is left behind");
+        assertEq(0, rq.size(), "the host's operation is still there");
+    }
+
+    #! the code of a thread that a module starts for a tenant acts for that tenant: another tenant does not cancel or
+    #! replace its operations, nor the host's, through the module's threads (H1)
+    moduleThreadTest() {
+        Program a = getTenantBg();
+        Program b = getTenantBg();
+        string key = getName("module-thread");
+        EventNotifier hn();
+        auto host_rq = submitHost(key + "-host", key + "-host", hn);
+        on_exit {
+            map AsyncIoController::cancelByOwner(key + $1), ("-host", "-hostmod", "-a", "-b");
+        }
+        # the host's operations: one of its own, and one that it submits through the module's thread
+        auto hostmod_rq = AioCancelBgLib::Lib::submitBg(key + "-hostmod");
+        assertEq(NT_OBJECT, hostmod_rq.typeCode(), "the host's submission through the module");
+        assertFalse(b.callFunction("cancel_bg", key + "-host"), "another tenant does not cancel the host's operation");
+        assertFalse(b.callFunction("cancel_bg", key + "-hostmod"),
+            "another tenant does not cancel the host's operation of the module's thread");
+        assertEq(0, host_rq.size());
+        assertEq(0, hostmod_rq.size());
+
+        # the tenant's operation, which the module's thread submits for it
+        auto a_rq = a.callFunction("submit_bg", key + "-a");
+        assertEq(NT_OBJECT, a_rq.typeCode(), "the tenant's submission");
+        assertFalse(b.callFunction("cancel_bg", key + "-a"), "another tenant's cancel by key");
+        assertEq(0, b.callFunction("cancel_owner_bg", key + "-a"), "another tenant's cancel by owner");
+        # another tenant's replacement is refused: its operation is not started, and its result is a canceled result
+        auto b_rq = b.callFunction("replace_bg", key + "-a");
+        assertEq(NT_OBJECT, b_rq.typeCode(), "another tenant's replacement");
+        assertTrue(b_rq.get(HangGuard).canceled, "another tenant's replacement is refused");
+        assertEq(0, a_rq.size(), "the tenant's operation was not canceled or replaced");
+        # the code of a thread that module code starts runs for no application (it can serve every caller of the
+        # module): the tenant does not cancel its own operation through the module's thread either (giving the
+        # application of a call to the thread that serves it is qore#6245); the host cancels it
+        assertFalse(a.callFunction("cancel_bg", key + "-a"), "the tenant's cancel through the module's thread");
+        assertEq(0, a_rq.size(), "the tenant's operation is still there");
+        assertTrue(AsyncIoController::cancelByKey(key + "-a"), "the host's cancel");
+        assertTrue(a_rq.get(HangGuard).canceled);
+    }
+
+    #! the operation of a listener that the host's server runs (the shape of an HTTP/3 listener's operation: the key
+    #! "<unique hash>:quic" and the owner "<unique hash>" of the listener's socket, submitted by module code in a thread
+    #! that it starts for trusted code) is not canceled by a sandboxed handler by its key or owner, directly or through
+    #! module code
+    listenerOperationTest() {
+        Program tenant = getTenantBg();
+        Socket listener();
+        string owner = listener.uniqueHash();
+        string key = owner + ":quic";
+        auto rq = AioCancelBgLib::Lib::submitBgFor(owner, key);
+        on_exit AsyncIoController::cancelByOwner(owner);
+        assertEq(NT_OBJECT, rq.typeCode(), "the listener's operation");
+        assertFalse(tenant.callFunction("cancel_bg", key), "by key through module code");
+        assertEq(0, tenant.callFunction("cancel_owner_bg", owner), "by owner through module code");
+        Program direct = getTenant();
+        assertFalse(direct.callFunction("cancel_key", key), "by key");
+        assertEq(0, direct.callFunction("cancel_owner", owner), "by owner");
+        assertEq(0, rq.size(), "the listener's operation was not canceled");
+        # the host cancels it
+        assertEq(1, AsyncIoController::cancelByOwner(owner));
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    #! a module's service thread, started during tenant a's call, serves every caller of the module: its timers and
+    #! operations belong to no application, so a does not cancel them and the host does (qore#6208)
+    serviceThreadTest() {
+        # tenants with a restriction that the module does not have, for which module code tags its timers
+        Program a = getTenantBg(PO_NO_LOCALE_CONTROL);
+        a.callFunction("start_service");
+        on_exit AioCancelBgLib::Lib::stopService();
+        string key = getName("service");
+        on_exit AsyncIoController::cancelByOwner(key);
+        int id = AioCancelBgLib::Lib::serviceAddTimer();
+        on_exit AsyncIoController::cancelTimer(id);
+        auto rq = AioCancelBgLib::Lib::serviceSubmit(key);
+        assertEq(NT_OBJECT, rq.typeCode(), "the service's operation");
+        assertFalse(a.callFunction("cancel_timer_call", id), "a does not cancel the service's timer");
+        assertFalse(a.callFunction("direct_key", key), "a does not cancel the service's operation");
+        assertEq(0, rq.size(), "the service's operation is still there");
+        assertTrue(AsyncIoController::cancelTimer(id), "the host cancels the service's timer");
+        assertTrue(AsyncIoController::cancelByKey(key), "the host cancels the service's operation");
+        assertTrue(rq.get(HangGuard).canceled);
+    }
+
+    #! a timer that the thread of a module adds for a tenant is that tenant's: another tenant's thread of the module
+    #! does not cancel it (L2)
+    moduleThreadTimerTest() {
+        # tenants with a restriction that the module does not have, for which the module's timers are tagged
+        Program a = getTenantBg(PO_NO_LOCALE_CONTROL);
+        Program b = getTenantBg(PO_NO_LOCALE_CONTROL);
+        int id = a.callFunction("add_timer_bg");
+        on_exit AsyncIoController::cancelTimer(id);
+        assertFalse(b.callFunction("cancel_timer_bg", id), "another tenant does not cancel the timer");
+        # the timer belongs to no application (the module's thread can serve every caller of the module): the tenant
+        # does not cancel it through another thread of the module either (qore#6245); the host cancels it
+        assertFalse(a.callFunction("cancel_timer_bg", id), "the tenant's cancel through another thread of the module");
+        assertTrue(AsyncIoController::cancelTimer(id), "the host's cancel");
+
+        # a thread that module code starts in another tenant's call after the thread that added a timer has ended (the
+        # module joins its threads, so the later thread can have its TID) does not cancel it
+        hash<auto> added = a.callFunction("add_timer_bg_tid");
+        on_exit AsyncIoController::cancelTimer(added.id);
+        assertTrue(thread_join(added.tid, -1), "the thread that added the timer has ended");
+        hash<auto> c = b.callFunction("cancel_timer_bg_tid", added.id);
+        assertFalse(c.result, sprintf("another tenant's later thread of the module (TID %d, the adder's %d)", c.tid,
+            added.tid));
+        # (Qore gives a background thread a TID that no thread had before until its TIDs wrap, so the later thread has
+        # the adder's TID only after a wrap; the check does not depend on it)
+        assertTrue(AsyncIoController::cancelTimer(added.id), "the host's cancel");
+    }
+
+    #! sandboxed code cancels only the timers of its own application by their IDs, which can be guessed: not the host's
+    #! nor another tenant's, whether that tenant added them directly or through module code (qore#7010)
+    tenantTimerTest() {
+        Program t1 = getTenant();
+        Program t2 = getTenant();
+        # tenants with a restriction that the module does not have, for which module code tags its timers
+        Program r1 = getTenantBg(PO_NO_LOCALE_CONTROL);
+        Program r2 = getTenantBg(PO_NO_LOCALE_CONTROL);
+        int host_id = AsyncIoController::addTimerDelay(1D, True);
+        on_exit AsyncIoController::cancelTimer(host_id);
+        int t1_id = t1.callFunction("add_timer");
+        on_exit AsyncIoController::cancelTimer(t1_id);
+        int r1_id = r1.callFunction("add_timer_call");
+        on_exit AsyncIoController::cancelTimer(r1_id);
+
+        assertFalse(t1.callFunction("cancel_timer", host_id), "a tenant does not cancel the host's timer");
+        assertFalse(t2.callFunction("cancel_timer", t1_id), "a tenant does not cancel another tenant's timer");
+        assertFalse(t1.callFunction("cancel_timer", r1_id),
+            "a tenant does not cancel the timer that module code added for another tenant");
+        assertFalse(r2.callFunction("cancel_timer_direct", r1_id),
+            "a tenant does not cancel another tenant's timer of module code directly");
+        assertFalse(r2.callFunction("cancel_timer_call", r1_id),
+            "a tenant does not cancel another tenant's timer of module code through module code");
+        assertFalse(r2.callFunction("cancel_timer_direct", host_id), "a tenant does not cancel the host's timer");
+
+        # each cancels its own
+        assertTrue(t1.callFunction("cancel_timer", t1_id), "the tenant cancels its own timer");
+        assertTrue(r1.callFunction("cancel_timer_call", r1_id),
+            "the tenant cancels the timer that module code added for it through module code");
+        assertTrue(AsyncIoController::cancelTimer(host_id), "the host cancels its own timer");
+    }
+
+    #! a tenant that only its SandboxManager restricts (no parse option of its own) cancels only its own timers,
+    #! directly, in a call of module code and in a thread that module code starts (qore#7010)
+    sandboxManagerTimerTest() {
+        Program s = getTenantBg();
+        Program r = getTenantBg(PO_NO_LOCALE_CONTROL);
+        Program t = getTenant();
+        int host_id = AsyncIoController::addTimerDelay(1D, True);
+        on_exit AsyncIoController::cancelTimer(host_id);
+        int r_id = r.callFunction("add_timer_call");
+        on_exit AsyncIoController::cancelTimer(r_id);
+        int t_id = t.callFunction("add_timer");
+        on_exit AsyncIoController::cancelTimer(t_id);
+        int s_id = s.callFunction("add_timer_call");
+        on_exit AsyncIoController::cancelTimer(s_id);
+
+        foreach hash<auto> i in ({"id": host_id, "whose": "the host's"}, {"id": r_id, "whose": "a restricted tenant's"},
+                {"id": t_id, "whose": "another tenant's"}) {
+            assertFalse(s.callFunction("cancel_timer_call", i.id), "through module code: " + i.whose);
+            assertFalse(s.callFunction("cancel_timer_bg", i.id), "through a thread of module code: " + i.whose);
+            assertFalse(s.callFunction("cancel_timer_direct", i.id), "directly: " + i.whose);
+        }
+        assertFalse(r.callFunction("cancel_timer_call", s_id), "another tenant does not cancel the tenant's timer");
+        assertFalse(t.callFunction("cancel_timer", s_id), "another tenant does not cancel the tenant's timer directly");
+
+        # the timer that module code added in its call is its own
+        assertTrue(s.callFunction("cancel_timer_call", s_id), "the tenant cancels its own timer");
+        assertTrue(AsyncIoController::cancelTimer(host_id), "the host cancels its own timer");
+        assertTrue(AsyncIoController::cancelTimer(r_id), "the host cancels a tenant's timer");
+        assertTrue(AsyncIoController::cancelTimer(t_id), "the host cancels a tenant's timer");
+    }
+
+    #! the threads that a module starts during the calls of two tenants submit tasks to the module's pool, whose one
+    #! worker runs them all: the task of one does not cancel the timer that the task of the other added, while a
+    #! thread's own tasks cancel each other's timers (qore#6208); the worker runs the work of each (qore#7010)
+    poolWorkerTimerTest() {
+        foreach int po in ((0, PO_NO_LOCALE_CONTROL)) {
+            Program a = getTenantBg(po);
+            Program b = getTenantBg(po);
+            hash<auto> added = a.callFunction("add_timer_pool_bg");
+            on_exit AsyncIoController::cancelTimer(added.id);
+            hash<auto> c = b.callFunction("cancel_timer_pool_bg", added.id);
+            assertEq(added.tid, c.tid, "the pool's one worker runs both tasks (po " + po + ")");
+            assertFalse(c.result, "another tenant's thread does not cancel the timer through the pool (po " + po + ")");
+            assertTrue(a.callFunction("add_cancel_timer_pool_bg"),
+                "a thread's own tasks of the pool cancel each other's timers (po " + po + ")");
+            assertTrue(AsyncIoController::cancelTimer(added.id), "the host cancels the timer (po " + po + ")");
+        }
+    }
+
+    #! the callbacks of the timers that the threads of a module add during the calls of two tenants run on the one
+    #! callback worker of the controller: the callback of one does not cancel the timer that the callback of the other
+    #! added, while the callbacks of one thread's timers cancel each other's (qore#7010)
+    /** The count of callback workers is set before the controller's first operation, so the check runs in a child
+        process
+    */
+    timerCallbackWorkerTest() {
+        string out = runChild(TimerCallbackChildSource);
+        foreach int po in ((0, PO_NO_LOCALE_CONTROL)) {
+            assertRegex(sprintf("\\b%d: same worker: True\n", po), out, out);
+            assertRegex(sprintf("\\b%d: other: False\n", po), out, out);
+            assertRegex(sprintf("\\b%d: own: True\n", po), out, out);
+            assertRegex(sprintf("\\b%d: host: True\n", po), out, out);
+        }
+    }
+
+    #! the host's code that runs in the callback of a tenant's operation (an object of the host's class that the
+    #! tenant submits) acts for the tenant, not for the host (M1)
+    hostCodeInTenantCallbackTest() {
+        Program tenant = getTenant();
+        string key = getName("host-in-tenant-callback");
+        EventNotifier hn();
+        auto host_rq = submitHost(key + "-host", key + "-host", hn);
+        on_exit {
+            AsyncIoController::cancelByOwner(key + "-host");
+            AsyncIoController::cancelByOwner(key);
+        }
+        EventNotifier n();
+        n.notify();
+        HostCancellingOperation op(n, key + "-host");
+        tenant.callFunction("submit_given", op, n, key);
+        assertFalse(op.report.get(HangGuard), "the host's code in the tenant's callback");
+        assertEq(0, host_rq.size(), "the host's operation was not canceled");
+    }
+
+    #! Returns a tenant that uses the module that acts in threads that it starts
+    private Program getTenantBg(int po = 0) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS | po);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantBgSource, "tenant");
+        return p;
+    }
+
+    #! runs the given code in a child process with the test's library modules in the process-wide module path
+    /** The modules must be in the process-wide module path for their initialization to be that of library code
+    */
+    private string runChild(string source) {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        TmpDir tmp("qore-asyncio-cancel-ownership-");
+        string child = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(source);
+        f.close();
+        string output = tmp.path + DirSep + "output.txt";
+        string cmd = sprintf("LD_LIBRARY_PATH='%s' DYLD_LIBRARY_PATH='%s' QORE_LIBDIR='%s' QORE_MODULE_DIR_ONLY=1 "
+            "QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1", libqore_dir, libqore_dir, libqore_dir,
+            get_script_dir() + DirSep + "aio-cancel-modules", qore_bin, child, output);
+        int rc = system(cmd);
+        string out = ReadOnlyFile::readTextFile(output);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    #! Returns a tenant that uses the chain of modules
+    private Program getTenantChain() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        p.parse(TenantChainSource, "tenant");
+        return p;
+    }
+
+    #! submits an operation of the host's
+    private auto submitHost(string owner, string key, EventNotifier n) {
+        return AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": hold(new WaitingOperation(n)),
+            "owner": owner,
+            "key": key,
+            "to": -1s,
+        });
+    }
+
+    #! Returns a tenant that uses the library modules
+    private Program getTenantModule(bool network = True) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(network);
+        p.setSandboxManager(sm);
+        p.parse(TenantModuleSource, "tenant");
+        return p;
+    }
+
+    #! Returns a tenant: a sandboxed Program
+    private Program getTenant() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! keeps an operation object of the host's for the life of the test, and returns it
+    private auto hold(auto o) {
+        AutoLock al(held_lock);
+        push held, o;
+        return o;
+    }
+
+    private string getName(string test) {
+        return sprintf("%s-%d-%d", test, getpid(), ++serial);
+    }
+}

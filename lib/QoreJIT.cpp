@@ -47,6 +47,10 @@
 #include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/Passes/PassBuilder.h>
+#ifdef DEBUG
+// qore_jit_dbg_pipeline_uninitialized_level()
+#include <llvm/IR/IRBuilder.h>
+#endif
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -843,7 +847,7 @@ bool qore_ir_fast_entry_param_is_private(
     if (ir_func.ir_only_locals.count(key)) {
         return true;
     }
-    if (q_env_is_set("QORE_DISABLE_UNUSED_FAST_ENTRY_PARAMS")) {
+    if (QORE_ENV_IS_SET("QORE_DISABLE_UNUSED_FAST_ENTRY_PARAMS")) {
         return false;
     }
 
@@ -931,7 +935,7 @@ std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(
 BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
         const AbstractQoreFunctionVariant* variant, bool never_returns_nothing,
         const QoreIRFunction* ir_func) {
-    if (!variant || !never_returns_nothing || q_env_is_set("QORE_DISABLE_NATIVE_FAST_RETURNS")) {
+    if (!variant || !never_returns_nothing || QORE_ENV_IS_SET("QORE_DISABLE_NATIVE_FAST_RETURNS")) {
         return BatchCalleeReturnKind::Boxed;
     }
     const AbstractFunctionSignature* sig
@@ -1087,13 +1091,68 @@ static void optimizeModule(llvm::Module& module, int opt_level, const std::atomi
     auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
     MPM.run(module, MAM);
     size_t pruned_calls = QoreIRToLLVM::pruneNoopDecrefs(module);
-    if (pruned_calls && q_env_is_set("QORE_IR_OPT_STATS")) {
+    if (pruned_calls && QORE_ENV_IS_SET("QORE_IR_OPT_STATS")) {
         fprintf(stderr, "IR-OPT-LLVM: pruned-noop-decrefs=%zu\n",
             pruned_calls);
     }
 
     delete tm;
 }
+
+#ifdef DEBUG
+// builds and runs the optimization pipeline of a module of one function with the calls of optimizeModule(), with an
+// optimization level whose bytes were never written, so that valgrind reports an uninitialised value that Qore's code
+// passes to LLVM (see examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of
+// examples/test/valgrind.supp must not hide it)
+int qore_jit_dbg_pipeline_uninitialized_level() {
+    // the native target, once for the process, as the JIT sets it up (the process may not have compiled code yet)
+    qore_llvm_initialize_targets();
+    llvm::LLVMContext ctx;
+    llvm::Module module("dbg", ctx);
+    llvm::Function* f = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getInt64Ty(ctx),
+        {llvm::Type::getInt64Ty(ctx)}, false), llvm::Function::ExternalLinkage, "f", module);
+    llvm::IRBuilder<> b(llvm::BasicBlock::Create(ctx, "entry", f));
+    b.CreateRet(b.CreateAdd(f->getArg(0), b.getInt64(1)));
+    std::string triple_str = llvm::sys::getDefaultTargetTriple();
+    llvm::Triple triple(triple_str);
+    std::string target_error;
+#if LLVM_VERSION_MAJOR >= 21
+    auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+#else
+    auto* target = llvm::TargetRegistry::lookupTarget(triple_str, target_error);
+#endif
+    if (!target) {
+        return -1;
+    }
+#if LLVM_VERSION_MAJOR >= 21
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#else
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple_str, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#endif
+    if (!tm) {
+        return -1;
+    }
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+    llvm::PassBuilder PB(tm.get(), llvm::PipelineTuningOptions(), std::nullopt, nullptr);
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    // the level is copied from memory that was never written, as a bug of Qore's code could pass one
+    std::unique_ptr<unsigned char[]> raw(new unsigned char[sizeof(llvm::OptimizationLevel)]);
+    llvm::OptimizationLevel level = llvm::OptimizationLevel::O2;
+    memcpy(static_cast<void*>(&level), raw.get(), sizeof(level));
+    auto MPM = PB.buildPerModuleDefaultPipeline(level);
+    MPM.run(module, MAM);
+    return 0;
+}
+#endif
 
 //! stops the background compile thread at process exit
 /** ~QoreJIT() used to do this; the singleton is immortal now, so the stop is registered from the
@@ -1504,7 +1563,7 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
     bool rc = compileFunctionInternal(func, error, deopt_counter);
     // synchronous compilations (top-level code with JIT execution) are traced like background ones, so that the
     // trace shows all native code
-    if (q_env_is_set("QORE_JIT_TIMING")) {
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         if (rc) {
             fprintf(stderr, "[JIT] compiled '%s' synchronously\n", func_name.c_str());
         } else {
@@ -1589,10 +1648,33 @@ static bool jit_check_handler_budget(const std::string& func_name, size_t handle
     error = "function '" + func_name + "' is too expensive for native compilation (about " + std::to_string(handler_cost)
         + " instructions to run its on_block_exit handlers; limit " + std::to_string(budget)
         + "); it remains on the IR tier";
-    if (q_env_is_set("QORE_JIT_TIMING")) {
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[JIT] skipped native compilation of '%s' (handler budget exceeded; about %zu instructions; "
             "limit %zu)\n", func_name.c_str(), handler_cost, budget);
     }
+    return false;
+}
+
+//! Returns false when the lowered \a module is larger than QoreJIT::getMaxJITLLVMInstructions() (qore#7174)
+/** Checked before the module is optimized, which with the code generation takes nearly all the time of a
+    compilation; the function stays on the IR tier.
+*/
+static bool jit_check_llvm_budget(const std::string& func_name, const llvm::Module& module, std::string& error) {
+    const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITLLVMInstructions());
+    if (!budget) {
+        return true;
+    }
+    const size_t count = module.getInstructionCount();
+    if (count <= budget) {
+        return true;
+    }
+    error = "function '" + func_name + "' is too large for native compilation (" + std::to_string(count)
+        + " LLVM instructions; limit " + std::to_string(budget) + "); it remains on the IR tier";
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[JIT] skipped native compilation of '%s' (LLVM budget exceeded; %zu LLVM instructions; "
+            "limit %zu)\n", func_name.c_str(), count, budget);
+    }
+    printd(2, "QoreJIT: %s\n", error.c_str());
     return false;
 }
 
@@ -1605,7 +1687,7 @@ static bool jit_check_size_budget(const std::string& func_name, size_t instructi
     error = "function '" + func_name + "' is too large for native compilation ("
         + std::to_string(instruction_count) + " IR instructions; limit " + std::to_string(budget)
         + "); it remains on the IR tier";
-    if (q_env_is_set("QORE_JIT_TIMING")) {
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[JIT] skipped native compilation of '%s' (compilation budget exceeded; "
             "%zu IR instructions; limit %zu)\n", func_name.c_str(), instruction_count, budget);
     }
@@ -1639,7 +1721,7 @@ int QoreJIT::adoptDefinedFunction(const std::string& name, const void* owner, st
         compiled_functions[name] = fn_ptr;
         addCodeOwnerLocked(name, owner);
     }
-    if (q_env_is_set("QORE_JIT_TIMING")) {
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] reused '%s' compiled in an earlier batch\n", name.c_str());
     }
     return 1;
@@ -2001,6 +2083,11 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // a Program.
     bgEndLowering();
 
+    // a function whose lowered code is too large to optimize and compile in a reasonable time stays on the IR tier
+    if (!jit_check_llvm_budget(func_name, *module, error)) {
+        return false;
+    }
+
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
@@ -2009,7 +2096,7 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
         llvm_dump << "=== LLVM IR for " << func_name << " ===\n";
         module->print(llvm_dump, nullptr);
@@ -2265,7 +2352,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         }
         batch_callee_map[callee.variant] = std::move(info);
     }
-    if (!q_env_is_set("QORE_DISABLE_JIT_INTERPROCEDURAL_SUMMARIES")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_JIT_INTERPROCEDURAL_SUMMARIES")) {
         if (!qore_ir_resolve_batch_function_summaries(
                 effect_functions, batch_callee_map)) {
             error = "cancelled during JIT batch function summary analysis";
@@ -2293,11 +2380,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     }
     // a direct call of a callee whose body does not observe the object and class context it runs in does not switch
     // to the callee's context
-    if (!q_env_is_set("QORE_DISABLE_JIT_CONTEXT_FREE_CALLS")) {
+    if (!QORE_ENV_IS_SET("QORE_DISABLE_JIT_CONTEXT_FREE_CALLS")) {
         qore_ir_resolve_context_free_fast_entries(effect_functions, batch_callee_map);
     }
     if (rewrite_root
-            && !q_env_is_set("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
+            && !QORE_ENV_IS_SET("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
         size_t projections = qore_ir_fuse_batch_aggregate_return_projections(
             *rewrite_root, batch_callee_map);
         // the projected values can show that a local that a store was taken to give a reference is given none
@@ -2306,7 +2393,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         }
         size_t late_specializations = 0;
         if (projections
-                && !q_env_is_set("QORE_DISABLE_JIT_LATE_SPECIALIZATION")) {
+                && !QORE_ENV_IS_SET("QORE_DISABLE_JIT_LATE_SPECIALIZATION")) {
             constexpr size_t max_rounds = 4;
             for (size_t round = 0; round < max_rounds; ++round) {
                 size_t changes = 0;
@@ -2324,7 +2411,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 }
             }
         }
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr,
                 "[BG-JIT] fused %zu aggregate-return projection group(s)"
                 " and applied %zu late specialization(s) in '%s'\n",
@@ -2468,7 +2555,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
-                if (q_env_is_set("QORE_JIT_TIMING")) {
+                if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                     fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
                         callee.ir_func->name.c_str(), error.c_str(), root_func_name.c_str());
                 }
@@ -2534,7 +2621,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
                 printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",
                     fast_name.c_str(), error.c_str());
-                if (q_env_is_set("QORE_JIT_TIMING")) {
+                if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                     fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
                         fast_name.c_str(), error.c_str(), root_func_name.c_str());
                 }
@@ -2575,6 +2662,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // work owns, and the names were copied above.
     bgEndLowering();
 
+    // a batch whose lowered code is too large to optimize and compile in a reasonable time stays on the IR tier
+    if (!jit_check_llvm_budget(root_func_name, *module, error)) {
+        return false;
+    }
+
     // Run LLVM optimization passes
     optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
     // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
@@ -2583,7 +2675,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
-    if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
+    if (QORE_ENV_IS_SET("QORE_DUMP_LLVM_IR")) {
         llvm::raw_fd_ostream llvm_dump(2, false);
         llvm_dump << "=== LLVM IR (batch) for " << root_func_name << " ===\n";
         module->print(llvm_dump, nullptr);
@@ -2825,6 +2917,36 @@ uint64_t QoreJIT::getMaxJITIRInstructions() {
     });
     const uint64_t budget = budget_setting.get();
     return budget;
+}
+
+uint64_t QoreJIT::getMaxJITLLVMInstructions() {
+    // function-local so the value cannot be read before its initializer runs, and is computed once
+    static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {
+        constexpr uint64_t default_max = 150000;
+        QoreEnvironmentValue env_holder("QORE_JIT_MAX_LLVM_INSTRUCTIONS");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            // no size limit was asked for with the IR budget: none for the lowered size either
+            return QoreJIT::getMaxJITIRInstructions() ? default_max : 0;
+        }
+        // only an unsigned decimal integer, as for QORE_JIT_MAX_IR_INSTRUCTIONS
+        const char* start = env;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r' || *start == '\v'
+                || *start == '\f') {
+            ++start;
+        }
+        if (*start < '0' || *start > '9') {
+            return default_max;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(start, &end, 10);
+        if (!end || end == start || *end) {
+            return default_max;
+        }
+        // 0 means "no limit"
+        return static_cast<uint64_t>(value);
+    });
+    return budget_setting.get();
 }
 
 void QoreJIT::setIRThreshold(uint64_t t) {
@@ -3280,7 +3402,7 @@ void QoreJIT::bgCompileThreadLoop() {
         std::string error;
         bool success;
 
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] compiling '%s' on background thread\n", saved_func_name.c_str());
         }
 
@@ -3321,7 +3443,7 @@ void QoreJIT::bgCompileThreadLoop() {
 #ifdef DEBUG
             ++dbg_bg_compile_discarded;
 #endif
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] discarded the compile of '%s': a Program that it refers to was deleted\n",
                     saved_func_name.c_str());
             }
@@ -3332,7 +3454,7 @@ void QoreJIT::bgCompileThreadLoop() {
         dbgBgHold(BgCompileHoldPoint::Install);
 
         if (!success) {
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", saved_func_name.c_str(), error.c_str());
             }
             if (work.uvb) {
@@ -3347,7 +3469,7 @@ void QoreJIT::bgCompileThreadLoop() {
         // Defensive check: only process if uvb is still valid (if jit_compile_state != 1, compilation was cancelled/failed)
         const UserVariantBase* root_uvb = work.uvb;
         if (!root_uvb) {
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] work item uvb is null, skipping\n");
             }
             finishBgCompileWork(work);
@@ -3358,7 +3480,7 @@ void QoreJIT::bgCompileThreadLoop() {
         int state = const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.load(std::memory_order_acquire);
         if (state != 1) {
             // Compilation was cancelled, failed, or already completed
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] compilation state is %d (not pending), skipping '%s'\n", state, saved_func_name.c_str());
             }
             finishBgCompileWork(work);
@@ -3368,7 +3490,7 @@ void QoreJIT::bgCompileThreadLoop() {
         // Lookup the compiled function
         JitFunctionPtr fn = lookupFunction(saved_func_name);
         if (!fn) {
-            if (q_env_is_set("QORE_JIT_TIMING")) {
+            if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", saved_func_name.c_str());
             }
             // Mark as failed
@@ -3397,7 +3519,7 @@ void QoreJIT::bgCompileThreadLoop() {
         mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);
         mutable_uvb->current_tier.store(UserVariantBase::TIER_JIT, std::memory_order_release);
 
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] compiled '%s' and promoted to JIT tier\n", saved_func_name.c_str());
         }
 
@@ -3414,7 +3536,7 @@ void QoreJIT::bgCompileThreadLoop() {
                     if (callee_uvb) {
                         UserVariantBase* mutable_callee = const_cast<UserVariantBase*>(callee_uvb);
                         mutable_callee->registerPrecompiledFunction(callee_fn);
-                        if (q_env_is_set("QORE_JIT_TIMING")) {
+                        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
                             fprintf(stderr, "[BG-JIT] batch-promoted callee '%s' to JIT tier\n",
                                     saved_callee_names[i].c_str());
                         }
@@ -3579,7 +3701,7 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
     }
     bg_queue_cv.notify_one();
 
-    if (q_env_is_set("QORE_JIT_TIMING")) {
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] enqueued compilation of '%s'\n", ir_func->name.c_str());
     }
 
@@ -3706,7 +3828,7 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
         }
     }
     if (detached.jit) {
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] detached an in-progress compile from a Program being deleted\n");
         }
         // released here, while this Program exists, as the compile thread released them before it finished
@@ -3762,7 +3884,7 @@ void QoreJIT::stopBackgroundCompiler() {
         }
     }
     if (detached.jit) {
-        if (q_env_is_set("QORE_JIT_TIMING")) {
+        if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] detached an in-progress compile at shutdown\n");
         }
         releaseDetachedRefs(detached);
@@ -3788,7 +3910,7 @@ void QoreJIT::stopBackgroundCompiler() {
         cancelQueuedBgCompileWork(work);
         ++cancelled_count;
     }
-    if (cancelled_count && q_env_is_set("QORE_JIT_TIMING")) {
+    if (cancelled_count && QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] cancelled %zu pending compilation%s at shutdown\n",
             cancelled_count, cancelled_count == 1 ? "" : "s");
     }
@@ -3860,7 +3982,7 @@ void QoreJIT::shutdown() {
     // uses the LLJIT's ExecutionSession, which cannot be destroyed under it: it is waited for first
     bool waited = finishDetachedCompile();
     releaseEngine();
-    if (waited && q_env_is_set("QORE_JIT_TIMING")) {
+    if (waited && QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended\n");
     }
 }
@@ -3877,7 +3999,7 @@ bool QoreJIT::finishDetachedCompile() {
     dbgReleaseBgCompileHolds();
 #endif
     joinAbandonedCompileThread();
-    if (q_env_is_set("QORE_JIT_TIMING")) {
+    if (QORE_ENV_IS_SET("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] waited for the abandoned compile in qore_cleanup()\n");
     }
     return true;

@@ -790,6 +790,7 @@ public class AppExternalIoTest inherits QUnit::Test {
     #! Sets a process environment variable until restoreEnv() is called
     private setEnv(string var, *string value) {
         if (!saved_env.hasKey(var)) {
+            # live-provider-optin: saves, sets and restores QORE_DATA_PROVIDERS and the fixture module variable of the test
             saved_env{var} = getenv(var);
         }
         if (exists value) {

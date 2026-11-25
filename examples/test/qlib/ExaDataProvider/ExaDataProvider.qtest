@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -30,9 +31,10 @@ public class ExaDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("ExaDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.EXA_CONNECTION;
+        conn_name = LiveProvider::get("exa", "EXA_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("the manifest agrees with the pinned schema", \schemaTest());
         addTestCase("action presentation", \actionPresentationTest());
 
@@ -50,6 +52,24 @@ public class ExaDataProviderTest inherits QUnit::Test {
         printOption("-c,--connection=ARG",
             "set the Exa connection name; without it (and without the EXA_CONNECTION environment "
             "variable) the live tests are skipped", OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("search", "answer", "contents", "find-similar",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Exa", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("create-agent-run", "create-batch", "trigger-monitor",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("Exa", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {
@@ -152,6 +172,7 @@ public class ExaDataProviderTest inherits QUnit::Test {
         would reject.
     */
     private livePingTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Exa connection ping failed: %s", ping.info ?? "no info"));
@@ -166,6 +187,7 @@ public class ExaDataProviderTest inherits QUnit::Test {
 
     #! Searches, answers a question and fetches a page
     private liveSearchTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractDataProvider prov = get_connection(conn_name).getDataProvider();
 
         auto r = prov.getChildProviderEx("search").doRequest({
@@ -193,6 +215,7 @@ public class ExaDataProviderTest inherits QUnit::Test {
 
     #! Reads the collections and fills the dropdowns from them
     private liveReadTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractDataProvider prov = get_connection(conn_name).getDataProvider();
         # an empty account is the normal case here; what is being checked is that the listing resolves
         # and answers the envelope every collection in this API uses

@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -162,9 +163,10 @@ public class MistralDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.MISTRAL_CONNECTION;
+        conn_name = LiveProvider::get("mistral", "MISTRAL_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + 164 actions registered", \registrationTest());
+        addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
         addTestCase("root provider lists 164 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
@@ -209,6 +211,24 @@ public class MistralDataProviderTest inherits QUnit::Test {
             "set the Mistral AI connection name; without it (and "
             "without the MISTRAL_CONNECTION env var) the live test is skipped",
             OptionColumn);
+    }
+
+    #! the POST operations that the vendored API description documents as pure queries, validations,
+    #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
+    private readOnlyActionsTest() {
+        foreach string name in (("chat-completion", "complete-code", "create-embeddings", "moderate-text", "moderate-chat", "ocr", "classify-text", "classify-chat", "transcribe-audio", "generate-speech", "query-workflow-execution", "search-logs", "search-traces", "aggregate-traces", "search-spans", "aggregate-spans", "search-span-evaluations", "search-latest-span-evaluations", "aggregate-span-evaluations", "search-pipeline-results",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("MistralAi", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # operations that create, change or start something on the server still declare a change
+        foreach string name in (("create-conversation", "append-conversation", "signal-workflow-execution", "create-batch-job",)) {
+            hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppActionEx("MistralAi", name);
+            assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     private registrationTest() {
@@ -681,6 +701,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         Cost: ~$0.0001 per run (capped via max_tokens=16).
     */
     private liveMistralTest() {
+        # live-provider-optin: the connection name comes from LiveProvider
         AbstractConnection conn = get_connection(conn_name);
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Mistral connection ping failed: %s",

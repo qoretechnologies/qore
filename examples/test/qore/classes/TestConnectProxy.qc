@@ -25,9 +25,14 @@ class TestConnectProxy {
         *SSLPrivateKey key;
         #! the addresses of target host names that cannot be resolved, such as a name in a test certificate
         *hash<string, string> host_map;
+        bool request_client_certificate;
         bool quit;
         Counter threads();
         Mutex m();
+        #! the data sent in answer to a CONNECT request, one send() each; see setConnectResponse()
+        list<string> connect_response = ("HTTP/1.1 200 Connection established\r\n\r\n",);
+        #! True if the tunnel is made after the response to CONNECT
+        bool connect_tunnel = True;
     }
 
     #! Creates the proxy and starts listening on a free port of 127.0.0.1
@@ -35,12 +40,15 @@ class TestConnectProxy {
         @param cert the certificate of an HTTPS proxy; clients then connect to the proxy with TLS
         @param key the private key of \a cert
         @param host_map the addresses to connect to for target host names, such as a name in a test certificate
+        @param request_client_certificate request an optional client certificate and record its presence
     */
-    constructor(*string required_auth, *SSLCertificate cert, *SSLPrivateKey key, *hash<string, string> host_map) {
+    constructor(*string required_auth, *SSLCertificate cert, *SSLPrivateKey key, *hash<string, string> host_map,
+            bool request_client_certificate = False) {
         self.required_auth = required_auth;
         self.cert = cert;
         self.key = key;
         self.host_map = host_map;
+        self.request_client_certificate = request_client_certificate;
         listener.bindINET("127.0.0.1", "0", True);
         listener.listen();
         port = listener.getSocketInfo().port;
@@ -56,6 +64,18 @@ class TestConnectProxy {
     #! Returns True while the proxy's listening socket is open (until shutdown())
     bool isListening() {
         return listener.isOpen();
+    }
+
+    #! Sets the answer to the CONNECT requests received from now on
+    /** @param response the data sent, each string with a send() of its own (ex: interim responses before the final
+        one)
+        @param tunnel True if the tunnel to the target is made after the response; False if the connection is closed
+        after it
+    */
+    setConnectResponse(list<string> response, bool tunnel) {
+        AutoLock al(m);
+        connect_response = response;
+        connect_tunnel = tunnel;
     }
 
     #! Returns a copy of the requests received
@@ -128,6 +148,11 @@ class TestConnectProxy {
             try {
                 s.setCertificate(cert);
                 s.setPrivateKey(key);
+                if (request_client_certificate) {
+                    s.setSslVerifyMode(SSL_VERIFY_PEER);
+                    s.acceptAllCertificates();
+                    s.captureRemoteCertificates();
+                }
                 s.upgradeServerToSSL(10s);
             } catch (hash<ExceptionInfo> ex) {
                 # the client failed the TLS handshake
@@ -144,13 +169,17 @@ class TestConnectProxy {
         if (!req) {
             return;
         }
+        hash<auto> entry = {
+            "line": req.line,
+            "proxy-authorization": req.hdr."proxy-authorization",
+            "ssl": s.isSecure(),
+        };
+        if (request_client_certificate) {
+            entry.client_cert_present = exists s.getRemoteCertificate();
+        }
         {
             AutoLock al(m);
-            requests += {
-                "line": req.line,
-                "proxy-authorization": req.hdr."proxy-authorization",
-                "ssl": s.isSecure(),
-            };
+            requests += entry;
         }
         if (required_auth && req.hdr."proxy-authorization" != required_auth) {
             s.send("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"test\"\r\n"
@@ -159,9 +188,24 @@ class TestConnectProxy {
         }
         *list<*string> m = (req.line =~ x/^CONNECT ([^:]+):([0-9]+) /);
         if (m) {
+            list<string> response;
+            bool tunnel;
+            {
+                AutoLock al(self.m);
+                response = connect_response;
+                tunnel = connect_tunnel;
+            }
+            if (!tunnel) {
+                try {
+                    map s.send($1), response;
+                } catch (hash<ExceptionInfo> ex) {
+                    # the client closed the connection
+                }
+                return;
+            }
             Socket target();
             target.connectINET(host_map{m[0]} ?? m[0], m[1].toInt(), 5s);
-            s.send("HTTP/1.1 200 Connection established\r\n\r\n");
+            map s.send($1), response;
             relay(s, target);
             return;
         }

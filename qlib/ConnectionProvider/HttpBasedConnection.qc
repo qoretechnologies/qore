@@ -448,7 +448,8 @@ public class HttpConnectPollOperation inherits HttpClientIoPollOperation {
         @throw HTTP-CLIENT-URL-ERROR the URL has no host or an unsupported scheme
     */
     constructor(string url, *hash<auto> http_opts, *Logger::LoggerInterface logger)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger), url, "GET",
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, url), url,
+                "GET",
                 NOTHING, NOTHING, <HttpClientIoPollOptions>{
                     "goal": "connect",
                     "connect_only": True,
@@ -510,7 +511,7 @@ public class HttpPingPollOperation inherits HttpClientIoPollOperation {
     constructor(string base_url, string method, string path, *hash<auto> http_opts, *hash<auto> headers, auto body,
             *Logger::LoggerInterface logger, string err_code = "HTTP-PING-ERROR",
             string log_prefix = "HttpConnection")
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger),
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
                 HttpClientIoPollOperation::getRequestUrl(base_url, path ?? "/"), method ?? "GET",
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts, headers),
                 HttpClientIoPollOperation::getRequestBody(method ?? "GET", body),
@@ -565,7 +566,7 @@ public class HttpRequestPollOperation inherits HttpClientIoPollOperation {
     */
     constructor(string base_url, string method, string path, auto body, *hash<auto> http_opts,
             *hash<auto> headers, *Logger::LoggerInterface logger)
-            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger),
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger, base_url),
                 HttpClientIoPollOperation::getRequestUrl(base_url, path), method,
                 HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts, headers),
                 HttpClientIoPollOperation::getRequestBody(method, body),
@@ -581,6 +582,11 @@ public class HttpRequestPollOperation inherits HttpClientIoPollOperation {
 /** Example of the usage is in \c RestConnection where the scheme \c rest:// is internally used as \c http://
 */
 public class HttpBasedConnection inherits AbstractConnectionWithInfo {
+    #! The connection's clients connect to a network host (qore#6981)
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     #! Creates the connection object
     /** @param name the name of the connection
         @param desc connection description
@@ -654,6 +660,22 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         }
         object client = getPollImpl();
         if (client.hasCallableMethod("startPollConnect")) {
+            # the synchronous client connects outside get() and getAsync(): code restricted from NETWORK may connect
+            # only to the target of a connection that was lent to it (qore#7262), checked before connecting
+            if (client.hasCallableMethod("getURL")) {
+                # the target only (scheme, host and port) of a builtin client: its credentials and path, which the
+                # calling code can set, are not given to the check (qore#7236)
+                if (client instanceof Qore::HTTPClient) {
+                    checkLentNetworkTarget(cast<Qore::HTTPClient>(client).getURL(UC_TARGET),
+                        cast<Qore::HTTPClient>(client).getProxyURL(UC_TARGET));
+                } else {
+                    checkLentNetworkTarget(client.getURL(), client.hasCallableMethod("getProxyURL")
+                        ? client.getProxyURL() : NOTHING);
+                }
+            } else if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+                throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
+                    "functional domain, and the target of the connection's client cannot be checked", name);
+            }
             return client.startPollConnect();
         }
         # the connection's client object does not support the polling API
@@ -684,6 +706,45 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
             *hash<auto> headers, *Logger::LoggerInterface logger) {
         return new HttpRequestPollOperation(real_url, method, path, body, getPingHttpOpts(),
             getPingHeaders() + headers, logger);
+    }
+
+    #! Returns True if the client that get() creates is bound to the connection's creator (qore#7262)
+    /** A client that creates its connections with the connection manager of HttpClientIo takes the creator's proof
+        (see @ref HttpClientIo::HttpClientCreatorProof "HttpClientCreatorProof"), and a builtin client that the class
+        checks before it connects cannot be used by code restricted from the \c NETWORK domain; a synchronous client
+        of Qore code (a subclass of @ref Qore::HTTPClient "HTTPClient" such as @ref RestClient::RestClient
+        "RestClient") makes its requests for any caller from targets that the caller can change, so it is not given to
+        restricted code (see checkLentClientTarget()).  This implementation returns False.
+
+        @since %ConnectionProvider 3.1
+    */
+    private bool hasBoundClient() {
+        return False;
+    }
+
+    #! Checks the client that get() or getPollImpl() creates for code restricted from NETWORK (qore#7262)
+    /** A connection whose client is not bound to its creator (see hasBoundClient()) gives no synchronous client to
+        restricted code (its async client is bound, if it is, see @ref sandbox_lent_connections); otherwise the
+        connection's real URL and the real URL of its
+        \c url member, which restricted code that was lent the connection can change, must be the target that the
+        connection's creator gave, and its \c proxy option its proxy
+
+        @throw PERMISSION-DENIED the client is not bound to the creator, or the target or the proxy is not the one that
+        the connection's creator gave
+    */
+    private checkLentClientTarget() {
+        if (!hasBoundClient()) {
+            throw "PERMISSION-DENIED", sprintf("connection %y: the calling code is restricted from the NETWORK "
+                "functional domain, and the connection's synchronous client is not bound to the target of the code "
+                "that created the connection", name);
+        }
+        # the configured URLs and proxy are checked by their targets only (scheme, host and port, without user
+        # information), as the client parses them (qore#7236)
+        *string proxy = opts.proxy.val() ? getLentTargetUrl(opts.proxy) : NOTHING;
+        checkLentNetworkTarget(getLentTargetUrl(real_url ?? url), proxy);
+        if (url.val() && url != real_url) {
+            checkLentNetworkTarget(getLentTargetUrl(getRealUrl(url, getConnectionSchemeInfo(), getType())), proxy);
+        }
     }
 
     #! Called by the constructor to set the real URL

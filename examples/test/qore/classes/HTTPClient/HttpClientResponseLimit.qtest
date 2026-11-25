@@ -429,10 +429,10 @@ class HttpClientResponseLimitTest inherits QUnit::Test {
 
     # drives a poll operation on this thread and returns its output
     private static auto drive(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + 30000000;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (microseconds(deadline - clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete (state %y)", op.getGoal(),
@@ -469,7 +469,7 @@ class HttpClientResponseLimitTest inherits QUnit::Test {
         # over TLS, the poll API negotiates the protocol of a new connection asynchronously; the concrete
         # connection gets the limit too.  The body is not compressed, so only the limit of the connection applies.
         hc = new HTTPClient({
-            "url": "https://localhost:" + tls_port,
+            "url": "https://127.0.0.1:" + tls_port,
             "ssl_verify_cert": False,
             "timeout": 30s,
             "max_response_body_size": Limit,
@@ -548,7 +548,7 @@ class HttpClientResponseLimitTest inherits QUnit::Test {
     # returns a client for the TLS listener with the given HTTP version, or skips the test if it is not negotiated
     private HTTPClient getTlsClient(string version, string expected) {
         HTTPClient hc({
-            "url": "https://localhost:" + tls_port,
+            "url": "https://127.0.0.1:" + tls_port,
             "ssl_verify_cert": False,
             "timeout": 30s,
             "http_version": version,

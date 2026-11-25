@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires AwsTextractRestClient
 %requires HttpServer
 %requires HttpServerUtil
@@ -68,7 +69,7 @@ public class AwsTextractRestClientTest inherits QUnit::Test {
         addTestCase("sync async and copies sign exact JSON bytes", \wireTest());
         addTestCase("ping rejects invalid credentials and malformed success", \pingTest());
         addTestCase("environment region and partition defaults", \environmentTest());
-        if (getenv("AWS_TEXTRACT_LIVE")) {
+        if (LiveProvider::get("aws", "AWS_TEXTRACT_LIVE")) {
             addTestCase("live authenticated and invalid-credential ping", \livePingTest());
         }
         server = new HttpServer(<HttpServerOptionInfo>{
@@ -155,7 +156,7 @@ public class AwsTextractRestClientTest inherits QUnit::Test {
     }
 
     private environmentTest() {
-        *string region = getenv("AWS_REGION");
+        *string region = LiveProvider::get("aws", "AWS_REGION");
         on_exit region == NOTHING ? unsetenv("AWS_REGION") : setenv("AWS_REGION", region);
         setenv("AWS_REGION", "eu-central-1");
         assertEq("https://textract.eu-central-1.amazonaws.com", applyTextractDefaults({}).url);

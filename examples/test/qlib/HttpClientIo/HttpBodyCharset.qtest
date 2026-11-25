@@ -328,11 +328,11 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     }
 
     private string getUrl() {
-        return "http://localhost:" + port;
+        return "http://127.0.0.1:" + port;
     }
 
     private string getTlsUrl() {
-        return "https://localhost:" + tls_port;
+        return "https://127.0.0.1:" + tls_port;
     }
 
     private HTTPClient getHttpClient(string url, *hash<auto> opts) {
@@ -429,12 +429,12 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         HTTPClient hc = getHttpClient(getUrl(), {"http_version": "1.1"});
         checkAll(auto sub (string path) {
             AbstractPollOperation op = hc.startPollSendRecv("GET", path);
-            date deadline = now_us() + 30s;
+            date deadline = microseconds(clock_get_monotonic_us()) + 30s;
             while (*hash<SocketPollInfo> info = op.continuePoll()) {
-                if (now_us() > deadline) {
+                if (microseconds(clock_get_monotonic_us()) > deadline) {
                     throw "TIMEOUT", sprintf("GET %s did not complete", path);
                 }
-                Socket::poll((info,), deadline - now_us());
+                Socket::poll((info,), deadline - microseconds(clock_get_monotonic_us()));
             }
             assertTrue(op.goalReached());
             return op.getOutput()."response-body";

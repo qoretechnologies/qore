@@ -34,6 +34,19 @@
 #include "QC_LoggerLevel.h"
 #include "QC_LoggerEvent.h"
 
+// the default implementation of LoggerInterface::logPreformatted(): logArgs() with the format "%s" and the message as
+// its only argument, so that the message is logged as it is (qore#3420)
+static void logger_interface_log_preformatted(QoreObject* self, QoreLoggerInterface* i, QoreValue level,
+        const QoreStringNode* message, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> fmt_args(new QoreListNode(autoTypeInfo), xsink);
+    fmt_args->push(message->stringRefSelf(), xsink);
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(level, xsink);
+    args->push(new QoreStringNode("%s"), xsink);
+    args->push(fmt_args.release(), xsink);
+    ValueHolder v(self->evalMethod(*i->logArgs, *args, xsink), xsink);
+}
+
 static QoreHashNode* LoggerInterface_serializer(const QoreObject& self, const QoreLoggerInterface& level,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
@@ -155,17 +168,72 @@ abstract LoggerInterface::debug(string message, ...);
     are passed to the @ref Qore::Logger::LoggerEvent object. If the last parameter is an
     @ref Qore::ExceptionInfo "ExceptionInfo" typed hash, then it is considered "throwable" information
 
-    @note This method is not abstract in order to not break existing code; by default it logs the message with the
-    \c DEBUG level; reimplement in subclasses to implement proper \c DETAIL logging
+    @note This method is not abstract in order to not break existing code; by default it calls \c logArgs() with the
+    \c DETAIL level, the message and the format arguments as one list; reimplement in subclasses to implement other
+    \c DETAIL logging
 
     @see @ref log()
 */
 LoggerInterface::detail(string message, ...) {
-    (void)message;
+    // logArgs(int level, string message, *softlist<auto> format_args): the format arguments are one list (qore#7197)
     ReferenceHolder<QoreListNode> new_args(new QoreListNode(autoTypeInfo), xsink);
     new_args->push(QLL_DETAIL, xsink);
-    new_args->merge(args, xsink);
+    new_args->push(message->stringRefSelf(), xsink);
+    if (args && args->size() > 1) {
+        new_args->push(args->copyListFrom(1), xsink);
+    }
     ValueHolder v(self->evalMethod(*i->logArgs, *new_args, xsink), xsink);
+}
+
+//! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+/**
+    log() and logArgs() use the message as a format for @ref Qore::vsprintf() "vsprintf()", so that a message with
+    format characters, such as one that is formatted already, would lose them; this method logs it as it is.
+
+    @param level the logging level
+    @param message the message, which is logged as it is
+
+    @note This method is not abstract in order to not break existing code; by default it calls logArgs() with the
+    format \c "%s" and the message as its only argument; reimplement it in subclasses as needed
+
+    @since Qore 3.0
+*/
+LoggerInterface::logPreformatted(Qore::Logger::LoggerLevel level, string message) {
+    logger_interface_log_preformatted(self, i, QoreValue(level->refSelf()), message, xsink);
+}
+
+//! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+/**
+    log() and logArgs() use the message as a format for @ref Qore::vsprintf() "vsprintf()", so that a message with
+    format characters, such as one that is formatted already, would lose them; this method logs it as it is.
+
+    @param level the logging level
+    @param message the message, which is logged as it is
+
+    @note This method is not abstract in order to not break existing code; by default it calls logArgs() with the
+    format \c "%s" and the message as its only argument; reimplement it in subclasses as needed
+
+    @since Qore 3.0
+*/
+LoggerInterface::logPreformatted(int level, string message) {
+    logger_interface_log_preformatted(self, i, level, message, xsink);
+}
+
+//! Logs a message as it is with the given logging level: the message is not a format, and it has no arguments
+/**
+    log() and logArgs() use the message as a format for @ref Qore::vsprintf() "vsprintf()", so that a message with
+    format characters, such as one that is formatted already, would lose them; this method logs it as it is.
+
+    @param level the logging level
+    @param message the message, which is logged as it is
+
+    @note This method is not abstract in order to not break existing code; by default it calls logArgs() with the
+    format \c "%s" and the message as its only argument; reimplement it in subclasses as needed
+
+    @since Qore 3.0
+*/
+LoggerInterface::logPreformatted(string level, string message) {
+    logger_interface_log_preformatted(self, i, QoreValue(level->stringRefSelf()), message, xsink);
 }
 
 //! Logs a message object with the INFO level

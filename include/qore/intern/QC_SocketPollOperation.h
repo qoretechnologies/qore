@@ -43,6 +43,8 @@
 #include "qore/OutputStream.h"
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreIoClassesOps.h"
+#include "qore/intern/QoreLastAttemptPollOperation.h"
 
 class QoreEventNotifier;
 
@@ -56,6 +58,27 @@ class QoreEventNotifier;
 //! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
 //! this must be increased to handle coalesced datagrams (e.g., 64KB for GRO).
 constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
+
+//! Creates the target TLS handshake of an HTTP operation, using credentials private to that operation.
+DLLLOCAL SocketUpgradeClientSslPollOperation* qore_http_client_ssl_upgrade(ExceptionSink* xsink,
+        QoreSocketObject* sock, SslUpgradeMode mode, QoreSSLCertificate* certificate, QoreSSLPrivateKey* private_key,
+        int64 credential_connection_id);
+
+//! Non-blocking reader of the HTTP header of a response, as an HTTP client reads it (qore#7485)
+/** The first line of the header must be a valid status line (RFC 9112 section 4), whatever it starts with
+    (qore_socket_private::checkHttpStatusLine()); SocketReadHttpHeaderPollOperation reads a header as a response only if
+    it starts with \c "HTTP/", and as a request if not.
+
+    The class is the mark of a response read: SocketReadHttpHeaderPollOperation::continuePoll() checks for it, so that
+    the layout of the public class does not change (design/module-api-version.md).
+*/
+class DLLLOCAL SocketReadHttpResponseHeaderPollOperation final : public SocketReadHttpHeaderPollOperation {
+public:
+    //! Creates the operation; see SocketReadHttpHeaderPollOperation
+    DLLLOCAL SocketReadHttpResponseHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
+            : SocketReadHttpHeaderPollOperation(xsink, sock) {
+    }
+};
 
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -441,7 +464,7 @@ constexpr int SPS_ACCEPTING = 1;
 constexpr int SPS_ACCEPTING_SSL = 2;
 constexpr int SPS_ACCEPTED = 3;
 
-class SocketAcceptPollSocketOperationBase : public SocketPollOperationBase {
+class SocketAcceptPollSocketOperationBase : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     DLLLOCAL SocketAcceptPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
     }
@@ -490,7 +513,7 @@ protected:
     }
 };
 
-class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase {
+class SocketAcceptPollOperation : public SocketAcceptPollSocketOperationBase, public QoreLastAttemptPollOperation {
 public:
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
     DLLLOCAL SocketAcceptPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool ssl);
@@ -554,6 +577,14 @@ public:
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
     DLLLOCAL virtual QoreValue getOutput() const override;
+
+    //! A plain TCP accept completes in one step: its step accepts a connection in the backlog or asks to wait again
+    /** An accept that negotiates TLS does not opt in: its step would accept the connection and start the TLS
+        handshake, and the timeout would then discard the accepted connection (qore#7480)
+    */
+    DLLLOCAL virtual bool completesInLastAttempt() const override {
+        return sgoal == SPG_ACCEPT;
+    }
 
     DLLLOCAL bool timeoutBeforeAccept() const {
         return aborted_before_accept || state == SPS_ACCEPTING;
@@ -1024,6 +1055,9 @@ private:
 */
 class SocketSendAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
+    //! Returns bytes delivered in the current response, or -1 after the send phase.
+    DLLLOCAL int64 getResponseSendProgress(bool& waiting_for_socket) const;
+
     DLLLOCAL SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* response_data,
         QoreSocketObject* sock, int64 idle_timeout_ms);
 
@@ -1073,7 +1107,8 @@ private:
 
     // Idle phase: timeout deadline in milliseconds on the monotonic clock (q_get_monotonic_us() / 1000, #6150)
     int64 idle_timeout_ms;
-    // the idle timeout in milliseconds, for the deadline of the next request after one answered by a fast route
+    // the idle timeout (TTL) in milliseconds: enterIdle() restarts the deadline from it when a response has been sent,
+    // a fast route's answer included (qore#7488)
     int64 idle_ttl_ms = 0;
 
     // the response of a fast route that is being sent; see serveFastRoute()
@@ -1428,7 +1463,7 @@ private:
 
     @since %Qore 3.0
 */
-class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase {
+class SocketWriteOutputStreamPollOperation : public SocketPollOperationBase, public SocketPollOperationMembers {
 public:
     DLLLOCAL SocketWriteOutputStreamPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         OutputStream* output_stream, QoreObject* output_stream_obj, BinaryNode* data, int timeout_ms);
@@ -1507,6 +1542,9 @@ private:
 */
 class SocketSendStreamAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
+    //! Returns bytes delivered in the current response, or -1 after the send phase.
+    DLLLOCAL int64 getResponseSendProgress(bool& waiting_for_socket) const;
+
     DLLLOCAL SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* header_data,
         QoreSocketObject* sock, InputStream* input_stream, QoreObject* input_stream_obj,
         int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked = false);
@@ -1584,7 +1622,11 @@ private:
 
     //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
     DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
+    //! the idle deadline on the monotonic clock in ms: given to the constructor, and restarted when the response has
+    //! been sent (see enterIdle())
     int64 idle_timeout_ms;
+    //! the idle time (TTL) in ms: the time from the construction to the deadline given to it (qore#7488)
+    int64 idle_ttl_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
@@ -1878,6 +1920,13 @@ enum class QCS : int {
     HEADERS_READY = 11,  //!< HTTP/3 headers received (headers-only mode)
 };
 
+//! A send of QUIC datagrams kept some for a send after a delay, as it failed with ENOBUFS (see QuicSendBackoff)
+/** Returned by the sendPendingPackets() of the QUIC response operations; the operation polls for input with the
+    earlier of QuicSession::getSendRetryAt() and the connection's next timer as its timeout, as POLLOUT would spin
+    (qore#7414)
+*/
+static constexpr int QUIC_SEND_BACKOFF = (1 << 8);
+
 //! Poll operation for QUIC client: handshake + HTTP/3 request/response
 /** Creates a QUIC connection, performs the TLS 1.3 handshake over QUIC,
     sets up HTTP/3, submits a request, and reads the response.
@@ -1889,22 +1938,19 @@ public:
     //! @param handshake_timeout_ns optional handshake deadline in nanoseconds
     //!     (0 = disabled); when >0, continuePoll() fails with QUIC-HANDSHAKE-TIMEOUT
     //!     if the handshake has not reached SETUP_HTTP3 by this elapsed time
-    //! @param not_before_ns_abs optional absolute ngtcp2 timestamp (ns) before
-    //!     which sendPendingPackets() must not emit any UDP datagrams; 0 =
-    //!     disabled.  Used by the HTTP/3 client's happy-eyeballs stagger to
-    //!     hold back secondary address-family attempts per RFC 8305 §8.
     //! @param bind_unbound if true, the socket does not have to be open: an unbound socket is bound by the
     //!     operation, once the remote address is resolved, to the wildcard address of the remote address's family,
     //!     with the network policy check of a bind; nothing that can block runs in the thread that creates the
     //!     operation.  If false, the socket must be an open UDP socket.
-    //! @param avoid_families address families (AF_INET, AF_INET6) not to connect in if the remote host has an
-    //!     address in another family; used only when no family is given and the socket is not bound
+    //! @param avoid_families address families (AF_INET, AF_INET6) to try last if the remote host has an address in
+    //!     another family: the addresses in these families follow the others in the order of the connection
+    //!     attempts (see @ref race_addrs_); used only when the socket is not bound
     DLLLOCAL SocketQuicClientPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
                                            const char* host, uint16_t port, int family,
                                            int64_t handshake_timeout_ns = 0,
-                                           int64_t not_before_ns_abs = 0,
                                            bool bind_unbound = false,
-                                           std::vector<int> avoid_families = std::vector<int>());
+                                           std::vector<int> avoid_families = std::vector<int>(),
+                                           bool http_client = false);
     DLLLOCAL ~SocketQuicClientPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
@@ -1914,6 +1960,8 @@ public:
                 sock->priv->clearNonBlock();
             }
             poll_state.reset();
+            // the attempts' sessions refer to the socket, which can be released below; the peers are told
+            releaseAttempts();
             sock->deref(xsink);
             delete this;
         }
@@ -1957,6 +2005,8 @@ public:
         // the controller defers abort via pending_aborts when one is in
         // flight) is safe and matches the locking expectations of normal
         // sendPendingPackets() callers in continuePoll().
+        // the connection attempts of an address family race that has no winner yet are given up
+        releaseAttempts();
         if (quic_session) {
             ngtcp2_tstamp next_expiry = 0;
             (void)sendPendingPackets(next_expiry, xsink);
@@ -1983,7 +2033,7 @@ public:
             // teardown below.  Matches the pattern used on the server
             // side (SocketQuicServerPollOperation::abort).
             if (quic_session) {
-                int fd = sock->priv->socket->getDescriptor();
+                int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
                 if (fd >= 0) {
                     uint8_t close_buf[1280];
                     ssize_t close_len = quic_session->writeConnectionClose(
@@ -2033,8 +2083,12 @@ public:
         return session && !session->isClosed();
     }
 
-    //! Returns the address family of the remote address, or AF_UNSPEC if it has not been resolved yet
-    /** Can be called from any thread
+    //! Returns the address family of the connection, or AF_UNSPEC if it is not known yet
+    /** While the connection attempts of an address family race run (see @ref race_addrs_), the family is not known:
+        it is the family of the attempt that wins the race, or, if every attempt fails, the family of the attempt
+        whose error is reported.
+
+        Can be called from any thread
     */
     DLLLOCAL int getAddressFamily() const { return address_family_.load(std::memory_order_acquire); }
 
@@ -2057,11 +2111,96 @@ public:
     DLLLOCAL int migrateConnection(ExceptionSink* xsink, bool* conn_id_blocked = nullptr);
 
 private:
+    //! A connection attempt of the address family race of an unbound socket (RFC 8305); see @ref race_addrs_
+    /** Each attempt has a UDP socket and a QUIC session of its own; the socket is an owned descriptor (see
+        qore_owned_descriptor_create()), which the async I/O controller polls as an extra fd of the operation, until
+        the attempt wins and the operation's socket takes it over, or until it is released with the attempt.
+    */
+    struct QuicConnectAttempt {
+        //! the attempt's socket, an owned descriptor; reset when the operation's socket takes it over
+        std::shared_ptr<QoreSharedDescriptor> owned;
+        int fd = -1;
+        int family = AF_UNSPEC;
+        std::shared_ptr<QuicSession> session;
+        struct sockaddr_storage local_addr{};
+        socklen_t local_addrlen = 0;
+        struct sockaddr_storage remote_addr{};
+        socklen_t remote_addrlen = 0;
+        //! the time of the next timer of the session
+        ngtcp2_tstamp next_expiry = UINT64_MAX;
+        //! the end of the grace period after an ICMP refusal; 0 if none is running (see @ref econnrefused_deadline_ns_)
+        int64_t econnrefused_deadline_ns = 0;
+        int64_t econnrefused_grace_ns = 0;
+        //! set if an ICMP refusal arrived and no datagram since
+        bool refused = false;
+        //! set if the last send found the socket's buffer full
+        bool want_write = false;
+        //! see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS
+        int test_datagram_seq = 0;
+
+        DLLLOCAL QuicConnectAttempt() = default;
+        QuicConnectAttempt(const QuicConnectAttempt&) = delete;
+        QuicConnectAttempt& operator=(const QuicConnectAttempt&) = delete;
+
+        //! the descriptor is closed now, or by the last I/O thread that has it registered
+        DLLLOCAL ~QuicConnectAttempt() {
+            session.reset();
+            qore_owned_descriptor_release(owned);
+        }
+    };
+
     DLLLOCAL QoreHashNode* continueResolve(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
     DLLLOCAL int initializeResolved(ExceptionSink* xsink);
 
+    //! Creates the client session of a connection to the given addresses; the socket's lock must be held
+    /** @param enable_0rtt true to resume with a cached session ticket and early data (0-RTT); the attempts of an
+        address family race make full handshakes: they would all present the same single-use ticket, and their
+        HTTP/3 layer is set up only once one has won (see @ref race_addrs_)
+    */
+    DLLLOCAL std::shared_ptr<QuicSession> createSessionLocked(const struct sockaddr_storage& local,
+            socklen_t local_len, const struct sockaddr_storage& remote, socklen_t remote_len, bool enable_0rtt,
+            ExceptionSink* xsink);
+
+    //! Returns true if the socket was closed after the operation was created, while it had no descriptor
+    /** A close of a socket without a descriptor only records the close (qore_socket_private::prepareForClose());
+        the operation must not give the socket a descriptor afterwards (see adoptWinner())
+    */
+    DLLLOCAL bool closeRequested() const {
+        return !close_requested_at_create_
+            && sock->priv->socket->priv->pre_close_interrupt_fired.load(std::memory_order_acquire);
+    }
+
+    //! Runs the address family race (see @ref race_addrs_); returns poll info while it runs, nullptr when it is over
+    /** When an attempt wins, the operation's socket takes its descriptor and the operation continues in
+        QCS::SETUP_HTTP3; when every attempt has failed, the error of the attempt that got furthest is raised.
+    */
+    DLLLOCAL QoreHashNode* continueRace(ExceptionSink* xsink);
+    //! Starts a connection attempt to the given address; returns -1 if an exception was raised
+    DLLLOCAL int startAttempt(const SocketResolvedAddrInfo& ai, ExceptionSink* xsink);
+    //! Sends and receives the datagrams of an attempt; returns 1 if its handshake completed, 0 if it runs, -1 if it
+    //! failed (an exception was raised)
+    DLLLOCAL int serviceAttempt(QuicConnectAttempt& a, ExceptionSink* xsink);
+    //! Makes the attempt with the given index the operation's connection; returns -1 if an exception was raised
+    DLLLOCAL int adoptWinner(size_t idx, ExceptionSink* xsink);
+    //! Records the error of a failed attempt for the error of the race and clears it
+    DLLLOCAL void recordRaceError(ExceptionSink& ax, int family);
+    //! Ends the race: raises the error of the attempt that got furthest
+    DLLLOCAL void failRace(ExceptionSink* xsink);
+    //! Returns the poll info of a running race
+    DLLLOCAL QoreHashNode* getRacePollInfo(ExceptionSink* xsink) const;
+    //! Gives up the attempt with the given index: the peer is told with a CONNECTION_CLOSE if it can be
+    DLLLOCAL void removeAttempt(size_t idx);
+    //! Gives up all the connection attempts of the race
+    DLLLOCAL void releaseAttempts() {
+        while (!attempts_.empty()) {
+            removeAttempt(attempts_.size() - 1);
+        }
+    }
+
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    SimpleRefHolder<QoreSSLCertificate> client_cert;
+    SimpleRefHolder<QoreSSLPrivateKey> client_pk;
     std::string host;
     std::string service;
     //! the session is set and released by the I/O thread (setSession(), resetSession()) and read by any thread
@@ -2103,8 +2242,36 @@ private:
     int family_ = AF_UNSPEC;
     //! if true, an unbound socket is bound once the remote address is resolved (see the constructor)
     bool bind_unbound_ = false;
-    //! address families not to connect in if the remote host has an address in another family
+    //! address families to try last if the remote host has an address in another family (see @ref race_addrs_)
     std::vector<int> avoid_families_;
+    //! The addresses that an unbound socket connects to, in the order of the connection attempts (RFC 8305)
+    /** The host name is resolved in all families (unless a family is given), and the addresses are ordered as RFC
+        8305 section 4 says: the families alternate, starting with the family of the first address; the addresses in
+        a family of @ref avoid_families_ follow the others.  With more than one address, the connection attempts race
+        (RFC 8305 section 5): an attempt is started @ref QUIC_HE_CONNECTION_ATTEMPT_DELAY_NS after the previous one,
+        or at once when every attempt started has failed; an attempt fails at once on an ICMP refusal while another
+        attempt runs or another address is left, and the first attempt whose handshake completes wins.  The
+        handshake deadline (connect timeout) applies to the race as a whole.  The attempts make full handshakes,
+        without 0-RTT (see createSessionLocked()); a host with a single address keeps 0-RTT.
+    */
+    std::vector<SocketResolvedAddrInfo> race_addrs_;
+    //! the index in @ref race_addrs_ of the next address to start an attempt for
+    size_t race_next_ = 0;
+    //! set if a close of the socket had been recorded when the operation was created (see closeRequested())
+    bool close_requested_at_create_ = false;
+    //! the time (ngtcp2 timestamp) at which the next attempt is started if an address is left
+    int64_t race_next_start_ns_ = 0;
+    //! the attempts of the race that run; touched only by the I/O thread (and when the operation is destroyed)
+    std::vector<std::unique_ptr<QuicConnectAttempt>> attempts_;
+    //! the error of the attempt that got furthest: an error raised after a server was reached (or a refusal by the
+    //! sandbox) is preferred to one of an attempt that reached no server (see quic_is_unreached_error())
+    std::string race_err_;
+    std::string race_desc_;
+    //! the exception argument of that error (owned); a refused server certificate carries \c ssl_verify_error in it,
+    //! which tells callers that the error is terminal (see http_is_terminal_connection_error())
+    QoreValue race_arg_;
+    bool race_err_unreached_ = false;
+    int race_err_family_ = AF_UNSPEC;
     //! the address family of the remote address once resolved; read from other threads
     std::atomic<int> address_family_{AF_UNSPEC};
     //! set by the I/O thread when the QUIC handshake completes; never cleared (see isHandshakeComplete())
@@ -2127,35 +2294,26 @@ private:
     //! The grace period of @ref econnrefused_deadline_ns_, for the error message
     int64_t econnrefused_grace_ns_ = 0;
 
-#ifdef DEBUG
-    //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS
+    //! Number of datagrams this operation produced; see QORE_QUIC_TEST_DROP_CLIENT_DATAGRAMS (debug builds)
     int test_datagram_seq_ = 0;
-#endif
 
-    //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
-    //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while
-    //! now < not_before_ns_, the send path is a no-op and returns the deadline
-    //! as next_expiry so the I/O controller reschedules continuePoll() at
-    //! the correct wall time.  Used to implement the RFC 8305 Connection
-    //! Attempt Delay (typically 250ms) for H3 happy-eyeballs — the secondary
-    //! address-family attempt is submitted immediately but holds its Initial
-    //! packet until this deadline elapses, giving the preferred family a
-    //! head start on the handshake.
-    int64_t not_before_ns_ = 0;
 
     //! The sandbox that governs the remote address and the bind of an unbound socket, resolved on the thread that
     //! creates the operation
     SimpleRefHolder<QoreSandboxManager> sandbox_manager_;
 
-    //! Selects the resolved address to connect to (see @ref avoid_families_)
-    DLLLOCAL const SocketResolvedAddrInfo& selectAddress(const std::vector<SocketResolvedAddrInfo>& addrs) const;
 
     //! Binds the unbound socket to the wildcard address of the given family; the socket's lock must be held
     DLLLOCAL int bindUnboundLocked(int family, ExceptionSink* xsink);
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
-    /** @param next_expiry output: next timer expiry for poll timeout
-        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    /** The datagrams that are not sent are kept by the session and sent before those written after them
+        (QuicSession::sendPackets(), qore#7414).
+
+        @param next_expiry output: next timer expiry for poll timeout; no later than the time to send the datagrams
+        kept again after a send that failed with ENOBUFS
+        @return 0 on success, also when datagrams are kept after a send that failed with ENOBUFS (every state of the
+        operation sends again when it is woken), SOCK_POLLOUT if the socket's buffer is full, -1 on error
     */
     DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 
@@ -2232,7 +2390,7 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
-        int fd = sock->priv->socket->getDescriptor();
+        int fd = qore_socket_ops(sock->priv->socket).getDescriptor();
         // Graceful QUIC shutdown (nginx pattern, see nginx-1.29.4
         // src/event/quic/ngx_event_quic.c:468-620):
         //   1. Send HTTP/3 GOAWAY on each session so clients stop opening
@@ -2375,8 +2533,14 @@ private:
     //! Coalesced timer + write + send for all sessions in a single pass
     /** Replaces separate processTimers() + sendAllPendingPackets() + getMinExpiry()
         with a single iteration over sessions.
-        @param min_expiry output: minimum timer expiry across all sessions
-        @return 0 on success, SOCK_POLLOUT if any session had a partial send, -1 on error
+        All sessions share the socket: the datagrams of a session that a send did not send are kept by the session
+        (QuicSession::sendPackets()) and sent before any that it writes after them, so that no session's datagrams
+        are dropped by another session's write (qore#7414).
+
+        @param min_expiry output: minimum timer expiry across all sessions, no later than the time to send again the
+        datagrams kept after a send that failed with ENOBUFS
+        @return 0 on success, also when datagrams are kept after a send that failed with ENOBUFS, SOCK_POLLOUT if the
+        socket's buffer is full, -1 on error
     */
     DLLLOCAL int processTimersAndSendAll(ngtcp2_tstamp& min_expiry, ExceptionSink* xsink);
 
@@ -2512,8 +2676,13 @@ private:
     socklen_t local_addrlen_ = 0;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
-    /** @param next_expiry output: next timer expiry for poll timeout
-        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    /** The datagrams that are not sent are kept by the session and sent before those written after them
+        (QuicSession::sendPackets(), qore#7414).
+
+        @param next_expiry output: next timer expiry for poll timeout; no later than the time to send the datagrams
+        kept again after a send that failed with ENOBUFS
+        @return 0 on success, SOCK_POLLOUT if the socket's buffer is full, QUIC_SEND_BACKOFF if datagrams are kept
+        after a send that failed with ENOBUFS, -1 on error
     */
     DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 
@@ -2662,8 +2831,13 @@ private:
     socklen_t local_addrlen_ = 0;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
-    /** @param next_expiry output: next timer expiry for poll timeout
-        @return 0 on success, SOCK_POLLOUT if partial send, -1 on error
+    /** The datagrams that are not sent are kept by the session and sent before those written after them
+        (QuicSession::sendPackets(), qore#7414).
+
+        @param next_expiry output: next timer expiry for poll timeout; no later than the time to send the datagrams
+        kept again after a send that failed with ENOBUFS
+        @return 0 on success, SOCK_POLLOUT if the socket's buffer is full, QUIC_SEND_BACKOFF if datagrams are kept
+        after a send that failed with ENOBUFS, -1 on error
     */
     DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink);
 

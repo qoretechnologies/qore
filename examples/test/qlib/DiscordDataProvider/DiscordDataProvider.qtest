@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Mime
 %requires Logger
 %requires ConnectionProvider
@@ -199,7 +200,7 @@ public class Main inherits QUnit::Test {
         assertEq(io_rest, prov.getRestClient());
 
         assertThrows("CONSTRUCTOR-ERROR", "must be a DiscordRestClientIo or a DiscordRestClient",
-            sub () { DiscordDataProvider p({"restclient": new RestClient({"url": "http://localhost:1"}, True)}); });
+            sub () { DiscordDataProvider p({"restclient": new RestClient({"url": "http://127.0.0.1:1"}, True)}); });
     }
 
     testActionDataDependentOptions() {
@@ -221,6 +222,12 @@ public class Main inherits QUnit::Test {
                     sprintf("action %y has data_dependent_options", action_name));
             }
         }
+        # both actions only make GET requests: they declare that they do not change state (qore#7454)
+        assertEq(2, action_map{expected_actions}.size());
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), action_map{expected_actions}.iterator();
+        map assertFalse($1.mutates_state, $1.action), action_map{expected_actions}.iterator();
+        map assertFalse(DataProviderActionCatalog::actionMutatesState($1), $1.action),
+            action_map{expected_actions}.iterator();
     }
 
     private usageIntern() {
@@ -233,12 +240,12 @@ public class Main inherits QUnit::Test {
     }
 
     private setupConnection() {
-        *string conn_name = m_options.conn ?? ENV.DISCORD_CONNECTION;
+        *string conn_name = LiveProvider::get("discord", "DISCORD_CONNECTION", m_options.conn);
         if (!conn_name.val()) {
             error("missing -c,--connection option or DISCORD_CONNECTION environment variable");
         }
 
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = LiveProvider::connection("discord", "DISCORD_CONNECTION", m_options.conn);
         if (!(conn instanceof DiscordRestConnection)) {
             error("connection %y is type %y; expecting \"DiscordRestConnection\"", conn_name, conn.className());
         }

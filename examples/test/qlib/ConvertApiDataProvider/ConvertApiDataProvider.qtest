@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -332,7 +333,7 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
 
     #! Sets up the ConvertAPI client for integration tests
     private setupConnection() {
-        apikey = m_options.apikey ?? ENV.CONVERTAPI_TOKEN;
+        apikey = LiveProvider::get("convertapi", "CONVERTAPI_TOKEN", m_options.apikey);
         if (!apikey) {
             if (m_options.verbose) {
                 printf("No API token provided (use -k option or CONVERTAPI_TOKEN env var)\n");
@@ -361,7 +362,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
     #! Creates a provider using the real client (integration tests only)
     private ConvertApiDataProvider::ConvertApiDataProvider createRealProvider() {
         if (!client) {
-            testSkip("No ConvertAPI token provided; set CONVERTAPI_TOKEN or use -k option");
+            testSkip(LiveProvider::enabled("convertapi") ?
+                "No ConvertAPI token provided; set CONVERTAPI_TOKEN or use -k option"
+                    : LiveProvider::skipReason("convertapi", "CONVERTAPI_TOKEN"));
         }
         return new ConvertApiDataProvider::ConvertApiDataProvider(client);
     }
@@ -523,6 +526,20 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
         assertTrue(actionMap."convert-file".options.file.preselected);
         assertTrue(actionMap."convert-pdf-to-image".options.format.required);
         assertTrue(actionMap."merge-pdf".options.files.preselected);
+
+        # get-converter-info only reads the converter description (GET info/<from>/to/<to>): it is read-only; the
+        # conversions take store_file, which makes ConvertAPI keep the output files in its storage, so they keep
+        # the default of an API action (qore#7454)
+        assertEq(NT_BOOLEAN, actionMap."get-converter-info".mutates_state.typeCode());
+        assertFalse(actionMap."get-converter-info".mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(actionMap."get-converter-info"));
+        foreach string action in (ExpectedChildren) {
+            if (action == "get-converter-info") {
+                continue;
+            }
+            assertTrue(exists actionMap{action}.options.store_file, action);
+            assertTrue(DataProviderActionCatalog::actionMutatesState(actionMap{action}), action);
+        }
 
         # the source options come first and are preselected, and a single input is either a file or a URL
         foreach string action in (("convert-word-to-pdf", "convert-excel-to-pdf", "convert-powerpoint-to-pdf",
@@ -941,9 +958,9 @@ public class ConvertApiDataProviderTest inherits QUnit::Test {
                 handler.rate_limited = 0;
                 handler.retry_after = "1";
             }
-            date start = now_us();
+            date start = microseconds(clock_get_monotonic_us());
             provider.getChildProviderEx("compress-pdf").doRequest({"url": "https://example.com/a.pdf"});
-            assertTrue(now_us() - start < 15s);
+            assertTrue(microseconds(clock_get_monotonic_us()) - start < 15s);
             assertEq(2, handler.requests.size());
             assertEq(("convert/pdf/to/compress", "convert/pdf/to/compress"), (map $1.path, handler.requests));
         }

@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -164,9 +165,9 @@ public class KeapDataProviderTest inherits QUnit::Test {
     #! Sets up the Keap client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.KEAP_CONNECTION;
+        *string conn_name = LiveProvider::get("keap", "KEAP_CONNECTION", m_options.conn);
         if (conn_name) {
-            AbstractConnection conn = get_connection(conn_name);
+            AbstractConnection conn = LiveProvider::connection("keap", "KEAP_CONNECTION", m_options.conn);
             if (conn instanceof KeapRestClient::KeapRestConnection) {
                 client = (cast<KeapRestClient::KeapRestConnection>(conn)).getAsync();
             }
@@ -174,10 +175,10 @@ public class KeapDataProviderTest inherits QUnit::Test {
         }
 
         # Try environment variables
-        *string token = m_options.token ?? ENV.KEAP_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.KEAP_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.KEAP_CLIENT_SECRET;
-        *string refresh_token = ENV.KEAP_REFRESH_TOKEN;
+        *string token = LiveProvider::get("keap", "KEAP_TOKEN", m_options.token);
+        *string client_id = LiveProvider::get("keap", "KEAP_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("keap", "KEAP_CLIENT_SECRET", m_options.client_secret);
+        *string refresh_token = LiveProvider::get("keap", "KEAP_REFRESH_TOKEN");
 
         if (token) {
             client = new KeapRestClient::KeapRestClientIo({"token": token});
@@ -258,6 +259,19 @@ public class KeapDataProviderTest inherits QUnit::Test {
         assertEq(True, found_create_contact, "create-contact action registered");
         assertEq(True, found_list_contacts, "list-contacts action registered");
         assertEq(True, found_contact_added_event, "contact-added event registered");
+
+        # get-file only reads the file (GET): it declares that it is read-only, which the catalogue reports as
+        # such; the file actions that write do not (qore#7454)
+        hash<DataProviderActionInfo> get_file = (select DataProviderActionCatalog::getActionsEx("Keap"),
+            $1.action == "get-file")[0];
+        assertEq(NT_BOOLEAN, get_file.mutates_state.typeCode());
+        assertFalse(get_file.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(get_file));
+        foreach string name in ("upload-file", "delete-file") {
+            hash<DataProviderActionInfo> action = (select DataProviderActionCatalog::getActionsEx("Keap"),
+                $1.action == name)[0];
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
     }
 
     #! Child provider tests

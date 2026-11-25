@@ -563,6 +563,10 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
 
     #! Verifies credentials with an inference-free control-plane request
     private pingImpl() {
+        # issue #7236: a ping of a connection whose configuration cannot work fails with its error, as
+        # RestConnection::pingImpl() and the polling ping (RestConnection::startPollConnect()) do
+        checkConfiguration(getConnectionOptions());
+
         AbstractRestClient runtime = cast<AbstractRestClient>(getAsync());
         AbstractRestClient control = new AwsRestClient::AwsRestClientIo(
             getConnectionOptions() + {
@@ -1348,6 +1352,11 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         try {
             return withRetry(hash<auto> sub () {
                 # the request's own timeout (LlmRequestOptions::timeout_ms), not only the client's
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableEncodedRawRequest("POST", path, binary(make_json(body)),
+                        {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, getRequestTimeoutMs(opts),
+                        getRequestCancelRegistration(opts));
+                }
                 return rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
                     {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson}, getRequestTimeoutMs(opts));
             }, opts);

@@ -64,6 +64,7 @@ class Queue;
     @see QoreEncoding
  */
 class QoreFile {
+    friend class qore_file_ops;
 public:
     //! creates the object and sets the default encoding
     DLLEXPORT QoreFile(const QoreEncoding *cs = QCS_DEFAULT);
@@ -638,41 +639,12 @@ public:
     */
     DLLEXPORT int detachFd();
 
-    //! sets terminal attributes
-    DLLLOCAL int setTerminalAttributes(int action, QoreTermIOS *ios, ExceptionSink* xsink) const;
 
-    //! gets terminal attributes
-    DLLLOCAL int getTerminalAttributes(QoreTermIOS *ios, ExceptionSink* xsink) const;
 
-    //! opens the file like open() if the sandbox filesystem policy allows it (not part of the library's public API)
-    /** @return 0 for success, -1 for error; if the sandbox policy denies access, an exception is raised, otherwise
-        \c errno is set as for open()
-    */
-    DLLLOCAL int openCheckAccess(ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs);
 
-    // NOTE: QoreFile::makeSpecial() can only be called right after the constructor (private API)
-    DLLLOCAL void makeSpecial(int sfd);
 
-    //! makes the file a special file that owns its descriptor (private API)
-    /** Like makeSpecial(), it cannot be reopened, but close() and the destruction of the object close the descriptor
-        (the ends of File::getPipe()); it can only be called right after the constructor
-    */
-    DLLLOCAL void makeOwnedSpecial(int fd);
 
-    //! sets the event queue (not part of the library's pubilc API), must be already referenced before call
-    DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data);
 
-    //! internal API, must be called before deleting the object if an event queue is set
-    DLLLOCAL void cleanup(ExceptionSink* xsink);
-
-    //! internal API: reads until the given end-of-line marker, converted to the file's encoding, is read
-    /** @param eol the end-of-line marker, in any encoding
-        @param incl_eol if true, the marker is included in the string returned
-        @param xsink for exceptions
-
-        @return the string read, or nullptr at the end of the file or if an exception was raised
-    */
-    DLLLOCAL QoreStringNode* readUntilText(const QoreString& eol, bool incl_eol, ExceptionSink* xsink);
 
 protected:
     //! the file input stream reads the descriptor itself, and records the end of a named pipe in the file

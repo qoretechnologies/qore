@@ -2000,7 +2000,8 @@ db.refreshMaterializedView("mv_sales_by_region", {"concurrent": True});
     }
 
     private validateOptionsIntern(string err, hash<auto> ropt, reference<hash> opt) {
-        AbstractSqlUtilBase::validateOptionsIntern(err, ropt, \opt, ds.getDBName() ?? "");
+        # the masked description of the datasource: the database name is not shown (issue #6988)
+        AbstractSqlUtilBase::validateOptionsIntern(err, ropt, \opt, dsdesc);
     }
 
     private validateOptionsIntern(string err, hash<auto> ropt, reference<hash> opt, string tag) {

@@ -283,8 +283,25 @@ int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& v_i
         return -1;
     }
     // a value read through the language unwraps itself, but walking a container gives the stored
-    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself
-    const QoreValue value = v_in.resolveIndirect();
+    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself; the target of a
+    // weak reference is read with a reference of its own, as another thread can free its list or hash while it is
+    // converted (qore#7231)
+    QoreValue value = v_in;
+    ValueHolder target(xsink);
+    switch (value.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            target = value.resolveIndirectRef();
+            value = *target;
+            break;
+        default:
+            // the target of an opaque reference is held by the container that holds the reference
+            if (value.isOpaque()) {
+                value = value.resolveIndirect();
+            }
+            break;
+    }
     switch (value.getType()) {
         case NT_NOTHING:
         case NT_NULL:

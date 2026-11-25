@@ -41,6 +41,7 @@
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreSandboxPollOps.h"
 
 #include <cassert>
 #include <cctype>
@@ -48,6 +49,10 @@
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
+#ifdef __linux__
+#include <sys/vfs.h>
+#endif
 #include <map>
 #include <memory>
 #include <mutex>
@@ -93,6 +98,11 @@ struct QoreSandboxMembers {
     }
 };
 
+#ifdef __linux__
+//! the f_type of a procfs file system (PROC_SUPER_MAGIC of <linux/magic.h>)
+static constexpr unsigned long QORE_PROC_SUPER_MAGIC = 0x9fa0;
+#endif
+
 struct qore_fs_security_private {
     std::shared_ptr<const QoreSandboxMembers> composition;
     //! the uncontrolled-API policy of the QoreSandboxManager (see QoreSandboxManager::setUncontrolledApiPolicy());
@@ -104,6 +114,13 @@ struct qore_fs_security_private {
     std::atomic<int> enforcement_level{QSEL_TENANT_ISOLATION};
     //! true once the enforcement level was raised explicitly: it can no longer be lowered
     std::atomic<bool> enforcement_level_fixed{false};
+    //! the isolation domain (tenant) of the QoreSandboxManager, or empty; written only before the manager governs
+    //! code (see QoreSandboxManager::setIsolationDomain(); manager state, kept here for the same reason; qore#6536)
+    std::string isolation_domain;
+    //! true once the manager governs code (see QoreSandboxManager::setGoverns()): the domain cannot be set any more
+    std::atomic<bool> governs{false};
+    //! serializes QoreSandboxManager::setIsolationDomain() and the reads of the domain by getIsolationDomain()
+    std::mutex domain_lock;
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
@@ -118,6 +135,18 @@ struct qore_fs_security_private {
         assert(pos != std::string::npos);
         leaf = path.substr(pos + 1);
         parent = pos ? path.substr(0, pos) : "/";
+    }
+
+    //! Returns true if the directory holding the given path is on a procfs file system, wherever it is mounted
+    static bool is_in_proc(const std::string& path) {
+#ifdef __linux__
+        std::string parent, leaf;
+        splitPath(path, parent, leaf);
+        struct statfs sfs;
+        return !statfs(parent.c_str(), &sfs) && static_cast<unsigned long>(sfs.f_type) == QORE_PROC_SUPER_MAGIC;
+#else
+        return false;
+#endif
     }
 
     //! Resolves a path to an absolute, symlink-free canonical path for security checks
@@ -182,8 +211,10 @@ struct qore_fs_security_private {
             // save errno before any other system call can overwrite it
             int err = errno;
             if (err != ENOENT && err != ENOTDIR) {
-                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
-                    "'%s': %s", path, probe.c_str(), strerror(err));
+                // the message names the path as given only, never a link target or a directory reached while
+                // resolving it (qore#7498)
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
+                    strerror(err));
                 return "";
             }
 
@@ -193,19 +224,29 @@ struct qore_fs_security_private {
             struct stat sb;
             if (!lstat(probe.c_str(), &sb) && S_ISLNK(sb.st_mode)) {
                 if (++links > qore_sandbox_max_symlinks) {
-                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
-                        "'%s': %s", path, probe.c_str(), strerror(ELOOP));
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s", path,
+                        strerror(ELOOP));
                     return "";
                 }
                 char buf[QORE_PATH_MAX + 1];
                 ssize_t len = readlink(probe.c_str(), buf, QORE_PATH_MAX);
                 if (len < 0) {
-                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
-                        "readlink('%s') failed: %s", path, probe.c_str(), strerror(errno));
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a link cannot be "
+                        "read: %s", path, strerror(errno));
                     return "";
                 }
                 assert(len <= QORE_PATH_MAX);
                 buf[len] = '\0';
+                // a link in procfs that does not resolve is a link to an object without a path (ex: /proc/self/fd/N,
+                // also reached as /dev/fd/N, to "pipe:[1234]" or "anon_inode:..."), to a removed file ("/path
+                // (deleted)") or to a memfd ("/memfd:name (deleted)"): its target names no file, and it is not
+                // resolved as a link, which would name another file (qore#7498)
+                if (is_in_proc(probe)) {
+                    xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a "
+                        "descriptor whose file cannot be identified by a path, so the security policy cannot be "
+                        "applied to it", path);
+                    return "";
+                }
                 if (*buf == '/') {
                     probe = buf;
                 } else {
@@ -255,8 +296,8 @@ struct qore_fs_security_private {
             std::string up = base + "/..";
             std::unique_ptr<char, decltype(&free)> real(realpath(up.c_str(), nullptr), &free);
             if (!real) {
-                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': the "
-                    "parent of '%s' cannot be resolved: %s", path, base.c_str(), strerror(errno));
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': a parent "
+                    "directory cannot be resolved: %s", path, strerror(errno));
                 return "";
             }
             base = real.get();
@@ -311,6 +352,48 @@ struct qore_fs_security_private {
     bool isInSandboxRoot(const std::string& canon_path) const {
         if (sandbox_root.empty()) return true;
         return pathStartsWith(canon_path, sandbox_root);
+    }
+
+    //! applies the rules of the policy to a canonical path; errors name the path as given (\a path)
+    bool checkRules(const std::string& canon, const char* path, int mode, ExceptionSink* xsink) const {
+        // Check denied paths first (they always take precedence)
+        if (isDenied(canon)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                "Access to '%s' denied by security policy (path is in denied list)", path);
+            return false;
+        }
+
+        // Check sandbox root containment
+        if (!isInSandboxRoot(canon)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+                "Access to '%s' denied: path is outside sandbox root '%s'",
+                path, sandbox_root.c_str());
+            return false;
+        }
+
+        // Check allowed paths
+        if (isAllowed(canon, mode)) {
+            return true;
+        }
+
+        // Fall back to default policy
+        if (default_allow) {
+            return true;
+        }
+
+        // Build mode string for error message
+        std::string mode_str;
+        if (mode & QSEC_READ) mode_str += "read,";
+        if (mode & QSEC_WRITE) mode_str += "write,";
+        if (mode & QSEC_EXECUTE) mode_str += "execute,";
+        if (mode & QSEC_DELETE) mode_str += "delete,";
+        if (mode & QSEC_CREATE) mode_str += "create,";
+        if (!mode_str.empty()) mode_str.pop_back();  // Remove trailing comma
+
+        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
+            "Access to '%s' denied: %s access not permitted by security policy",
+            path, mode_str.c_str());
+        return false;
     }
 };
 
@@ -411,6 +494,45 @@ bool QoreFilesystemSecurityManager::isRestricting() const {
         || !priv->sandbox_root.empty();
 }
 
+//! returns true if a canonical path is a descriptor alias
+/** /dev/fd/N reaches the file of descriptor N of the process; where /dev/fd is not a symbolic link (macOS, the BSDs),
+    realpath() does not resolve it, and the path remains in /dev/fd, whatever file it reaches
+*/
+static bool is_descriptor_alias(const std::string& canon) {
+    return !canon.compare(0, 8, "/dev/fd/");
+}
+
+//! gets the canonical path of the file that a descriptor alias reaches
+/** @return 0 for OK, -1 if it reaches no file with a path (a pipe, a socket, a removed file, a closed descriptor) or
+    the path cannot be determined
+*/
+static int resolve_descriptor_alias(const char* path, std::string& target) {
+#ifdef _Q_WINDOWS
+    return -1;
+#else
+    // opening a descriptor alias duplicates the descriptor: it opens no file, and it changes neither the file nor
+    // the status flags of the descriptor; it fails with EACCES if the descriptor is not open for that access
+    int fd;
+    for (int flags : {O_RDONLY, O_WRONLY}) {
+        do {
+            fd = open(path, flags | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+        } while (fd < 0 && errno == EINTR);
+        if (fd >= 0 || errno != EACCES) {
+            break;
+        }
+    }
+    if (fd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        return -1;
+    }
+    return q_get_open_file_path(fd, sbuf, nullptr, target);
+#endif
+}
+
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
     if (priv->composition) {
         unsigned checked = 0;
@@ -431,44 +553,68 @@ bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, Exce
         return false;
     }
 
-    // Check denied paths first (they always take precedence)
-    if (priv->isDenied(canon)) {
-        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-            "Access to '%s' denied by security policy (path is in denied list)", path);
-        return false;
+    // a descriptor alias is checked as the file that it reaches
+    if (is_descriptor_alias(canon)) {
+        std::string target;
+        // the name as given is opened: realpath() of a descriptor alias on macOS does not keep the descriptor number
+        // (it gives "/dev/fd/<name of the file>"), and the file is identified by the descriptor that the open gives
+        if (resolve_descriptor_alias(path, target)) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: it refers to a descriptor "
+                "whose file cannot be identified by a path, so the security policy cannot be applied to it", path);
+            return false;
+        }
+        // errors name the path as given, not the file reached
+        ExceptionSink xsink2;
+        canon = priv->canonicalize(target.c_str(), &xsink2);
+        if (xsink2 || is_descriptor_alias(canon)) {
+            xsink2.clear();
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
+                "cannot be resolved", path);
+            return false;
+        }
     }
 
-    // Check sandbox root containment
-    if (!priv->isInSandboxRoot(canon)) {
-        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-            "Access to '%s' denied: path is outside sandbox root '%s'",
-            path, priv->sandbox_root.c_str());
-        return false;
+#ifdef O_PATH
+    // the object that the name reaches must be the one at its canonical path: a name through a procfs link (ex:
+    // /proc/self/fd/N) reaches the object of the link, whatever a file at the path that the link shows is (ex: a file
+    // named "/x (deleted)" made for the link of a removed file "/x"); O_PATH opens the object without opening the file
+    // (no side effect), and a name that reaches nothing is not checked here (qore#7498)
+    {
+        int pfd;
+        do {
+            pfd = open(path, O_PATH | O_CLOEXEC);
+        } while (pfd < 0 && errno == EINTR);
+        if (pfd >= 0) {
+            ON_BLOCK_EXIT(close, pfd);
+            struct stat obuf, cbuf;
+            if (fstat(pfd, &obuf) || stat(canon.c_str(), &cbuf) || obuf.st_dev != cbuf.st_dev
+                    || obuf.st_ino != cbuf.st_ino) {
+                xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the file it refers to "
+                    "cannot be identified by a path, so the security policy cannot be applied to it", path);
+                return false;
+            }
+        }
     }
+#endif
 
-    // Check allowed paths
-    if (priv->isAllowed(canon, mode)) {
+    return priv->checkRules(canon, path, mode, xsink);
+}
+
+bool QoreSandboxComposition::checkCanonicalAccess(QoreFilesystemSecurityManager& fs, const char* canon,
+        const char* path, int mode, ExceptionSink* xsink) {
+    if (fs.priv->composition) {
+        unsigned checked = 0;
+        for (auto* manager : fs.priv->composition->managers) {
+            if (!(checked++ % 100) && qore_check_cancel(xsink, "sandbox policy intersection")) {
+                return false;
+            }
+            if (!checkCanonicalAccess(manager->filesystem(), canon, path, mode, xsink)) {
+                return false;
+            }
+        }
         return true;
     }
-
-    // Fall back to default policy
-    if (priv->default_allow) {
-        return true;
-    }
-
-    // Build mode string for error message
-    std::string mode_str;
-    if (mode & QSEC_READ) mode_str += "read,";
-    if (mode & QSEC_WRITE) mode_str += "write,";
-    if (mode & QSEC_EXECUTE) mode_str += "execute,";
-    if (mode & QSEC_DELETE) mode_str += "delete,";
-    if (mode & QSEC_CREATE) mode_str += "create,";
-    if (!mode_str.empty()) mode_str.pop_back();  // Remove trailing comma
-
-    xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-        "Access to '%s' denied: %s access not permitted by security policy",
-        path, mode_str.c_str());
-    return false;
+    return fs.priv->checkRules(canon, path, mode, xsink);
 }
 
 QoreHashNode* QoreFilesystemSecurityManager::getConfiguration(ExceptionSink* xsink) const {
@@ -580,6 +726,9 @@ struct qore_net_security_private {
     std::vector<CIDRRange> denied_ranges;
     std::vector<PortRange> allowed_ports;
     bool default_allow = false;
+    //! set by blockPrivateNetworks(): an IPv6 address outside the global unicast range 2000::/3 that embeds no IPv4
+    //! address is denied (issue #6858)
+    bool block_non_global_ipv6 = false;
 
     // Parse CIDR notation into CIDRRange
     bool parseCIDR(const char* cidr, CIDRRange& range, ExceptionSink* xsink) {
@@ -699,28 +848,59 @@ struct qore_net_security_private {
         return false;
     }
 
-    // Returns the address that the rules are applied to: an IPv4-mapped IPv6 address carries an IPv4 address, as does
-    // an address of the NAT64 well-known prefix (64:ff9b::/96) or of 6to4 (2002::/16, the IPv4 address of its site;
-    // qore#6858), and a connection to an unspecified address (0.0.0.0 or ::) goes to the local host
+    //! returns the offset of the IPv4 address that an IPv6 address embeds, or -1 if it embeds none
+    /** IPv4-mapped (::ffff:0:0/96) and IPv4-compatible (::/96, not :: and ::1) addresses, the well-known NAT64 prefix
+        (64:ff9b::/96) and 6to4 (2002::/16) carry an IPv4 address that the address reaches or is routed by, and are
+        judged by it (issue #6858); for Teredo (2001::/32), \a xor_bits is set: the client's address is stored inverted
+    */
+    static int embeddedIPv4Offset(const struct in6_addr& a, bool& xor_bits) {
+        const uint8_t* b = a.s6_addr;
+        xor_bits = false;
+        if (IN6_IS_ADDR_V4MAPPED(&a)) {
+            return 12;
+        }
+        // IPv4-compatible: the first 96 bits are zero, and the address is not :: or ::1 (compared by bytes: the macro
+        // IN6_IS_ADDR_V4COMPAT() of some C libraries excludes more addresses)
+        static const uint8_t zero12[12] = {};
+        if (!memcmp(b, zero12, sizeof(zero12)) && !IN6_IS_ADDR_UNSPECIFIED(&a) && !IN6_IS_ADDR_LOOPBACK(&a)) {
+            return 12;
+        }
+        static const uint8_t nat64[12] = {0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
+        if (!memcmp(b, nat64, sizeof(nat64))) {
+            return 12;
+        }
+        if (b[0] == 0x20 && b[1] == 0x02) {
+            return 2;
+        }
+        if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0 && b[3] == 0) {
+            xor_bits = true;
+            return 12;
+        }
+        return -1;
+    }
+
+    // Returns the address that the rules are applied to: an IPv6 address that embeds an IPv4 address carries it (see
+    // embeddedIPv4Offset()), and a connection to an unspecified address (0.0.0.0 or ::) goes to the local host
     static const struct sockaddr* normalizeAddr(const struct sockaddr* addr, struct sockaddr_storage& storage,
             bool unspecified_as_loopback) {
         if (addr->sa_family == AF_INET6) {
             const struct sockaddr_in6* sin6 = reinterpret_cast<const struct sockaddr_in6*>(addr);
-            const unsigned char* a6 = sin6->sin6_addr.s6_addr;
-            static const unsigned char nat64_prefix[12] = {0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0};
-            // the offset of the embedded IPv4 address, or -1
-            int v4_offset = -1;
-            if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr) || !memcmp(a6, nat64_prefix, sizeof(nat64_prefix))) {
-                v4_offset = 12;
-            } else if (a6[0] == 0x20 && a6[1] == 0x02) {
-                v4_offset = 2;
-            }
-            if (v4_offset >= 0) {
+            bool xor_bits;
+            int off = embeddedIPv4Offset(sin6->sin6_addr, xor_bits);
+            if (off >= 0) {
+                uint8_t v4[4];
+                memcpy(v4, &sin6->sin6_addr.s6_addr[off], sizeof(v4));
+                if (xor_bits) {
+                    for (uint8_t& c : v4) {
+                        c ^= 0xff;
+                    }
+                }
+                in_port_t port = sin6->sin6_port;
                 storage = {};
                 struct sockaddr_in* sin = reinterpret_cast<struct sockaddr_in*>(&storage);
                 sin->sin_family = AF_INET;
-                sin->sin_port = sin6->sin6_port;
-                memcpy(&sin->sin_addr, a6 + v4_offset, sizeof(sin->sin_addr));
+                sin->sin_port = port;
+                memcpy(&sin->sin_addr, v4, sizeof(v4));
                 addr = reinterpret_cast<const struct sockaddr*>(&storage);
             } else if (unspecified_as_loopback && IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
                 storage = {};
@@ -765,6 +945,43 @@ struct qore_net_security_private {
             return IN6_IS_ADDR_LOOPBACK(&reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr);
         }
         return false;
+    }
+
+    //! Returns true if the denied ranges or the rules of blockPrivateNetworks() deny the address
+    /** @param orig the address as given
+        @param addr the address that the rules apply to (see normalizeAddr()); a denied range that contains either
+        denies it, so a range that the host denies on an IPv6 translation prefix still applies (issue #6858)
+    */
+    bool isDeniedAny(const struct sockaddr* orig, const struct sockaddr* addr) const {
+        if (isDenied(addr) || (orig != addr && isDenied(orig))) {
+            return true;
+        }
+        // an IPv6 address that is not a global unicast address (outside 2000::/3), other than the unspecified address
+        // (a bind to it binds every interface; a connection to it is judged as one to the loopback address)
+        if (block_non_global_ipv6 && addr->sa_family == AF_INET6) {
+            const struct in6_addr& a = reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr;
+            if ((a.s6_addr[0] & 0xe0) != 0x20 && !IN6_IS_ADDR_UNSPECIFIED(&a)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns true if an allowed range contains the address as given or the address that the rules apply to
+    bool inAllowedRangeAny(const struct sockaddr* orig, const struct sockaddr* addr) const {
+        return inAllowedRange(addr) || (orig != addr && inAllowedRange(orig));
+    }
+
+    //! Returns the address for a message: the address as given, and the address that the rules apply to if it differs
+    std::string describeAddr(const struct sockaddr* orig, const struct sockaddr* addr) const {
+        std::string rv = getAddrString(orig);
+        if (orig != addr) {
+            std::string applied = getAddrString(addr);
+            if (applied != rv) {
+                rv += " (" + applied + ")";
+            }
+        }
+        return rv;
     }
 
     // Check if address is in denied ranges
@@ -871,34 +1088,79 @@ void QoreNetworkSecurityManager::addAllowedPortRange(int low, int high, int prot
 void QoreNetworkSecurityManager::blockPrivateNetworks() {
     ExceptionSink xsink;
 
-    // IPv4 private networks
-    addDeniedIPRange("127.0.0.0/8", &xsink);      // Localhost
-    addDeniedIPRange("10.0.0.0/8", &xsink);       // RFC 1918 Class A
-    addDeniedIPRange("172.16.0.0/12", &xsink);    // RFC 1918 Class B
-    addDeniedIPRange("192.168.0.0/16", &xsink);   // RFC 1918 Class C
-    addDeniedIPRange("169.254.0.0/16", &xsink);   // Link-local (includes cloud metadata)
-    // the other ranges that are not public unicast destinations (qore#6858)
-    // "This network" (0.0.0.0/8), which reaches the local host on common platforms; 0.0.0.0 itself is not in it: a
-    // connection to it is checked as a connection to the local host (normalizeAddr()), and a bind to it is a bind on
-    // all interfaces, which the denied ranges do not decide: the range is added as the blocks of 0.0.0.1/32 up to
-    // 0.128.0.0/9
-    for (int prefix = 32; prefix >= 9; --prefix) {
-        uint32_t start = 1u << (32 - prefix);
-        char cidr[32];
-        snprintf(cidr, sizeof cidr, "%u.%u.%u.%u/%d", (start >> 24) & 0xff, (start >> 16) & 0xff, (start >> 8) & 0xff,
-            start & 0xff, prefix);
-        addDeniedIPRange(cidr, &xsink);
+    // every IPv4 range that is not a public unicast destination (IANA IPv4 special-purpose registry, issue #6858)
+    // "this network" (0.0.0.0/8), which reaches the local host on common platforms, but the unspecified address
+    // 0.0.0.0 itself: a connection to it is judged as one to the loopback address (see normalizeAddr()), and a bind to
+    // it binds every interface, which a host denies explicitly if it must
+    static const char* this_network[] = {
+        "0.0.0.1/32",
+        "0.0.0.2/31",
+        "0.0.0.4/30",
+        "0.0.0.8/29",
+        "0.0.0.16/28",
+        "0.0.0.32/27",
+        "0.0.0.64/26",
+        "0.0.0.128/25",
+        "0.0.1.0/24",
+        "0.0.2.0/23",
+        "0.0.4.0/22",
+        "0.0.8.0/21",
+        "0.0.16.0/20",
+        "0.0.32.0/19",
+        "0.0.64.0/18",
+        "0.0.128.0/17",
+        "0.1.0.0/16",
+        "0.2.0.0/15",
+        "0.4.0.0/14",
+        "0.8.0.0/13",
+        "0.16.0.0/12",
+        "0.32.0.0/11",
+        "0.64.0.0/10",
+        "0.128.0.0/9",
+    };
+    for (const char* range : this_network) {
+        addDeniedIPRange(range, &xsink);
     }
-    addDeniedIPRange("100.64.0.0/10", &xsink);    // Shared address space (carrier-grade NAT)
-    addDeniedIPRange("224.0.0.0/4", &xsink);      // Multicast
-    addDeniedIPRange("240.0.0.0/4", &xsink);      // Reserved, and the limited broadcast address
+    addDeniedIPRange("10.0.0.0/8", &xsink);       // RFC 1918
+    addDeniedIPRange("100.64.0.0/10", &xsink);    // shared address space (carrier-grade NAT)
+    addDeniedIPRange("127.0.0.0/8", &xsink);      // loopback
+    addDeniedIPRange("169.254.0.0/16", &xsink);   // link-local (includes cloud metadata)
+    addDeniedIPRange("172.16.0.0/12", &xsink);    // RFC 1918
+    addDeniedIPRange("192.0.0.0/24", &xsink);     // IETF protocol assignments
+    addDeniedIPRange("192.0.2.0/24", &xsink);     // documentation
+    addDeniedIPRange("192.88.99.0/24", &xsink);   // 6to4 relay anycast (deprecated)
+    addDeniedIPRange("192.168.0.0/16", &xsink);   // RFC 1918
+    addDeniedIPRange("198.18.0.0/15", &xsink);    // benchmarking
+    addDeniedIPRange("198.51.100.0/24", &xsink);  // documentation
+    addDeniedIPRange("203.0.113.0/24", &xsink);   // documentation
+    addDeniedIPRange("224.0.0.0/4", &xsink);      // multicast
+    addDeniedIPRange("240.0.0.0/4", &xsink);      // reserved, including the limited broadcast address
 
-    // IPv6 private networks
-    addDeniedIPRange("::1/128", &xsink);          // Localhost
-    addDeniedIPRange("fe80::/10", &xsink);        // Link-local
-    addDeniedIPRange("fc00::/7", &xsink);         // Unique local addresses
-    addDeniedIPRange("ff00::/8", &xsink);         // Multicast (qore#6858)
-    // an IPv6 address that embeds an IPv4 address (IPv4-mapped, NAT64, 6to4) is judged by the IPv4 address
+    // every IPv6 range that is not a public unicast destination; the addresses that embed an IPv4 address are judged
+    // by it (see normalizeAddr())
+    // the unspecified address :: is judged as the loopback address for a connection, as 0.0.0.0 is
+    addDeniedIPRange("::1/128", &xsink);          // loopback
+    addDeniedIPRange("64:ff9b:1::/48", &xsink);   // local-use IPv4/IPv6 translation
+    addDeniedIPRange("100::/64", &xsink);         // discard-only
+    // IETF protocol assignments (2001::/23) but Teredo (2001::/32), which is judged by the IPv4 address it embeds
+    addDeniedIPRange("2001:1::/32", &xsink);
+    addDeniedIPRange("2001:2::/31", &xsink);
+    addDeniedIPRange("2001:4::/30", &xsink);
+    addDeniedIPRange("2001:8::/29", &xsink);
+    addDeniedIPRange("2001:10::/28", &xsink);
+    addDeniedIPRange("2001:20::/27", &xsink);
+    addDeniedIPRange("2001:40::/26", &xsink);
+    addDeniedIPRange("2001:80::/25", &xsink);
+    addDeniedIPRange("2001:100::/24", &xsink);
+    addDeniedIPRange("2001:db8::/32", &xsink);    // documentation
+    addDeniedIPRange("3fff::/20", &xsink);        // documentation
+    addDeniedIPRange("fc00::/7", &xsink);         // unique local
+    addDeniedIPRange("fe80::/10", &xsink);        // link-local
+    addDeniedIPRange("fec0::/10", &xsink);        // site-local (deprecated)
+    addDeniedIPRange("ff00::/8", &xsink);         // multicast
+    // and every other address outside the global unicast range 2000::/3 that embeds no IPv4 address (see
+    // isDeniedAny())
+    priv->block_non_global_ipv6 = true;
 
     assert(!xsink);  // These should never fail
 }
@@ -914,8 +1176,8 @@ void QoreNetworkSecurityManager::allowHTTPSOnly() {
     addAllowedPort(443, QSEC_NET_TCP);
 }
 
-bool QoreNetworkSecurityManager::allowsPort(int port, int proto) const {
-    return priv->isPortAllowed(port, proto);
+bool qore_network_security_manager_ops::allowsPortImpl(QoreNetworkSecurityManager* b, int port, int proto) {
+    return b->priv->isPortAllowed(port, proto);
 }
 
 void QoreNetworkSecurityManager::setDefaultPolicy(bool allow) {
@@ -962,13 +1224,14 @@ bool QoreNetworkSecurityManager::checkConnect(const char* hostname, const struct
         return true;
     }
     struct sockaddr_storage storage;
+    const struct sockaddr* orig = addr;
     addr = qore_net_security_private::normalizeAddr(addr, storage, true);
 
     // Check denied ranges first (always take precedence, also over an allowed host name)
-    if (priv->isDenied(addr)) {
+    if (priv->isDeniedAny(orig, addr)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Connection to %s denied by security policy (private/blocked network)",
-            priv->getAddrString(addr).c_str());
+            priv->describeAddr(orig, addr).c_str());
         return false;
     }
 
@@ -987,12 +1250,12 @@ bool QoreNetworkSecurityManager::checkConnect(const char* hostname, const struct
 
     // Check allowed ranges
     if (!priv->allowed_ranges.empty()) {
-        if (priv->inAllowedRange(addr)) {
+        if (priv->inAllowedRangeAny(orig, addr)) {
             return true;
         }
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Connection to %s denied by security policy (not in allowed list)",
-            priv->getAddrString(addr).c_str());
+            priv->describeAddr(orig, addr).c_str());
         return false;
     }
 
@@ -1000,7 +1263,7 @@ bool QoreNetworkSecurityManager::checkConnect(const char* hostname, const struct
     if (!priv->default_allow) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Connection to %s denied by security policy (default deny)",
-            priv->getAddrString(addr).c_str());
+            priv->describeAddr(orig, addr).c_str());
         return false;
     }
 
@@ -1022,14 +1285,21 @@ bool QoreNetworkSecurityManager::checkBind(const struct sockaddr* addr, socklen_
         return true;
     }
     struct sockaddr_storage storage;
+    const struct sockaddr* orig = addr;
     addr = qore_net_security_private::normalizeAddr(addr, storage, false);
 
     // denied ranges keep code from reaching networks; a socket bound to a loopback address can only be reached from
-    // the local host, which is less than a bind on all interfaces exposes, so denied ranges do not apply to it
-    if (!qore_net_security_private::isLoopback(addr) && priv->isDenied(addr)) {
+    // the local host, which is less than a bind on all interfaces exposes, so denied ranges do not apply to it: only a
+    // loopback address itself, or an IPv4-mapped one, not another IPv6 form that embeds a loopback address, which would
+    // be an address of a real interface
+    bool loopback = qore_net_security_private::isLoopback(orig)
+        || (orig->sa_family == AF_INET6
+            && IN6_IS_ADDR_V4MAPPED(&reinterpret_cast<const struct sockaddr_in6*>(orig)->sin6_addr)
+            && qore_net_security_private::isLoopback(addr));
+    if (!loopback && priv->isDeniedAny(orig, addr)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Binding to %s denied by security policy (private/blocked network)",
-            priv->getAddrString(addr).c_str());
+            priv->describeAddr(orig, addr).c_str());
         return false;
     }
 
@@ -1042,19 +1312,19 @@ bool QoreNetworkSecurityManager::checkBind(const struct sockaddr* addr, socklen_
     }
 
     if (!priv->allowed_ranges.empty()) {
-        if (priv->inAllowedRange(addr)) {
+        if (priv->inAllowedRangeAny(orig, addr)) {
             return true;
         }
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Binding to %s denied by security policy (not in allowed list)",
-            priv->getAddrString(addr).c_str());
+            priv->describeAddr(orig, addr).c_str());
         return false;
     }
 
     if (!priv->default_allow) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Binding to %s denied by security policy (default deny)",
-            priv->getAddrString(addr).c_str());
+            priv->describeAddr(orig, addr).c_str());
         return false;
     }
 
@@ -1114,6 +1384,7 @@ QoreNetworkSecurityManager* QoreNetworkSecurityManager::copy() const {
     result->priv->denied_ranges = priv->denied_ranges;
     result->priv->allowed_ports = priv->allowed_ports;
     result->priv->default_allow = priv->default_allow;
+    result->priv->block_non_global_ipv6 = priv->block_non_global_ipv6;
     return result;
 }
 
@@ -1123,6 +1394,7 @@ void QoreNetworkSecurityManager::reset() {
     priv->denied_ranges.clear();
     priv->allowed_ports.clear();
     priv->default_allow = false;
+    priv->block_non_global_ipv6 = false;
 }
 
 void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& other) {
@@ -1132,6 +1404,7 @@ void QoreNetworkSecurityManager::copyFrom(const QoreNetworkSecurityManager& othe
     priv->denied_ranges = other.priv->denied_ranges;
     priv->allowed_ports = other.priv->allowed_ports;
     priv->default_allow = other.priv->default_allow;
+    priv->block_non_global_ipv6 = other.priv->block_non_global_ipv6;
 }
 
 //------------------------------------------------------------------------------
@@ -1326,11 +1599,174 @@ bool QoreSandboxManager::isEnforcementLevelFixed() const {
 void QoreSandboxManager::setMaxThreads(int count) {
     max_threads = count;
     // a raised limit frees slots for the thread pools waiting for one
-    notifyThreadSlotReleased();
+    qore_sandbox_manager_ops(this).notifyThreadSlotReleased();
 }
 
 int QoreSandboxManager::getMaxThreads() const {
     return sandbox_intersection_limit<int>(this, max_threads.load(), &QoreSandboxManager::getMaxThreads);
+}
+
+//! true once a sandbox has an isolation domain: until then no sandbox can be mixed (see
+//! QoreSandboxComposition::callerIsMixed())
+static std::atomic<bool> qore_isolation_domains_used{false};
+
+int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xsink) {
+    // the domain decides which code may run for which tenant: only the host sets it
+    if (qore_calling_code_is_untrusted()) {
+        xsink->raiseException("SANDBOX-ACCESS-ERROR", "SandboxManager::setIsolationDomain(): sandboxed code, or code "
+            "whose functional domains are restricted, cannot set the isolation domain of a sandbox");
+        return -1;
+    }
+    if (!domain || !*domain) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the isolation domain "
+            "must not be empty");
+        return -1;
+    }
+    if (QoreSandboxComposition::members(this)) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): a composite sandbox has "
+            "the isolation domains of its members");
+        return -1;
+    }
+    // the error is raised after the lock is released: raising an exception resolves the sandbox of the code that
+    // raises it (qore#7139), which can take the domain lock of this manager as a member of a composition
+    std::string current;
+    bool governs = false;
+    {
+        std::lock_guard<std::mutex> lck(fs_mgr.priv->domain_lock);
+        if (fs_mgr.priv->isolation_domain == domain) {
+            return 0;
+        }
+        if (fs_mgr.priv->isolation_domain.empty()) {
+            governs = fs_mgr.priv->governs.load(std::memory_order_acquire);
+            if (!governs) {
+                fs_mgr.priv->isolation_domain = domain;
+                qore_isolation_domains_used.store(true, std::memory_order_release);
+                return 0;
+            }
+        } else {
+            current = fs_mgr.priv->isolation_domain;
+        }
+    }
+    if (!current.empty()) {
+        xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the isolation domain of "
+            "the sandbox is already set to '%s'; it cannot be changed", current.c_str());
+        return -1;
+    }
+    assert(governs);
+    xsink->raiseException("SANDBOX-CONFIG-ERROR", "SandboxManager::setIsolationDomain(): the sandbox already "
+        "governs code; its isolation domain must be set before it is given to a Program");
+    return -1;
+}
+
+std::string qore_caller_isolation_domain() {
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    if (governing) {
+        std::string domain;
+        // code that the sandboxes of different tenants govern together belongs to no tenant: the mixed value is
+        // returned, never one of their domains nor that of the caller of a trusted build (fails closed)
+        if (QoreSandboxComposition::foldIsolationDomain(governing.get(), domain)) {
+            return domain;
+        }
+    }
+    // code in a trusted build that a tenant entered works for that tenant, whose sandbox the build's barrier hides
+    // (qore#6536)
+    if (const std::string* domain = qore_sandbox_build_caller_domain()) {
+        return *domain;
+    }
+    return std::string();
+}
+
+const std::string* QoreSandboxComposition::governingIsolationDomain(const QoreSandboxManager* sm) {
+    // the domain of a manager cannot change once it governs code, so it is read without a lock
+    const std::string& domain = sm->fs_mgr.priv->isolation_domain;
+    return domain.empty() ? nullptr : &domain;
+}
+
+void QoreSandboxComposition::setGoverns(QoreSandboxManager* sm) {
+    // after a concurrent setIsolationDomain() has written the domain
+    std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
+    sm->fs_mgr.priv->governs.store(true, std::memory_order_release);
+}
+
+std::string QoreSandboxManager::getIsolationDomain() const {
+    std::string domain;
+    QoreSandboxComposition::foldIsolationDomain(this, domain);
+    return domain;
+}
+
+// starts with a NUL character, so that QoreSandboxManager::setIsolationDomain() can never set it
+const std::string QoreSandboxComposition::MixedIsolationDomain("\0mixed", 6);
+
+int QoreSandboxComposition::foldIsolationDomain(const QoreSandboxManager* sm, std::string& domain) {
+    domain.clear();
+    const auto* managers = members(sm);
+    if (!managers) {
+        std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
+        domain = sm->fs_mgr.priv->isolation_domain;
+        if (domain.empty()) {
+            return 0;
+        }
+        return qore_isolation_domain_is_mixed(domain) ? -1 : 1;
+    }
+    // the sandboxes of different tenants govern code together when one tenant calls code or an object of another
+    // tenant's (whose provenance applies that tenant's sandbox), and such code belongs to neither: the composite is
+    // mixed, which every caller treats as refused (fails closed); a member without a domain belongs to no tenant and
+    // adds nothing, as for the isolation of trusted builds
+    for (const QoreSandboxManager* member : *managers) {
+        std::string d;
+        {
+            std::lock_guard<std::mutex> lck(member->fs_mgr.priv->domain_lock);
+            d = member->fs_mgr.priv->isolation_domain;
+        }
+        if (d.empty()) {
+            continue;
+        }
+        if (qore_isolation_domain_is_mixed(d) || (!domain.empty() && d != domain)) {
+            domain = MixedIsolationDomain;
+            return -1;
+        }
+        if (domain.empty()) {
+            domain = std::move(d);
+        }
+    }
+    return domain.empty() ? 0 : 1;
+}
+
+bool QoreSandboxComposition::callerIsMixed() {
+    // no sandbox has a domain: nothing can be mixed, at no cost
+    if (!qore_isolation_domains_used.load(std::memory_order_acquire)) {
+        return false;
+    }
+    try {
+        ReferenceHolder<QoreSandboxManager> sm(qore_find_thread_sandbox_manager_ref(), nullptr);
+        std::string domain;
+        return sm && foldIsolationDomain(*sm, domain) < 0;
+    } catch (std::bad_alloc&) {
+        return true;
+    }
+}
+
+int QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm, ExceptionSink* xsink) {
+    if (!qore_calling_code_is_untrusted()) {
+        return 0;
+    }
+    // a sandbox that sandboxed code creates belongs to the tenant of that code
+    ReferenceHolder<QoreSandboxManager> creator(qore_find_thread_sandbox_manager_ref(), nullptr);
+    if (!creator) {
+        return 0;
+    }
+    std::string domain;
+    // code that the sandboxes of different tenants govern together belongs to no tenant, so it cannot create a
+    // sandbox of one of them, nor one without a domain that would escape theirs (fails closed)
+    if (foldIsolationDomain(*creator, domain) < 0) {
+        xsink->raiseException("SANDBOX-ISOLATION-ERROR", "SandboxManager: code that the sandboxes of more than one "
+            "isolation domain govern together cannot create a sandbox");
+        return -1;
+    }
+    std::lock_guard<std::mutex> lck(sm->fs_mgr.priv->domain_lock);
+    assert(!sm->fs_mgr.priv->governs.load(std::memory_order_relaxed));
+    sm->fs_mgr.priv->isolation_domain = std::move(domain);
+    return 0;
 }
 
 void QoreSandboxManager::setWallTimeLimit(int64 ms) {
@@ -1388,24 +1824,24 @@ bool QoreSandboxManager::restricts() const {
     return networkRestricts() || filesystemRestricts() || limitsRestrict();
 }
 
-int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
+int qore_sandbox_manager_ops::acquireThreadSlotImpl(QoreSandboxManager* b, ExceptionSink* xsink) {
     bool released = false;
-    int rc = acquireThreadSlotQuiet(xsink, released);
+    int rc = qore_sandbox_manager_ops(b).acquireThreadSlotQuiet(xsink, released);
     if (released) {
         // the slots of a composition taken before a member refused one were released again
-        notifyThreadSlotReleased();
+        qore_sandbox_manager_ops(b).notifyThreadSlotReleased();
     }
     return rc;
 }
 
-int QoreSandboxManager::acquireThreadSlotQuiet(ExceptionSink* xsink, bool& released) {
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
+int qore_sandbox_manager_ops::acquireThreadSlotQuietImpl(QoreSandboxManager* b, ExceptionSink* xsink, bool& released) {
+    if (const auto* managers = QoreSandboxComposition::members(b)) {
         size_t acquired = 0;
         for (auto* manager : *managers) {
             if ((!(acquired % 100) && qore_check_cancel(xsink, "sandbox thread reservation"))
-                    || manager->acquireThreadSlotQuiet(xsink, released)) {
+                    || qore_sandbox_manager_ops(manager).acquireThreadSlotQuiet(xsink, released)) {
                 while (acquired) {
-                    (*managers)[--acquired]->releaseThreadSlotQuiet();
+                    qore_sandbox_manager_ops((*managers)[--acquired]).releaseThreadSlotQuiet();
                     released = true;
                 }
                 return -1;
@@ -1414,15 +1850,15 @@ int QoreSandboxManager::acquireThreadSlotQuiet(ExceptionSink* xsink, bool& relea
         }
         return 0;
     }
-    int count = active_threads.load();
+    int count = b->active_threads.load();
     while (true) {
-        int max = max_threads.load();
+        int max = b->max_threads.load();
         if (max > 0 && count >= max) {
             xsink->raiseException("THREAD-CREATION-FAILURE", "cannot start a thread: sandbox thread limit of %d "
                 "reached", max);
             return -1;
         }
-        if (active_threads.compare_exchange_weak(count, count + 1)) {
+        if (b->active_threads.compare_exchange_weak(count, count + 1)) {
             return 0;
         }
     }
@@ -1493,29 +1929,29 @@ void ThreadPool::notifySlotReleased(QoreSandboxManager* sm, const AbstractPrivat
     }
 }
 
-void QoreSandboxManager::releaseThreadSlot() {
-    releaseThreadSlotQuiet();
-    notifyThreadSlotReleased();
+void qore_sandbox_manager_ops::releaseThreadSlotImpl(QoreSandboxManager* b) {
+    qore_sandbox_manager_ops(b).releaseThreadSlotQuiet();
+    qore_sandbox_manager_ops(b).notifyThreadSlotReleased();
 }
 
-void QoreSandboxManager::notifyThreadSlotReleased(const AbstractPrivateData* except) {
+void qore_sandbox_manager_ops::notifyThreadSlotReleasedImpl(QoreSandboxManager* b, const AbstractPrivateData* except) {
     // a thread pool waiting for a slot of this manager, or of a member of this composition, can start a worker now
-    ThreadPool::notifySlotReleased(this, except);
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
+    ThreadPool::notifySlotReleased(b, except);
+    if (const auto* managers = QoreSandboxComposition::members(b)) {
         for (auto* manager : *managers) {
             ThreadPool::notifySlotReleased(manager, except);
         }
     }
 }
 
-void QoreSandboxManager::releaseThreadSlotQuiet() {
-    if (const auto* managers = QoreSandboxComposition::members(this)) {
+void qore_sandbox_manager_ops::releaseThreadSlotQuietImpl(QoreSandboxManager* b) {
+    if (const auto* managers = QoreSandboxComposition::members(b)) {
         for (auto* manager : *managers) {
-            manager->releaseThreadSlotQuiet();
+            qore_sandbox_manager_ops(manager).releaseThreadSlotQuiet();
         }
         return;
     }
-    int prev = active_threads.fetch_sub(1);
+    int prev = b->active_threads.fetch_sub(1);
     assert(prev > 0);
     (void)prev;
 }
@@ -1702,6 +2138,14 @@ static bool is_module_initialization_resource_read(const char* path, int mode) {
     return target.size() == root.size() || root.back() == '/' || target[root.size()] == '/';
 }
 
+bool QoreSandboxComposition::checkCanonicalFilesystemAccess(QoreSandboxManager& sm, const char* canon,
+        const char* path, int mode, ExceptionSink* xsink) {
+    if (is_module_initialization_resource_read(canon, mode)) {
+        return true;
+    }
+    return checkCanonicalAccess(sm.fs_mgr, canon, path, mode, xsink);
+}
+
 bool QoreSandboxManager::checkFilesystemAccess(const char* path, int mode, ExceptionSink* xsink) {
     if (is_module_initialization_resource_read(path, mode)) {
         return true;
@@ -1742,6 +2186,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     // the effective enforcement level, fixed if this manager's is: a copy is never looser
     result->fs_mgr.priv->enforcement_level.store(getEnforcementLevel(), std::memory_order_release);
     result->fs_mgr.priv->enforcement_level_fixed.store(isEnforcementLevelFixed(), std::memory_order_release);
+    // the copy belongs to the same tenant
+    result->fs_mgr.priv->isolation_domain = getIsolationDomain();
     // Don't copy interrupt state
 
     return result;
@@ -1840,6 +2286,8 @@ int qore_program_private::setOwnSandboxManager(QoreSandboxManager* sm, bool addi
             return -1;
         }
         if (sm) {
+            // its isolation domain is fixed from now on
+            QoreSandboxComposition::setGoverns(sm);
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
             // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
@@ -1870,6 +2318,28 @@ QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
         return sm;
     }
     return nullptr;
+}
+
+bool qore_object_program_is_sandboxed(const QoreObject* obj) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+    return static_cast<bool>(sm);
+}
+
+bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
+    if (!sm) {
+        return false;
+    }
+    id = qore_program_private::get(*pgm)->getProgramId();
+    return true;
 }
 
 QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
@@ -2196,6 +2666,10 @@ QoreSandboxManager* QoreSandboxComposition::combine(const std::vector<QoreSandbo
             return manager;
         }
     }
+    // the isolation domains of the members are fixed from now on
+    for (QoreSandboxManager* member : flat) {
+        QoreSandboxComposition::setGoverns(member);
+    }
     auto composition = std::make_shared<const QoreSandboxMembers>(std::move(flat));
     ReferenceHolder<QoreSandboxManager> result(new QoreSandboxManager, nullptr);
     result->fs_mgr.priv->composition = composition;
@@ -2283,6 +2757,19 @@ int qore_transfer_object_to_caller(QoreObject& obj, ExceptionSink* xsink) {
     return 0;
 }
 
+int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsink) {
+    assert(what);
+    assert(xsink);
+    // a module is a capability, but the terminal is not lent to code that is restricted from it: library code that
+    // serves such code writes nothing to the process's terminal for it (qore#7140)
+    if (!qore_caller_restricts_terminal_io()) {
+        return 0;
+    }
+    xsink->raiseException("ILLEGAL-EXPRESSION", "%s cannot be called for code that is restricted from terminal I/O "
+        "(functional domain TERMINAL_IO, PO_NO_TERMINAL_IO)", what);
+    return -1;
+}
+
 int qore_check_process_wide_registration(const char* what, ExceptionSink* xsink) {
     assert(what);
     assert(xsink);
@@ -2321,4 +2808,190 @@ QoreSandboxPolicyBarrierHelper::~QoreSandboxPolicyBarrierHelper() {
     if (active) {
         qore_pop_sandbox_policy_barrier();
     }
+}
+
+//------------------------------------------------------------------------------
+// Pinned paths for name-based operations (qore#7518)
+//------------------------------------------------------------------------------
+
+#ifndef _Q_WINDOWS
+//! opens a directory by an absolute path without following any link in it
+/** Each component is opened relative to the one before it with O_NOFOLLOW, so that a component that is or has become
+    a link is refused (ELOOP), as is one that is no longer a directory (ENOTDIR)
+
+    @return the descriptor, or -1 with errno set
+*/
+static int open_dir_nofollow(const std::string& dir) {
+#if defined(O_PATH)
+    const int dflags = O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#elif defined(O_SEARCH)
+    const int dflags = O_SEARCH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#else
+    const int dflags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+#endif
+    assert(!dir.empty() && dir[0] == '/');
+    int fd;
+    do {
+        fd = open("/", dflags & ~O_NOFOLLOW);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return -1;
+    }
+    size_t pos = 1;
+    while (pos < dir.size()) {
+        size_t end = dir.find('/', pos);
+        if (end == std::string::npos) {
+            end = dir.size();
+        }
+        if (end > pos) {
+            std::string comp = dir.substr(pos, end - pos);
+            int nfd;
+            do {
+                nfd = openat(fd, comp.c_str(), dflags);
+            } while (nfd < 0 && errno == EINTR);
+            int err = errno;
+            // a link is refused as ENOTDIR by some systems with O_DIRECTORY (ex: Linux with O_PATH): it is reported as
+            // a link
+            if (nfd < 0 && err == ENOTDIR) {
+                struct stat lbuf;
+                if (!fstatat(fd, comp.c_str(), &lbuf, AT_SYMLINK_NOFOLLOW) && S_ISLNK(lbuf.st_mode)) {
+                    err = ELOOP;
+                }
+            }
+            close(fd);
+            if (nfd < 0) {
+                errno = err;
+                return -1;
+            }
+            fd = nfd;
+        }
+        pos = end + 1;
+    }
+    return fd;
+}
+#endif
+
+QoreSandboxPinnedPath::~QoreSandboxPinnedPath() {
+#ifndef _Q_WINDOWS
+    if (dirfd >= 0) {
+        close(dirfd);
+    }
+#endif
+}
+
+int q_sandbox_pin_path(QoreSandboxManager& sm, const char* name, int mode, bool entry, QoreSandboxPinnedPath& pin,
+        ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -2;
+#else
+    assert(pin.dirfd < 0);
+    std::string canon_parent;
+    {
+        qore_fs_security_private resolver;
+        if (entry) {
+            // the entry itself: the directory holding it is resolved, its last component is not
+            std::string n(name);
+            while (n.size() > 1 && n.back() == '/') {
+                n.pop_back();
+                pin.dir_required = true;
+            }
+            size_t sep = n.rfind('/');
+            std::string dir = sep == std::string::npos ? std::string(".") : (sep ? n.substr(0, sep) : std::string("/"));
+            pin.leaf = sep == std::string::npos ? n : n.substr(sep + 1);
+            if (pin.leaf.empty() || pin.leaf == "." || pin.leaf == "..") {
+                errno = EINVAL;
+                return -2;
+            }
+            canon_parent = resolver.canonicalize(dir.c_str(), xsink);
+        } else {
+            // the object that the name reaches: every component is resolved
+            std::string canon = resolver.canonicalize(name, xsink);
+            if (!*xsink) {
+                if (canon == "/") {
+                    canon_parent = "/";
+                    pin.leaf = ".";
+                } else {
+                    size_t sep = canon.rfind('/');
+                    canon_parent = sep ? canon.substr(0, sep) : std::string("/");
+                    pin.leaf = canon.substr(sep + 1);
+                }
+            }
+        }
+        if (*xsink) {
+            return -1;
+        }
+    }
+    pin.canon = canon_parent == "/" ? "/" + pin.leaf : canon_parent + "/" + pin.leaf;
+
+    // the directory is pinned: the operation acts in it, whatever its path reaches afterwards
+    pin.dirfd = open_dir_nofollow(canon_parent);
+    if (pin.dirfd < 0) {
+        // a component that is a link (it became one after the path was resolved) denies the operation; one that is
+        // not a directory (ENOTDIR) is the error of the operation, as without a policy
+        if (errno == ELOOP) {
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the path changed while it was "
+                "checked", name);
+            return -1;
+        }
+        return -2;
+    }
+
+    // the policy is checked for the canonical path pinned, without resolving it again: the directory was opened along
+    // it without following a link, so the decision applies to the directory pinned; the error names the path as given
+    if (!QoreSandboxComposition::checkCanonicalFilesystemAccess(sm, pin.canon.c_str(), name, mode, xsink)) {
+        return -1;
+    }
+    // a name ending with '/' keeps it for the operation, to which the operating system applies its rules
+    if (pin.dir_required) {
+        pin.leaf += '/';
+    }
+
+    // test hook: a concurrent change of the file system after the path was pinned
+    q_dbg_fs_swap_point(name);
+    return 0;
+#endif
+}
+
+int q_fchmodat_nofollow(int dirfd, const char* leaf, int mode) {
+#ifdef _Q_WINDOWS
+    errno = ENOSYS;
+    return -1;
+#else
+    // a change of mode that does not follow a link: supported on macOS and by Linux with fchmodat2()
+    if (!fchmodat(dirfd, leaf, mode, AT_SYMLINK_NOFOLLOW)) {
+        return 0;
+    }
+    if (errno != ENOTSUP && errno != EOPNOTSUPP && errno != ENOSYS && errno != EINVAL) {
+        return -1;
+    }
+#if defined(O_PATH) && defined(__linux__)
+    // the object is opened without following a link, and its mode is changed through the descriptor's procfs link,
+    // which reaches the object itself
+    int fd;
+    do {
+        fd = openat(dirfd, leaf, O_PATH | O_NOFOLLOW | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return -1;
+    }
+    ON_BLOCK_EXIT(close, fd);
+    struct stat sbuf;
+    if (fstat(fd, &sbuf)) {
+        return -1;
+    }
+    // the mode of a link is not changed (as with AT_SYMLINK_NOFOLLOW, which Linux does not support for links)
+    if (S_ISLNK(sbuf.st_mode)) {
+        errno = ELOOP;
+        return -1;
+    }
+    char proc_path[64];
+    snprintf(proc_path, sizeof proc_path, "/proc/self/fd/%d", fd);
+    return chmod(proc_path, mode);
+#else
+    // without a change of mode that does not follow a link, the operation is refused rather than raced
+    errno = ENOTSUP;
+    return -1;
+#endif
+#endif
 }

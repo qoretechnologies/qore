@@ -35,6 +35,7 @@
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreMiscMembersOps.h"
 
 #include <cassert>
 #include <cctype>
@@ -81,6 +82,7 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_COLUMNAR_SELECT,    "HasColumnarSelect" },
   { DBI_CAP_HAS_BULK_LOAD,          "HasBulkLoad" },
   { DBI_CAP_LOCAL_ONLY,             "LocalOnly" },
+  { DBI_CAP_SENSITIVE_DBNAME,       "SensitiveDbName" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -89,9 +91,17 @@ struct qore_dbi_mlist_private {
     dbi_method_list_t l;
     dbi_opt_map_t omap;
 
-    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type = 0) {
+    //! registers an option; \a declared is true for the variant with option flags, which decides whether the option
+    //! is sensitive (qore#7070)
+    DLLLOCAL void registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags,
+            bool declared) {
         assert(omap.find(name) == omap.end());
-        omap[name] = DbiOptInfo(desc, type);
+        // fail-closed: a flag that this library does not know (of a driver built for a later library) can mean that
+        // the value must not be shown, so the option counts as sensitive (qore#7070)
+        if (flags & ~QDBI_OPT_SENSITIVE) {
+            flags = QDBI_OPT_SENSITIVE;
+        }
+        omap[name] = DbiOptInfo(desc, type, flags & QDBI_OPT_SENSITIVE, declared);
     }
 
     DLLLOCAL static qore_dbi_mlist_private* get(const qore_dbi_method_list& ml) {
@@ -287,7 +297,13 @@ void qore_dbi_method_list::add(int code, q_dbi_option_get_t method) {
 }
 
 void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type) {
-    priv->registerOption(name, desc, type);
+    // no decision about the sensitivity of the option: it counts as undeclared, and its value is never shown in a
+    // masked form of a datasource (qore#7070)
+    priv->registerOption(name, desc, type, 0, false);
+}
+
+void qore_dbi_method_list::registerOption(const char* name, const char* desc, const QoreTypeInfo* type, int flags) {
+    priv->registerOption(name, desc, type, flags, true);
 }
 
 DbiArgHelper::DbiArgHelper(const QoreListNode* ol, bool numeric, ExceptionSink* xs) : orig(ol), nl(0), xsink(xs) {
@@ -709,8 +725,8 @@ DBIDriverList::~DBIDriverList() {
     delete priv;
 }
 
-DBIDriver* DBIDriverList::find_intern(const char* name) const {
-    return priv->find_intern(name);
+DBIDriver* qore_dbi_driver_list_ops::find_internImpl(DBIDriverList* b, const char* name) {
+    return b->priv->find_intern(name);
 }
 
 DBIDriver* DBIDriverList::find(const char* name) const {
@@ -723,6 +739,11 @@ DBIDriver* DBIDriverList::find(const char* name) const {
 }
 
 DBIDriver* DBIDriverList::find(const char* name, ExceptionSink* xsink) const {
+    // a string that cannot be a driver name, such as a datasource string or a path, is not looked up and not loaded as
+    // a module, whose error would show it (qore#6961)
+    if (!q_dbi_valid_driver_name(name)) {
+        return nullptr;
+    }
     DBIDriver* d = priv->find_intern(name);
     if (d) {
         return d;
@@ -750,8 +771,8 @@ DBIDriver* DBIDriverList::registerDriver(const char* name, const qore_dbi_method
     return dd;
 }
 
-QoreListNode* DBIDriverList::getDriverList() const {
-    return priv->getDriverList();
+QoreListNode* qore_dbi_driver_list_ops::getDriverListImpl(DBIDriverList* b) {
+    return b->priv->getDriverList();
 }
 
 void DBI_concat_numeric(QoreString* str, QoreValue v) {
@@ -811,6 +832,520 @@ static char* check_datasource_chars(char* str, const char* chars) {
     return p;
 }
 
+bool q_dbi_valid_driver_name(const char* name) {
+    if (!name || !*name) {
+        return false;
+    }
+    for (const char* p = name; *p; ++p) {
+        // ASCII letters and digits only, independent of the locale
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int q_dbi_raise_invalid_driver_name(ExceptionSink* xsink, const char* err) {
+    assert(xsink);
+    xsink->raiseException(err, "the DBI driver name is not valid: a driver name has only ASCII letters, digits, '_' "
+        "and '-'; it is not shown, as it can be a datasource string with credentials (a datasource string is accepted "
+        "only where a datasource string is expected, never as a driver name)");
+    return -1;
+}
+
+// returns true if the host name has only characters that a host name or an IP address can have (qore#6988)
+/** ASCII letters, digits, '.', '-', '_', and ':', '[' and ']' for an IPv6 address; a host with any other character
+    (such as a control character, which could forge a line of a log, or the text of a datasource string that is not a
+    host name) is not shown
+*/
+static bool q_ds_valid_host_name(const char* host, size_t len) {
+    // a NUL character, which would end the host as a C string, is not valid either
+    for (const char* p = host, *e = host + len; p < e; ++p) {
+        // independent of the locale
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-'
+            || c == '_' || c == ':' || c == '[' || c == ']')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void q_ds_append_masked(QoreString& str, const char* driver, const char* host, int port) {
+    q_ds_append_masked(str, driver, host, host ? strlen(host) : 0, port);
+}
+
+void q_ds_append_masked(QoreString& str, const char* driver, const char* host, size_t host_len, int port) {
+    str.sprintf("%s:" QORE_DS_MASK "/" QORE_DS_MASK "@" QORE_DS_MASK,
+        q_dbi_valid_driver_name(driver) ? driver : QORE_DS_MASK);
+    if (host && host_len) {
+        str.sprintf("%%%s", q_ds_valid_host_name(host, host_len) ? host : QORE_DS_MASK);
+        if (port) {
+            str.sprintf(":%d", port);
+        }
+    }
+}
+
+void q_ds_append_masked(QoreString& str, const Datasource& ds) {
+    q_ds_append_masked(str, ds.getDriverName(), ds.getHostNameStr().c_str(), ds.getPort());
+}
+
+void q_ds_append_masked_string(QoreString& str, const char* ds) {
+    const char* colon = ds ? strchr(ds, ':') : nullptr;
+    if (colon && colon != ds) {
+        std::string driver(ds, colon - ds);
+        if (q_dbi_valid_driver_name(driver.c_str())) {
+            str.sprintf("%s:" QORE_DS_MASK, driver.c_str());
+            return;
+        }
+    }
+    str.concat(QORE_DS_MASK);
+}
+
+// returns the port value of a datasource hash, or 0 if it has none that is valid
+static int q_ds_hash_port(const QoreHashNode* h) {
+    QoreValue v = h->getKeyValue("port");
+    switch (v.getType()) {
+        case NT_INT: {
+            int64 port = v.getAsBigInt();
+            return (port > 0 && port <= 65535) ? static_cast<int>(port) : 0;
+        }
+        case NT_STRING: {
+            // the value can be an inline short string, which has no QoreStringNode
+            QoreStringDataHelper str(v);
+            assert(str);
+            const char* p = str.c_str();
+            if (!*p || str.size() > 5) {
+                return 0;
+            }
+            int port = 0;
+            for (; *p; ++p) {
+                if (*p < '0' || *p > '9') {
+                    return 0;
+                }
+                port = port * 10 + (*p - '0');
+            }
+            return port <= 65535 ? port : 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+void q_ds_append_masked_hash(QoreString& str, const QoreHashNode* h) {
+    q_ds_append_masked_flags(str, h, 0);
+}
+
+static QoreStringNode* q_ds_shown_option_value(const QoreValue v);
+
+// returns true if the name of an option can name a credential or a connection string or URL that can embed one: it
+// has one of the words below, without case, anywhere in it; the value of such an option is masked whatever the
+// driver declares (defense in depth against an option declared not sensitive by mistake; qore#7070)
+bool q_dbi_option_name_is_sensitive(const char* key) {
+    static const char* words[] = {"pass", "pwd", "secret", "token", "key", "cred", "conn", "url", "dsn", "auth"};
+    for (const char* p = key; *p; ++p) {
+        for (const char* w : words) {
+            if (!strncasecmp(p, w, strlen(w))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// the one path for the value of a driver option in every masked form of a datasource (the safe URL, the masked hash,
+// the options of a db:// connection's information and ping results, mask_datasource_options()): returns the value
+// to show as a string, or nullptr if the value is masked: if the driver is not loaded (\a dd is nullptr), if the
+// option cannot be shown (see qore_dbi_private::isOptionShowable(): also if its name can name a credential, see
+// q_dbi_option_name_is_sensitive()), or if the value cannot be shown in a datasource
+// string (see q_ds_shown_option_value()) (qore#7070)
+static QoreStringNode* q_dbi_shown_option(const qore_dbi_private* dd, const char* key, const QoreValue v) {
+    if (!dd || !dd->isOptionShowable(key)) {
+        return nullptr;
+    }
+    return q_ds_shown_option_value(v);
+}
+
+QoreHashNode* q_dbi_mask_options(const char* driver, const QoreHashNode* opts) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    if (!opts || opts->empty()) {
+        return rv.release();
+    }
+    // the driver is looked up among the drivers already loaded only: masking never loads a module, which could fail
+    // or be refused; fail-closed, every value is masked when the driver is not loaded (qore#7070)
+    const qore_dbi_private* dd = nullptr;
+    if (q_dbi_valid_driver_name(driver)) {
+        DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(driver);
+        if (d) {
+            dd = qore_dbi_private::get(*d);
+        }
+    }
+    ConstHashIterator i(opts);
+    while (i.next()) {
+        // the value of an option that the driver declares not sensitive is shown only as the masked forms of a
+        // datasource show it: as a string, if it can be shown in a datasource string (see q_ds_masked_hash()); a value
+        // such as a URL or a connection string with credentials, or a container, is masked as well
+        QoreStringNode* val = q_dbi_shown_option(dd, i.getKey(), i.get());
+        rv->setKeyValue(i.getKey(), val ? val : new QoreStringNode(QORE_DS_MASK), nullptr);
+    }
+    return rv.release();
+}
+
+// parses a datasource string for its masked description; returns the hash of its parts, or nullptr if it cannot be
+// parsed or is ambiguous, with \a driver set to its driver name if it starts with a valid one; never raises an
+// exception
+static QoreHashNode* q_ds_parse_for_mask(const QoreString& ds, std::string& driver) {
+    // the string is never shown, and an exception raised parsing it is not raised to the caller
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(q_parse_datasource_string(ds, &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
+        // the text in the default encoding, as the driver name is looked for in ASCII
+        TempEncodingHelper tmp(ds, QCS_DEFAULT, &xsink);
+        if (xsink) {
+            xsink.clear();
+            return nullptr;
+        }
+        const char* p = tmp->c_str();
+        const char* colon = strchr(p, ':');
+        if (colon && colon != p) {
+            std::string d(p, colon - p);
+            if (q_dbi_valid_driver_name(d.c_str())) {
+                driver = d;
+            }
+        }
+        return nullptr;
+    }
+    // the option block is found from the last '{' of the string, so a '{' in the password can make the text after it,
+    // with the real database name and host, the option block, and a part of the password the host; an option with
+    // '@', which separates the credentials from the database name, makes the split ambiguous, so only the driver is
+    // shown then (qore#6988)
+    QoreValue opts = h->getKeyValue("options");
+    if (opts.getType() == NT_HASH) {
+        ConstHashIterator i(opts.get<const QoreHashNode>());
+        while (i.next()) {
+            QoreStringDataHelper val(i.get());
+            if (strchr(i.getKey(), '@') || (val && memchr(val.c_str(), '@', val.size()))) {
+                QoreStringDataHelper d(h->getKeyValue("type"));
+                if (d && q_dbi_valid_driver_name(d.c_str())) {
+                    driver = d.c_str();
+                }
+                return nullptr;
+            }
+        }
+    }
+    return h.release();
+}
+
+// appends the description of a string that is described by its driver name only
+static void q_ds_append_driver_only(QoreString& str, const std::string& driver) {
+    if (driver.empty()) {
+        str.concat(QORE_DS_MASK);
+    } else {
+        str.sprintf("%s:" QORE_DS_MASK, driver.c_str());
+    }
+}
+
+void q_ds_append_masked_string_desc(QoreString& str, const QoreString& ds) {
+    q_ds_append_masked_string_flags(str, ds, 0);
+}
+
+void q_ds_append_masked_string_flags(QoreString& str, const QoreString& ds, unsigned flags) {
+    std::string driver;
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(q_ds_parse_for_mask(ds, driver), &xsink);
+    if (!h) {
+        q_ds_append_driver_only(str, driver);
+        return;
+    }
+    q_ds_append_masked_flags(str, *h, flags);
+}
+
+QoreHashNode* q_ds_masked_string_hash(const QoreString& ds, unsigned flags) {
+    std::string driver;
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(q_ds_parse_for_mask(ds, driver), &xsink);
+    if (!h) {
+        QoreHashNode* rv = new QoreHashNode(autoTypeInfo);
+        rv->setKeyValue("type", new QoreStringNode(driver.empty() ? QORE_DS_MASK : driver.c_str()), nullptr);
+        return rv;
+    }
+    return q_ds_masked_hash(*h, flags);
+}
+
+// returns true if the database name can be shown: it is not empty and has no control character, which could forge a
+// line of a log, and no NUL character (qore#7017)
+/* the name is shown only if it is valid UTF-8 and has no character that could make it more than a database name
+   (qore#7017):
+   - no control character (C0, DEL or C1), which could forge a line of a log, and no bidirectional formatting
+     character, which could make it display as other text
+   - none of the separators of a datasource string ("@", "%", "{", "}", "(", ")"), which would make the description
+     show another host or options than the datasource's
+   - no "=" or ";" and no "://": a database name can be a connection string of its own (ex: a PostgreSQL conninfo
+     string such as "host=h user=u password=p dbname=d", a URI, or an ODBC string with "PWD="), with credentials
+*/
+static bool q_ds_valid_db_name(const char* db, size_t len) {
+    if (!len) {
+        return false;
+    }
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(db);
+    const unsigned char* e = p + len;
+    while (p < e) {
+        unsigned c = *p;
+        unsigned cp;
+        size_t n;
+        if (c < 0x80) {
+            cp = c;
+            n = 1;
+        } else if ((c & 0xe0) == 0xc0) {
+            cp = c & 0x1f;
+            n = 2;
+        } else if ((c & 0xf0) == 0xe0) {
+            cp = c & 0x0f;
+            n = 3;
+        } else if ((c & 0xf8) == 0xf0) {
+            cp = c & 0x07;
+            n = 4;
+        } else {
+            return false;
+        }
+        if (static_cast<size_t>(e - p) < n) {
+            return false;
+        }
+        for (size_t i = 1; i < n; ++i) {
+            if ((p[i] & 0xc0) != 0x80) {
+                return false;
+            }
+            cp = (cp << 6) | (p[i] & 0x3f);
+        }
+        // overlong forms, surrogates and values above U+10FFFF are not valid UTF-8
+        if ((n == 2 && cp < 0x80) || (n == 3 && cp < 0x800) || (n == 4 && (cp < 0x10000 || cp > 0x10ffff))
+            || (cp >= 0xd800 && cp <= 0xdfff)) {
+            return false;
+        }
+        if (cp < 0x20 || (cp >= 0x7f && cp <= 0x9f)
+            || cp == 0x061c || cp == 0x200e || cp == 0x200f || (cp >= 0x202a && cp <= 0x202e)
+            || (cp >= 0x2066 && cp <= 0x2069)) {
+            return false;
+        }
+        switch (cp) {
+            case '@': case '%': case '{': case '}': case '(': case ')': case '=': case ';':
+                return false;
+            case ':':
+                if (static_cast<size_t>(e - p) >= 3 && p[1] == '/' && p[2] == '/') {
+                    return false;
+                }
+                break;
+        }
+        p += n;
+    }
+    return true;
+}
+
+// returns the database name of a datasource hash in UTF-8 if it can be shown (see q_ds_valid_db_name()), or nullptr
+static QoreStringNode* q_ds_shown_db_name(const QoreValue v) {
+    QoreStringDataHelper db(v);
+    if (!db || db.empty()) {
+        return nullptr;
+    }
+    // the value can be in any encoding: it is checked and shown in UTF-8
+    ExceptionSink xsink;
+    QoreString str(db.c_str(), db.size(), db.getEncoding());
+    TempEncodingHelper utf8(str, QCS_UTF8, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    if (!q_ds_valid_db_name(utf8->c_str(), utf8->size())) {
+        return nullptr;
+    }
+    return new QoreStringNode(utf8->c_str(), utf8->size(), QCS_UTF8);
+}
+
+// returns true if the name has only ASCII letters, digits, '_', '-' and '.': an encoding or an option name that can be
+// shown (qore#7017)
+static bool q_ds_valid_name(const char* name, size_t len) {
+    if (!len) {
+        return false;
+    }
+    for (const char* p = name, *e = name + len; p < e; ++p) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-'
+            || c == '.')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// returns the string form of the value of an option for a masked datasource, if it can be shown in a datasource string:
+// a string, an integer, a floating-point number, an arbitrary-precision number or a boolean whose string form has only
+// printable ASCII characters, none of the separators of a datasource string or of its option block (@ % { } ( ) , =),
+// no ";" and no "://"; nullptr otherwise, then the value is masked (fail-closed; qore#7070)
+static QoreStringNode* q_ds_shown_option_value(const QoreValue v) {
+    switch (v.getType()) {
+        case NT_STRING:
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_BOOLEAN:
+            break;
+        default:
+            return nullptr;
+    }
+    QoreStringValueHelper str(v);
+    // a string in an encoding that is not ASCII-compatible has bytes that are not printable ASCII and is masked
+    for (const char* p = str->c_str(), *e = p + str->size(); p < e; ++p) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (c < 0x20 || c > 0x7e || strchr("@%{}(),=;", c)) {
+            return nullptr;
+        }
+    }
+    if (strstr(str->c_str(), "://")) {
+        return nullptr;
+    }
+    return new QoreStringNode(str->c_str());
+}
+
+QoreHashNode* q_ds_masked_hash(const QoreHashNode* h, unsigned flags) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
+    // the values can be inline short strings, which have no QoreStringNode; the helpers hold their bytes, and a value
+    // that is not a string gives nullptr
+    QoreStringDataHelper type(h ? h->getKeyValue("type") : QoreValue());
+    rv->setKeyValue("type", new QoreStringNode(type && q_dbi_valid_driver_name(type.c_str()) ? type.c_str()
+        : QORE_DS_MASK), nullptr);
+    rv->setKeyValue("user", new QoreStringNode(QORE_DS_MASK), nullptr);
+    // the driver is looked up among the drivers already loaded only, and only for the forms that show more than the
+    // masked description: masking never loads a module
+    const qore_dbi_private* dd = nullptr;
+    if ((flags & (QDS_MASK_SHOW_DB | QDS_MASK_SHOW_OPTIONS)) && type && q_dbi_valid_driver_name(type.c_str())) {
+        DBIDriver* d = qore_dbi_driver_list_ops(DBI).find_intern(type.c_str());
+        if (d) {
+            dd = qore_dbi_private::get(*d);
+        }
+    }
+    {
+        // the database name of a loaded driver that declares that its database name can hold credentials
+        // (DBI_CAP_SENSITIVE_DBNAME) is always masked; otherwise it is shown only under the rule of
+        // q_ds_valid_db_name() (qore#7275); the capability of a driver that is not loaded is not known, so the rule
+        // alone decides then
+        QoreStringNode* db = (flags & QDS_MASK_SHOW_DB) && h && !(dd && (dd->getCaps() & DBI_CAP_SENSITIVE_DBNAME))
+            ? q_ds_shown_db_name(h->getKeyValue("db")) : nullptr;
+        rv->setKeyValue("db", db ? db : new QoreStringNode(QORE_DS_MASK), nullptr);
+    }
+    if (!h) {
+        return rv.release();
+    }
+    if (flags & QDS_MASK_SHOW_OPTIONS) {
+        QoreStringDataHelper charset(h->getKeyValue("charset"));
+        if (charset && charset.size()) {
+            rv->setKeyValue("charset", new QoreStringNode(q_ds_valid_name(charset.c_str(), charset.size())
+                ? charset.c_str() : QORE_DS_MASK), nullptr);
+        }
+    }
+    QoreStringDataHelper host(h->getKeyValue("host"));
+    if (host && host.size()) {
+        rv->setKeyValue("host", new QoreStringNode(q_ds_valid_host_name(host.c_str(), host.size()) ? host.c_str()
+            : QORE_DS_MASK), nullptr);
+        int port = q_ds_hash_port(h);
+        if (port) {
+            rv->setKeyValue("port", port, nullptr);
+        }
+    }
+    if (flags & QDS_MASK_SHOW_OPTIONS) {
+        QoreValue opts = h->getKeyValue("options");
+        if (opts.getType() == NT_HASH && !opts.get<const QoreHashNode>()->empty()) {
+            // the value of an option is shown only if the driver is already loaded and declares the option without
+            // declaring it sensitive (QDBI_OPT_SENSITIVE), and if the value can be shown in a datasource string;
+            // every other value is masked: an option of a driver that is not loaded, that the driver does not declare
+            // (such as an option of a driver with DBI_CAP_OPTION_PASSTHRU) or that it declares sensitive (qore#7070);
+            // the driver is never loaded here
+            ReferenceHolder<QoreHashNode> oh(new QoreHashNode(autoTypeInfo), nullptr);
+            bool valid = true;
+            ConstHashIterator i(opts.get<const QoreHashNode>());
+            while (i.next()) {
+                const char* key = i.getKey();
+                if (!q_ds_valid_name(key, strlen(key))) {
+                    valid = false;
+                    break;
+                }
+                QoreStringNode* val = q_dbi_shown_option(dd, key, i.get());
+                oh->setKeyValue(key, val ? val : new QoreStringNode(QORE_DS_MASK), nullptr);
+            }
+            if (valid) {
+                rv->setKeyValue("options", oh.release(), nullptr);
+            } else {
+                rv->setKeyValue("options", new QoreStringNode(QORE_DS_MASK), nullptr);
+            }
+        }
+    }
+    return rv.release();
+}
+
+int q_ds_mask_flags(const QoreHashNode* opts, unsigned& flags, ExceptionSink* xsink) {
+    flags = 0;
+    if (!opts) {
+        return 0;
+    }
+    ConstHashIterator i(opts);
+    while (i.next()) {
+        const char* key = i.getKey();
+        unsigned flag;
+        if (!strcmp(key, "show_db")) {
+            flag = QDS_MASK_SHOW_DB;
+        } else if (!strcmp(key, "show_options")) {
+            flag = QDS_MASK_SHOW_OPTIONS;
+        } else {
+            xsink->raiseException("DATASOURCE-MASK-ERROR", "unknown option for the masked form of a datasource; the "
+                "options are \"show_db\" and \"show_options\"");
+            return -1;
+        }
+        if (i.get().getAsBool()) {
+            flags |= flag;
+        }
+    }
+    return 0;
+}
+
+void q_ds_append_masked_flags(QoreString& str, const QoreHashNode* h, unsigned flags) {
+    ReferenceHolder<QoreHashNode> m(q_ds_masked_hash(h, flags), nullptr);
+    // every value of the masked hash is a string that can be shown, or an int (the port)
+    QoreStringDataHelper type(m->getKeyValue("type"));
+    QoreStringDataHelper db(m->getKeyValue("db"));
+    str.sprintf("%s:" QORE_DS_MASK "/" QORE_DS_MASK "@%s", type.c_str(), db.c_str());
+    QoreStringDataHelper charset(m->getKeyValue("charset"));
+    if (charset) {
+        str.sprintf("(%s)", charset.c_str());
+    }
+    QoreStringDataHelper host(m->getKeyValue("host"));
+    if (host) {
+        str.sprintf("%%%s", host.c_str());
+        QoreValue port = m->getKeyValue("port");
+        if (port.getType() == NT_INT) {
+            str.sprintf(":%lld", port.getAsBigInt());
+        }
+    }
+    QoreValue opts = m->getKeyValue("options");
+    if (opts.getType() == NT_HASH) {
+        str.concat('{');
+        ConstHashIterator i(opts.get<const QoreHashNode>());
+        bool first = true;
+        while (i.next()) {
+            if (!first) {
+                str.concat(',');
+            }
+            first = false;
+            // each value is QORE_DS_MASK or a string that can be shown (see q_ds_masked_hash())
+            QoreStringDataHelper val(i.get());
+            str.sprintf("%s=%s", i.getKey(), val ? val.c_str() : QORE_DS_MASK);
+        }
+        str.concat('}');
+    } else if (!opts.isNothing()) {
+        str.concat("{" QORE_DS_MASK "}");
+    }
+}
+
 /*
   parseDatasource()
   parses strings of the form: driver:user/pass@db(encoding)%host:post{option1,option2=value}
@@ -823,6 +1358,18 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
         xsink->raiseException(DATASOURCE_PARSE_ERROR, "empty text passed to parseDatasource()");
         return nullptr;
     }
+
+    // the string is never shown in an exception, as it can contain a user name, a password and a database name; only
+    // its driver name is shown (qore#6961)
+    auto parse_error = [ds, xsink](const char* fmt, const char* arg = nullptr) -> QoreHashNode* {
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode);
+        desc->sprintf(fmt, arg);
+        desc->concat(" in datasource string '");
+        q_ds_append_masked_string(**desc, ds);
+        desc->concat('\'');
+        xsink->raiseException(DATASOURCE_PARSE_ERROR, desc.release());
+        return nullptr;
+    };
 
     QoreStringNode* driver = nullptr;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -866,16 +1413,14 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
                         // here we must have an equals sign
                         assert(eq);
                         if (eq == p) {
-                            xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing value after '=' in option "
-                                "specification in '%s'", ds);
-                            return nullptr;
+                            return parse_error("missing value after '=' in option specification");
                         }
                         *eq = '\0';
                         ++eq;
                         len = oend ? oend - eq : strlen(eq);
                         if (opt->existsKey(p)) {
-                            xsink->raiseException(DATASOURCE_PARSE_ERROR, "option '%s' repeated in '%s'", p, ds);
-                            return nullptr;
+                            // the option name is not shown either, as it is text of the string (qore#6961)
+                            return parse_error("an option is repeated in the option specification");
                         }
 
                         QoreString key(p);
@@ -891,6 +1436,18 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
                 }
                 if (oend) {
                     ++p;
+                }
+            }
+
+            // the option block is found from the last '{', so a '{' in a password can make a part of the password
+            // and the database name an option; an option name never has '@', which separates the credentials from
+            // the database name, so such a string is refused, and its option names are not shown, as they can be a
+            // part of a password (qore#6988)
+            ConstHashIterator oi(*opt);
+            while (oi.next()) {
+                if (strchr(oi.getKey(), '@')) {
+                    return parse_error("an option name in the option specification has '@'; a password with '{' can "
+                        "be given in a datasource hash");
                 }
             }
 
@@ -940,8 +1497,7 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
     // take last '@' sign in string in case there's one in the password
     p = strrchr(str, '@');
     if (!p) {
-        xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing database name delimited by '@' in '%s'", ds);
-        return nullptr;
+        return parse_error("missing database name delimited by '@'");
     }
 
     *p = '\0';
@@ -959,9 +1515,7 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
     if (p) {
         char* end = strchr(p, ')');
         if (!end) {
-            xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing closing parenthesis in charset specification in "
-                "'%s'", ds);
-            return nullptr;
+            return parse_error("missing closing parenthesis in charset specification");
         }
         *p = '\0';  // terminate for db
         *end = '\0';  // terminate charset
@@ -982,48 +1536,62 @@ QoreHashNode* parseDatasource(const char* ds, ExceptionSink* xsink) {
         str = p + 1;
 
         if (tok == '%') {
-            p = check_datasource_chars(str, ":");
-            if ((p == str) || !*str) {
-                xsink->raiseException(DATASOURCE_PARSE_ERROR, "missing hostname string after '%%' delimeter in '%s'",
-                    ds);
-                return nullptr;
-            }
-
             const char* hstr = str;
-
-            if (p) {
-                tok = *p;
+            tok = '\0';
+            if (*str == '[') {
+                // an IPv6 address in brackets, which has colons of its own (issue #6997)
+                p = strchr(str, ']');
+                if (!p || p == str + 1) {
+                    return parse_error("missing IPv6 address or closing ']' after '%%['");
+                }
                 *p = '\0';
+                hstr = str + 1;
                 str = p + 1;
+                if (*str == ':') {
+                    tok = ':';
+                    ++str;
+                }
             } else {
-                str += strlen(str);
+                // the first ':' after the host gives the port (issue #6997)
+                p = strchr(str, ':');
+                if ((p == str) || !*str) {
+                    return parse_error("missing hostname string after '%%' delimeter");
+                }
+                if (p) {
+                    tok = ':';
+                    *p = '\0';
+                    str = p + 1;
+                } else {
+                    str += strlen(str);
+                }
             }
 
             h->setKeyValue("host", new QoreStringNode(hstr), nullptr);
         }
 
         if (tok == ':') {
-            int port = atoi(str);
-            assert(port);
-            h->setKeyValue("port", port, nullptr);
-
+            // a port is a number from 1 to 65535: a port that is 0 (which the Datasource API takes as the default
+            // port), larger, negative or not a number is an error (issue #6997)
             char* pstr = str;
             while (isdigit(*pstr)) {
                 ++pstr;
             }
-
             if (*pstr) {
-                xsink->raiseException(DATASOURCE_PARSE_ERROR, "invalid characters present in port number in '%s'",
-                    ds);
-                return nullptr;
+                return parse_error("invalid characters present in port number");
             }
+            int port = 0;
+            if (pstr - str <= 5) {
+                port = atoi(str);
+            }
+            if (port < 1 || port > 65535) {
+                return parse_error("invalid port number (the port must be from 1 to 65535)");
+            }
+            h->setKeyValue("port", port, nullptr);
             str = pstr;
         }
 
         if (*str) {
-            xsink->raiseException(DATASOURCE_PARSE_ERROR, "unrecognized characters at end of datasource definition "
-                "in '%s'", ds);
-            return nullptr;
+            return parse_error("unrecognized characters at end of datasource definition");
         }
     }
 
@@ -1091,7 +1659,12 @@ QoreStringNode* makeConfigString(const QoreHashNode* h, ExceptionSink* xsink) {
     QoreStringValueHelper host_str(host_val);
     if (!host_val.isNullOrNothing() && host_val.getType() == NT_STRING
         && host_str->size()) {
-        str->sprintf("%%%s", host_str->c_str());
+        // an IPv6 address has colons of its own: it is given in brackets, as parse_datasource() expects it (issue #6997)
+        if (strchr(host_str->c_str(), ':') && host_str->c_str()[0] != '[') {
+            str->sprintf("%%[%s]", host_str->c_str());
+        } else {
+            str->sprintf("%%%s", host_str->c_str());
+        }
         has_host = true;
     }
 

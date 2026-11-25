@@ -80,6 +80,7 @@ enum Http3Mode {
 /** thread-safe, uses QoreSocket for socket communication
  */
 class QoreHttpClientObject : public QoreSocketObject {
+    friend class qore_http_client_object_ops;
     friend struct qore_httpclient_priv;
     // HttpClientConnectSendRecvPollOperation was the legacy poll op
     // for startPollSendRecv/startPollConnect; removed in Phase 5
@@ -488,6 +489,17 @@ public:
         @return the proxy connection parameters as a URL, caller owns the reference count returned
     */
     DLLEXPORT QoreStringNode* getProxyURL();
+
+    //! returns the proxy connection parameters as a URL with the given parts (or 0 if there is none)
+    /**
+        @param code the parts of the URL to include, a bitfield of @ref UC_TARGET and the other \c UC_* values (see
+        @ref URL_NORMAL)
+
+        @return the proxy connection parameters as a URL with the given parts, caller owns the reference count returned
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreStringNode* getProxyURL(int code);
 
     //! returns the proxy connection parameters as a URL without any password (or 0 if there is none)
     /**
@@ -1055,15 +1067,6 @@ public:
     /** @since %Qore 2.0
     */
     DLLEXPORT QoreHashNode* getConfig() const;
-
-    DLLLOCAL static void static_init();
-
-    //! Returns the standard HTTP reason phrase for a status code.
-    /** @since %Qore 3.0
-    */
-    DLLLOCAL static const char* getHttpStatusMessage(int code);
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink);
 
 protected:
     //! destroys the object and frees all associated memory

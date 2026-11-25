@@ -1,0 +1,362 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) stream resets and flow control of server streams
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A WebSocket connection on HTTP/2 or HTTP/3 that the handler drops because its client took none of the data for the
+# send timeout discards what it has not sent (qore#7325): its stream is reset (HTTP/2 RST_STREAM, HTTP/3
+# RESET_STREAM and STOP_SENDING), so that the client is told at once and the server releases the stream and its send
+# buffer.  Before, the end of the stream was queued behind the unsent data: a client that grants no credit was never
+# told, and the stream and its buffer stayed until the session ended.  The stream's data is held back from the
+# transport with a debug hook, as when the client takes nothing; the hold stays in place until the client has been
+# told, so that only a reset can reach it.  An HTTP/2 case also uses a real peer that grants no flow-control credit:
+# a client written with raw frames whose stream window is 0 and which never sends WINDOW_UPDATE.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketStreamForcedCloseTest
+
+#! more than the 1 MiB limit of a stream's send buffer: the second message finds the buffer full
+const Payload = 3 * 1024 * 1024;
+
+#! the send timeout of the handler
+const SendTimeout = 1s;
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! the time that the client is given to be told that its connection was dropped, with the stream's data still held
+/** Not a timing assertion: the reset reaches the client in milliseconds; before the fix it never did
+*/
+const ToldGuard = 20s;
+
+#! Returns a serialized HTTP/2 frame
+binary sub h2_frame(int type, int flags, int sid, binary payload) {
+    return parse_hex_string(sprintf("%06x%02x%02x%08x", payload.size(), type, flags, sid)) + payload;
+}
+
+#! Returns one byte
+binary sub b1(int b) {
+    return parse_hex_string(sprintf("%02x", b));
+}
+
+#! what the server knew of the stream when the connection ended
+hashdecl StreamEndInfo {
+    #! the progress count of the stream: -1 when the stream and its data are gone
+    int count;
+    #! True if the handler dropped the connection with forceStop()
+    bool force_stopped;
+}
+
+#! Holds its stream's data and sends two large messages when the client asks for it
+class HeldConnection inherits WebSocketConnection {
+    private {
+        HeldHandler held_handler;
+        *int session_id;
+        int stream_id;
+    }
+
+    constructor(HeldHandler handler, *int session_id, int stream_id) : WebSocketConnection(handler) {
+        held_handler = handler;
+        self.session_id = session_id;
+        self.stream_id = stream_id;
+    }
+
+    gotMessage(string msg) {
+        if (msg == "send-real") {
+            # a real peer that grants no credit: nothing is held
+            send(binary(strmul("a", Payload)));
+            send(binary(strmul("b", Payload)));
+            return;
+        }
+        if (msg != "send") {
+            return;
+        }
+        if (session_id) {
+            call_function("dbg_quic_hold_stream_data", session_id, stream_id);
+        } else {
+            call_function("dbg_http2_hold_stream_data", stream_id);
+        }
+        send(binary(strmul("a", Payload)));
+        # waits for the stream's send buffer, which never drains, and drops the connection
+        send(binary(strmul("b", Payload)));
+    }
+
+    #! records whether the server still has the stream when the connection ends (after its stream was closed)
+    /** An HTTP/2 stream is released by the reset itself.  An HTTP/3 stream's data is released when the QUIC stream
+        closes, once the peer has answered the reset (STOP_SENDING and RESET_STREAM), as nghttp3 may still refer to
+        it until then: its release is waited for, woken by the stream's close; before the fix, its end of the stream
+        was staged behind the held data, and it never closed.  Only a force-stopped connection is waited for.
+    */
+    connectionClosed() {
+        hash<StreamEndInfo> info = <StreamEndInfo>{
+            "count": -2,
+            "force_stopped": isForceStopped(),
+        };
+        try {
+            *AsyncSocketIo::AbstractStreamContext ctx = getStreamContext();
+            if (ctx) {
+                Socket sock = ctx.getSocket();
+                if (session_id) {
+                    if (info.force_stopped) {
+                        int deadline = clock_get_monotonic_us() + get_duration_microseconds(ToldGuard);
+                        while (True) {
+                            int left_ms = (deadline - clock_get_monotonic_us()) / 1000;
+                            # -1: the stream has no data record any more (or the session ended); 0: its data
+                            # drained, which held data never does; 1: it is still there when the wait ends
+                            if (left_ms <= 0 || sock.waitForQuicStreamDrain(session_id, stream_id, left_ms) != 1) {
+                                break;
+                            }
+                        }
+                    }
+                    info.count = sock.getQuicStreamAckedBytes(session_id, stream_id);
+                } else {
+                    info.count = sock.getHttp2StreamTakenBytes(stream_id);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a session that has ended has no such stream either
+            info.count = -1;
+        }
+        held_handler.ended.push(info);
+    }
+}
+
+class HeldHandler inherits WebSocketHandler {
+    public {
+        #! what the server knew of the stream of each connection when it ended
+        Queue ended();
+    }
+
+    constructor(Logger logger) : WebSocketHandler(NOTHING, {"send_timeout": SendTimeout, "logger": logger}) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new HeldConnection(self, cx."header-info".session_id, cx."header-info".stream_id);
+    }
+}
+
+class WebSocketStreamForcedCloseTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        HeldHandler handler;
+        int port;
+        int h2c_port;
+    }
+
+    constructor() : QUnit::Test("WebSocketStreamForcedClose", "1.0") {
+        foreach string ver in (("2.0", "3.0")) {
+            addTestCase(sprintf("HTTP/%s: a client dropped after the send timeout is told while its data is held, "
+                "and the stream is released", ver), \testForcedClose(), ver);
+            addTestCase(sprintf("HTTP/%s: a connection that the client closes ends its stream in order", ver),
+                \testOrderlyClose(), ver);
+        }
+        addTestCase("HTTP/2: a real peer that grants no flow-control credit gets RST_STREAM after the send timeout",
+            \testZeroWindowPeer());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        Logger logger("held", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        handler = new HeldHandler(logger);
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("ws", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "auto",
+        }).port;
+        h2c_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the library is not built with debugging");
+        }
+        handler.ended.clear();
+    }
+
+    #! a client of the given HTTP version whose closed connections are pushed to the given Queue
+    private WebSocketClient makeClient(string ver, Queue closed) {
+        return new WebSocketClient(sub (*data msg) {
+            if (!exists msg) {
+                closed.push(True);
+            }
+        }, {
+            "url": sprintf("wss://127.0.0.1:%d", port),
+            "http_version": ver,
+            "ssl_verify_cert": False,
+            "timeout": HangGuard,
+        });
+    }
+
+    testForcedClose(string ver) {
+        Queue closed();
+        WebSocketClient wsc = makeClient(ver, closed);
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        # the hold ends after the checks, so that only a reset of the stream can reach the client meanwhile
+        on_exit {
+            call_function("dbg_quic_release_stream_data");
+            call_function("dbg_http2_release_stream_data");
+        }
+        wsc.connect();
+        assertEq(ver == "3.0", wsc.isHttp3(), "the connection uses the HTTP version");
+        wsc.send("send");
+
+        # the server drops the connection after the send timeout
+        hash<StreamEndInfo> info = handler.ended.get(HangGuard);
+        assertTrue(info.force_stopped, "the handler dropped the connection");
+        assertEq(-1, info.count, "the server released the stream and its send buffer when the connection ended");
+
+        # the client is told, although the stream's data is still held back
+        bool told;
+        try {
+            told = closed.get(ToldGuard);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+        assertTrue(told, "the client was told that its connection was dropped");
+        assertFalse(wsc.isOpen(), "the client's connection is closed");
+    }
+
+    #! the reset is for dropped connections only: a connection that the client closes is not force-stopped
+    testOrderlyClose(string ver) {
+        Queue closed();
+        WebSocketClient wsc = makeClient(ver, closed);
+        wsc.connect();
+        wsc.send("hello");
+        wsc.disconnect();
+        hash<StreamEndInfo> info = handler.ended.get(HangGuard);
+        assertFalse(info.force_stopped, "the connection was not force-stopped");
+        assertTrue(closed.get(HangGuard), "the client's connection was closed");
+    }
+
+    #! Reads one HTTP/2 frame; returns NOTHING if none arrives within the given time
+    static *hash<auto> readFrame(Socket s, timeout t) {
+        if (!s.isDataAvailable(t)) {
+            return;
+        }
+        binary hdr = s.recvBinary(9, t);
+        int len = (hdr[0] << 16) | (hdr[1] << 8) | hdr[2];
+        hash<auto> rv = {
+            "type": hdr[3],
+            "flags": hdr[4],
+            "sid": ((hdr[5] & 0x7f) << 24) | (hdr[6] << 16) | (hdr[7] << 8) | hdr[8],
+            "payload": len ? s.recvBinary(len, t) : binary(),
+        };
+        return rv;
+    }
+
+    #! A peer that grants no flow-control credit (its stream window is 0, and it never sends WINDOW_UPDATE): the
+    #! connection is dropped after the send timeout, and the peer gets RST_STREAM on the stream, where before the end
+    #! of the stream stayed queued behind the data that it never took
+    testZeroWindowPeer() {
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", h2c_port), HangGuard);
+        on_exit s.close();
+        # SETTINGS_INITIAL_WINDOW_SIZE (0x4) = 0: the server can send no DATA on a stream
+        binary settings = h2_frame(4, 0, 0, <000400000000>);
+        # an extended CONNECT for a WebSocket (RFC 8441); literals without indexing, no Huffman coding
+        binary block = <02> + b1(7) + binary("CONNECT")
+            + <00> + b1(9) + binary(":protocol") + b1(9) + binary("websocket")
+            + <86>
+            + <04> + b1(1) + binary("/")
+            + <01> + b1(9) + binary("127.0.0.1")
+            + <00> + b1(21) + binary("sec-websocket-version") + b1(2) + binary("13");
+        # HEADERS with END_HEADERS, without END_STREAM
+        s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + settings + h2_frame(1, 0x4, 1, block));
+
+        # the server's SETTINGS are acknowledged, and its response opens the WebSocket
+        bool open;
+        int deadline = clock_get_monotonic_us() + get_duration_microseconds(HangGuard);
+        while (!open && clock_get_monotonic_us() < deadline) {
+            *hash<auto> f = readFrame(s, HangGuard);
+            if (!f) {
+                break;
+            }
+            if (f.type == 4 && !(f.flags & 0x1)) {
+                s.send(h2_frame(4, 0x1, 0, binary()));
+            } else if (f.type == 1 && f.sid == 1) {
+                open = True;
+            } else if (f.type == 3 && f.sid == 1) {
+                fail(sprintf("the server reset the WebSocket stream before it opened: %y", f.payload));
+            }
+        }
+        assertTrue(open, "the server opened the WebSocket stream");
+
+        # a masked text frame (mask key 0) that makes the server send more than the stream's send buffer takes
+        binary ws_frame = <8189> + <00000000> + binary("send-real");
+        s.send(h2_frame(0, 0, 1, ws_frame));
+
+        # the server drops the connection after the send timeout
+        hash<StreamEndInfo> info = handler.ended.get(HangGuard);
+        assertTrue(info.force_stopped, "the handler dropped the connection");
+        assertEq(-1, info.count, "the server released the stream and its send buffer when the connection ended");
+
+        # the peer gets RST_STREAM on the stream, and no DATA, as it granted no credit
+        *hash<auto> rst;
+        int data_frames = 0;
+        deadline = clock_get_monotonic_us() + get_duration_microseconds(ToldGuard);
+        while (!rst && clock_get_monotonic_us() < deadline) {
+            *hash<auto> f = readFrame(s, ToldGuard);
+            if (!f) {
+                break;
+            }
+            if (f.sid == 1 && f.type == 3) {
+                rst = f;
+            } else if (f.sid == 1 && f.type == 0) {
+                ++data_frames;
+            } else if (f.type == 6 && !(f.flags & 0x1)) {
+                # PING: acknowledged, as a live peer does
+                s.send(h2_frame(6, 0x1, 0, f.payload));
+            } else if (f.type == 7) {
+                break;
+            }
+        }
+        assertTrue(exists rst, "the peer got RST_STREAM on the stream");
+        # CANCEL (0x8)
+        assertEq(<00000008>, rst.payload, "the stream was cancelled");
+        assertEq(0, data_frames, "no data was sent to a peer that granted no credit");
+    }
+}

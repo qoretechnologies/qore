@@ -482,8 +482,11 @@ public class DataProvider {
         #! Global options
         static int options = 0;
 
-        #! Global logger
-        static *LoggerInterface logger;
+        #! The hooks that the host gives modules, by module (setModuleHostHooks())
+        static hash<string, hash<auto>> module_host_hooks;
+
+        #! Serializes access to the module host hooks
+        static Mutex module_host_hooks_lock();
     }
 
     #! Sets or clears the global logger
@@ -492,21 +495,93 @@ public class DataProvider {
         @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
         tenants and for trusted code
 
+        @note the messages that the module produces for any caller, also for sandboxed code, go to this logger
+
         @since DataProvider 3.0
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
-        DataProvider::logger = logger;
+        DataProviderGlobalLogger::logger = logger;
+    }
+
+    #! Sets the hooks that the host gives a module, before the module is loaded
+    /** A module that runs code for sandboxed callers can need host code to do it: for example module-v8 runs a tenant's
+        TypeScript actions with the tenant context, the token store and the egress meter that the host supplies
+        (TypeScriptActionInterface::TenantActionRunner).  The host can load such a module lazily, in whichever thread
+        first asks for one of its apps, schemes or factories, so it cannot always pass its hooks to the module itself
+        after loading it; it sets them here, at startup, and the module reads them in its own initialization
+        (getModuleHostHooks()).
+
+        The hooks are set once per module: a second set raises an error, so code that runs later cannot replace them.
+        Set them at startup before any user code is loaded, not only before the module: until they are set, any code
+        that is neither sandboxed nor denied @ref Qore::PO_NO_PROCESS_CONTROL "process control" could take the module's
+        slot first.  Give closures or call references, not objects: the registry keeps what it is given, and an object
+        is shared by reference, so code holding it could change what the module calls.  The hooks are host code,
+        created by the trusted code that sets them, and run as such.  Without hooks a module that needs them refuses
+        the calls of sandboxed callers.
+
+        @param module the name of the module the hooks are for
+        @param hooks the hooks; the module documents their keys and signatures
+
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
+        tenants and for trusted code
+        @throw MODULE-HOST-HOOKS-ERROR hooks are set already for the module
+
+        @par Example:
+        @code{.py}
+DataProvider::setModuleHostHooks("TypeScriptActionInterface", {
+    "tenant_context_resolver": \Host::resolveTenantContext(),
+});
+        @endcode
+
+        @since DataProvider 3.12
+    */
+    static setModuleHostHooks(string module, hash<auto> hooks) [dom=PROCESS_CONTROL] {
+        # process-wide: the hooks decide what the module does for every caller, of other tenants and of trusted code
+        DataProvider::checkNotSandboxed("set a module's host hooks");
+        AutoLock al(module_host_hooks_lock);
+        if (exists module_host_hooks{module}) {
+            throw "MODULE-HOST-HOOKS-ERROR", sprintf("the host hooks of module %y are set already", module);
+        }
+        module_host_hooks{module} = hooks;
+    }
+
+    #! Returns the hooks that the host gives a module, if any (setModuleHostHooks())
+    /** For a module's own trusted code, typically its initialization; code that a sandbox governs cannot read them.
+
+        @param module the name of the module
+
+        @return the hooks the host set for the module, or @ref nothing if it set none
+
+        @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
+
+        @since DataProvider 3.12
+    */
+    static *hash<auto> getModuleHostHooks(string module) [dom=PROCESS_CONTROL] {
+        DataProvider::checkNotSandboxed("read a module's host hooks");
+        AutoLock al(module_host_hooks_lock);
+        return module_host_hooks{module};
     }
 
     #! Returns the global data provider logger
-    /** @return the global data provider logger
+    /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
+        get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
+        directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
+        such code still go to the logger
+
+        @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
+        is sandboxed or acts for sandboxed code
 
         @since DataProvider 3.0
+        @since DataProvider 3.12 sandboxed code does not get the logger
     */
     static *LoggerInterface getGlobalLogger() {
-        return logger;
+        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
+        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+            return;
+        }
+        return DataProviderGlobalLogger::logger;
     }
 
     #! Adds the given global data provider options
@@ -1721,6 +1796,29 @@ if (errors) {
     }
 
     #! Tries to load a data provider from the environment from the connection name
+    /** Each module of the \c QORE_DATA_PROVIDERS environment variable is loaded, and the name is looked up as a
+        connection (with \c get_connection()) and then, if that raises \c CONNECTION-ERROR, as a datasource connection
+        (with \c get_ds_string()), on every call in which a module is loaded or one was loaded before: after each
+        module, and after each provider module of its \c get_data_provider_map() that is loaded; a module whose
+        registration has completed (all of the provider modules of its map are loaded, or it has no map) is not loaded
+        again
+
+        @param name the name of the connection
+        @param subtype the subtype of the data provider of the connection, if any
+        @param logger the logger to set on the connection, if any
+
+        @return the data provider of the connection, or @ref nothing if getting the connection or its data provider
+        raises \c CONNECTION-ERROR (ex: no connection of the name exists) and creating the data provider of a
+        datasource connection of the name raises \c NO-FUNCTION, \c DATASOURCE-ERROR (ex: no datasource connection of
+        the name exists) or \c DATASOURCE-PARSE-ERROR, or if \c QORE_DATA_PROVIDERS is not set or none of its modules
+        can be loaded (the name is then not looked up)
+
+        @throw any exception raised by getting the connection or its data provider (ex: an exception of the data
+        provider of the connection) other than \c CONNECTION-ERROR, or by creating the data provider of a datasource
+        connection other than \c NO-FUNCTION, \c DATASOURCE-ERROR and \c DATASOURCE-PARSE-ERROR, also from the lookup
+        made after a \c QORE_DATA_PROVIDERS module is loaded (it was reported as an invalid module before %Qore 3.0;
+        qore#7484)
+    */
     static *AbstractDataProvider tryLoadProviderForConnectionFromEnv(string name, *string subtype,
             *LoggerInterface logger) {
         load_module("ConnectionProvider");
@@ -2014,7 +2112,7 @@ if (action.data_provider_info) {
             try {
                 i.value();
             } catch (hash<ExceptionInfo> ex) {
-                if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                if (SandboxManager::isTerminalIoAllowed()) {
                     stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
                 }
             }
@@ -2089,7 +2187,7 @@ if (action.data_provider_info) {
                 try {
                     p.loadModule(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
                             ex.err, ex.desc);
                     }
@@ -2103,7 +2201,7 @@ if (action.data_provider_info) {
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore NO-FUNCTION error
-                    if (ex.err != "NO-FUNCTION" && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    if (ex.err != "NO-FUNCTION" && SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: %s: "
                             "%s\n", mod, type, ex.err, ex.desc);
                     }
@@ -2141,6 +2239,8 @@ if (action.data_provider_info) {
         *string prov = getenv("QORE_DATA_PROVIDERS");
         if (prov) {
             list<string> pl = prov.split(PathSep);
+            # true once the symbol has been looked up for the modules whose registration is complete
+            bool registered_checked;
             foreach string mod in (pl) {
                 bool registration_module_loaded;
                 {
@@ -2149,14 +2249,21 @@ if (action.data_provider_info) {
                         = env_registration_module_map{mod} ?? False;
                 }
                 if (registration_module_loaded) {
+                    # the module and its provider modules are loaded and registered already, so they are not loaded
+                    # again, but the symbol is still looked up: a lookup that resolved nothing recorded the module, and
+                    # every later lookup through it returned nothing (qore#7484); the lookup is not made for a
+                    # module, so it is made once for all of the recorded modules
+                    if (info && !registered_checked) {
+                        registered_checked = True;
+                        if (*object rv = DataProvider::checkSymbol(info, logger)) {
+                            return rv;
+                        }
+                    }
                     continue;
                 }
                 Program p(PO_NO_USER_API);
                 try {
                     p.loadModule(mod);
-                    if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
-                        return rv;
-                    }
                 } catch (hash<ExceptionInfo> ex) {
                     if (failure_callback) {
                         failure_callback(<DataProviderEnvironmentLoadFailureInfo>{
@@ -2166,11 +2273,17 @@ if (action.data_provider_info) {
                             "description": ex.desc,
                             "argument": ex.arg,
                         });
-                    } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    } else if (SandboxManager::isTerminalIoAllowed()) {
                         stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod,
                             get_ex_pos(ex), ex.err, ex.desc);
                     }
                     continue;
+                }
+                # the symbol is looked up outside of the load of the module: an exception of the lookup (ex: raised
+                # by the data provider of a connection) reaches the caller, as it does for a recorded module and for a
+                # provider module, and does not make the module invalid (qore#7484)
+                if (info && (*object rv = DataProvider::checkSymbol(info, logger))) {
+                    return rv;
                 }
                 hash<string, string> dmap;
                 try {
@@ -2186,7 +2299,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        } else if (SandboxManager::isTerminalIoAllowed()) {
                             stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: "
                                 "%s: %s\n", mod, type, ex.err, ex.desc);
                         }
@@ -2216,7 +2329,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        } else if (SandboxManager::isTerminalIoAllowed()) {
                             stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS provider module %y %s: %s: %s\n",
                                 mod_str, get_ex_pos(ex), ex.err, ex.desc);
                         }
@@ -2422,6 +2535,110 @@ if (action.data_provider_info) {
     }
 }
 
+#! The process-wide logger of the DataProvider module (not public: only the module's own code uses it)
+/** Set by trusted code with DataProvider::setGlobalLogger(); the module's own code logs the messages that it produces
+    for every caller here, also when it serves sandboxed code, so that they reach the logger that the host configured,
+    while DataProvider::getGlobalLogger() does not hand the logger to sandboxed code (qore#6746)
+*/
+class DataProviderGlobalLogger {
+    public {
+        #! the logger, if any
+        static *LoggerInterface logger;
+    }
+
+    #! Logs a message that the code of a data provider object produces with the process-wide logger, if one is set
+    /** The message is formatted first, and its line breaks and other control characters are written as escapes
+        (a tab is kept), so that no value in it, which a caller can choose (the name of an action, the text of an
+        exception, the strings of a subclass), can start a line of its own that looks like another message in the
+        host's log.  The code of an object of a class that sandboxed code declares (a subclass of a data provider class
+        of a module) can make its messages what it wants, also through the module's methods that it inherits, which
+        format its own values: such a message is marked with the Program of the object's class, the tenant whose code
+        chose it, whichever code calls the object (qore#7110); the messages of an object of a class of a module or of
+        the host keep their form, also when sandboxed code created the object or calls it
+
+        @param obj the data provider object whose code produces the message
+        @param level the level of the message
+        @param fmt the format string of the message for @ref Qore::vsprintf() "vsprintf()"
+        @param args the arguments of the format string
+    */
+    static logObjectArgs(object obj, Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
+        *LoggerInterface l = logger;
+        if (!l) {
+            return;
+        }
+        string msg = DataProviderGlobalLogger::escapeControl(DataProviderGlobalLogger::format(fmt, args));
+        if (*int id = SandboxManager::getSandboxedProgramId(obj)) {
+            msg = sprintf("[sandboxed Program %d] %s", id, msg);
+        }
+        l.logArgs(level, "%s", msg);
+    }
+
+    private:internal {
+        #! The characters that escapeControl() escapes: the C0 control characters but a tab, DEL, the C1 control
+        #! characters, the Unicode line and paragraph separators and the bidirectional control characters
+        const EscapedCharPattern = "[\\x00-\\x08\\x0a-\\x1f\\x7f\\x{80}-\\x{9f}\\x{61c}\\x{200e}\\x{200f}"
+            + "\\x{2028}-\\x{202e}\\x{2066}-\\x{2069}]";
+    }
+
+    #! Returns the formatted message; never raises an exception
+    /** An argument that cannot be converted to the encoding of the format string gives the format string with the
+        error instead
+    */
+    private:internal static string format(string fmt, *softlist<auto> args) {
+        try {
+            return vsprintf(fmt, args);
+        } catch (hash<ExceptionInfo> ex) {
+            try {
+                return sprintf("%s (the arguments of the message cannot be formatted: %s)", fmt, ex.err);
+            } catch (hash<ExceptionInfo> ex1) {
+                return sprintf("<message that cannot be formatted: %s>", ex1.err);
+            }
+        }
+    }
+
+    #! Returns the string in UTF-8 with its line breaks and other control characters as escapes, but a tab
+    /** CR and LF are written as \c "\\r" and \c "\\n", the other C0 control characters and DEL as \c "\\xNN", and
+        the C1 control characters, the Unicode line and paragraph separators and the bidirectional control characters,
+        which a log viewer or a terminal can act on, as \c "\\uNNNN"; a byte that is no character of the string's
+        encoding is taken as its ISO-8859-1 character first.  A backslash is not escaped.  It takes time linear in the
+        length of the string, and never raises an exception: a string that cannot be converted gives a fixed
+        placeholder, so that logging never fails
+    */
+    private:internal static string escapeControl(string str) {
+        try {
+            if (!str.isEncodingValid()) {
+                str = binary_to_string(binary(str), "ISO-8859-1");
+            }
+            str = convert_encoding(str, "UTF-8");
+            # the common case: nothing to escape
+            if (!regex(str, EscapedCharPattern)) {
+                return str;
+            }
+            string rv = "";
+            # the characters are taken in one pass, as indexing a string with multibyte characters scans it from its
+            # start
+            foreach string c in (str =~ x/(.)/gs) {
+                int cp = c.getUnicode();
+                if (cp == 10) {
+                    rv += "\\n";
+                } else if (cp == 13) {
+                    rv += "\\r";
+                } else if (cp != 9 && (cp < 0x20 || cp == 0x7f)) {
+                    rv += sprintf("\\x%02x", cp);
+                } else if ((cp >= 0x80 && cp <= 0x9f) || cp == 0x61c || cp == 0x200e || cp == 0x200f
+                        || (cp >= 0x2028 && cp <= 0x202e) || (cp >= 0x2066 && cp <= 0x2069)) {
+                    rv += sprintf("\\u%04x", cp);
+                } else {
+                    rv += c;
+                }
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("<message that cannot be logged: %s>", ex.err);
+        }
+    }
+}
+
 #! Loads modules for the lookups of the DataProvider module (not public: only the module's own code uses it)
 /** The public APIs that load every known factory module declare the \c PROCESS_CONTROL domain
     (DataProvider::registerKnownFactories()); a lookup that loads them for its caller, as DataProvider::getFactory()
@@ -2461,7 +2678,8 @@ class DataProviderModuleLoader {
 
     #! Try to load the given module; see DataProvider::tryLoad()
     static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
-        *LoggerInterface logger = DataProvider::getGlobalLogger();
+        # read directly: the messages of the module go to the host's logger also for sandboxed callers
+        *LoggerInterface logger = DataProviderGlobalLogger::logger;
         try {
             if (logger) {
                 logger.info("DataProvider loading module: %y", module_str);
@@ -2480,7 +2698,7 @@ class DataProviderModuleLoader {
                 } else {
                     logger.error("%s", err);
                 }
-            } else if (!init && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            } else if (!init && SandboxManager::isTerminalIoAllowed()) {
                 stderr.print(err + "\n");
             }
         }

@@ -98,6 +98,9 @@ static inline const char* get_action_method(SslAction action) {
 
 class SSLSocketHelper {
     friend class SSLSocketReferenceHelper;
+#ifdef DEBUG
+    friend class TlsDuplexPollTest;
+#endif
 public:
     DLLLOCAL SSLSocketHelper(qore_socket_private& qs) : qs(qs) {
     }
@@ -145,7 +148,17 @@ public:
         - < 0 = error (exception raised)
     */
     DLLLOCAL int doNonBlockingIo(ExceptionSink* xsink, const char* mname, void* buf, size_t size, SslAction action,
-            size_t& real_io);
+            size_t& real_io, size_t* awaiting_drain = nullptr);
+
+    //! A write is acknowledged to its owner only after the record reaches the transport.
+    DLLLOCAL int sendNonBlocking(ExceptionSink* xsink, const char* mname, void* buf, size_t size,
+            size_t& real_io, size_t& awaiting_drain) {
+        return doNonBlockingIo(xsink, mname, buf, size, WRITE, real_io, &awaiting_drain);
+    }
+
+    DLLLOCAL bool mustRetryWrite() const { return retry_events && retry_action == WRITE; }
+
+    DLLLOCAL bool mustRetryRead() const { return retry_events && retry_action == READ; }
 
     DLLLOCAL int setClient(ExceptionSink* xsink, const char* mname, const char* sni_target_host, int sd,
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr);
@@ -233,9 +246,22 @@ public:
     DLLLOCAL std::string getAlpnProtocol() const;
 
     //! Returns true if HTTP/2 ("h2") was negotiated via ALPN
-    /** @since Qore 3.0
+    /** Answers from the value recorded when the handshake completed (see recordedHttp2()), and otherwise reads the
+        TLS state, which must then be done on the thread that owns the connection
+
+        @since Qore 3.0
     */
     DLLLOCAL bool isHttp2() const;
+
+    //! Returns the result of the ALPN negotiation recorded when the handshake completed
+    /** The negotiated protocol does not change once the handshake has completed, so the value can be read from any
+        thread without the TLS state (qore#7223)
+
+        @return 1 if HTTP/2 ("h2") was negotiated, 0 if not, -1 if the handshake has not completed
+    */
+    DLLLOCAL int recordedHttp2() const {
+        return h2_negotiated.load(std::memory_order_acquire);
+    }
 
     //! Returns the number of bytes already decrypted and buffered in the SSL layer
     /** This is a lightweight check (no I/O) that reads an internal counter.
@@ -262,6 +288,22 @@ private:
     //! the TLS connection that carries this connection, if any; see setLayeredClient()
     SSLSocketHelper* outer = nullptr;
 
+    // Installed only when a nonblocking TLS operation actually encounters write backpressure.
+    struct StagedOutput {
+        BIO* transport;
+        BIO* network;
+    };
+    static constexpr size_t MAX_STAGED_CIPHERTEXT = 64 * 1024;
+    StagedOutput* staged = nullptr;
+    int retry_events = 0;
+    SslAction retry_action = READ;
+    DLLLOCAL SSLSocketHelper* wireTls();
+    DLLLOCAL bool startStaging(ExceptionSink* xsink);
+    DLLLOCAL int drainStaged(ExceptionSink* xsink);
+    DLLLOCAL int resumePendingIo(ExceptionSink* xsink, const char* mname, SslAction action, size_t& real_io,
+        size_t* awaiting_drain);
+    DLLLOCAL void stopStaging();
+
     //! True once a write failed because the peer closed or reset the connection and the socket was kept open
     /** OpenSSL forbids SSL_shutdown() after a fatal error (SSL_ERROR_SYSCALL), so sendCloseNotify() sends no
         close_notify alert then.
@@ -269,6 +311,19 @@ private:
         @since %Qore 3.0
     */
     std::atomic<bool> write_failed{false};
+
+#ifdef DEBUG
+    //! Debug-only: the next drain of the staged ciphertext fails as when the peer reset the connection; set with the
+    //! staging that dbg_force_staged_write_failure() forces
+    bool dbg_fail_next_drain = false;
+#endif
+
+    //! The result of the ALPN negotiation, recorded when the handshake completed: 1 for "h2", 0 for another or no
+    //! protocol, -1 before the handshake completed (qore#7223)
+    std::atomic<int> h2_negotiated{-1};
+
+    //! Records the result of the ALPN negotiation once the handshake has completed
+    DLLLOCAL void recordAlpn();
 
     //! ALPN protocols for client-side negotiation (wire format)
     std::vector<unsigned char> alpn_wire_format;

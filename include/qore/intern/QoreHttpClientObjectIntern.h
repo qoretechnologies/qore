@@ -62,6 +62,16 @@ typedef std::set<std::string, ltstrcase> strcase_set_t;
 // case-insensitive field name"
 typedef strcase_str_map_t header_map_t;
 
+class QoreHttpClientObject;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
+
+// Transfers the reference to each credential to the HTTP transport during construction.
+DLLLOCAL void qore_httpclient_set_owned_credentials(QoreHttpClientObject& client, QoreSSLCertificate* cert,
+    QoreSSLPrivateKey* key, const QoreListNode* origins, ExceptionSink* xsink);
+DLLLOCAL void qore_httpclient_set_connection_path(QoreHttpClientObject& client, const char* path, ExceptionSink* xsink);
+DLLLOCAL void qore_httpclient_set_secure(QoreHttpClientObject& client, bool secure, ExceptionSink* xsink);
+
 struct con_info {
     int port;
     std::string host,
@@ -189,16 +199,30 @@ struct con_info {
         }
 
         if (!port) {
-            // concat and encode "host" when using a UNIX domain socket
+            // a UNIX domain socket: the path URL-encoded with every reserved character encoded (as set_url() makes it),
+            // so that the URL gives exactly the path: a path with "@", "%", ":", "#" or "?" written as it is would be
+            // read as user information and another host, as another path, or as a port (issue #7236)
             pstr->concat("socket=");
-            for (unsigned i = 0; i < host.size(); ++i) {
-                char c = host[i];
-                switch (c) {
-                    case ' ': pstr->concat("%20"); break;
-                    case '/': pstr->concat("%2f"); break;
-                    default: pstr->concat(c); break;
+            if (!unix_urlencoded_path.empty() || host.empty()) {
+                pstr->concat(unix_urlencoded_path.c_str());
+            } else {
+                ExceptionSink xsink;
+                QoreString tmp_host(host);
+                QoreString tmp_path;
+                tmp_path.concatEncodeUrl(&xsink, tmp_host, true);
+                if (xsink) {
+                    // the path cannot be encoded: no path is given rather than an ambiguous one
+                    xsink.clear();
+                } else {
+                    pstr->concat(tmp_path.c_str());
                 }
             }
+        } else if (host.find(':') != std::string::npos && host[0] != '[') {
+            // issue #7236: an IPv6 address is given in brackets (RFC 3986 section 3.2.2), or the URL is ambiguous: a
+            // host "::1:8080" with the default port would be read as host "::1" with port 8080
+            pstr->concat('[');
+            pstr->concat(host.c_str());
+            pstr->concat(']');
         } else {
             pstr->concat(host.c_str());
         }

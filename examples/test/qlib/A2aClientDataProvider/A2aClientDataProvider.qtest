@@ -56,6 +56,7 @@ class A2aClientDataProviderTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("A2aClientDataProvider test", "1.0") {
         addTestCase("factory test", \factoryTest());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("provider hierarchy test", \providerHierarchyTest());
         addTestCase("agent card get test", \agentCardGetTest());
         addTestCase("send message test", \sendMessageTest());
@@ -346,5 +347,27 @@ class A2aClientDataProviderTest inherits QUnit::Test {
         fields = A2aTaskResultDataType.getFields();
         assertTrue(exists fields.id, "Task result should have id field");
         assertTrue(exists fields.status, "Task result should have status field");
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-agent-card",
+            "get-extended-agent-card",
+            "get-task",
+            "list-tasks",
+            "get-push-notification-config",
+            "list-push-notification-configs",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("A2A", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # sending a message creates a task: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("A2A", "send-message")));
     }
 }

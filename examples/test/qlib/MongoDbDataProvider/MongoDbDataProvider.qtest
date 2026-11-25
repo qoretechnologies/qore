@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -40,7 +41,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("MongoDbDataProviderTest", "1.0") {
-        url = ENV.MONGODB_URL;
+        url = LiveProvider::getService("mongodb", "MONGODB_URL");
         int verbose = m_options.verbose ?? 0;
         setenv("QORE_MONGODB_VERBOSE", sprintf("%d", verbose));
         setenv("MONGOC_LOG_LEVEL", verbose > 2 ? "debug" : "warning");
@@ -849,6 +850,19 @@ sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider pr
             assertEq(sprintf("/databases/{database}/{collection}/%s", action_name), action.path,
                 sprintf("action %y addresses the collection", action_name));
         }
+
+        # find, findOne, countDocuments and the fixed vector search pipeline only read: the actions declare
+        # that they are read-only (qore#7454)
+        foreach string action_name in ("find", "find-one", "count", "vector-search") {
+            hash<DataProviderActionInfo> action = action_map{action_name};
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action_name);
+            assertFalse(action.mutates_state, action_name);
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), action_name);
+        }
+        # the writes, and an aggregation pipeline, which can write with $out or $merge, change state
+        foreach string action_name in ("insert", "update", "delete", "aggregate", "bulk") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(action_map{action_name}), action_name);
+        }
     }
 
     #! Every action's path must resolve to a provider that supplies the option and result types
@@ -1014,9 +1028,9 @@ sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider pr
         assertEq(1.0, created.ok, "the vector search index was created");
 
         # Atlas builds the index asynchronously; it cannot be queried until it says so
-        date timeout = now_us() + 8m;
+        date timeout = microseconds(clock_get_monotonic_us()) + 8m;
         bool queryable = False;
-        while (now_us() < timeout) {
+        while (microseconds(clock_get_monotonic_us()) < timeout) {
             list<hash<auto>> pipeline = ({"$listSearchIndexes": {}},);
             list<hash<auto>> idx = coll.aggregate(pipeline).toList();
             if (idx && idx[0].queryable) {

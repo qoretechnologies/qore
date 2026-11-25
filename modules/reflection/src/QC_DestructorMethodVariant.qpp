@@ -79,7 +79,7 @@ nothing DestructorMethodVariant::call(object obj) {
     // we have to explictly test object compatibility here
     const QoreExternalMethodVariant* mv = static_cast<const QoreExternalMethodVariant*>(v->variant);
     const QoreMethod* m = mv->getMethod();
-    if (check_variant_call(mv, obj, *m, xsink)) {
+    if (check_variant_call(caller, mv, obj, *m, xsink)) {
         return QoreValue();
     }
 

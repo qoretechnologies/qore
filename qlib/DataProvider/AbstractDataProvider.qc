@@ -4070,17 +4070,25 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
     #! Logs an error caught by an API that returns no value instead of raising it
     /** The error is logged with the data provider's logger, or with the global data provider logger if the data
         provider has none, so that it is not lost; messages must not contain option or data values, which can hold
-        credentials
+        credentials.  With the global logger, which the host sets for the whole process, the line breaks and other
+        control characters of the message are written as escapes, and the message of an object of a class that
+        sandboxed code declares is marked with the Program of the object's class
+        (<tt>[sandboxed Program &lt;id&gt;]</tt>),
+        so that a subclass cannot pass its messages off as the module's; the messages of the objects of the classes of
+        modules and of the host keep their form otherwise
 
         @param message the message format string for @ref Qore::vsprintf() "vsprintf()"
 
         @since %DataProvider 3.9
     */
     private logCaughtError(string message, ...) {
-        *LoggerInterface logger = getLogger() ?? DataProvider::getGlobalLogger();
-        if (logger) {
+        if (*LoggerInterface logger = getLogger()) {
             logger.logArgs(Qore::Logger::LoggerLevel::LevelError, message, argv);
+            return;
         }
+        # the global logger is used directly, as the message is produced by the module also for sandboxed callers; the
+        # message of an object of a class that sandboxed code declares is marked as such (qore#7110)
+        DataProviderGlobalLogger::logObjectArgs(self, Qore::Logger::LoggerLevel::LevelError, message, argv);
     }
 
     #! Returns the description of a response message, if this object represents a response message
@@ -9347,12 +9355,13 @@ list<hash<DataProviderDebugInfo>> info = collector.getAll();
     }
 
     #! Returns @ref True if debug collection is enabled
-    /** @return @ref True if a debug collector is registered
+    /** @return @ref True if a debug collector is registered and has not been deleted
 
         @since DataProvider 3.3
     */
     bool debugCollectionEnabled() {
-        return debug_collector.val();
+        # the same check as in collectDebugInfo(): True for an object without members, False for a deleted object
+        return debug_collector ? True : False;
     }
 
     #! Returns @ref True if the data provider supports being used as a pipeline processor

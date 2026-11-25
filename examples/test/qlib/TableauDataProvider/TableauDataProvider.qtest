@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -174,6 +175,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         addTestCase("sanity tests", \sanityTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
+        addTestCase("action state changes", \actionStateTests());
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("trigger example data tests", \triggerExampleDataTests());
@@ -204,19 +206,19 @@ public class TableauDataProviderTest inherits QUnit::Test {
     #! Sets up the Tableau client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.TABLEAU_CONNECTION;
+        *string conn_name = LiveProvider::get("tableau", "TABLEAU_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = LiveProvider::connection("tableau", "TABLEAU_CONNECTION", m_options.conn).get();
             return;
         }
 
-        *string subdomain = m_options.subdomain ?? ENV.TABLEAU_SUBDOMAIN;
-        *string token_name = m_options.token_name ?? ENV.TABLEAU_TOKEN_NAME;
-        *string token_secret = m_options.token_secret ?? ENV.TABLEAU_TOKEN_SECRET;
-        *string content_url = m_options.content_url ?? ENV.TABLEAU_CONTENT_URL;
+        *string subdomain = m_options.subdomain ?? LiveProvider::get("tableau", "TABLEAU_SUBDOMAIN");
+        *string token_name = LiveProvider::get("tableau", "TABLEAU_TOKEN_NAME", m_options.token_name);
+        *string token_secret = LiveProvider::get("tableau", "TABLEAU_TOKEN_SECRET", m_options.token_secret);
+        *string content_url = m_options.content_url ?? LiveProvider::get("tableau", "TABLEAU_CONTENT_URL");
 
         if (!subdomain || !token_name || !token_secret) {
             if (m_options.verbose) {
@@ -293,6 +295,30 @@ public class TableauDataProviderTest inherits QUnit::Test {
         assertEq("TableauDataProvider", info.type);
 
         assertTrue(info.constructor_options.hasKey("tableaurestclient"));
+    }
+
+    #! The actions declare whether they change state, as the implementation does
+    actionStateTests() {
+        # the download reads the content of the datasource with a GET and stores nothing: the action declares
+        # that it is read-only (qore#7454)
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx(
+            TableauDataProvider::AppName, "download-datasource");
+        assertEq(DPAT_API, action.action_code);
+        assertEq(NT_BOOLEAN, action.mutates_state.typeCode());
+        assertFalse(action.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(action));
+        # the searches and gets are read-only by their action code
+        foreach string action_name in ("search-datasources", "get-datasource", "search-projects", "get-project") {
+            assertFalse(DataProviderActionCatalog::actionMutatesState(
+                DataProviderActionCatalog::getAppActionEx(TableauDataProvider::AppName, action_name)), action_name);
+        }
+        # the actions that create, update or delete a resource or a tag change state
+        foreach string action_name in ("update-datasource", "delete-datasource", "add-tag-to-datasource",
+                "delete-tag-from-datasource", "create-project", "update-project", "delete-project", "create-user",
+                "update-user", "delete-user", "delete-extract-refresh-task") {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(
+                DataProviderActionCatalog::getAppActionEx(TableauDataProvider::AppName, action_name)), action_name);
+        }
     }
 
     #! Child provider tests - verify hierarchy
@@ -1005,7 +1031,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             "logger": new Logger("server", LoggerLevel::getLevelError()),
         });
         on_exit server.stop();
-        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         FakeTableauHandler handler();
         server.setHandler("tableau", "", NOTHING, handler);
         server.setDefaultHandler("tableau", handler);
@@ -1014,7 +1040,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
             "token_name": "pat-name",
             "token_secret": "pat-secret",
             "content_url": "my-site",
-            "url": "http://localhost:" + port + "/api/3.27",
+            "url": "http://127.0.0.1:" + port + "/api/3.27",
         });
         assertNothing(rest.getSiteLuid());
         TableauDataProvider::TableauDataProvider provider({"tableaurestclient": rest});

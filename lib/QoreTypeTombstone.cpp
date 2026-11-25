@@ -215,7 +215,19 @@ public:
         fp += "|b";
         if (p->scl) {
             for (BCNode* n : *p->scl) {
-                if (failed || !n->sclass) {
+                // a parent class is kept alive by the list of the class's ancestors (BCSMList::append() references
+                // it), not by the edge: a class whose hierarchy was not initialized (such as one that is circular or
+                // inherits a class whose hierarchy is invalid) has edges to parent classes that its list does not
+                // hold, and a parse rollback may have freed them already, so the edge is compared with the list
+                // without reading the parent class (qore#7464): with the canonical class of each entry, which the
+                // entry's reference keeps alive, as the edge holds the canonical class (BCNode::setClassPointer())
+                // and an entry can be another QoreClass of the class (one imported into the Program, as the AOT
+                // loader adds it with qore_class_private::addBaseClass())
+                if (failed || !n->sclass
+                    || std::none_of(p->scl->sml.begin(), p->scl->sml.end(),
+                        [n](const class_virt_pair_t& i) {
+                            return qore_class_private::get(*i.first)->cls == n->sclass;
+                        })) {
                     failed = true;
                     break;
                 }
@@ -1099,7 +1111,10 @@ bool qore_type_needs_decl_pin(const QoreTypeInfo* ti) {
     if (!ti) {
         return false;
     }
-    if (const QoreComplexCodeTypeInfo* cti = dynamic_cast<const QoreComplexCodeTypeInfo*>(ti)) {
+    // on the path of every generic call (CodeEvaluationHelper::setTypeParamInstantiation()): classified with the
+    // type's flag, not a dynamic_cast (issue #6126)
+    if (ti->isComplexCode()) {
+        const QoreComplexCodeTypeInfo* cti = static_cast<const QoreComplexCodeTypeInfo*>(ti);
         if (qore_type_needs_decl_pin(cti->getReturnType())) {
             return true;
         }

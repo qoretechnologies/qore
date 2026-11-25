@@ -163,7 +163,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
     start() {
         # Pin @c m across this method: see @ref pcm_lock_pin
         Mutex m_pin = m;
-        AutoLock al(m);
+        # messages queued by deferLog() under the lock are emitted after it is released
+        on_exit flushDeferredLogs();
+        m.lock();
+        on_exit m.unlock();
 
         if (stopping) {
             throw "MONITOR-START-ERROR", "cannot start while the monitor is being stopped";
@@ -292,7 +295,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             throw "MONITOR-CONNECTION-ERROR", sprintf("Connection %y does not support the polling API and cannot be "
                 "added to the polling connection monitor", name);
         }
-        AutoLock al(m);
+        # messages queued by deferLog() under the lock are emitted after it is released
+        on_exit flushDeferredLogs();
+        m.lock();
+        on_exit m.unlock();
         if (*hash<PollInfo> info = cache{name}) {
             # if the connection has already been added, then ignore
             if (info.conn == conn) {
@@ -348,7 +354,10 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             controller.cancelByOwner("pcm:" + name);
         }
         {
-            AutoLock al(m);
+            # messages queued by deferLog() under the lock are emitted after it is released
+            on_exit flushDeferredLogs();
+            m.lock();
+            on_exit m.unlock();
             addOrUpdateIntern(conn, other, start_pending);
         }
     }
@@ -515,12 +524,31 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             task_cnt.dec();
         };
         try {
+            # the timer's cancel callback balances the count when the module cleanup cancels the timer at the end of
+            # the process, as its callback never runs then (qore#7116)
             cache{name}.timer_id = controller.addTimerDelay(delay, sub () {
-                controller.submitTask(task, cancel_cb);
-            });
-        } catch () {
+                try {
+                    controller.submitTask(task, cancel_cb);
+                } catch (hash<ExceptionInfo> ex) {
+                    # at the end of the process, the module cleanup can refuse the task, whose cancel callback has
+                    # balanced the count then (qore#7116)
+                    if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                        rethrow;
+                    }
+                }
+            # (no owner: the timer's callback is not tracked per owner, as before)
+            }, "", cancel_cb);
+        } catch (hash<ExceptionInfo> ex) {
             task_cnt.dec();
-            rethrow;
+            # at the end of the process, the work of the module cleanup cannot add timers after its deadline (see
+            # @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()"): the connection is not polled
+            # again (qore#7027)
+            if (ex.err != "ASYNC-IO-SHUTDOWN-ERROR") {
+                rethrow;
+            }
+            # the monitor lock is held: emitted when it is released
+            deferLog(LoggerLevel::DEBUG, sprintf("ping of connection %y not scheduled at the end of the process: %s: "
+                "%s", name, ex.err, ex.desc));
         }
     }
 
@@ -568,6 +596,9 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
                 return;  # stale or superseded
             }
             cache{name}.ping_active = False;
+            # issue #7236: a ping that could not be started is a check that failed, as in the continuePoll() error
+            # path below, so the connection does not read as never checked
+            cache{name}.conn.last_check = now_us();
             deferLog(LoggerLevel::ERROR, sprintf("%y: error handling ping start: %s", name,
                 get_exception_string(ex)));
             failedToStartPing(name, ex);
@@ -590,7 +621,13 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             cache{name}.ping_active = False;
             cache{name}.conn.last_check = now_us();
             cache{name}.spop = spop;
-            handlePingFailed(name, now_us() - cache{name}.start, ex);
+            # the deadline of the operation can pass before this first step, when this thread does not run for its
+            # duration: a timeout, as when the controller's steps raise it (handlePingResult(), qore#6973)
+            if (ex.err == "SOCKET-TIMEOUT") {
+                handlePingTimeout(name, now_us() - cache{name}.start);
+            } else {
+                handlePingFailed(name, now_us() - cache{name}.start, ex);
+            }
             if (active) {
                 scheduleNextPing(name, ping_repeat);
             }
@@ -766,7 +803,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         return conn.startPollConnect(getLogger());
     }
 
-    #! Could not start ping
+    #! Could not start ping; called with the connection's \c last_check set to the time of the failure
     private failedToStartPing(string name, hash<ExceptionInfo> ex) {
         # error already logged
         cache{name}.conn.handlePingFailed(0s, ex);

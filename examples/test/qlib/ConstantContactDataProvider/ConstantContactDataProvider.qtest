@@ -27,6 +27,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
@@ -81,6 +82,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
 
         # Integration tests (require Constant Contact credentials)
         addTestCase("integration tests", \integrationTests());
@@ -97,21 +99,41 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! Tests that the actions that only read declare that they do not change state (qore#7454)
+    private readOnlyActionTests() {
+        # both actions only make a GET request
+        list<string> read_only = ("get-account", "get-email-summary");
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions(ConstantContactDataProvider::AppName),
+            read_only.contains($1.action);
+        assertEq(read_only, sort(map $1.action, actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), actions;
+        map assertFalse($1.mutates_state, $1.action), actions;
+        map assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState($1), $1.action), actions;
+        # an action that changes state still reports it
+        hash<DataProviderActionInfo> update = (select
+            DataProvider::DataProviderActionCatalog::getActions(ConstantContactDataProvider::AppName),
+            $1.action == "update-account")[0];
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(update));
+    }
+
     #! Sets up the Constant Contact client for integration tests
     private setupConnection() {
         # Try to use a connection from Qorus if specified
-        *string conn_name = m_options.conn ?? ENV.CONSTANTCONTACT_CONNECTION;
+        *string conn_name = LiveProvider::get("constantcontact", "CONSTANTCONTACT_CONNECTION", m_options.conn);
         if (conn_name) {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).getAsync();
+            client = LiveProvider::connection("constantcontact", "CONSTANTCONTACT_CONNECTION",
+                m_options.conn).getAsync();
             return;
         }
 
-        *string token = m_options.token ?? ENV.CONSTANTCONTACT_ACCESS_TOKEN;
-        *string client_id = m_options.client_id ?? ENV.CONSTANTCONTACT_CLIENT_ID;
-        *string client_secret = m_options.client_secret ?? ENV.CONSTANTCONTACT_CLIENT_SECRET;
+        *string token = LiveProvider::get("constantcontact", "CONSTANTCONTACT_ACCESS_TOKEN", m_options.token);
+        *string client_id = LiveProvider::get("constantcontact", "CONSTANTCONTACT_CLIENT_ID", m_options.client_id);
+        *string client_secret = LiveProvider::get("constantcontact", "CONSTANTCONTACT_CLIENT_SECRET",
+            m_options.client_secret);
 
         if (!token && (!client_id || !client_secret)) {
             if (m_options.verbose) {

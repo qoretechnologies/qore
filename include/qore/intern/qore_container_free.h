@@ -72,4 +72,36 @@ private:
     bool recursive;
 };
 
+//! The weak reference count of a list or hash (qore#7163)
+/** A list or hash holds one weak reference to itself until it is freed.  A weak reference (":=") keeps a freed list
+    or hash node allocated, and code can take a reference of its own to it through one of its weak holders (reading
+    or copying the weak reference).
+
+    If any weak holder besides the container itself remains when its free starts (QoreListNode::derefImpl(),
+    QoreHashNode::derefImpl()), the holders together take one reference to it (\c weak_hold), before its entries are
+    freed directly or by free_nested_containers(): a reference taken through a weak holder from then on, also by a
+    destructor of an entry, does not bring the count to zero while the holders hold theirs.  The free ends by
+    releasing the container's own weak reference, and the last weak holder releases the holders' reference
+    (QoreListNode::weakDeref(), QoreHashNode::weakDeref()): the node is then deleted by the release of its last
+    reference, whichever that is, with a single counter deciding it.
+
+    Code that holds a reference to a freed container after its weak holders released theirs can give it a weak holder
+    again: the weak reference count then rises from zero, and the holders take a reference again
+    (QoreListNode::weakRef(), QoreHashNode::weakRef()).
+
+    Without other weak holders, nothing can take a reference to the container, which is deleted when its free ends.
+*/
+class QoreContainerWeakRefs : public QoreReferenceCounter {
+public:
+    //! Returns true if weak holders besides the container itself hold a weak reference to it
+    DLLLOCAL bool hasHolders() const {
+        return references.load() > 1;
+    }
+
+    //! Takes a weak reference; returns true if the count was zero (a freed container whose holders released theirs)
+    DLLLOCAL bool refFromZero() const {
+        return !references.fetch_add(1);
+    }
+};
+
 #endif

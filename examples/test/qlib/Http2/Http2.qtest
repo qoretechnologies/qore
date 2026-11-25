@@ -189,7 +189,7 @@ public class Http2Test inherits QUnit::Test {
         sock.setAlpnProtocols(("h2", "http/1.1"));
 
         # Connect to server
-        sock.connect(sprintf("localhost:%d", port), 5000);
+        sock.connect(sprintf("127.0.0.1:%d", port), 5000);
 
         # Accept all certificates for testing
         sock.acceptAllCertificates(True);
@@ -305,7 +305,7 @@ public class Http2Test inherits QUnit::Test {
         # Test HttpAcceptPollOperation with various http_version modes
         # Create a new SSL listener socket for testing
         Socket listener();
-        listener.bind("localhost:0");
+        listener.bind("127.0.0.1:0");
         listener.listen();
         int test_port = listener.getPort();
 
@@ -327,7 +327,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 Socket client();
                 client.setAlpnProtocols(("h2", "http/1.1"));
-                client.connect(sprintf("localhost:%d", test_port), 5000);
+                client.connect(sprintf("127.0.0.1:%d", test_port), 5000);
                 client.acceptAllCertificates(True);
                 client.upgradeClientToSSL(5000);
                 done.dec();
@@ -376,7 +376,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 Socket client();
                 client.setAlpnProtocols(("h2", "http/1.1"));
-                client.connect(sprintf("localhost:%d", test_port), 5000);
+                client.connect(sprintf("127.0.0.1:%d", test_port), 5000);
                 client.acceptAllCertificates(True);
                 client.upgradeClientToSSL(5000);
                 done.dec();
@@ -411,7 +411,7 @@ public class Http2Test inherits QUnit::Test {
             Counter done(1);
             background sub() {
                 Socket client();
-                client.connect(sprintf("localhost:%d", test_port), 5000);
+                client.connect(sprintf("127.0.0.1:%d", test_port), 5000);
                 done.dec();
             }();
 
@@ -475,7 +475,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -577,7 +577,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Enabled(True);
@@ -638,7 +638,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -734,7 +734,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("required");  # Require HTTP/2
@@ -1012,7 +1012,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -1131,7 +1131,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("required");
@@ -1206,7 +1206,7 @@ public class Http2Test inherits QUnit::Test {
         # Test 4: HttpAcceptPollOperation with h2c mode
         {
             Socket listener();
-            listener.bind("localhost:0");
+            listener.bind("127.0.0.1:0");
             listener.listen();
             int test_port = listener.getPort();
 
@@ -1220,7 +1220,7 @@ public class Http2Test inherits QUnit::Test {
             Counter done(1);
             background sub() {
                 Socket client();
-                client.connect(sprintf("localhost:%d", test_port), 5000);
+                client.connect(sprintf("127.0.0.1:%d", test_port), 5000);
                 done.dec();
             }();
 
@@ -1252,7 +1252,7 @@ public class Http2Test inherits QUnit::Test {
         # Test 5: End-to-end h2c test with local server
         {
             Socket server_sock();
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -1336,7 +1336,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 try {
                     HTTPClient client({
-                        "url": sprintf("http://localhost:%d", test_port),
+                        "url": sprintf("http://127.0.0.1:%d", test_port),
                     });
                     client.setHttp2Mode("h2c-direct");
 
@@ -1393,7 +1393,7 @@ public class Http2Test inherits QUnit::Test {
             SSLPrivateKey key(KeyPem);
             server_sock.setCertificate(cert);
             server_sock.setPrivateKey(key);
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -1464,7 +1464,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 try {
                     HTTPClient client({
-                        "url": sprintf("https://localhost:%d", test_port),
+                        "url": sprintf("https://127.0.0.1:%d", test_port),
                     });
                     client.acceptAllCertificates(True);
                     client.setHttp2Mode("required");
@@ -1539,7 +1539,7 @@ public class Http2Test inherits QUnit::Test {
             SSLPrivateKey key(KeyPem);
             server_sock.setCertificate(cert);
             server_sock.setPrivateKey(key);
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -1601,7 +1601,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 try {
                     HTTPClient client({
-                        "url": sprintf("https://localhost:%d", test_port),
+                        "url": sprintf("https://127.0.0.1:%d", test_port),
                     });
                     client.acceptAllCertificates(True);
                     client.setHttp2Mode("required");
@@ -1634,7 +1634,7 @@ public class Http2Test inherits QUnit::Test {
             SSLPrivateKey key(KeyPem);
             server_sock.setCertificate(cert);
             server_sock.setPrivateKey(key);
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -1682,7 +1682,7 @@ public class Http2Test inherits QUnit::Test {
                 try {
                     Socket client();
                     client.setAlpnProtocols(("h2",));
-                    client.connect(sprintf("localhost:%d", test_port), 5000);
+                    client.connect(sprintf("127.0.0.1:%d", test_port), 5000);
                     client.acceptAllCertificates(True);
                     client.upgradeClientToSSL(5000);
                     # keep the connection open until the server has made its check on it
@@ -1819,7 +1819,7 @@ public class Http2Test inherits QUnit::Test {
 
     private hash<auto> runCurlHttp2WebSocketConnect(int port, string path, string key) {
         string log_path = tmp_location() + DirSep + "http2-ws-curl-" + getpid() + ".log";
-        string url = sprintf("https://localhost:%d%s", port, path);
+        string url = sprintf("https://127.0.0.1:%d%s", port, path);
         string cmd = sprintf("curl --http2 -k -s -D %s -o /dev/null -X CONNECT "
             + "-H ':protocol: websocket' -H 'Sec-WebSocket-Key: %s' -H 'Sec-WebSocket-Version: 13' %s",
             log_path, key, url);
@@ -1979,7 +1979,7 @@ public class Http2Test inherits QUnit::Test {
             WebSocketClient::WebSocketClient ws_client(sub (data msg) {
                 msg_queue.push(msg.toString());
             }, {
-                "url": "wss://localhost:" + port + "/ws",
+                "url": "wss://127.0.0.1:" + port + "/ws",
                 "ssl_verify_cert": False,
                 "http_version": "2.0",  # Force HTTP/2 mode
             });
@@ -2411,7 +2411,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -2490,7 +2490,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("auto");  # Let ALPN negotiate
@@ -2591,7 +2591,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -2658,7 +2658,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("auto");
@@ -2745,7 +2745,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -2819,7 +2819,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 # Even though we set auto, global mode disabled should override
@@ -2893,7 +2893,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -2969,7 +2969,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("required");
@@ -3039,7 +3039,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -3097,7 +3097,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                     "timeout": 500ms,  # Short timeout
                     "connect_timeout": 5s,
                 });
@@ -3155,7 +3155,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -3232,7 +3232,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                     "timeout": 30s,
                 });
                 client.acceptAllCertificates(True);
@@ -3311,7 +3311,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         server_sock.setCertificate(cert);
         server_sock.setPrivateKey(key);
-        server_sock.bind("localhost:0");
+        server_sock.bind("127.0.0.1:0");
         server_sock.listen();
         int test_port = server_sock.getPort();
 
@@ -3390,7 +3390,7 @@ public class Http2Test inherits QUnit::Test {
         background sub() {
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("required");
@@ -3510,7 +3510,7 @@ public class Http2Test inherits QUnit::Test {
         # Test 1: Poll operation with HTTP/2 required but server doesn't support it
         {
             Socket server_sock();
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -3538,7 +3538,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 try {
                     HTTPClient client({
-                        "url": sprintf("http://localhost:%d", test_port),
+                        "url": sprintf("http://127.0.0.1:%d", test_port),
                     });
                     client.setHttp2Mode("required");  # Require HTTP/2
 
@@ -3594,7 +3594,7 @@ public class Http2Test inherits QUnit::Test {
             SSLPrivateKey key(KeyPem);
             server_sock.setCertificate(cert);
             server_sock.setPrivateKey(key);
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -3624,7 +3624,7 @@ public class Http2Test inherits QUnit::Test {
             background sub() {
                 try {
                     HTTPClient client({
-                        "url": sprintf("https://localhost:%d", test_port),
+                        "url": sprintf("https://127.0.0.1:%d", test_port),
                         "timeout": 5s,
                     });
                     client.acceptAllCertificates(True);
@@ -3696,7 +3696,7 @@ public class Http2Test inherits QUnit::Test {
             server_sock.setPrivateKey(key);
             # Only advertise HTTP/1.1 since server handles HTTP/1.1 protocol
             server_sock.setAlpnProtocols(("http/1.1",));
-            server_sock.bind("localhost:0");
+            server_sock.bind("127.0.0.1:0");
             server_sock.listen();
             int test_port = server_sock.getPort();
 
@@ -3727,7 +3727,7 @@ public class Http2Test inherits QUnit::Test {
             }();
 
             # Client - start disconnected, then use poll to connect and send request
-            HTTPClient client({"url": sprintf("https://localhost:%d", test_port)});
+            HTTPClient client({"url": sprintf("https://127.0.0.1:%d", test_port)});
             client.acceptAllCertificates(True);
             # Disable HTTP/2 mode to match server's HTTP/1.1-only ALPN
             client.setHttp2Mode("disabled");
@@ -3792,7 +3792,7 @@ public class Http2Test inherits QUnit::Test {
         SSLPrivateKey key(KeyPem);
         listener.setCertificate(cert);
         listener.setPrivateKey(key);
-        listener.bind("localhost:0");
+        listener.bind("127.0.0.1:0");
         listener.listen();
         int test_port = listener.getPort();
 
@@ -3875,7 +3875,7 @@ public class Http2Test inherits QUnit::Test {
             on_exit client_done.dec();
             try {
                 HTTPClient client({
-                    "url": sprintf("https://localhost:%d", test_port),
+                    "url": sprintf("https://127.0.0.1:%d", test_port),
                 });
                 client.acceptAllCertificates(True);
                 client.setHttp2Mode("auto");
@@ -3939,7 +3939,7 @@ public class Http2Test inherits QUnit::Test {
         server.setHandler("test", "/test", MimeTypeText, new Http2TestHandler());
         server.setDefaultHandler("test", new Http2TestHandler());
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": cert,
             "key": key,
@@ -3947,7 +3947,7 @@ public class Http2Test inherits QUnit::Test {
         int test_port = linfo.port;
         on_exit delete server;
 
-        string base_url = sprintf("https://localhost:%d", test_port);
+        string base_url = sprintf("https://127.0.0.1:%d", test_port);
 
         # Run multiple rounds with 5 concurrent connections each to stress the race
         # window between I/O controller setting O_NONBLOCK and handler thread flushing

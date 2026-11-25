@@ -158,14 +158,20 @@ printf(\"rv:%d\\n\", r);
         string code = "%modern\n" + (debugging ? "" : "%no-debugging\n") + "
 int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
 
+# a reference created in the function keeps its untyped locals on the runtime stack, where the handlers' native
+# code tracks them (#5951: a typed local that only a handler references is IR-only)
+sub touch(reference<int> z) {}
+
 int sub big(int n) {
-    int r = 0;
+    auto r = 0;
+    int z = 0;
+    touch(\\z);
 ";
         for (int i = 0; i < n; ++i) {
             code += sprintf("    try {
         r += may_throw(n - %d);
     } catch (hash<ExceptionInfo> ex) {
-        int l%d = r + %d;
+        auto l%d = r + %d;
         on_exit { r += l%d; }
         r += 1;
     }

@@ -187,7 +187,10 @@ qore_qmod_cache_setup "${QORE_SRC_DIR}"
 # the C and C++ compiler cache, when the job has one (see ccache-ci.sh)
 . "${QORE_SRC_DIR}/test/docker_test/ccache-ci.sh"
 qore_ccache_setup
+# CMake takes a semicolon-separated list. Use only the package prefixes selected above.
+cmake_module_dirs=$(printf '%s' "${EXTRA_MODULE_DIRS%:}" | tr : ';')
 cmake .. \
+    "-DQORE_EXTERNAL_MODULE_DIRS=${QORE_EXTERNAL_MODULE_DIRS-${cmake_module_dirs}}" \
     -DCMAKE_BUILD_TYPE=release \
     -DQORE_QCC_TEST_HOOKS=ON \
     -DSINGLE_COMPILATION_UNIT=1 \
@@ -207,6 +210,10 @@ cd "${QORE_SRC_DIR}"
 # The build-system tests (examples/test/cmake), against this build, as test-cmake.sh runs them on Linux
 QORE_QPP_EXECUTABLE="${BUILD_DIR}/qpp" QORE_QCC_EXECUTABLE="${BUILD_DIR}/qcc" QORE_BINARY="${BUILD_DIR}/qore" \
     QORE_TEST_BUILD_DIR="${BUILD_DIR}" python3 -B -W error -m unittest discover -s examples/test/cmake -v
+
+# The checkers of run_tests.sh, as test-cmake.sh runs them on Linux: some check what only macOS does (the libqore that
+# the dynamic loader finds for the build's programs, #7029)
+QORE_TEST_BUILD_DIR="${BUILD_DIR}" python3 -B -W error -m unittest discover -s examples/test/runner -p "test_*.py" -v
 
 # Core tests need native modules from the image (for example yaml and xml), but
 # must not see the image's user modules: those were compiled against the Qore

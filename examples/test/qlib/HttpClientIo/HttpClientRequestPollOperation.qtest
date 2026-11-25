@@ -159,8 +159,8 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
         url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1", "service": 0}).port);
         # server b is reached with another host name, so that cookies of server a are not sent to it
-        url_b = sprintf("http://localhost:%d", server_b.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+        url_b = sprintf("http://127.0.0.1:%d", server_b.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
             "service": 0}).port);
         on_exit {
             peer_a.block.dec();
@@ -502,13 +502,13 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
     }
 
     static auto runPoller(AbstractPollOperation op) {
-        date deadline = now_us() + 30s;
+        int deadline = clock_get_monotonic_us() + 30000000;
         while (!op.goalReached()) {
             *hash<SocketPollInfo> pi = op.continuePoll();
             if (op.goalReached()) {
                 break;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (microseconds(deadline - clock_get_monotonic_us())).durationMilliseconds();
             if (remaining <= 0) {
                 op.abort();
                 throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());

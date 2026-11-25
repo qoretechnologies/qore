@@ -111,18 +111,9 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
         rest.setLogger(logger);
     }
 
-    #! Wait for a given period of time
+    #! Sleeps on the calling thread for the given interval
     static threadWait(date wait_period) {
-%ifdef PO_NO_PROCESS_CONTROL
-        # workaround to wait in a context without process control
-        Mutex m();
-        Condition c();
-        m.lock();
-        on_exit m.unlock();
-        c.wait(m, wait_period);
-%else
         usleep(wait_period);
-%endif
     }
 
     #! Retrieves info for the given guild; must be accessible to the calling user

@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires Logger
 %requires ConnectionProvider
 %requires DataProvider
@@ -58,7 +59,7 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("AwsTextractDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.AWS_TEXTRACT_CONNECTION;
+        conn_name = LiveProvider::get("aws", "AWS_TEXTRACT_CONNECTION", m_options.conn);
 
         addTestCase("factory + app + exact complete inventory", \registrationTest());
         addTestCase("detect-document-text builds Document.Bytes from document_bytes",
@@ -76,7 +77,7 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         addTestCase("app declares Documents AppGroup",   \documentsAppGroupTest());
 
         # Opt-in: three synthetic single-page calls incur the account's normal AWS charges.
-        if (conn_name || ENV.AWS_TEXTRACT_LIVE) {
+        if (conn_name || LiveProvider::get("aws", "AWS_TEXTRACT_LIVE")) {
             addTestCase("live: readable OCR, queries, and expense analysis",
                 \liveTextractTest());
         }
@@ -106,6 +107,15 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         AwsTextractActions::registerNativeActions();
         assertEq(sort(Actions), sort(map $1.action, DataProviderActionCatalog::getActionsEx("AwsTextract")));
         assertEq((), DataProviderActionCatalog::getInitializationFailures(("AwsTextract",)));
+        # the synchronous DetectDocumentText and AnalyzeDocument calls return their result and store nothing
+        # (qore#7454)
+        foreach string name in ("detect-document-text", "analyze-document") {
+            hash<DataProvider::DataProviderActionInfo> info =
+                (select DataProvider::DataProviderActionCatalog::getActionsEx("AwsTextract"), $1.action == name)[0];
+            assertEq(NT_BOOLEAN, info.mutates_state.typeCode(), name);
+            assertFalse(info.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(info), name);
+        }
         list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected =
             (<DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract"},)
             + (map <DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract", "action": $1}, Actions);
@@ -216,6 +226,7 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
     private liveTextractTest() {
         AbstractDataProvider prov;
         if (conn_name) {
+            # live-provider-optin: the connection name comes from LiveProvider
             AbstractConnection conn = get_connection(conn_name);
             assertTrue(conn.ping(True).ok);
             prov = conn.getDataProvider();

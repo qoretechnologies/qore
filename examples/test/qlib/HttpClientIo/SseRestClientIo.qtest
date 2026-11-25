@@ -101,9 +101,9 @@ class TestObserver inherits DataProvider::Observer {
 
     bool waitForEvents(timeout t = 10s) {
         AutoLock al(m);
-        date end_time = now_us() + t;
+        date end_time = microseconds(clock_get_monotonic_us()) + t;
         while (events.size() < expected_count) {
-            date remaining = end_time - now_us();
+            date remaining = end_time - microseconds(clock_get_monotonic_us());
             if (remaining <= 0us) {
                 return False;
             }
@@ -179,7 +179,7 @@ class SseRestClientIoTest inherits Test {
         server.setDefaultHandler("sse", handler);
         server.setHandler("sse-comment", "/comment", NOTHING, comment_handler);
         server.setHandler("sse-error", "/error", NOTHING, new TestSseErrorHandler());
-        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
     }
 
     globalTearDown() {
@@ -190,7 +190,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseReader() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         SseStreamReader reader = rest.restSseReader("GET", "/sse");
 
@@ -206,7 +206,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseReaderMultiple() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         SseStreamReader reader = rest.restSseReader("GET", "/sse");
 
@@ -228,7 +228,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseStream() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         list<hash<SseMessageInfo>> events();
 
@@ -257,7 +257,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseStreamStop() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         int count = 0;
         rest.restSseStream("GET", "/sse", bool sub(hash<SseMessageInfo> evt) {
@@ -269,7 +269,7 @@ class SseRestClientIoTest inherits Test {
     }
 
     testRestSseReaderSkipsComments() {
-        RestClientIo rest({"url": sprintf("http://localhost:%d", port)});
+        RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port)});
 
         SseStreamReader reader = rest.restSseReader("GET", "/comment");
         on_exit reader.cancel();
@@ -289,7 +289,7 @@ class SseRestClientIoTest inherits Test {
         int lport = listener.getSocketInfo().port;
 
         background sub () {
-            Socket conn = listener.accept(5s);
+            Socket conn = listener.accept(30s);
             on_exit conn.close();
 
             hash<auto> req = conn.readHTTPHeader(5s);
@@ -341,7 +341,7 @@ class SseRestClientIoTest inherits Test {
 
     testRestSseReaderThrowsResponseError() {
         RestClientIo rest({
-            "url": sprintf("http://localhost:%d", port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "data": "json",
         });
 
@@ -371,7 +371,7 @@ class SseRestClientIoTest inherits Test {
         lport = listener.getSocketInfo().port;
         background sub () {
             try {
-                Socket conn = listener.accept(5s);
+                Socket conn = listener.accept(30s);
                 on_exit conn.close();
                 hash<auto> req = conn.readHTTPHeader(5s);
                 if (req."content-length") {
@@ -470,7 +470,7 @@ class SseRestClientIoTest inherits Test {
 
     testRestObserveSse() {
         RestClientIo rest({
-            "url": sprintf("http://localhost:%d", port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "data": "json",
         });
         on_exit rest.close();
@@ -533,16 +533,16 @@ class SseRestClientIoTest inherits Test {
 
     testPollOperationHeartbeatDefault() {
         Socket listener();
-        listener.bindINET("localhost", 0, True, AF_INET, SOCK_STREAM);
+        listener.bindINET("127.0.0.1", 0, True, AF_INET, SOCK_STREAM);
         listener.listen();
         on_exit listener.close();
 
         int lport = listener.getSocketInfo().port;
         Socket client();
-        client.connect("localhost:" + lport, 5s);
+        client.connect("127.0.0.1:" + lport, 5s);
         on_exit client.close();
 
-        Socket server_sock = listener.accept(5s);
+        Socket server_sock = listener.accept(30s);
         on_exit server_sock.close();
 
         # the operation starts its heartbeat interval when it is created, and continuePoll() arms the poll with the

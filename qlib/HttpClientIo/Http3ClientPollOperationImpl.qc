@@ -129,6 +129,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 # the peer) was not sent: the connection is closed now, so that a retry finds a new one
                 if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
                         || ex.err == "QUIC-RECV-ERROR" || ex.err == "HTTP3-IDLE-CLOSE"
+                        || ex.err == "HTTP3-PEER-UNRESPONSIVE"
+                        || ex.err == "HTTP3-STATELESS-RESET"
                         || ex.err == "HTTP3-LOCAL-CLOSE" || ex.err == "HTTP3-PEER-CLOSE") {
                     self.setSubmitError(ex.err, ex.desc);
                 }
@@ -148,24 +150,31 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param connection owning HTTP client connection
         @param ssl_ca_file optional file containing trusted CA certificates
         @param ssl_ca_path optional directory containing trusted CA certificates
+        @param ssl_trust_store an in-memory trust store to verify the server with instead of the CA locations (since
+            %HttpClientIo 1.0, qoretechnologies/qore#7248)
         @param address_family the address family to connect in; if not set, the host name is resolved in all
-        families and the family of the first address is used (see \a avoid_families)
-        @param avoid_families address families not to connect in if the host name also resolves to an address in
-        another family
+        families, and the connection attempts to its addresses race (RFC 8305; see
+        @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()")
+        @param avoid_families address families to try last if the host name also resolves to an address in another
+        family
 
         Nothing that can block runs while the operation is created: the UDP socket is created unbound, and the
         operation resolves the host name and binds the socket in the family of the remote address once it is
         submitted to the I/O controller, so a connection can also be created on an async I/O thread (see
         @ref Qore::Http3ClientPollOperationBase::constructor() "Http3ClientPollOperationBase::constructor()")
+        @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain, or from
+        \c FILESYSTEM and CA certificate locations are given; checked at run time, when the object is created (see
+        @ref httpclientio_caller_domains)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
             *SSLCertificate client_cert, *SSLPrivateKey client_pk,
-            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path, *int address_family,
+            HttpClientConnection connection, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store, *int address_family,
             *list<int> avoid_families) :
             Http3ClientPollOperationBase(
-                Http3ClientPollOperation::createAndConfigureSocket(ssl_verify_mode, accept_all_certs, client_cert,
-                    client_pk, ssl_ca_file, ssl_ca_path),
+                Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode, accept_all_certs, client_cert,
+                    client_pk, ssl_ca_file, ssl_ca_path, ssl_trust_store),
                 url_info.host,
                 url_info.port,
                 connection,
@@ -610,9 +619,12 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     /** Called from the constructor initializer list before the C++ base constructor.  The socket is not bound: the
         operation binds it once the remote address is resolved (see the constructor).
     */
-    private static Socket createAndConfigureSocket(*int ssl_verify_mode, bool accept_all_certs,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path) {
-        Socket sock();
+    private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode, bool accept_all_certs,
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk, *string ssl_ca_file, *string ssl_ca_path,
+            *SSLTrustStore ssl_trust_store) {
+        # the caller check of the operation, which this method runs first (qore#6981)
+        HttpClientCallerExemption::check(ssl_ca_file, ssl_ca_path);
+        Socket sock = http_client_tls_socket(url_info, client_cert, client_pk);
 
         # Apply SSL verification settings before connect
         if (accept_all_certs) {
@@ -621,15 +633,13 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             sock.setSslVerifyMode(ssl_verify_mode);
         }
 
-        # Set client certificate and key for mTLS
-        if (client_cert) {
-            sock.setCertificate(client_cert);
-        }
-        if (client_pk) {
-            sock.setPrivateKey(client_pk);
-        }
         if (ssl_ca_file || ssl_ca_path) {
             sock.setSslCaLocations(ssl_ca_file, ssl_ca_path);
+        }
+
+        # an in-memory trust store, which takes precedence over the CA locations (qoretechnologies/qore#7248)
+        if (ssl_trust_store) {
+            sock.setSslTrustStore(ssl_trust_store);
         }
 
         return sock;

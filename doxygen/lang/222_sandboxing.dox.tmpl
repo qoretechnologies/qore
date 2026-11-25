@@ -160,13 +160,14 @@ Program p(opts);
     the %Program as capabilities, and from library modules that declare the domain.
 
     What the %Program's restrictions do guarantee when module code is involved:
+    - code that the %Program authors is never run in another thread by the builtins that run code in other threads,
+      whichever code passes it on (see @ref sandbox_thread_callables)
     - the restrictions of a sandboxed %Program apply to the builtins that module code calls for it, as described in
       @ref user_module_runtime_context; a builtin that runs code asynchronously, such as
       @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" or
       @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a sandboxed
-      caller that may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
-      checked against the module's own parse options only, and module code can always run its own closures, which can
-      call the caller's code
+      caller that may not control threads (see @ref MODULE_OWNED); module code can always run its own closures, which
+      can call the caller's code
     - the caller's code that module code runs, on the caller's thread or on a thread of the module, keeps the
       restrictions of its own %Program: they are checked when it is parsed and, for a dynamic call such as
       @ref Qore::call_function() "call_function()", when the call is made; only the thread it runs on is one that the
@@ -185,16 +186,74 @@ Program p(opts);
     What they do not guarantee:
     - the restrictions of a %Program without a @ref Qore::SandboxManager "SandboxManager" (parse options only) are not
       passed on to module code at run time: module code runs with its own parse options, and the
-      @ref MODULE_OWNED checks do not apply, so module code can run the %Program's closures and call references on
-      its own threads and timers; parse options restrict the code of the %Program itself
+      @ref MODULE_OWNED checks do not apply; module code that runs a closure of its own on its own threads and timers
+      can call the %Program's code from there
     - a module that module code loads at run time (with @ref Qore::load_module() "load_module()", or a data provider
       factory or type that is loaded on demand) is loaded with the restrictions of the %Program of the module that
       loads it, which a module's \c domains declaration relaxes, not with those of the caller
 
     To contain restricted code that uses modules, and to bound its threads, give its %Program a
-    @ref Qore::SandboxManager "SandboxManager", with a thread limit for the latter.  A run-time refusal of the @ref background "background" operator in module code for restricted
-    callers would break the modules that run their callers' code on their own threads, while the sandbox already
-    governs those threads.
+    @ref Qore::SandboxManager "SandboxManager", with a thread limit for the latter.
+
+    @subsection sandbox_thread_callables Code of Restricted Programs Is Not Run in Other Threads
+    A @ref closure "closure", @ref call_reference "call reference" or object that the code of a %Program that may not
+    control threads (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") authored is refused with
+    \c PERMISSION-DENIED by the APIs that run code in another thread, whichever code passes it on, with or without a
+    @ref Qore::SandboxManager "SandboxManager" (since %Qore 3.0):
+    - a call of a closure or call reference, or of a method of an object of a class of such a %Program, with the
+      @ref background "background" operator (ex: \c "background c()" or \c "background o.m()" in module code that
+      was given \c c or \c o), in every execution mode; a closure that is only an argument of the call (ex:
+      \c "background f(c, x + 1)") is given by the code that starts the thread to the code that it calls, and is not
+      refused; a known limitation of code compiled with \c qcc (a module or an executable): it does not give the
+      callee when the new thread computes the arguments or the callee of the call, and refuses every closure, call
+      reference and object of such code that the expression takes when the thread starts, also one that is only an
+      argument of a call of trusted code (ex: \c "background call_function(\\hc(), c)")
+      (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
+    - code of such a %Program that the expression of the @ref background "background" operator calls itself, which
+      is not a value when the thread starts: a callable or object that the new thread computes (an element of a list,
+      a member of a hash, the result of an operator or of a call, a global or static class variable), the code that
+      @ref Qore::call_function() "call_function()", @ref Qore::call_function_args() "call_function_args()",
+      @ref Qore::call_object_method() "call_object_method()" or
+      @ref Qore::call_object_method_args() "call_object_method_args()" calls for the expression, the top-level code
+      or an expression of such a %Program (@ref Qore::Program::run() "Program::run()",
+      @ref Qore::Expression::eval() "Expression::eval()"), a callable or object that
+      @ref Qore::set_thread_resource() "set_thread_resource()" would run when the thread ends, or the override of
+      a subclass of such a %Program that a call of a method of the object of the starting code dispatches to (ex:
+      \c "background work(x + 1)" in a method of a module's class); the new thread checks it when it calls it, so
+      the thread is started and ends with the \c PERMISSION-DENIED exception, reported as any exception that ends a
+      thread, without calling it; code that the functions and methods that the expression calls call is not checked:
+      module code that calls the code of its caller in a thread of its own (ex: \c "background f(c, x + 1)"); a
+      destructor is not checked either: it runs where the last reference to its object is released
+      (<a href="https://github.com/qoretechnologies/qore/issues/7087">issue 7087</a>)
+    - @ref Qore::AsyncIoController::submitTask() "AsyncIoController::submitTask()", its timers and
+      @ref Qore::AsyncIoController::setTimerCallback() "setTimerCallback()", and
+      @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" and
+      @ref Qore::AsyncIoController::exec() "exec()" of a poll operation of a class of such a %Program
+    - the completion code, the operation and the counter of a @ref Qore::DelegatingPollOperation
+      "DelegatingPollOperation", and the frame callback of a WebSocket poll operation, also one that the host lends
+    - @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" and
+      @ref Qore::parallel_foreach() "parallel_foreach()"
+
+    The thread classes are a domain of their own: code that may not control threads but may use the thread classes
+    can create a @ref Qore::Thread::ThreadPool "ThreadPool" of its own, so its code is run by a pool, also one that its
+    host lends it; @ref Qore::Thread::ThreadPool::submit() "ThreadPool::submit()" and the functions above refuse the
+    code of a %Program that may not use the thread classes (@ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES").
+    @ref Qore::defer_thread_cancel() "defer_thread_cancel()" runs its code in the calling thread and is not affected.
+
+    The code that authored a value decides, not the code that passes it on:
+    - code that the host creates passes, also when the host gives it to the restricted %Program or creates it for an
+      object that it lends: the host decides to run it
+    - a closure, call reference or object that module code creates for a restricted caller is the module's
+      capability, which the caller's sandbox governs (its thread limit and policy): module code that runs a closure
+      of its own in another thread, which then calls the code of its caller, is how a module calls back its callers
+      (a server handler, an event callback, a timer of the module) and is not refused
+
+    These are the APIs that the rule covers.
+
+    Module code that runs code that it is given in another thread through a queue of its own checks it with
+    @ref Qore::check_thread_callable() "check_thread_callable()", as the handler pool of
+    @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" and the done callbacks of the
+    WebSocket modules do.
 
     @section sandbox_manager SandboxManager Class
 
@@ -482,7 +541,9 @@ authenticate();
     read are listed, each with the reason why every caller may read it, and a check of the sources
     (\c examples/test/runner/test_module_shared_statics.py) fails for any other.  The members of an object that hold
     credentials, such as the options of an HTTP listener with its TLS certificate and private key, are
-    \c private:internal as well, so that a subclass cannot read them from an object that it is given.
+    \c private:internal as well, so that a subclass cannot read them from an object that it is given.  A class that
+    sandboxed code declares with the name and the declarations of a trusted class is another class, with no private
+    access to the objects of the trusted class (see @ref private_access_class_identity).
 
     The same applies to the code of a module that changes such state for its caller: a registry, lookup, resolver,
     serializer, codec, schema or type cache of a standard module, which every caller uses, refuses registrations,
@@ -522,6 +583,21 @@ authenticate();
       @ref Qore::qore_add_module_to_blacklist_ex() "qore_add_module_to_blacklist_ex()"
     - module options: @ref Qore::set_module_option() "set_module_option()"
 
+    The operations and timers of the process-wide async I/O controller belong to the application that submits or adds
+    them: code that is sandboxed cancels, flushes and replaces only those of its own application, by key, owner or ID
+    (see @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()",
+    @ref Qore::AsyncIoController::cancelByKey() "cancelByKey()",
+    @ref Qore::AsyncIoController::cancelByOwner() "cancelByOwner()" and
+    @ref Qore::AsyncIoController::cancelTimer() "cancelTimer()").
+    This holds for all code that is sandboxed, whether a @ref Qore::SandboxManager "SandboxManager" or the
+    restrictions of its %Program sandbox it, directly, in the calls of module code that it makes and in the threads
+    that module code starts for it.
+    The code of a thread that module code starts runs for no application, as such a thread can serve every caller
+    of the module: a tenant cannot cancel its own operation or timer through such a thread, nor can any other code that
+    is sandboxed; sandboxed code that runs for no application acts on no operation and cancels only the timers that its
+    own work added.  Giving the application of a call to the thread that serves it is
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
+
     The registries, lookups, resolvers, serializers, codecs, schemas and type caches of the standard modules apply
     the same rule with exceptions of their own, which each API documents (see @ref sandbox_module_state); the other
     callback registries of the standard modules raise \c SANDBOX-REGISTRATION-ERROR, for example the child provider
@@ -551,6 +627,69 @@ authenticate();
     were set, and @ref Qore::AsyncIoController::getCacheSize() "AsyncIoController::getCacheSize()" refuses it
     (\c PERMISSION-DENIED), as it counts the operations of every caller; the autostop setting, which only trusted code can
     change, can be read with @ref Qore::AsyncIoController::getAutostop() "AsyncIoController::getAutostop()".
+
+    The same applies to the other objects and settings that the library or a module keeps once for the whole process
+    and that serve every caller, such as loggers, sessions and defaults (as a separate copy per isolation domain is not
+    available yet):
+    - code that is sandboxed or acts for sandboxed code cannot replace or change them
+      (\c SANDBOX-REGISTRATION-ERROR): the default stack size of new threads
+      (@ref Qore::set_default_thread_stack_size() "set_default_thread_stack_size()"), the allocation tracking session
+      (@ref Qore::start_alloc_tracking() "start_alloc_tracking()" and
+      @ref Qore::stop_alloc_tracking() "stop_alloc_tracking()", whose data covers every caller) and the start time of
+      the relative time of the \c logger_bin module (\c LoggerEvent::setStartTime())
+    - it does not get the loggers that the host set: the global loggers of the \c DataProvider and
+      \c ProviderIndexUtil modules (\c getGlobalLogger()) return @ref nothing "NOTHING" for it, as if none were set
+    - a setting that holds no data of any caller can still be read, such as the default thread stack size and the
+      start time of relative logger time
+    - the messages that the library and the modules produce while they serve sandboxed code go to a logger that the
+      caller gave its own object, to the loggers that the host configured, which no sandboxed code can replace, or are
+      not logged; never to a logger of another tenant
+    - sandboxed code cannot write messages of its own to the loggers that the host configured as if they were a
+      module's: \c ProviderIndexUtil::log() refuses it, and a message that the code of an object of a class that
+      sandboxed code declares writes to the host's \c DataProvider logger (the errors that a data provider subclass
+      logs with \c AbstractDataProvider::logCaughtError() without a logger of its own, also those that the module's
+      methods that it inherits log) is marked with the %Program of the object's class, the tenant whose code chose it,
+      whichever code calls the object (<tt>[sandboxed Program &lt;id&gt;]</tt>, see
+      @ref Qore::SandboxManager::getSandboxedProgramId() "SandboxManager::getSandboxedProgramId()", which can be a
+      %Program that the tenant created); the line breaks, the Unicode line separators and the other control characters
+      of every message written this way are escaped, also in a message whose bytes are not valid UTF-8, so
+      that no value in it that a caller chose can start a line of its own or act on a terminal; the messages of the
+      objects of the classes of the modules and of the host keep their form otherwise, also when sandboxed code created
+      or calls them
+
+    State that the host or the library sets for the whole process and that can hold data or configuration of the host
+    or of other tenants is not readable by sandboxed code either, until a separate view per isolation domain is
+    available, and an API that returns it requires the functional domain that its content requires:
+    - the code of a sandboxed %Program does not get the values of the application registry
+      (@ref Qore::get_app_registry() "get_app_registry()") or the module options
+      (@ref Qore::get_module_option() "get_module_option()"): they return @ref nothing "NOTHING" for it, and both
+      require the \c PROCESS functional domain; library module code that reads them to serve sandboxed code still
+      gets them, as the \c DataProvider module does for the custom expressions that the host publishes there
+    - code that is sandboxed or acts for sandboxed code does not get the process-wide YAML tag handler registry of the
+      \c YamlTagHandler module (\c globalTagRegistry() raises \c YAML-TAG-REGISTRATION-DENIED), the lock of the
+      process-wide type cache of \c DataProvider, the default post-processing code of the connections of
+      \c ConnectionProvider (\c AbstractConnection::getPostProcessing()), the locale data fallbacks of the \c i18n
+      module, which record the locales of every caller (\c SANDBOX-REGISTRATION-ERROR), or the number of shared
+      clients of \c VoyageRestClient, whose clients it shares only with the code of its own %Program
+    - an object that a builtin constant of the library or of a binary module holds, such as
+      @ref Qore::stdout "stdout", the type constants of the \c reflection module and the level objects of the
+      \c logger_bin module (which \c LoggerLevel::getLevel() also returns), and the process-wide
+      @ref Qore::AsyncIoController "AsyncIoController" object, is one object for every %Program: no code can add
+      members to it (\c SYSTEM-OBJECT-ERROR), so that no data passes through it from one caller to another; only an
+      object that no %Program owns is such a constant (a constant that a language bridge imports into a %Program is
+      that %Program's), and a member write gate of the class, which owns the storage of its undeclared members, is
+      evaluated before the rule
+    - the code of a sandboxed %Program cannot give a member that the class does not declare to an object of a
+      builtin class without a public member list that another %Program or the library created
+      (\c SYSTEM-OBJECT-ERROR): such an object can be shared, as one that a module keeps in a static member is,
+      such as the \c Type object of \c Mapper::recordType; the members that the class declares, which its own code
+      writes, and the objects that the %Program created itself are not affected (an object that a %Program that it
+      created, or a module that it loaded by its path, created is another %Program's)
+    - type descriptors, constants and settings that hold no data of any caller can still be read, such as the types
+      of the process-wide type cache of \c DataProvider and the global options of that module
+    - a public static member of a standard module that the host sets cannot be hidden from sandboxed code: such a
+      member is deprecated in favor of a setter and a getter that refuse sandboxed code, such as
+      \c AbstractConnection::post_processing, which \c AbstractConnection::setPostProcessing() replaces
 
     @since %Qore 3.0
 
@@ -633,6 +772,54 @@ authenticate();
 
     @since %Qore 3.0
 
+    @subsection sandbox_isolation_domains Isolation Domains (Tenants)
+
+    A host that runs the code of several tenants gives each tenant's sandboxes an isolation domain with
+    @ref Qore::SandboxManager::setIsolationDomain() "SandboxManager::setIsolationDomain()", before it gives them to a
+    %Program.  The domain cannot change afterwards, and only trusted code can set it.  A sandbox that sandboxed code
+    creates or copies belongs to the domain of the sandbox that governs that code.
+
+    The code of one domain never runs for another: a trusted build
+    (@ref Qore::SandboxManager::createTrustedBuildCall() "createTrustedBuildCall()") that sandboxed code of one domain
+    calls refuses to enter a sandbox of another domain with a \c SANDBOX-ISOLATION-ERROR exception, before any of its
+    code runs.  This holds on every path: code given in the build's arguments or reached through them, code returned
+    by the caller's callbacks, code that the build passes on to a nested build, and code that threads, pool tasks and
+    asynchronous I/O that the build starts run.  These may run in such a build:
+    - the caller's own code, and the code of other sandboxes of the caller's domain (a tenant's other interfaces);
+    - the build's own code (the sandboxes of the %Program that created the capability);
+    - code that no sandbox governs (the host's code), and the code of sandboxes without a domain.
+
+    Such a build cannot use a %Program of another domain either, neither its code nor its state: every method of
+    @ref Qore::Program "Program" and @ref Qore::ProgramControl "ProgramControl" called on it raises
+    \c SANDBOX-ISOLATION-ERROR before it reads or changes anything (parsing, loading modules, reading or setting global
+    variables, taking call references, introspection), except \c getProgramId(), which only identifies it.  So do
+    the methods of @ref Qore::DebugProgram "DebugProgram" and @ref Qore::Breakpoint "Breakpoint" given its
+    @ref Qore::ProgramControl "ProgramControl" or bound to it (a breakpoint assigned to it, a debugger that it was
+    added to; except \c Breakpoint::getBreakpointId()), and @ref Qore::load_user_module_with_program()
+    "load_user_module_with_program()" and @ref Qore::Program::loadUserModuleWithProgram()
+    "Program::loadUserModuleWithProgram()" given it as the container of a module.  Deleting its object, or a
+    breakpoint or debugger bound to it (which unassigns or detaches it), is not refused.  The %Program of a module from a trusted module directory, a %Program of the host and one of a sandbox
+    without a domain are not another domain's.
+
+    A build that trusted code calls may run the code of any domain: the host can orchestrate across tenants.  A host
+    that sets no domains is not affected.
+
+    Code that the sandboxes of more than one domain govern together, as a method of an object that one tenant's call
+    created when another tenant calls it, belongs to no domain: @ref Qore::SandboxManager::getCallerIsolationDomain()
+    "SandboxManager::getCallerIsolationDomain()" raises \c SANDBOX-ISOLATION-ERROR for it, and so do the creation of
+    a sandbox by its sandboxed code, the creation of a %Program and the start of a thread; a trusted build that it
+    calls runs the code of none of those domains, only the build's own code and the code of sandboxes without a
+    domain.
+
+    Isolation applies between the sandboxes that have a domain: a host that isolates tenants gives every tenant's
+    sandbox a domain.  A sandbox without a domain is the host's (as the sandboxes of system policies are) and is
+    outside isolation by design: it is treated as host code, so a sandbox without a domain that governs a tenant's
+    code together with the tenant's sandbox does not change the tenant's domain, and the code of a sandboxed %Program
+    whose sandbox has no domain is not isolated from the tenants.
+
+    @note Isolation domains decide which code runs where; they do not by themselves keep a tenant from obtaining
+    another tenant's objects through state that the process shares (see @ref sandbox_module_state)
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
@@ -681,6 +868,122 @@ authenticate();
     must therefore create them in the host's context, or before restricted code can look them up.
 
     @since %Qore 3.0
+
+    @subsection sandbox_lent_connections Connections That the Host Lends
+
+    A connection object that the host creates and gives to restricted code is the host's: the code that it was lent
+    to uses the target that the host gave, not one of its own.  A connection object takes a proof of the code that
+    creates it (@ref HttpClientIo::HttpClientCreatorProof "HttpClientCreatorProof"), bound to its HTTP target (TLS or
+    not, host, port), its proxy and its CA certificate locations; the HTTP clients that it creates for code restricted
+    from the \c NETWORK domain (its async client from
+    @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()", the clients of the WebSocket, JSON-RPC,
+    YAML-RPC, MCP and A2A connections, a REST connection's async client) connect only to that target, through that
+    proxy, also if the restricted code changes the connection's members or the client.  A synchronous client of Qore
+    code (a @ref RestClient::RestClient "RestClient" or @ref YamlRpcClient::YamlRpcClient "YamlRpcClient", the
+    client of a server-sent event connection), which makes its requests for any caller from targets that the caller
+    can change, is not given to code restricted from the \c NETWORK domain: the connection's
+    @ref ConnectionProvider::AbstractConnection::get() "get()" and
+    @ref ConnectionProvider::AbstractConnection::getPollImpl() "getPollImpl()" raise \c PERMISSION-DENIED for it,
+    and it uses the connection's async client where that is bound.  A connection that restricted code looks up by
+    name and that is created for it then has no proof of the host (see @ref sandbox_caller_domains), so its clients
+    are refused to it.
+
+    @warning The connections whose clients are not HTTP clients (for example Telnet, SMTP, POP3, IMAP, FTP, Redis,
+    Memcached, MLLP and MongoDB connections) are not yet bound to their creator's target: their module code connects for the code that they were lent to, to the
+    target in the connection's members, which that code can change, and sends the connection's credentials there.
+    The parse options of the restricted code do not stop it; a @ref Qore::SandboxManager "SandboxManager" that
+    governs the code does, as its network policy decides the connections of the module code that it runs (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7327">issue 7327</a>).  Lend such connections only to
+    code governed by a sandbox whose network policy allows just their targets.
+
+    @since %Qore 3.0
+
+    @subsection sandbox_terminal_io The Terminal Is Not Lent
+
+    A module is a capability (see @ref sandbox_caller_domains), but the terminal is not lent to code that is
+    restricted from terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): the builtins that use the
+    process's terminal refuse such a caller (\c ILLEGAL-EXPRESSION) also when library code calls them for it, also
+    through an object that other code created and lent to it:
+    - the methods of the system @ref Qore::stdin "stdin", @ref Qore::stdout "stdout" and @ref Qore::stderr "stderr"
+      files that are refused for code with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO" (for example reading,
+      writing, redirecting, the terminal attributes and locks), and @ref Qore::print() "print()", @ref Qore::printf() "printf()"
+      and @ref Qore::vprintf() "vprintf()"
+    - @ref Qore::StdoutOutputStream "StdoutOutputStream" and @ref Qore::StderrOutputStream "StderrOutputStream", also
+      when another stream or a @ref Qore::StreamWriter "StreamWriter" writes to them
+    - @ref Qore::TermIOS::getWindowSize() "TermIOS::getWindowSize()"
+    - the variants of @ref Qore::GetOpt "GetOpt" that write an error to @ref Qore::stderr "stderr" and exit raise the
+      error instead (\c GETOPT-ERROR)
+
+    The standard modules check @ref Qore::SandboxManager::isTerminalIoAllowed() "SandboxManager::isTerminalIoAllowed()"
+    before they use the terminal and leave the output out for such a caller: their diagnostics, the
+    \c LoggerAppenderStdOut, \c LoggerAppenderStdErr and \c StdoutAppender appenders of the
+    @ref loggerintro "Logger" module and its \c LoggerAppenderStream whose stream is a \c StdoutOutputStream or a
+    \c StderrOutputStream, the console debug collector of the data providers and the progress display of the
+    \c TerminalFormat module (a stream that wraps one of them, such as an \c EncodingConversionOutputStream, refuses
+    the write, so the appenders after it in that logger are not reached).  So the lines that a
+    logger with such an appender, which the host created, would write to the terminal while its code serves a caller
+    that is restricted from terminal I/O are left out; the logger's other appenders are unaffected (qore#7140).  This
+    holds for an appender that writes synchronously; one that a queue processes in a thread of its own
+    (\c LoggerAppenderQueue) writes as the code of that thread may.  The output of the \c QUnit tests that such code
+    runs is refused (its output is written with the builtins above), so a test cannot run under that restriction.
+
+    The terminal is the host's: the caller is the nearest code on the stack that is not a module's, and when that is
+    trusted host code (a %Program that is not sandboxed and whose options allow terminal I/O), the output is the
+    host's choice and is written, also when the host's code runs under an object or a callback that restricted code
+    created (whose provenance otherwise restricts the code that runs under it).  So an embedding application's own
+    loggers with a terminal appender write the lines of the host's own logging calls, also those it makes for
+    restricted code; they leave out only the lines that library code writes while restricted code is its nearest
+    caller (for example through a \c LoggerWrapper or the logger of a data provider that restricted code uses).
+    It follows that when the host calls a method of a module object that restricted code created (such as a logger
+    with a terminal appender and a layout of its own), the module code writes to the terminal what the object holds:
+    the host decides whether to make the call, and should not call such objects when the terminal must stay closed to
+    that code.  The code of a %Program that has released its classes runs in its caller's %Program with the caller's
+    options, so the code of a released restricted %Program that the host calls is the host's code for the terminal.
+
+    @subsection sandbox_exception_reports Exception Reports of Sandboxed Code
+
+    An exception that code that is sandboxed or acts for sandboxed code raises (the code of a sandboxed %Program, and
+    the code that runs for it, such as module code that it calls or code that runs under its sandbox) records it with
+    the ID of the sandboxed %Program, and keeps it when it is rethrown; so does an exception that such code rethrows
+    with values of its own, and the error of a @ref Qore::Thread::Queue "Queue" that such code sets with
+    @ref Qore::Thread::Queue::setError() "Queue::setError()", whichever code then reads from or writes to the queue, the
+    exception of such code that @ref Qore::parallel_map() "parallel_map()" or
+    @ref Qore::parallel_foreach() "parallel_foreach()" raises again in the calling thread, and the error of
+    a @ref Qore::Thread::Future "Future" that such code rejects (with @ref Qore::Thread::Promise::setError()
+    "Promise::setError()", or by raising in @ref Qore::call_async() "call_async()"), whichever code then gets its
+    result.  The library also does work for such code where no sandbox context is applied, and keeps the origin
+    there (qore#7232, qore#7286): the exceptions and errors of an asynchronous I/O operation that such code submitted
+    (its steps on the controller's I/O thread, such as the error of a @ref Qore::PollPipeline "PollPipeline" that
+    rejects its result @ref Qore::Thread::Promise "Promise"; its completion, also when it is canceled; and the work
+    that its callback workers run for it), the failure of a module load of such code that
+    another thread waits for, and the exception of a stream of such code that the \c json and \c yaml modules read
+    or write.  Wherever and in
+    whichever thread the library reports it (the unhandled exception report on @ref Qore::stderr "stderr" of a
+    background thread, a @ref Qore::Thread::ThreadPool "ThreadPool" task, an asynchronous I/O timer, callback or task,
+    the release of thread-local data or of thread resources, also when the host runs the code, and the error log lines
+    of the asynchronous I/O controller's logger or the one set with
+    @ref Qore::set_async_io_logger() "set_async_io_logger()", and the warnings of a parse that an embedding application
+    reports with the default warning handler), the report cannot pass for the host's own (qore#7139):
+    - each line starts with the mark \c "[caller Program N] " (\c N is the ID of the sandboxed %Program, or
+      \c unknown if it is not known); in a log line, the message starts with it; the report of a chain of exceptions
+      that has such an exception is marked whole, with the ID of the first one
+    - the text of the code's choosing (the error code, the description and the argument, the names of functions, files
+      and sources) is converted to UTF-8 and escaped, so that it stays on its marked line: line breaks, backslash, the
+      C0 and C1 control characters and DEL, the Unicode line and paragraph separators and the bidirectional formatting
+      characters (as \c \\n, \c \\r, \c \\t, \c \\\\, \c \\xNN and \c \\u{NNNN}), as are the bytes of
+      invalid UTF-8 (\c \\xNN); the asynchronous I/O controller's error log lines escape the text of every exception
+      and the names that the submitter chose (owner, key), and every message of the asynchronous I/O loggers and of
+      the controller's debug trace (\c QORE_ASYNC_IO_TRACE) keeps the text that submitting code chose on its line:
+      its line breaks and other control characters except tab are escaped (backslash is kept) and a \c % is printed as
+      it is (qore#7216)
+
+    The marked report on @ref Qore::stderr "stderr" is a compact form of the report of other code: for each exception of
+    the chain, the location where it was raised, the error, description and argument, and the function, file and line
+    of each frame of the call stack (without the language and the code type of each frame); a log line names the first
+    exception of a chain, as for other code.  The exceptions
+    of the host's own code are reported as before.  The mark is a property of the report: Qore code that catches the
+    exception (such as a host that logs it with @ref Util::get_exception_string() "get_exception_string()") gets its
+    values as they are, and escapes them itself before it writes them where they could pass for its own.
 
     @subsection sandbox_module_init Module Initialization
 
@@ -771,6 +1074,10 @@ authenticate();
     module statically linked into a program built with \c qcc is part of that program's own native code and needs no
     such decision.
 
+    When library code accepts a module path at run time, the restrictions of its caller apply through nested library
+    calls and when loading into a different %Program. Host-controlled module directories remain the way to provide
+    native dependencies to restricted callers.
+
     What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
     the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the
     verification of the IR that a compiled module carries (the IR that the IR interpreter and the debugger run)
@@ -857,6 +1164,20 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     - \c ".." cannot be used to escape the sandbox root through components that do not exist yet
     - a symbolic link pointing outside the sandbox root is denied even when its target does not
       exist, so a dangling link cannot be used to create files outside the root
+
+    The rules apply to the file that is actually reached:
+    - a path that refers to an open descriptor (such as \c "/dev/fd/N" or \c "/dev/stdin") is checked as the
+      file of that descriptor; one whose descriptor has no file path (a pipe, a socket, a removed file) is denied
+    - a file that is opened (with @ref Qore::File "File", @ref Qore::ReadOnlyFile "ReadOnlyFile",
+      @ref Qore::FileInputStream "FileInputStream", @ref Qore::FileOutputStream "FileOutputStream" and the APIs based
+      on them) and a directory that is listed are checked again by the path of the file or directory that was opened;
+      if that path cannot be determined or is not allowed, the file is closed again and the operation is denied, and
+      a file opened with \c O_TRUNC is truncated only after this check
+    - an open with \c O_TRUNC needs write access, also with \c O_RDONLY
+    - a symbolic link created by @ref Qore::symlink() "symlink()" must have a target within the reach of the policy (not
+      denied, inside the sandbox root, and covered by an allowed path or the default policy), checked as the link
+      reaches it: a relative target is resolved against the directory of the link, and a target that does not exist yet
+      by its deepest existing directory; each access through the link is checked as before
 
     A path that cannot be resolved for any other reason - for example because a directory in the
     path cannot be searched - raises \c SANDBOX-PATH-ERROR.  This is a resolution failure, not a
@@ -997,26 +1318,18 @@ sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
 
     Server-Side Request Forgery (SSRF) attacks trick applications into making requests to internal
     resources. The @ref Qore::SandboxManager::blockPrivateNetworks() "blockPrivateNetworks()" method
-    blocks all private and internal network ranges:
+    blocks every address that is not a public unicast destination: the private, loopback, link-local, shared
+    (carrier-grade NAT), "this network", documentation, benchmarking, multicast and reserved ranges of IPv4 and IPv6
+    (see the method for the list).  An IPv6 address that embeds an IPv4 address (IPv4-mapped or -compatible, NAT64,
+    6to4, Teredo) is judged by the IPv4 address, and the rules apply to the resolved address of each connection when
+    it is made, so a host name that resolves to a blocked address is refused whatever name it has.  A blocked range
+    takes precedence over the sandbox's allowed hosts and ranges.
 
     @code{.py}
 SandboxManager sm();
 
-# Block all private networks (essential for SSRF prevention)
+# Block every non-public address (essential for SSRF prevention)
 sm.blockPrivateNetworks();
-
-# This blocks:
-# - 127.0.0.0/8 (localhost)
-# - 10.0.0.0/8 (RFC 1918 Class A)
-# - 172.16.0.0/12 (RFC 1918 Class B)
-# - 192.168.0.0/16 (RFC 1918 Class C)
-# - 169.254.0.0/16 (link-local, includes cloud metadata 169.254.169.254)
-# - 0.0.0.0/8, 100.64.0.0/10 (carrier-grade NAT), 224.0.0.0/4 (multicast), 240.0.0.0/4 (reserved, broadcast)
-# - ::1/128 (IPv6 localhost)
-# - fe80::/10 (IPv6 link-local)
-# - fc00::/7 (IPv6 unique local)
-# - ff00::/8 (IPv6 multicast)
-# an IPv6 address that embeds an IPv4 address (IPv4-mapped, NAT64, 6to4) is judged by the IPv4 address
 
 # Allow public internet access
 sm.setNetworkDefaultPolicy(True);
@@ -1089,7 +1402,9 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()".
 
     A connection is decided by these rules in order, after DNS resolution, for each address:
-    -# an IPv4-mapped IPv6 address (<tt>&#58;&#58;ffff:a.b.c.d</tt>) is checked as the IPv4 address it carries, and an
+    -# an IPv6 address that embeds an IPv4 address (IPv4-mapped, such as <tt>&#58;&#58;ffff:a.b.c.d</tt>,
+       IPv4-compatible, NAT64 with the well-known prefix, 6to4 or Teredo) is checked as the IPv4 address it carries
+       (a denied or allowed IP range also applies to the address as given); an
        unspecified destination address (\c 0.0.0.0 or <tt>::</tt>), which the system connects to the local host, is
        checked as the loopback address
     -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a
@@ -1101,7 +1416,8 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
     not restricted by allowed ports, and denied IP ranges do not deny a bind to a loopback address (\c 127.0.0.0/8
-    or <tt>::1</tt>, also as an IPv4-mapped address): a socket bound there can only be reached from the local host, which
+    or <tt>::1</tt>, also as an IPv4-mapped address, but not in another form that embeds it): a socket bound there can
+    only be reached from the local host, which
     is less than a bind on all interfaces exposes, so a sandbox that blocks private networks, such as with
     @ref Qore::SandboxManager::blockPrivateNetworks() "SandboxManager::blockPrivateNetworks()", can still run a
     local listener, while connections to loopback addresses stay denied.  Denied ranges still deny a bind to any
@@ -1569,6 +1885,11 @@ sm.setMaxStackSize(1024 * 1024);  # 1MB per call
     @note The stack size limit is only enforced where %Qore checks the stack of its threads, as it does for the
     \c STACK-LIMIT-EXCEEDED exception of all code.
 
+    @note The slice of the stack that the destructor of an object released at the thread's stack limit can use (see
+    @ref destructors_at_stack_limit) never extends a sandbox's limit: in a call into a sandbox with a stack size limit, a
+    destructor that cannot start within the limit does not run, also that of an object of trusted code that the
+    sandboxed code releases.
+
     @section sandbox_interrupt Safe Code Interruption
 
     The interrupt mechanism allows safely stopping sandboxed code that is stuck in loops
@@ -1771,6 +2092,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c SANDBOX-MEMORY-LIMIT|SandboxManager|The @ref sandbox_memory_limit "memory limit" of the sandbox was exceeded
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
     |\c SANDBOX-ENFORCEMENT-LEVEL-ERROR|SandboxManager|An invalid @ref sandbox_enforcement_level "enforcement level"
+    |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
     |\c SANDBOX-OBJECT-ACCESS-ERROR|SandboxManager|Sandboxed code tried to change @ref sandbox_object_ownership "an object that its sandbox did not create"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded

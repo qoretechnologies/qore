@@ -158,6 +158,30 @@ const QoreClass* qore_pseudo_get_class(qore_type_t t) {
     return pseudo_get_class(t);
 }
 
+bool qore_pseudo_class_accepts_type(const QoreClass* qc, qore_type_t t) {
+    // a weak reference and a reference are not values of the class of their target: the dispatch by name gives the
+    // method their target (pseudo_classes_dispatch())
+    switch (t) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+        case NT_REFERENCE:
+            return false;
+        default:
+            break;
+    }
+    // the classes are compared by their private data, which a Program's copy of a class shares
+    const qore_class_private* qpriv = qore_class_private::get(*qc);
+    const QoreClass* vqc = pseudo_get_class(t);
+    return qore_class_private::get(*vqc) == qpriv || qpriv == qore_class_private::get(*QC_PSEUDOVALUE)
+        || vqc->getClass(qc->getID());
+}
+
+void qore_raise_pseudo_receiver_type_error(const QoreValue& v, const char* class_name, ExceptionSink* xsink) {
+    xsink->raiseException("RUNTIME-TYPE-ERROR", "a pseudo-method of class %s cannot be called on a value of type "
+        "'%s'", class_name, v.getFullTypeName());
+}
+
 const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
     ValueHolder v(QoreTypeInfo::getDefaultQoreValue(t), nullptr);
     qore_type_t nt = v->getType();
@@ -189,6 +213,21 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 */
 // Keep invocation arguments as scalar values instead of addresses captured by the evaluation lambdas.  This lets
 // SCU inline the thin eval entries without reserving capture/parameter storage in ordinary object dot-call frames.
+//! The dispatch of pseudo_classes_dispatch() for the list or hash of a weak reference, out of its path for other values
+/** The target is held with a reference of its own while the pseudo-method runs, which can keep it, or is a new empty
+    one if it was freed (qore#7198).
+*/
+template <typename F, typename... Args>
+static __attribute__((noinline, cold)) QoreValue pseudo_classes_dispatch_weak(const QoreValue n, ExceptionSink* xsink,
+        F f, Args... args) {
+    if (n.getType() == NT_WEAKREF_HASH) {
+        ReferenceHolder<QoreHashNode> target(n.get<WeakHashReferenceNode>()->lock(), xsink);
+        return f(po_list[NT_HASH], QoreValue(*target), args...);
+    }
+    ReferenceHolder<QoreListNode> target(n.get<WeakListReferenceNode>()->lock(), xsink);
+    return f(po_list[NT_LIST], QoreValue(*target), args...);
+}
+
 template <typename F, typename... Args>
 static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink, F f, Args... args) {
     switch (n.getType()) {
@@ -205,10 +244,8 @@ static QoreValue pseudo_classes_dispatch(const QoreValue n, ExceptionSink* xsink
             return f(po_list[NT_OBJECT], QoreValue(n.get<WeakReferenceNode>()->get()), args...);
 
         case NT_WEAKREF_HASH:
-            return f(po_list[NT_HASH], QoreValue(n.get<WeakHashReferenceNode>()->get()), args...);
-
         case NT_WEAKREF_LIST:
-            return f(po_list[NT_LIST], QoreValue(n.get<WeakListReferenceNode>()->get()), args...);
+            return pseudo_classes_dispatch_weak(n, xsink, f, args...);
 
         case NT_REFERENCE: {
             const ReferenceNode* r = n.get<const ReferenceNode>();
@@ -243,6 +280,20 @@ QoreValue pseudo_classes_eval(LexicalSemanticPolicy policy, const QoreValue n, c
         return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<true>(policy, v, name, args,
             rc_get_current_ref(), xsink);
     }, policy, name, args, xsink);
+}
+
+QoreValue pseudo_classes_eval_named(const QoreValue n, const char* name, const QoreListNode* args, bool tmp_args,
+        const qore_class_private* class_ctx, const name_vec_t& arg_names, LexicalSemanticPolicy policy,
+        RuntimeConfig& rc, ExceptionSink* xsink) {
+    return pseudo_classes_dispatch(n, xsink, [&] (const QoreClass* qc, const QoreValue v) {
+        const QoreMethod* w = qore_class_private::get(*qc)->runtimeFindPseudoMethod(v, name, xsink);
+        if (!w) {
+            assert(*xsink);
+            return QoreValue();
+        }
+        return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, v, args, tmp_args,
+            class_ctx, arg_names, policy);
+    });
 }
 
 int pseudo_classes_check_method(const QoreValue n, const char* name, ExceptionSink* xsink) {

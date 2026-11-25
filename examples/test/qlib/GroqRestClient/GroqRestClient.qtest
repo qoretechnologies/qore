@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../LiveProviderTest.qm
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires OpenAiRestClient
@@ -63,7 +64,7 @@ public class GroqRestClientTest inherits QUnit::Test {
             \syncConnectionPathTest());
         addTestCase("automatic connection URL and app identity", \connectionConfigTest());
         addTestCase("sync and async pings verify authentication", \pingTest());
-        if (ENV.GROQ_LIVE) {
+        if (LiveProvider::get("groq", "GROQ_LIVE")) {
             addTestCase("live valid and invalid authentication", \livePingTest());
         }
         set_return_value(main());
@@ -143,7 +144,7 @@ public class GroqRestClientTest inherits QUnit::Test {
 
     private livePingTest() {
         GroqRestClient::GroqRestConnection conn("live", "live authentication",
-            GroqRestClient::GroqRestConnection::DefaultUrl, {}, {"apikey": ENV.GROQ_APIKEY});
+            GroqRestClient::GroqRestConnection::DefaultUrl, {}, {"apikey": LiveProvider::get("groq", "GROQ_APIKEY")});
         assertTrue(conn.ping(True).ok);
         GroqRestClient::GroqRestConnection invalid("invalid", "negative authentication",
             GroqRestClient::GroqRestConnection::DefaultUrl, {}, {"apikey": "invalid-qore-audit-key"});

@@ -61,6 +61,8 @@ class QlibRestrictedCallersTest inherits QUnit::Test {
 
         #! holds the module directory of the children, the data provider index and the SQLite databases
         TmpDir tmp("qore-qlib-restricted-callers-");
+        #! a directory that the module path of the children starts with, if set (see testLazyAot())
+        *string mod_prefix;
 
         #! the directory with links to the binary modules that the children may load
         string binary_dir;
@@ -217,7 +219,7 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
 
         #! the output of the case of the SqlUtil table cache and the datasource of restricted code
         const ExpectedSqlIdentity = "trusted cached: True
-same description: True
+same key: True
 cached table: \"own datasource\"
 resolver table: \"own datasource\"
 resolved table: \"own datasource\"
@@ -244,6 +246,8 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
         addTestCase("the SqlUtil table resolver resolves tables for restricted code", \testSqlUtil());
         addTestCase("deferred registrations of a library module's initialization run for a restricted reader",
             \testLazy());
+        addTestCase("deferred registrations of the initialization of a qcc-compiled library module run as deferred "
+            "module initialization", \testLazyAot());
         addTestCase("a lazy registration that a restricted reader cannot run is run by the next reader",
             \testLate());
         addTestCase("restricted code cannot give its own code the exemption of deferred module initialization",
@@ -290,7 +294,7 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
         string env_str = env ? (map sprintf("%s=%s ", $1.key, shellQuote($1.value)), env.pairIterator()).join("")
             : "";
         string err_path = sprintf("%s/%s-%s-%d.err", tmp.path, case_name, mode, sandbox ? 1 : 0);
-        string mod_dir = case_dir + ":" + qlib_dir + ":" + binary_dir;
+        string mod_dir = (mod_prefix ? mod_prefix + ":" : "") + case_dir + ":" + qlib_dir + ":" + binary_dir;
         string cmd = sprintf("env -u QORE_PROVIDER_INDEX_DIR -u QORE_DATA_PROVIDERS %sQORE_MODULE_DIR_ONLY=1 "
             "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s %s "
             "%d %s 2>%s", env_str, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(libqore_dir),
@@ -365,6 +369,29 @@ direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
         foreach string mode in (Modes) {
             foreach bool sandbox in ((False, True)) {
                 checkCase(ExpectedLazy, "lazy", mode, sandbox);
+            }
+        }
+    }
+
+    # the module of the deferred registrations compiled by qcc, alone in the first directory of the module path: the
+    # closures of its initialization run as deferred module initialization as for the module loaded from source, and
+    # the closures that do not qualify do not (qore#7335)
+    testLazyAot() {
+        string aot_dir = tmp.path + "/aot";
+        mkdir(aot_dir);
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        int rc;
+        string output = backquote(sprintf("env QORE_MODULE_DIR_ONLY=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1", shellQuote(libqore_dir), shellQuote(libqore_dir),
+            shellQuote(case_dir + ":" + qlib_dir + ":" + binary_dir), shellQuote(qcc_bin),
+            shellQuote(aot_dir + "/RcLazyMod.qmod"), shellQuote(case_dir + "/RcLazyMod.qm")), \rc);
+        assertEq(0, rc, "qcc RcLazyMod: " + output.substr(-2000));
+        mod_prefix = aot_dir;
+        on_exit remove mod_prefix;
+        foreach string mode in (Modes) {
+            foreach bool sandbox in ((False, True)) {
+                checkCase(ExpectedLazy, "lazy", mode, sandbox);
+                checkCase(ExpectedClosures, "closures", mode, sandbox);
             }
         }
     }

@@ -746,10 +746,10 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
             getQlibDir(), ShutdownFlushIntervalMs, marker));
         delete f;
 
-        date start = now_us();
+        date start = microseconds(clock_get_monotonic_us());
         int rc = runWithWatchdog(sprintf("%s %s > %s 2>&1", shellQuote(getQoreBinary()), shellQuote(script),
             shellQuote(out_path)), ShutdownWatchdogSecs);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us()) - start;
 
         assertEq(0, rc, sprintf("the subprocess exited normally in %y: %s", elapsed,
             is_file(out_path) ? ReadOnlyFile::readTextFile(out_path) : ""));

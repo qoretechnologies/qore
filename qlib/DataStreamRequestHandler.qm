@@ -140,6 +140,10 @@ private nothing recvDataImpl(auto data) {
     @section datastreamrequesthandlerrelnotes Release Notes
 
     @subsection datastreamrequesthandler_v1_2 DataStreamRequestHandler v1.2
+    - reads the fields of a request from the \c "headers" key of its header hash, or from the top level of a hash
+      built by user code (see @ref HttpUtil::http_get_field() "http_get_field()"), so it works with the HttpServer
+      option \c http_fields_at_top_level set to @ref False
+      (<a href="https://github.com/qoretechnologies/qore/issues/6851">issue 6851</a>)
     - the \c 409 response for a DataStream request gives the exception without its location in the server's code or
       its call stack unless the server's debugging is enabled (issue #6780)
     - a request is accepted with any YAML media type in its \c DataStream-Accept header (\c "application/yaml",
@@ -241,7 +245,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         effective_encoding = suppress_ds_v1_content_encoding
             ? NOTHING : cx.encoding;
         @debug {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("AbstractDataStreamRequestHandler::constructor() "
                     "encoding=%y effective_encoding=%y connect_mode=%y "
                     "suppress_ds_v1_content_encoding=%y\n",
@@ -340,12 +344,12 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
         } else {
             # DataStream v1 mode
             # any YAML media type is accepted; peers before Qore 3.0 send "text/x-yaml"
-            if (!ds_is_yaml_type(cx.hdr{DataStreamAccept.lwr()})) {
+            if (!ds_is_yaml_type(http_get_field(cx.hdr, DataStreamAccept.lwr()))) {
                 return {
                     "code": (err = 406),
                     "body": sprintf("cannot accept DataStream request with header %s: %y; "
                         "expecting %y", DataStreamAccept,
-                        cx.hdr{DataStreamAccept.lwr()}, DataStreamMimeTypeYaml),
+                        http_get_field(cx.hdr, DataStreamAccept.lwr()), DataStreamMimeTypeYaml),
                     "hdr": {"Content-Type": MimeTypeText},
                 };
             }
@@ -412,11 +416,18 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     nothing recvImpl(hash v) {
         @debug {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("AbstractDataStreamRequestHandler::recvImpl() data_size=%d\n", v.data.size());
             }
         }
-        if (v.deserialized && exists v.data) {
+        if (v.deserialized && !connect_mode && v.data.typeCode() == NT_BINARY
+                && http_get_field(cx.hdr, DataStreamContentEncoding.lwr()).val()) {
+            # the bytes of a DataStream v1 body given whole whose records are compressed one by one
+            # (DataStream-Content-Encoding; its content type is binary, so the REST framework does not deserialize
+            # it): the receive callback finds and decodes the compressed records (qore#7323); a body with only a
+            # Content-Encoding was decoded by the server, and is parsed below
+            recv_callback({"data": v.data, "chunked": False});
+        } else if (v.deserialized && exists v.data) {
             # Pre-deserialized body from the REST framework (non-chunked request).
             # The data may be truly deserialized (hash/list from REST validator), raw YAML
             # string, or Connect-framed binary from cx."stream-body". Deserialize as needed.
@@ -471,7 +482,7 @@ public class AbstractDataStreamRequestHandler inherits RestHandler::AbstractRest
     */
     auto sendImpl() {
         @debug {
-            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            if (SandboxManager::isTerminalIoAllowed()) {
                 stdout.printf("AbstractDataStreamRequestHandler::sendImpl()\n");
             }
         }

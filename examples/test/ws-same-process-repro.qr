@@ -167,13 +167,13 @@ ws.observersReady();
 string padding = strmul("X", msg_size_kb * 1024);
 
 # Send batches
-date total_start = now_us();
+date total_start = microseconds(clock_get_monotonic_us());
 int passed = 0;
 int failed = 0;
 
 for (int i = 0; i < num_batches; ++i) {
     string request_id = sprintf("batch-%d", i);
-    date batch_start = now_us();
+    date batch_start = microseconds(clock_get_monotonic_us());
 
     printf("Batch %d/%d: sending %d KB ... ", i + 1, num_batches, msg_size_kb);
     ws.sendData({
@@ -183,7 +183,7 @@ for (int i = 0; i < num_batches; ++i) {
     });
 
     *hash<auto> resp = obs.waitForResponse(request_id, 30s);
-    date elapsed = now_us() - batch_start;
+    date elapsed = microseconds(clock_get_monotonic_us()) - batch_start;
     if (resp && resp.event == "ack") {
         printf("OK (%y)\n", elapsed);
         ++passed;
@@ -200,7 +200,7 @@ for (int i = 0; i < num_batches; ++i) {
 
 printf("\n=== Results ===\n");
 printf("Passed: %d/%d, Failed: %d, Total time: %y\n",
-    passed, num_batches, failed, now_us() - total_start);
+    passed, num_batches, failed, microseconds(clock_get_monotonic_us()) - total_start);
 
 ws.disconnect();
 server.stop();

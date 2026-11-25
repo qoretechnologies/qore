@@ -396,7 +396,9 @@ class SandboxPrivateMemberWriteTest inherits QUnit::Test {
         p.parse(LookAlikeSource, "look-alike");
 
         Plain plain();
-        assertEq(Err, p.callFunction("write_plain", plain), mode + ": a look-alike of the host's class");
+        # refused by the write rule if the look-alike has the access of the class, by the access rules if not
+        string r = p.callFunction("write_plain", plain);
+        assertTrue(r == Err || r == "PRIVATE-MEMBER", mode + ": a look-alike of the host's class: " + r);
         assertEq(0, plain.get(), mode + ": the host's object is unchanged");
 
         Logger host_logger("host");

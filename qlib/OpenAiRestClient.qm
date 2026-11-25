@@ -39,6 +39,7 @@
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 %requires HttpClientStreamingIo
+%requires DataProvider
 %requires QoreLlmTypes
 %requires QoreRagTypes
 
@@ -124,6 +125,8 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_2 OpenAiRestClient v1.2
+    - the OpenAI-compatible LLM providers make asynchronous chat calls, streamed or not, without holding a thread
+      while the response is awaited (@ref QoreLlmUtils::AbstractLlmProvider::chatAsync() "AbstractLlmProvider::chatAsync()")
     - fixed @ref OpenAiRestClient::OpenAiResponseSseStreamIo "OpenAiResponseSseStreamIo" to accept request headers
       whose values all have the same type, such as a literal <tt>{"X-Count": 1}</tt>; adding the \c Content-Type
       header raised \c RUNTIME-TYPE-ERROR
@@ -1092,6 +1095,40 @@ class OpenAiStrictOutputSchema {
     }
 }
 
+#! Passes the events of the SSE observable of an asynchronous stream to its request
+class OpenAiAsyncSseObserver inherits DataProvider::Observer {
+    private {
+        #! The request of the stream
+        QoreLlmUtils::LlmAsyncSseRequest req;
+        #! The attempt that opened the stream
+        int attempt;
+    }
+
+    constructor(QoreLlmUtils::LlmAsyncSseRequest req, int attempt) {
+        self.req = req;
+        self.attempt = attempt;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        switch (event_id) {
+            case HttpClientStreamingIo::EVENT_SSE_CONNECTED:
+                req.sseConnected(attempt);
+                break;
+            case HttpClientStreamingIo::EVENT_SSE_DATA:
+                req.sseEvent(attempt, data_);
+                break;
+            case HttpClientStreamingIo::EVENT_SSE_CLOSED:
+                req.sseClosed(attempt, data_.reason == "idle-timeout"
+                    ? QoreLlmUtils::LlmAsyncSseRequest::ClosedIdleTimeout
+                    : (exists data_.reason
+                        ? QoreLlmUtils::LlmAsyncSseRequest::ClosedError
+                        : QoreLlmUtils::LlmAsyncSseRequest::ClosedEnd),
+                    QoreLlmUtils::LlmAsyncSseRequest::getCloseError(data_));
+                break;
+        }
+    }
+}
+
 #! LLM provider that dispatches to OpenAI-compatible \c /v1/chat/completions endpoints
 /** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract for any
     backend that speaks the OpenAI chat-completions wire format (OpenAI,
@@ -1317,6 +1354,10 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
+                if (opts.cancellation) {
+                    return rest_client.restDoCancellableRequestTarget("POST", wire.target, wire.body,
+                        buildAuthHeader(), getRequestTimeoutMs(opts), getRequestCancelRegistration(opts));
+                }
                 return rest_client.restDoRequestTargetWithTimeout("POST", wire.target, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
@@ -1328,6 +1369,12 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
+        return parseChatResult(resp, wire, strict_context);
+    }
+
+    #! Returns the response of a chat request
+    private hash<QoreLlmUtils::ChatResponse> parseChatResult(hash<auto> resp, hash<auto> wire,
+            hash<auto> strict_context) {
         return parseOpenAiChatResponse(restoreStrictResponse(wire.responses
             ? responsesToChatCompletion(resp.body) : resp.body, strict_context));
     }
@@ -1386,11 +1433,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         on_exit reader.cancel();
 
         int timeout_ms = getRequestTimeoutMs(opts);
-        *hash<auto> terminal;
-        hash<auto> stream_usage;
-        *string served_service_tier;
-        hash<auto!> structured_state = {"content": ""};
-        int structured_bytes = 0;
+        hash<auto!> loop_state = newStreamLoopState();
         while (True) {
             *hash<SseMessageInfo> evt = callCancellable(*hash<SseMessageInfo> sub () {
                 return reader.readEvent(remainingStreamTimeout(timeout_ms, request_deadline));
@@ -1405,88 +1448,129 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 }
                 break;
             }
-            if (evt.data == "[DONE]") {
+            if (handleStreamEvent(\loop_state, evt, wire, strict_context, callback, opts)) {
                 break;
             }
+        }
+        finishStream(loop_state, strict_context, callback, opts);
+    }
 
-            *hash<auto> parsed;
-            try {
-                parsed = parse_json(evt.data);
-            } catch () {
-                continue;
-            }
+    #! Returns the state of a stream's events for handleStreamEvent() and finishStream()
+    private static hash<auto> newStreamLoopState() {
+        # "auto!" hashes: values of any type are added to them later
+        hash<auto!> structured_state = {"content": ""};
+        hash<auto!> responses_stream_state = {};
+        hash<auto!> rv = {
+            "terminal": NOTHING,
+            "stream_usage": NOTHING,
+            "served_service_tier": NOTHING,
+            "structured_bytes": 0,
+        };
+        rv.structured_state = structured_state;
+        rv.responses_stream_state = responses_stream_state;
+        return rv;
+    }
 
-            if (wire.responses) {
-                parsed = responsesStreamToChatChunk(parsed, \responses_stream_state);
-                if (!parsed) {
-                    continue;
-                }
-            }
-            if (parsed.usage.typeCode() == NT_HASH) {
-                stream_usage = parsed.usage;
-            }
-            if (parsed.service_tier.typeCode() == NT_STRING) {
-                served_service_tier = parsed.service_tier;
-            }
-            if (parsed.choices[0].finish_reason.val()) {
-                terminal = parsed;
-            }
+    #! Handles an event of a chat stream; returns True at the end of the stream (\c [DONE])
+    private bool handleStreamEvent(reference<hash<auto>> loop_state, hash<auto> evt, hash<auto> wire,
+            hash<auto> strict_context, code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        if (evt.data == "[DONE]") {
+            return True;
+        }
 
-            if (strict_context.project) {
-                # JSON member deletion cannot be expressed as an append-only
-                # delta. Buffer adapted structured calls until their JSON is
-                # complete, then emit one canonical delta before the terminal.
-                structured_bytes += evt.data.length();
-                if (structured_bytes > 16 * 1024 * 1024) {
-                    throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
-                        "structured response exceeds the 16 MiB buffer limit";
-                }
-                updateOpenAiStreamStateFromRaw(\structured_state, parsed);
-                getOpenAiToolCallDeltas(\structured_state, parsed);
-                if (parsed.choices[0].delta.content.val()) {
-                    structured_state.content += openAiContentText(parsed.choices[0].delta.content) ?? "";
-                }
-                if (parsed.choices[0].delta.refusal.val()) {
-                    structured_state.refusal += parsed.choices[0].delta.refusal;
-                }
-                if (opts.stream_progress) {
-                    # the caller watches the held-back output as it arrives, and can stop it by throwing
-                    opts.stream_progress(<QoreLlmUtils::ChatStreamEvent>{
-                        "event": evt.event,
-                        "delta": parsed.choices[0].delta.content.val()
-                            ? openAiContentText(parsed.choices[0].delta.content) : NOTHING,
-                        "raw": parsed,
-                    });
-                }
-                continue;
-            }
+        *hash<auto> parsed;
+        try {
+            parsed = parse_json(evt.data);
+        } catch () {
+            return False;
+        }
 
-            *string delta;
-            if (parsed.choices[0].delta.content.val()) {
-                delta = openAiContentText(parsed.choices[0].delta.content);
-            }
-            bool has_tool_call_delta =
-                parsed.choices[0].delta.tool_calls.typeCode() == NT_LIST
-                && parsed.choices[0].delta.tool_calls.size() > 0;
-            # OpenAI-compatible providers normally emit function calls in
-            # tool-call-only deltas. Dropping a chunk merely because it has no
-            # text loses the function name/argument stream and makes the final
-            # response look like a clean no-call completion to every caller.
-            # The usage of the response arrives in a chunk of its own after the
-            # chunk with the finish reason, so the stream ends with "[DONE]" or
-            # with the end of the response, not with the finish reason.
-            if (delta.val() || has_tool_call_delta
-                    || parsed.choices[0].delta.content.typeCode() == NT_LIST
-                    || parsed.choices[0].delta.reasoning_content.typeCode() == NT_STRING
-                    || parsed.choices[0].finish_reason.val()
-                    || parsed.usage.typeCode() == NT_HASH) {
-                deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{
-                    "event": evt.event,
-                    "delta": delta,
-                    "raw": parsed,
-                }, opts);
+        if (wire.responses) {
+            hash<auto!> responses_stream_state = loop_state.responses_stream_state;
+            on_exit loop_state.responses_stream_state = responses_stream_state;
+            parsed = responsesStreamToChatChunk(parsed, \responses_stream_state);
+            if (!parsed) {
+                return False;
             }
         }
+        if (parsed.usage.typeCode() == NT_HASH) {
+            loop_state.stream_usage = parsed.usage;
+        }
+        if (parsed.service_tier.typeCode() == NT_STRING) {
+            loop_state.served_service_tier = parsed.service_tier;
+        }
+        if (parsed.choices[0].finish_reason.val()) {
+            loop_state.terminal = parsed;
+        }
+
+        if (strict_context.project) {
+            # JSON member deletion cannot be expressed as an append-only
+            # delta. Buffer adapted structured calls until their JSON is
+            # complete, then emit one canonical delta before the terminal.
+            loop_state.structured_bytes += evt.data.length();
+            if (loop_state.structured_bytes > 16 * 1024 * 1024) {
+                throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                    "structured response exceeds the 16 MiB buffer limit";
+            }
+            hash<auto!> structured_state = loop_state.structured_state;
+            on_exit loop_state.structured_state = structured_state;
+            updateOpenAiStreamStateFromRaw(\structured_state, parsed);
+            getOpenAiToolCallDeltas(\structured_state, parsed);
+            if (parsed.choices[0].delta.content.val()) {
+                structured_state.content += openAiContentText(parsed.choices[0].delta.content) ?? "";
+            }
+            if (parsed.choices[0].delta.refusal.val()) {
+                structured_state.refusal += parsed.choices[0].delta.refusal;
+            }
+            if (opts.stream_progress) {
+                # the caller watches the held-back output as it arrives, and can stop it by throwing
+                opts.stream_progress(<QoreLlmUtils::ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": parsed.choices[0].delta.content.val()
+                        ? openAiContentText(parsed.choices[0].delta.content) : NOTHING,
+                    "raw": parsed,
+                });
+            }
+            return False;
+        }
+
+        *string delta;
+        if (parsed.choices[0].delta.content.val()) {
+            delta = openAiContentText(parsed.choices[0].delta.content);
+        }
+        bool has_tool_call_delta =
+            parsed.choices[0].delta.tool_calls.typeCode() == NT_LIST
+            && parsed.choices[0].delta.tool_calls.size() > 0;
+        # OpenAI-compatible providers normally emit function calls in
+        # tool-call-only deltas. Dropping a chunk merely because it has no
+        # text loses the function name/argument stream and makes the final
+        # response look like a clean no-call completion to every caller.
+        # The usage of the response arrives in a chunk of its own after the
+        # chunk with the finish reason, so the stream ends with "[DONE]" or
+        # with the end of the response, not with the finish reason.
+        if (delta.val() || has_tool_call_delta
+                || parsed.choices[0].delta.content.typeCode() == NT_LIST
+                || parsed.choices[0].delta.reasoning_content.typeCode() == NT_STRING
+                || parsed.choices[0].finish_reason.val()
+                || parsed.usage.typeCode() == NT_HASH) {
+            deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{
+                "event": evt.event,
+                "delta": delta,
+                "raw": parsed,
+            }, opts);
+        }
+        return False;
+    }
+
+    #! Ends a chat stream: delivers the held-back structured response, if any, and the final event
+    private finishStream(hash<auto> loop_state, hash<auto> strict_context,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        *hash<auto> terminal = loop_state.terminal;
+        *hash<auto> stream_usage = loop_state.stream_usage;
+        *string served_service_tier = loop_state.served_service_tier;
+        hash<auto!> structured_state = loop_state.structured_state;
         if (!strict_context.project) {
             if (!terminal) {
                 throw "LLM-ERROR",
@@ -1555,6 +1639,121 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         deliverStreamEvent(callback, <QoreLlmUtils::ChatStreamEvent>{
             "done": True, "raw": final_raw,
         }, opts);
+    }
+
+    #! Returns @ref True: the asynchronous chat calls of this provider hold no thread while they wait
+    bool supportsAsyncChat() {
+        return True;
+    }
+
+    #! Starts the request of @ref chat() as a step of an asynchronous operation, without holding a thread
+    /** The request, its retries and its errors are those of @ref chat(); the response is awaited by the async I/O
+        controller, and a retry waits on a timer.  See
+        @ref QoreLlmUtils::AbstractLlmProvider::startChatAsync() "AbstractLlmProvider::startChatAsync()".
+    */
+    startChatAsync(QoreLlmUtils::LlmAsyncOperation op, list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, hash<QoreLlmUtils::LlmRequestOptions> opts,
+            code<nothing(hash<QoreLlmUtils::ChatResponse>)> on_response,
+            code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<auto> strict_context;
+        hash<auto> wire;
+        try {
+            ensureRestClient();
+            strict_context = prepareStrictRequest(buildOpenAiChatBody(messages, tools, opts));
+            wire = prepareOpenAiWireRequest(strict_context.body);
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        startRequestAsync(op, opts, hash<QoreLlmUtils::LlmAsyncSubmission> sub (EventNotifier notifier) {
+            RestClientIo::RestFuture future = rest_client.restDoRequestAsyncTargetWithNotifier("POST", wire.target,
+                wire.body, buildAuthHeader(), getRequestTimeoutMs(opts), notifier);
+            return <QoreLlmUtils::LlmAsyncSubmission>{
+                "cancel": sub () { future.cancel(); },
+                "is_done": bool sub () { return future.isDone(); },
+                "get": auto sub () { return future.get(); },
+            };
+        }, sub (auto resp) {
+            hash<QoreLlmUtils::ChatResponse> response;
+            try {
+                response = parseChatResult(resp, wire, strict_context);
+            } catch (hash<ExceptionInfo> ex) {
+                error_cb(ex);
+                return;
+            }
+            on_response(response);
+        }, sub (hash<ExceptionInfo> ex) {
+            error_cb(ex.err == "LLM-CANCELLED" ? ex : makeException("LLM-ERROR",
+                sprintf("chat request failed: %s", OpenAiLlmProvider::requestErrorDetail(ex)), ex));
+        });
+    }
+
+    #! Starts the request of @ref chatStream() as a step of an asynchronous operation, without holding a thread
+    /** The request, its events, its retries and its errors are those of @ref chatStream(); the stream is read by the
+        async I/O controller, and each event is delivered in a task of \a op.  See
+        @ref QoreLlmUtils::AbstractLlmProvider::startChatStreamAsync() "AbstractLlmProvider::startChatStreamAsync()".
+    */
+    startChatStreamAsync(QoreLlmUtils::LlmAsyncOperation op, list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools, hash<QoreLlmUtils::LlmRequestOptions> opts,
+            code<nothing()> on_end, code<nothing(hash<ExceptionInfo>)> error_cb) {
+        hash<auto> strict_context;
+        hash<auto> hdr;
+        hash<auto> wire;
+        *date request_deadline;
+        try {
+            ensureRestClient();
+            strict_context = prepareStrictRequest(buildOpenAiChatBody(messages, tools, opts));
+            hash<auto> body = strict_context.body;
+            body.stream = True;
+            # a streamed response reports its usage only when it is requested; a caller that set the option in
+            # QoreLlmUtils::LlmRequestOptions::body_options keeps its own value
+            if (streamIncludesUsage() && !body.hasKey("stream_options")) {
+                body.stream_options = {"include_usage": True};
+            }
+            # subclasses such as the Azure OpenAI provider supply their own credential headers
+            hdr = (buildAuthHeader() ?? {}) + {
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+            };
+            wire = prepareOpenAiWireRequest(body);
+            request_deadline = exists opts.timeout_ms
+                ? now_us() + milliseconds(getRequestTimeoutMs(opts)) : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            error_cb(ex);
+            return;
+        }
+        hash<auto!> loop_state = newStreamLoopState();
+        int timeout_ms;
+        QoreLlmUtils::LlmAsyncSseRequest req(self, op, opts,
+            code<nothing()> sub (QoreLlmUtils::LlmAsyncSseRequest r, int attempt) {
+                timeout_ms = getRequestTimeoutMs(opts);
+                # raises the error of a request whose deadline has passed, as the synchronous request does
+                remainingStreamTimeout(timeout_ms, request_deadline);
+                HttpClientStreamingIo::SseObservable obs = rest_client.restObserveSseTarget("POST", wire.target,
+                    wire.body, hdr, {"idle_timeout": timeout_ms, "emit_heartbeat": False});
+                obs.registerObserver(new OpenAiAsyncSseObserver(r, attempt));
+                obs.observersReady();
+                return sub () { obs.stopEvents(); };
+            },
+            bool sub (hash<auto> evt) {
+                return handleStreamEvent(\loop_state, evt, wire, strict_context, callback, opts);
+            },
+            sub () {
+                finishStream(loop_state, strict_context, callback, opts);
+            },
+            hash<ExceptionInfo> sub () {
+                return makeException("LLM-ERROR", sprintf("streaming chat response timed out: no event arrived "
+                    "within %d ms", timeout_ms), {"err": "HTTPCLIENT-TIMEOUT"});
+            },
+            hash<ExceptionInfo> sub (hash<ExceptionInfo> ex) {
+                return makeException("LLM-ERROR", sprintf("streaming chat request failed: %s",
+                    OpenAiLlmProvider::requestErrorDetail(ex)), ex);
+            },
+            on_end, error_cb,
+            request_deadline ? max(1, (request_deadline - now_us()).durationMilliseconds()) : NOTHING,
+            "POST " + wire.target.path);
+        req.start();
     }
 
     #! Retains opaque Responses reasoning at the existing facade boundary

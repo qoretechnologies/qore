@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-loopback: localhost - testRestClientAltSvcViaLocalhostFastPath() checks HTTP/3 through the name localhost, which resolves to ::1 first, to a server whose TCP and QUIC listeners are on the dual-stack wildcard address "::" (both loopback addresses); "https://localhost:1" only sets HTTPClient options; its other servers listen on 127.0.0.1 and their clients connect to 127.0.0.1
 
 /*
     Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
@@ -47,6 +48,18 @@
 %requires HttpClientIo
 
 %exec-class HttpServerHttp3IntegrationTest
+
+#! A server that gives the test the UDP socket of a QUIC listener (qore#7429)
+class QuicSocketServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    #! Returns the UDP socket of the QUIC listener with the given ID
+    Socket getQuicSocket(int id) {
+        AutoLock al(fast_routes_lock);
+        return quic_udp_sockets{string(id)};
+    }
+}
 
 #! Simple handler for basic GET tests
 class SimpleHandler inherits AbstractHttpRequestHandler {
@@ -776,7 +789,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit delete dummy;
         int port = dummy.getSocketInfo().port;
 
-        date started = now_us();
+        date started = microseconds(clock_get_monotonic_us());
         bool got_error = False;
         *hash<ExceptionInfo> caught;
         try {
@@ -785,7 +798,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             got_error = True;
             caught = ex;
         }
-        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        int elapsed_ms = (microseconds(clock_get_monotonic_us()) - started).durationMilliseconds();
 
         assertTrue(got_error, "request to silent UDP port must fail");
         # Underlying cause must be the new transport-level deadline error; without
@@ -819,7 +832,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     testServerShutdown() {
         # Create a separate server and manager for this test
         Logger logger("shutdown-test", LoggerLevel::getLevelInfo());
-        HttpServer server(<HttpServerOptionInfo>{
+        QuicSocketServer server(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
             "quic_drain_timeout": 100ms,  # short for localhost testing
@@ -832,6 +845,9 @@ l50Xb2GWQesIt9k5jF5IOw==
             "key": new SSLPrivateKey(KeyPem),
         });
         int port = h3info.port;
+        # the UDP socket of the server's QUIC listener
+        Socket quic_sock = server.getQuicSocket(h3info.id);
+        assertTrue(quic_sock.isOpen(), "the QUIC listener's UDP socket is open");
         string url = "https://127.0.0.1:" + port;
 
         auto mgr = new HttpClientIo::HttpClientConnectionManager(
@@ -854,14 +870,30 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Delete the server
         delete server;
 
-        # the server's UDP socket is closed when the server is deleted: its port can be bound at once; the test holds
-        # it, so that nothing else can answer on it (qore#5812)
+        # the server's UDP socket is closed when the server is deleted (qore#5812); checked on the socket itself, as
+        # its port can be given to another process at once (qore#7429)
+        assertFalse(quic_sock.isOpen(), "the deleted server's UDP socket is closed");
+
+        # the test holds the port, so that nothing else can answer on it; another process can have been given the
+        # port between the delete and this bind (a parallel run): then the request below could reach that process,
+        # and is not made
         Socket udp();
         try {
             udp.bindINET("127.0.0.1", string(port), False, AF_INET, SOCK_DGRAM);
         } catch (hash<ExceptionInfo> ex) {
-            fail(sprintf("the port of the deleted server is still bound (or another process took it): %s: %s",
-                ex.err, ex.desc));
+            if (ex.arg !== EADDRINUSE) {
+                rethrow;
+            }
+            # a socket whose descriptor is still in use is closed only when it is released: it no longer reports
+            # itself open, but its port stays bound by this process, which is the failure that qore#5812 is about
+            *bool own = ownsUdpPort(port);
+            if (own !== False) {
+                fail(sprintf("UDP port %d is still bound %s after the server was deleted: %s: %s", port,
+                    own ? "by this process" : "(the owner could not be determined)", ex.err, ex.desc));
+            }
+            # another process was given the port after the delete (a parallel run): the request below could reach it
+            testSkip(replace(sprintf("UDP port %d was taken by another process after the server was deleted: %s: %s",
+                port, ex.err, ex.desc), "%", "%%"));
         }
         on_exit udp.close();
 
@@ -879,6 +911,53 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
         assertEq(NOTHING, late, "no response after the server was deleted");
         assertTrue(exists err, "the request after the server was deleted fails");
+    }
+
+    #! Returns whether this process has a UDP socket bound on \a port, or @ref nothing if it cannot be determined
+    /** Linux: the inode of the socket bound on the port (\c /proc/net/udp and \c udp6) among the descriptors of the
+        process (\c /proc/self/fd); macOS: the UDP sockets of the process that \c lsof lists
+    */
+    private static *bool ownsUdpPort(int port) {
+        if (is_dir("/proc/self/fd")) {
+            string hex_port = sprintf(":%04X ", port);
+            hash<string, bool> inodes;
+            foreach string table in ("/proc/net/udp", "/proc/net/udp6") {
+                if (!is_file(table)) {
+                    continue;
+                }
+                foreach string line in (ReadOnlyFile::readTextFile(table).split("\n")) {
+                    list<string> fields = (map $1, line.split(" "), $1 !== "");
+                    # fields: sl local_address rem_address st tx:rx tr:when retrnsmt uid timeout inode ...
+                    if (fields.size() > 9 && (fields[1] + " ").find(hex_port) >= 0) {
+                        inodes{fields[9]} = True;
+                    }
+                }
+            }
+            foreach string fd in (glob("/proc/self/fd/*") ?? ()) {
+                try {
+                    *string inode = (readlink(fd) =~ x/^socket:\[([0-9]+)\]$/)[0];
+                    if (inode && inodes{inode}) {
+                        return True;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # the descriptor of the glob itself is gone
+                }
+            }
+            return False;
+        }
+        # macOS (and other systems with lsof)
+        string out;
+        int rc;
+        try {
+            out = backquote(sprintf("lsof -nP -a -p %d -iUDP:%d -Fn 2>/dev/null", getpid(), port), \rc);
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        # lsof exits with 1 when it lists nothing
+        if (rc != 0 && rc != 1) {
+            return;
+        }
+        return out =~ /^n/m;
     }
 
     testGoawayGracefulShutdown() {
@@ -1795,11 +1874,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         hash<auto> resp1 = client.send("", "GET", "/test", NOTHING, True);
-        date t2 = now_us();
+        date t2 = microseconds(clock_get_monotonic_us());
         hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
-        date t3 = now_us();
+        date t3 = microseconds(clock_get_monotonic_us());
         hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
-        date t4 = now_us();
+        date t4 = microseconds(clock_get_monotonic_us());
 
         assertEq(200, int(resp1.status_code), "localhost first request");
         assertEq(200, int(resp2.status_code), "localhost second request");

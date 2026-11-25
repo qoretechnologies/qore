@@ -126,7 +126,7 @@ auto DestructorMethod::call(object obj) {
     }
 
     // we have to explictly test object compatibility here
-    if (check_call(obj, *m->m, xsink)) {
+    if (check_call(caller, obj, *m->m, xsink)) {
         return QoreValue();
     }
 

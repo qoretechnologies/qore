@@ -6,6 +6,23 @@
 
 include(CMakeParseArguments)
 
+# The Ninja generators give Ninja the DEPFILE of a custom command as it is under policy CMP0116 OLD, the setting of a
+# project whose cmake_minimum_required() is older than 3.20, as the Qore build's is.  qcc writes the target of a
+# depfile as the absolute path of its output, and Ninja, which names the outputs of a build tree by paths relative to
+# it, takes a depfile whose first target is not the output of its edge for an invalid one: every qmod was compiled
+# again by every Ninja build (qore#7189).  With NEW, CMake rewrites each depfile for Ninja (cmake_transform_depfile)
+# into one that names the paths as Ninja does; the depfile that qcc writes is left as it is for the module loader.
+# The functions and macros of this file keep the policy settings of their definition, so this applies to every rule
+# they create, in the Qore build and in a project that loads this file with find_package(Qore), whatever the
+# project's own setting; the file's policy scope (pushed here, popped at its end) keeps the setting from the code that
+# includes it, also where include() pushes none (CMP0011 not set, as in a script run with cmake -P).  CMake before
+# 3.20 has no such policy and no rewriting.  Every depfile of these rules names its paths absolutely, so NEW, which
+# reads a relative path as relative to the current binary directory instead of the top one, changes nothing else.
+cmake_policy(PUSH)
+if (POLICY CMP0116)
+    cmake_policy(SET CMP0116 NEW)
+endif ()
+
 if (NOT DEFINED QORE_CMAKE_DIR)
     get_filename_component(QORE_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
 endif ()
@@ -86,6 +103,16 @@ if (NOT DEFINED QORE_QDX_COMMAND)
     endif ()
 endif ()
 option(QORE_GENERATE_JAVA_BINDINGS "Generate Java bindings with module documentation (requires JNI)" ON)
+
+# Every module's documentation target writes its Java bindings with qjar into the one ${CMAKE_BINARY_DIR}/java
+# tree, so the directory cannot be a BYPRODUCTS of these targets: Ninja requires each output to come from a single
+# rule ("multiple rules generate java"), and a directory output also makes "ninja clean" fail, as it cannot remove a
+# directory that is not empty.  The targets name it as a file to remove in a clean instead, which both generators
+# remove recursively, as a Makefile clean removed the BYPRODUCTS directory before.  The qjar runs of different
+# modules write the classes of their own module only, so they can run in parallel.
+function (_qore_java_bindings_clean _target)
+    set_property(TARGET ${_target} APPEND PROPERTY ADDITIONAL_CLEAN_FILES ${CMAKE_BINARY_DIR}/java)
+endfunction()
 
 # the binary modules that the documentation tools load: qdx requires astparser and Qdx, whose Util module requires
 # yaml, json and reflection, and qjar requires reflection; a documentation target built in the same tree as these
@@ -565,6 +592,34 @@ function(_QORE_DEPFILE_FRESH_READ_COMMAND _out_var _target)
                 "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_target}.dir/compiler_depend.internal")
     endif ()
     set(${_out_var} ${_qore_depfile_fresh_read_command} PARENT_SCOPE)
+endfunction()
+
+# Sets _out_var to the extra DEPENDS of a custom command whose DEPFILE another rule rewrites (qore#7189)
+#
+# The Ninja generators give Ninja a copy of the depfile of a custom command under policy CMP0116 NEW (see the
+# beginning of this file): CMake's cmake_transform_depfile, which runs with the command and so rewrites the copy only
+# when the command runs.  A depfile that another rule rewrites (the group stamps of QORE_QCC_COMPILE_OBJECTS, whose
+# depfiles the group's incremental plan rewrites for the next build) would then reach Ninja only after the command
+# had run again for another reason, and an input it adds would not make the command run.  So with Ninja, the command
+# also depends on its depfile: a rewrite makes it run, which refreshes the copy; the depfiles are written only when
+# their content changes, so that happens only then.  The depfile is the output of a rule of its own that makes one
+# naming only _target when there is none (a removed object directory, a first build; QoreEnsureDepfile.cmake), so
+# Ninja never refuses the build for a missing input, nor takes an empty depfile for a missing one in every build; the
+# command that writes it later replaces it.  A first build runs the command again in the next build (the depfile that
+# it, or the incremental plan, writes for the next build is newer than its output), and so does the build after a
+# rewrite by another rule; a command that writes its own depfile after it touches its output dates the depfile back
+# (QORE_QCC_DEPFILE_DATE_BACK, see tools/qore-qo-batch-bootstrap), so that it does not.  The Makefile generators read
+# the depfile itself.
+function(_QORE_DEPFILE_REWRITTEN_ELSEWHERE_DEPENDS _out_var _depfile _target)
+    set(_qore_depfile_depends)
+    if (CMAKE_GENERATOR MATCHES "Ninja")
+        add_custom_command(OUTPUT ${_depfile}
+            COMMAND ${CMAKE_COMMAND} -DDEPFILE=${_depfile} -DTARGET=${_target}
+                -P ${QORE_CMAKE_DIR}/QoreEnsureDepfile.cmake
+            VERBATIM)
+        set(_qore_depfile_depends ${_depfile})
+    endif ()
+    set(${_out_var} ${_qore_depfile_depends} PARENT_SCOPE)
 endfunction()
 
 function(_QORE_QCC_REGISTER_MANAGED_DIRS)
@@ -1115,10 +1170,14 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         # the set of external inputs changes has neither cost.
         set(_qore_qcc_external_inputs_stamp
             "${${_qore_qcc_scc_prefix}_GENERATION_DIR}/.qcc-external-inputs.stamp")
+        # the group's incremental plan rewrites the depfile (qore#7189)
+        _QORE_DEPFILE_REWRITTEN_ELSEWHERE_DEPENDS(_qore_qcc_external_inputs_depends
+            "${_qore_qcc_external_inputs_stamp}.d" "${_qore_qcc_external_inputs_stamp}")
         add_custom_command(OUTPUT ${_qore_qcc_external_inputs_stamp}
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 ${${_qore_qcc_scc_prefix}_GENERATION_DIR}
             COMMAND ${CMAKE_COMMAND} -E touch ${_qore_qcc_external_inputs_stamp}
+            DEPENDS ${_qore_qcc_external_inputs_depends}
             DEPFILE ${_qore_qcc_external_inputs_stamp}.d
             COMMENT "Checking ${_QORE_QCO_GROUP} build inputs from outside the group"
             VERBATIM)
@@ -1176,6 +1235,15 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} -c -L \"$preload_dir\" --batch-build-sidecars --depfile-compile-contract-stamps --depfile-declaration-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' \"$@\"\n")
         QORE_WRITE_IF_CHANGED("${_qore_qcc_subset_script}" "${_qore_qcc_subset_cmd}")
 
+        # the group's incremental plan rewrites the depfile too, in its shared-parse batch (qore#7189)
+        _QORE_DEPFILE_REWRITTEN_ELSEWHERE_DEPENDS(_qore_qcc_bootstrap_depfile_depends
+            "${_qore_qcc_bootstrap_stamp}.d" "${_qore_qcc_bootstrap_stamp}")
+        # with Ninja, the helper dates the depfile that its batch writes back to the stamp it touched before, so that
+        # the stamp's own run does not make the next build run it again (see the function above)
+        set(_qore_qcc_bootstrap_date_back)
+        if (CMAKE_GENERATOR MATCHES "Ninja")
+            set(_qore_qcc_bootstrap_date_back "QORE_QCC_DEPFILE_DATE_BACK=1")
+        endif ()
         add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}
             # Dates the group's last whole-group publication for the frozen
             # dependency graph.  It cannot be the stamp above: that one is also
@@ -1187,6 +1255,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_bootstrap_aggregate_dir}
             COMMAND ${CMAKE_COMMAND} -E env
                 "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
+                ${_qore_qcc_bootstrap_date_back}
                 ${_qore_qcc_batch_bootstrap_helper}
                     ${_qore_qcc_context_path}
                     ${_qore_qcc_bootstrap_stamp}
@@ -1206,6 +1275,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_QORE_QCO_MANIFEST_INPUTS}
                 ${_QORE_QCO_BOOTSTRAP_AGGREGATE_CONTEXT}
                 ${_QORE_QCO_BOOTSTRAP_AGGREGATE_MANIFEST_INPUTS}
+                ${_qore_qcc_bootstrap_depfile_depends}
             DEPFILE ${_qore_qcc_bootstrap_stamp}.d
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "qcc -c: batch bootstrapping ${_QORE_QCO_GROUP} (${_qore_qcc_count} sources)"
@@ -2421,8 +2491,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
             set(_qore_binary_java_step)
             if (QORE_GENERATE_JAVA_BINDINGS)
                 set(_qore_binary_java_step
-                    COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name}
-                    BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
+                    COMMAND ${CMAKE_COMMAND} -E env ${_qore_qjar_env} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${_module_name})
             endif()
 
             add_custom_target(${_docs_targ}
@@ -2435,6 +2504,9 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
                 VERBATIM
             )
             add_dependencies(${_docs_targ} ${_module_name})
+            if (QORE_GENERATE_JAVA_BINDINGS)
+                _qore_java_bindings_clean(${_docs_targ})
+            endif()
             if ("${_mod_suffix}" STREQUAL "2")
                 qore_install_module_doxygen_tag("${_module_name}" "${_working_dir}/${_module_name}.tag")
             endif()
@@ -2744,6 +2816,9 @@ MACRO (QORE_QMOD_CACHE_SETUP)
         QORE_GET_QCC_COMMAND(_qore_qmod_cache_qcc)
         set(QORE_QMOD_CACHE_CONTEXT ${CMAKE_BINARY_DIR}/qmod-cache-context.json)
         set(_qore_qmod_cache_inputs --input=${QCC_FORMAT_STAMP} --input=${CMAKE_BINARY_DIR}/aot-link.conf)
+        if (DEFINED QORE_EXTERNAL_MODULE_DIRS_FILE)
+            list(APPEND _qore_qmod_cache_inputs --input=${QORE_EXTERNAL_MODULE_DIRS_FILE})
+        endif()
         if (DEFINED QORE_AOT_PROBE_STAMP)
             list(APPEND _qore_qmod_cache_inputs --input=${QORE_AOT_PROBE_STAMP})
         endif()
@@ -2961,6 +3036,12 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
 
     if (NOT DEFINED QCC_FORMAT_STAMP)
+        # A standalone module is built by the build-tree owner. Its install target can run as a different user:
+        # building "all" there would regenerate the stamp and compiled modules with that user's permissions.
+        # Leave an embedding project's install target and any explicit generator setting to the caller.
+        if (PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR AND NOT DEFINED CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
+            set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON CACHE BOOL "Install built module files without rebuilding all")
+        endif ()
         # A module built outside the Qore source tree: every AOT .qmod depends on this stamp, which is rewritten
         # whenever qcc, the Qore library or the installed qcc format fingerprint changes.  qcc itself is not always
         # relinked or reinstalled when a new Qore library is installed, so depending on the qcc executable alone left
@@ -3151,7 +3232,8 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # fixes that don't affect qmod output.  QoreAOTRuntime.cpp is part of
     # the stamp because it deserializes and registers slot-map metadata from
     # qmods; stale qmods can fail at load time if that path changes.
-    set(_qmod_opt_flags)
+    # @assert and @debug are compiled when qcc parses the module. Include them in Debug qmods.
+    set(_qmod_opt_flags "$<$<CONFIG:Debug>:--parse-option=enable-debug>")
     # Final module output uses the same source-prefix maps as native compilation.
     string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_qcc_build_type)
     separate_arguments(_qore_qcc_cxx_flags NATIVE_COMMAND
@@ -3167,9 +3249,10 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         endif()
         list(APPEND _qmod_opt_flags "-O${QORE_AOT_MODULE_OPT_LEVEL}")
     endif()
-    set(_qmod_probe_dep "")
+    # A new search order can select a different module with the same API and an older timestamp.
+    set(_qmod_probe_dep ${QORE_EXTERNAL_MODULE_DIRS_FILE})
     if (DEFINED QORE_AOT_PROBE_STAMP)
-        set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
+        list(APPEND _qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
     endif()
     # In the Qore build, each qmod also depends on the AOT runtime identity header, which qcc-format-version rewrites
     # only when the identity changes (qore_aot_runtime_identity_targets() in cmake/QoreMacrosIntern.cmake): a qmod
@@ -3209,6 +3292,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
         # Per-resource copy commands so rebuilds fire when a resource
@@ -3274,6 +3358,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
+            COMMAND_EXPAND_LISTS
             VERBATIM
         )
     endif()
@@ -3825,8 +3910,7 @@ MACRO (QORE_USER_MODULE _module_file)
         set(_qore_user_java_step)
         if (QORE_GENERATE_JAVA_BINDINGS)
             set(_qore_user_java_step
-                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f}
-                BYPRODUCTS ${CMAKE_BINARY_DIR}/java)
+                COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QJAR_COMMAND} -i ${CMAKE_BINARY_DIR}/java -m ${f})
         endif()
 
         # qdx regenerates the base configuration at build time. Keep phase
@@ -3891,6 +3975,10 @@ MACRO (QORE_USER_MODULE _module_file)
             )
             add_dependencies(docs-fast-${f} qore)
         endif (WIN32 AND (NOT MINGW) AND (NOT MSYS))
+        if (QORE_GENERATE_JAVA_BINDINGS)
+            _qore_java_bindings_clean(docs-${f})
+            _qore_java_bindings_clean(docs-fast-${f})
+        endif()
 
         # Fast documentation skips docs-lang, which normally builds these
         # native tool dependencies before qdx and qjar can load them.
@@ -4810,3 +4898,6 @@ int main(int argc, char* argv []) {
 }
 " QORE_HAVE_PTHREAD_GETATTR_NP)
 endmacro()
+
+# the end of the policy scope of this file (see CMP0116 at its beginning)
+cmake_policy(POP)

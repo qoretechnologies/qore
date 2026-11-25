@@ -925,6 +925,18 @@ sub test() {
     the scope-relevant reference count is equal to the number of recursive references for every object in a recursive directed graph (note that objects can be deleted
     manually at any time by using the @ref delete "delete operator"). Whenever an object is collected, the object's destructor method as defined in the object's class is run on the object (multiple destructor methods can be run on objects instantiated from a class hierarchy).
 
+    @anchor destructors_at_stack_limit
+    A destructor also runs when its object is released with little stack left, such as in the frames that unwind from
+    a \c STACK-LIMIT-EXCEEDED exception: on x86_64 and aarch64, when the stack check of a destructor, or of a call that
+    it makes, finds the thread's stack limit reached, the limit is lowered by 32 KB, a slice of the stack reserved below
+    it, until that destructor returns; the destructor, every call that it makes and the destructors of the objects that
+    it releases run against the lower limit.  A destructor that recurses raises \c STACK-LIMIT-EXCEEDED at the lower
+    limit, and once the slice is used up, a destructor that cannot start raises \c STACK-LIMIT-EXCEEDED, which is
+    chained to the exception being raised.  The limit of a
+    @ref sandbox_stack_limit "sandbox stack size limit" is never lowered: in a call into a sandbox with a stack size
+    limit, a destructor that cannot start within the sandbox's limit does not run, also that of an object of trusted
+    code that the sandboxed code releases (qore#6861).
+
     The following affect objects' scope:
     - external references to the object: an object's automatic scope is prolonged as long as the object has valid external references
     - @anchor running_call_receiver a running method call: the object whose method is called is kept until the call

@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RestClientIoCancelSubmit.qtest Copyright 2026 Qore Technologies, s.r.o. — MIT License
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClientIo
+%exec-class RestClientIoCancelSubmitTest
+
+#! A client that runs a hook just after an async request has been submitted
+/** The hook runs in the thread that submits the request, inside the operation's submission step, before the
+    operation has recorded the request's stream.
+*/
+class SubmitHookClient inherits RestClientIo {
+    public {
+        #! Runs after the request has been submitted, before the operation has recorded its stream
+        *code<nothing()> after_submit;
+    }
+
+    constructor(hash<auto> opts) : RestClientIo(opts) {
+    }
+
+    hash<auto> submitPreparedAsyncRequestAttemptWithNotifier(string method, string path, *hash<auto> hdr,
+            hash<auto> prepared, EventNotifier notifier) {
+        hash<auto> rv = RestClientIo::submitPreparedAsyncRequestAttemptWithNotifier(method, path, hdr, prepared,
+            notifier);
+        if (after_submit) {
+            after_submit();
+        }
+        return rv;
+    }
+}
+
+#! A server that accepts one connection, reads its request, never answers and reports how the connection ended
+class HoldingServer {
+    public {
+        int port;
+        #! Receives the path of the request once the whole request has been read, or NOTHING if it was not
+        Queue requests();
+        #! Receives {"closed": True} when the client closes the connection, else {"closed": False} and the error
+        #! that ended the wait
+        Queue closed();
+    }
+
+    private {
+        Socket listener();
+        Counter running();
+    }
+
+    #! The time the server waits for the request and then for the client to close the connection
+    const Wait = 30s;
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background serveOne();
+    }
+
+    #! Waits until the connection has been served; every queue entry has been pushed when this returns
+    waitDone() {
+        running.waitForZero();
+        listener.close();
+    }
+
+    private serveOne() {
+        on_exit running.dec();
+        Socket conn;
+        try {
+            conn = listener.accept(60s);
+        } catch (hash<ExceptionInfo> ex) {
+            requests.push(NOTHING);
+            closed.push({"closed": False, "error": ex.err + ": " + ex.desc});
+            return;
+        }
+        on_exit conn.close();
+        try {
+            hash<auto> hdr = conn.readHTTPHeader(Wait);
+            if (hdr."content-length") {
+                conn.recv(hdr."content-length".toInt(), Wait);
+            }
+            requests.push(hdr.path);
+        } catch (hash<ExceptionInfo> ex) {
+            requests.push(NOTHING);
+            closed.push({"closed": False, "error": ex.err + ": " + ex.desc});
+            return;
+        }
+        # nothing is sent, so the read ends only when the client closes the connection (or resets it)
+        hash<auto> result;
+        try {
+            conn.recv(1, Wait);
+            result = {"closed": False, "error": "the client sent more data"};
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SOCKET-CLOSED" || (ex.err == "SOCKET-RECV-ERROR" && ex.arg == ECONNRESET)) {
+                result = {"closed": True};
+            } else {
+                result = {"closed": False, "error": ex.err + ": " + ex.desc};
+            }
+        }
+        closed.push(result);
+    }
+}
+
+class RestClientIoCancelSubmitTest inherits QUnit::Test {
+    constructor() : Test("RestClientIo cancellation around request submission", "1.0", \ARGV) {
+        addTestCase("a cancel after the server has read the request, before the operation records its stream, "
+            "closes the request's connection", \testCancelAfterSubmit());
+        set_return_value(main());
+    }
+
+    #! Cancels a request after the server has read it, before the operation has recorded its stream
+    /** The hook runs in the thread that submits the request, whichever it is, and cancels the operation only once
+        the server has read the whole request, as a caller does that cancels when its request has arrived; so the
+        cancel lands in the same place in every run.  The request's own timeout is an hour, so only the cancellation
+        can close its connection.
+    */
+    testCancelAfterSubmit() {
+        HoldingServer server();
+        on_exit server.waitDone();
+
+        SubmitHookClient client({"url": "http://127.0.0.1:" + server.port});
+        on_exit client.close();
+
+        Promise promise();
+        Future future = promise.getFuture();
+        RestClientIoAsyncRequestOperation op(client, promise, "POST", "/held", {"a": 1}, NOTHING, False, NOTHING,
+            NOTHING, NOTHING, 3600000);
+        # the hook may run in the thread of the async I/O controller, where no assertion can be made
+        list<auto> hook_results = ();
+        client.after_submit = sub () {
+            push hook_results, server.requests.get(60s);
+            push hook_results, op.cancel();
+        };
+        op.start();
+
+        hash<ExceptionInfo> ex;
+        try {
+            future.get(3600s);
+            fail("the request returned instead of being cancelled");
+        } catch (hash<ExceptionInfo> ex0) {
+            ex = ex0;
+        }
+        assertEq("HTTPCLIENT-CANCELLED", ex.err);
+        assertEq({"closed": True}, server.closed.get(60s), "the cancellation closes the request's connection");
+        assertEq(("/held", True), hook_results,
+            "the request is submitted once, read by the server, then cancelled by the hook");
+    }
+}

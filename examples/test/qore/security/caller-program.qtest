@@ -16,8 +16,12 @@
 #! The caller Program of module code (SandboxManager::getCallerProgramId(), qore#6852)
 /** Module code that serves the code of a tenant Program gets that Program's ID, also through more module code, a
     method of a module class, a thread or a thread pool task that the module code starts, and the module of a
-    tenant; a closure runs its own Program's code wherever it is called; the caller is unknown in a trusted build and
-    in a Program that it created; the sandbox checks are unchanged.  The checks are in
+    tenant; a closure runs its own Program's code wherever it is called; a trusted build's own code is its creator's,
+    and the caller of a library module's build is unknown (its state is shared); a Program that a build created is a
+    Program like any other, whose code is its own; the initialization of library code (a module from a trusted module
+    directory, here caller-program/lib) has an unknown caller whoever loads it, that of a module that a tenant loads
+    by its own path serves the tenant, and a Program that module code creates runs its own code (qore#7077); the
+    sandbox checks are unchanged.  The checks are in
     caller-program/caller-program-worker.q, which is run in each execution mode, with the modules compiled to AOT
     modules, and as a program compiled with qcc.
 */
@@ -28,7 +32,13 @@ class CallerProgramTest inherits QUnit::Test {
             "main-direct", "main-module", "direct", "module", "module-via-module", "method", "background",
             "thread-pool", "closure-of-a-called-by-b", "closure-of-b", "closure-of-a-called-by-main",
             "sandboxed-both-id", "sandboxed-both-allowed", "unsandboxed-both-id", "unsandboxed-both-allowed",
-            "tenant-module", "trusted-build", "trusted-build-program",
+            "tenant-module", "trusted-build-tenant", "trusted-build-tenant-thread", "trusted-build-program-host",
+            "trusted-build-program-other", "trusted-build-module-host", "trusted-build-module-other",
+            "trusted-build-program-expression", "trusted-build-callback-program", "trusted-build-host",
+            "trusted-build-creator", "trusted-build-creator-own", "trusted-build-nested", "init-library-host-ran",
+            "init-library-host", "init-library-host-thread", "init-library-tenant-ran", "init-library-tenant",
+            "init-library-tenant-thread", "init-library-other", "init-library-other-call", "init-path-ran",
+            "init-path-tenant", "init-path-tenant-thread", "module-made-program-flag", "module-made-program",
         );
     }
 
@@ -41,8 +51,8 @@ class CallerProgramTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("CallerProgramTest", "1.0", \ARGV) {
-        prefix = "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir)
-            + " QORE_LIBDIR=" + quote(libdir) + " ";
+        # caller-program/lib is a trusted module directory: the modules there are library code (qore#7077)
+        prefix = makePrefix(dir + DirSep + "lib");
         addTestCase("each execution mode", \testModes());
         addTestCase("AOT modules", \testAotModules());
         addTestCase("qcc executables", \testCompiled());
@@ -69,23 +79,38 @@ class CallerProgramTest inherits QUnit::Test {
             + " -b --enable-debug --exec-mode=tiered " + worker), ExecModeHarness::IRTierName);
     }
 
+    #! the environment of a run, with \a lib as a trusted module directory
+    private string makePrefix(string lib) {
+        return "LD_LIBRARY_PATH=" + quote(libdir) + " DYLD_LIBRARY_PATH=" + quote(libdir) + " QORE_LIBDIR="
+            + quote(libdir) + " QORE_MODULE_DIR=" + quote(lib) + ":$QORE_MODULE_DIR ";
+    }
+
     #! the modules compiled with qcc -m: their code runs as native code of their own Programs
     testAotModules() {
         if (!qcc_bin) {
             testSkip("qcc is not available");
         }
         TmpDir tmp("qore-caller-program-");
-        foreach string f in (("CallerProbeA.qm", "CallerProbeB.qm", "TenantMod.qm", "caller-program-worker.q")) {
+        foreach string f in (("CallerProbeA.qm", "CallerProbeB.qm", "CallerProbeC.qm", "TenantMod.qm",
+                "CallerInitPath.qm", "ProgramMaker.qm", "caller-program-worker.q")) {
             copy_file(dir + DirSep + f, tmp.path + DirSep + f);
         }
-        foreach string m in (("CallerProbeB", "CallerProbeA")) {
+        # the library modules of the initialization cases, in a trusted module directory of their own
+        string lib = tmp.path + DirSep + "lib";
+        mkdir(lib);
+        foreach string f in (("CallerInitTrusted.qm", "CallerInitTenant.qm")) {
+            copy_file(dir + DirSep + "lib" + DirSep + f, lib + DirSep + f);
+        }
+        string aot_prefix = makePrefix(lib);
+        foreach list<string> m in ((tmp.path, "CallerProbeB"), (tmp.path, "CallerProbeA"), (tmp.path, "CallerInitPath"),
+                (lib, "CallerInitTrusted"), (lib, "CallerInitTenant")) {
             ExecModeHarness::run_any(sprintf("cd %s && QORE_MODULE_DIR=%s:$QORE_MODULE_DIR %s%s -m -o %s.qmod %s.qm",
-                quote(tmp.path), quote(tmp.path), prefix, quote(qcc_bin), m, m));
-            assertTrue(is_file(tmp.path + DirSep + m + ".qmod"), m + ".qmod was compiled");
+                quote(m[0]), quote(m[0]), aot_prefix, quote(qcc_bin), m[1], m[1]));
+            assertTrue(is_file(m[0] + DirSep + m[1] + ".qmod"), m[1] + ".qmod was compiled");
         }
         string worker = quote(tmp.path + DirSep + "caller-program-worker.q");
         foreach string mode in (ExecModeHarness::ExecModes) {
-            assertEq(expected("CallerProbeA.qmod"), ExecModeHarness::run(prefix + quote(qore_bin)
+            assertEq(expected("CallerProbeA.qmod"), ExecModeHarness::run(aot_prefix + quote(qore_bin)
                 + " -b --enable-debug --exec-mode=" + mode + " " + worker, ExecModeHarness::NativeCheck::None),
                 "AOT modules, " + mode);
         }

@@ -392,6 +392,11 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - the \c TABLE-ERROR exceptions for a synonym or a table that cannot be found show the masked description of the
+      datasource (see
+      @ref Qore::SQL::AbstractDatasource::getMaskedDescription() "AbstractDatasource::getMaskedDescription()") instead
+      of its user name and database name
+      (<a href="https://github.com/qoretechnologies/qore/issues/6988">issue 6988</a>)
     - implemented the SqlUtil @ref select_option_lock_wait "lock_wait" select option (\c "nowait",
       \c "wait" and, with Oracle 11g and later, \c "skip_locked"), and the classification of the lock-not-available
       errors (\c ORA-00054 and \c ORA-30006), also with the \c jdbc driver
@@ -4529,8 +4534,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         return rv;
     }
 
+    # the description of the datasource for messages, with the user name, password and database name masked
+    # (issue #6988)
     private string getDBString() {
-        return sprintf("%s@%s", ds.getUserName(), ds.getDBName());
+        return ds.getMaskedDescription();
     }
 
     #! returns the schema name
