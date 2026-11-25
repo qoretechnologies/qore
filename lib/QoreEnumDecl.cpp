@@ -161,13 +161,21 @@ qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old
           typeInfo(new QoreEnumTypeInfo(ed, old.name.c_str(), old.path.c_str(), instance_serial)),
           orNothingTypeInfo(new QoreEnumOrNothingTypeInfo(ed, old.name.c_str(), old.path.c_str(),
               instance_serial)),
-          pub(old.pub), sys(old.sys), mod_imported(old.mod_imported) {
+          pub(old.pub), sys(old.sys),
+          // a copy is never a builtin type owner (isTypeOwnerSystem()); kept as its source's (qore#7533)
+          not_module_decl(old.not_module_decl), mod_imported(old.mod_imported) {
     setParseLocation(old.loc);
     // Copy members - must ref the value since constructor takes ownership
     for (auto* member : old.members) {
         QoreEnumMember* new_member = new QoreEnumMember(member->getName(), member->getValue().refSelf(), ed);
         members.push_back(new_member);
         member_map[new_member->getName()] = new_member;
+    }
+    // last, as nothing is thrown from here on: the copy keeps a binary module's original, which its module can free
+    // before the copy (qore#7533)
+    if (orig->type_owner.isTypeOwnerModule()) {
+        orig->ref();
+        orig_ref = true;
     }
 }
 
@@ -181,6 +189,11 @@ qore_enum_decl_private::~qore_enum_decl_private() {
         delete member;
     }
     qore_type_owner_destroyed(&type_owner);
+    // last, after everything that uses it (qore#7533)
+    if (orig_ref) {
+        orig_ref = false;
+        const_cast<qore_enum_decl_private*>(orig)->deref();
+    }
 }
 
 const QoreTypeInfo* qore_enum_decl_private::getTypeOwnerType() const {

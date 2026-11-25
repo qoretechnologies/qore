@@ -45,13 +45,6 @@ BINDS_IPV4_LOOPBACK = re.compile(
 CONNECTS_LOCALHOST = re.compile(
     r"""["'](?:(?:https?|wss?|rests?|ftps?|e?smtps?|mllp)://(?:[^@/"']*@)?)?localhost[:/]""")
 
-#: tests that another change fixes; each entry names the issue that removes it
-KNOWN = {
-    # fixed with qore#7462 (umbrella/qore1), which changes this test
-    "examples/test/qlib/HttpClientIo/HttpClientIoRedirect.qtest": "qore#7462",
-}
-
-
 def all_tests():
     """The tests that run_tests.sh runs: those of examples/test and of the binary modules"""
     tests = sorted(TESTS.rglob("*.qtest"))
@@ -89,18 +82,8 @@ class LoopbackHostsTest(unittest.TestCase):
     def test_tests(self):
         errors = []
         for path in all_tests():
-            rel = str(path.relative_to(ROOT))
-            found = check(path)
-            if rel in KNOWN:
-                if not found:
-                    errors.append("%s: no longer needs its entry in KNOWN (%s); remove it" % (rel, KNOWN[rel]))
-                continue
-            errors += found
+            errors += check(path)
         self.assertEqual([], errors, "\n" + "\n".join(errors))
-
-    def test_known_exist(self):
-        for rel in KNOWN:
-            self.assertTrue((ROOT / rel).is_file(), "%s is listed in KNOWN but does not exist" % rel)
 
     def test_detects(self):
         # a test that listens on 127.0.0.1 and connects to localhost is found

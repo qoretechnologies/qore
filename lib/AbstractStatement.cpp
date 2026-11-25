@@ -283,7 +283,16 @@ int AbstractStatement::exec(RuntimeConfig& rc, QoreValue& return_value, Exceptio
     }
     // the temporaries of the statement live until it ends
     QoreStatementTempScope temps(xsink);
-    return execImpl(rc, return_value, xsink);
+    try {
+        return execImpl(rc, return_value, xsink);
+    } catch (const std::bad_alloc&) {
+        // the memory that the statement needed could not be allocated: the statement fails with a Qore exception,
+        // which the code can catch; the exception is converted here, at the statement, so that it does not unwind the
+        // blocks that contain the statement, whose cleanup (on_exit, local variables) runs only as they end
+        // (qore#7466)
+        qore_raise_allocation_failure(xsink, "a statement");
+        return 0;
+    }
 }
 
 int AbstractStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {

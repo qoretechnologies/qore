@@ -390,10 +390,37 @@ int QoreDir::chown(uid_t uid, gid_t gid, ExceptionSink* xsink) const {
 }
 #endif
 
+#ifndef _Q_WINDOWS
+//! gets the status of the directory of a Dir object under a sandbox policy, pinned against a concurrent change
+//! (qore#7518)
+/** @return 0 for OK, -1 if an error has been raised (with the error code given)
+*/
+static int dir_pinned_stat(QoreSandboxManager& sm, const std::string& path, struct stat& sbuf, const char* err,
+        ExceptionSink* xsink) {
+    if (q_sandbox_pinned_stat(sm, path.c_str(), true, sbuf, xsink)) {
+        if (!*xsink) {
+            xsink->raiseErrnoException(err, errno, "stat() call failed on '%s'", path.c_str());
+        }
+        return -1;
+    }
+    return 0;
+}
+#endif
+
 QoreListNode *QoreDir::stat(ExceptionSink* xsink) const {
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
+#ifndef _Q_WINDOWS
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        std::string path = priv->getDirname();
+        if (smh && !path.empty()) {
+            struct stat sbuf;
+            return dir_pinned_stat(*smh.get(), path, sbuf, "DIR-STAT-FAILURE", xsink) ? nullptr : stat_to_list(sbuf);
+        }
+    }
+#endif
     return priv->stat(xsink);
 }
 
@@ -401,6 +428,16 @@ QoreHashNode *QoreDir::hstat(ExceptionSink* xsink) const {
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
+#ifndef _Q_WINDOWS
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        std::string path = priv->getDirname();
+        if (smh && !path.empty()) {
+            struct stat sbuf;
+            return dir_pinned_stat(*smh.get(), path, sbuf, "DIR-HSTAT-FAILURE", xsink) ? nullptr : stat_to_hash(sbuf);
+        }
+    }
+#endif
     return priv->hstat(xsink);
 }
 
@@ -409,6 +446,23 @@ QoreHashNode *QoreDir::statvfs(ExceptionSink* xsink) const {
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
+#ifndef _Q_WINDOWS
+    {
+        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+        std::string path = priv->getDirname();
+        if (smh && !path.empty()) {
+            struct statvfs vfs;
+            if (q_sandbox_pinned_statvfs(*smh.get(), path.c_str(), vfs, xsink)) {
+                if (!*xsink) {
+                    xsink->raiseErrnoException("DIR-STATVFS-FAILURE", errno, "statvfs() call failed on '%s'",
+                        path.c_str());
+                }
+                return nullptr;
+            }
+            return statvfs_to_hash(vfs);
+        }
+    }
+#endif
     return priv->statvfs(xsink);
 }
 #endif

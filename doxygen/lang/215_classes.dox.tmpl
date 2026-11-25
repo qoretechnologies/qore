@@ -580,14 +580,24 @@ x1.viaB();    # "P1::m": B1's code can call P1::m()
 	- @ref memberNotification_methods "memberNotification()": these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 	- methodGate(): these methods are not inherited so they may not be declared <b><tt>final</tt></b>
 
-    An inherited <b><tt>final</tt></b> method reserves its name in subclasses. A subclass declaring an
-    instance or static method with that name gets a parse error, even when its parameter types, names or arity
-    differ. The declaring class can provide several overloads itself. A <b><tt>private:internal</tt></b>
-    final variant is visible only in its declaring class and does not reserve the name in subclasses.
+    A <b><tt>final</tt></b> method holds for the whole class hierarchy: a call of the method's name on an object of
+    any subclass with arguments that the <b><tt>final</tt></b> variant accepts selects that variant.  Overload
+    resolution considers the variants of a class's own method first, then those of its parent classes in the order
+    in which they are listed, each with its own parent classes (depth first), and an earlier variant wins a tie, so
+    the following are parse errors in a subclass of a class with a <b><tt>final</tt></b> method:
+    - a method with the same signature (an override)
+    - a variant of the same name with another signature that accepts arguments that the <b><tt>final</tt></b> variant
+      accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
+      arguments; a variant whose parameters accept none of the same arguments is allowed
+    - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
+      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
+      position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a
+      <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
+    - a parent class listed before the class with the <b><tt>final</tt></b> method that declares or inherits a method
+      of the same name, as the subclass's calls of the name are then resolved in that method, or one of its variants
+      is selected first
 
-    In multiple inheritance, a call accepting the final variant's arguments must still reach that variant.
-    Parent classes are searched depth first in declaration order. A parent listed before the final method's
-    class that redirects the call to another method also causes a parse error.
+    <b><tt>final</tt></b> variants declared <b><tt>private:internal</tt></b> are not inherited and are not affected.
 
     @par Example:
     @code{.py}
@@ -608,8 +618,8 @@ class T2 inherits Base, Other {}
 class C inherits Base {
     # parse error: a call with a string argument could select this variant
     string log(data msg) { return "c"; }
-    # parse error: Base's final method reserves the name for static methods and disjoint overloads too
-    static string log(int code) { return "c"; }
+    # OK: accepts none of the arguments of Base::log()
+    string log(int code) { return "c"; }
 }
     @endcode
 
@@ -717,6 +727,41 @@ while (i.next) {}  # parse exception: the call is i.next()
     Members declared <b><tt>private</tt></b> can only be accessed within the class hierarchy; trying to access private members form outside the class hierarchy will result in either a parse or runtime exception, depending on when the illegal access is caught.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n
     Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.  A <tt><b>private:internal</b></tt> member is separate from the members with the same name declared by other classes in the hierarchy: each class reads and writes its own, which is initialized in every object of the class or of a subclass, however deep the hierarchy, and whatever the order of the parent classes in the <tt><b>inherits</b></tt> clauses of the hierarchy.\n\n
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
+
+    @subsection sandboxed_class_private_access Private Access of Classes Declared by Sandboxed Code
+    A class declared in a @ref Qore::Program "Program" with a @ref sandbox_manager "sandbox manager" (or that sandboxed
+    code creates) has no private access to the private members, methods, static class variables and constants that a class
+    declared by trusted code (a module's code, or a Program without a sandbox manager) declares, on any object, also on
+    the objects of the class itself: for it they are as if they were <tt><b>private:internal</b></tt>.  An access that
+    can be resolved when parsing raises a parse error; an access resolved at run time (through a value without a type,
+    a member name computed at run time, the conversion of the object to a hash or its keys, a
+    @ref call_reference "call reference", or the reflection API) raises the same
+    exception as an access from outside the class hierarchy.
+
+
+    The class can still use its own members and methods and the public members and methods that it inherits, implement
+    and override the private (abstract) methods of the trusted class, which the trusted class then calls, and call the
+    version of a method that it overrides in a base class (<tt>Base::method()</tt>).  Code of the trusted class keeps
+    its private access to the objects of the subclass, and classes declared by trusted code are not affected.  A
+    library class that is meant to be subclassed by sandboxed code offers the members and methods that its subclasses
+    need as public members and methods.  The access is decided by the state of the class's Program when the class is
+    committed (see @ref sandbox_private_access).\n\n
+    The standard modules give such subclasses public methods in place of the private declarations that their
+    subclasses use: \c DataProvider (\c AbstractDataProvider::checkOptions(),
+    \c processSearchParameters(), \c getWrappedExceptionArg(), \c AbstractDataProviderType::checkChange(),
+    \c AbstractDataProviderRecordIterator::doMemberGate() and \c matchGeneric(),
+    \c AbstractWatchDataProviderBase::isStopping() and \c logPollError(),
+    \c AbstractTimestampWatchDataProvider::getEventName() and \c getWatchRecordTimestamp(),
+    \c Observable::hasObservers() and \c getObserverCount()), \c FtpPoller (\c setFatal() and \c isFatal()),
+    \c HttpServerUtil (\c AbstractStreamRequest::getContext(), \c getHeaders() and \c getBody()) and \c RestHandler
+    (\c AbstractRestStreamRequestHandler::getContext() and \c getArgs()); a context that they give is a copy with the
+    request metadata only.  These methods are @ref final_methods "final": a subclass method with the name and the
+    signature of one of them is a parse error (a method of the name with other parameters, or a static method of the
+    name, is a method of its own, which a call with the signature of the final method does not call).  The private methods that change shared state or reach the host's resources stay private:
+    a data provider subclass declared by sandboxed code cannot call \c AbstractDataProvider::resolveValue() or
+    \c valueNeedsResolution() (the host's dynamic value resolution) or
+    \c AbstractWatchDataProviderBase::persistCheckpoint() (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7032">issue 7032</a>).
 
     @subsection private_access_class_identity Private Access and the Identity of Classes
     The private and <tt><b>private:internal</b></tt> members and methods of an object can be used by the code of a

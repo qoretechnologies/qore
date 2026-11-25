@@ -2137,10 +2137,24 @@ QoreStringMaker::QoreStringMaker(const QoreEncoding* enc, const char* fmt, ...) 
     }
 }
 
+//! allocates the buffer of a string that is being constructed
+/** Memory that cannot be allocated deletes the string's data and fails with std::bad_alloc, which the constructor
+    passes on (qore#7466)
+*/
+static char* qore_string_ctor_alloc(qore_string_private*& priv, size_t size) {
+    try {
+        return static_cast<char*>(qore_malloc_or_throw(size));
+    } catch (...) {
+        delete priv;
+        priv = nullptr;
+        throw;
+    }
+}
+
 QoreString::QoreString() : priv(new qore_string_private) {
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
-    priv->ownedBuffer() = (char*)malloc(priv->allocated * sizeof(char));
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, priv->allocated * sizeof(char));
     priv->sb.sync(priv->allocated);
     priv->ownedBuffer()[0] = '\0';
     priv->encoding = QCS_DEFAULT;
@@ -2150,7 +2164,7 @@ QoreString::QoreString() : priv(new qore_string_private) {
 QoreString::QoreString(const char* str) : priv(new qore_string_private) {
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
-    priv->ownedBuffer() = (char*)malloc(priv->allocated * sizeof(char));
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, priv->allocated * sizeof(char));
     priv->sb.sync(priv->allocated);
     if (str) {
         while (str[priv->len]) {
@@ -2170,7 +2184,7 @@ QoreString::QoreString(const char* str) : priv(new qore_string_private) {
 QoreString::QoreString(const char* str, const QoreEncoding* new_qore_encoding) : priv(new qore_string_private) {
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
-    priv->ownedBuffer() = (char*)malloc(priv->allocated * sizeof(char));
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, priv->allocated * sizeof(char));
     priv->sb.sync(priv->allocated);
     if (str) {
         while (str[priv->len]) {
@@ -2188,7 +2202,7 @@ QoreString::QoreString(const char* str, const QoreEncoding* new_qore_encoding) :
 
 QoreString::QoreString(const std::string& str, const QoreEncoding* new_encoding) : priv(new qore_string_private) {
     priv->allocated = str.size() + 1 + STR_CLASS_BLOCK;
-    priv->ownedBuffer() = (char*)malloc(priv->allocated * sizeof(char));
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, priv->allocated * sizeof(char));
     priv->sb.sync(priv->allocated);
     memcpy(priv->ownedBuffer(), str.c_str(), str.size() + 1);
     priv->len = str.size();
@@ -2198,7 +2212,7 @@ QoreString::QoreString(const std::string& str, const QoreEncoding* new_encoding)
 QoreString::QoreString(const QoreEncoding* new_qore_encoding) : priv(new qore_string_private) {
     priv->len = 0;
     priv->allocated = STR_CLASS_BLOCK;
-    priv->ownedBuffer() = (char*)malloc(priv->allocated * sizeof(char));
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, priv->allocated * sizeof(char));
     priv->sb.sync(priv->allocated);
     priv->ownedBuffer()[0] = '\0';
     priv->encoding = new_qore_encoding;
@@ -2207,7 +2221,7 @@ QoreString::QoreString(const QoreEncoding* new_qore_encoding) : priv(new qore_st
 QoreString::QoreString(const char* str, size_t size, const QoreEncoding* new_qore_encoding) : priv(new qore_string_private) {
     priv->len = size;
     priv->allocated = size + STR_CLASS_EXTRA;
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     memcpy(priv->ownedBuffer(), str, size);
     priv->ownedBuffer()[size] = '\0';
@@ -2225,7 +2239,7 @@ QoreString::QoreString(const QoreString* str, size_t size) : priv(new qore_strin
         size = str->priv->len;
     priv->len = size;
     priv->allocated = size + STR_CLASS_EXTRA;
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     if (size)
         memcpy(priv->ownedBuffer(), str->priv->effective_buf(), size);
@@ -2236,7 +2250,7 @@ QoreString::QoreString(const QoreString* str, size_t size) : priv(new qore_strin
 QoreString::QoreString(char c) : priv(new qore_string_private) {
     priv->len = 1;
     priv->allocated = STR_CLASS_BLOCK;
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     priv->ownedBuffer()[0] = c;
     priv->ownedBuffer()[1] = '\0';
@@ -2245,7 +2259,7 @@ QoreString::QoreString(char c) : priv(new qore_string_private) {
 
 QoreString::QoreString(int64 i) : priv(new qore_string_private) {
     priv->allocated = MAX_BIGINT_STRING_LEN + 1;
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     priv->len = ::snprintf(priv->ownedBuffer(), MAX_BIGINT_STRING_LEN, QLLD, i);
     // terminate string just in case
@@ -2255,7 +2269,7 @@ QoreString::QoreString(int64 i) : priv(new qore_string_private) {
 
 QoreString::QoreString(bool b) : priv(new qore_string_private) {
     priv->allocated = 2;
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     priv->ownedBuffer()[0] = b ? '1' : '0';
     priv->ownedBuffer()[1] = 0;
@@ -2265,7 +2279,7 @@ QoreString::QoreString(bool b) : priv(new qore_string_private) {
 
 QoreString::QoreString(double f) : priv(new qore_string_private) {
     priv->allocated = MAX_FLOAT_STRING_LEN + 1;
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     priv->len = ::snprintf(priv->ownedBuffer(), MAX_FLOAT_STRING_LEN, "%.9g", f);
     // snprintf() always terminates the string
@@ -2281,7 +2295,7 @@ QoreString::QoreString(const DateTime *d) : QoreString() {
 
 QoreString::QoreString(const BinaryNode *b) : priv(new qore_string_private) {
     priv->allocated = b->size() + (b->size() * 4) / 10 + 10; // estimate for base64 encoding
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     priv->ownedBuffer()[0] = '\0';
     priv->len = 0;
@@ -2291,7 +2305,7 @@ QoreString::QoreString(const BinaryNode *b) : priv(new qore_string_private) {
 
 QoreString::QoreString(const BinaryNode *b, size_t maxlinelen) : priv(new qore_string_private) {
     priv->allocated = b->size() + (b->size() * 4) / 10 + 10; // estimate for base64 encoding
-    priv->ownedBuffer() = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->ownedBuffer() = qore_string_ctor_alloc(priv, sizeof(char) * priv->allocated);
     priv->sb.sync(priv->allocated);
     priv->ownedBuffer()[0] = '\0';
     priv->len = 0;
@@ -4284,7 +4298,8 @@ void qore_string_private::adoptCopy(const char* src, size_t n, size_t ascii_pref
     assert(ascii_prefix <= n);
     size_t new_alloc = n + STR_CLASS_EXTRA;
     new_alloc = (new_alloc / 0x10 + 1) * 0x10;
-    buffer = (char*)malloc(sizeof(char) * new_alloc);
+    // memory that cannot be allocated fails with std::bad_alloc and leaves the string unchanged (qore#7466)
+    buffer = static_cast<char*>(qore_malloc_or_throw(sizeof(char) * new_alloc));
     if (n) {
         memcpy(buffer, src, n);
     }
@@ -4304,7 +4319,8 @@ void qore_string_private::materialize() {
     const qore_string_private* parent = qore_string_private::get(view_parent);
     size_t new_alloc = len + STR_CLASS_EXTRA;
     new_alloc = (new_alloc / 0x10 + 1) * 0x10;
-    buffer = (char*)malloc(sizeof(char) * new_alloc);
+    // memory that cannot be allocated fails with std::bad_alloc and leaves the view unchanged (qore#7466)
+    buffer = static_cast<char*>(qore_malloc_or_throw(sizeof(char) * new_alloc));
     if (len) {
         memcpy(buffer, parent->buffer + view_offset, len);
     }
