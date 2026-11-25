@@ -54,6 +54,15 @@ module KitDataProvider {
                 "This integration supports full CRUD operations on core resources "
                 "and event-based triggers.",
             "scheme": "kitrest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "kit.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://kit.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": KitLogo,
             "logo_file_name": "kit-logo.svg",
             "logo_mime_type": MimeTypeSvg,

@@ -72,6 +72,15 @@ module VertexAiDataProvider {
                 "Tokens are cached and refreshed transparently by `GcpAuth`.\n\n"
                 "Project: <https://cloud.google.com/vertex-ai>",
             "scheme": "vertex-ai",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": VertexAiLogo,
             "logo_file_name": "vertex-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,

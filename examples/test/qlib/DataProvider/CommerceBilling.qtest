@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class CommerceBillingTest
+
+class CommerceBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Commerce provider billing") {
+        addVendor("BigCommerce", "BigCommerce", "bigcommerce.com", "included",
+            "https://developer.bigcommerce.com/docs/start/best-practices/api-rate-limits");
+        addVendor("SystemeIo", "SystemeIo", "systeme.io", "included",
+            "https://systeme.io/pricing");
+        addVendor("Kit", "Kit", "kit.com", "included",
+            "https://kit.com/pricing");
+        addVendor("Unbounce", "Unbounce", "unbounce.com", "subscription",
+            "https://unbounce.com/pricing/");
+        addVendor("Cin7Core", "Cin7Core", "dearsystems.com", "subscription",
+            "https://www.cin7.com/pricing/");
+        set_return_value(main());
+    }
+}

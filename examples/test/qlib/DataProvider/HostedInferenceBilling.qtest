@@ -1,0 +1,45 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class HostedInferenceBillingTest
+
+class HostedInferenceBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("HostedInference provider billing") {
+        addVendor("Fireworks", "FireworksAi", "fireworks.ai", "metered",
+            "https://fireworks.ai/pricing", {
+                "chat-completion": "metered", "get-model": "included",
+                "list-datasets": "included",
+            });
+        addVendor("Together", "TogetherAi", "together.xyz", "metered",
+            "https://www.together.ai/pricing", {
+                "chat-completion": "metered", "list-models": "included",
+                "list-endpoints": "included",
+            });
+        addVendor("Mistral", "MistralAi", "mistral.ai", "metered",
+            "https://mistral.ai/pricing", {
+                "create-embeddings": "token", "list-models": "included",
+            });
+        addVendor("Cohere", "Cohere", "cohere.com", "metered",
+            "https://cohere.com/pricing", {
+                "chat": "token", "rerank": "metered", "list-models": "included",
+            });
+        addVendor("Jina", "JinaAi", "jina.ai", "metered",
+            "https://jina.ai/embeddings/", {
+                "create-embeddings": "token", "rerank": "token", "read-url": "token",
+                "get-model": "included",
+            });
+        addVendor("Exa", "Exa", "exa.ai", "metered",
+            "https://exa.ai/pricing", {
+                "search": "request", "answer": "request", "contents": "page",
+                "get-agent-run": "metered",
+            });
+        set_return_value(main());
+    }
+}

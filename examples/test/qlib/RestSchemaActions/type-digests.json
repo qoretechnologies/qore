@@ -65,8 +65,8 @@
     "make-api-call": "metadata:0f04848395c249bb output:66e4f18413704210 options:be86034f62051ef1",
     "create-speech": "metadata:1acb96a062c4c249 output:750843fda41f953a options:204b3cb02bb9acae",
     "create-batch": "metadata:9ac0d9d9ea51f963 output:a802c98286b5178f options:1e2aba442670f405",
-    "list-batches": "metadata:e329475598c7d6f6 output:9fbea5df7b3b3016 options:fedcf1670f29ba8d",
-    "get-batch": "metadata:0bc2f48b71ed88df output:4571c5df0bce9d0b options:e421023d3bec02e6",
+    "list-batches": "metadata:042ce8486ba29a0b output:9fbea5df7b3b3016 options:fedcf1670f29ba8d",
+    "get-batch": "metadata:5e99f0e4e7b78aeb output:4571c5df0bce9d0b options:e421023d3bec02e6",
     "cancel-batch": "metadata:4344f7fa626b0edc output:4571c5df0bce9d0b options:60ebf8f57f994b06",
     "chat-completion": "metadata:ee26191801c3a601 output:96bf81805e7d793c options:185f079ead9f83fb",
     "create-completion": "metadata:b1b9f729d0aeb1df output:24c5497abeb85c82 options:7fdcd06db41ca338",
@@ -122,8 +122,8 @@
     "resume-fine-tuning-job": "metadata:d5d3ac0adbad1e8c output:c524f544b4697736 options:4e6e547d8061cf35",
     "create-image-edit": "metadata:dc42da86cad2437a output:769c33260f3f53a2 options:f50a55553d95b819",
     "create-image": "metadata:086d14c435abe9a2 output:769c33260f3f53a2 options:516580652422d3c2",
-    "list-models": "metadata:e45e4e8a8f5f4fc2 output:bb35386ef66b401f options:73e11daf766657dc",
-    "get-model": "metadata:eeb3b0af208261aa output:a35b277e1f159440 options:7ad45a340d6522d6",
+    "list-models": "metadata:68c920b7346f8250 output:bb35386ef66b401f options:73e11daf766657dc",
+    "get-model": "metadata:0604a59e776013c2 output:a35b277e1f159440 options:7ad45a340d6522d6",
     "delete-model": "metadata:9b36945c9f7b16cb output:dc925893e79bda34 options:9a1b3f8799531a5a",
     "create-realtime-call": "metadata:b43dbc7d671c7638 output:430306c29498e0d6 options:7a94a65b0116a8c2",
     "accept-realtime-call": "metadata:77c22551f91495ef output:- options:ebff4f0323753c13",
@@ -215,7 +215,7 @@
     "get-custom-model": "metadata:430d3a89cc0d63ac output:cb507c3186cf172d options:0b5983b6cdbe030c",
     "get-custom-model-deployment": "metadata:2189bf99f7335a3b output:e30d8493a7b52238 options:0a857ffe7e41d521",
     "get-evaluation-job": "metadata:e4a6f0e964fad247 output:5de51b287e860066 options:9a8f74a93da63d11",
-    "get-foundation-model": "metadata:2475ba2de7c26896 output:ba395cfc4be3d867 options:97ea166ad6946ca2",
+    "get-foundation-model": "metadata:913590f712b30f23 output:ba395cfc4be3d867 options:97ea166ad6946ca2",
     "get-foundation-model-availability": "metadata:8f4520d4263ed77a output:aeaa7d6f50775429 options:25d3886836173ede",
     "get-guardrail": "metadata:33d14d0436dfb291 output:456d36dce4d7d210 options:0d9fdedd1e2fd5f1",
     "get-imported-model": "metadata:e47178f13557fe06 output:fcd8934d81b75d1e options:c60649690a579ffe",
@@ -240,7 +240,7 @@
     "list-enforced-guardrails-configuration": "metadata:44788ea155f814fd output:0ef0fc592224711b options:824847ca70cd9c84",
     "list-evaluation-jobs": "metadata:30bb146aa0f611d4 output:afcaf44bf2ccc415 options:40bdb56efac73e55",
     "list-foundation-model-agreement-offers": "metadata:3d90247bb416da92 output:37e989aa739f18fe options:ff3f917dd809e508",
-    "list-foundation-models": "metadata:aec60a7179617cff output:ef4b11e56ef70ffd options:f89886089c394435",
+    "list-foundation-models": "metadata:f23323434a4886f7 output:ef4b11e56ef70ffd options:f89886089c394435",
     "list-guardrails": "metadata:67c4c347d0cf1eba output:42548e420b81528b options:ee327d7791b5d85d",
     "list-imported-models": "metadata:53fb5dcfcf1b94c5 output:5741689e95a6b9eb options:4b040cdc5837dd9a",
     "list-inference-profiles": "metadata:4ff5ff6ba455b9af output:efffff1791681770 options:8b861921ef57b06a",
@@ -281,6 +281,6 @@
     "invoke-model": "metadata:acff68232000cdf9 output:32fddaf0e5a8e944 options:e85fcd9e132719e0",
     "list-async-invokes": "metadata:3416629c29c00868 output:03d94062b0adc0b1 options:d9a52780c9300420",
     "start-async-invoke": "metadata:a361221e281f2d9e output:67a2e7bad4793e50 options:9f860a0971cb7f32",
-    "embed": "metadata:2002074d45410b2f output:fb53bcbfcceaa54a options:20da222507fe57ea"
+    "embed": "metadata:8062458590043a45 output:fb53bcbfcceaa54a options:20da222507fe57ea"
   }
 }

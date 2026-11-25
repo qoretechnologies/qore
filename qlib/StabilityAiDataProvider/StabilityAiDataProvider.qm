@@ -72,6 +72,15 @@ module StabilityAiDataProvider {
                 "Generation and transformations consume credits. Check the [current pricing](https://platform.stability.ai/pricing) "
                 "and use **Get Credit Balance** before submitting work.",
             "scheme": "stability-ai",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "stability.ai",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://platform.stability.ai/pricing",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::StabilityAiLogoText,
             "logo_file_name": "stability-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -91,10 +100,16 @@ module StabilityAiDataProvider {
                     remove action.get_output_type;
                     action.output_type = StabilityAiOperation::MediaType;
                 }
+                if (StabilityAiApi::getActionSet().getOperationEx(action.action).getMethod().upr() == "GET") {
+                    action.billing = <DataProviderBillingInfo>{"model": "included"};
+                } else {
+                    action.billing = <DataProviderBillingInfo>{"unit": "credit"};
+                }
                 DataProviderActionCatalog::registerAction(action);
             }
             foreach hash<auto> job in (StabilityAiWaitDataProvider::Jobs.pairIterator()) {
                 DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                    "billing": <DataProviderBillingInfo>{"model": "included"},
                     "app": StabilityAiDataProvider::AppName, "action": job.key, "path": "/" + job.key,
                     "display_name": job.value[1], "short_desc": job.value[2],
                     "desc": "Waits for an existing job and returns verified media. The timeout includes every status request. "
@@ -108,6 +123,7 @@ module StabilityAiDataProvider {
                 "app": StabilityAiDataProvider::AppName,
                 "path": "/generate-image",
                 "action": "generate-image",
+                "billing": <DataProviderBillingInfo>{"unit": "credit"},
                 "display_name": "Generate Image",
                 "short_desc": "Generate an image from a text prompt",
                 "desc": "Generates an image from a text prompt via Stability AI's "

@@ -55,6 +55,15 @@ module BigCommerceDataProvider {
                 "This integration supports customers, products, orders, carts, "
                 "shipments, blog posts, and customer addresses.",
             "scheme": "bigcommerceres",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "bigcommerce.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developer.bigcommerce.com/docs/start/best-practices/api-rate-limits",
+                "effective_date": 2026-11-25,
+            },
             "logo": BigCommerceLogo,
             "logo_file_name": "bigcommerce-logo.svg",
             "logo_mime_type": MimeTypeSvg,

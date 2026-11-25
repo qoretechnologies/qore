@@ -54,6 +54,15 @@ module DeepSeekDataProvider {
                 "- Upload images for reuse in vision requests\n"
                 "- Inspect available models and account credit",
             "scheme": "deepseek",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "deepseek.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": DeepSeekLogo,
             "logo_file_name": "deepseek-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -65,6 +74,7 @@ module DeepSeekDataProvider {
             "app": DeepSeekDataProvider::AppName,
             "path": "/chat-completion",
             "action": "chat-completion",
+            "billing": <DataProviderBillingInfo>{"unit": "token"},
             "display_name": "Chat Completion",
             "short_desc": "Generate a chat completion from a DeepSeek model",
             "desc": "Generate answers, analyze images, or call functions from a conversation history.\n\n"
