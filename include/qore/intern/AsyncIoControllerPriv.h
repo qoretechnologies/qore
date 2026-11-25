@@ -1578,12 +1578,16 @@ private:
         }
 
         //! Reserves the key for a submission that is queued for the thread, and checks it against the other threads
-        /** The caller holds the lock of the controller, which orders the submissions.  An operation or submission of the
-            same thread, or of the same poll operation, is not a collision: the thread's commands are processed in
-            order, and its cache decides.
+        /** The caller holds the lock of the controller, which orders the submissions.  The entry is the newest
+            submission or operation of the key, so a submission is decided against it whatever its thread: the entry
+            must say who has the key when the next submission, of another thread, is queued right behind this one and
+            before the thread has processed it.  The same poll operation submitted again is not a collision: it takes
+            the entry over (on its own thread; one on another thread is left to that thread).  A submission that
+            replaces an operation of its own thread takes the entry over too; the thread's cache replaces the
+            operation when it admits the submission, so \a displaced is on the same thread and nothing is canceled.
 
-            @param token receives the token of the reservation, 0 if none was made (the key is in use on the thread
-            or refused)
+            @param token receives the token of the reservation, 0 if none was made (refused, or the same poll
+            operation on another thread)
             @param displaced receives the entry that a Replace took the key from
         */
         DLLLOCAL KeyCollision reserve(const std::string& key, int thread_idx, bool replace, bool sandboxed,
@@ -1602,7 +1606,12 @@ private:
                 return KeyCollision::None;
             }
             Entry& e = i->second;
-            if (e.thread_idx == thread_idx || e.spop_obj == spop_obj) {
+            if (e.spop_obj == spop_obj) {
+                if (e.thread_idx == thread_idx) {
+                    // the operation is submitted again on its thread: the new submission has the key
+                    e.token = token = ++last_token;
+                    e.app_pgm_id = app_id;
+                }
                 return KeyCollision::None;
             }
             if (!replace) {

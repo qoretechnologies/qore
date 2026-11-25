@@ -5234,7 +5234,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                         "the key '%s' is in use by an operation of other code", uh.c_str());
                     return nullptr;
                 case KeyCollision::Replace:
-                    cancel_displaced = true;
+                    // an operation of this thread was replaced above
+                    cancel_displaced = displaced_key.thread_idx != t.thread_idx;
                     break;
                 default:
                     break;
@@ -5420,7 +5421,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                 spop_obj, cmd.submit_key_token, displaced_key);
             cmd.submit_key_collision = collision == KeyCollision::Refuse || collision == KeyCollision::TakeOther
                 ? collision : KeyCollision::None;
-            cancel_displaced = collision == KeyCollision::Replace;
+            // an operation of the submission's own thread is replaced by the thread when it admits the submission
+            cancel_displaced = collision == KeyCollision::Replace && displaced_key.thread_idx != target->thread_idx;
             uint64_t key_token = cmd.submit_key_token;
             try {
                 // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O

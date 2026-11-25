@@ -56,6 +56,34 @@ class WaitingOperation inherits AbstractPollOperation<auto> {
     }
 }
 
+#! A waiting operation that keeps its result
+class ProbeOperation inherits WaitingOperation {
+    public {
+        Queue done();
+    }
+
+    constructor(EventNotifier notifier) : WaitingOperation(notifier) {
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        done.push(result);
+    }
+}
+
+#! Code of the sandboxed Program that submits an operation of the host
+const SandboxedCode = "
+%modern
+sub submit_op(AbstractPollOperation op, string owner, string key, EventNotifier n, bool replace) {
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": n,
+        \"spop\": op,
+        \"owner\": owner,
+        \"key\": key,
+        \"to\": -1s,
+    }, replace);
+}
+";
+
 #! An operation key is unique in the controller, whatever the I/O threads of the sockets of the operations
 /** Operations are routed to an I/O thread by their socket, not by their key, so that every operation on a socket runs
     on one thread.  The key collision checks of a submission (the refusal without replace_existing of qore#7108, the
@@ -72,6 +100,8 @@ class AsyncIoKeyAcrossThreadsTest inherits QUnit::Test {
         addTestCase("a submission under a key in use on another I/O thread is refused", \testRefused());
         addTestCase("a replacing submission cancels the operation on another I/O thread", \testReplaced());
         addTestCase("the key is free again when its operation has ended", \testKeyFreed());
+        addTestCase("an operation replaced on its own thread has the key of its replacement's owner",
+            \testReplacedOnOwnThread());
         set_return_value(main());
     }
 
@@ -161,6 +191,38 @@ class AsyncIoKeyAcrossThreadsTest inherits QUnit::Test {
         hash<SocketPollResultInfo> r2 = rq2.get(HangGuard);
         assertTrue(r2.canceled, "the replacing operation is canceled by the cancellation");
         assertEq(NOTHING, r2.ex);
+    }
+
+    testReplacedOnOwnThread() {
+        skipIfNoDebugging();
+        string owner = sprintf("key-across-own-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        string key = owner + "-key";
+        list<EventNotifier> n = getNotifiers();
+
+        # a sandboxed Program submits an operation on the thread of the first notifier
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(new SandboxManager());
+        p.parse(SandboxedCode, "own-thread");
+        ProbeOperation op1(n[0]);
+        p.callFunction("submit_op", op1, owner, key, n[0], False);
+
+        # the host replaces it on the same thread: its result says that it was replaced
+        WaitingOperation op2(n[0]);
+        Queue<hash<SocketPollResultInfo>> rq2 = submitOp(owner, key, n[0], op2, True);
+        assertTrue(op1.done.get(HangGuard).canceled, "the sandboxed operation is replaced by the host's");
+
+        # the key is the host's now: the sandboxed code does not replace it from another thread, as it would not
+        # from the same thread
+        ProbeOperation op3(n[1]);
+        p.callFunction("submit_op", op3, owner, key, n[1], True);
+        hash<SocketPollResultInfo> r3 = op3.done.get(HangGuard);
+        assertTrue(r3.canceled, "the sandboxed submission is refused");
+        assertEq("ASYNC-IO-KEY-ERROR", r3.ex.err, "with the reason");
+        assertEq(0, rq2.size(), "the host's operation has no result");
+        assertFalse(op2.aborted, "the host's operation was not aborted");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the host's operation is the only one with the key");
+        assertTrue(rq2.get(HangGuard).canceled, "the host's operation is canceled by the cancellation");
     }
 
     testKeyFreed() {
