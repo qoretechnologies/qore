@@ -128,6 +128,10 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreUnshiftOperatorNode::evalImplInternal(bo
     if (*xsink)
         return QoreValue();
 
+    // the operand is referenced before the lvalue is taken: if it is the lvalue's own value, the lvalue's list is then
+    // copied before it is changed, so the value pushed is the one that the operand had, not the changed list
+    res.ensureReferencedValue();
+
     // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
     LValueHelper val(left, xsink);
     if (!val)
@@ -150,17 +154,19 @@ QORE_INTERN_ALWAYS_INLINE QoreValue QoreUnshiftOperatorNode::evalImplInternal(bo
     }
 
     // value is not a list, so throw exception
-    if (val.getType() != NT_LIST) {
+    if (!val.holdsList()) {
         // no need to check for PO_STRICT_ARGS; this exception was always thrown
         xsink->raiseException(*loc, "UNSHIFT-ERROR", QoreValue(), "the lvalue argument to unshift is type \"%s\"; " \
             "expecting \"list\"", val.getTypeName());
         return QoreValue();
     }
 
-    // no exception can occur here
-    val.ensureUnique();
-
-    QoreListNode* l = val.getValue().get<QoreListNode>();
+    // a weak reference to a list: its list is changed, and the lvalue keeps the weak reference (qore#7297)
+    QoreListNode* l = val.getListForChange();
+    if (!l) {
+        return QoreValue();
+    }
+    val.changedScannedValue(*res);
 
     if constexpr (Lexical) {
         qore_list_private::insert(*l, res.takeReferencedValue(), xsink, getSemanticPolicy());

@@ -1,11 +1,12 @@
 /*
     qore_aot_runtime_identity.cpp
 
-    Defines the AOT runtime identity of this libqore build.
+    Defines the AOT runtime identity and the builtin API identity of this libqore build.
 
-    The identity is generated at build time by cmake/QoreWriteAOTRuntimeIdentity.cmake from the qcc format
-    fingerprint; this file is compiled as a separate translation unit so that an identity change only recompiles
-    this tiny file, not the entire single-compilation-unit build.
+    The AOT runtime identity is generated at build time by cmake/QoreWriteAOTRuntimeIdentity.cmake from the qcc
+    format fingerprint, and the builtin API identity by cmake/QoreWriteBuiltinApiIdentity.cmake from the API metadata
+    of libqore's qpp files (qore#7183); this file is compiled as a separate translation unit so that an identity
+    change only recompiles this tiny file, not the entire single-compilation-unit build.
 
     Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -33,7 +34,9 @@
 */
 
 #include "qore/intern/qore_aot_runtime_identity.h"
+#include "qore/intern/qore_builtin_api_identity.h"
 
 extern "C" {
     const char* qore_aot_runtime_identity = QORE_AOT_RUNTIME_IDENTITY;
+    const char* qore_builtin_api_identity = QORE_BUILTIN_API_IDENTITY;
 }

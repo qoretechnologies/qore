@@ -92,6 +92,9 @@ public final class HttpClientCreatorProof {
         *string ca_file;
         *string ca_path;
 
+        #! the ID of the Program of the code that took the proof, if known (qore#7544)
+        *int owner_pgm_id = SandboxManager::getCallerProgramId();
+
         #! the register of the proofs that were issued and of their grants (see HttpClientCreatorProofRegistry)
         static HttpClientCreatorProofRegistry registry();
 
@@ -125,6 +128,16 @@ public final class HttpClientCreatorProof {
         reg.issued{self.uniqueHash()} = True;
     }
 
+    #! Returns the ID of the Program of the code that took the proof, if known (qore#7544)
+    /** The connection manager created with the proof is that code's: the code of that Program takes the sockets of its
+        connections (see @ref HttpClientIo::HttpClientConnection::getSocket() "HttpClientConnection::getSocket()")
+
+        @since HttpClientIo 1.0
+    */
+    *int getOwnerProgramId() {
+        return owner_pgm_id;
+    }
+
     #! Withdraws the proof
     /** Uses the register that the proof was recorded in, which the proof keeps, so that it works whenever the proof is
         destroyed, also after the static members of the class were cleared at the end of the program (qore#7236)
@@ -151,11 +164,11 @@ public final class HttpClientCreatorProof {
         @throw PERMISSION-DENIED the calling code is restricted from the \c NETWORK functional domain
     */
     static HttpClientCreatorProof get(string url, *hash<auto> opts) {
-        if (SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             throw "PERMISSION-DENIED", "the calling code may not create an HTTP client connection manager, as it is "
                 "restricted from the NETWORK functional domain";
         }
-        return new HttpClientCreatorProof(!SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+        return new HttpClientCreatorProof(!SandboxManager::isLentToRestricted(DOM_FILESYSTEM),
             HttpClientCreatorProof::getOrigins(url), opts);
     }
 
@@ -167,10 +180,10 @@ public final class HttpClientCreatorProof {
         such code is refused when it creates its manager
     */
     static *HttpClientCreatorProof tryGet(*string url, *hash<auto> opts) {
-        if (!url.val() || SandboxManager::isCallerRestricted(DOM_NETWORK)) {
+        if (!url.val() || SandboxManager::isLentToRestricted(DOM_NETWORK)) {
             return;
         }
-        return new HttpClientCreatorProof(!SandboxManager::isCallerRestricted(DOM_FILESYSTEM),
+        return new HttpClientCreatorProof(!SandboxManager::isLentToRestricted(DOM_FILESYSTEM),
             HttpClientCreatorProof::getOrigins(url), opts);
     }
 

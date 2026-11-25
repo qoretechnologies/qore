@@ -1728,20 +1728,15 @@ static QoreValue read_expr_global_varref(AOTExprReadCtx& ctx) {
 
     `toStringRoundTrip()` is the right digit form rather than `toString()`: it is the shortest significand
     that reconstructs the source binary value when parsed at `getPrec()` bits, and it preserves signed zero.
-    It can fail, so the old form is kept as a fallback -- carrying the precision is what fixes the defect, and
-    that happens either way.
 */
 static bool write_expr_const_number(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         QoreString str;
-        ExceptionSink xsink;
-        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
-            xsink.clear();
-            str.clear();
-            num->toString(str);
+        if (!qore_aot_format_number(*num, str)) {
+            return false;
         }
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         ctx.writer.writeStringRef(str.c_str());
         ctx.writer.writeU32(static_cast<uint32_t>(num->getPrec()));
         return true;

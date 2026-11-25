@@ -60,6 +60,15 @@ module SendCloudDataProvider {
                 "- Service point lookup across carriers\n"
                 "- Brand and sender-address management\n"
                 "- Triggers for parcel status changes and return updates",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "sendcloud.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.sendcloud.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "sendcloudrest",
             "logo": SendCloudDataProvider::SendCloudLogo,
             "logo_file_name": "sendcloud-logo.svg",
@@ -154,6 +163,7 @@ module SendCloudDataProvider {
             "app": SendCloudDataProvider::AppName,
             "path": "/create-parcel",
             "action": "create-parcel",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Parcels",
             "display_name": "Create Parcel",
             "short_desc": "Create a new parcel",
@@ -530,6 +540,7 @@ module SendCloudDataProvider {
             "app": SendCloudDataProvider::AppName,
             "path": "/create-return",
             "action": "create-return",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Returns",
             "display_name": "Create Return",
             "short_desc": "Create a new return",

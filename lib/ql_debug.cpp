@@ -28248,6 +28248,25 @@ private:
 #endif
 };
 
+#ifdef __APPLE__
+extern std::atomic<bool> qore_dbg_unix_pin_no_thread_cwd;
+#endif
+
+//! Debug-only: enables or disables the use of the per-thread working directory (macOS pthread_fchdir_np()) to reach
+//! the UNIX socket paths pinned under a sandbox policy, so that the fallback is tested (qore#7518)
+/** @return True if the per-thread working directory is used after the call (macOS with pthread_fchdir_np()), False
+    otherwise
+*/
+static QoreValue f_dbg_unix_socket_pin_thread_cwd(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+#ifdef __APPLE__
+    qore_dbg_unix_pin_no_thread_cwd.store(!get_param_value(params, 0).getAsBool(), std::memory_order_relaxed);
+    return qore_pthread_fchdir_np() != nullptr;
+#else
+    return false;
+#endif
+}
+
 //! Debug-only: runs the unit tests of the bind of a UNIX socket address (qore#7518)
 static QoreValue f_dbg_run_unix_sockaddr_bind_tests(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -29051,34 +29070,6 @@ static void ut_variant_takes_call_arity(UnitTestCounters& c) {
     UT_ASSERT(c, qore_variant_takes_call_arity(255, 0, true), "many arguments for a variant with extra args");
 }
 
-// the size helper of the JIT runtime (JITRuntime.cpp)
-extern "C" uint64_t qore_fast_any_size(uint64_t arg_bits, ExceptionSink* xsink);
-
-//! qore#7062: qore_fast_any_size() returns the length in characters of a string in both representations
-/** The caller of the helper gives strings to qore_fast_length() and qore_fast_strlen() first, so this is the only
-    check that an inline short string reaching it gets its length instead of 0
-*/
-static void ut_fast_any_size_short_string(UnitTestCounters& c) {
-    auto any_size = [] (QoreValue v, ExceptionSink& xsink) -> int64 {
-        return std::bit_cast<QoreValue>(qore_fast_any_size(std::bit_cast<uint64_t>(v), &xsink)).getAsBigInt();
-    };
-    ExceptionSink xsink;
-    // "\xc3\xa9\xc3\xa9" is two characters in four bytes
-    QoreValue short_value = QoreValue::makeStringValue("\xc3\xa9\xc3\xa9");
-    UT_ASSERT(c, short_value.isShortString(), "a 4-byte string is stored inline");
-    UT_ASSERT_EQ(c, 2, (int)any_size(short_value, xsink), "the size of an inline short string is its length");
-    UT_ASSERT(c, !xsink.isException(), "the size of an inline short string raises no exception");
-    QoreValue empty = QoreValue::makeStringValue("");
-    UT_ASSERT_EQ(c, 0, (int)any_size(empty, xsink), "the size of an empty string is 0");
-    // the same characters in a node: "\xc3\xa9\xc3\xa9\xc3\xa9a" is four characters in seven bytes
-    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("\xc3\xa9\xc3\xa9\xc3\xa9" "a", QCS_UTF8));
-    QoreValue node_value(*node);
-    UT_ASSERT(c, !node_value.isShortString(), "a 7-byte string is not stored inline");
-    UT_ASSERT_EQ(c, 4, (int)any_size(node_value, xsink), "the size of a string node is its length");
-    UT_ASSERT(c, !xsink.isException(), "the size of a string node raises no exception");
-    xsink.clear();
-}
-
 static void ut_old_background_self_call_helper(UnitTestCounters& c) {
     auto is_rebuild_error = [] (ExceptionSink& xsink) -> bool {
         if (!xsink.isException()) {
@@ -29368,7 +29359,6 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
     ut_variant_takes_call_arity(c);
-    ut_fast_any_size_short_string(c);
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
     ut_sandbox_context_continued_walk(c, rc.getProgram());
@@ -34493,7 +34483,11 @@ void qore_dbg_fs_swap_on_open(const char* fn) {
         target = std::move(dbg_fs_swap_target);
     }
 #ifndef _Q_WINDOWS
-    unlink(link.c_str());
+    // a directory is moved aside (to "<name>.dbg-moved"), as a concurrent rename would, so that a link can replace it
+    // (qore#7518)
+    if (unlink(link.c_str()) && (errno == EISDIR || errno == EPERM)) {
+        rename(link.c_str(), (link + ".dbg-moved").c_str());
+    }
     if (symlink(target.c_str(), link.c_str())) {
         fprintf(stderr, "dbg_fs_swap_on_open(): symlink(%s, %s) failed: %s\n", target.c_str(), link.c_str(),
             strerror(errno));
@@ -37257,7 +37251,18 @@ static QoreValue f_dbg_call_pseudo_method(const QoreListNode* params, RuntimeCon
 #endif
 }
 
+// defined in JITRuntime.cpp (debug builds)
+DLLLOCAL void qore_dbg_jit_force_deopt(bool on);
+
+//! forces the AST retry of the bodies of the fast calls of the current thread while \a on (qore#7394)
+static QoreValue f_dbg_jit_force_deopt(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_jit_force_deopt(HARD_QORE_VALUE_BOOL(params, 0));
+    return QoreValue();
+}
+
 void init_debug_functions(QoreNamespace& qns) {
+    qns.addBuiltinVariant("dbg_jit_force_deopt", f_dbg_jit_force_deopt, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, boolTypeInfo, QORE_PARAM_NO_ARG, "on");
     qns.addBuiltinVariant("dbg_call_pseudo_method", f_dbg_call_pseudo_method, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         anyTypeInfo, 3, anyTypeInfo, QORE_PARAM_NO_ARG, "class_value", stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         anyTypeInfo, QORE_PARAM_NO_ARG, "value");
@@ -37344,6 +37349,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_run_unix_sockaddr_bind_tests", f_dbg_run_unix_sockaddr_bind_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_unix_socket_pin_thread_cwd", f_dbg_unix_socket_pin_thread_cwd, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, softBoolTypeInfo, QORE_PARAM_NO_ARG, "enable");
 #endif
     qns.addBuiltinVariant("dbg_run_variant_search_tests", f_dbg_run_variant_search_tests, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);

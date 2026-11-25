@@ -1,0 +1,20 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+module GateProbe {
+    version = "1.0";
+    desc = "A module with a private root class named like a Qore builtin";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+class Gate {
+    int marker() { return 37; }
+}
+
+public namespace GateProbe {
+    public int sub probe() {
+        ::Gate g();
+        return g.marker();
+    }
+}

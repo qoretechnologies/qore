@@ -315,6 +315,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
+        # - frame-check-qcc-o3 (#7072): its checks run in a qcc executable and in child processes that set their own
+        #   --exec-mode
         # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
         # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
         #   qcc executables
@@ -367,6 +369,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution modes and as a qcc executable, as a module is initialized once in a process
         # - reflection-module-init-barrier-oom: its script runs in child processes that set their own execution
         #   modes and as a qcc executable, which arm a debug hook and whose failed module load ends the process
+        # - aot-runtime-identity (#6898): its checks run qcc and the executables it compiles in child processes started
+        #   without an execution mode
+        # - AOTModuleBuiltinApiIdentity (#7183): its checks compile modules and load them in child processes of its own
+        #   binary started without an execution mode
+        # - AOTGuardedMethodEntryReturnKind (#6860): its checks run qcc in child processes started without an execution
+        #   mode
         # - HttpServerRecvGrowFailure (#7417): the server whose read fails runs in a child process of the qore
         #   interpreter in the default mode, under a limit of its address space
         # - module-init-frames (#7289): its probes run in child processes that set their own --exec-mode, with the
@@ -376,10 +384,13 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
         #   as the checks are of the exit of the process that holds the Program
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTGuardedMethodEntryReturnKind.qtest",
+                                 "examples/test/ir/aot-runtime-identity/aot-runtime-identity.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
+                                 "examples/test/ir/AOTModuleBuiltinApiIdentity.qtest",
                                  "examples/test/qore/security/aot-cross-module-caller-mask.qtest",
                                  "examples/test/qore/misc/alloc-failure/alloc-failure.qtest",
                                  "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
@@ -418,8 +429,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
                                  "examples/test/qore/lists/broken-list-range-past-end.qtest",
                                  "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
+                                 "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
@@ -427,6 +440,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_worker_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",

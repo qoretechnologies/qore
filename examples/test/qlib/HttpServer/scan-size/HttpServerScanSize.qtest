@@ -15,8 +15,10 @@
 hashdecl ScanSizeRow {
     #! the scans that ran
     int scans;
-    #! the graph nodes they entered
+    #! the graph nodes they entered, which depend on the closed regions current when they ran
     int nodes;
+    #! the nodes of their graphs outside closed regions, which are fixed by the graphs
+    int unsealed;
 }
 
 #! the scans a worker made while it served one request on each of its open connections
@@ -35,9 +37,13 @@ hashdecl ScanSizeResult {
 
     The scans are counted by the scan accounting (QORE_SCAN_STATS), which is enabled when a process starts, so a
     worker process serves the requests: it opens a number of keep-alive connections, makes one more request on each,
-    and reports the scans those requests made.  The nodes a scan enters are fixed by the shape of the graph it walks,
-    not by timing, so the test compares the nodes entered per request and per scan with few and with many open
-    connections.
+    and reports the scans those requests made.  The test compares the unsealed nodes of the scans (ScanStatsInfo
+    \c unsealed_nodes) with few and with many open connections: the nodes in a cycle with each scan's root and those
+    that cannot be part of a closed region, such as every connection's entry, which holds the connection's socket.
+    They are fixed by the graph a scan walks.  The nodes a scan enters (\c nodes) are not: a scan does not enter a
+    closed region that is current, and whether the server's regions are current when a request's scan runs depends
+    on the order of the scans that the server's other threads make; on a loaded machine, a scan of a request's
+    object entered 12, 15, 22 or 25 nodes for the same graph, with 7 unsealed nodes each time.
 */
 class HttpServerScanSizeTest inherits QUnit::Test {
     public {
@@ -66,8 +72,8 @@ class HttpServerScanSizeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! the nodes the scans enter per request, and per scan of a request's object, are about the same with few and
-    #! with many open connections
+    #! the unsealed nodes of the scans per request, and per scan of a request's object, are about the same with few
+    #! and with many open connections
     scansDoNotGrow() {
         TmpDir tmp("qore-http-scan-size-");
         hash<ScanSizeResult> few = runWorker(tmp.path, Few);
@@ -75,34 +81,40 @@ class HttpServerScanSizeTest inherits QUnit::Test {
         assertEq(Few, few.requests, "the small run's requests");
         assertEq(Many, many.requests, "the large run's requests");
 
-        # all scans; scans that walk every connection enter about 8 times as many nodes per request with 8 times the
-        # connections, and scans that do not enter about the same number either way
-        float few_per_request = HttpServerScanSizeTest::totalNodes(few).toFloat() / few.requests;
-        float many_per_request = HttpServerScanSizeTest::totalNodes(many).toFloat() / many.requests;
+        # all scans; scans that walk every connection have about 8 times as many unsealed nodes per request with 8
+        # times the connections, and scans that do not have about the same number either way: which of a request's
+        # scans run, rather than being deferred or made unnecessary by another thread's scan, depends on the order of
+        # the server's threads, so this varies by a few nodes per request (25 to 33 with 4 connections, 31 to 32
+        # with 32, on a loaded machine)
+        float few_per_request = HttpServerScanSizeTest::totalUnsealed(few).toFloat() / few.requests;
+        float many_per_request = HttpServerScanSizeTest::totalUnsealed(many).toFloat() / many.requests;
         if (m_options.verbose) {
-            printf("all scans: %d connections: %.1f nodes per request; %d connections: %.1f nodes per request\n",
-                Few, few_per_request, Many, many_per_request);
+            printf("all scans: %d connections: %.1f unsealed nodes per request (%.1f entered); %d connections: %.1f "
+                "unsealed nodes per request (%.1f entered)\n", Few, few_per_request,
+                HttpServerScanSizeTest::totalNodes(few).toFloat() / few.requests, Many, many_per_request,
+                HttpServerScanSizeTest::totalNodes(many).toFloat() / many.requests);
         }
-        assertLe(few_per_request * 1.5, many_per_request, sprintf("the nodes the scans enter per request do not "
-            "grow with the open connections: %.1f with %d, %.1f with %d", few_per_request, Few, many_per_request,
+        assertLe(few_per_request * 1.5, many_per_request, sprintf("the unsealed nodes of the scans per request do "
+            "not grow with the open connections: %.1f with %d, %.1f with %d", few_per_request, Few, many_per_request,
             Many));
 
-        # the scans of an object in a cycle with the server
+        # the scans of an object in a cycle with the server: the graph each walks is the same in every request, so
+        # its unsealed nodes are the same with any number of connections, unless the scans reach the connections
         *hash<ScanSizeRow> f = few.rows{RequestRoot};
         *hash<ScanSizeRow> m = many.rows{RequestRoot};
         if (!f || !m) {
             fail(sprintf("no scans of %y: %y %y", RequestRoot, few, many));
             return;
         }
-        float few_per_scan = f.nodes.toFloat() / f.scans;
-        float many_per_scan = m.nodes.toFloat() / m.scans;
+        float few_per_scan = f.unsealed.toFloat() / f.scans;
+        float many_per_scan = m.unsealed.toFloat() / m.scans;
         if (m_options.verbose) {
-            printf("%s: %d connections: %d scans, %.1f nodes per scan; %d connections: %d scans, %.1f nodes per "
-                "scan\n", RequestRoot, Few, f.scans, few_per_scan, Many, m.scans, many_per_scan);
+            printf("%s: %d connections: %d scans, %.1f unsealed nodes per scan (%.1f entered); %d connections: %d "
+                "scans, %.1f unsealed nodes per scan (%.1f entered)\n", RequestRoot, Few, f.scans, few_per_scan,
+                f.nodes.toFloat() / f.scans, Many, m.scans, many_per_scan, m.nodes.toFloat() / m.scans);
         }
-        assertLe(few_per_scan * 1.5, many_per_scan, sprintf("the scans of %y do not grow with the open "
-            "connections: %.1f nodes per scan with %d, %.1f with %d", RequestRoot, few_per_scan, Few, many_per_scan,
-            Many));
+        assertEq(few_per_scan, many_per_scan, sprintf("the scans of %y do not grow with the open connections: %.1f "
+            "unsealed nodes per scan with %d, %.1f with %d", RequestRoot, few_per_scan, Few, many_per_scan, Many));
     }
 
     #! the worker reports the scans that serving the requests made, so the comparison above is not vacuous
@@ -111,9 +123,12 @@ class HttpServerScanSizeTest inherits QUnit::Test {
         hash<ScanSizeResult> rv = runWorker(tmp.path, Few);
         int scans = rv.rows{RequestRoot}.scans ?? 0;
         assertGt(0, scans, sprintf("scans of %y were made: %y", RequestRoot, rv));
-        # each scan of a request's object enters at least the object, its handler and the handler's server
-        assertGe(3 * scans, rv.rows{RequestRoot}.nodes ?? 0, sprintf("the scans of %y walk the handler's cycle: %y",
-            RequestRoot, rv));
+        # each scan of a request's object enters at least the object, its handler and the handler's server, which
+        # are in a cycle with it and so unsealed
+        assertGe(3 * scans, rv.rows{RequestRoot}.unsealed ?? 0, sprintf("the scans of %y walk the handler's cycle: "
+            "%y", RequestRoot, rv));
+        assertGe(rv.rows{RequestRoot}.unsealed ?? 0, rv.rows{RequestRoot}.nodes ?? 0, sprintf("the scans of %y "
+            "entered every unsealed node: %y", RequestRoot, rv));
     }
 
     #! returns the nodes all scans of the run entered
@@ -121,6 +136,15 @@ class HttpServerScanSizeTest inherits QUnit::Test {
         int rc = 0;
         foreach hash<ScanSizeRow> row in (rv.rows.iterator()) {
             rc += row.nodes;
+        }
+        return rc;
+    }
+
+    #! returns the unsealed nodes of all scans of the run
+    private static int totalUnsealed(hash<ScanSizeResult> rv) {
+        int rc = 0;
+        foreach hash<ScanSizeRow> row in (rv.rows.iterator()) {
+            rc += row.unsealed;
         }
         return rc;
     }
@@ -141,7 +165,7 @@ class HttpServerScanSizeTest inherits QUnit::Test {
                 rv.requests = req[0].toInt();
                 continue;
             }
-            *list<*string> row = (line =~ x/^root=(.+) scans=([0-9]+) nodes=([0-9]+)$/);
+            *list<*string> row = (line =~ x/^root=(.+) scans=([0-9]+) nodes=([0-9]+) unsealed=([0-9]+)$/);
             if (!row) {
                 fail(sprintf("unexpected worker output: %y", out));
                 continue;
@@ -149,6 +173,7 @@ class HttpServerScanSizeTest inherits QUnit::Test {
             rv.rows{row[0]} = <ScanSizeRow>{
                 "scans": row[1].toInt(),
                 "nodes": row[2].toInt(),
+                "unsealed": row[3].toInt(),
             };
         }
         return rv;

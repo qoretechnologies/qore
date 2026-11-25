@@ -261,6 +261,17 @@ public class VertexAiDataProviderTest inherits QUnit::Test {
                 ? {"maxOutputTokens": 256, "thinkingConfig": {"thinkingLevel": "LOW", "includeThoughts": True}}
                 : config, handler.last_body.generationConfig);
         }
+        foreach string family in (("argon", "carbon", "hydrogen", "neon")) {
+            string model = "gemini-4-" + family;
+            string highest = ("hydrogen", "neon").contains(family) ? "XHIGH" : "HIGH";
+            foreach hash<auto> c in (({"thinking_level": "xhigh", "thinking_budget": 1024},
+                    {"thinking_level": "minimal"}, {"thinking_budget": 0})) {
+                p.doRequest({"model": model, "contents": ({"role": "user", "parts": ({"text": "invoice"},)},),
+                    "generationConfig": {"thinking_config": c}});
+                assertEq({"thinkingLevel": c.thinking_level == "xhigh" ? highest : "LOW"},
+                    handler.last_body.generationConfig.thinkingConfig, model);
+            }
+        }
     }
 
     private embedTest() {

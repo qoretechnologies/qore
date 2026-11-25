@@ -392,6 +392,12 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - @ref OracleSqlUtilBase::OracleDatabase::OracleDatabaseOptions "base_tables_only" limits table listings and
+      lookups to directly named base tables (<a href="https://github.com/qoretechnologies/qore/issues/1681">issue 1681</a>)
+    - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" supports creating, describing, and aligning reverse-key
+      indexes with the \c "reverse" method (<a href="https://github.com/qoretechnologies/qore/issues/1612">issue 1612</a>)
+    - @ref OracleSqlUtilBase::OracleIndex "OracleIndex" raises \c INDEX-OPTION-ERROR when a bitmap index is
+      declared unique (<a href="https://github.com/qoretechnologies/qore/issues/1611">issue 1611</a>)
     - a table of the user's own schema is named in messages, also in the \c TABLE-ERROR exceptions for a synonym or
       a table that cannot be found, without the schema, whose name is the user name
       (@ref OracleSqlUtilBase::OracleTable::getMessageName() "OracleTable::getMessageName()")
@@ -972,14 +978,14 @@ class OraclePartitionScopeSupport inherits Qore::Serializable {
 public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSupport {
     public {
         #! the native type of the index (if supported); mirrors \c ALL_INDEXES.INDEX_TYPE (e.g.
-        #! \c "NORMAL", \c "BITMAP", \c "FUNCTION-BASED NORMAL", or a domain-index name)
+        #! \c "NORMAL", \c "NORMAL/REV", \c "BITMAP", \c "FUNCTION-BASED NORMAL", or a domain-index name)
         string native_type;
 
         #! the tablespace name of the index (if supported)
         *string tablespace;
 
-        #! the explicit access method requested via the generic \c method index option (e.g. \c "bitmap"
-        #! or a domain-index \c INDEXTYPE name); \c NOTHING means the driver default (a normal B-tree)
+        #! the explicit access method requested via the generic \c method index option (e.g. \c "bitmap", \c "reverse"
+        #! or a domain-index \c INDEXTYPE name); a bitmap index must be nonunique
         *string method;
 
         #! method-specific storage parameters rendered into a \c PARAMETERS('k1=v1 k2=v2 ...') clause
@@ -999,24 +1005,43 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
         native_type = nt;
         tablespace = t;
         method = n_method;
+        if (unique && (method.val() ? method : native_type).lwr() == "bitmap") {
+            throw "INDEX-OPTION-ERROR", sprintf("Oracle bitmap index %y cannot be unique", name);
+        }
+        if (n_with && (getDescriptionMethod() ?? "").lwr() == "reverse") {
+            throw "INDEX-OPTION-ERROR", sprintf("Oracle reverse-key index %y cannot have domain index parameters", name);
+        }
         with_options = n_with;
         validatePartitionScope(NOTHING, unique, columns.keys(), method, "INDEX-OPTION-ERROR", "index", name);
+    }
+
+    #! Returns the method to write in a table description or create statement
+    /** @since OracleSqlUtilBase 1.7
+    */
+    *string getDescriptionMethod() {
+        if (method.val()) {
+            return method;
+        }
+        switch (native_type.upr()) {
+            case "NORMAL/REV":
+            case "FUNCTION-BASED NORMAL/REV":
+                return "reverse";
+            case "BITMAP":
+                return "bitmap";
+        }
+        return NOTHING;
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
         string scope = validatePartitionScope(opt.partition_scope, unique, columns.keys(), method,
             "INDEX-OPTION-ERROR", "index", name);
-        # determine method: explicit overrides native_type for emission
-        *string m = method.val() ? method.lwr() : NOTHING;
-
-        # decide whether this is a bitmap prefix or an INDEXTYPE IS domain-index creation
+        string m = (getDescriptionMethod() ?? "").lwr();
         string prefix;
         *string indextype;
-        if (m == "bitmap" || (!m && native_type.lwr() == "bitmap")) {
+        if (m == "bitmap") {
             prefix = "bitmap ";
-        } else if (m.val() && m != "btree" && m != "normal") {
-            # anything other than bitmap/btree/normal is treated as a domain-index type name
+        } else if (m && !inlist(m, ("btree", "normal", "reverse"))) {
             indextype = m;
         }
 
@@ -1025,7 +1050,9 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
             unique ? "unique " : "", prefix ?? "", oracle_get_sql_identifier(name), table_name,
             (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
 
-        if (indextype.val()) {
+        if (m == "reverse") {
+            sql += " reverse";
+        } else if (indextype.val()) {
             sql += sprintf(" indextype is %s", indextype);
             if (with_options) {
                 list<string> parts = ();
@@ -1058,8 +1085,8 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
     bool equalImpl(AbstractIndex ix) {
         OracleIndex oix = cast<OracleIndex>(ix);
         # normalize method comparison: NOTHING / "normal" / "btree" are all the default B-tree
-        string m1 = (method.val() ? method.lwr() : native_type.lwr());
-        string m2 = (oix.method.val() ? oix.method.lwr() : oix.native_type.lwr());
+        string m1 = (getDescriptionMethod() ?? native_type).lwr();
+        string m2 = (oix.getDescriptionMethod() ?? oix.native_type).lwr();
         if (m1 == "btree") {
             m1 = "normal";
         }
@@ -2013,6 +2040,14 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             "force": "?",
         };
 
+        #! Oracle database constructor options
+        /** Set \c base_tables_only to @ref True "True" to omit synonyms from table listings and look up tables
+            by their own names. By default, a synonym of a table can be used in both operations.
+
+            @since OracleSqlUtilBase 1.7
+        */
+        const OracleDatabaseOptions = AbstractDatabase::DatabaseOptions + {"base_tables_only": Type::Boolean};
+
         #! oracle-specific generic creation options
         const OracleCreationOptions = AbstractDatabase::CreationOptions + (
             "compute_statistics": Type::Boolean,
@@ -2205,8 +2240,43 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         const OracleMaxPrecision = 38;
     }
 
+    private {
+        *bool has_identity_sequence_name;
+    }
+
+    # ALL_TAB_IDENTITY_COLS.SEQUENCE_NAME was added in 12.1.0.2. Read the server version once per database.
+    private bool hasIdentitySequenceName() {
+        if (!exists has_identity_sequence_name) {
+            auto v = ds.getServerVersion();
+            string release = v.typeCode() == NT_HASH ? v.version : v;
+            int major = v.typeCode() == NT_HASH ? v.major_version.toInt() : (release =~ x/([0-9]+)/)[0].toInt();
+            *list<string> parts = (release =~ x/12\.([0-9]+)\.[0-9]+\.([0-9]+)/);
+            has_identity_sequence_name = major > 12 || (major == 12 && (parts[0].toInt() > 1
+                || (parts[0].toInt() == 1 && parts[1].toInt() >= 2)));
+        }
+        return has_identity_sequence_name;
+    }
+
     #! creates the object from the arguments given
     constructor(AbstractDatasource nds, *hash opts) : AbstractDatabase(nds, opts) {
+        if (opts.driver) {
+            AbstractDatabase::checkDriverOptions(\self.opts, getDriverOptionKeys());
+        }
+    }
+
+    private hash<auto> getDatabaseOptions() {
+        return OracleDatabaseOptions;
+    }
+
+    #! Returns the named table, honoring the database's base_tables_only option
+    /** @copydetails SqlUtil::AbstractDatabase::getTable()
+    */
+    *AbstractTable getTable(string name) {
+        if (!opts.base_tables_only) {
+            return AbstractDatabase::getTable(name);
+        }
+        AbstractTable t = AbstractTable::getTable(ds, name, {"base_tables_only": True});
+        return t.checkExistence() ? t : NOTHING;
     }
 
     #! returns a name as an SQL identifier for Oracle
@@ -2271,7 +2341,15 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         string schema;
         getSchemaName(\name, \schema);
 
-        *hash<auto> row = ds.selectRow("select * from all_sequences where sequence_owner = %v and sequence_name = %v", schema.upr(), name.upr());
+        bool identity_cols = hasIdentitySequenceName();
+        string fields = identity_cols ? ", i.table_name owner_table, i.column_name owner_column" : "";
+        string identity_join = identity_cols
+            ? "left join all_tab_identity_cols i on i.owner = s.sequence_owner and i.sequence_name = s.sequence_name "
+            : "";
+        *hash<auto> row = ds.selectRow("select s.*, o.generated" + fields + " from all_sequences s "
+            "left join all_objects o on o.owner = s.sequence_owner and o.object_name = s.sequence_name "
+            "and o.object_type = 'SEQUENCE' " + identity_join + "where s.sequence_owner = %v and s.sequence_name = %v",
+            schema.upr(), name.upr());
         if (!row)
             return;
         bool ascending = row.increment_by > 0;
@@ -2288,7 +2366,15 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         }
         # Oracle does not keep the starting value of a sequence; the first value in its direction is given
         number start = ascending ? row.min_value : row.max_value;
-        return new OracleSequence(name, start, row.increment_by, max, min, row.cycle_flag == "Y", row.cache_size);
+        OracleSequence seq(name, start, row.increment_by, max, min, row.cycle_flag == "Y", row.cache_size);
+        if (row.owner_column.val()) {
+            seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "identity", "schema": row.sequence_owner, "table": row.owner_table,
+                "column": row.owner_column};
+        } else if (row.generated == "N") {
+            # A generated sequence whose owning table is hidden from this account has unknown ownership.
+            seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+        }
+        return seq;
     }
 
     private *AbstractView getViewImpl(string name) {
@@ -2556,6 +2642,10 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         list<string> l = getListIntern(ds.select("select table_name from user_tables t where "
             "nvl(t.dropped, 'NO') != 'YES' and not exists (select 1 from user_mviews m where m.mview_name = "
             "t.table_name) order by 1").table_name);
+
+        if (opts.base_tables_only) {
+            return l;
+        }
 
         # add all tables accessible with synonyms
         *list<string> tl = ds.select("select synonym_name from user_synonyms s, all_tables t where s.table_owner = "
@@ -3140,6 +3230,14 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "compute_statistics": Type::Boolean,
             "partition_scope": Type::String,
         };
+
+        #! Oracle table constructor options
+        /** With \c base_tables_only set to @ref True "True", only a base table with the given name can be
+            described. The default also allows a view, a materialized view, or a synonym to be described.
+
+            @since OracleSqlUtilBase 1.7
+        */
+        const OracleTableOptions = AbstractTable::TableOptions + {"base_tables_only": Type::Boolean};
 
         #! Oracle-specific constraint options
         /** this constant extends @ref OracleIndexOptions as returned by \c OracleSqlUtilBase::OracleTable::getConstraintOptions() with the following keys:
@@ -4125,6 +4223,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
     }
 
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
+        if (opts.driver) {
+            AbstractDatabase::checkDriverOptions(\self.opts, getDriverOptionKeys());
+        }
         # see if there is a dblink in the name
         *string dbl = (nname =~ x/@(.*)/)[0];
         if (dbl) {
@@ -4156,6 +4257,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         ora_major = oracle_get_server_major_version(nds);
 
         introspectSystemViews();
+    }
+
+    private hash<auto> getTableOptions() {
+        return OracleTableOptions;
     }
 
     private introspectSystemViews() {
@@ -4260,6 +4365,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         # a dropped table in the recycle bin (named "BIN$...") is in user_tables and dba_tables with dropped = 'YES'
         m_isDropped = (row.dropped == "YES");
+        if (opts.base_tables_only && (m_isMaterializedView || m_isDropped)) {
+            throw "TABLE-ERROR", sprintf("%s is not a base table", getMessageName());
+        }
 
         tablespace = row.tablespace_name;
         readonly = row.read_only == "YES";
@@ -4396,10 +4504,12 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         if (row)
             return row;
 
-        row = ds.selectRow("select * from " + systemView("dba_views") + (dblink ? "@" + dblink : "") + " where owner = %v and view_name = %v", schema.upr(), name.upr());
-        if (row) {
-            m_isView = True;
-            return row;
+        if (!opts.base_tables_only) {
+            row = ds.selectRow("select * from " + systemView("dba_views") + (dblink ? "@" + dblink : "") + " where owner = %v and view_name = %v", schema.upr(), name.upr());
+            if (row) {
+                m_isView = True;
+                return row;
+            }
         }
 
         throw "TABLE-ERROR", sprintf("table %s does not exist or is not accessible to this user (%s)",
@@ -4493,6 +4603,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         if (row) {
             schema = getUserSchema();
             return row;
+        }
+
+        if (opts.base_tables_only) {
+            throw "TABLE-ERROR", sprintf("base table %s does not exist or is not accessible to this user (%s)",
+                getMessageName(), getDBString());
         }
 
         row = ds.selectRow("select * from user_views where view_name = %v", name.upr());
@@ -5193,17 +5308,39 @@ group by p.index_name", schema.upr(), name.upr());
         return new ForeignConstraints(ch);
     }
 
+    private bool supportsCheckDescriptionsImpl() {
+        return True;
+    }
+
     private Constraints getConstraintsImpl() {
         if (!tablespace)
             setTableInfoIntern();
 
-        # get only user check constraints
-        *hash qh = ds.select("select constraint_name, search_condition, status from " + systemView("dba_constraints") + (dblink ? "@" + dblink : "") + " where owner = %v and table_name = %v and constraint_type = 'C' and generated != 'GENERATED NAME'", schema.upr(), name.upr());
+        string suffix = dblink ? "@" + dblink : "";
+        *hash qh = ds.select("select c.constraint_name, c.search_condition, c.status, c.validated, c.deferrable, "
+            "c.rely, cc.column_name from " + systemView("dba_constraints") + suffix + " c left join "
+            + systemView("dba_cons_columns") + suffix + " cc on c.owner = cc.owner and "
+            "c.constraint_name = cc.constraint_name where c.owner = %v and c.table_name = %v "
+            "and c.constraint_type = 'C' and c.generated != 'GENERATED NAME'", schema.upr(), name.upr());
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
-            if (!native_case)
-                row.constraint_name = row.constraint_name.lwr();
-            rv.(row.constraint_name) = new OracleCheckConstraint(row.constraint_name, row.search_condition, row.status == "ENABLED");
+            string cname = native_case ? row.constraint_name : row.constraint_name.lwr();
+            reference<OracleCheckConstraint> ck = \rv{cname};
+            if (!ck) {
+                ck = new OracleCheckConstraint(cname, row.search_condition, row.status == "ENABLED");
+                if (!ck.enabled) {
+                    ck.preserve_reason = "DISABLED";
+                } else if (row.validated == "NOT VALIDATED") {
+                    ck.preserve_reason = "NOVALIDATE";
+                } else if (row.deferrable == "DEFERRABLE") {
+                    ck.preserve_reason = "DEFERRABLE";
+                } else if (row.rely == "RELY") {
+                    ck.preserve_reason = "RELY";
+                }
+            }
+            if (ck.preserve_reason && row.column_name) {
+                ck.catalog_columns += native_case ? row.column_name : row.column_name.lwr();
+            }
         }
 
         Constraints c(rv);
@@ -5400,16 +5537,15 @@ group by p.index_name", schema.upr(), name.upr());
         @param iname the name of the index
         @param opt the index options
 
-        @throw INDEX-OPTION-ERROR the method is not bitmap, btree, normal or the name of a domain indextype, a domain
-        index parameter name is not a name, or its value is not a scalar value
+        @throw INDEX-OPTION-ERROR the method is not bitmap, btree, normal, reverse or the name of a domain indextype,
+        a domain index parameter name is not a name, or its value is not a scalar value
     */
     static checkIndexOptions(string iname, *hash<auto> opt) {
-        # the method (bitmap, btree, normal or the name of a domain indextype) and the parameter names are written
-        # into the DDL as they are (qore#6577)
+        # the method and the domain parameter names are written into the DDL as they are (qore#6577)
         if (exists opt.method && (opt.method.typeCode() != NT_STRING
                 || !regex(opt.method, "\\A[A-Za-z_][A-Za-z0-9_$#]*(?:\\.[A-Za-z_][A-Za-z0-9_$#]*)?\\z"))) {
-            throw "INDEX-OPTION-ERROR", sprintf("index %y: the index method %y is not bitmap, btree, normal or the "
-                "name of a domain indextype", iname, opt.method);
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the index method %y is not bitmap, btree, normal, reverse "
+                "or the name of a domain indextype", iname, opt.method);
         }
         foreach hash<auto> i in (opt.with.pairIterator()) {
             if (!regex(i.key, "\\A[A-Za-z_][A-Za-z0-9_]*\\z")) {
@@ -5529,10 +5665,9 @@ group by p.index_name", schema.upr(), name.upr());
         if (ix.compute_statistics) {
             rv.compute_statistics = True;
         }
-        if (ix.method) {
-            rv.method = ix.method;
-        } else if (ix.native_type.lwr() == "bitmap") {
-            rv.method = "bitmap";
+        *string method = ix.getDescriptionMethod();
+        if (method) {
+            rv.method = method;
         }
         if (ix.with_options) {
             rv.with = ix.with_options;
@@ -6810,6 +6945,15 @@ group by p.index_name", schema.upr(), name.upr());
     #! returns @ref True "True" if the database automatically creates a unique constraint when a unique index is created (ex: mysql)
     private bool uniqueIndexCreatesConstraintImpl() {
         return False;
+    }
+
+    #! Returns whether the server supports changing a table's logging mode
+    bool supportsTableLogging() {
+        return True;
+    }
+
+    private string getSetLoggingSqlImpl(bool enabled) {
+        return sprintf("alter table %s %s", getSqlName(), enabled ? "logging" : "nologging");
     }
 
     #! returns @ref True "True" if the database support tablespaces

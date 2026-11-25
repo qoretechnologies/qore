@@ -59,6 +59,15 @@ module GoHighLevelDataProvider {
                 "contacts, opportunities, tasks, calendars, conversations, and campaigns.\n\n"
                 "This integration supports contact management, opportunity tracking, task management, "
                 "campaign automation, and event triggers.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "leadconnectorhq.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.gohighlevel.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "gohighlevelres",
             "logo": GoHighLevelLogo,
             "logo_file_name": "gohighlevel-logo.svg",

@@ -193,6 +193,12 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports column ownership and the native
+      sequence type where the database supplies them (issue #7587)
+    - @ref table_desc_hash "Table descriptions" can align named CHECK constraints on PostgreSQL and Oracle
+      (<a href="https://github.com/qoretechnologies/qore/issues/1616">issue 1616</a>)
+    - @ref SqlUtil::AbstractTable::getAlignSql() "getAlignSql()" removes an Oracle primary key before dropping its
+      supporting index when both are absent from the template (<a href="https://github.com/qoretechnologies/qore/issues/1482">issue 1482</a>)
     - serialized objects keep no credentials of their datasource: the default serializer keeps its masked
       configuration, and a datasource is restored with a registered deserializer or the new
       @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()"; data of
@@ -2677,6 +2683,14 @@ db_table.getAlignSql(template_table, callback_opts);
       under the \c drivers key and the driver key name under that; see below for an example
     - \c foreign_constraints: (optional) a hash of foreign constraint information keyed by constraint name; the values
       are @ref fk_desc_hash "foreign constraint hashes"
+    - \c check_constraints: on PostgreSQL and Oracle, a hash mapping constraint names to SQL predicate strings,
+      for example <tt>{"positive_qty": "qty > 0"}</tt>. Alignment creates, replaces, and removes checks by name.
+      An empty hash removes every representable check. Checks with special catalog attributes are preserved and
+      identified by the alignment info callback (including PostgreSQL NOT VALID, NO INHERIT, or inherited checks,
+      and Oracle disabled or unvalidated checks). Their expressions are omitted from exported descriptions.
+      Expressions are compared as SQL text; when PostgreSQL rewrites a predicate, use the expression returned by
+      @ref SqlUtil::AbstractTable::getDescriptionHash() "getDescriptionHash()" for a stable comparison. Omitting the key uses the existing constraint alignment,
+      which can drop undeclared catalog checks. Other drivers reject this key.
     - \c unique_constraints: (optional) a hash of unique constraint information keyed by constraint name; the values
       are @ref uk_desc_hash "unique constraint hashes"
     - \c partition_strategy: (optional) a @ref SqlUtil::PartitionStrategy "partition strategy hash"; Phase 1
@@ -10666,12 +10680,23 @@ AbstractConstraint ix = constraints.uk_jobs;
         public {
             #! the source of the check clause
             string src;
+            #! An attribute that a check description cannot express, if any
+            *string preserve_reason;
+            #! Columns that must remain present to preserve this catalog check
+            *list<string> catalog_columns;
         }
 
         #! creates the object and sets its name and the check clause source
         constructor(string n, string n_src) : AbstractConstraint(n) {
             name = n;
             src = n_src;
+        }
+
+        #! Returns the SQL predicate to use in a table description
+        /** @since SqlUtil 3.11.0
+        */
+        string getDescriptionExpression() {
+            return src;
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -11241,6 +11266,18 @@ string sql = constraint.getDeferrabilitySql();
         }
     }
 
+    #! The ownership of a database sequence as reported by its catalog
+    public hashdecl SqlSequenceOwnershipInfo {
+        #! \c standalone, \c identity (generated for an identity column), or \c owned (bound to a column)
+        string kind;
+        #! The catalog spelling of the owning schema, if the database has schemas and there is an owner
+        *string schema;
+        #! The catalog spelling of the owning table, if any
+        *string table;
+        #! The catalog spelling of the owning column, if any
+        *string column;
+    }
+
     #! base class for sequences
     public class AbstractSequence inherits Qore::Serializable {
         public {
@@ -11255,6 +11292,16 @@ string sql = constraint.getDeferrabilitySql();
 
             #! the ending number
             *number max;
+
+            #! Column ownership returned by getSequence(), or @ref nothing when the driver cannot determine it
+            /** A standalone sequence can supply a column default. Ownership means the catalog associates the
+                sequence's lifetime with a particular column. A sequence constructed from a description has no
+                catalog ownership information.
+            */
+            *hash<SqlSequenceOwnershipInfo> ownership;
+
+            #! Native SQL sequence type returned by getSequence(), or @ref nothing when there is no declared type
+            *string data_type;
         }
 
         #! creates the object from the arguments
