@@ -1308,7 +1308,11 @@ AbstractDataProviderType output_type = action.output_type;
     registerLazyValue() builds other shared values, such as types built from a vendored API description, the same
     way; getLazyValue() gives a value only to the code of the %Program that registered it (the module's code, also
     when it serves a caller of the module), not to the code of a caller, of another module or of a tenant, also when
-    the module's code calls that code back.  Every such decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
+    the module's code calls that code back.  The check identifies the code that makes the call of getLazyValue(): a
+    call that the module's code makes for a caller, with a callable and arguments that the caller gives it (a call
+    reference to getLazyValue() itself, for example), is the module's call, so a module does not call a callable of a
+    caller with the caller's arguments if they can include the ID of one of its values (issue #7601).  Every such
+    decision uses Qore::SandboxManager::isSandboxed(), so it is the same for callers restricted with
     @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS".  There is no worker when the module was loaded first
     by code that may not create the worker's capability (restricted with \c PO_NO_UNCONTROLLED_APIS, or sandboxed code
     loading the module by path): then every deferred registration runs, and every lazy value is built, when it is
@@ -2133,6 +2137,10 @@ class MyProvider {
         calling code cannot be identified
         @throw DATA-PROVIDER-LAZY-INIT-ERROR a sandbox governs the reader, the value is not built, and there is no
         catalog worker, or the reader is loading a module
+
+        @note The calling code is the code that makes the call of this method: a call that the code of the registering
+        module makes with a callable and arguments that another caller gives it, such as a call reference to this
+        method, is the module's call (see @ref dataprovider_lazy_actions)
 
         @since %DataProvider 3.11
     */

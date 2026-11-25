@@ -82,6 +82,19 @@ hash<auto> sub run(int id) {
         'getter': attempt(auto sub () { return LazyOwnerValues::LazyOwnerValues::getValue(); }),
         'closure': attempt(auto sub () { return LazyOwnerValues::LazyOwnerValues::getReader()(); }),
         'enumeration': enumerate(),
+        # a call reference of the tenant that the module's code calls with the tenant's argument (qore#7601)
+        'callref-direct': attempt(auto sub () {
+            return LazyOwnerValues::LazyOwnerValues::callBackWith(\\DataProviderActionCatalog::getLazyValue(), id);
+        }),
+        'callref-function': attempt(auto sub () {
+            return LazyOwnerValues::LazyOwnerValues::callBackWith(\\readFunction(), id);
+        }),
+        'callref-static-method': attempt(auto sub () {
+            return LazyOwnerValues::LazyOwnerValues::callBackWith(\\TenantReader::readStatic(), id);
+        }),
+        'callref-method': attempt(auto sub () {
+            return LazyOwnerValues::LazyOwnerValues::callBackWith(\\(new TenantReader()).read(), id);
+        }),
     } + callbacks(id);
 }
 
@@ -147,6 +160,13 @@ class LazyValueOwnerTest inherits QUnit::Test {
             "closure": "OK \"owned\"",
             # no ID is found
             "enumeration": (),
+            # a call reference of the tenant to the tenant's code that the module's code calls is the tenant's call;
+            # a call reference to getLazyValue() itself that the module's code calls with the tenant's argument is the
+            # module's call, as documented (qore#7601)
+            "callref-direct": "OK \"owned\"",
+            "callref-function": "DATA-PROVIDER-LAZY-VALUE-ERROR",
+            "callref-static-method": "DATA-PROVIDER-LAZY-VALUE-ERROR",
+            "callref-method": "DATA-PROVIDER-LAZY-VALUE-ERROR",
             # the tenant's code that the module's code runs is the tenant's
             "callback-closure": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),
             "callback-function": ("DATA-PROVIDER-LAZY-VALUE-ERROR",),

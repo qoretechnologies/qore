@@ -36,6 +36,12 @@ public class LazyOwnerValues {
         return c();
     }
 
+    #! runs the code of a caller with an argument of the caller, as a module that takes a callback and its argument
+    #! does (qore#7601)
+    static auto callBackWith(code c, auto arg) {
+        return c(arg);
+    }
+
     #! the ID, for the tests of the refusals only
     static int getIdForTest() {
         return id;
