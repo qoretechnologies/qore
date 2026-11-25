@@ -399,7 +399,9 @@ auto sub run(string op, string path) {
             call_function("dbg_fs_swap_on_open", "", "");
         }
         # the temporary file is created by its first open, and replaced before the second one, which copies it
-        call_function("dbg_fs_swap_on_open", dst + ".qore-ftp-tmp.*", secret_file, 1);
+        # the creation of the temporary file is skipped (its open and the end of the pinning of its path; qore#7518),
+        # and its reopen is changed
+        call_function("dbg_fs_swap_on_open", dst + ".qore-ftp-tmp.*", secret_file, 2);
         *hash<ExceptionInfo> err;
         try {
             p.callFunction("run", url, src, dst);
@@ -407,8 +409,10 @@ auto sub run(string op, string path) {
             err = ex;
         }
         assertTrue(exists err, "the get fails");
-        # the copy refuses the link that replaced the temporary file
-        assertEq("FTP-FILE-WRITE-ERROR", err.err, "the temporary file is not reopened through a link: " + err.desc);
+        # the link that replaced the temporary file is refused: by the policy when its path is pinned for the reopen
+        # (qore#7518), or by the copy
+        assertTrue(err.err == "FILESYSTEM-ACCESS-DENIED" || err.err == "FTP-FILE-WRITE-ERROR",
+            "the temporary file is not reopened through a link: " + err.err + ": " + err.desc);
         assertFalse(is_file(dst) && ReadOnlyFile::readTextFile(dst) == Secret,
             "the local file does not get the content of the file outside of the allowed directory");
         assertEq(Secret, ReadOnlyFile::readTextFile(secret_file), "the secret file is unchanged");

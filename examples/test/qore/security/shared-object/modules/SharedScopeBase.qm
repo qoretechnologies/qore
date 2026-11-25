@@ -1,0 +1,47 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# a library module whose class is the base class of a class of another module, for SharedObjectCrossModule.q
+
+%modern
+
+module SharedScopeBase {
+    version = "1.0";
+    desc = "test module: a base class with an update scope";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace SharedScopeBase {
+#! opens an update scope for an object of this module, as the schema modules do
+auto sub update_shared(object obj, code update) {
+    return SandboxManager::updateSharedObject(obj, update);
+}
+
+public class Base {
+    public {
+        string v = "orig";
+    }
+
+    constructor() {
+        if (SandboxManager::createsSharedObjects()) {
+            SandboxManager::shareObject(self);
+        }
+    }
+
+    #! updates the object in a scope that a function of this module opens
+    fill() {
+        update_shared(self, sub () { v = "filled"; });
+    }
+
+    #! returns a closure of this class that changes the object
+    code getUpdate() {
+        return sub () { v = "handed out"; };
+    }
+
+    #! opens an update scope with code that its caller gives, in a function of this module
+    auto forward(code update) {
+        return update_shared(self, update);
+    }
+}
+}

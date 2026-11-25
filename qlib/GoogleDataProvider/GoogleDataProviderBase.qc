@@ -329,11 +329,12 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         if (*AbstractDataProviderType rv = requests{rpath}.request_type) {
             return rv;
         }
-        # create new type without implicit / path args
+        # create new type without implicit / path args; it is the caller's own, so it is not kept in the cache, whose
+        # keys the caller would choose otherwise (qore#6863)
         if (args && (*AbstractDataProviderType rv = requests{path}.request_type)) {
             HashDataType nt(rv.getValueType(), rv.getName(), rv.getFields() - args);
             nt.checkConvertOrNothing();
-            return request_map{api}{rpath}.request_type = nt;
+            return nt;
         }
         throw "SCHEMA-ERROR", sprintf("Google API %y unknown request path %y requested; known request paths: %y", api,
             path, keys requests);
@@ -388,6 +389,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         );
         # resolve all unresolved types
         requests = unresolved.resolveRequests(api, requests, input_schema_map, output_schema_map);
+
+        # the types are shared by every caller of the module, which cannot change them (qore#6843, qore#6863)
+        GoogleDataProviderBase::freezeTypes(requests);
 
         # save the schema info
         return request_map{api} = requests;
@@ -475,6 +479,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         # resolve all unresolved types
         unresolved.resolve(schema);
 
+        # the types are shared by every caller of the module, which cannot change them (qore#6843, qore#6863)
+        GoogleDataProviderBase::freezeTypes(schema);
+
         # save and return the schema info
         return input_schema_map{api} = schema;
     }
@@ -490,6 +497,9 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
 
         # resolve all unresolved types
         unresolved.resolve(schema);
+
+        # the types are shared by every caller of the module, which cannot change them (qore#6843, qore#6863)
+        GoogleDataProviderBase::freezeTypes(schema);
 
         # save and return the schema info
         return output_schema_map{api} = schema;
@@ -714,6 +724,28 @@ hash<auto> calendar = GoogleDataProviderBase::getSchemaInfo("calendar");
     }
 
     #! Returns the URL for the given API
+    #! Marks the data types in a value of the caches as shared by every Program (qore#6843, qore#6863)
+    /** The types are built in the call of the caller that needs them first, which can be sandboxed; see
+        DataProvider::AbstractDataProviderType::freeze()
+    */
+    private static freezeTypes(auto v) {
+        switch (v.typeCode()) {
+            case NT_HASH:
+                map GoogleDataProviderBase::freezeTypes($1), v.iterator();
+                break;
+            case NT_LIST:
+                map GoogleDataProviderBase::freezeTypes($1), v;
+                break;
+            case NT_OBJECT:
+                if (v instanceof AbstractDataProviderType) {
+                    cast<AbstractDataProviderType>(v).freeze();
+                } else if (v instanceof AbstractDataField) {
+                    cast<AbstractDataField>(v).freeze();
+                }
+                break;
+        }
+    }
+
     static string getUrlForApi(string api) {
         if (DataProviderStaticMetadataHelper::get()) {
             throw "GOOGLE-SCHEMA-UNAVAILABLE", sprintf("live Discovery URL lookup for Google API %y is disabled "
@@ -730,7 +762,9 @@ hash<auto> calendar = GoogleDataProviderBase::getSchemaInfo("calendar");
             "timeout": InitTimeout,
             "connect_timeout": InitTimeout,
         });
-        string discovered_url = rest.restGet(url_info.path + sprintf("?name=%s", api)).body.items[0].discoveryRestUrl;
+        # the API name is a query parameter value (qore#6863)
+        string discovered_url = rest.restGet(url_info.path + sprintf("?name=%s", encode_url(api, True)))
+            .body.items[0].discoveryRestUrl;
         AutoLock al(m);
         return api_map{api} ?? (api_map{api} = discovered_url);
     }

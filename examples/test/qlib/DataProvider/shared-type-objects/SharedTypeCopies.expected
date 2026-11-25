@@ -1,0 +1,12 @@
+the tenant changes its copy of a shared type: changed
+the tenant changes its copy of a shared type with other tags: changed
+the tenant changes its copy of a shared type with other fields: changed
+the tenant changes its "or nothing" copy of a shared type: changed
+the tenant changes its copy of a shared field: changed
+the tenant changes its renamed copy of a shared field: changed
+a pipeline step of the tenant removes a nested field of a shared type: nested fields: y
+the shared type: a nested
+its nested type: x y
+the shared field's default value: null
+the shared simple type's options: null
+the tenant changes a copy that trusted code made: SANDBOX-REGISTRATION-ERROR

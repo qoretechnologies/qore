@@ -229,6 +229,12 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::AbstractStreamRequest::getContext() "AbstractStreamRequest::getContext()",
+      @ref HttpServer::AbstractStreamRequest::getHeaders() "getHeaders()" and
+      @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
+      members of the class when sandboxed code declares them; the context is a copy with the request metadata only
+      (@ref HttpServer::AbstractStreamRequest::ContextKeys "ContextKeys",
+      @ref HttpServer::AbstractStreamRequest::HeaderInfoKeys "HeaderInfoKeys"; issue #6843)
     - the code that serves a stream request gets the request without the objects of the server and the credentials
       of the request, also in the arguments of the stream request's constructor, when the code is restricted (a
       sandbox that does not trust its code governs it; a stream request of restricted code that a trusted handler
@@ -3084,7 +3090,7 @@ public hashdecl HttpFilteredRequestInfo {
 */
 public class AbstractStreamRequest {
     public {
-        #! The keys of the request context that filterRequest() gives
+        #! The keys of the request context that getContext(), filterContext() and filterRequest() give
         /** The request metadata of @ref httpserverutil_request_context, without the objects of the server (its
             logger, the client certificate, the listener's socket information, the user thread context of the
             listener) and the original \c Authorization header; an allowlist: other keys, including those that the
@@ -3136,7 +3142,8 @@ public class AbstractStreamRequest {
         */
         const OwnCredentialHeaders = ("authorization",);
 
-        #! The keys of the \c "header-info" hash of the request context that filterRequest() gives
+        #! The keys of the \c "header-info" hash of the request context that getContext(), filterContext() and
+        #! filterRequest() give
         /** The request metadata that @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" gives, without
             the socket, the stream and session IDs, the closures and the other server state that the server adds; an
             allowlist, as @ref ContextKeys
@@ -3513,6 +3520,63 @@ public class AbstractStreamRequest {
             kept += param;
         }
         return uri.substr(0, q) + (kept ? "?" + join("&", kept) : "") + frag;
+    }
+
+    #! Returns a copy of the request context of the request with the keys in @ref ContextKeys only
+    /** For subclasses, which cannot use the private members of this class when sandboxed code declares them.  The
+        context of the server holds objects of the server, its listener and the process (for example the listener's
+        socket and the process-wide I/O controller), which are not given: only the keys in @ref ContextKeys, and of
+        its \c "header-info" hash only the keys in @ref HeaderInfoKeys; see filterContext()
+
+        @return a copy of the request context with the keys in @ref ContextKeys that it has
+
+        @since HttpServerUtil 1.6
+    */
+    final hash<auto> getContext() {
+        return AbstractStreamRequest::filterContext(cx);
+    }
+
+    #! Returns a copy of the request headers
+    /** @since HttpServerUtil 1.6
+    */
+    final hash<auto> getHeaders() {
+        return hdr;
+    }
+
+    #! Returns any message body received with the request
+    /** @since HttpServerUtil 1.6
+    */
+    final auto getBody() {
+        return body;
+    }
+
+    #! Returns a copy of a request context with the keys in @ref ContextKeys only
+    /** The \c "header-info" key of the copy has only the keys in @ref HeaderInfoKeys.  The keys are an allowlist: a
+        key that the server adds to the context is not given unless it is added to the list
+
+        @param cx the request context
+
+        @return a copy of \a cx with the keys in @ref ContextKeys that it has
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<auto> filterContext(hash<auto> cx) {
+        hash<auto> rv;
+        foreach string key in (ContextKeys) {
+            if (cx.hasKey(key)) {
+                rv{key} = cx{key};
+            }
+        }
+        if (cx."header-info".typeCode() == NT_HASH) {
+            hash<auto> info;
+            foreach string key in (HeaderInfoKeys) {
+                if (cx."header-info".hasKey(key)) {
+                    info{key} = cx."header-info"{key};
+                }
+            }
+            rv."header-info" = info;
+        }
+        return rv;
     }
 
     #! returns @ref True if the server should apply content encoding (compression) to the response body

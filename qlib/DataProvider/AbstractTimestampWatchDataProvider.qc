@@ -266,7 +266,7 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
         @note this method must not throw; an unusable timestamp skips one record, whereas an
         exception here would abort the whole cycle and stall every other record with it
     */
-    private *date getWatchRecordTimestamp(hash<auto> record) {
+    *date getWatchRecordTimestamp(hash<auto> record) {
         auto val = record{getTimestampField()};
         switch (val.typeCode()) {
             case NT_DATE:
@@ -312,6 +312,6 @@ public class AbstractTimestampWatchDataProvider inherits AbstractOrderedWatchDat
     abstract private list<hash<auto>> fetchRecords(date since);
 
     #! Returns the name of the event raised for each new record
-    abstract private string getEventName();
+    abstract string getEventName();
 }
 }

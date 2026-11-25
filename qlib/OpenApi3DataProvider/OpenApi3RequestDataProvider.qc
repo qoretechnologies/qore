@@ -141,7 +141,22 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
         if (request_type) {
             return request_type;
         }
+        # the schema's own fields are built in a type build of the schema, without the defaults of the REST client,
+        # so that a schema that is shared by every Program keeps them for every caller; the type with the defaults is
+        # then made from them outside the build (qore#6843)
+        AbstractDataProviderType rt = schema.runTypeBuild(AbstractDataProviderType sub () {
+            return buildRequestType();
+        });
+        if (rest) {
+            rt = buildRequestType(rest);
+        }
+        # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
+        # that caller and is not kept in the instance for the others (qore#7104)
+        return DataProvider::mayRegisterShared() ? (request_type = rt) : rt;
+    }
 
+    #! Builds the type of a request, with the request body defaults of the given REST client, if any
+    private AbstractDataProviderType buildRequestType(*AbstractRestClient rest_client) {
         HashDataType rv(getName() + ": request");
         bool required = False;
         # pio.parameters and op.parameters are hash<string, ParameterObject>; ParameterObject
@@ -157,7 +172,7 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
         *ParameterObject body = op.body ?? pio.body;
         if (body) {
             AbstractDataField body_field = schema.getFieldFromSchema("body", "REST request body argument",
-                body.schema, body.required ?? False, rest);
+                body.schema, body.required ?? False, rest_client);
             rv.addField(body_field);
             if (!required && body.required) {
                 required = True;
@@ -168,17 +183,14 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
             foreach hash<auto> i in (op.formData.pairIterator()) {
                 ParameterObject fp = i.value;
                 formData.addField(schema.getFieldFromSchema(i.key, "formData." + i.key, fp.schema,
-                    fp.required ?? False, rest));
+                    fp.required ?? False, rest_client));
                 if (!required && fp.required) {
                     required = True;
                 }
             }
             rv.addField(new QoreDataField("formData", "REST request form data", formData));
         }
-        AbstractDataProviderType rt = required ? rv : rv.getOrNothingType();
-        # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
-        # that caller and is not kept in the instance for the others (qore#7104)
-        return DataProvider::mayRegisterShared() ? (request_type = rt) : rt;
+        return required ? rv : rv.getOrNothingType();
     }
 
     #! Returns the description of the record type, if any
@@ -198,6 +210,11 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
     }
 
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
+        # the schema's own fields are built in a type build of the schema (qore#6843)
+        return schema.runTypeBuild(*hash<string, AbstractDataField> sub () { return buildRecordType(); });
+    }
+
+    private *hash<string, AbstractDataField> buildRecordType() {
         *ResponseObject response = getSuccessResponse();
         if (response.schema) {
             AbstractDataField response_field = schema.getResponseFieldFromSchema("body", "REST response body argument",
@@ -259,6 +276,12 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
 
     #! Returns a data provider type object for an OpenAPI 3 response
     private AbstractDataProviderType getResponseTypeIntern(ResponseObject response, string label) {
+        # the schema's own fields are built in a type build of the schema (qore#6843)
+        return schema.runTypeBuild(AbstractDataProviderType sub () { return buildResponseType(response, label); });
+    }
+
+    #! Builds a data provider type object for an OpenAPI 3 response
+    private AbstractDataProviderType buildResponseType(ResponseObject response, string label) {
         label += " response";
         HashDataType rv();
         if (response.schema) {

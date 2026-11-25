@@ -330,7 +330,7 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
 
         @param ex the exception information
     */
-    private logPollError(hash<ExceptionInfo> ex) {
+    logPollError(hash<ExceptionInfo> ex) {
         # Default: ignore; subclasses should override for proper logging
     }
 
@@ -352,7 +352,7 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
     #! Returns @ref True if the stop flag is set
     /** Useful for subclasses to check during long-running pollOnce() operations
     */
-    private bool isStopping() {
+    bool isStopping() {
         return stop_flag;
     }
 

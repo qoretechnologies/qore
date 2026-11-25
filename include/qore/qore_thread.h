@@ -141,8 +141,16 @@ DLLEXPORT void set_thread_resource(const ResolvedCallReferenceNode* rcr, const Q
  */
 DLLEXPORT int remove_thread_resource(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink);
 
-//! Returns a CallStackInfo hash for the caller's location, if available, otherwise returns nullptr
-/** @param offset the call stack entry offset
+//! Returns a CallStackInfo hash for the entry of the current thread's call stack at the given offset, if any
+/** @param offset the offset of the entry in the call stack, as in the list that get_thread_call_stack() returns:
+    \c 0 is the location of the current call, \c 1 (the default) that of the caller of the current function, and so
+    on
+
+    @return a CallStackInfo hash for the entry at \a offset, or nullptr if the call stack has no entry at that offset;
+    the caller owns the reference
+
+    @note Before %Qore 3.0 (issue 7564), any offset other than \c 0, also the default, returned nullptr; a module
+    that calls it with the default or another non-zero offset now gets a hash, which it must dereference
 */
 DLLEXPORT QoreHashNode* qore_get_parent_caller_location(size_t offset = 1);
 

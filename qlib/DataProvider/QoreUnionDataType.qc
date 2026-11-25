@@ -106,6 +106,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.11
     */
     QoreUnionDataType setUnionTypes(list<AbstractDataProviderType> types) {
+        checkChange("types");
         if (types.size() < 2) {
             throw "TYPE-ERROR", sprintf("union types require at least two alternatives; got %y", types);
         }
@@ -480,6 +481,11 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
             return self;
         }
         return copyUnion(map $1.getMandatoryType(), types);
+    }
+
+    #! Marks the types that the type holds as shared; see AbstractDataProviderType::freeze()
+    private freezeImpl() {
+        map $1.freeze(), types;
     }
 }
 }

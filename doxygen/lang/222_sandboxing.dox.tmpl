@@ -333,6 +333,20 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_private_access Classes Declared by Sandboxed Code and the Private Declarations of Trusted Classes
+
+    A class that sandboxed code declares can inherit a class that trusted code declares, such as a class of a library
+    module, but it has no private access to what the trusted class declares: the private members, methods, constants and static
+    class variables of the trusted class are as if they were \c private:internal for it, on every object, so that a
+    tenant's subclass cannot read or change the private state of the objects of the library that every Program shares,
+    nor call their private methods (see @ref sandboxed_class_private_access).  It can still override and implement the
+    private methods of the trusted class, and call the base class's version of a method that it overrides.
+
+    The rule is decided for a class when it is committed: a class parsed in a Program with a sandbox manager (or by
+    sandboxed code) is a class that sandboxed code declared.  A class that a Program parsed before a sandbox manager
+    was set for it keeps the private access that it had, so a host sets the manager before it parses code that it does
+    not trust.
+
     @subsection sandbox_program_capability Program Objects Are Capabilities
 
     A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the
@@ -667,6 +681,91 @@ authenticate();
     - a public static member of a standard module that the host sets cannot be hidden from sandboxed code: such a
       member is deprecated in favor of a setter and a getter that refuse sandboxed code, such as
       \c AbstractConnection::post_processing, which \c AbstractConnection::setPostProcessing() replaces
+
+    @since %Qore 3.0
+
+    @subsection sandbox_shared_objects Shared Objects
+
+    An object that trusted library code creates and keeps for every %Program of the process (in a constant, a static
+    variable or a cache of a module) is shared by the code of every tenant.  Trusted code marks such an object with
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()", usually in its constructor when
+    @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()" returns @ref True.  Code
+    that is sandboxed or acts for sandboxed code (as decided for @ref sandbox_process_wide_registries "registrations")
+    then cannot change the object's members, in any form of write (assignment, the other operators that change an
+    lvalue, \c remove and \c delete of a member or a slice of members, a write through a reference to a member,
+    the \c += operator with a hash on the object, a write to an element of a container that a member holds), nor
+    delete the object with the \c delete operator: each raises \c SHARED-OBJECT-ERROR before anything is changed.
+    Reading the members is not affected.
+
+    This applies to every code that runs for sandboxed code: the methods of the object's own class, Reflection and
+    the code that trusted library code runs for its caller.  A class whose objects maintain state that they build from
+    themselves, such as the caches that they build on first use, also in a call for sandboxed code, makes each such
+    change in an update scope with
+    @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()": a closure that a method of
+    a class of the object creates runs with the object writable for the code of that class's %Program only; each such
+    update computes the new state from the object itself, never from data that its caller gives.  A method that runs
+    code that its caller gives while it holds the object's state accepts only a closure of a trusted class from
+    sandboxed code (@ref Qore::SandboxManager::checkSharedObjectCallback() "SandboxManager::checkSharedObjectCallback()"),
+    and a method that changes the object on behalf of its caller can name the change it refuses with
+    @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()".  A closure that a
+    class creates and gives to other code changes the object only in an update scope that it opens itself; a closure
+    runs in one update scope only, so that code that obtains a closure that a class creates for an update scope, and
+    passes it to a method of the class that opens a scope with the code that it is given, can run its update once, if
+    it has not run yet, but never again: such a closure computes the new state from the object itself, never from data
+    that its caller gives, and a record that undoes a change (such as the undo records of the type build of a REST
+    schema) refuses to run outside the operation that recorded it, and more than once.
+
+    An update scope admits only the code that runs in it for the class that opened it: code that sandboxed code
+    supplied and that runs in the scope (a callback of the caller, a method of a class of a sandboxed %Program, the
+    destructor of an object of such a class), and any code that such code calls, also a method of the object's own
+    class, acts for sandboxed code: it cannot change the object, open another update scope or share objects.  When
+    that code returns, the scope's own code changes the object again.
+
+    Only code that may share objects
+    (@ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()") can mark an object with
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()": code that no sandbox governs, and the
+    code of a class of a shared object in an update scope for it (not code that sandboxed code called in the scope);
+    sandboxed code cannot, so a shared object is always one that trusted code created or built.  The types and fields
+    that a shared REST schema builds and caches, also for sandboxed code, are shared in this way when the build has
+    finished (see @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()"), so
+    that sandboxed code cannot change them.
+
+    What a shared object derives from the data of its caller is not kept in the shared object: a library class keeps
+    it in the per-%Program cache of the calling code
+    (@ref Qore::SandboxManager::setProgramCacheValue() "SandboxManager::setProgramCacheValue()" and
+    @ref Qore::SandboxManager::getProgramCacheValue() "SandboxManager::getProgramCacheValue()"), where only trusted code
+    of the %Program of a class of the object can read it, bounded, and released with the %Program or with the object
+    (@ref Qore::SandboxManager::releaseProgramCacheValues() "SandboxManager::releaseProgramCacheValues()"; in the
+    cache of a sandboxed %Program by that %Program's next use of its cache, so that releasing them never runs its code
+    in the caller's thread).  The shared REST
+    schemas write their caches only in their own type builds
+    (@ref RestSchemaValidator::AbstractRestSchemaValidator::runTypeBuild() "AbstractRestSchemaValidator::runTypeBuild()"),
+    which only the schema's code and the library code that builds its types run (sandboxed code cannot run a type build
+    of a shared schema, and code that sandboxed code supplied cannot change it in one): the types and fields asked for
+    outside a type build, with the data of whichever caller, are read from the schema's caches and otherwise built
+    without writing them and kept in the per-%Program cache, from which they are released with the schema; so are the
+    response types of types that the schema did not build, and, for every caller, the variants of the schema's types
+    with the request body defaults of a REST client: such a variant is a copy of the schema's own type that shares
+    every field and type of it but the fields with a default, and the code of the REST client runs before any type
+    build of the schema, never in one.  What the per-%Program cache keeps is frozen, as trusted code that sandboxed
+    code calls back uses the sandboxed %Program's cache: no code of the %Program can change it.  A schema object whose
+    document has been destroyed reads what it cached and builds nothing, and a schema that trusted code deserializes is
+    shared as one that it creates, and restores no type in its caches.  Setting the environment variable
+    \c QORE_SHARED_OBJECT_TRACE reports each refused change of a shared object, and each refused mark, on standard
+    error, to find the changes that a class must make in an update scope.
+
+    The REST and AsyncAPI schemas of the \c Swagger, \c OpenApi3 and \c AsyncApi modules and their schema objects
+    are marked in this way when trusted code creates them, so that a tenant cannot change a schema that a module
+    shares, such as the schema of a REST application, for every other tenant; a tenant can change the schemas that it
+    creates itself.
+
+    An object held in a member of a shared object is a separate object: it is protected only if it is marked itself
+    (the schema objects of a shared schema are).  The mark is not copied with the object: a copy is marked only if its
+    class marks it again, as the schema classes do when trusted code makes the copy.  An object that
+    \c Serializable::deserialize() creates runs no constructor, so a constructor that marks the object does not mark
+    it: trusted code that shares a deserialized object marks it with
+    @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.  This applies to the schemas that
+    serialized data provider types restore, which are not marked.
 
     @since %Qore 3.0
 
@@ -2000,6 +2099,7 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     |\c SANDBOX-CONFIG-ERROR|SandboxManager|Invalid configuration, such as a negative limit
     |\c SANDBOX-ISOLATION-ERROR|SandboxManager|Code of another @ref sandbox_isolation_domains "isolation domain" was to run in a trusted build that sandboxed code called, or its %Program was used there
     |\c SANDBOX-REGISTRATION-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change a @ref sandbox_process_wide_registries "process-wide registry or setting"
+    |\c SHARED-OBJECT-ERROR|SandboxManager|Code that is sandboxed or acts for sandboxed code tried to change or delete a @ref sandbox_shared_objects "shared object"
     |\c THREAD-CREATION-FAILURE|SandboxManager|Thread limit exceeded
     |Parse error|Parse Options|Code uses disabled functionality
 

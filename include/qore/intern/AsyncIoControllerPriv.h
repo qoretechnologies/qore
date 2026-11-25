@@ -1243,18 +1243,31 @@ public:
     //! Registers a submission of a poll operation without a C++ poll operation by its Qore object (qore#6531)
     /** The deletion of the object (qoreOpObjectDeleted()) cancels the operation with this controller; the
         registration ends with the operation's cache entry (PollInfo::cleanup()) or the submission that failed
+
+        @return the generation of the registration: an entry of the registry is keyed on the object and a generation,
+        so that the deleted mark of an object never applies to another object made later at its address, whatever
+        registration of the first object is left (qore#7168); the registration is ended and checked with it
     */
-    DLLLOCAL void registerQoreOp(const QoreObject* obj);
+    DLLLOCAL uint64_t registerQoreOp(const QoreObject* obj);
 
     //! Ends a registration made by registerQoreOp()
-    DLLLOCAL static void unregisterQoreOp(const QoreObject* obj);
+    DLLLOCAL static void unregisterQoreOp(const QoreObject* obj, uint64_t gen);
 
     //! Returns true if the Qore object of a registered poll operation was deleted
-    DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj);
+    DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj, uint64_t gen);
 
 #ifdef DEBUG
-    //! Debug-only: the number of objects in the registry of the operations without a C++ poll operation
+    //! Debug-only: the number of entries in the registry of the operations without a C++ poll operation
     DLLLOCAL static size_t dbgQoreOpRegisteredCount();
+
+    //! Debug-only: adds the entry that a registration of a deleted object at the address of \a obj leaves when it is
+    //! not ended (as qore#7167 did): a registration of \a obj is then made in a new generation (qore#7168)
+    /** @return the generation of the entry, which dbgQoreOpReleaseStale() removes
+    */
+    DLLLOCAL static uint64_t dbgQoreOpInjectStale(const QoreObject* obj);
+
+    //! Debug-only: removes the entry of the given generation added by dbgQoreOpInjectStale()
+    DLLLOCAL static void dbgQoreOpReleaseStale(uint64_t gen);
 #endif
 
     //! Called when the Qore object of a poll operation is deleted: a submitted operation without a C++ poll operation
@@ -1674,6 +1687,8 @@ private:
         //! For SubmitOp: the operation, which has no C++ poll operation, is registered by its Qore object (see
         //! registerQoreOp())
         bool submit_qop_registered = false;
+        //! For SubmitOp: the generation of the registration (qore#7168)
+        uint64_t submit_qop_gen = 0;
     };
 
     //! A cancellation that a CancelByProgram command deferred until the result of the operation's step (qore#6703)
@@ -1739,6 +1754,8 @@ private:
         //! true if the operation, which has no C++ poll operation, is registered by its Qore object (see
         //! registerQoreOp(); qore#6531): the entry unregisters it when it is cleaned up
         bool qop_registered = false;
+        //! the generation of the registration (qore#7168)
+        uint64_t qop_gen = 0;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         //! Whether the class of the operation has an onPollComplete() method: -1 = not looked up yet, 0 = no, 1 = yes

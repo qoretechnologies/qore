@@ -373,6 +373,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   modules loaded from source and compiled with qcc, as a module is initialized once in a process
         # - type-retirement-aot-parent (#7464): its script runs in child processes without an execution mode, with the
         #   modules loaded from source and compiled with qcc
+        # - self-held-program-module-decls-exit (#7533): its scripts run in child processes without an execution mode,
+        #   as the checks are of the exit of the process that holds the Program
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/qore/classes/type-retirement-aot-parent.qtest",
                                  "examples/test/ir/aot-standalone-format-floor/aot-standalone-format-floor.qtest",
@@ -421,8 +423,10 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
+                                 "examples/test/qore/classes/Program/self-held-program-module-decls-exit.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_poll_complete_notify.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_cancel_fork.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
                                  "examples/test/qore/functions/relative-date-range.qtest",
