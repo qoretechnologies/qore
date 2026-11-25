@@ -1079,16 +1079,25 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
 
     FunctionEntry* fe = func_list.findNode(fname);
 
+    // a variant added to a function of a namespace that a Program owns, which the namespace shares with a namespace
+    // that no Program owns (its copy of the static system namespace or of a module's), is the Program's: the entry
+    // gets its own copy of the function first (copy on write), as adding it to the shared function would add it to
+    // every namespace that shares it and keep what it names in the static namespace (qore#7588)
+    bool owned = ownedByProgram();
+    if (fe && fe->isSharedUnowned() && owned) {
+        // the copy takes every variant of the function; replaceFunction() does not throw
+        fe->replaceFunction(new QoreFunction(*fe->getFunction(), QoreParseOptions(), true));
+    }
+
     // a variant added to a namespace that a Program owns references the mortal declarations that it names, also those
-    // marked later (qore#7540); one added to a namespace that no Program owns, or to a function that the namespace
-    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs and
-    // references none: it would keep them until the static system namespace is deleted at library cleanup
+    // marked later (qore#7540); one added to a namespace that no Program owns is shared by the Programs and references
+    // none: it would keep them until the static system namespace is deleted at library cleanup
     BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v);
     bool runtime_variant = false;
     if (bv) {
-        if (ownedByProgram() && !(fe && fe->isSharedUnowned())) {
+        if (owned) {
             runtime_variant = !bv->isSharedOrigin();
-        } else if (getRoot() || module_owned || (fe && fe->isSharedUnowned())) {
+        } else if (getRoot() || module_owned) {
             bv->setSharedOrigin();
         }
     }

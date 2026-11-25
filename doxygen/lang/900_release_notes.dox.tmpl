@@ -2929,6 +2929,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a builtin function variant that a binary module adds at run time to a function of a Program's namespace that the
+      Program shares with the static system namespace or a module's namespace is the Program's only; it was added to
+      every Program (<a href="https://github.com/qoretechnologies/qore/issues/7588">issue 7588</a>)
     - fixed a memory-safety issue with the builtin declarations in a namespace that a binary module adds to a Program
       at run time, which are now freed with their Program only once nothing uses them
       (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>)

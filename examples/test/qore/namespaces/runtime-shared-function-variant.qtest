@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeSharedFunctionVariantTest
+
+#! A builtin variant added at run time to a function that a Program shares with the static system namespace is the
+#! Program's only
+/** A binary module can add a builtin variant to a function of a Program's namespace at run time
+    (QoreNamespace::addBuiltinVariant()); when the Program's namespace is a copy of a namespace that no Program owns
+    (the static system namespace or a module's), the function is shared with it: the Program's entry gets a copy of
+    the function first, so that the variant is not added to every Program that shares the function (qore#7588). The
+    variant is added with the debug function dbg_add_shared_variant() to Qore::dbg_shared_target(int), which returns
+    1; the variant (dbg_shared_target(string)) returns 2. The test needs a library with debugging.
+*/
+public class RuntimeSharedFunctionVariantTest inherits QUnit::Test {
+    public {
+        const Source = "sub add() { dbg_add_shared_variant(); }
+auto sub call(auto v) { return call_function(\"dbg_shared_target\", v); }
+auto sub direct(auto v) { return dbg_shared_target(v); }";
+
+        const CallSource = "auto sub call(auto v) { return call_function(\"dbg_shared_target\", v); }";
+    }
+
+    constructor() : QUnit::Test("runtime shared function variant", "1.0") {
+        addTestCase("the variant is the adding Program's", \ownTest());
+        addTestCase("other Programs and the static namespace do not get the variant", \otherTest());
+        addTestCase("a call parsed before the variant was added calls it", \parsedBeforeTest());
+        addTestCase("adding the variant twice", \twiceTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_shared_variant")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! returns a Program that can add the variant and call the function
+    private static Program getProgram() {
+        Program p(PO_NEW_STYLE);
+        p.parse(Source, "shared-variant");
+        return p;
+    }
+
+    ownTest() {
+        skipIfNoDebugging();
+        Program p = getProgram();
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("call", "x"), "before the add");
+        p.callFunction("add");
+        assertEq(2, p.callFunction("call", "x"), "the variant");
+        assertEq(1, p.callFunction("call", 5), "the static variant");
+    }
+
+    otherTest() {
+        skipIfNoDebugging();
+        Program before(PO_NEW_STYLE);
+        before.parse(CallSource, "before");
+        Program p = getProgram();
+        p.callFunction("add");
+        Program after(PO_NEW_STYLE);
+        after.parse(CallSource, "after");
+        foreach hash<auto> h in ({"label": "a Program created before", "pgm": before},
+                {"label": "a Program created after", "pgm": after}) {
+            assertThrows("RUNTIME-OVERLOAD-ERROR", \h.pgm.callFunction(), ("call", "x"), h.label);
+            assertEq(1, h.pgm.callFunction("call", 5), h.label + ": the static variant");
+        }
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \call_function(), ("dbg_shared_target", "x"), "the main Program");
+        # the adding Program still has it after the others were created
+        assertEq(2, p.callFunction("call", "x"), "the adding Program");
+    }
+
+    parsedBeforeTest() {
+        skipIfNoDebugging();
+        Program p = getProgram();
+        # direct() was parsed when only dbg_shared_target(int) existed; its call is resolved at run time
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("direct", "x"), "before the add");
+        p.callFunction("add");
+        assertEq(2, p.callFunction("direct", "x"), "after the add");
+    }
+
+    twiceTest() {
+        skipIfNoDebugging();
+        Program p = getProgram();
+        # the second add copies nothing more: the Program's entry already has its own function, which frees the
+        # duplicate variant
+        p.callFunction("add");
+        p.callFunction("add");
+        assertEq(2, p.callFunction("call", "x"), "the variant");
+        Program q(PO_NEW_STYLE);
+        q.parse(CallSource, "q");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \q.callFunction(), ("call", "x"), "another Program");
+    }
+}

@@ -40,6 +40,7 @@
 
 #include <map>
 #include <string>
+#include <atomic>
 
 class qore_ns_private;
 
@@ -52,7 +53,9 @@ private:
     FunctionEntry(const FunctionEntry& old) = delete;
 
 protected:
-    QoreFunction* func;
+    //! the function; atomic, as a Program's entry can be given a copy of a shared function at run time while other
+    //! threads call through it (replaceFunction(), qore#7588)
+    std::atomic<QoreFunction*> func;
     std::string name;
     qore_ns_private* ns;
     //! true if the function is shared with a namespace that no Program owns (the static system namespace or the
@@ -62,7 +65,12 @@ protected:
     uint64_t decl_seq = qore_next_decl_seq();
 
     DLLLOCAL ~FunctionEntry() {
-        func->deref();
+        fn()->deref();
+    }
+
+    //! returns the function
+    DLLLOCAL QoreFunction* fn() const {
+        return func.load(std::memory_order_acquire);
     }
 
 public:
@@ -110,50 +118,64 @@ public:
     }
 
     DLLLOCAL QoreFunction* getFunction() const {
-        return func;
+        return fn();
+    }
+
+    //! Gives the entry its own copy of its function, which it shares with a namespace that no Program owns, so that a
+    //! builtin variant added at run time to the function of a Program's namespace is the Program's only (qore#7588)
+    /** Called under the runtime namespace write lock; a thread calling through the entry meanwhile uses the function
+        that it read, which the namespace that it is shared with keeps.  Code compiled before keeps calling the
+        function that it was compiled with, which does not have the variant
+    */
+    DLLLOCAL void replaceFunction(QoreFunction* nf) {
+        assert(shared_unowned);
+        QoreFunction* old = func.exchange(nf, std::memory_order_acq_rel);
+        shared_unowned = false;
+        old->deref();
     }
 
     DLLLOCAL QoreFunction* getFunction(bool runtime) const {
-        if (runtime && func->committedEmpty())
+        QoreFunction* f = fn();
+        if (runtime && f->committedEmpty())
             return nullptr;
-        return func;
+        return f;
     }
 
     DLLLOCAL const char* getName() const {
-        return name.empty() ? func->getName() : name.c_str();
+        return name.empty() ? fn()->getName() : name.c_str();
     }
 
     DLLLOCAL int parseInit() {
-        return func->parseInit(ns);
+        return fn()->parseInit(ns);
     }
 
     DLLLOCAL void parseCommit() {
-        func->parseCommit();
+        fn()->parseCommit();
     }
 
     // returns -1 if the entry can be deleted
     DLLLOCAL int parseRollback() {
         // if there are no committed variants, then return -1 to erase the function entry entirely
-        if (func->committedEmpty())
+        if (fn()->committedEmpty())
             return -1;
 
         // otherwise just roll back the pending variants
-        func->parseRollback();
+        fn()->parseRollback();
         return 0;
     }
 
     DLLLOCAL ResolvedCallReferenceNode* makeCallReference(const QoreProgramLocation* loc) const;
 
     DLLLOCAL bool isPublic() const {
-        return func->hasPublic();
+        return fn()->hasPublic();
     }
 
     DLLLOCAL bool isUserPublic() const {
-        return func->hasUserPublic();
+        return fn()->hasUserPublic();
     }
 
     DLLLOCAL bool hasBuiltin() const {
-        return func->hasBuiltin();
+        return fn()->hasBuiltin();
     }
 
     DLLLOCAL void updateNs(qore_ns_private* ns) {
