@@ -33,6 +33,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ql_string.h"
+#include "qore/intern/QoreTransliteration.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/UnicodeByteOrder.h"
@@ -1238,6 +1239,30 @@ int width = char_width(str);
 */
 int char_width(softstring str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return str->getCharWidth(xsink);
+}
+
+//! Returns a copy of the input with bytes mapped by the given transliteration patterns
+/** The source and target patterns can be supplied at run time. As with the @ref transliteration_operator,
+    an inclusive range such as \c a-z expands in byte order. A backslash quotes the next byte, with
+    the escapes <tt>\\n</tt>, <tt>\\t</tt>, <tt>\\r</tt>, <tt>\\b</tt> and <tt>\\f</tt> for control characters.
+    Patterns have no delimiters. If a source byte occurs twice, its first mapping is used. A short target repeats
+    its last byte. Unmatched bytes are copied. All three arguments are processed in the default string encoding.
+
+    @param input the string to translate
+    @param source the bytes to match
+    @param target the replacement bytes
+    @return the translated string in the default encoding
+    @throw TRANSLITERATION-ERROR invalid range, unfinished escape or nonempty source with an empty target
+    @par Example
+    @code{.py}
+    string lower = "a-z";
+    string upper = "A-Z";
+    string label = transliterate("Box 12", lower, upper);  # "BOX 12"
+    @endcode
+    @since %Qore 3.0
+*/
+string transliterate(string input, string source, string target) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return QoreTransliteration::translate(*input, *source, *target, xsink);
 }
 
 //! Returns a string in all lower-case characters based on the argument passed
