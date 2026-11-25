@@ -2234,22 +2234,60 @@ QoreSandboxManager* qore_program_private::getOwnSandboxManagerRef() {
     return nullptr;
 }
 
-bool qore_object_program_is_sandboxed(const QoreObject* obj) {
-    QoreProgram* pgm = obj->getProgram();
-    if (!pgm) {
-        return false;
+namespace {
+//! Returns true if the code that declares the class, or one of its base classes, is sandboxed (qore#7576)
+/** The Program whose code declares a class is its source Program (qore_class_private::spgm), also for a class that
+    was imported into another Program, whose namespace then holds it; once that Program has released the class, the
+    state that it had then is used (see qore_class_private::isSandboxedCode()).  A builtin class is trusted.
+
+    @param qc the class
+    @param id if not null, set to the ID of the Program that declares the first sandboxed class found, the class
+    itself before its base classes
+*/
+bool qore_class_declared_by_sandboxed_code(const qore_class_private& qc, qore_program_id_t* id) {
+    if (!qc.sys) {
+        // spgm is cleared under the lock before the Program can be freed (see getReferencedSourceProgram())
+        std::lock_guard<std::mutex> al(qc.dataLock());
+        QoreProgram* p = qc.spgm.load();
+        if (p) {
+            if (qore_program_is_sandboxed(p)) {
+                if (id) {
+                    *id = qore_program_private::get(*p)->getProgramId();
+                }
+                return true;
+            }
+        } else if (qc.released_sandboxed.load()) {
+            if (id) {
+                *id = qc.released_spgm_id.load();
+            }
+            return true;
+        }
     }
-    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
-    return static_cast<bool>(sm);
+    if (qc.scl) {
+        for (const auto& i : *qc.scl) {
+            if (i->sclass && qore_class_declared_by_sandboxed_code(*qore_class_private::get(*i->sclass), id)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+}
+
+bool qore_object_program_is_sandboxed(const QoreObject* obj) {
+    if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), nullptr)) {
+        return true;
+    }
+    QoreProgram* pgm = obj->getProgram();
+    return pgm && qore_program_is_sandboxed(pgm);
 }
 
 bool qore_object_sandboxed_program_id(const QoreObject* obj, qore_program_id_t& id) {
-    QoreProgram* pgm = obj->getProgram();
-    if (!pgm) {
-        return false;
+    if (qore_class_declared_by_sandboxed_code(*qore_class_private::get(*obj->getClass()), &id)) {
+        return true;
     }
-    ReferenceHolder<QoreSandboxManager> sm(qore_program_private::get(*pgm)->getSandboxManagerRef(), nullptr);
-    if (!sm) {
+    QoreProgram* pgm = obj->getProgram();
+    if (!pgm || !qore_program_is_sandboxed(pgm)) {
         return false;
     }
     id = qore_program_private::get(*pgm)->getProgramId();
