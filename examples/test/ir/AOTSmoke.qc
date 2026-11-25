@@ -11398,12 +11398,8 @@ exit(0);
         in the fresh process, and the program fails instead of running in UTC.
     */
     testPathDateLiteralZone() {
-        string dir = sprintf("/tmp/aot_tz_%d_%d", getpid(), rand());
-        mkdir(dir);
-        on_exit {
-            unlink(dir + "/zone.tzif");
-            rmdir(dir);
-        }
+        TmpDir tmp("aot_tz_");
+        string dir = tmp.path;
         {
             File src();
             src.open2(get_script_dir() + "/../qore/vars/fixtures/tzif/rfc9636/b4-jerusalem.tzif");
@@ -11457,7 +11453,8 @@ printf(\"%s %s %s %s %s\\n\", L[0].format(\"IF\"), L[1].format(\"IF\"), H.w.form
             string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1; echo EXIT=$?", libqore_dir,
                 paths.out));
             assertRegex("EXIT=[1-9]", out, "qcc -O" + opt + " without the zone file");
-            assertNRegex("\\+00:00|Z ", out, "qcc -O" + opt + " without the zone file");
+            assertNRegex("[0-9]T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[-+][0-9]{2}:[0-9]{2})", out,
+                "qcc -O" + opt + " without the zone file");
         }
     }
 
@@ -11467,12 +11464,8 @@ printf(\"%s %s %s %s %s\\n\", L[0].format(\"IF\"), L[1].format(\"IF\"), H.w.form
         dates in UTC.
     */
     testPathDateLiteralZoneModule() {
-        string dir = sprintf("/tmp/aot_tzmod_%d_%d", getpid(), rand());
-        mkdir(dir);
-        on_exit {
-            map unlink(dir + "/" + $1), ("zone.tzif", "TzPathMod.qm", "TzPathMod.qmod", "plain.q", "restricted.q");
-            rmdir(dir);
-        }
+        TmpDir tmp("aot_tzmod_");
+        string dir = realpath(tmp.path);
         {
             File src();
             src.open2(get_script_dir() + "/../qore/vars/fixtures/tzif/rfc9636/b4-jerusalem.tzif");
@@ -11480,7 +11473,7 @@ printf(\"%s %s %s %s %s\\n\", L[0].format(\"IF\"), L[1].format(\"IF\"), H.w.form
             dst.open2(dir + "/zone.tzif", O_WRONLY | O_CREAT | O_TRUNC);
             dst.write(src.readBinary(-1));
         }
-        string path = realpath(dir + "/zone.tzif");
+        string path = dir + "/zone.tzif";
         File f();
         f.open2(dir + "/TzPathMod.qm", O_WRONLY | O_CREAT | O_TRUNC);
         f.write("%modern\n%set-time-zone " + path + "
@@ -11501,9 +11494,15 @@ public namespace TzPathMod {
         f.write("%modern\n%requires TzPathMod\nprintf(\"%s %s\\n\", TzPathMod::Winter.format(\"IF\"), "
             "TzPathMod::summer());\n");
         f.close();
+        # a restricted Program loads the module; with PRELOAD set, the host has loaded the module's zone before; with
+        # NLC set, the Program has PO_NO_LOCALE_CONTROL, so it ignores the module's %set-time-zone directive, and only
+        # the module's date literals name the zone
         f.open2(dir + "/restricted.q", O_WRONLY | O_CREAT | O_TRUNC);
-        f.write("%modern\n%no-child-restrictions\nProgram p(PO_NO_FILESYSTEM);\ntry {\n"
-            "    p.parse(\"%requires TzPathMod\\nstring sub t() { return TzPathMod::summer(); }\", \"r\");\n"
+        f.write("%modern\n%no-child-restrictions\n"
+            "if (ENV.PRELOAD) {\n    TimeZone tz(ENV.PRELOAD);\n}\n"
+            "Program p(PO_NO_FILESYSTEM | (ENV.NLC ? PO_NO_LOCALE_CONTROL : 0));\ntry {\n"
+            "    p.parse(\"%requires TzPathMod\\nstring sub t() { return TzPathMod::Winter.format(\\\"IF\\\") + \\\" \\\" "
+            "+ TzPathMod::summer(); }\", \"r\");\n"
             "    printf(\"%s\\n\", p.callFunction(\"t\"));\n"
             "} catch (hash<ExceptionInfo> ex) {\n    printf(\"%s: %s\\n\", ex.err, ex.desc);\n}\n");
         f.close();
@@ -11519,10 +11518,24 @@ public namespace TzPathMod {
             assertEq(expected, backquote(sprintf("%s %s -b --exec-mode=%s %s/plain.q 2>&1", env, qore_bin, mode,
                 dir)), mode);
         }
-        string out = backquote(sprintf("%s %s -b %s/restricted.q 2>&1", env, qore_bin, dir));
-        assertRegex("^MODULE-LOAD-ERROR: .*ILLEGAL-FILESYSTEM-ACCESS|restricted code can load time zone regions only",
-            out, "restricted Program");
-        assertNRegex("\\+0[023]:00", out, "restricted Program");
+        # each case: the variables of the run, and the error expected: the directive's or the date literal's
+        list<list<string>> cases = (
+            ("", "the %set-time-zone directive cannot name a zoneinfo file path in a restricted Program"),
+            ("PRELOAD=" + path, "the %set-time-zone directive cannot name a zoneinfo file path in a restricted Program"),
+            ("NLC=1", "the time zone of a date literal is the zoneinfo file path '" + path + "', which cannot be "
+                "loaded in a restricted Program"),
+            # the zone is loaded already, but the restricted Program cannot use it, as in a fresh process
+            ("NLC=1 PRELOAD=" + path, "the time zone of a date literal is the zoneinfo file path '" + path + "', which "
+                "cannot be loaded in a restricted Program"),
+        );
+        foreach list<string> c in (cases) {
+            string out = backquote(sprintf("%s %s %s -b %s/restricted.q 2>&1", env, c[0], qore_bin, dir));
+            string name = "restricted Program [" + c[0] + "]";
+            assertRegex("^MODULE-LOAD-ERROR: ", out, name);
+            assertTrue(out.find(c[1]) >= 0, name + ": " + out);
+            # no date at all, in the zone's offsets or in UTC
+            assertNRegex("[0-9]T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[-+][0-9]{2}:[0-9]{2})", out, name);
+        }
     }
 
     testFixedOffsetDateLiteralZone() {
