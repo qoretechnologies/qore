@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - loads the optional native PDF module and exercises its PoDoFo and PDFium capabilities
+# Copyright 2026 Qore Technologies, s.r.o. MIT License
+%modern
+%requires QUnit
+%requires FsUtil
+%requires json
+%requires DataProvider
+%requires ProviderIndex
+%requires ../../TestInterpreter.qm
+%try-module pdf
+%define NoPdf
+%endtry
+%try-module msgpack
+%define NoMsgPack
+%endtry
+%exec-class NativePdfDiscoveryTest
+
+class NativePdfDiscoveryTest inherits QUnit::Test {
+    constructor() : Test("Native PDF discovery", "1.0", \ARGV) {
+        addTestCase("native PDF factory and published actions", \discovery());
+        set_return_value(main());
+    }
+
+    private static string quote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    discovery() {
+%ifdef NoMsgPack
+        testSkip("the published index requires msgpack");
+%endif
+        assertEq("PdfDataProvider", DataProvider::FactoryMap.pdf);
+        assertEq("PdfCoDataProvider", DataProvider::FactoryMap.pdfco);
+        assertTrue(inlist("PdfDataProvider", DataProvider::FactoryModuleList));
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        *AbstractDataProviderFactory factory = DataProvider::getFactory("pdf");
+        hash<auto> report = ProviderIndex::createDataProviderIndex(NOTHING, dir, <ProviderIndexCreateOptions>{
+            "apps": ("Qore", "PDF"), "workers": 0, "load_environment": False, "load_typescript_actions": False,
+            "load_known_factories": False,
+        }).summary.qualification;
+        int rc;
+        string out = backquote(quote(TestInterpreter::qore_interpreter()) + " "
+            + quote(get_script_dir() + "/pdf-discovery/read-index.q") + " " + quote(dir) + " 2>&1", \rc);
+        assertEq(0, rc, out);
+        hash<auto> indexed = parse_json(out);
+%ifdef NoPdf
+        assertNothing(factory);
+        assertEq({}, indexed);
+        assertTrue(inlist("PDF", map $1.app, report.unavailable));
+%else
+        if (!factory) {
+            testSkip("native pdf has no installed PdfDataProvider module");
+        }
+        assertTrue(report.complete);
+        assertEq("pdf", factory.getName());
+        foreach string name in (("list-form-fields", "get-form-data", "fill-form")) {
+            assertEq("PDF", indexed{name}.app);
+            assertEq(name, indexed{name}.action);
+            assertEq("/document/" + name, indexed{name}.path);
+            assertEq("PdfDataProvider", indexed{name}.cls_mod);
+            assertTrue(indexed{name}.desc.val());
+        }
+        assertEq(Pdf::PdfRenderer::isAvailable(), indexed.hasKey("render-page"));
+        assertEq(Pdf::PdfRenderer::isAvailable(), indexed.hasKey("extract-text"));
+        string blank = dir + "/blank.pdf";
+        string form = dir + "/form.pdf";
+        string filled = dir + "/filled.pdf";
+        Pdf::PdfWriter writer();
+        writer.addTextPage("Shipment receipt", 612.0, 792.0);
+        writer.save(blank);
+        Pdf::PdfEditor editor(blank);
+        editor.createFormField("reference", "text", 0, 100.0, 700.0, 120.0, 20.0);
+        editor.createFormField("recipient", "text", 0, 100.0, 670.0, 120.0, 20.0);
+        editor.createFormField("received", "checkbox", 0, 100.0, 640.0, 20.0, 20.0);
+        editor.save(form);
+        hash<string, AbstractDataProvider> providers;
+        foreach string name in (keys indexed) {
+            AbstractDataProvider provider = factory.create();
+            foreach string part in (indexed{name}.path[1..].split("/")) {
+                provider = provider.getChildProviderEx(part);
+            }
+            assertTrue(provider.supportsRequest());
+            providers{name} = provider;
+        }
+        hash<auto> values = {"reference": "A-7", "recipient": "Ada", "received": True};
+        assertEq(3, providers."list-form-fields".doRequest({"input_path": form}).field_count);
+        assertEq(3, providers."fill-form".doRequest({"input_path": form, "output_path": filled,
+            "form_data": values}).fields_filled);
+        assertEq(values, providers."get-form-data".doRequest({"input_path": filled}).data);
+        if (indexed.hasKey("render-page")) {
+            hash<auto> args = {"input_path": filled, "page_index": 0};
+            hash<auto> rendered = providers."render-page".doRequest(args + {"dpi": 72});
+            assertEq("BGRA", rendered.format);
+            assertTrue(rendered.width > 0 && rendered.height > 0);
+            assertRegex("Shipment receipt", providers."extract-text".doRequest(args).text);
+        }
+%endif
+    }
+}

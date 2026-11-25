@@ -1755,6 +1755,8 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
 
 
     @section dataprovider_v3_13 DataProvider v3.13
+    - @ref DataProvider::DataProvider::listKnownFactories() "factory discovery" includes the optional native
+      PDF provider and its installed actions
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
 
