@@ -401,7 +401,8 @@ static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, Ex
     there is no parse
 */
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    // a short string value is inline: read through the helper
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
     int64 variant = HARD_QORE_VALUE_INT(params, 1);
     // "outer::inner": the declarations are in a subnamespace of the namespace that is added
     std::string full = name->c_str();
@@ -1953,7 +1954,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
         "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
-        "dbg_finish_hold",
+        "dbg_finish_hold", "type_wait_entry", "type_epoch_holds", "type_tombstones", "generic_cache_registry",
+        "type_owner_registry", "type_info_registry",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -8434,6 +8436,47 @@ public:
         reg_close_checked = true;
     }
 
+    //! The descriptors that the event loop of runConnectCloseRegistered() registers and removes, and the gate that
+    //! keeps the hold of the attempt's descriptor that its registration has until the test's close of the socket has
+    //! returned
+    struct RegCloseLog {
+        std::mutex l;
+        std::condition_variable cond;
+        std::vector<int> registered;
+        std::vector<int> removed;
+        //! the close's socket, for the hook after the close's shutdown (shutdown_first)
+        qore_socket_private* sock = nullptr;
+        //! the descriptor whose removal waits for the close; -1 until the test closes the socket
+        int gate_fd = -1;
+        //! the I/O thread is removing the registration of gate_fd
+        bool gate_reached = false;
+        //! the test's close of the socket has returned
+        bool close_done = false;
+        //! the removal of gate_fd did not wait for the close (the guard limit expired)
+        bool gate_expired = false;
+        //! the close's shutdown was held until the I/O thread was removing the registration (shutdown_first)
+        bool held_after_shutdown = false;
+    };
+    static inline std::atomic<RegCloseLog*> reg_close_log{nullptr};
+
+    //! Holds the close of runConnectCloseRegistered() after its shutdown until the I/O thread, woken by the shutdown,
+    //! has ended the connection and is removing its registration (qore_dbg_after_pre_close_shutdown)
+    /** Called in a close, which can be made by a destructor: it throws nothing; a failed wait does not hold the close,
+        which the test then sees (held_after_shutdown is not set)
+    */
+    static void regCloseAfterShutdown(qore_socket_private* sp) noexcept {
+        RegCloseLog* r = reg_close_log.load(std::memory_order_acquire);
+        if (!r || sp != r->sock) {
+            return;
+        }
+        try {
+            std::unique_lock<std::mutex> g(r->l);
+            // the guard limit only guards against a hang
+            r->held_after_shutdown = r->cond.wait_for(g, std::chrono::seconds(30), [r]() { return r->gate_reached; });
+        } catch (...) {
+        }
+    }
+
     //! A connection that an I/O thread runs, closed by another thread while the I/O thread has the attempt's
     //! descriptor registered, neither closes nor uses the attempt's number once it could belong to another descriptor,
     //! and fails as closed at once (qore#6962, qore#7003)
@@ -8446,9 +8489,33 @@ public:
         have run, and must not get the attempt's number; then the operation must fail as closed, with neither a cancel
         nor its time limit, which cannot end it before.  The loop's removal of the registration must not fail, the
         socket must not take over the new descriptor, and nothing may close it.
+
+        Socket::close() shuts the descriptor down before it gives it up (qore_socket_private::prepareForClose()): the
+        shutdown ends the attempt in progress, whose event can wake the I/O thread, which then ends the connection (as
+        closed, see runConnectCloseInPreClose()) and removes its registration, and so releases the registration's hold
+        of the descriptor, before the close gives the descriptor up; the close then has no registration to wake
+        (qore#7478).  The order is therefore forced in each variant:
+        - without @p shutdown_first, the wake first: the I/O thread is held before its command queue
+          (dbgHoldIoCommands()) from before the close until the close has returned, so that it handles no event of the
+          shutdown in between; once released, it takes the close's wake (which it drains after its commands, before it
+          polls its event loop again) and runs the operation, which fails as closed.  The test checks that the thread
+          was held for the whole close and that the attempt's registration was removed only after the close
+        - with @p shutdown_first, the shutdown's event first: the close is held after its shutdown
+          (qore_dbg_after_pre_close_shutdown) until the I/O thread, woken by the shutdown, has ended the connection and
+          is removing its registration, which is the order that a loaded host can give the close otherwise (the close
+          runs on the global controller's I/O thread, which the hook holds); in this order the close has no hold of its
+          own to wake (only the one that the test's gate keeps), so the variant checks the result of the operation and
+          not the wake
+
+        In both, the event loop's removal of the attempt's descriptor waits for the test's close to return
+        (dbgSetBeforeRemove()): the loop has dropped the registration from its map then, but the removal from the
+        system and the release of the registration's hold of the descriptor follow the hook, so the hold is kept until
+        the close has given the descriptor up, and the close finds it to wake.
     */
-    static void runConnectCloseRegistered(UnitTestCounters& c, bool direct) {
-        const std::string when = direct ? " (registered, closed directly)" : " (registered)";
+    static void runConnectCloseRegistered(UnitTestCounters& c, bool direct, bool shutdown_first = false) {
+        assert(!direct || !shutdown_first);
+        const std::string when = direct ? " (registered, closed directly)"
+            : (shutdown_first ? " (registered, the shutdown's event first)" : " (registered)");
         ExceptionSink xsink;
         std::vector<int> fds;
         struct FdCloser {
@@ -8480,31 +8547,46 @@ public:
             return;
         }
         // the descriptors that the loop registers and removes; they outlive the I/O thread
-        struct RegLog {
-            std::mutex l;
-            std::condition_variable cond;
-            std::vector<int> registered;
-            std::vector<int> removed;
-        } rlog;
+        RegCloseLog rlog;
         struct Cleanup {
             AsyncIoControllerPriv* ctrl;
             ExceptionSink& xsink;
             ~Cleanup() {
+                qore_dbg_after_pre_close_shutdown.store(nullptr, std::memory_order_release);
+                reg_close_log.store(nullptr, std::memory_order_release);
                 xsink.clear();
                 ctrl->stopClear(&xsink);
                 xsink.clear();
             }
         } cleanup{*ctrl, xsink};
         ctrl->setMaxIoThreads(1, &xsink);
-        // set before the I/O thread starts, which is the only thread that uses the loop then
-        ctrl->io_threads[0]->loop->dbgSetAfterRegister([&rlog](int fd) {
-            std::lock_guard<std::mutex> g(rlog.l);
-            rlog.registered.push_back(fd);
-            rlog.cond.notify_all();
+        // set before the I/O thread starts, which is the only thread that uses the loop then; the hooks run in the
+        // event loop and throw nothing: a registration that cannot be recorded fails the checks that look for it
+        ctrl->io_threads[0]->loop->dbgSetAfterRegister([&rlog](int fd) noexcept {
+            try {
+                std::lock_guard<std::mutex> g(rlog.l);
+                rlog.registered.push_back(fd);
+                rlog.cond.notify_all();
+            } catch (...) {
+            }
         });
-        ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&rlog](int fd) {
-            std::lock_guard<std::mutex> g(rlog.l);
-            rlog.removed.push_back(fd);
+        // the removal of the attempt's descriptor waits for the test's close: the loop has dropped the registration
+        // from its map then, but the removal from the system and the release of the registration's hold of the
+        // descriptor follow this hook, so the hold is kept until the close has given the descriptor up (qore#7478); a
+        // removal that cannot be recorded fails the check that looks for it, and a failed wait does not hold it
+        ctrl->io_threads[0]->loop->dbgSetBeforeRemove([&rlog](int fd) noexcept {
+            try {
+                std::unique_lock<std::mutex> g(rlog.l);
+                rlog.removed.push_back(fd);
+                if (fd == rlog.gate_fd && !rlog.close_done) {
+                    rlog.gate_reached = true;
+                    rlog.cond.notify_all();
+                    // the guard limit only guards against a hang
+                    rlog.gate_expired = !rlog.cond.wait_for(g, std::chrono::seconds(30),
+                        [&rlog]() { return rlog.close_done; });
+                }
+            } catch (...) {
+            }
         });
         ctrl->start(&xsink);
         bool ready = !xsink && ctrl->waitReady(5000, &xsink);
@@ -8570,22 +8652,88 @@ public:
         reg_close_reuse_src = sp[0];
         reg_close_reuse_fd = -1;
         reg_close_checked = false;
-        qore_dbg_before_close_wakes.store(regCloseCheck, std::memory_order_release);
-        if (direct) {
-            // the C++ close that bypasses the controller (as an HTTP/2 abort or the destructor of an HTTP client)
-            qore_socket_private::get(*sock->priv->socket)->close_and_reset();
-        } else {
-            sock->close();
+        // without shutdown_first, the I/O thread is held before its command queue for the whole close, so that it
+        // handles no event of the close's shutdown before the close's wake (see above)
+        bool io_held_before = false;
+        bool io_held_after = false;
+        {
+            // the I/O thread is released after the gate below (so that the operation's removal, which follows the
+            // release, does not wait at the gate), also if the close throws; nothing leaves a destructor
+            struct IoHoldRelease {
+                AsyncIoControllerPriv* ctrl;
+                bool active;
+                ~IoHoldRelease() {
+                    if (active) {
+                        try {
+                            ctrl->dbgHoldIoCommands(false);
+                        } catch (...) {
+                        }
+                    }
+                }
+            } io_hold_release{*ctrl, !shutdown_first};
+            if (!shutdown_first) {
+                ctrl->dbgHoldIoCommands(true);
+                io_held_before = ctrl->dbgWaitIoCommandsHeld(10000);
+            }
+            // the removal of the attempt's descriptor is let go once the close has returned, also if it throws;
+            // nothing leaves a destructor: if the lock fails, the removal waits for the guard limit, which the test
+            // sees (gate_expired)
+            struct GateRelease {
+                RegCloseLog& r;
+                ~GateRelease() {
+                    try {
+                        std::lock_guard<std::mutex> g(r.l);
+                        r.close_done = true;
+                        r.cond.notify_all();
+                    } catch (...) {
+                    }
+                }
+            } gate_release{rlog};
+            {
+                std::lock_guard<std::mutex> g(rlog.l);
+                rlog.gate_fd = attempt_fd;
+                rlog.sock = qore_socket_private::get(*sock->priv->socket);
+            }
+            if (shutdown_first) {
+                reg_close_log.store(&rlog, std::memory_order_release);
+                qore_dbg_after_pre_close_shutdown.store(regCloseAfterShutdown, std::memory_order_release);
+            }
+            qore_dbg_before_close_wakes.store(regCloseCheck, std::memory_order_release);
+            if (direct) {
+                // the C++ close that bypasses the controller (as an HTTP/2 abort or the destructor of an HTTP client)
+                qore_socket_private::get(*sock->priv->socket)->close_and_reset();
+            } else {
+                sock->close();
+            }
+            qore_dbg_before_close_wakes.store(nullptr, std::memory_order_release);
+            qore_dbg_after_pre_close_shutdown.store(nullptr, std::memory_order_release);
+            reg_close_log.store(nullptr, std::memory_order_release);
+            if (!shutdown_first) {
+                // returns at once if the thread is still held
+                io_held_after = ctrl->dbgWaitIoCommandsHeld(10000);
+            }
         }
-        qore_dbg_before_close_wakes.store(nullptr, std::memory_order_release);
+        if (shutdown_first) {
+            std::lock_guard<std::mutex> g(rlog.l);
+            UT_ASSERT(c, rlog.held_after_shutdown,
+                ("the I/O thread ended the connection between the shutdown of the close and the close" + when).c_str());
+        } else {
+            UT_ASSERT(c, io_held_before && io_held_after,
+                ("the I/O thread is held before its command queue for the whole close" + when).c_str());
+        }
         int reuse_fd = reg_close_reuse_fd;
         if (reuse_fd >= 0) {
             fds.push_back(reuse_fd);
         }
-        UT_ASSERT(c, reg_close_checked, ("the close wakes the registration of the descriptor" + when).c_str());
-        UT_ASSERT(c, reuse_fd >= 0 && reuse_fd != attempt_fd,
-            ("the attempt's number is not given to another descriptor while the registered operation has it"
-                + when).c_str());
+        // with shutdown_first, the hold that the close wakes is the one that the test's gate keeps past the removal of
+        // the registration (without the gate, the step that the shutdown's event ran has released it, and the close
+        // has nothing to wake, which is correct: qore#7478): these two checks are of the wake order only
+        if (!shutdown_first) {
+            UT_ASSERT(c, reg_close_checked, ("the close wakes the registration of the descriptor" + when).c_str());
+            UT_ASSERT(c, reuse_fd >= 0 && reuse_fd != attempt_fd,
+                ("the attempt's number is not given to another descriptor while the registered operation has it"
+                    + when).c_str());
+        }
 
         // the wake runs the operation, which fails as closed: neither its time limit nor a cancel ends it
         bool timed_out = false;
@@ -8597,7 +8745,10 @@ public:
             const QoreHashNode* exh = ex.getType() == NT_HASH ? ex.get<const QoreHashNode>() : nullptr;
             QoreValue err = exh ? exh->getKeyValue("err") : QoreValue();
             std::string what = err.getType() == NT_STRING ? QoreStringDataHelper(err).c_str() : "no error";
-            // not EVENT-LOOP-ERROR: the removal of the inert descriptor's registration does not fail
+            // with shutdown_first, the step that the shutdown's event ran failed as closed (the shutdown changed the
+            // descriptor generation), and its result was settled before the gated removal of its registration, which
+            // this therefore does not check; otherwise the close's wake ran the operation, and the result is not
+            // EVENT-LOOP-ERROR: the removal of the inert descriptor's registration does not fail
             UT_ASSERT(c, what == "SOCKET-CLOSED", ("the closed connection fails as closed: " + what + when).c_str());
         }
         xsink.clear();
@@ -8618,6 +8769,13 @@ public:
                 removed = removed || fd == attempt_fd;
             }
             UT_ASSERT(c, removed, ("the loop removes the number of the inert descriptor" + when).c_str());
+            UT_ASSERT(c, !rlog.gate_expired,
+                ("the removal of the attempt's descriptor waited for the close" + when).c_str());
+            if (!shutdown_first) {
+                // the wake first: the operation ended, and its registration was removed, only after the close
+                UT_ASSERT(c, !rlog.gate_reached,
+                    ("the attempt's registration is removed only after the close has returned" + when).c_str());
+            }
         }
     }
 
@@ -8856,6 +9014,10 @@ public:
             hold.sock = qore_socket_private::get(*sock->priv->socket);
             hold.attempt_fd = attempt_fd;
         }
+        // the file of the attempt's descriptor, to tell it from the descriptor that has its number after the close
+        struct stat attempt_st = {};
+        bool attempt_st_ok = !::fstat(attempt_fd, &attempt_st);
+        UT_ASSERT(c, attempt_st_ok, ("the attempt's descriptor is open before the close" + when).c_str());
         pre_close_hold.store(&hold, std::memory_order_release);
         qore_dbg_after_pre_close_shutdown.store(preCloseHook, std::memory_order_release);
         // the close through the controller: its shutdown, then (once the hook let it continue) its close
@@ -8868,6 +9030,20 @@ public:
             UT_ASSERT(c, hold.removed_while_held,
                 ("the I/O thread ended the connection between the shutdown and the close" + when).c_str());
         }
+        // the I/O thread ended the operation for the changed descriptor generation (without a step), so the
+        // operation's attempt still holds the descriptor, and the close, which found the registration removed (and
+        // its hold released), closed the connection by making the descriptor inert: the number is kept, by another
+        // descriptor, until the attempt releases it with the operation (see close_and_reset_locked())
+        if (attempt_st_ok) {
+            struct stat after_st = {};
+            bool kept = !::fstat(attempt_fd, &after_st);
+            UT_ASSERT(c, kept && (after_st.st_dev != attempt_st.st_dev || after_st.st_ino != attempt_st.st_ino),
+                ("the close closes the connection, and an inert descriptor keeps its number while the attempt holds "
+                    "it" + when).c_str());
+        }
+        // the inert descriptor, to tell when the number is free again
+        struct stat inert_st = {};
+        bool inert_st_ok = !::fstat(attempt_fd, &inert_st);
 
         bool timed_out = false;
         ValueHolder result(queue->shift(&xsink, 30000, &timed_out), &xsink);
@@ -8890,7 +9066,19 @@ public:
         queue = nullptr;
         queue_obj = nullptr;
         op_obj = nullptr;
-        sock->close();
+        // the controller's references to the operation are released by its stop (its I/O thread's, and those that
+        // its dispatcher releases off the I/O thread), and the operation with them, whose attempt's hold closes the
+        // inert descriptor: the number is free then
+        ctrl->stopClear(&xsink);
+        xsink.clear();
+        if (inert_st_ok) {
+            // the number no longer has the inert descriptor (it is free, or another thread's descriptor has it)
+            struct stat now_st = {};
+            bool released = ::fstat(attempt_fd, &now_st)
+                || now_st.st_dev != inert_st.st_dev || now_st.st_ino != inert_st.st_ino;
+            UT_ASSERT(c, released, ("the release of the attempt's hold with the operation closes the inert descriptor"
+                + when).c_str());
+        }
     }
 
 #ifdef __linux__
@@ -24496,6 +24684,26 @@ static QoreValue f_dbg_async_io_qop_registered_count(const QoreListNode* params,
     return static_cast<int64>(AsyncIoControllerPriv::dbgQoreOpRegisteredCount());
 }
 
+//! Debug-only: adds the entry that a registration of a deleted operation object at the address of the given object
+//! leaves when it is not ended (as qore#7167 did): the address of an object that a later object reuses (qore#7168)
+/** @param op an operation object implemented in Qore, not submitted
+    @return the generation of the entry, which dbg_async_io_qop_release_stale() removes
+*/
+static QoreValue f_dbg_async_io_qop_inject_stale(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* op = get_param_value(params, 0).get<const QoreObject>();
+    return static_cast<int64>(AsyncIoControllerPriv::dbgQoreOpInjectStale(op));
+}
+
+//! Debug-only: removes an entry added by dbg_async_io_qop_inject_stale() (qore#7168)
+/** @param gen the generation that it returned; the object given to it can have been deleted since
+*/
+static QoreValue f_dbg_async_io_qop_release_stale(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgQoreOpReleaseStale(static_cast<uint64_t>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
 //! Debug-only: returns True if a submission takes the key of an operation that it may not replace (qore#7010)
 /** @param sandboxed if the submitting code is sandboxed
     @param app_id the application that the submitting code runs for; -1 for none (\c QORE_NO_PROGRAM_ID)
@@ -24934,6 +25142,25 @@ static QoreValue f_dbg_h2_client_hold_stream_registrations(const QoreListNode* p
         ExceptionSink* xsink) {
     qore_dbg_h2_client_hold_stream_registrations(get_param_value(params, 0).getAsBool());
     return QoreValue();
+}
+
+//! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, or lets them go on
+/** Tests use this to release the values of an owner (SandboxManager::releaseProgramCacheValues()) while a reader holds
+    a value that it found and has not used yet, deterministically.  A test must stop holding them (also when it
+    fails).
+ */
+static QoreValue f_dbg_program_cache_hold_reads(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_program_cache_hold_reads(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until the given number of reads of the per-Program cache are held (see dbg_program_cache_hold_reads())
+/** Returns True when they are, or False if they are not after the given number of milliseconds, a bound that only
+    keeps a failing test from hanging
+ */
+static QoreValue f_dbg_program_cache_wait_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_program_cache_wait_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        get_param_value(params, 1).getAsBigInt());
 }
 
 //! Debug-only: holds the references that the async I/O threads release on callback workers, or releases them
@@ -26164,6 +26391,89 @@ static QoreValue f_dbg_fork_while_handler_held(const QoreListNode* params, Runti
     return rv.release();
 }
 
+//! Debug-only: creates a child process with fork() while another thread holds a process-wide lock of type retirement
+/** The other thread holds the lock named (see qore_type_dbg_fork_lock(): \c "type_wait_entry", \c "type_epoch_holds",
+    \c "type_tombstones", \c "generic_cache_registry", \c "type_owner_registry" or \c "type_info_registry"), as a
+    thread does that enters a quiescent wait, arms an epoch hold, makes a tombstone, registers a generic cache entry or
+    creates a type or a declaration at the moment of fork().  It holds the lock until the prepare handlers reach the
+    fork handler of the same name, which then waits for it, or, if no such handler is registered, until fork() has
+    returned in the parent.  The child first checks that it can take the lock and exits with 98 at once if it cannot,
+    so that a child that inherited the lock held fails without waiting for it (qore#7549); then it runs the code
+    given, if any, and exits with the value it returns (99 if it raised an exception).  DEBUG builds only.
+
+    @return a hash: \c status: the exit status of the child (-1 if it did not exit normally), \c waited: True if
+    fork() waited for the thread holding the lock
+
+    @throw DBG-FORK-ERROR no lock with the given name exists, or fork() failed
+*/
+static QoreValue f_dbg_fork_while_type_lock_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    const ResolvedCallReferenceNode* child_code = get_param_value(params, 1).get<const ResolvedCallReferenceNode>();
+    std::mutex* lock = qore_type_dbg_fork_lock(name->c_str());
+    if (!lock) {
+        xsink->raiseException("DBG-FORK-ERROR", "no type retirement lock named '%s' exists", name->c_str());
+        return QoreValue();
+    }
+    ForkHoldTest t;
+    t.target = name->c_str();
+    std::thread holder([&t, lock]() {
+        std::unique_lock<std::mutex> held(*lock);
+        std::unique_lock<std::mutex> ul(t.m);
+        t.held = true;
+        t.cv.notify_all();
+        t.cv.wait(ul, [&t] { return t.release; });
+        // the lock is released after the test state's mutex, which the prepare hook holds while it releases this
+        // thread
+    });
+    {
+        std::unique_lock<std::mutex> ul(t.m);
+        t.cv.wait(ul, [&t] { return t.held; });
+    }
+    fork_hold_test = &t;
+    qore_fork_prepare_hook = fork_hold_hook;
+    pid_t pid = fork();
+    if (!pid) {
+        // a lock inherited held would block the code below forever
+        if (!lock->try_lock()) {
+            _exit(98);
+        }
+        lock->unlock();
+        int status = 0;
+        if (child_code) {
+            ExceptionSink child_xsink;
+            ValueHolder rv(child_code->invoke(nullptr, &child_xsink), &child_xsink);
+            status = child_xsink ? 99 : static_cast<int>(rv->getAsBigInt());
+            child_xsink.clear();
+        }
+        _exit(status);
+    }
+    int fork_errno = errno;
+    qore_fork_prepare_hook = nullptr;
+    fork_hold_test = nullptr;
+    {
+        // releases the holder if the prepare handlers did not (no handler covers the lock, or fork() failed)
+        std::lock_guard<std::mutex> lg(t.m);
+        t.release = true;
+        t.cv.notify_all();
+    }
+    holder.join();
+    if (pid < 0) {
+        xsink->raiseErrnoException("DBG-FORK-ERROR", fork_errno, "fork() failed");
+        return QoreValue();
+    }
+    int status = ut_wait_child(pid);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("status", status, xsink);
+    rv->setKeyValue("waited", t.hook_saw_held, xsink);
+    return rv.release();
+}
+
+//! Debug-only: returns the number of armed epoch holds of type retirement (QoreTypeEpochHold; qore#7549)
+static QoreValue f_dbg_type_epoch_holds(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_type_epoch_hold_count());
+}
+
 //! Debug-only: creates a child process with fork() while another thread holds the parse options lock of a Program
 /** The other thread holds the lock that serializes the changes of the Program's parse options (issue #6078) until
     fork() has returned in the parent.  The child runs the code given, which can change the Program's options, and exits
@@ -27130,6 +27440,28 @@ static QoreValue f_dbg_set_flag_violation_mode(const QoreListNode* params, Runti
 //! Debug-only: returns the number of code flag violations detected since process start
 static QoreValue f_dbg_get_flag_violations(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return qore_get_flag_violations();
+}
+
+//! Debug-only: adds a namespace with a builtin class with static variables that have values to the current Program
+//! at run time, as a binary module can (qore#7541)
+/** The namespace \a name has the class \c DbgSvClass, whose static variables are \c sv (\c int, with the value
+    \a value), \c ssv (\c string, with the value \c "str") and \c nsv (\c *int, without a value).
+*/
+static QoreValue f_dbg_add_runtime_static_var_class(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    // a short string value is inline: read through the helper
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    int64 value = HARD_QORE_VALUE_INT(params, 1);
+    std::unique_ptr<QoreNamespace> ns(new QoreNamespace(name->c_str()));
+    std::string path = std::string("::") + name->c_str() + "::DbgSvClass";
+    QoreClass* qc = new QoreClass("DbgSvClass", path.c_str());
+    qc->addBuiltinStaticVar("sv", value, Public, bigIntTypeInfo);
+    qc->addBuiltinStaticVar("ssv", new QoreStringNode("str"), Public, stringTypeInfo);
+    qc->addBuiltinStaticVar("nsv", QoreValue(), Public, bigIntOrNothingTypeInfo);
+    // the namespace takes the class (its destructor is not public)
+    ns->addSystemClass(qc);
+    getProgram()->getRootNS()->addNamespace(ns.release());
+    return QoreValue();
 }
 
 static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* xsink) {
@@ -30010,6 +30342,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     AsyncIoDescriptorHoldTest::runConnectCloseInProgress(c, AsyncIoDescriptorHoldTest::CCM_POLL_AFTER, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false);
     AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, true);
+    AsyncIoDescriptorHoldTest::runConnectCloseRegistered(c, false, true);
     AsyncIoDescriptorHoldTest::runConnectCloseInPreClose(c);
     AsyncIoDescriptorHoldTest::runConnectCheckAfterShutdown(c);
     AsyncIoDescriptorHoldTest::runConnectCloseTwoAttempts(c);
@@ -30977,6 +31310,15 @@ static QoreValue f_dbg_hold_bg_compile(const QoreListNode* params, RuntimeConfig
     if (!QoreJIT::instance().dbgHoldBgCompile(point, func ? func->c_str() : "")) {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "a background compile hold is armed at this point already");
     }
+    return QoreValue();
+}
+
+//! makes the next background JIT compile of the function named that is accepted arm an epoch hold of type
+//! retirement, as the compile of a specialization does (qore#7549)
+static QoreValue f_dbg_force_bg_compile_epoch_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper func(get_param_value(params, 0));
+    QoreJIT::instance().dbgForceBgCompileEpochHold(func->c_str());
     return QoreValue();
 }
 
@@ -32089,6 +32431,155 @@ bool dbg_arm_scan_hold(std::vector<ScanRootHold>& holds, const QoreListNode* par
     release.release();
     return false;
 }
+}
+
+namespace {
+//! an armed hold of dbg_hold_object_cleanup()
+struct ObjectCleanupHold {
+    // compared only, never dereferenced: the hold is armed with a reference that the test keeps
+    const QoreObject* obj;
+    Counter* held;
+    Counter* release;
+};
+
+std::mutex object_cleanup_hold_lock;
+//! the holds of dbg_hold_object_cleanup(), guarded by object_cleanup_hold_lock
+std::vector<ObjectCleanupHold> object_cleanup_holds;
+
+//! runs in the cleanup of a deleted object once its private data is freed; holds it if a hold is armed for the object
+void dbg_object_cleanup_hold_hook(QoreObject& obj) {
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(object_cleanup_hold_lock);
+        for (auto i = object_cleanup_holds.begin(), e = object_cleanup_holds.end(); i != e; ++i) {
+            if (i->obj == &obj) {
+                held = i->held;
+                release = i->release;
+                object_cleanup_holds.erase(i);
+                break;
+            }
+        }
+    }
+    if (!held) {
+        return;
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+}
+}
+
+//! holds the cleanup of an object when it is deleted, once its private data is freed and before its members are released
+/** The thread that deletes the object waits until \a release reaches zero, after the object is marked deleted and its
+    lock released; tests use this to make a call that another thread makes with the object meanwhile deterministic.
+    The hold is used once; the caller keeps a reference to the object until the hold is used (the hold matches the
+    object by its address).
+
+    @param obj the object
+    @param held decremented once the cleanup is held
+    @param release the cleanup goes on when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_object_cleanup(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        std::lock_guard<std::mutex> l(object_cleanup_hold_lock);
+        object_cleanup_holds.push_back({obj, *held, *release});
+        // the armed hold owns the references now
+        held.release();
+        release.release();
+    }
+    // the hook stays installed; it does nothing while no hold is armed
+    qore_object_private::dbg_cleanup_hook.store(dbg_object_cleanup_hold_hook, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
+//! an armed hold of dbg_hold_program_take_over()
+struct ProgramTakeOverHold {
+    // compared only, never dereferenced: the hold is armed with a reference that the test keeps
+    const QoreObject* obj;
+    int phase;
+    Counter* held;
+    Counter* release;
+};
+
+std::mutex program_take_over_hold_lock;
+//! the holds of dbg_hold_program_take_over(), guarded by program_take_over_hold_lock
+std::vector<ProgramTakeOverHold> program_take_over_holds;
+
+//! runs at a point of a call that takes over a Program object; holds it if a hold is armed for the point
+void dbg_program_take_over_hold_hook(QoreObject& obj, int phase) {
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(program_take_over_hold_lock);
+        for (auto i = program_take_over_holds.begin(), e = program_take_over_holds.end(); i != e; ++i) {
+            if (i->obj == &obj && i->phase == phase) {
+                held = i->held;
+                release = i->release;
+                program_take_over_holds.erase(i);
+                break;
+            }
+        }
+    }
+    if (!held) {
+        return;
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+}
+}
+
+//! holds the next call that takes over a Program object at the given point
+/** Program::loadApplyToUserModule() and the related methods remove the private data from their object and give it to
+    the module that they load; the call waits until \a release reaches zero at the point: 0, after the call setup and
+    before the private data is removed; 1, once it is removed and before the module is loaded.  The functions and
+    methods that take over a Program object as the container of a module (load_user_module_with_program(),
+    Program::loadUserModuleWithProgram()) wait at point 2 for the object, after the binding of their arguments and
+    before they take the private data from it.  Tests use this to make another call with the object deterministic.
+    The hold is used once; the caller keeps a reference to the object until the hold is used (the hold matches the
+    object by its address).
+
+    @param obj the Program object
+    @param phase the point: 0, 1 or 2
+    @param held decremented once the call is held
+    @param release the call goes on when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_program_take_over(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    int phase = static_cast<int>(get_param_value(params, 1).getAsBigInt());
+    ReferenceHolder<Counter> held(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 3, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    {
+        std::lock_guard<std::mutex> l(program_take_over_hold_lock);
+        program_take_over_holds.push_back({obj, phase, *held, *release});
+        // the armed hold owns the references now
+        held.release();
+        release.release();
+    }
+    // the hook stays installed; it does nothing while no hold is armed
+    qore_dbg_program_take_over_hook.store(dbg_program_take_over_hold_hook, std::memory_order_release);
+    return QoreValue();
 }
 
 //! holds the next pass of a recursive-reference scan whose root is an object of a class, with the root locked
@@ -36362,6 +36853,14 @@ static QoreValue f_dbg_sandbox_fail_next_budgets(const QoreListNode* params, Run
     qore_sandbox_dbg_fail_next_budgets(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
     return QoreValue();
 }
+//! Makes the next count resolutions of the sandbox that governs the thread fail as if no memory could be allocated
+/** Tests that code that marks what trusted code creates as shared fails closed (qore#6843)
+*/
+static QoreValue f_dbg_sandbox_fail_next_resolutions(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_fail_next_sandbox_resolutions(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
 #endif
 
 #ifdef DEBUG
@@ -36941,6 +37440,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_sandbox_fail_next_budgets", f_dbg_sandbox_fail_next_budgets,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_sandbox_fail_next_resolutions", f_dbg_sandbox_fail_next_resolutions,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
     qns.addBuiltinVariant("dbg_fail_next_system_thread_starts", f_dbg_fail_next_system_thread_starts,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
@@ -36967,6 +37469,13 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_h2_client_hold_stream_registrations", f_dbg_h2_client_hold_stream_registrations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_program_cache_hold_reads", f_dbg_program_cache_hold_reads,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_program_cache_wait_held", f_dbg_program_cache_wait_held,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_socket_check_idle_data", f_dbg_socket_check_idle_data,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK | QDOM_NETWORK, bigIntTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
@@ -37072,6 +37581,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntOrNothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
     qns.addBuiltinVariant("dbg_async_io_qop_registered_count", f_dbg_async_io_qop_registered_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_qop_inject_stale", f_dbg_async_io_qop_inject_stale,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
+    qns.addBuiltinVariant("dbg_async_io_qop_release_stale", f_dbg_async_io_qop_release_stale,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "gen");
     qns.addBuiltinVariant("dbg_async_io_submit_takes_key_of_other", f_dbg_async_io_submit_takes_key_of_other,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 4,
         boolTypeInfo, QORE_PARAM_NO_ARG, "sandboxed",
@@ -37259,6 +37772,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_hold_bg_compile", f_dbg_hold_bg_compile, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", stringOrNothingTypeInfo, QORE_PARAM_NO_ARG,
         "func");
+    qns.addBuiltinVariant("dbg_force_bg_compile_epoch_hold", f_dbg_force_bg_compile_epoch_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "func");
     qns.addBuiltinVariant("dbg_wait_bg_compile_held", f_dbg_wait_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "point", bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_bg_compile_held", f_dbg_bg_compile_held, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo);
@@ -37420,6 +37935,13 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_object_cleanup", f_dbg_hold_object_cleanup, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_program_take_over", f_dbg_hold_program_take_over, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 4, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "obj", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "phase", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_hold_scan", f_dbg_hold_scan, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "cls", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
@@ -37721,6 +38243,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QORE_PARAM_NO_ARG, "child");
     qns.addBuiltinVariant("dbg_fork_while_thread_wait_lock_held", f_dbg_fork_while_thread_wait_lock_held,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1, codeTypeInfo, QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_fork_while_type_lock_held", f_dbg_fork_while_type_lock_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", codeOrNothingTypeInfo,
+        QORE_PARAM_NO_ARG, "child");
+    qns.addBuiltinVariant("dbg_type_epoch_holds", f_dbg_type_epoch_holds, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_arm_parse_scope_gate", f_dbg_arm_parse_scope_gate, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 5, QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
         QORE_PARAM_NO_ARG, "kind", bigIntTypeInfo, QORE_PARAM_NO_ARG, "set_options", bigIntTypeInfo,
@@ -37807,6 +38334,9 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "mode");
     qns.addBuiltinVariant("dbg_get_flag_violations", f_dbg_get_flag_violations,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_add_runtime_static_var_class", f_dbg_add_runtime_static_var_class, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "value");
 }
 
 #undef QDOM_DEBUG_HOOK

@@ -97,6 +97,12 @@ public class CohereSchema {
     }
 
     private {
+        #! The ID of the lazy value of getSchema() (qore#6843)
+        static int schema_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \CohereSchema::buildSchemaValue());
+        #! The ID of the lazy value of getActionSet() (qore#6843)
+        static int action_set_value_id = DataProvider::DataProviderActionCatalog::registerLazyValue(
+            \CohereSchema::buildActionSetValue());
         #! The parsed schema
         static *OpenApi3::OpenApi3Schema schema;
 
@@ -114,6 +120,15 @@ public class CohereSchema {
         @throw EMPTY-SCHEMA-FILE the vendored resource is empty
     */
     static OpenApi3::OpenApi3Schema getSchema() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(schema_value_id);
+    }
+
+    #! Builds the value of getSchema() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static OpenApi3::OpenApi3Schema buildSchemaValue() {
         AutoLock al(lck);
         return CohereSchema::getSchemaIntern();
     }
@@ -123,6 +138,15 @@ public class CohereSchema {
         @throw REST-SCHEMA-ACTION-ERROR the manifest and schema disagree
     */
     static RestSchemaActions::RestSchemaActionSet getActionSet() {
+        return DataProvider::DataProviderActionCatalog::getLazyValue(action_set_value_id);
+    }
+
+    #! Builds the value of getActionSet() from the module's vendored data only, with no input from the caller
+    /** Built as a lazy value, on the catalog worker for a sandboxed reader, so that the value that every
+        Program shares is not marked as created by the reader (qore#6843; see
+        DataProvider::DataProviderActionCatalog::registerLazyValue())
+    */
+    private static RestSchemaActions::RestSchemaActionSet buildActionSetValue() {
         AutoLock al(lck);
         if (!action_set) {
             action_set = new RestSchemaActions::RestSchemaActionSet(CohereSchema::getSchemaIntern(),

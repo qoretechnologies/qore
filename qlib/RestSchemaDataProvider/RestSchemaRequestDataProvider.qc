@@ -185,6 +185,11 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     private *hash<string, AbstractDataField> getRecordTypeIntern() {
+        # the schema's own fields are built in a type build of the schema (qore#6843)
+        return schema.runTypeBuild(*hash<string, AbstractDataField> sub () { return buildRecordType(); });
+    }
+
+    private *hash<string, AbstractDataField> buildRecordType() {
         *RestSchemaValidator::AbstractResponseObject response = getSuccessResponse();
         if (!response) {
             return;
@@ -209,13 +214,21 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             return request_type;
         }
 
-        AbstractDataProviderType rt = isSwagger() ? getSwaggerRequestType() : getOpenApi3RequestType();
+        # the schema's own fields are built in a type build of the schema, without the defaults of the REST client,
+        # so that a schema that is shared by every Program keeps them for every caller; the type with the defaults is
+        # then made from them outside the build (qore#6843)
+        AbstractDataProviderType rt = schema.runTypeBuild(AbstractDataProviderType sub () {
+            return isSwagger() ? getSwaggerRequestType() : getOpenApi3RequestType();
+        });
+        if (rest) {
+            rt = isSwagger() ? getSwaggerRequestType(rest) : getOpenApi3RequestType(rest);
+        }
         # a provider instance can be shared between tenants: a type that a sandboxed caller builds is private to
         # that caller and is not kept in the instance for the others (qore#7104)
         return DataProvider::mayRegisterShared() ? (request_type = rt) : rt;
     }
 
-    private AbstractDataProviderType getSwaggerRequestType() {
+    private AbstractDataProviderType getSwaggerRequestType(*AbstractRestClient rest_client) {
         SwaggerSchema swagger = cast<SwaggerSchema>(schema);
         Swagger::PathItemObject swagger_pio = cast<Swagger::PathItemObject>(pio);
         Swagger::OperationObject swagger_op = cast<Swagger::OperationObject>(op);
@@ -228,7 +241,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         *Swagger::AbstractSwaggerParameterObject body = swagger_op.body ?? swagger_pio.body;
         if (body) {
             AbstractDataField body_field = swagger.getFieldFromSchema("body", "REST request body argument",
-                cast<Swagger::BodyParameter>(body).schema, body.required ?? False, rest);
+                cast<Swagger::BodyParameter>(body).schema, body.required ?? False, rest_client);
             rv.addField(body_field);
             if (!required && body.required) {
                 required = True;
@@ -248,7 +261,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         return required ? rv : rv.getOrNothingType();
     }
 
-    private AbstractDataProviderType getOpenApi3RequestType() {
+    private AbstractDataProviderType getOpenApi3RequestType(*AbstractRestClient rest_client) {
         OpenApi3Schema openapi3 = cast<OpenApi3Schema>(schema);
         OpenApi3::PathItemObject openapi3_pio = cast<OpenApi3::PathItemObject>(pio);
         OpenApi3::OperationObject openapi3_op = cast<OpenApi3::OperationObject>(op);
@@ -261,7 +274,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         # In OpenAPI 3.0, body is converted to a ParameterObject just like in Swagger
         *OpenApi3::ParameterObject body = openapi3_op.body ?? openapi3_pio.body;
         if (body && body.schema) {
-            AbstractDataField body_field = openapi3_op.getRequestBodyField(openapi3_pio, rest);
+            AbstractDataField body_field = openapi3_op.getRequestBodyField(openapi3_pio, rest_client);
             rv.addField(body_field);
             if (!required && body.required) {
                 required = True;
@@ -316,6 +329,13 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
     #! Returns a data provider type object for a response using abstract types
     private AbstractDataProviderType getResponseTypeFromResponse(RestSchemaValidator::AbstractResponseObject response,
+            string label) {
+        # the schema's own fields are built in a type build of the schema (qore#6843)
+        return schema.runTypeBuild(AbstractDataProviderType sub () { return buildResponseType(response, label); });
+    }
+
+    #! Builds a data provider type object for a response using abstract types
+    private AbstractDataProviderType buildResponseType(RestSchemaValidator::AbstractResponseObject response,
             string label) {
         label += " response";
         HashDataType rv();

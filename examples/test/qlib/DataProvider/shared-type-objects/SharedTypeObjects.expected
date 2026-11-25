@@ -1,0 +1,7 @@
+shared type and field: SANDBOX-REGISTRATION-ERROR SANDBOX-REGISTRATION-ERROR SANDBOX-REGISTRATION-ERROR SANDBOX-REGISTRATION-ERROR SANDBOX-REGISTRATION-ERROR
+the tenant's own type and field: changed changed changed
+outside a sandbox: changed
+a module's lazily built schema, first used by a tenant: built
+a module's lazily built schema: SANDBOX-REGISTRATION-ERROR SANDBOX-REGISTRATION-ERROR
+a module's cached types built in a tenant's call: SANDBOX-REGISTRATION-ERROR SANDBOX-REGISTRATION-ERROR
+a tenant registers a lazy value: DATA-PROVIDER-LAZY-VALUE-ERROR

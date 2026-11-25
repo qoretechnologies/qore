@@ -336,6 +336,18 @@ printf(\"qlib: %s %s %s\\n\", form(\"AsyncSocketIo\"), form(\"WebSocketClient\")
 # a Qorus service's restrictions
 const ServiceOptions = PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL;
 
+# the client's own code arms and cancels its watchdog for an object of the caller's class: a class that sandboxed code
+# declares cannot call the private methods of the client (qore#6843)
+class WatchdogProbe inherits DiscordWebSocketClient {
+    constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
+    }
+
+    run() {
+        armHelloWatchdog();
+        cancelHelloWatchdog();
+    }
+}
+
 # restrictions that apply to module code are those of a sandboxed caller; a caller restricted only by its parse
 # options restricts its own code only
 Program sub restricted(string label, string code, bool sandboxed = True) {
@@ -346,6 +358,7 @@ Program sub restricted(string label, string code, bool sandboxed = True) {
     p.loadModule(\"OwnedAsyncMod\");
     p.loadModule(\"AsyncSocketIo\");
     p.loadModule(\"DiscordWebSocketClient\");
+    p.importClass(\"WatchdogProbe\");
     p.setParseOptions(ServiceOptions);
     p.parse(code, label);
     return p;
@@ -367,17 +380,15 @@ sub call(string label, Program pgm, string f, *softlist<auto> args) {
 }
 
 const ServiceCode = \"
-class Probe inherits DiscordWebSocketClient {
-    constructor() : DiscordWebSocketClient({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder'}) {}
-    run() { armHelloWatchdog(); cancelHelloWatchdog(); }
+class Probe inherits WatchdogProbe {
+    constructor() : WatchdogProbe({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder'}) {}
 }
 auto sub discord_watchdog() { Probe pr(); pr.run(); return 'armed and cancelled'; }
 # with a call wrapper, as the Qorus discord-bot service has, the client schedules a closure of its own module that
 # calls the wrapper, created while it runs a method for an object of the caller's class
-class WrappedProbe inherits DiscordWebSocketClient {
-    constructor() : DiscordWebSocketClient({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder',
+class WrappedProbe inherits WatchdogProbe {
+    constructor() : WatchdogProbe({'url': 'ws://127.0.0.1:1/', 'token': 'offline-placeholder',
         'call_wrapper': sub (code c) { c(); }}) {}
-    run() { armHelloWatchdog(); cancelHelloWatchdog(); }
 }
 auto sub discord_watchdog_call_wrapper() { WrappedProbe pr(); pr.run(); return 'armed and cancelled'; }
 auto sub controller_caller_timer() {

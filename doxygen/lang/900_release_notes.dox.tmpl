@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
+    REST classes and stream requests whose sandbox does not trust their code get the request context without the
+    server's objects and the credentials of the request (with the platform's authorization context), and trusted code
+    when its handler opts in; an unfiltered stream request of such code is refused (see
+    @ref httpserverutil_request_credentials and @ref rest_request_credentials).
+
     @par A Separated Module Is Refused for the Warnings Found When It Is Committed
     A @ref separated_modules "separated module" whose code raises a warning of its warning mask when it is committed
     (such as \c INVALID-OPERATION) is now refused, as the same module in a single file always was; fix the code or
@@ -206,10 +212,10 @@
     (<a href="https://github.com/qoretechnologies/qore/issues/7133">issue 7133</a>).
 
     @par Code Restricted From External Information Gets No Installation or Module Paths of the Host
-    @ref Qore::get_qore_library_info() "get_qore_library_info()" is external information, and module descriptions,
-    the module context path and the error for a module that is not found give no paths of the host to code restricted
-    with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info "%no-external-info";
-    <a href="https://github.com/qoretechnologies/qore/issues/7502">issue 7502</a>).
+    @ref Qore::get_qore_library_info() "get_qore_library_info()" is external information (also for a module's
+    \c init closure), and module descriptions, the module context path and the not-found error give no host paths to
+    code restricted with @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" (see @ref no-external-info
+    "%no-external-info"; <a href="https://github.com/qoretechnologies/qore/issues/7502">issue 7502</a>).
 
     @par An HTTP Field Never Replaces a Key of the Message, and the Fields Have Keys of Their Own
     HTTP messages give their fields under \c "headers" and \c "trailers", and a field named like a key of the message
@@ -255,9 +261,9 @@
     <a href="https://github.com/qoretechnologies/qore/issues/6772">issue 6772</a>).
 
     @par The Handler of an HTTP/1.x Request Gets a Socket of Its Request
-    An HTTP/1.x handler declared by sandboxed code, or that asks for it (as one that gives its socket to code that is not
-    trusted must), gets a socket for its own request only, and aborts the connection with
-    @ref HttpServer::http_abort_connection() "http_abort_connection()" (see @ref httpserver_handler_socket; issues
+    An HTTP/1.x handler declared by sandboxed code, or that asks for it, gets a socket for its own request only, and
+    aborts the connection with @ref HttpServer::http_abort_connection() "http_abort_connection()"; the connection's
+    socket that other handlers get is refused to sandboxed code (see @ref httpserver_handler_socket; issues
     <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>).
 
     @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
@@ -300,6 +306,12 @@
     Sandboxed code cannot move the process-wide fast clock, set the clock or waiter of a shared embedder rate limiter,
     get or place an EDIFACT release in the process-wide registry, or see the locks of standard module classes
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
+
+    @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
+    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code but
+    can override them and call an overridden method's base version; library classes give their subclasses final public
+    methods, so a subclass method with one of their names and signatures is a parse error and must be renamed
+    (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
     The static members in which public classes of the standard modules keep state shared by all of their callers, and
@@ -709,8 +721,9 @@
     under the key passes \c True.
 
     @par Final Methods Hold for the Whole Class Hierarchy
-    An inherited @ref final_methods "final method" now reserves its name against instance and static declarations in
-    subclasses, and a multiple-inheritance order that redirects calls away from the final variant is a parse error.
+    A subclass can no longer bypass a @ref final_methods "final" method with an overload that accepts the same
+    arguments or with a parent class listed before the final method's class that declares or inherits its name;
+    both are now parse errors.
 
     @par Module Code Runs in the Module's Program
     User code called from another %Program, such as a module function, a method of a module class or a function
@@ -1394,6 +1407,12 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7179">issue 7179</a>).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+
+    @par Restricted Programs
+    @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
+    sandbox that does not trust its code governs the %Program of the class of an object, as
+    @ref Qore::SandboxManager::isRestricted() "isRestricted()" does for the calling code (see
+    @ref sandbox_restricts).
 
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
@@ -2868,6 +2887,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
+      \c qore_get_parent_caller_location(), whose default offset is \c 1, return the frame at the given offset of the
+      call stack; they returned @ref nothing for any offset other than \c 0
+      (<a href="https://github.com/qoretechnologies/qore/issues/7564">issue 7564</a>)
     - a functional-domain restriction set on a Program after parsing with @ref Qore::Program::setParseOptions()
       "Program::setParseOptions()" applies to the construction of objects of every class of the Program, whether or
       not the class has a constructor of its own (<a href="https://github.com/qoretechnologies/qore/issues/7513">issue
@@ -2886,6 +2909,19 @@
       keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
       (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
       7509</a>)
+    - an HTTP/2 stream that the application resets with @ref Qore::Socket::resetHttp2Stream()
+      "Socket::resetHttp2Stream()" (as @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" does for a connection
+      that it stops) releases its buffered data when the call returns, where the stream kept it until the I/O thread
+      next sent the session's frames (<a href="https://github.com/qoretechnologies/qore/issues/7532">issue 7532</a>)
+    - the Doxygen search indexes of the documentation of a user module leave out the imported modules that its pages
+      do not link to, which made up 29% of their size
+      (<a href="https://github.com/qoretechnologies/qore/issues/6376">issue 6376</a>)
+    - @ref qoreocrutilsintro "QoreOcrUtils" document OCR keeps the readable text of a PDF document and reports blank,
+      partially readable and unreadable pages one by one, also when the optional PDF reader is not available
+      (<a href="https://github.com/qoretechnologies/qore/issues/6764">issue 6764</a>)
+    - the tests that create UNIX socket files use short private directories, so they pass with a \c TMPDIR whose
+      path is too long for a UNIX socket name (<a href="https://github.com/qoretechnologies/qore/issues/7462">issue
+      7462</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
@@ -4599,6 +4635,15 @@
       constructor and @ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()" raise the
       module's exception, where the C++ exception of the module escaped from the creation of a registered %Program
       (<a href="https://github.com/qoretechnologies/qore/issues/6786">issue 6786</a>)
+    - sandboxed code cannot change the data types, data fields and REST schemas that library modules share with every
+      %Program of the process, nor change the members of a REST or AsyncAPI schema or of another
+      @ref sandbox_shared_objects "shared object" or delete it, whose classes update the state that they build from
+      themselves with @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()" (see
+      @ref dataprovider_v3_12 "DataProvider v3.12"; issues #6843, #6863)
+    - only trusted code @ref Qore::SandboxManager::shareObject() "shares objects", and what a shared REST schema
+      derives from the data of its caller, such as the request body defaults of a REST client, is kept in the
+      @ref Qore::SandboxManager::setProgramCacheValue() "per-Program cache" of the caller (see
+      @ref sandbox_shared_objects; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - @ref Qore::call_function() "call_function()" and @ref Qore::call_function_args() "call_function_args()" give
       their arguments to the call, which releases the extra arguments with its frame as a direct call does, also when
       an exception leaves the call after a return statement
@@ -4654,6 +4699,10 @@
       @ref Qore::QDF_STATIC_CLASS_VARS "QDF_STATIC_CLASS_VARS" replaces hash-valued static class variables instead of
       merging them, and a hash-valued static class variable no longer holds freed memory after deserialization, which
       could crash the process (<a href="https://github.com/qoretechnologies/qore/issues/7516">issue 7516</a>)
+    - a call that takes over a @ref Qore::Program "Program" object, such as @ref Qore::load_user_module_with_program(),
+      raises \c OBJECT-ALREADY-DELETED when another call takes the object over or deletes it before or at the same
+      time, instead of using or releasing the Program again
+      (<a href="https://github.com/qoretechnologies/qore/issues/7528">issue 7528</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

@@ -48,18 +48,18 @@ sub socket_ca(*string file, *string path) {
 }
 
 sub client_ca(hash<auto> opts) {
-    HTTPClient hc({"url": "https://localhost:1"} + opts);
+    HTTPClient hc({"url": "https://127.0.0.1:1"} + opts);
 }
 
 *string sub client_ca_file(hash<auto> opts) {
-    HTTPClient hc({"url": "https://localhost:1"} + opts);
+    HTTPClient hc({"url": "https://127.0.0.1:1"} + opts);
     hash<auto> h = hc.getHttpConfig();
     return h.ssl_trust_store ? "store" : h.ssl_ca_file;
 }
 
 # the result of an HTTP request that verifies the server certificate with the CA locations of the client
 string sub client_verify(int port, string file) {
-    HTTPClient hc({"url": "https://localhost:" + port, "ssl_ca_file": file, "ssl_verify_cert": True,
+    HTTPClient hc({"url": "https://127.0.0.1:" + port, "ssl_ca_file": file, "ssl_verify_cert": True,
         "connect_timeout": 10s, "timeout": 10s});
     try {
         hc.get("/");
@@ -82,7 +82,7 @@ string sub verify(int port, *string file, *string path, *string after, *SSLTrust
     }
     s.setSslVerifyMode(SSL_VERIFY_PEER);
     try {
-        s.connectINETSSL("localhost", port, 10s);
+        s.connectINETSSL("127.0.0.1", port, 10s);
         s.close();
         return "verified";
     } catch (hash<ExceptionInfo> ex) {

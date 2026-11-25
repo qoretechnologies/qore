@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of the compiled child program
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ListElementTypeStripTest
+
+#! Tests the type of a value stored in an element of a list whose element type is untyped
+/** The child script (list-element-type-strip/list-element-type-strip.q) stores a typed hash and a typed list in
+    elements of local lists of type list, softlist and list<any>, with a constant index (new, existing and past the end
+    elements, a list from a literal, a list captured by a closure, a vivified softlist) and with a variable index, and
+    prints the type of the stored value: the complex type is stripped, as for any other untyped target, in every
+    execution mode (issue #7573: the IR interpreter and native code kept it for a store with a constant index into a
+    local list); a list<auto> element keeps it. It runs in every execution mode, and compiled with AOT at optimization
+    levels 0 and 3, against the same expected output.
+*/
+class ListElementTypeStripTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string script;
+
+        TmpDir tmp("qore-list-element-type-strip-");
+
+        #! the output of the child script
+        const ExpectedOutput = "list new: hash
+list existing: hash
+list past the end: hash
+list list value: list
+softlist: hash
+vivified softlist: list hash
+vivified *softlist: list hash
+vivified global softlist: list hash
+vivified member softlist: list hash
+vivified nested list: list hash
+vivified static softlist: list hash
+vivified softlist hash value: list hash
+vivified softlist variable index: list hash
+list<any>: hash
+list from a literal: hash
+closure list: hash
+list<auto>: hash<string, int>
+any: hash
+hash key: hash
+list variable index: hash
+";
+    }
+
+    constructor() : QUnit::Test("ListElementTypeStrip", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        script = get_script_dir() + "/list-element-type-strip/list-element-type-strip.q";
+
+        addTestCase("element types of untyped lists, in every mode", \testModes());
+        addTestCase("element types of untyped lists, compiled with AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+                "--exec-mode=%s %s", env(), qore_bin, mode, script));
+            assertEq(0, r.rc, sprintf("%s: exit code: %s", mode, r.out));
+            assertEq(ExpectedOutput, r.out, mode);
+        }
+    }
+
+    testAot() {
+        foreach int opt in (0, 3) {
+            string bin = sprintf("%s/list-element-strip-O%d", tmp.path, opt);
+            string out = backquote(sprintf("%s %s -b --compile --opt-level=%d --output %s %s 2>&1", env(), qore_bin,
+                opt, bin, script));
+            assertTrue(is_file(bin), sprintf("compiled with -O%d: %s", opt, out));
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s", env(), bin));
+            assertEq(0, r.rc, sprintf("-O%d: exit code: %s", opt, r.out));
+            assertEq(ExpectedOutput, r.out, sprintf("AOT -O%d", opt));
+        }
+    }
+}

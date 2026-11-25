@@ -191,6 +191,24 @@ public class Observable {
         return exists (remove observer_map{observer.uniqueHash()});
     }
 
+    #! Returns @ref True if any observer is registered
+    /** For subclasses, which cannot use the private members of this class when sandboxed code declares them; the
+        observers themselves are not returned: a subclass that needs them keeps track of the observers that it
+        registers itself
+
+        @since DataProvider 3.12
+    */
+    final bool hasObservers() {
+        return observer_map.size() > 0;
+    }
+
+    #! Returns the number of registered observers; see hasObservers()
+    /** @since DataProvider 3.12
+    */
+    final int getObserverCount() {
+        return observer_map.size();
+    }
+
     #! The method notifies all subscribed observers
     /** @param event_id unique ID identifying an event
         @param data_ hash representing new data to be passed to observers' update() methods

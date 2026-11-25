@@ -753,12 +753,19 @@ list<hash<CallStackInfo>> get_thread_call_stack() [dom=THREAD_CONTROL,THREAD_INF
 }
 
 //! Returns information about the code in the callstack according to the offset argument
-/** @param offset the offset in the call stack to retrieve
+/** @param offset the offset in the call stack to retrieve, from the innermost frame, as
+    @ref Qore::get_thread_call_stack() "get_thread_call_stack()" lists them: \c 0 is the frame of the call of this
+    function, \c 1 the frame of the call of the code that called it, and so on
 
     @return information about the code in the callstack according to the offset argument; if the call stack does not
-    have an entry at the given offset, @ref NOTHING is returned
+    have an entry at the given offset, or the offset is negative, @ref NOTHING is returned
+
+    @note before %Qore 3.0, @ref NOTHING was returned for any offset other than \c 0 (issue #7564)
 */
 *hash<CallStackInfo> get_parent_caller_location(int offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=THREAD_CONTROL,THREAD_INFO] {
+    if (offset < 0) {
+        return QoreValue();
+    }
     return qore_get_parent_caller_location(offset);
 }
 

@@ -397,6 +397,10 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     priv->orig = priv;
     priv->pub = pub;
     priv->sys = sys;
+    // the concrete declaration of a hashdecl that belongs to no binary module (of the static system namespace or a
+    // tombstone) is not a binary module's either; the flag is copied, as the concrete declaration does not reference
+    // its generic, which a binary module's can outlive (qore#7533)
+    priv->not_module_decl = not_module_decl;
     priv->reexport = reexport;
     priv->parse_init_done = true;
     priv->parameterized_base = thd;
@@ -410,6 +414,10 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     priv->setParentHashDecl(instantiate_parent_hashdecl(parentHashDecl, receiver_type_info));
     for (auto& mi : members.member_list) {
         priv->members.addNoCheck(strdup(mi.first), mi.second ? mi.second->instantiate(receiver_type_info) : nullptr);
+    }
+    // the concrete declaration of a copy names the module declarations that the copy's members name (qore#7533)
+    if (copied) {
+        priv->keepCopyModuleNames(nullptr);
     }
 
     TypedHashDecl* existing = nullptr;
@@ -503,6 +511,8 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         // do leave it as-is — symmetric with qore_class_private's import ctor.
         pub(old.pub),
         sys(old.sys),
+        // a copy is never a builtin type owner (isTypeOwnerSystem()); kept as its source's (qore#7533)
+        not_module_decl(old.not_module_decl),
         // Preserve the source's reexport marker so inheritParseImports's
         // child-Program propagation continues through transitive %requires
         // chains: A → B (via reexport) → C will reach C.
@@ -528,6 +538,45 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;
         members.addNoCheck(strdup(i.first), new_member);
     }
+    // the member types and the parent are the source's: the module declarations that they name are kept for the
+    // copy (qore#7533)
+    keepCopyModuleNames(&old);
+}
+
+void typed_hash_decl_private::keepCopyModuleNames(const typed_hash_decl_private* src) {
+    assert(copy_module_names.empty());
+    std::vector<QoreTypeOwner*> names;
+    if (src && src->copied) {
+        // a copy of a copy names what its source names, which it keeps until it is destroyed
+        names = src->copy_module_names;
+    } else if (src && src->type_owner.isTypeOwnerSystem()) {
+        // a builtin source's list is computed once (a Program copies every builtin hashdecl)
+        names = src->getBuiltinModuleNames();
+    } else {
+        addMemberModuleNames(names);
+        addBuiltinParentModuleNames(names);
+        // and what the module classes that they name name in their own types (qore#7533)
+        qore_type_owner_add_module_class_names(names);
+    }
+    // nothing is thrown from here on: every reference taken is released by the destructor
+    for (QoreTypeOwner* o : names) {
+        o->refTypeOwner();
+    }
+    copy_module_names.swap(names);
+}
+
+const std::vector<QoreTypeOwner*>& typed_hash_decl_private::getBuiltinModuleNames() const {
+    assert(type_owner.isTypeOwnerSystem());
+    // the members of a builtin hashdecl are complete when it is first copied; an exception leaves the list to the next
+    // call
+    std::call_once(builtin_module_names_once, [this] () {
+        std::vector<QoreTypeOwner*> names;
+        addMemberModuleNames(names);
+        addBuiltinParentModuleNames(names);
+        qore_type_owner_add_module_class_names(names);
+        builtin_module_names.swap(names);
+    });
+    return builtin_module_names;
 }
 
 int typed_hash_decl_private::parseInitHashDeclInitialization(const QoreProgramLocation* loc,

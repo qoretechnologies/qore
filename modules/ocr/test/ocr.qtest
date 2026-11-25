@@ -35,10 +35,25 @@ hashdecl OcrSandboxFixture {
 public class OcrModuleTest inherits QUnit::Test {
     private {
         string test_image_path;
+        #! the reason the English trained data cannot be used from the system data directory, if it cannot
+        /** A host can have the Tesseract library without the English language data (\c eng.traineddata, the
+            \c tesseract-ocr-eng package on Debian and Ubuntu); the cases that need it are skipped then (qore#7582).
+        */
+        *string no_english_data;
     }
 
     constructor() : Test("OcrModuleTest", "1.0") {
         test_image_path = normalize_dir(get_script_dir() + "/test_image.png");
+        try {
+            new Ocr::TesseractEngine("", "eng");
+        } catch (hash<ExceptionInfo> ex) {
+            # only missing language data is a reason to skip; any other error fails the cases that need the data
+            if (ex.err != "OCR-INIT-ERROR") {
+                rethrow;
+            }
+            no_english_data = sprintf("the English trained data (eng.traineddata, package tesseract-ocr-eng) "
+                "cannot be loaded from the system data directory: %s", ex.desc);
+        }
 
         addTestCase("ocr_has_tesseract", \hasTesseractTest());
         addTestCase("TesseractEngine - constructor", \constructorTest());
@@ -67,7 +82,15 @@ public class OcrModuleTest inherits QUnit::Test {
         assertTrue(Ocr::ocr_has_tesseract());
     }
 
+    #! skips the current case if the English trained data cannot be used from the system data directory
+    private checkEnglishData() {
+        if (no_english_data) {
+            testSkip(no_english_data);
+        }
+    }
+
     constructorTest() {
+        checkEnglishData();
         Ocr::TesseractEngine engine("", "eng");
         assertTrue(True);
     }
@@ -394,6 +417,7 @@ string sub extract_text(binary img) {
     }
 
     capabilitiesTest() {
+        checkEnglishData();
         Ocr::TesseractEngine engine("", "eng");
         hash<auto> caps = engine.getCapabilities();
         assertTrue(caps.has_tesseract);
@@ -403,6 +427,7 @@ string sub extract_text(binary img) {
     }
 
     extractTextTest() {
+        checkEnglishData();
         Ocr::TesseractEngine engine("", "eng");
         binary img = ReadOnlyFile::readBinaryFile(test_image_path);
         assertTrue(img.size() > 0);
@@ -417,6 +442,7 @@ string sub extract_text(binary img) {
     }
 
     extractMetadataTest() {
+        checkEnglishData();
         Ocr::TesseractEngine engine("", "eng");
         binary img = ReadOnlyFile::readBinaryFile(test_image_path);
 
@@ -438,6 +464,7 @@ string sub extract_text(binary img) {
     }
 
     emptyImageTest() {
+        checkEnglishData();
         Ocr::TesseractEngine engine("", "eng");
         assertThrows("OCR-ERROR", "empty",
             sub () {

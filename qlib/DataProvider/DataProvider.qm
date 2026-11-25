@@ -1759,6 +1759,27 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       tells consumers whether the source redelivers a refused event
 
     @section dataprovider_v3_12 DataProvider v3.12
+    - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
+      @ref DataProvider::AbstractDataField::freeze() "AbstractDataField::freeze()" also mark the type or field as a
+      @ref sandbox_shared_objects "shared object" when the calling code may share objects
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - added @ref DataProvider::Observable::hasObservers() "Observable::hasObservers()" and
+      @ref DataProvider::Observable::getObserverCount() "getObserverCount()" for subclasses, which cannot use the
+      private members of the class when sandboxed code declares them; a subclass that needs its observers keeps track
+      of them itself (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
+    - the methods that subclasses call are public, so that a subclass declared in a sandboxed Program, which cannot
+      use the private methods of the library's classes, can call them:
+      @ref DataProvider::AbstractDataProvider::checkOptions() "AbstractDataProvider::checkOptions()",
+      @ref DataProvider::AbstractDataProvider::processSearchParameters() "processSearchParameters()" and
+      @ref DataProvider::AbstractDataProvider::getWrappedExceptionArg() "getWrappedExceptionArg()";
+      @ref DataProvider::AbstractDataProviderType::checkChange() "AbstractDataProviderType::checkChange()";
+      @ref DataProvider::AbstractDataProviderRecordIterator::doMemberGate() "AbstractDataProviderRecordIterator::doMemberGate()"
+      and @ref DataProvider::AbstractDataProviderRecordIterator::matchGeneric() "matchGeneric()";
+      @ref DataProvider::AbstractWatchDataProviderBase::isStopping() "AbstractWatchDataProviderBase::isStopping()" and
+      @ref DataProvider::AbstractWatchDataProviderBase::logPollError() "logPollError()";
+      @ref DataProvider::AbstractTimestampWatchDataProvider::getEventName() "AbstractTimestampWatchDataProvider::getEventName()"
+      and @ref DataProvider::AbstractTimestampWatchDataProvider::getWatchRecordTimestamp() "getWatchRecordTimestamp()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - @ref DataProvider::DataProviderActionCatalog::actionMutatesState() "actionMutatesState()" can classify
       an action with its configured options using the producer's read-only conditions (issue 7470)
     - added @ref DataProvider::DataProvider::setModuleHostHooks() "DataProvider::setModuleHostHooks()" and
@@ -1858,6 +1879,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       standard modules refuse changes of their process-wide registries to sandboxed code; the process-wide type cache
       (@ref DataProvider::DataProvider::getTypeCache() "DataProvider::getTypeCache()") refuses them too
       (<a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>)
+    - sandboxed code cannot change a data type or a data field that code no sandbox governs created, which every
+      %Program of the process can share; added @ref DataProvider::AbstractDataProviderType::freeze()
+      "AbstractDataProviderType::freeze()" and @ref DataProvider::AbstractDataField::freeze()
+      "AbstractDataField::freeze()" for types that a module builds in a sandboxed call and keeps for every caller
+      (<a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>)
     - @ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" returns
       @ref nothing "NOTHING" for code that is sandboxed or acts for sandboxed code, which does not get the process-wide
       logger that the host set; the messages that the module produces for such code still go to that logger

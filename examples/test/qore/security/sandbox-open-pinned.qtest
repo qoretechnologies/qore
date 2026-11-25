@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - files opened and created relative to a pinned directory (openat(), O_NOFOLLOW)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The files that sandboxed code opens or creates are the files that the sandbox file-system policy checked: a
+# component of the path that is replaced by a link to a directory outside of the allowed directory after the check
+# does not make an open read a file there, nor a creation create a file there, before the check of the file opened
+# (qore#7518).  The replacement is made with dbg_fs_swap_on_open() (debug builds) after the path is pinned: the
+# open's own hook is skipped, and the end of the pinning of the path is changed.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxOpenPinnedTest
+
+class SandboxOpenPinnedTest inherits QUnit::Test {
+    private {
+        string dir;
+        string allowed;
+        string real;
+        string link;
+        string outside;
+        Program sandbox;
+    }
+
+    const SandboxCode = '
+string sub read(string path) {
+    File f();
+    f.open2(path);
+    return f.read(-1) ?? "";
+}
+
+# the result of File::open() and its error number
+list<int> sub try_open(string path, int flags) {
+    File f();
+    int rc = f.open(path, flags);
+    return (rc, rc ? errno() : 0);
+}
+
+sub create(string path, int flags = O_CREAT | O_WRONLY) {
+    File f();
+    f.open2(path, flags);
+    f.write("created");
+}
+';
+
+    constructor() : QUnit::Test("sandbox opens pinned", "1.0", \ARGV) {
+        addTestCase("a file opened is the file checked", \openTest());
+        addTestCase("a file created is created in the directory checked", \createTest());
+        addTestCase("a file replaced by a link after the check is not opened", \leafLinkTest());
+        addTestCase("a link as the last component of a creation is followed as without a policy", \createLinkTest());
+        addTestCase("the results of opens are those without a policy", \parityTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("q7518o-");
+        allowed = dir + DirSep + "a";
+        real = allowed + DirSep + "r";
+        link = allowed + DirSep + "l";
+        outside = dir + DirSep + "o";
+        mkdir(allowed);
+        mkdir(real);
+        mkdir(outside);
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+    }
+
+    globalTearDown() {
+        if (dir) {
+            remove_tree(dir);
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link needs dbg_fs_swap_on_open()");
+        }
+        unlink(link);
+        symlink(real, link);
+    }
+
+    tearDown() {
+        call_function("dbg_fs_swap_on_open", "", "");
+    }
+
+    openTest() {
+        writeFile(real + DirSep + "f", "inside");
+        writeFile(outside + DirSep + "f", "outside");
+        arm();
+        assertEq("inside", sandbox.callFunction("read", link + DirSep + "f"));
+    }
+
+    createTest() {
+        arm();
+        *hash<ExceptionInfo> err;
+        try {
+            sandbox.callFunction("create", link + DirSep + "n");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        # also when the creation fails, no file is created outside
+        assertFalse(exists hlstat(outside + DirSep + "n"), "no file is created outside");
+        assertNothing(err, "the creation succeeds");
+        assertEq("created", ReadOnlyFile::readTextFile(real + DirSep + "n"), "the file is created inside");
+    }
+
+    leafLinkTest() {
+        writeFile(real + DirSep + "g", "inside");
+        writeFile(outside + DirSep + "g", "outside");
+        # the file is replaced by a link to the file outside at the end of the pinning of its path (the open's own
+        # hook is skipped)
+        call_function("dbg_fs_swap_on_open", real + DirSep + "g", outside + DirSep + "g", 1);
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("read", real + DirSep + "g"));
+    }
+
+    createLinkTest() {
+        string target = real + DirSep + "t";
+        writeFile(target, "old");
+        string lnk = allowed + DirSep + "tl";
+        symlink(target, lnk);
+        # as without a policy, a creation without O_EXCL follows an existing link to a file that the policy allows
+        sandbox.callFunction("create", lnk, O_CREAT | O_WRONLY | O_TRUNC);
+        assertEq("created", ReadOnlyFile::readTextFile(target));
+        # with O_EXCL, an existing link is refused, as without a policy
+        assertThrows("FILE-OPEN2-ERROR", \sandbox.callFunction(), ("create", lnk, O_CREAT | O_EXCL | O_WRONLY));
+    }
+
+    parityTest() {
+        string p = allowed + DirSep + "p";
+        mkdir(p);
+        string f = p + DirSep + "f";
+        writeFile(f, "x");
+        string lf = p + DirSep + "lf";
+        symlink(f, lf);
+        list<list<auto>> cases = (
+            (lf, O_RDONLY | O_NOFOLLOW),
+            (lf, O_CREAT | O_WRONLY | O_NOFOLLOW),
+            (lf, O_RDONLY),
+            (p + DirSep + ".", O_CREAT | O_WRONLY),
+            (p + DirSep + "..", O_CREAT | O_WRONLY),
+            (p + DirSep, O_RDONLY),
+            (p + DirSep + ".", O_RDONLY),
+            (f + DirSep, O_RDONLY),
+            (f + DirSep, O_CREAT | O_WRONLY),
+            (p + DirSep + "x" + DirSep, O_CREAT | O_WRONLY),
+            (p + DirSep + "missing" + DirSep + "x", O_CREAT | O_WRONLY),
+            (f + DirSep + "x", O_RDONLY),
+            (lf, O_CREAT | O_EXCL | O_WRONLY),
+        );
+        Program plain(PO_MODERN);
+        plain.parse(SandboxCode, "no policy");
+        foreach list<auto> c in (cases) {
+            list<int> expected = plain.callFunction("try_open", c[0], c[1]);
+            assertEq(expected, sandbox.callFunction("try_open", c[0], c[1]), sprintf("open(%y, %d)", c[0], c[1]));
+        }
+    }
+
+    # replaces the link to the directory checked with one to the directory outside, at the end of the pinning of the
+    # path (the open's own hook is skipped)
+    private arm() {
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", outside, 1);
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

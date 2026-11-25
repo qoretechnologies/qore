@@ -1,0 +1,88 @@
+Swagger:
+  basePath: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setBasePath(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setTimeZoneLocale(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  host: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info object's title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reusable schemas: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  addParameter(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's dataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's orNothingDataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's required: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's items: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's additionalProperties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's example: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's type: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  Reflection NormalMember::setValue(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  PathItemObject::merge(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  AbstractObjectBase::initialize(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  LoggerWrapper::setLogger(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  cacheSchemaObject(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  runTypeBuild(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  recordTypeBuildWrite(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  delete the schema: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reads of a shared schema: "/api" "test" "a thing" ["name"]
+OpenAPI 3:
+  basePath: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setBasePath(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  setTimeZoneLocale(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  host: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  info object's title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reusable schemas: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  addParameter(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's dataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's orNothingDataType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's required: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's items: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's additionalProperties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's example: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's type: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  Reflection NormalMember::setValue(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  PathItemObject::merge(): shared: METHOD-DOES-NOT-EXIST, unchanged; own: METHOD-DOES-NOT-EXIST
+  AbstractObjectBase::initialize(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  LoggerWrapper::setLogger(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  cacheSchemaObject(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  runTypeBuild(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  recordTypeBuildWrite(): shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  delete the schema: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reads of a shared schema: "/api" "test" "a thing" ["name"]
+AsyncAPI:
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  defaultContentType: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  components object's schemas: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  delete the schema: shared: SHARED-OBJECT-ERROR, unchanged; own: changed
+  reads of a shared schema: "test" "a thing" ["name"]
+Stripe:
+  basePath: shared: SHARED-OBJECT-ERROR, unchanged
+  setBasePath(): shared: SHARED-OBJECT-ERROR, unchanged
+  setTimeZoneLocale(): shared: SHARED-OBJECT-ERROR, unchanged
+  host: shared: SHARED-OBJECT-ERROR, unchanged
+  info.title: shared: SHARED-OBJECT-ERROR, unchanged
+  info object's title: shared: SHARED-OBJECT-ERROR, unchanged
+  addParameter(): shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's desc: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's dataType: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's orNothingDataType: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's properties: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's required: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's items: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's additionalProperties: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's example: shared: SHARED-OBJECT-ERROR, unchanged
+  schema object's type: shared: SHARED-OBJECT-ERROR, unchanged
+  Reflection NormalMember::setValue(): shared: SHARED-OBJECT-ERROR, unchanged
+  PathItemObject::merge(): shared: METHOD-DOES-NOT-EXIST, unchanged
+  AbstractObjectBase::initialize(): shared: SHARED-OBJECT-ERROR, unchanged
+  LoggerWrapper::setLogger(): shared: SHARED-OBJECT-ERROR, unchanged
+  cacheSchemaObject(): shared: SHARED-OBJECT-ERROR, unchanged
+  runTypeBuild(): shared: SHARED-OBJECT-ERROR, unchanged
+  recordTypeBuildWrite(): shared: SHARED-OBJECT-ERROR, unchanged
+a tenant holds the type build lock of a shared schema: SHARED-OBJECT-ERROR
+trusted code changes a shared schema: "/trusted" "trusted"

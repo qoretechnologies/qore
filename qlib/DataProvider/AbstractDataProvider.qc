@@ -5742,7 +5742,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.6
     */
-    private static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
+    static auto getWrappedExceptionArg(hash<ExceptionInfo> ex) {
         return (ex.arg.typeCode() == NT_HASH ? ex.arg : {}) + {"ex": ex};
     }
 
@@ -7533,7 +7533,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @note The error code passed as \c err is thrown if any errors are detected
     */
-    private *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
+    *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> option_desc,
             *hash<auto> uoptions, *string required_options) {
         # to ensure that the return value has type "hash<auto>"
         hash<auto> options += uoptions;
@@ -7682,7 +7682,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @return the processed expression
     */
-    private *hash<DataProviderExpression> processSearchParameters(*hash<DataProviderExpression> exp,
+    *hash<DataProviderExpression> processSearchParameters(*hash<DataProviderExpression> exp,
             *hash<auto> search_options) {
         if (!exp) {
             return exp;

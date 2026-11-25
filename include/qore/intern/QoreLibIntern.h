@@ -1669,6 +1669,13 @@ DLLLOCAL int qore_check_caller_terminal_io(const char* what, ExceptionSink* xsin
 DLLLOCAL int qore_fd_wait_ready(int fd, bool read, ExceptionSink* xsink, const char* operation);
 
 #ifdef DEBUG
+//! Debug-only: holds the reads of the per-Program cache that find a value, after the lookup, while \a hold is true
+//! (see dbg_program_cache_hold_reads())
+DLLLOCAL void qore_dbg_program_cache_hold_reads(bool hold);
+
+//! Debug-only: waits until \a count reads of the per-Program cache are held; false if not after \a timeout_ms
+DLLLOCAL bool qore_dbg_program_cache_wait_held(int count, int64 timeout_ms);
+
 //! Debug-only: reports that a read or write of the descriptor starts waiting for it (see dbg_fd_wait_notify())
 DLLLOCAL void qore_dbg_fd_wait(int fd);
 
@@ -2959,6 +2966,13 @@ DLLLOCAL int64 get_ms_zero(const QoreValue& v);
 
 DLLLOCAL AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n);
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n);
+
+//! applies the element type of a list whose element type has no type (untyped or auto) to a pointer value
+/** as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment()): an untyped element (list, softlist,
+    list<any>) strips the complex type of a container, an auto element (list<auto>) keeps it; used by the IR
+    interpreter and native code, out of line so that a store of another value costs one test (qore#7573)
+*/
+DLLLOCAL void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry, ExceptionSink* xsink);
 
 // for IPv4/v6 only
 DLLLOCAL void* qore_get_in_addr(struct sockaddr *sa);

@@ -663,10 +663,13 @@ class TenantEchoHandler inherits AbstractDataStreamRequestHandler {
         list<auto> records = ();
         int sent = 0;
         string probe;
+        *string version;
     }
 
     constructor(hash<auto> cx, *hash<auto> ah) : AbstractDataStreamRequestHandler(cx, ah) {
         probe = probe_socket(cx);
+        # a class declared by sandboxed code cannot use the private members of the module's class
+        version = cx.hdr.http_version;
     }
 
     private nothing recvDataImpl(auto data) {
@@ -678,7 +681,7 @@ class TenantEchoHandler inherits AbstractDataStreamRequestHandler {
             return records[sent++];
         }
         if (sent++ == records.size()) {
-            return {\"probe\": probe, \"version\": cx.hdr.http_version};
+            return {\"probe\": probe, \"version\": version};
         }
     }
 }
@@ -1578,7 +1581,8 @@ nothing sub run_code(code c) {
             "the connection's own socket is not a handler's");
         assertThrows("HTTP-HANDLER-SOCKET-ERROR", \http_abort_connection(), c, "a client socket is not a handler's");
         assertEq(c.getSocketInfo(False).port, info.sock.getPeerInfo(False).port, "the request's connection");
-        # the abort of a framework's drain (HTTP/1.1: the connection is closed), run on behalf of the tenant
+        # the abort of a framework's drain (HTTP/1.1: the connection is closed), run on behalf of the tenant: the target
+        # is the server's, and has the server's alias of the connection's socket (qore#7338)
         Socket sock = info.sock;
         p.callFunction("run_code", sub () { sock.close(); });
         assertThrows("SOCKET-CLOSED", \c.readHTTPHeader(), HangGuard, "the client sees the connection closed");

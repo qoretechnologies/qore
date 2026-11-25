@@ -1,0 +1,6 @@
+undeclared member of a write gate: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+compound assignment of an undeclared member: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+remove of an undeclared member: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+delete of an undeclared member: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+declared member with accessors: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+remove of a declared member with accessors: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed

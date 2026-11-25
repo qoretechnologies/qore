@@ -18,13 +18,9 @@ default:
       alias: redis
     - name: mongo:6.0
       alias: mongodb
+  # no job but pipeline-passed and github-status posts the required GitHub status "${REPO_NAME}" (see github-status)
   before_script:
     - . test/docker_test/tree-tested-skip.sh
-    - |
-        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-    - set +e
 
 variables:
   REPO_NAME: qore
@@ -85,7 +81,9 @@ resolve-qore-test-base-images:
     - k8s
     - amd64
   services: []
-  before_script: []
+  # the required GitHub status is pending from the start of the pipeline (see github-status)
+  before_script:
+    - sh test/docker_test/ci-github-status.sh pending
   # one more run when the registry was briefly unavailable (the script exits 1 on any error); this replaces the
   # default retry, so a runner system failure is retried as well
   retry:
@@ -349,18 +347,7 @@ test-ubuntu-amd64:
   variables:
     TEST_TIMEOUT: "600"
   script:
-    - |
-        if test/docker_test/test-ubuntu.sh; then
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 0
-        else
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 1
-        fi
+    - test/docker_test/test-ubuntu.sh
   artifacts:
     when: on_failure
     paths:
@@ -379,18 +366,7 @@ test-ubuntu-arm64:
   variables:
     TEST_TIMEOUT: "600"
   script:
-    - |
-        if test/docker_test/test-ubuntu.sh; then
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 0
-        else
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 1
-        fi
+    - test/docker_test/test-ubuntu.sh
   artifacts:
     when: on_failure
     paths:
@@ -411,18 +387,7 @@ test-alpine-amd64:
   variables:
     TEST_TIMEOUT: "600"
   script:
-    - |
-        if test/docker_test/test-alpine.sh; then
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 0
-        else
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 1
-        fi
+    - test/docker_test/test-alpine.sh
   artifacts:
     when: on_failure
     paths:
@@ -441,18 +406,7 @@ test-alpine-arm64:
   variables:
     TEST_TIMEOUT: "600"
   script:
-    - |
-        if test/docker_test/test-alpine.sh; then
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 0
-        else
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 1
-        fi
+    - test/docker_test/test-alpine.sh
   artifacts:
     when: on_failure
     paths:
@@ -780,3 +734,112 @@ test-tsan-ubuntu-amd64:
       - crash-dumps/
       - tsan-reports/
     expire_in: 7 days
+
+# The required GitHub status of the pipeline (the context "${REPO_NAME}"; qore#7203).  GitHub keeps the last state of
+# a context, so it is posted by these two jobs only, never by a job that tests: when each test job posted its own
+# result there, the check showed the job that finished last, and a job that passed after another had failed made it
+# green.  The other jobs may post contexts of their own (${REPO_NAME}-ir, ...), which are not required.
+# - resolve-qore-test-base-images posts "pending" when the pipeline starts.
+# - pipeline-passed needs every other job of the pipeline (test_ci_required_status.py in examples/test/runner fails
+#   when a job is missing; the jobs that rules can leave out of a pipeline are optional) and runs only when all of
+#   them passed (a parallel job: every shard).  It writes its marker artifact and posts "success"; it fails when it
+#   cannot post it.
+# - github-status runs in every outcome once pipeline-passed has run or was skipped: "success" when the marker is
+#   there, otherwise "failure" (a job failed or was canceled, or was skipped because a job it needs did not pass), so
+#   the check does not stay pending when a job was canceled.
+# A job that is retried and then passes: pipeline-passed, which was skipped, runs then and posts "success" (GitLab runs
+# again the skipped jobs that need a retried job; github-status, which has run, is not run again).  A pipeline that is
+# canceled cancels github-status as well, and the check stays "pending": a pending required check blocks the merge as
+# a failure does, until the pipeline runs again.  In a pipeline whose tree already passed (tree-tested-skip.sh) every
+# job passes at once, and the status names the pipeline that passed the tree.
+pipeline-passed:
+  stage: .post
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  needs:
+    - job: resolve-qore-test-base-images
+      artifacts: false
+    - job: tree-already-tested
+      optional: true
+      artifacts: true
+    - job: check-third-party-sources
+      artifacts: false
+    - job: check-module-release-notes
+      artifacts: false
+    - job: check-fast-routes-core-sanitizers
+      artifacts: false
+    - job: check-build-separate-units
+      artifacts: false
+    - job: build-ubuntu-amd64
+      optional: true
+      artifacts: false
+    - job: build-ubuntu-arm64
+      optional: true
+      artifacts: false
+    - job: build-alpine-amd64
+      optional: true
+      artifacts: false
+    - job: build-alpine-arm64
+      optional: true
+      artifacts: false
+    - job: build-perf
+      optional: true
+      artifacts: false
+    - job: test-ubuntu-amd64
+      artifacts: false
+    - job: test-ubuntu-arm64
+      artifacts: false
+    - job: test-alpine-amd64
+      artifacts: false
+    - job: test-alpine-arm64
+      artifacts: false
+    - job: test-ast-ubuntu-amd64
+      artifacts: false
+    - job: test-ir-ubuntu-amd64
+      artifacts: false
+    - job: test-jit-ubuntu-amd64
+      artifacts: false
+    - job: test-tiered-ubuntu-amd64
+      artifacts: false
+    - job: test-macos
+      optional: true
+      artifacts: false
+    - job: test-perf
+      artifacts: false
+    - job: test-cmake-ubuntu-amd64
+      artifacts: false
+    - job: test-cmake-alpine-amd64
+      artifacts: false
+    - job: test-tsan-ubuntu-amd64
+      artifacts: false
+  when: on_success
+  script:
+    - sh test/docker_test/ci-github-status.sh passed
+  # the marker is uploaded even when the success post failed (the job then fails, and github-status posts it again)
+  artifacts:
+    when: always
+    paths:
+      - ci-pipeline-passed
+    expire_in: 7 days
+
+github-status:
+  stage: .post
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  tags:
+    - k8s
+    - amd64
+  services: []
+  before_script: []
+  needs:
+    - job: pipeline-passed
+      artifacts: true
+    - job: tree-already-tested
+      optional: true
+      artifacts: true
+  when: always
+  script:
+    - sh test/docker_test/ci-github-status.sh final
