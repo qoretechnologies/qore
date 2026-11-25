@@ -4011,7 +4011,7 @@ bool QoreIRFunction::collectHandlerBodyLocals(const StatementBlock* code,
     return !unknown_node_found;
 }
 
-void QoreIRFunction::computeIROnlyLocals() {
+void QoreIRFunction::computeIROnlyLocals(bool aot_method) {
     // the write inventories are recomputed: the take-over analysis cached from them for the AOT IR is computed again
     // when it is needed (see take_over_params_state)
     take_over_params_state.store(0, std::memory_order_release);
@@ -4215,8 +4215,9 @@ void QoreIRFunction::computeIROnlyLocals() {
             // that enters a method instantiates its parameters there (UserVariantBase::setupCall(),
             // instantiateFastCallParams()), and an IR-only parameter would be read from it as a native value only to
             // be boxed again for the argument array of the call; only the body locals that the call takes become
-            // IR-only (issue #7267)
-            if (inst->opcode == QoreIROpcode::CallMethod) {
+            // IR-only (issue #7267). An AOT method can instead receive native parameters at a checked fast
+            // entry: the ordinary AST visibility checks above still protect captured or otherwise visible locals.
+            if (!aot_method && inst->opcode == QoreIROpcode::CallMethod) {
                 const QoreValue& call_expr = static_cast<const QoreIRExprInstruction*>(inst.get())->expr;
                 if (qore_get_self_function_call_node(call_expr.getInternalNode())) {
                     std::unordered_set<const void*> arg_locals;

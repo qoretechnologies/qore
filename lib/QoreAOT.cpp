@@ -3111,7 +3111,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
     }
     // Classify locals as IR-only vs AST-visible for optimization
-    ir_func->computeIROnlyLocals();
+    ir_func->computeIROnlyLocals(sig && sig->selfid && !ir_func->emit_debug_statements);
     // a read of a plain local that the statement writes later is released after its last use (qore#5712)
     ir_func->releasePlainLocalReadsBeforeWrites();
     if (sig) {
