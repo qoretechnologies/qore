@@ -890,9 +890,10 @@
     <tt>unknown time zone region</tt>).  See @ref path_nul_characters.
 
     @par Time Zones Do Not Open Files That a Program May Not Access
-    A zoneinfo path is checked against the restrictions also when it was loaded already and named by its file's
-    canonical path, path zones are limited per sandbox, domain and %Program, and an invalid or missing region raises \c TZINFO-ERROR
-    <tt>unknown time zone region</tt> instead of \c FILE-OPEN2-ERROR.  See @ref sandbox_fs_tz_regions.
+    Restricted code can load time zone regions only, not zoneinfo paths (per-tenant limits:
+    <a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>), and an invalid or missing region
+    raises \c TZINFO-ERROR <tt>unknown time zone region</tt> instead of \c FILE-OPEN2-ERROR.  See
+    @ref sandbox_fs_tz_regions.
 
     @par Deserialized Time Zones Never Open Files
     The time zone of a deserialized date or @ref Qore::TimeZone "TimeZone" is a region, the local zone or a UTC

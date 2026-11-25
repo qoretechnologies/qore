@@ -12,29 +12,45 @@ The whole file is read, up to `QoreZoneInfo::MaxFileSize` (1 MiB; real zoneinfo 
 parsed from memory (`QoreZoneInfo::init()`):
 
 - A path (`findLoadRegionFromPath()`; `findLoadRegionOrPath()` passes names starting with `/` or `.` from
-  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is made absolute with the current directory once
-  and checked against `PO_NO_FILESYSTEM` and the file-system policy of the code that runs (`checkPathPolicy()`,
-  errors name the path as given) before anything else. `loadPath()` then, without the lock: opens exactly that path
-  with `O_NONBLOCK`, requires a regular file (`fstat()`), determines the canonical path of the open file
-  (`F_GETPATH` on macOS, `/proc/self/fd/N` on Linux, `realpath()` otherwise) and verifies that it names the open
-  file (`stat()` device and inode), checks the policy again for that path (the open can reach another file than the
-  checked path named), reads the file and computes the SHA-256 of its data. `pathmap` maps the canonical path to the
-  zone and digest; an entry is used only with the same digest, so a reused inode, another file or changed data never
-  gets another file's zone, and spellings and symbolic links of one file share a zone (on Linux hard links are
-  separate entries; on macOS `F_GETPATH` gives the link name the kernel has cached, so a zone can be named by any
-  link name of its file: that can only lead to false denials, never to access to another file). A changed file gets
-  a new zone; the old one is kept in `retired_path_zones`, as dates refer to it. New zones are inserted under the
-  write lock: when another thread inserted the same data first, its zone is used; when it inserted other data (the
-  file changed), the zone inserted last replaces it in the cache and the replaced one is retired. A new zone is
-  charged with its parsed size (`QoreZoneInfo::memorySize()`; files with more than 10000 transitions are refused)
-  to the sandbox that governs the loading code (`QoreSandboxMemoryAccount` of each member of a composite sandbox:
-  `tz_path_zones`/`tz_path_bytes` against 256 zones and 32 MiB, and `used` against its memory limit, permanently),
-  to its isolation domain (`domain_path_quota`, the same limits) and to the process total for sandboxed code (16384
-  zones, 256 MiB); code that no sandbox governs is charged to its Program (`qore_program_private`, 256 zones, 32 MiB)
-  and not limited by the process total. The zone is named by the canonical path (the directory of the local time
-  file is dropped from the name if a canonical region name follows, #3736). On Windows, where the file is not
-  identified by its handle, code that a sandbox governs cannot load a path; trusted code's paths are made absolute,
-  read without the lock and cached by that path (at most 16384).
+  `TimeZone::setRegion()` and `Program::setTimeZoneRegion()` to it) is refused for restricted code (see below);
+  otherwise it is made absolute with the current directory once and checked against `PO_NO_FILESYSTEM` and the
+  file-system policy of the code that runs (`checkPathPolicy()`, errors name the path as given) before anything
+  else. `loadPath()` then, without the lock: opens exactly that path with `O_NONBLOCK`, determines the canonical path
+  of the open file (`F_GETPATH` on macOS, `/proc/self/fd/N` on Linux, `realpath()` otherwise), verifies that it
+  names the open file (`stat()` device and inode) and checks the policy again for that path before anything is
+  reported about the file; then the file must be regular and is read.
+- Zones (`getZone()`): the data read from a file is identified by the device and inode of the file and the
+  SHA-256 of the data (`ZoneIdentity`); `identity_map` holds one `QoreZoneInfo` per identity, never returned
+  itself. Each name gets a `QoreAliasZoneInfo` named by the name as given (a path) or the region name, which shares
+  the data of the identity's zone; `path_aliases` and `region_aliases` map names to them and an entry is used for
+  a path only when its identity is unchanged (a changed file gets a new zone; the old one is kept in
+  `retired_zones`, as dates refer to it). New zones are inserted under the write lock; when another thread
+  inserted the same data first, its zone is used.
+- Restricted code (`QoreTimeZoneManager::callerRestricted()`, `programRestricted()`): code that a sandbox governs
+  or whose parse options restrict a functional domain, in any Program but a host Program (one created with no
+  Program running, `qore_program_private::tz_host`). The calling code is found past the code of modules, which acts
+  for its caller (`qore_caller_restricts_domain()`, `qore_get_calling_program()`). Restricted code can load regions
+  only: `findLoadRegionFromPath()` raises `ILLEGAL-FILESYSTEM-ACCESS` before anything else (`checkRegion()` raises
+  it first for a path-like name, also one with a NUL character), and the `%set-time-zone` directive refuses a path
+  in a restricted Program: one with a sandbox manager, or a non-host Program whose parse options restrict any
+  functional domain (decided by the Program's own options and sandbox managers, as the directive is processed while
+  other code parses it). Code that a sandbox governs is restricted also in the host Program. A region that restricted code loads
+  gets the zone of the canonical name of the file reached (the walked path with links resolved; on macOS the true
+  name from `F_GETPATH`), so the names that restricted code can add are bounded by the files of the zoneinfo
+  directory, and zone data is bounded by the identities of those files. Region names from data
+  (`findDataRegion()`, `find_create_timezone()` through `findLoadDataRegion()`) follow the same rule: canonical for
+  restricted code, named as given for other code, so that host data round-trips. For restricted code, a name that
+  is not canonical (a link, a spelling) is not added to `region_aliases`; `restricted_spellings` remembers the
+  canonical names of up to `MaxRestrictedSpellings` (512) such spellings (emptied when full), so restricted code
+  reads the file of a spelling again only after that. On Windows, restricted code can use only
+  zoneinfo region names in the runtime's zoneinfo-to-Windows map (exact names; no Windows time zone names), names
+  are at most 255 bytes, and restricted code gets the unknown-region error for any registry failure (unverified: no
+  Windows build). Limits per tenant, which would let
+  restricted code load paths, are a follow-up (qore#7566). Every allocation is made before a map refers to a new
+  zone, and vectors grow geometrically. On Windows, the zone of a path that unrestricted code loads is read without
+  the lock and cached by its absolute path (at most 16384).
+- Date literals: the JIT rebuilds the zone of a literal by its name with `findLoadedZone()`, which finds a zone that
+  was loaded when the code was parsed (a region, a path as given or the local zone) without file access.
 - The `%set-time-zone` parse directive (`qore_program_private::findTimeZoneDirectiveZone()`) is processed while
   the Program is parsed, when the code that runs is the caller of the parse: a path is refused when the parsed
   Program has `PO_NO_FILESYSTEM` or any sandbox manager; a region goes to the region loader.
@@ -49,19 +65,20 @@ parsed from memory (`QoreZoneInfo::init()`):
   subject to the file-system policy of the code that names it, so that sandboxed code can deserialize a date in a
   region that is not cached yet (qore#7442). It takes names from data as well (`find_create_timezone()` for DBI
   drivers and Arrow/Parquet imports, AOT/JIT date literals, regions of deserialized dates), so a name is never
-  loaded as a path there. The region name of the local zone returns it. A canonical name (`isRegionName()`:
-  components of `[A-Za-z0-9_+-]` separated by single `/`) is looked up in `tzmap` under the read lock (only the
-  region loader stores zones there under region names) and otherwise loaded by `loadRegion()` without the lock:
-  `open_region_file()` opens the `realpath()` of the zoneinfo directory with `O_DIRECTORY` and walks the region's
-  components with `openat()` and `O_NOFOLLOW` (`O_DIRECTORY` for directories, `O_NONBLOCK` for the file), so a
-  component replaced during the walk cannot lead outside; a component that is a symbolic link is read with
-  `readlinkat()` and followed only inside of the directory (`..` cannot go above it, an absolute target must be in
-  it, at most 40 links); then `fstat()` must show a regular file, which is read with `read()`. The zone is inserted
-  under the write lock; a zone that another thread inserted first is kept. Every failure up to the parse raises
-  the same `TZINFO-ERROR` `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show
-  whether a path exists; errors in the data name the region. Any other name raises that error too. `checkRegion()`
-  gives it for a region string with a NUL character, a `..` or empty component or a backslash. The zoneinfo
-  directory must not be writable by untrusted code (hard links and files put there cannot be told apart).
+  loaded as a path there. The region name of the local zone returns it. A canonical name (`isRegionName()`: at
+  most 255 bytes of components of `[A-Za-z0-9_+-]` separated by single `/`) is looked up in `region_aliases` under
+  the read lock and otherwise loaded by `loadRegion()` without the lock: `open_region_file()` opens the
+  `realpath()` of the zoneinfo directory with `O_DIRECTORY` and walks the region's components with `openat()` and
+  `O_NOFOLLOW` (`O_DIRECTORY` for directories, `O_NONBLOCK` for the file), taking one component at a time from a
+  string of at most `PATH_MAX` bytes, so a component replaced during the walk cannot lead outside; a component
+  that is a symbolic link is read with `readlinkat()` and followed only inside of the directory (`..` cannot go
+  above it, an absolute target must be in it, at most 40 links); the file must be regular. The zone of the file is
+  named by its path in the zoneinfo directory (on macOS the true name from `F_GETPATH`, as the file system does not
+  distinguish case, so every spelling of a region reaches its file; spellings share its data). Every
+  failure, also a file that is not a zoneinfo file, raises the same `TZINFO-ERROR`
+  `unknown time zone region "<name>"` (`raiseUnknownRegion()`), so the error does not show whether a path exists.
+  `checkRegion()` gives it for a region string with a NUL character, a `..` or empty component or a backslash. The
+  zoneinfo directory must not be writable by untrusted code (hard links and files put there cannot be told apart).
 - `parse()` checks the version 1 header, computes the size of each data block from the header counts in 64-bit
   arithmetic and checks it against the file size before anything in the block is read. A version 1 file is read
   from its 32-bit block. In a version 2+ file the version 1 header and block are only skipped; the 64-bit block

@@ -659,7 +659,9 @@ DLLEXPORT const AbstractQoreZoneInfo* findCreateOffsetZone(int seconds_east);
 //! returns a time zone for the given region name or UTC offset given as a string ("+01:00")
 /** The name is a time zone name from data (ex: a database value or an imported file): it is never loaded as a path;
     only a canonical region name in the zoneinfo directory, the name of the local zone or a UTC offset is accepted,
-    and any other name raises \c TZINFO-ERROR (<tt>unknown time zone region</tt>)
+    and any other name raises \c TZINFO-ERROR (<tt>unknown time zone region</tt>); for restricted code (see the
+    sandboxing documentation), a region gets the time zone of the canonical name of its file (the path in the
+    zoneinfo directory with links resolved), for other code the time zone named as given
 
     @param name the name of the region to find or a UTC offset given as a string ("+01:00")
     @param xsink if the given region is not found or valid or any error occur finding or loading the given region, exception info is stored here and the function returns 0

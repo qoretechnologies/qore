@@ -1194,15 +1194,15 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     zone database of the runtime.  The runtime reads the file of a region itself, so a region that was not loaded
     yet can be used by sandboxed code (ex: when it deserializes a date that trusted code created in the local
     zone): the file of a region is not subject to @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" or to the
-    filesystem policy of the code that names the region.  Therefore only a canonical region name is read: one or
-    more components separated by single \c "/" characters, each component made of ASCII letters, digits, \c "_",
-    \c "+" and \c "-" (ex: \c "Etc/GMT+5", \c "America/Argentina/Buenos_Aires", \c "America/Port-au-Prince"),
-    whose file is a regular file reached from the zoneinfo directory one component at a time without leaving it:
-    symbolic links are followed only inside of the directory; nothing else is accessed for it.  A region that is
-    not a canonical name (ex: one with a \c "." or \c ".." component, an empty path component, a backslash or a
-    NUL character), whose file is outside of the zoneinfo directory or that does not exist raises the same
-    \c TZINFO-ERROR <tt>unknown time zone region</tt>, which does not show whether a file exists.  Only a region
-    loaded this way is cached under its region name.  This applies to
+    filesystem policy of the code that names the region.  Therefore only a canonical region name is read: at most
+    255 bytes of one or more components separated by single \c "/" characters, each component made of ASCII
+    letters, digits, \c "_", \c "+" and \c "-" (ex: \c "Etc/GMT+5", \c "America/Argentina/Buenos_Aires",
+    \c "America/Port-au-Prince"), whose file is a zoneinfo file reached from the zoneinfo directory one component
+    at a time without leaving it: symbolic links are followed only inside of the directory; nothing else is
+    accessed for it.  A region that is not a canonical name (ex: one with a \c "." or \c ".." component, an empty
+    path component, a backslash or a NUL character), whose file is outside of the zoneinfo directory, that does
+    not exist or whose file is not a zoneinfo file raises the same \c TZINFO-ERROR
+    <tt>unknown time zone region</tt>, which does not show whether a file exists.  This applies to
     @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
     @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()",
     @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()", the
@@ -1214,32 +1214,41 @@ string text = ReadOnlyFile::readTextFile(path);  # raises FILE-OPEN2-ERROR
     A zoneinfo file given as an absolute path or a path starting with \c "." is a path when code gives it to
     @ref Qore::TimeZone::constructor() "TimeZone::constructor()",
     @ref Qore::TimeZone::setRegion() "TimeZone::setRegion()" or
-    @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()": a
-    relative path is a path in the current directory; the path is subject to
-    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM", which refuses it without opening the file, and to the
-    filesystem policy of the code that runs, also when the time zone of the path was loaded already; the file is
-    opened at exactly this path without blocking and must be a regular file, and the policy is checked again for the
-    file that the open reached, by its canonical path.  The time zone is named by that canonical path (on macOS, for
-    a file with more than one hard link, by any of its link names) and is shared only by loads of the same file with
-    the same data, so it never changes the time zone of a region name or of another file.  Time zones are never
-    freed, so the memory of a time zone loaded from a path stays charged: to the sandbox that governs the code that
-    loads it (to every sandbox of a composite sandbox, so the Programs that sandboxed code creates share its limits),
-    against its memory limit (see @ref Qore::SandboxManager::setMemoryLimit() "SandboxManager::setMemoryLimit()") and
-    against a limit of 256 time zones and 32 MiB per sandbox and per isolation domain, and against a limit of 16384
-    time zones and 256 MiB for all sandboxed code in the process; code that no sandbox governs is limited to 256 time
-    zones and 32 MiB per %Program and not by the process limit.  A load beyond a limit raises \c TZINFO-ERROR
-    (\c SANDBOX-MEMORY-LIMIT for the memory limit), and a TZif file with more than 10000 transitions is refused.  On Windows, where the file is not identified by its
-    handle, code that a sandbox governs cannot load a time zone from a path (\c ILLEGAL-FILESYSTEM-ACCESS).  The @ref set-time-zone "%set-time-zone" parse directive accepts a path only in a
-    %Program whose file-system access is not restricted (no @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and no
-    sandbox manager), as it is processed while the %Program is parsed.
+    @ref Qore::Program::setTimeZoneRegion() "Program::setTimeZoneRegion()".  Restricted code, which is code that a
+    sandbox governs (in any %Program, also the host %Program) or code whose parse options restrict a functional
+    domain in any %Program but the host %Program, can load time zone regions only.  The host %Program is a %Program
+    that is created where no %Program is running, such as the main %Program of the \c qore program or a %Program
+    that an embedding application creates: its code is not restricted for time zones even if its parse options
+    restrict functional domains (but @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" still refuses paths).  For
+    restricted code, a path raises \c ILLEGAL-FILESYSTEM-ACCESS before anything is accessed, also when restricted
+    code calls the code of a module that loads it, and so does the @ref set-time-zone "%set-time-zone" directive with
+    a path in a restricted %Program; restricted code also gets the time zone of a region by the canonical name of the
+    region's
+    file (its path in the zoneinfo directory with the links resolved, and on macOS its true name), so the time zones
+    that restricted code can add are bounded by the files of the zoneinfo directory; a name that other code loaded
+    already gets that code's time zone, so the name that @ref Qore::TimeZone::region() "TimeZone::region()" returns
+    can depend on which name of a region was loaded first.  This applies to region names from data as well (a
+    deserialized date or @ref Qore::TimeZone "TimeZone" object, or a name that the C++ API
+    \c find_create_timezone() gets); for other code, a region name from data keeps its name.  Limits on the time
+    zones of each tenant, which would allow restricted code to load paths, are a follow-up
+    (<a href="https://github.com/qoretechnologies/qore/issues/7566">issue #7566</a>).  For other code, a relative
+    path is a path in the current directory; the path is subject to
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" and to the filesystem policy, also when the time zone of the path
+    was loaded already; the file is opened at exactly this path without blocking, the policy is checked again for
+    the file that the open reached, by its canonical path, and the file must be a regular file.  The time zone is
+    named by the path as given.
+
+    Each name of a region or path has a time zone of its own; the time zones of the names that reach the same file
+    with the same data share that data, so a time zone never gets the data of another file or the data that a file
+    had before it changed.  A TZif file with more than 10000 transitions is refused.
 
     A time zone name that comes from data and not from code is never loaded as a path: the zone of a deserialized
-    date or @ref Qore::TimeZone "TimeZone" object (see @ref serializable_time_zones), a name that the C++ API
-    \c find_create_timezone() gets (from database drivers and imported Arrow or Parquet data, for example) and the
-    time zone of a date literal in compiled code are a region, the name of the local zone or a UTC offset; any other
-    name raises \c TZINFO-ERROR <tt>unknown time zone region</tt>.  The name of the local zone denotes the local
-    zone in data, also when it is a path (a local time file outside of a zoneinfo directory), without any file
-    access.
+    date or @ref Qore::TimeZone "TimeZone" object (see @ref serializable_time_zones) and a name that the C++ API
+    \c find_create_timezone() gets (from database drivers and imported Arrow or Parquet data, for example) are a
+    region, the name of the local zone or a UTC offset; any other name raises \c TZINFO-ERROR
+    <tt>unknown time zone region</tt>.  The name of the local zone denotes the local zone in data, also when it is
+    a path (a local time file outside of a zoneinfo directory), without any file access.  The time zone of a date
+    literal in code is the time zone that the code had when it was parsed, also one loaded from a path.
 
     @since %Qore 3.0
 
