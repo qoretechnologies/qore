@@ -13,6 +13,7 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -825,6 +826,125 @@ class BuildMatchTest(BuildMatchFixture):
         self.assertIn("*** MISMATCH: the build does not match the tree", result.output)
         self.assertIn("*** the tests run all the same: QORE_TEST_ALLOW_BUILD_MISMATCH=1 ***", result.output)
         self.assertIn("the test ran", result.output)
+
+    def checkout_with_changed_stat_data(self):
+        """Makes the tree as a CI job's tree is when the tests start: a checkout whose files are older than its index
+        (else git reads them whatever their stat data: they are racily clean), with the index refreshed, and then every
+        file replaced by a copy with the same content, mode and mtime: its inode, and so its ctime, are new, as the
+        owner and the ctime of every file are after the job's `chown -R` (qore#7615).  Git's default stat check
+        (core.checkStat=default) then finds no file matching the index and reads each of them; the inode is used
+        because, unlike the ctime, it changes at once whatever the clock's granularity"""
+        tracked = git(self.tree, "ls-files").split("\n")
+        for name in tracked:
+            os.utime(self.tree / name, (SOURCE_TIME - 1000000000, SOURCE_TIME - 1000000000))
+        git(self.tree, "update-index", "--refresh")
+        for name in tracked:
+            path = self.tree / name
+            before = path.stat().st_ino
+            copy = path.with_name(path.name + ".copy")
+            shutil.copy2(path, copy)
+            os.replace(copy, path)
+            self.assertNotEqual(before, path.stat().st_ino)
+        return tracked
+
+    def traced_git(self, log):
+        """Puts a git in the path that records the files of the tree that it opens when it compares the tree (git's own
+        process, and its children), and the arguments of each run, in the given file"""
+        write_script(self.bin / "git", """\
+            #!/bin/sh
+            echo "ARGS $*" >> '%s'
+            for arg in "$@"; do
+                if [ "$arg" = diff ]; then
+                    exec strace -f -qq -e trace=openat,open -o '%s.strace' %s "$@"
+                fi
+            done
+            exec %s "$@"
+            """ % (log, log, shutil.which("git"), shutil.which("git")))
+
+    def test_a_tree_whose_files_changed_owner_and_ctime_is_not_read(self):
+        # qore#7615: the job whose comparison was killed after 60 s ran `chown -R` on the tree: git read and hashed each
+        # of the 10,773 files that it compares (155 MB) instead of looking at their stat data
+        if shutil.which("strace") is None:
+            self.skipTest("strace shows which files git opens")
+        tracked = self.checkout_with_changed_stat_data()
+        log = self.base / "git-runs"
+        self.traced_git(log)
+        self.assert_runs(self.run_runner())
+        opened = Path(str(log) + ".strace").read_text()
+        # git runs in the tree (-C): the paths are relative to it, or absolute
+        reads = [name for name in tracked if name.startswith(("lib/", "qlib/"))
+                 and re.search(r'["/]%s"' % re.escape(name), opened)]
+        self.assertEqual([], reads, "git opened files whose size and mtime are the index's")
+
+    def test_the_comparison_ignores_the_owner_and_the_ctime_of_the_files(self):
+        # the same, as a check of the command that does not need strace: git is told not to compare what a chown changes
+        log = self.base / "git-runs"
+        write_script(self.bin / "git", """\
+            #!/bin/sh
+            echo "ARGS $*" >> '%s'
+            exec %s "$@"
+            """ % (log, shutil.which("git")))
+        self.assert_runs(self.run_runner())
+        diffs = [line for line in log.read_text().split("\n") if line.startswith("ARGS ") and " diff " in line]
+        self.assertEqual(1, len(diffs), log.read_text())
+        self.assertIn("-c core.checkStat=minimal", diffs[0])
+        self.assertIn("-c core.trustctime=false", diffs[0])
+
+    def test_a_change_is_found_in_a_tree_whose_stat_data_changed(self):
+        # the same tree, with a file that was changed (its size and mtime differ): it is still found
+        self.checkout_with_changed_stat_data()
+        (self.tree / "lib/a.cpp").write_text("int a = 10;\n")
+        os.utime(self.tree / "lib/a.cpp", (LATER, LATER))
+        self.assert_refused(self.run_runner(), "    lib/a.cpp")
+
+    def fake_git_that_hangs_at_diff(self):
+        """Puts a git in the path that hangs where the check compares the tree, and runs the others as git does"""
+        write_script(self.bin / "git", """\
+            #!/bin/sh
+            for arg in "$@"; do
+                if [ "$arg" = diff ]; then
+                    exec sleep 30
+                fi
+            done
+            exec %s "$@"
+            """ % shutil.which("git"))
+
+    def test_a_comparison_that_is_killed_is_an_infrastructure_error_not_a_mismatch(self):
+        # qore#7615: the comparison that the time limit killed was reported as a mismatch of the build with the tree
+        # (the same commit), with "Killed" as the reason
+        self.fake_git_that_hangs_at_diff()
+        result = self.run_runner(QORE_TEST_BUILD_CHECK_WAIT="1")
+        self.assertEqual(75, result.returncode, result.output)
+        self.assertNotIn("the test ran", result.output)
+        self.assertNotIn("*** MISMATCH:", result.output)
+        self.assertNotIn("Killed", result.output)
+        self.assertIn("*** BUILD CHECK FAILED: the tree could not be compared with the build's commit "
+                      + self.commit, result.output)
+        self.assertIn("not a mismatch", result.output)
+        self.assertIn("QORE_TEST_BUILD_CHECK_WAIT", result.output)
+        self.assertIn("Exiting.", result.output)
+
+    def test_a_comparison_that_is_killed_runs_the_tests_with_the_override(self):
+        self.fake_git_that_hangs_at_diff()
+        result = self.run_runner(QORE_TEST_BUILD_CHECK_WAIT="1", QORE_TEST_ALLOW_BUILD_MISMATCH="1")
+        self.assertEqual(0, result.returncode, result.output)
+        self.assertIn("*** BUILD CHECK FAILED: the tree could not be compared with the build's commit", result.output)
+        self.assertIn("*** the tests run all the same: QORE_TEST_ALLOW_BUILD_MISMATCH=1 ***", result.output)
+        self.assertIn("the test ran", result.output)
+
+    def test_a_comparison_that_fails_is_still_a_mismatch(self):
+        # a git that fails for another reason than the time limit (a corrupt repository) keeps its report
+        write_script(self.bin / "git", """\
+            #!/bin/sh
+            for arg in "$@"; do
+                if [ "$arg" = diff ]; then
+                    echo "fatal: the repository is corrupt" >&2
+                    exit 128
+                fi
+            done
+            exec %s "$@"
+            """ % shutil.which("git"))
+        self.assert_refused(self.run_runner(), "the repository is corrupt")
 
 
 class BuildMatchSpaceTest(BuildMatchFixture):
