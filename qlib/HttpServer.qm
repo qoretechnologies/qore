@@ -1197,7 +1197,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         *code<string(string)> maskfunc;
 
         # if the hostname may be shown in the error pages: not if code restricted from external information created
-        # the server (qore#7586)
+        # the server, nor for such code that calls the server's methods (qore#7586)
         bool show_hostname = True;
 
         # quit server flag
@@ -3380,11 +3380,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! Returns the HTML error page for the given status code and message
     /** The page shows the server's name and the hostname, but not the hostname if code restricted from external
-        information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created the server (see
-        @ref sandbox_ambient_host_data)
+        information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created the server or calls this method
+        (see @ref sandbox_ambient_host_data)
     */
     string getHtmlErrorMessage(int status_code, string msg) {
-        string address = show_hostname
+        string address = show_hostname && SandboxManager::callerMayReadExternalInfo()
             ? sprintf("%s on %s", http_server_string, gethostname())
             : http_server_string;
         return sprintf("<html><head><title>%s %s</title></head><body><h1>%s</h1><pre>%s</pre><p><hr><address>%s"

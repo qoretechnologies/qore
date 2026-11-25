@@ -661,8 +661,10 @@ string path = normalize_dir(path);
     @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()") may not
     read: if \a cwd is not given for such code, a relative path is not prefixed with it; the result is the
     normalized relative path (\c "." and repeated separators removed, \c ".." resolved where it can be, leading
-    \c ".." segments kept, \c "." for an empty path), which names the same file for the file system functions
-    (see @ref sandbox_ambient_host_data)
+    \c ".." segments kept, otherwise starting with \c "./", \c "." for an empty path), which names the same file
+    for the file system functions; a relative \a cwd that such code gives is joined with the path in the same way
+    (ex: \c "./d/x" for \c "x" in \c "d"), so that a path below a relative directory starts with that directory
+    normalized (see @ref sandbox_ambient_host_data)
 
     @see
     - @ref Util::normalize_dir_unix() or
@@ -700,6 +702,10 @@ public string sub normalize_dir_unix(string path, *string cwd) {
         }
         if (!exists cwd) {
             return Util::normalize_relative_path(path, "/");
+        }
+        # a relative working directory given by such a caller: the result stays relative (qore#7586)
+        if (cwd.val() && !absolute_path_unix(cwd) && !SandboxManager::callerMayReadExternalInfo()) {
+            return Util::normalize_relative_path(cwd + "/" + path, "/");
         }
         path = cwd + "/" + path;
     }
@@ -760,6 +766,10 @@ public string sub normalize_dir_windows(string path, *string cwd) {
         if (!exists cwd) {
             return Util::normalize_relative_path(path, "\\");
         }
+        # a relative working directory given by such a caller: the result stays relative (qore#7586)
+        if (cwd.val() && !absolute_path_windows(cwd) && !SandboxManager::callerMayReadExternalInfo()) {
+            return Util::normalize_relative_path(cwd + "\\" + path, "\\");
+        }
         path = cwd + "\\" + path;
     }
 
@@ -805,7 +815,9 @@ public string sub normalize_dir_windows(string path, *string cwd) {
 }
 
 #! normalizes a relative path as a relative path: removes \c "." and empty segments and resolves \c ".." where it can
-/** Leading \c ".." segments are kept, as the path is relative to a directory that is not known
+/** Leading \c ".." segments are kept, as the path is relative to a directory that is not known; a path in the
+    directory itself starts with \c "./", so that a path below a relative directory starts with the normalized
+    directory (ex: \c "./x" is below \c ".", \c "./d/x" below \c "./d")
 
     @param path the relative path
     @param sep the path separator
@@ -824,7 +836,10 @@ string sub normalize_relative_path(string path, string sep) {
         }
         push rv, seg;
     }
-    return rv ? rv.join(sep) : ".";
+    if (!rv) {
+        return ".";
+    }
+    return (rv[0] == ".." ? "" : "." + sep) + rv.join(sep);
 }
 
 #! removes ".." segments and the segments they refer to from a list of path segments
@@ -858,27 +873,70 @@ string path = get_relative_path("/var/tmp", path);
     @param cwd the current working directory, used in case \a base or \a path are relative paths; if not given
     and the current working directory cannot be determined, relative paths are normalized relative to the root
     directory; if not given and the calling code may not read external information, \a basedir and \a path must be
-    both absolute or both relative paths
+    both absolute or both relative paths, and the result of two relative paths must not depend on the names of the
+    current working directory and its parents (ex: from \c ".." to \c "x")
 
     @return a path as a relative path from another directory
 
     @throw INVALID-FUNCTION-ACCESS \a cwd is not given, the calling code may not read external information
     (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"; the current working directory is information about the
-    host), and one of \a basedir and \a path is an absolute path and the other a relative one, so that the result
-    would depend on the current working directory (see @ref sandbox_ambient_host_data)
+    host), and the result would depend on the current working directory: one of \a basedir and \a path is an
+    absolute path and the other a relative one, or the result of two relative paths would name the current working
+    directory or one of its parents (see @ref sandbox_ambient_host_data)
 
     @since %Util 1.8
 */
 public string sub get_relative_path(string basedir, string path, *string cwd) {
+    # the names of a working directory that stands in for the current one, which the caller may not read
+    *list<string> placeholder;
     if (!exists cwd) {
         # the current working directory only for a caller that could read it itself (qore#7586)
         cwd = Util::default_cwd();
-        if (!exists cwd && absolute_path(basedir) != absolute_path(path)) {
-            throw "INVALID-FUNCTION-ACCESS", sprintf("get_relative_path(): the relative path from %y to %y depends "
-                "on the current working directory, which the calling code may not read (PO_NO_EXTERNAL_INFO); give "
-                "the current working directory explicitly", basedir, path);
+        if (!exists cwd) {
+            if (absolute_path(basedir) != absolute_path(path)) {
+                Util::throw_cwd_dependent(basedir, path);
+            }
+            if (!absolute_path(basedir)) {
+                # two relative paths: a placeholder directory deep enough for their leading ".." segments; a result
+                # that names a part of it depends on the current working directory
+                int depth = 1;
+                foreach string p in ((basedir, path)) {
+                    int n = 0;
+                    foreach string seg in (Util::normalize_relative_path(p, DirSep).split(DirSep)) {
+                        if (seg != "..") {
+                            break;
+                        }
+                        ++n;
+                    }
+                    depth = max(depth, n + 1);
+                }
+                placeholder = map "qore-cwd-" + Util::get_random_string(16), xrange(depth);
+                cwd = DirSep + placeholder.join(DirSep);
+            }
         }
     }
+    if (placeholder) {
+        string rv = Util::get_relative_path_intern(basedir, path, cwd);
+        foreach string seg in (rv.split(DirSep)) {
+            if (inlist(seg, placeholder)) {
+                Util::throw_cwd_dependent(basedir, path);
+            }
+        }
+        return rv;
+    }
+    return Util::get_relative_path_intern(basedir, path, cwd);
+}
+
+#! raises INVALID-FUNCTION-ACCESS: the relative path depends on the current working directory, which the caller may
+#! not read (qore#7586)
+sub throw_cwd_dependent(string basedir, string path) {
+    throw "INVALID-FUNCTION-ACCESS", sprintf("get_relative_path(): the relative path from %y to %y depends on the "
+        "current working directory, which the calling code may not read (PO_NO_EXTERNAL_INFO); give the current "
+        "working directory explicitly", basedir, path);
+}
+
+#! returns a path as a relative path from another directory, with the given working directory
+string sub get_relative_path_intern(string basedir, string path, *string cwd) {
     basedir = normalize_dir(basedir, cwd);
     string dir = normalize_dir(dirname(path), cwd);
     string file = basename(path);

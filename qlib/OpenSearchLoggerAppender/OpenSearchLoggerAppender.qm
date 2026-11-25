@@ -183,7 +183,8 @@ module OpenSearchLoggerAppender {
 
     The \c host field is not written by an appender that code restricted from external information
     (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") created, as the hostname is information about the host
-    that such code may not read (see @ref sandbox_ambient_host_data).
+    that such code may not read; it is decided when the appender is created, so an appender of the host writes it
+    whatever code logs through it (see @ref sandbox_ambient_host_data).
 
     @section opensearchloggerappenderfields Constant Document Fields
 

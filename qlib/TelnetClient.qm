@@ -69,8 +69,8 @@ module TelnetClient {
     @section telnetclient_relnotes TelnetClient Module Release Notes
 
     @subsection telnetclient_v1_8 TelnetClient v1.8
-    - a client that code restricted from external information created sends the server no values of the host's
-      environment (\c DISPLAY, \c PRINTER, \c TERM) and not the hostname (see @ref sandbox_ambient_host_data)
+    - a client that code restricted from external information created or calls sends the server no values of the
+      host's environment (\c DISPLAY, \c PRINTER, \c TERM) and not the hostname (see @ref sandbox_ambient_host_data)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"), which sends a
@@ -564,10 +564,11 @@ public class TelnetClient {
     #! this method provides the value that will be given as the DISPLAY value in protocol negotiation
     /** override this method in a subclass to provide a different value
 
-        none if code restricted from external information created the client (see @ref sandbox_ambient_host_data)
+        none if code restricted from external information created or calls the client (see
+        @ref sandbox_ambient_host_data)
     */
     private *string getDisplay() {
-        if (!host_env) {
+        if (!hostEnv()) {
             return;
         }
         *string rv = ENV.DISPLAY;
@@ -578,22 +579,30 @@ public class TelnetClient {
     #! this method provides the value that will be given as the terminal type in protocol negotiation
     /** override this method in a subclass to provide a different value
 
-        @ref DefaultTerminalType if code restricted from external information created the client (see
+        @ref DefaultTerminalType if code restricted from external information created or calls the client (see
         @ref sandbox_ambient_host_data)
     */
     private *string getTerminalType() {
-        return host_env && ENV.TERM.val() ? ENV.TERM : DefaultTerminalType;
+        return hostEnv() && ENV.TERM.val() ? ENV.TERM : DefaultTerminalType;
     }
 
     #! this method provides the value that will be given as the user's environment in protocol negotiation
     /** override this method in a subclass to provide a different value
 
-        no value of the host's environment if code restricted from external information created the client (see
-        @ref sandbox_ambient_host_data)
+        no value of the host's environment if code restricted from external information created or calls the client
+        (see @ref sandbox_ambient_host_data)
     */
     private hash getEnvironment() {
         # by default we only return the DISPLAY and PRINTER env variables to the other side
-        return (host_env ? ENV.(list("PRINTER")) : {}) + ("DISPLAY": getDisplay());
+        return (hostEnv() ? ENV.(list("PRINTER")) : {}) + ("DISPLAY": getDisplay());
+    }
+
+    #! returns @ref True if values of the host's environment and the hostname may be sent to the server
+    /** Not if code restricted from external information created the client or calls it (see
+        @ref sandbox_ambient_host_data)
+    */
+    private bool hostEnv() {
+        return host_env && SandboxManager::callerMayReadExternalInfo();
     }
 
     #! this method provides the value that will be given as the terminal speed in protocol negotiation

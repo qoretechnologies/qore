@@ -950,7 +950,9 @@ authenticate();
       \c NO_COLOR, @ref QUnit::Test::getEnv() "QUnit::Test::getEnv()" gives no values,
       @ref EdifactUtil::EdifactDirectoryCache "EdifactDirectoryCache" takes no cache root from the environment and
       expands no \c ~ (\c EDIFACT-CACHE-ERROR), and a @ref TelnetClient::TelnetClient "TelnetClient" that such code
-      created sends the server no \c DISPLAY, \c PRINTER and \c TERM
+      created or calls sends the server no \c DISPLAY and \c PRINTER and the default terminal type instead of
+      \c TERM; the \c %%E field of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" that such code
+      created is empty
 
     Information about the host other than the environment is not used for such code either, as it may not read it
     itself (@ref Qore::getcwd() "getcwd()", @ref Qore::gethostname() "gethostname()",
@@ -961,11 +963,13 @@ authenticate();
       path is absolute and the other relative; the REPL's \c /pwd command is refused
     - the hostname, the PID and the addresses of the network interfaces:
       @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" uses the loopback address for a wildcard
-      bind address; the \c %%h, \c %%P and \c %%E fields of a @ref Qore::Logger::LoggerLayoutPattern
-      "LoggerLayoutPattern", the hostname in the error pages of an @ref HttpServer::HttpServer "HttpServer", the
-      \c host field of the documents of the ElasticSearch and OpenSearch logger appenders and the PID in the task IDs
-      of the MCP and A2A server handlers are left out for an object that such code created (it is decided when the
-      object is created); the SMTP client names \c localhost in its \c EHLO and \c HELO commands
+      bind address, and the SMTP client names \c localhost in its \c EHLO and \c HELO commands; the hostname in the
+      error pages of an @ref HttpServer::HttpServer "HttpServer" and the PID in the task IDs of the MCP and A2A server
+      handlers are left out for an object that such code created and while such code calls one of the host; the
+      \c %%h and \c %%P fields of a @ref Qore::Logger::LoggerLayoutPattern "LoggerLayoutPattern" and the \c host
+      field of the documents of the ElasticSearch and OpenSearch logger appenders are left out for an object that
+      such code created: it is decided when the object is created, so a layout or appender of the host keeps them
+      whatever code logs through it, as the file names of the Logger file appenders do
 
     The host grants this information as it grants ambient data, with a policy barrier or a capability, and an object
     that it lends lends nothing here.  Library code that uses this information for its own work and gives the caller

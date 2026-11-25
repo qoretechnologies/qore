@@ -65,7 +65,8 @@ public:
 private:
     //! if the hostname, the PID and the values of environment variables are formatted (\c %h, \c %P, \c %E)
     /** Not if code restricted from external information created the layout: it is decided when the layout is
-        created, so a layout of the host keeps its fields whatever code logs through it (qore#7586)
+        created, so a layout of the host keeps its fields whatever code logs through it, as the file names of the
+        Logger file appenders do (qore#7586)
     */
     const bool host_info;
 

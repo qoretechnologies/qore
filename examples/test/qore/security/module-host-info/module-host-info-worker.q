@@ -130,12 +130,18 @@ hash<auto> may_read = {
     "norm": normalize_dir("a/../b/./c", cwd),
     "norm_up": normalize_dir_unix("../x/./y//z/..", cwd),
     "norm_corner": (map normalize_dir($1, cwd), ("", "./", "a/..", "../../a/../b")),
+    "norm_relcwd": (normalize_dir("x", "."), normalize_dir("x", "d"), normalize_dir("../e", ".")),
     # the current working directory of a UNIX host prefixed as it is
     "norm_win": cwd + "\\b",
     "norm_abs": "/q7586/b",
     "norm_explicit": "/q7586/b",
     "rel": "./b/f",
     "rel_abs": "../b/f",
+    "rel_dot": "../x",
+    "rel_dotdir": "../y",
+    "rel_sib": get_relative_path("a", "x", cwd),
+    "rel_up": get_relative_path("..", "x", cwd),
+    "rel_up2": get_relative_path("../a", "b", cwd),
     "rel_mixed": get_relative_path("/q7586", "y", cwd),
     "nocolor": True,
     "url_wild": url_wild_host,
@@ -152,6 +158,7 @@ hash<auto> may_read = {
     "telnet_display": ENV.DISPLAY,
     "qunit_env": ENV.QUNIT_Q7586,
     "edifact": ENV.QORE_EDIFACT_DIRCACHE,
+    "edifact_tilde": getenv("HOME") + "/q7586",
     "edifact_explicit": "/q7586/edifact",
     "conns": ("q7586",),
     "conn": "q7586://host-user:host-secret@host.example",
@@ -161,6 +168,9 @@ hash<auto> may_read = {
     "mcp_pid": True,
     "a2a_pid": True,
     "repl_pwd": cwd,
+    "repl_cd": "Changed to: " + cwd,
+    "lent_errpage": True,
+    "lent_layout": sprintf("%s|%s|%s", hostname, pid, ENV.Q7586_SECRET),
     "grant_barrier": tmp_host,
     "grant_capability": tmp_host,
     "lent_tmp": tmp_host,
@@ -172,10 +182,15 @@ hash<auto> may_not_read = may_read + {
     "tmp": tmp_free,
     "tmpdir": tmp_free,
     "tmpfile": tmp_free,
-    "norm": "b/c",
+    "norm": "./b/c",
     "norm_up": "../x/y",
     "norm_corner": (".", ".", ".", "../../b"),
-    "norm_win": "b",
+    "norm_win": ".\\b",
+    # a relative working directory given by such code: the result is below it
+    "norm_relcwd": ("./x", "./d/x", "../e"),
+    "rel_sib": "../x",
+    "rel_up": "INVALID-FUNCTION-ACCESS",
+    "rel_up2": "INVALID-FUNCTION-ACCESS",
     "rel_mixed": "INVALID-FUNCTION-ACCESS",
     "nocolor": False,
     "url_wild": "http://127.0.0.1:8080",
@@ -192,6 +207,7 @@ hash<auto> may_not_read = may_read + {
     "telnet_display": NOTHING,
     "qunit_env": NOTHING,
     "edifact": "EDIFACT-CACHE-ERROR",
+    "edifact_tilde": "EDIFACT-CACHE-ERROR",
     "conns": (),
     "conn": "CONNECTION-ERROR",
     "conn_hash": (),
@@ -200,6 +216,8 @@ hash<auto> may_not_read = may_read + {
     "mcp_pid": False,
     "a2a_pid": False,
     "repl_pwd": "REPL-ERROR",
+    "repl_cd": "Changed directory",
+    "lent_errpage": False,
     # a lent object lends nothing
     "lent_tmp": tmp_free,
     "lent_url": "http://127.0.0.1:8080",
@@ -207,13 +225,15 @@ hash<auto> may_not_read = may_read + {
 
 # the values must differ, or the checks would not show what the code gets
 foreach string k in (keys may_read) {
-    if (may_read{k} === may_not_read{k} && k !~ /^(norm_abs|norm_explicit|rel|rel_abs|smtp|edifact_explicit|grant_.*)$/) {
+    if (may_read{k} === may_not_read{k} && k !~ /^(norm_abs|norm_explicit|rel|rel_abs|rel_dot|rel_dotdir|rel_sib|smtp|edifact_explicit|grant_.*|lent_layout)$/) {
         check("setup/" + k, "distinct values", "the same value");
     }
 }
 
-# an object of the AmbientCallers module that the host lends
+# objects that the host lends: of the AmbientCallers module, an HTTP server and a logger layout
 AmbientCallers::LentWorker lent();
+HttpServer::HttpServer host_server();
+Logger::LoggerLayoutPattern host_layout("%h|%P|%E{Q7586_SECRET}");
 
 SmtpRecorder smtp();
 
@@ -239,14 +259,18 @@ foreach hash<auto> mode in (Modes.pairIterator()) {
         p.setGlobalVarValue("q_hostname", hostname);
         p.setGlobalVarValue("q_smtp_port", smtp.port);
         p.setGlobalVarValue("q_lent", lent);
+        p.setGlobalVarValue("q_server", host_server);
+        p.setGlobalVarValue("q_layout", host_layout);
         p.setGlobalVarValue("q_r", {});
         p.run();
         hash<auto> r = p.getGlobalVariable("q_r");
         # the task IDs: whether they contain the PID (an error as it is)
         r.mcp_pid = r.mcp_id =~ /^task-/ ? r.mcp_id.find("-" + pid + "-") >= 0 : r.mcp_id;
         r.a2a_pid = r.a2a_id =~ /^task-/ ? r.a2a_id.find("-" + pid + "-") >= 0 : r.a2a_id;
-        if (r.errpage.typeCode() == NT_STRING) {
-            r.errpage = r.errpage.find(" on " + hostname + "</address>") >= 0;
+        foreach string k in (("errpage", "lent_errpage")) {
+            if (r{k}.typeCode() == NT_STRING && r{k} =~ /^<html>/) {
+                r{k} = r{k}.find(" on " + hostname + "</address>") >= 0;
+            }
         }
         r.smtp_ehlo = r.smtp == "connected" ? smtp.lines.get(30s) : NOTHING;
         hash<auto> expected = kind.value.restricted ? may_not_read : may_read;

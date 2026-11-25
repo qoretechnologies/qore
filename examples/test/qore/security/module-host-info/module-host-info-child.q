@@ -9,6 +9,8 @@
 our *string q_hostname;
 our *int q_smtp_port;
 our *object q_lent;
+our *object q_server;
+our *object q_layout;
 our hash<auto> q_r;
 
 # subclasses that reach the protected methods of the modules' classes
@@ -80,11 +82,17 @@ try {
 try { q_r.norm = Util::normalize_dir("a/../b/./c"); } catch (hash<ExceptionInfo> ex) { q_r.norm = ex.err; }
 try { q_r.norm_up = Util::normalize_dir_unix("../x/./y//z/.."); } catch (hash<ExceptionInfo> ex) { q_r.norm_up = ex.err; }
 try { q_r.norm_corner = map Util::normalize_dir($1), ("", "./", "a/..", "../../a/../b"); } catch (hash<ExceptionInfo> ex) { q_r.norm_corner = ex.err; }
+try { q_r.norm_relcwd = (Util::normalize_dir("x", "."), Util::normalize_dir("x", "d"), Util::normalize_dir("../e", ".")); } catch (hash<ExceptionInfo> ex) { q_r.norm_relcwd = ex.err; }
 try { q_r.norm_win = Util::normalize_dir_windows("a\\..\\b"); } catch (hash<ExceptionInfo> ex) { q_r.norm_win = ex.err; }
 try { q_r.norm_abs = Util::normalize_dir("/q7586/a/../b"); } catch (hash<ExceptionInfo> ex) { q_r.norm_abs = ex.err; }
 try { q_r.norm_explicit = Util::normalize_dir("b", "/q7586"); } catch (hash<ExceptionInfo> ex) { q_r.norm_explicit = ex.err; }
 try { q_r.rel = Util::get_relative_path("a", "a/b/f"); } catch (hash<ExceptionInfo> ex) { q_r.rel = ex.err; }
 try { q_r.rel_abs = Util::get_relative_path("/q7586/a", "/q7586/b/f"); } catch (hash<ExceptionInfo> ex) { q_r.rel_abs = ex.err; }
+try { q_r.rel_dot = Util::get_relative_path(".", "../x"); } catch (hash<ExceptionInfo> ex) { q_r.rel_dot = ex.err; }
+try { q_r.rel_dotdir = Util::get_relative_path("x/..", "../y"); } catch (hash<ExceptionInfo> ex) { q_r.rel_dotdir = ex.err; }
+try { q_r.rel_sib = Util::get_relative_path("a", "x"); } catch (hash<ExceptionInfo> ex) { q_r.rel_sib = ex.err; }
+try { q_r.rel_up = Util::get_relative_path("..", "x"); } catch (hash<ExceptionInfo> ex) { q_r.rel_up = ex.err; }
+try { q_r.rel_up2 = Util::get_relative_path("../a", "b"); } catch (hash<ExceptionInfo> ex) { q_r.rel_up2 = ex.err; }
 try { q_r.rel_mixed = Util::get_relative_path("/q7586", "y"); } catch (hash<ExceptionInfo> ex) { q_r.rel_mixed = ex.err; }
 try { q_r.nocolor = Util::TerminalColor::isColorDisabled(); } catch (hash<ExceptionInfo> ex) { q_r.nocolor = ex.err; }
 
@@ -139,6 +147,7 @@ try { q_r.qunit_env = (new QUnit::Test("q7586", "1.0", ())).getEnv("Q7586"); } c
 
 # EdifactUtil
 try { q_r.edifact = (new EdifactUtil::EdifactDirectoryCache()).getCacheRoot(); } catch (hash<ExceptionInfo> ex) { q_r.edifact = ex.err; }
+try { q_r.edifact_tilde = (new EdifactUtil::EdifactDirectoryCache("~/q7586")).getCacheRoot(); } catch (hash<ExceptionInfo> ex) { q_r.edifact_tilde = ex.err; }
 try { q_r.edifact_explicit = (new EdifactUtil::EdifactDirectoryCache("/q7586/edifact")).getCacheRoot(); } catch (hash<ExceptionInfo> ex) { q_r.edifact_explicit = ex.err; }
 
 # ConnectionProvider and DatasourceProvider
@@ -158,6 +167,24 @@ try {
     q_r.repl_pwd = h.error ? h.error.err : h.value;
 } catch (hash<ExceptionInfo> ex) {
     q_r.repl_pwd = ex.err;
+}
+
+# QoreRepl: the reply of /cd (to the current directory, which is not changed)
+try {
+    *hash<auto> h = (new QoreRepl::QoreRepl({"history_file": NOTHING})).eval("/cd .");
+    q_r.repl_cd = h.error ? h.error.err : h.value;
+} catch (hash<ExceptionInfo> ex) {
+    q_r.repl_cd = ex.err;
+}
+
+# objects of the modules' classes that the host created and lent: the error page of a server of the host gives no
+# hostname to such code; a layout of the host keeps its fields (decided when it was created)
+try { q_r.lent_errpage = q_server.getHtmlErrorMessage(404, "q7586"); } catch (hash<ExceptionInfo> ex) { q_r.lent_errpage = ex.err; }
+try {
+    q_r.lent_layout = q_layout.format(new Logger::LoggerEvent("q7586", "q7586", Logger::LoggerLevel::getLevelInfo(),
+        "m"));
+} catch (hash<ExceptionInfo> ex) {
+    q_r.lent_layout = ex.err;
 }
 
 # the host's grants: a policy barrier and a system-policy capability (the host's values for every caller)
