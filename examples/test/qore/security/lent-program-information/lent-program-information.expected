@@ -1,0 +1,21 @@
+host: <host dir> True <host value> <path> <path>
+borrower callFunction: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower callFunctionArgs: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower callStaticMethod: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower callStaticMethodArgs: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower function reference: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower method reference: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower expression: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower reference to callFunction(): <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower run(): <borrower dir> False
+borrower, nested lent call: <borrower dir> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower, a call resolved at run time: "INVALID-FUNCTION-ACCESS"
+borrower, a builtin method of the domain: "INVALID-FUNCTION-ACCESS"
+borrower, module code that uses the domain internally: "pid"; host: "pid"
+borrower, the location of an exception: "host"; host: "host"
+borrower, a lent call from a module thread: <path> False "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS" "INVALID-FUNCTION-ACCESS"
+borrower, a host function that reads a file: "host data" "host data"
+borrower, an exception in the lent call: "BOOM"
+host after the exception: <host dir> True <host value> <path> <path>
+host calls the borrower's reference: <host dir> True <host value> <path> <path>
+host after the borrower's calls: <host dir> True <host value> <path> <path>

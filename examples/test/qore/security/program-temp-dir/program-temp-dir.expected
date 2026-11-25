@@ -3,8 +3,8 @@ restricted TmpDir: "<dir>"
 restricted child: "<dir>"
 restricted set lent: "SANDBOX-ACCESS-ERROR"
 restricted set child: "SANDBOX-ACCESS-ERROR"
-restricted module Program: <default>
-second restricted module Program: <default>
+restricted module Program: "<dir>"
+second restricted module Program: "<scratch>/second"
 second restricted tmp_location: "<scratch>/second"
 host module Program: <default>
 sandboxed tmp_location: "<dir>"

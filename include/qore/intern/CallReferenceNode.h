@@ -43,6 +43,11 @@ struct QoreTypeParamInstantiation;
 class LocalFunctionCallReferenceNode;
 class FunctionCallReferenceNode;
 class FunctionEntry;
+
+//! marks a call reference that a Program object gives (Program::getCallReference()) so that its calls record the
+//! call into the Program as the Program object's methods that run its code do (QoreLentProgramInfoHelper,
+//! qore#7678); does nothing for any other value
+DLLLOCAL void qore_call_reference_set_lent_program(QoreValue v);
 class RuntimeConfig;
 
 struct CallReferenceNodeLocation {
@@ -296,6 +301,29 @@ public:
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
     }
+
+    //! marks the reference as one that a Program object gave (see FunctionCallReferenceNode::setLentProgram())
+    DLLLOCAL void setLentProgram() {
+        lent_program = true;
+    }
+
+private:
+    //! true if a Program object gave the reference (Program::getCallReference(), qore#7678)
+    bool lent_program = false;
+
+    //! the bodies of the dispatchers and their variants for a reference that a Program object gave (qore#7678)
+    DLLLOCAL QoreValue dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+    DLLLOCAL QoreValue dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
 };
 
 //! a call reference to a static user method resolved after AOT source linking
@@ -541,8 +569,31 @@ public:
         }
     }
 
+    //! marks the reference as one that a Program object gave (Program::getCallReference()): its calls record the call
+    //! into the Program as the Program object's methods that run its code do (qore#7678)
+    DLLLOCAL void setLentProgram() {
+        lent_program = true;
+    }
+
 protected:
     QoreProgram* pgm;
+    //! true if a Program object gave the reference (see setLentProgram())
+    bool lent_program = false;
+
+    //! the bodies of the dispatchers and their variants for a reference that a Program object gave (qore#7678)
+    DLLLOCAL QoreValue dispatchValueImpl(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsImpl(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedImpl(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueImpl(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+    DLLLOCAL QoreValue dispatchValueLent(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue execValueTmpArgsLent(QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamedLent(const QoreListNode* args, const name_vec_t& arg_names,
+            LexicalSemanticPolicy policy, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchLexicalValueLent(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+
     //! the declarations of the explicit type arguments (see holdExplicitTypeArgDecls())
     QoreTypeDeclRefs explicit_type_arg_decls;
 

@@ -105,7 +105,9 @@ call("restricted set lent", restricted, "set_own", (restricted,));
 call("restricted set child", restricted, "set_child");
 
 # a Program that module code creates and keeps for all of its callers takes no directory from the caller that created
-# it: neither this Program's nor the next caller's directory is used for the other's files
+# it: neither this Program's nor the next caller's directory is used for the other's files; a call into it for a
+# caller restricted from external information gets that caller's directory, as each borrower of a lent Program does
+# (qore#7678)
 call("restricted module Program", restricted, "shared");
 string dir2 = scratch + "/second";
 mkdir(dir2);

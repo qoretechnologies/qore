@@ -1172,6 +1172,64 @@ DLLLOCAL QoreProgram* qore_thread_current_program_if_any();
 //! module's (the code of a module acts for its caller), or nullptr if there is none
 DLLLOCAL QoreProgram* qore_get_calling_program();
 
+//! returns the Program of the code that calls the library as qore_get_calling_program() does, except that for the code
+//! of a host Program called for a borrower restricted from external information (see QoreLentProgramInfoHelper), the
+//! borrower's Program: for the information of the host that the calling code may receive (qore#7678)
+DLLLOCAL QoreProgram* qore_get_information_calling_program();
+
+//! returns true if the code that calls the library runs in a host Program called for a borrower restricted from
+//! external information (see QoreLentProgramInfoHelper; qore#7678): it may use no function of the external-information
+//! domain
+DLLLOCAL bool qore_lent_program_refuses_external_info();
+
+//! returns true if the code of a host Program called for a borrower restricted from external information makes the
+//! call itself (not module code that it calls): the functions of the external-information domain are refused to it
+//! at run time (qore#7678)
+DLLLOCAL bool qore_lent_program_refuses_external_info_builtin();
+
+class ThreadData;
+
+//! Records a call into a host Program for code restricted from external information, for the duration of the call
+/** Used by the methods of a Program object that run the Program's code (Program::callFunction(), ...) and by the call
+    references and expressions that a Program object gives, before they switch to the Program: if the calling code
+    may not read external information, the target is not restricted from it itself, and the target is not the calling
+    code's Program, the target's code (and the module code that it calls) answers the requests of information of the
+    host as the borrower would: qore_caller_may_read_external_info(), runtime_no_external_info(),
+    qore_get_information_calling_program(), and the functions of the external-information domain are refused at run
+    time (qore#7678).  Every other check is unchanged.  Fails closed: if the record cannot be made, an exception is
+    raised and the caller must not make the call
+*/
+//! true once any Program had a restriction (see SyncParseOptions.h)
+DLLLOCAL extern std::atomic<bool> qore_program_restrictions_seen;
+
+class QoreLentProgramInfoHelper {
+public:
+    DLLLOCAL QoreLentProgramInfoHelper(QoreProgram* target, ExceptionSink* xsink) {
+        // in a process where no Program ever had a restriction, nothing can be lent to restricted code
+        if (target && qore_program_restrictions_seen.load(std::memory_order_relaxed)) {
+            init(target, xsink);
+        }
+    }
+
+    DLLLOCAL ~QoreLentProgramInfoHelper() {
+        if (td) {
+            pop();
+        }
+    }
+
+    QoreLentProgramInfoHelper(const QoreLentProgramInfoHelper&) = delete;
+    QoreLentProgramInfoHelper& operator=(const QoreLentProgramInfoHelper&) = delete;
+
+private:
+    ThreadData* td = nullptr;
+    const QoreProgram* tgt = nullptr;
+
+    //! records the call if the calling code may not read external information (see the class)
+    DLLLOCAL void init(QoreProgram* target, ExceptionSink* xsink);
+    //! removes the record
+    DLLLOCAL void pop();
+};
+
 //! returns the temporary directory of the Program of the code that calls the library (see qore_get_calling_program()
 //! and Program::setTempDir()) as a new string, or nullptr if it has none (qore#7656)
 DLLLOCAL QoreStringNode* qore_get_caller_temp_dir();

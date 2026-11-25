@@ -1647,7 +1647,9 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     %Program and are not carried into another %Program that its code calls.  Only the runtime policy of a
     @ref Qore::SandboxManager "SandboxManager" follows the caller, and what is created for a sandboxed caller keeps
     its sandbox as provenance (see @ref sandbox_provenance).  A host must therefore not give tenant or sandboxed
-    code a Program object with more freedom than the tenant itself has; see @ref sandbox_program_capability.
+    code a Program object with more freedom than the tenant itself has; see @ref sandbox_program_capability.  The
+    requests of information of the host that the %Program's code makes for code restricted from external information
+    are answered as for that code (see @ref sandbox_lent_program_information).
 
     @ref qore_classes "Classes", @ref constants "constants", @ref qore_namespaces "namespaces", @ref qore_functions "functions", and
     @ref global_variables "global variables" are only inherited into child Program objects if they are declared @ref mod_public "public"
@@ -2220,6 +2222,12 @@ auto Program::callFunction(string name, ...) {
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
     if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
         return QoreValue();
@@ -2261,6 +2269,12 @@ auto result = pgm.callFunctionArgs("func_name", (arg1, arg2));
 auto Program::callFunctionArgs(string function_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
         return QoreValue();
     }
     // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -2317,6 +2331,12 @@ auto Program::callStaticMethod(string class_name, string method, ...) {
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreListNode> call_args(xsink);
     // if there are arguments to pass
     if (num_args(args) > 2) {
@@ -2371,6 +2391,12 @@ auto Program::callStaticMethodArgs(
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
         return QoreValue();
     }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     return q_call_static_method_args(p, class_name, method_name, arguments, xsink);
 }
 
@@ -2420,6 +2446,12 @@ pgm.run();
 auto Program::run() {
     // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
     if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the Program's code answers the requests of information of the host as a caller restricted from external
+    // information would (qore#7678)
+    QoreLentProgramInfoHelper lent_info(p, xsink);
+    if (*xsink) {
         return QoreValue();
     }
     return p->run(xsink);
@@ -4736,7 +4768,10 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_AR
     QoreProgramContextHelper pch(p);
     // the identifier is resolved in the Program, not as a method of the Program object, which is the stack object
     // of this method (issue #5863)
-    return get_call_reference_intern(nullptr, identifier, xsink);
+    QoreValue rv = get_call_reference_intern(nullptr, identifier, xsink);
+    // the calls of a reference that the Program object gives are recorded as its methods' calls are (qore#7678)
+    qore_call_reference_set_lent_program(rv);
+    return rv;
 }
 
 //! returns an expression object for the given source code

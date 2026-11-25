@@ -1008,6 +1008,16 @@ public:
     };
     //! the active capability frames, innermost last
     std::vector<CapabilityFrame> capability_frames;
+    //! a call into a host Program that a Program object lent to code restricted from external information names
+    //! (qore#7678): the Program's code answers the requests of information of the host as the borrower would
+    struct LentProgramInfo {
+        //! the host Program called
+        const QoreProgram* target;
+        //! the Program of the restricted code that called it (see qore_get_information_calling_program())
+        const QoreProgram* borrower;
+    };
+    //! the active lent Program calls, innermost last (QoreLentProgramInfoHelper)
+    std::vector<LentProgramInfo> lent_program_info;
     //! the last generation given to a source of the calling code's restrictions (see GrantSnapshot)
     uint64_t restriction_gen = 0;
     //! the ID of the Program whose application the work of a SandboxManager::callGoverned() call belongs to, or 0
@@ -7080,6 +7090,9 @@ static QoreParseOptions qore_restricting_domain_options();
 
 std::atomic<bool> qore_program_restrictions_seen{false};
 
+//! true once a lent Program call was recorded (QoreLentProgramInfoHelper): before, no thread has one to look up
+static std::atomic<bool> qore_lent_program_info_used{false};
+
 bool qore_note_program_parse_options(const QoreParseOptions& po) {
     if (!po.hasAny(qore_restricting_domain_options())) {
         return false;
@@ -8824,7 +8837,61 @@ bool qore_caller_lent_to_restricts_domain(int64 domain) {
     return qore_get_calling_code_restrictions(td).hasAny(dom) || qore_get_lent_to_restrictions(td).hasAny(dom);
 }
 
+//! returns the record of the innermost active lent Program call whose target is \a pgm, or nullptr
+static const ThreadData::LentProgramInfo* qore_find_lent_program_info(ThreadData* td, const QoreProgram* pgm) {
+    if (!pgm) {
+        return nullptr;
+    }
+    for (auto i = td->lent_program_info.rbegin(), e = td->lent_program_info.rend(); i != e; ++i) {
+        if (i->target == pgm) {
+            return &*i;
+        }
+    }
+    return nullptr;
+}
+
+//! returns the record if the code that calls the library runs in a host Program called for a borrower restricted
+//! from external information (qore#7678), or nullptr
+/** The calling code's Program is the nearest Program that is not a module's (module code acts for its caller), and
+    it is the target of the innermost active lent Program call that names it; the record's borrower can be nullptr
+    when no Program of the borrower was on the stack (module code that ran for it): the call is lent all the same
+*/
+static const ThreadData::LentProgramInfo* qore_lent_program_record(ThreadData* td) {
+    if (!qore_lent_program_info_used.load(std::memory_order_relaxed) || td->lent_program_info.empty()) {
+        return nullptr;
+    }
+    return qore_find_lent_program_info(td,
+        qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
+}
+
+bool qore_lent_program_refuses_external_info() {
+    if (!qore_lent_program_info_used.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    return td && qore_lent_program_record(td);
+}
+
+bool qore_lent_program_refuses_external_info_builtin() {
+    if (!qore_lent_program_info_used.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    if (!td || td->lent_program_info.empty()) {
+        return false;
+    }
+    // the code of the host Program itself, not module code that it calls: such code answers as it does when the
+    // borrower calls it directly (qore#7678)
+    const QoreProgram* pgm = td->current_pgm;
+    return pgm && !qore_program_is_module_inline(pgm) && qore_find_lent_program_info(td, pgm);
+}
+
 bool qore_caller_may_read_external_info() {
+    // the code of a host Program called for a borrower restricted from external information answers as the borrower
+    // would (qore#7678)
+    if (qore_lent_program_refuses_external_info()) {
+        return false;
+    }
     // a lent object's capability frame lends nothing: the code that it was lent to counts (fails closed)
     return !qore_caller_lent_to_restricts_domain(QDOM_EXTERNAL_INFO);
 }
@@ -8949,6 +9016,72 @@ QoreProgram* qore_get_calling_program() {
         return nullptr;
     }
     return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
+}
+
+QoreProgram* qore_get_information_calling_program() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    // the borrower of a host Program called for it (qore#7678); none if no Program of the borrower was identified, so
+    // that no Program's information is given (fails closed)
+    if (const ThreadData::LentProgramInfo* lpi = qore_lent_program_record(td)) {
+        return const_cast<QoreProgram*>(lpi->borrower);
+    }
+    return const_cast<QoreProgram*>(qore_get_nearest_non_module_program(td, qore_get_caller_module_init_barrier(td)));
+}
+
+void QoreLentProgramInfoHelper::init(QoreProgram* target, ExceptionSink* xsink) {
+    ThreadData* t = thread_data.get();
+    if (!t) {
+        return;
+    }
+    // the code of a Program that is not a module's and is not restricted from external information, with no other
+    // source of restrictions on the thread, may read external information: decided on the Program alone, as
+    // qore_caller_may_read_external_info() would decide it, without the walk (the common case of trusted code
+    // calling a Program; see runtime_no_external_info())
+    {
+        const QoreProgram* cur = t->current_pgm;
+        if (cur && !qore_program_is_module_inline(cur) && !t->runtime_po_state.caller_restrictions
+                && !t->runtime_po_state.code_pgm && !t->sandbox_provenance && t->capability_frames.empty()
+                && t->sandbox_policy_barrier_ctx.empty() && t->lent_program_info.empty()
+                && !qore_program_private::getParseOptions(*cur).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO))) {
+            // the predicate above is a copy of what qore_caller_may_read_external_info() decides for such code
+            assert(qore_caller_may_read_external_info());
+            return;
+        }
+    }
+    // decided in the context of the code that calls the Program, before the call switches to it
+    if (qore_caller_may_read_external_info()) {
+        return;
+    }
+    // a Program restricted from external information answers for itself as restricted
+    if (qore_program_private::getParseOptions(*target).hasAny(QoreParseOptions(PO_NO_EXTERNAL_INFO))) {
+        return;
+    }
+    // the borrower's Program, or nullptr if none is on the stack (module code that runs for the borrower): the call is
+    // recorded all the same, and gives no Program's information (fails closed)
+    const QoreProgram* borrower = qore_get_information_calling_program();
+    if (borrower && borrower == target) {
+        return;
+    }
+    try {
+        t->lent_program_info.push_back({target, borrower});
+    } catch (std::bad_alloc&) {
+        // the call is refused: without the record, the Program would answer for the host (fails closed)
+        xsink->outOfMemory();
+        return;
+    }
+    if (!qore_lent_program_info_used.load(std::memory_order_relaxed)) {
+        qore_lent_program_info_used.store(true, std::memory_order_relaxed);
+    }
+    td = t;
+    tgt = target;
+}
+
+void QoreLentProgramInfoHelper::pop() {
+    assert(td && !td->lent_program_info.empty() && td->lent_program_info.back().target == tgt);
+    td->lent_program_info.pop_back();
 }
 
 bool qore_caller_restricts_terminal_io() {
@@ -10658,6 +10791,10 @@ bool runtime_no_external_info() {
     ThreadData* td = thread_data.get();
     if (!td) {
         return false;
+    }
+    // the code of a host Program called for a borrower restricted from external information (qore#7678)
+    if (qore_lent_program_record(td)) {
+        return true;
     }
     // the code of a Program that is not a module's, with no restrictions of a sandboxed caller and no provenance of
     // restricted code: the rule below decides on the Program's options alone, without walking further (see

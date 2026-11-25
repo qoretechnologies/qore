@@ -1094,9 +1094,8 @@ bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic&
 }
 
 QoreStringNode* qore_get_caller_temp_dir() {
-    QoreProgram* pgm = qore_get_calling_program();
-    // the code of a Program that is not a module's answers for itself, also when restricted code calls it (a Program
-    // lent to such code), as for the environment (see SandboxManager::callerMayReadExternalInfo())
+    // the borrower's Program for a host Program called for code restricted from external information (qore#7678)
+    QoreProgram* pgm = qore_get_information_calling_program();
     return pgm ? qore_program_private::get(*pgm)->getTempDir() : nullptr;
 }
 
