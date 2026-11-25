@@ -92,6 +92,8 @@ bool qore_catch_thread_exit(ExceptionSink* xsink) {
 
 int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
     ValueHolder trv(xsink);
+    // in the body of a handler, a request in the try or catch block passes the statement (#7022)
+    QoreTryReturnSlotHelper slot_helper(*trv, return_value);
 
     QORE_TRACE("TryStatement::execImpl()");
     int rc = 0;
@@ -133,6 +135,8 @@ int TryStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
 
 int TryStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     ValueHolder trv(xsink);
+    // in the body of a handler, a request in the try or catch block passes the statement (#7022)
+    QoreTryReturnSlotHelper slot_helper(*trv, return_value);
 
     QORE_TRACE("TryStatement::execImpl()");
     int rc_state = 0;

@@ -1301,6 +1301,45 @@ auto sub endsFunctionObject(int n) {
     return new ReturnMarker();
 }
 
+# An on_error handler after the on_exit handler does not run at a normal exit: the on_exit handler is the last that
+# runs, so a request in it ends the function, and the return goes on with its value (#6949, #7022)
+auto sub onErrorAfterExit(int n) {
+    on_error {
+        push log, "error";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### on_error_after_exit
+            }
+            return new ReturnMarker();
+        }
+    }
+    return -7;
+}
+
+# A try statement in the handler's body passes the request as it is: a later handler takes it, and the abandoned object
+# is released when the request leaves its block (#7022)
+auto sub tryInHandler(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        try {
+            {
+                on_exit {
+                    push log, "inner";              ### try_in_handler
+                }
+                return new ReturnMarker();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            push log, ex.err;
+        }
+        push log, "after try";
+    }
+    return -7;
+}
+
 # The return in the handler is in a try statement, which gives its value to the block (qore_try_give_return())
 auto sub outerPendingTry(int n) {
     on_exit {

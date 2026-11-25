@@ -406,37 +406,7 @@ private:
 
 constinit thread_local void* qore_pending_return_snapshot_tls = nullptr;
 
-namespace {
-//! A handler that runs, in the chain of the current thread: a break or a continue that leaves a block in its body goes
-//! on as the handler's request (#7022)
-struct HandlerRun {
-    //! the return slot of the function that runs the handler
-    const QoreValue* slot;
-    //! the block that declares the handler
-    const StatementBlock* block;
-    //! the handler is the last of its exit: the normal end of a later one does not replace its request
-    bool last;
-    HandlerRun* previous;
-};
-constinit thread_local HandlerRun* qore_handler_run_tls = nullptr;
-
-//! Adds a handler that runs to the chain of the thread, and removes it on every way out
-class HandlerRunHelper {
-public:
-    DLLLOCAL HandlerRunHelper(const QoreValue& slot, const StatementBlock* block, bool last)
-            : run{&slot, block, last, qore_handler_run_tls} {
-        qore_handler_run_tls = &run;
-    }
-
-    DLLLOCAL ~HandlerRunHelper() {
-        assert(qore_handler_run_tls == &run);
-        qore_handler_run_tls = run.previous;
-    }
-
-private:
-    HandlerRun run;
-};
-}
+constinit thread_local QoreHandlerRun* qore_handler_run_tls = nullptr;
 
 bool StatementBlock::requestTakenInFunction(int rc, const QoreValue& return_value) const {
     assert(rc == RC_BREAK || rc == RC_CONTINUE);
@@ -445,7 +415,14 @@ bool StatementBlock::requestTakenInFunction(int rc, const QoreValue& return_valu
     }
     // the request goes on as one of each handler around the block: a later handler of a handler that is not the last
     // takes it, or a loop or switch statement around the block that declares the handler
-    for (const HandlerRun* r = qore_handler_run_tls; r && r->slot == &return_value; r = r->previous) {
+    // the walk follows the return slot of the code around the block: a try statement's blocks have one of their own,
+    // which a request passes as it is (QoreTryReturnSlotHelper)
+    const QoreValue* slot = &return_value;
+    for (const QoreHandlerRun* r = qore_handler_run_tls; r && r->slot == slot; r = r->previous) {
+        if (r->alias_of) {
+            slot = r->alias_of;
+            continue;
+        }
         if (!r->last || r->block->loopTakesRequest(rc)) {
             return true;
         }
@@ -588,7 +565,19 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
                             before_request.capture(return_value);
                         }
                         nrc_before_request = nrc;
-                        HandlerRunHelper handler_run(return_value, this, std::next(i) == e);
+                        // the last handler that runs at the exit: no later one runs in the state of the exit, and the
+                        // exit is not an error exit, as compiled code decides (QoreIRLowering's last_run; #7022)
+                        bool last_run = !error;
+                        if (last_run) {
+                            for (block_list_t::iterator j = std::next(i); j != e; ++j) {
+                                const obe_type_e jtype = (*j).first;
+                                if ((*j).second && (jtype == OBE_Unconditional || jtype == OBE_Success)) {
+                                    last_run = false;
+                                    break;
+                                }
+                            }
+                        }
+                        QoreHandlerRunHelper handler_run(return_value, this, last_run);
                         int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
                         if (hrc != RC_BREAK && hrc != RC_CONTINUE) {
                             before_request.reset();

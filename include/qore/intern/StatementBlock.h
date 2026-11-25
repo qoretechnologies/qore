@@ -64,6 +64,70 @@ DLLLOCAL extern constinit thread_local void* qore_pending_return_snapshot_tls;
 //! Notifies the active pending return snapshots that a return replaces the value of this slot (#7022)
 DLLLOCAL void qore_replacing_return_notify(QoreValue& slot);
 
+class StatementBlock;
+
+//! An entry in the chain of the handlers that run in the current thread (StatementBlock::requestTakenInFunction())
+/** A handler that runs (\c block set), or a try statement in the body of a handler, whose try and catch blocks have
+    a return slot of their own (\c alias_of set: the slot that the statement gives its return to), which a break or a
+    continue passes as it is (#7022)
+*/
+struct QoreHandlerRun {
+    //! the return slot of the code that runs the handler or the try statement's blocks
+    const QoreValue* slot;
+    //! for a try statement: the return slot that encloses the statement
+    const QoreValue* alias_of;
+    //! for a handler: the block that declares the handler
+    const StatementBlock* block;
+    //! for a handler: it is the last that runs at its exit (QoreIRLowering's last_run)
+    bool last;
+    QoreHandlerRun* previous;
+};
+
+//! The innermost entry of the chain of the handlers that run in the current thread, or nullptr (#7022)
+DLLLOCAL extern constinit thread_local QoreHandlerRun* qore_handler_run_tls;
+
+//! Adds an entry to the chain of the thread, and removes it on every way out (#7022)
+class QoreHandlerRunHelper {
+public:
+    DLLLOCAL QoreHandlerRunHelper(const QoreValue& slot, const StatementBlock* block, bool last)
+            : run{&slot, nullptr, block, last, qore_handler_run_tls} {
+        qore_handler_run_tls = &run;
+    }
+
+    DLLLOCAL ~QoreHandlerRunHelper() {
+        assert(qore_handler_run_tls == &run);
+        qore_handler_run_tls = run.previous;
+    }
+
+private:
+    QoreHandlerRun run;
+};
+
+//! The slot of a try statement's blocks while a handler runs: a request passes the statement as it is (#7022)
+/** Only a TLS read outside of handlers
+*/
+class QoreTryReturnSlotHelper {
+public:
+    DLLLOCAL QoreTryReturnSlotHelper(const QoreValue& slot, const QoreValue& outer) {
+        if (qore_handler_run_tls) {
+            run = {&slot, &outer, nullptr, false, qore_handler_run_tls};
+            qore_handler_run_tls = &run;
+            pushed = true;
+        }
+    }
+
+    DLLLOCAL ~QoreTryReturnSlotHelper() {
+        if (pushed) {
+            assert(qore_handler_run_tls == &run);
+            qore_handler_run_tls = run.previous;
+        }
+    }
+
+private:
+    QoreHandlerRun run{};
+    bool pushed = false;
+};
+
 //! Notifies the active pending return snapshots, if any, when a source return replaces the value of this slot
 /** A TLS read inline: the snapshots are only active while handlers or a loop run with a pending return (#7022)
 */

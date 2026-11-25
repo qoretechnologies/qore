@@ -35,7 +35,8 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "twoHandlersTry", "twoHandlersLaterReturn", "threeHandlers", "mixedHandlers",
             "mixedHandlersLoop", "mixedInHandler", "abandonedReturn", "abandonedObject", "outerPendingReturn", "eagerOuter",
             "innerLoopPending", "unchangedObject", "nrcLost", "dtorThrow", "abandonTiming", "abandonedNested",
-            "abandonedNestedTry", "outerPendingTry", "dtorThrowLoop", "endsFunctionObject");
+            "abandonedNestedTry", "outerPendingTry", "dtorThrowLoop", "endsFunctionObject", "onErrorAfterExit",
+            "tryInHandler");
 
         #! Expected return values and destructor order when a debugger request abandons a return (#7022).
         const AbandonedResults = {
@@ -66,6 +67,10 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "dtorThrowLoop": "RESULT:MARKER-ERROR: the destructor threw LOG:[\"throw\"]",
             # a request that ends the function leaves the return, which goes on with its object (#6949)
             "endsFunctionObject": "RESULT:{<ReturnMarker object>: {}} LOG:[\"outer\", \"released\"]",
+            # the on_exit handler is the last that runs: the on_error handler after it does not run at a normal exit
+            "onErrorAfterExit": "RESULT:{<ReturnMarker object>: {}} LOG:[\"released\"]",
+            # the request passes the try statement in the handler, and a later handler takes it
+            "tryInHandler": "RESULT:-7 LOG:[\"released\", \"last\"]",
             "outerPendingTry": "RESULT:-7 LOG:[\"last\"]",
             "outerPendingTry/string": "RESULT:restored LOG:[\"last\"]",
             "outerPendingTry/object": "RESULT:null LOG:[\"released\", \"last\"]",
@@ -87,6 +92,8 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             # statement; a second request during the handlers of another request is qore#7008, which adds the case)
             ("dtorThrowLoop", "break", "dtor_throw_loop", 1),
             ("endsFunctionObject", "break", "ends_function_object", 1),
+            ("onErrorAfterExit", "break", "on_error_after_exit", 1),
+            ("tryInHandler", "break", "try_in_handler", 1),
             ("outerPendingTry", "break", "outer_pending_try", 1),
             ("outerPendingTry/string", "break", "outer_pending_try", 1),
             ("outerPendingTry/object", "break", "outer_pending_try", 1),
