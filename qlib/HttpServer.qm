@@ -5506,6 +5506,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
             # the methods of a handler of restricted code get the request without its credentials (qore#7303)
             bool restricted_handler = handler && handler.handlerCodeIsRestricted();
+            request_helper.restricted_handler = restricted_handler;
+            # the helper of a persistent connection serves each of its requests: no earlier request's changes are
+            # kept (qore#7303)
+            remove request_helper.platform_changes;
 
             if (handler && http_get_field(hdr, "expect")) {
                 if (http_get_field(hdr, "expect") == "100-continue") {
@@ -5656,6 +5660,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             # code of the handler gets the request without them (qore#7303); a handler of a trusted
                             # class that serves a request for restricted code authenticates it itself, as before
                             ah = handler.authenticateRestrictedRequest(hview, hdr, \handler_cx, \platform_changes);
+                            request_helper.platform_changes = platform_changes;
                         } else {
                             ah = handler.authenticateRequest(hview, hdr, \handler_cx);
                         }
@@ -6443,14 +6448,26 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             }
                         }
 
-                        hash<auto> sock_cx = cx + {"listener": listener.getHandlerView(), "id": sock_id};
+                        # the code that a handler of restricted code starts gets the request without its credentials
+                        # (qore#7303)
+                        hash<auto> sock_hdr = hdr;
+                        hash<auto> sock_cx;
+                        if (request_helper.restricted_handler) {
+                            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                                request_helper.platform_changes);
+                            sock_cx = filtered.cx;
+                            sock_hdr = filtered.hdr;
+                        } else {
+                            sock_cx = cx;
+                        }
+                        sock_cx += {"listener": listener.getHandlerView(), "id": sock_id};
                         hash<auto> ends = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id, cx.handler_name,
                             pend);
                         sock_cx."header-info".ws_end = ends.end;
                         sock_cx."header-info".ws_end_hold = ends.hold;
                         sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                         sock_cx."header-info".ws_submit = getHandlerPoolSubmitter();
-                        if (sockhandler.start(listener.getID(), sock_cx, hdr,
+                        if (sockhandler.start(listener.getID(), sock_cx, sock_hdr,
                                 request_helper.handler_sock ?? http_handler_connection_socket(s))) {
                             request_helper.setDedicatedExternal();
                         }
@@ -6585,7 +6602,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     }
 
                     # Pass poll_op and async I/O context to handler via header-info
-                    hash<auto> ws_cx = cx + {"listener": listener.getHandlerView()};
+                    # the code that a handler of restricted code starts gets the request without its credentials
+                    # (qore#7303)
+                    hash<auto> ws_hdr = hdr;
+                    hash<auto> ws_cx;
+                    if (request_helper.restricted_handler) {
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                            request_helper.platform_changes);
+                        ws_cx = filtered.cx;
+                        ws_hdr = filtered.hdr;
+                    } else {
+                        ws_cx = cx;
+                    }
+                    ws_cx += {"listener": listener.getHandlerView()};
                     # reports the end of the connection to the request's async target if the handler takes it over
                     *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
@@ -6652,9 +6681,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                                 # operation nor the connection's socket: a method of another class with the same
                                 # name gets nothing more (qore#7476)
                                 ? call_object_method(handler, "startAsyncWebSocketForRequest", listener.getID(), ws_cx,
-                                    hdr, request_helper.handler_sock,
+                                    ws_hdr, request_helper.handler_sock,
                                     new HttpServer::HttpWebSocketPollOperationHandle(ws_poll_op))
-                                : sockhandler.start(listener.getID(), ws_cx, hdr,
+                                : sockhandler.start(listener.getID(), ws_cx, ws_hdr,
                                     (cx."header-info".http2 || cx."header-info".http3)
                                         ? (request_helper.handler_sock ?? http_handler_connection_socket(s))
                                         : http_handler_connection_socket(s)))
@@ -6879,6 +6908,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             bool handler_close, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # the run of the response's event source, if any
         *Priv::SseEventSourceRun sse_run = rv.sse_source;
+        # the setup of the connection of a handler of restricted code gets the request without its credentials
+        # (qore#7303)
+        hash<auto> h_cx = cx;
+        hash<auto> h_hdr = hdr;
+        if (request_helper.restricted_handler && handler) {
+            hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                request_helper.platform_changes);
+            h_cx = filtered.cx;
+            h_hdr = filtered.hdr;
+        }
         # SSE response — set up async SSE connection via the I/O controller.
         # The write path depends on the HTTP version:
         # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
@@ -6944,7 +6983,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
-                            handler_sock, cx, hdr, cid, session_id, stream_id, wake_cb);
+                            handler_sock, h_cx, h_hdr, cid, session_id, stream_id, wake_cb);
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http3SseStream(handler_sock, session_id, stream_id,
                             wake_cb, True);
@@ -6962,7 +7001,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     Socket handler_sock = request_helper.handler_sock ?? s;
                     if (sock_handler) {
                         sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
-                            handler_sock, cx, hdr, cid, stream_id, wake_cb);
+                            handler_sock, h_cx, h_hdr, cid, stream_id, wake_cb);
                     } else {
                         sse_conn = new HttpServerAsyncIo::Http2SseStream(handler_sock, stream_id, wake_cb, True);
                     }
@@ -7101,12 +7140,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                         setup_called = True;
                         call_object_method(handler, "setupAsyncSseConnectionForRequest", request_helper.handler_sock,
-                            cx, hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
+                            h_cx, h_hdr, cid, new HttpServerAsyncIo::Http1SseConnection(poll_op, True));
                     }
                 } else {
                     poll_op = sock_handler
                         ? call_object_method(handler, "setupAsyncSseConnection", http_handler_connection_socket(s),
-                            cx, hdr, cid)
+                            h_cx, h_hdr, cid)
                         # a handler that is not a socket handler gets the stream from the server, for its event
                         # source
                         : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
@@ -10025,8 +10064,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Send a 200 OK response and exit the loop; the on_exit
                 # block will call phi.clear() → persistentClosed() →
                 # release any handler-held context.
+                # a handler of restricted code gets the header fields of the request without its credentials, as
+                # its other methods do (qore#7303)
                 if (phi.handler
-                        && phi.handler.isPersistentSessionEndRequest(req_hdr)) {
+                        && phi.handler.isPersistentSessionEndRequest(phi.handler.handlerCodeIsRestricted()
+                            ? phi.handler.withholdCredentialsForDispatch({}, req_hdr).hdr
+                            : req_hdr)) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;
@@ -13543,6 +13586,18 @@ thread_local *RequestHelper current_request;
 */
 class RequestHelper {
     public {
+        #! True if the request's handler is of restricted code (AbstractHttpRequestHandler::handlerCodeIsRestricted())
+        /** Its methods get the request without its credentials, also the code that a socket handoff of its response
+            starts (qore#7303)
+        */
+        bool restricted_handler;
+
+        #! What the trusted authenticator of a handler of restricted code added to the request context (qore#7303)
+        /** As AbstractHttpRequestHandler::authenticateRestrictedRequest() returns it, for
+            AbstractHttpRequestHandler::withholdCredentialsForDispatch()
+        */
+        *hash<auto> platform_changes;
+
         #! if True, the request's INFO messages are logged
         /** decided once when the request starts, as the check costs a call to the logger for each message; a change
             of the log level applies from the next request
