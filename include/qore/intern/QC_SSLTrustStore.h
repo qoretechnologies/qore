@@ -85,6 +85,15 @@ public:
     */
     DLLLOCAL static QoreSSLTrustStore* get(X509* const* certs, size_t count, ExceptionSink* xsink);
 
+    //! Returns a trust store for the CA certificates of CA locations, read with the filesystem policy of the caller
+    /** Under a sandbox policy, CA locations are read when they are set, into a trust store, so that no file is read by
+        its name when a connection is verified (qore#7518); the CA path gives the certificates of its files with
+        OpenSSL hashed names; the caller owns the reference returned
+
+        @return the trust store, or nullptr if an exception has been raised
+    */
+    DLLLOCAL static QoreSSLTrustStore* fromCaLocations(const char* ca_file, const char* ca_path, ExceptionSink* xsink);
+
     //! Returns the number of distinct stores in the process cache (for tests)
     DLLLOCAL static size_t getCacheSize();
 

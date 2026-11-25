@@ -2535,6 +2535,7 @@ public:
         IsSecure,
         SetAlpnProtocols,
         SetCaLocations,
+        SetCaTrustStore,
         SetTrustStore,
         GetAlpnProtocol,
         IsHttp2,
@@ -2556,6 +2557,17 @@ public:
             std::string&& ca_path)
             : sock(sock), action(Action::SetCaLocations), ca_file(std::move(ca_file)), ca_path(std::move(ca_path)) {
         sock->ref();
+    }
+
+    //! Sets the trust store of CA locations read under a sandbox policy; takes a reference to it (qore#7518)
+    DLLLOCAL QoreSocketObjectTlsStatePollOperation(QoreSocketObject* sock, QoreSSLTrustStore* ts,
+            std::string&& ca_file, std::string&& ca_path)
+            : sock(sock), action(Action::SetCaTrustStore), ca_file(std::move(ca_file)), ca_path(std::move(ca_path)),
+            trust_store(ts) {
+        sock->ref();
+        if (ts) {
+            ts->ref();
+        }
     }
 
     //! Sets or clears the in-memory trust store; takes a reference to it (qoretechnologies/qore#7248)
@@ -2630,8 +2642,15 @@ public:
                 break;
 
             case Action::SetCaLocations:
+                // CA locations set again replace any read under a sandbox policy (qore#7518)
+                sp->setSslCaTrustStore(nullptr, nullptr, nullptr);
                 sp->ssl_ca_file = ca_file;
                 sp->ssl_ca_path = ca_path;
+                output = 0;
+                break;
+
+            case Action::SetCaTrustStore:
+                sp->setSslCaTrustStore(trust_store, ca_file.c_str(), ca_path.c_str());
                 output = 0;
                 break;
 
@@ -2682,6 +2701,7 @@ private:
                 return static_cast<int64>(-1);
             case Action::SetAlpnProtocols:
             case Action::SetCaLocations:
+            case Action::SetCaTrustStore:
             case Action::SetTrustStore:
                 return static_cast<int64>(-1);
             case Action::GetCipherName:
@@ -4804,6 +4824,7 @@ QoreSocketObject::QoreSocketObject(QoreSocketObject& orig, int descriptor)
     dst->ssl_ca_file = src->ssl_ca_file;
     dst->ssl_ca_path = src->ssl_ca_path;
     dst->setSslTrustStore(src->ssl_trust_store);
+    dst->setSslCaTrustStore(src->ssl_ca_trust_store, src->ssl_ca_file_read.c_str(), src->ssl_ca_path_read.c_str());
     dst->async_io_route_key = getIoIdentityHash();
     // the connections accepted from a listener share its HTTP fast context (routes and extra headers): a change
     // reaches the connections that are already open
@@ -5740,6 +5761,22 @@ void qore_socket_object_private::setSslTrustStore(QoreSSLTrustStore* ts, Excepti
         -1, "setSslTrustStore", "tls-state", xsink), xsink);
 }
 
+void qore_socket_object_private::setSslCaTrustStore(QoreSSLTrustStore* ts, const char* ca_file, const char* ca_path,
+        ExceptionSink* xsink) {
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        AutoLocker al(priv->m);
+        if (priv->checkValid(xsink)) {
+            return;
+        }
+        qore_socket_private::get(*priv->socket)->setSslCaTrustStore(ts, ca_file, ca_path);
+        return;
+    }
+
+    ValueHolder rv(qore_socket_object_exec_poll_output(so, new QoreSocketObjectTlsStatePollOperation(so, ts,
+        std::string(ca_file ? ca_file : ""), std::string(ca_path ? ca_path : "")),
+        -1, "setSslCaLocations", "tls-state", xsink), xsink);
+}
+
 void qore_socket_object_private::setSslTrustStoreForAsyncPoll(QoreSSLTrustStore* ts, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     if (priv->checkValid(xsink)) {
@@ -5755,6 +5792,8 @@ void qore_socket_object_private::setSslCaLocationsForAsyncPoll(const char* ca_fi
         return;
     }
     qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    // CA locations set again replace any read under a sandbox policy (qore#7518)
+    sp->setSslCaTrustStore(nullptr, nullptr, nullptr);
     sp->ssl_ca_file = ca_file ? ca_file : "";
     sp->ssl_ca_path = ca_path ? ca_path : "";
 }

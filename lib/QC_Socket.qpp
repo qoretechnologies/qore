@@ -7459,8 +7459,18 @@ sock.connectSSL("server.example.com:443");
     prepared by the \c openssl \c rehash command; if neither argument is given, the default CA certificates are used
     again
 
+    @note Under a sandbox file-system policy, the CA certificates are read when they are set, with the policy of the
+    caller, into an in-memory trust store (see
+    @ref Qore::Socket::setSslTrustStore() "Socket::setSslTrustStore()"), so that no file is read by its name when a
+    certificate is verified; the CA path then gives the certificates of its files with hashed names, each of which,
+    or the file that it links to, the policy must allow to be read; this trust store is used when no trust store is
+    set with @ref Qore::Socket::setSslTrustStore() "Socket::setSslTrustStore()", and calling this method without
+    arguments clears it
+
     @throw SOCKET-SSL-ERROR raised by the TLS handshake if the CA certificates cannot be loaded
     @throw SOCKET-SSL-ERROR a path contains a NUL character; see @ref path_nul_characters
+    @throw SSLTRUSTSTORE-ERROR under a sandbox file-system policy, the CA certificates cannot be read
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox file-system policy does not allow a location to be read
 
     @see
     - @ref Qore::Socket::setSslVerifyMode() "Socket::setSslVerifyMode()"
@@ -7479,6 +7489,20 @@ nothing Socket::setSslCaLocations(*string ca_file, *string ca_path) [dom=FILESYS
             return QoreValue();
         }
         if (ca_path && !smh->checkFilesystemAccess(ca_path->c_str(), QSEC_READ, xsink)) {
+            return QoreValue();
+        }
+        // under a sandbox policy, the CA certificates are read now, into a trust store, so that no file is read by
+        // its name when a connection is verified (qore#7518)
+        if (ca_file || ca_path) {
+            QoreSSLTrustStore* ts = QoreSSLTrustStore::fromCaLocations(ca_file ? ca_file->c_str() : nullptr,
+                ca_path ? ca_path->c_str() : nullptr, xsink);
+            if (!ts) {
+                return QoreValue();
+            }
+            // the trust store of the CA locations is used when no trust store is set (see setSslTrustStore())
+            qore_socket_object_private(s).setSslCaTrustStore(ts, ca_file ? ca_file->c_str() : nullptr,
+                ca_path ? ca_path->c_str() : nullptr, xsink);
+            ts->deref();
             return QoreValue();
         }
     }
