@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class MessagingBillingTest
+
+class MessagingBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Messaging provider billing") {
+        addVendor("ConstantContact", "ConstantContact", "cc.email", "subscription",
+            "https://www.constantcontact.com/pricing");
+        addVendor("CustomerIo", "CustomerIo", "customer.io", "subscription",
+            "https://customer.io/pricing", {
+                "send-transactional-email": "metered", "list-campaigns": "subscription",
+            });
+        addVendor("Mailgun", "Mailgun", "mailgun.net", "subscription",
+            "https://www.mailgun.com/pricing/", {
+                "send-email": "metered", "validate-email": "metered",
+                "list-domains": "subscription",
+            });
+        addVendor("Klaviyo", "Klaviyo", "klaviyo.com", "subscription",
+            "https://www.klaviyo.com/pricing", {
+                "send_campaign": "metered", "get_campaign": "subscription",
+            });
+        set_return_value(main());
+    }
+}

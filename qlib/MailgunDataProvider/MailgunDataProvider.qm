@@ -61,6 +61,15 @@ module MailgunDataProvider {
                 "- Mailing list management\n"
                 "- Inbound email routing\n"
                 "- Event tracking via webhooks",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "mailgun.net",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.mailgun.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "mailgun",
             "logo": MailgunLogo,
             "logo_file_name": "mailgun-logo.svg",
@@ -75,6 +84,7 @@ module MailgunDataProvider {
             "app": MailgunDataProvider::AppName,
             "path": "/send-email",
             "action": "send-email",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Email",
             "display_name": "Send Email",
             "short_desc": "Send an email via Mailgun",
@@ -99,6 +109,7 @@ module MailgunDataProvider {
             "app": MailgunDataProvider::AppName,
             "path": "/validate-email",
             "action": "validate-email",
+            "billing": <DataProviderBillingInfo>{"model": "metered"},
             "groups": "Email",
             "display_name": "Validate Email",
             "short_desc": "Validate an email address",
