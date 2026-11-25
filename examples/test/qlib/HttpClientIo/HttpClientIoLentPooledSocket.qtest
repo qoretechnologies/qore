@@ -151,6 +151,64 @@ int sub upgradeStatus() {
     remove upgrade_sh;
     return rv;
 }
+our *object stolen;
+#! a poll operation of the borrower's own class: keeps a token that it is given
+class KeepingOp inherits HttpClientPollOperation {
+    Socket getSocket() { return new Socket(); }
+    Socket getSocketFor(object a) { stolen = a; return new Socket(); }
+    cancelRequest(int sid) {}
+    clearConnection(object t) { stolen = t; }
+    string getGoal() { return \"x\"; }
+    string getState() { return \"x\"; }
+    bool goalReached() { return True; }
+    *hash<SocketPollInfo> continuePoll() { return NOTHING; }
+}
+#! a connection of the borrower's own class with that poll operation
+class KeepingConn inherits HttpClientConnection {
+    public { KeepingOp op = new KeepingOp(); }
+    constructor() : HttpClientConnection({\"host\": \"x\", \"port\": 1}, 1s, NOTHING, 1, NOTHING) {}
+    string getProtocol() { return \"h1\"; }
+    HttpClientPollOperation getPollOperation() { return op; }
+    Socket getSocket() { return new Socket(); }
+    int submitRequestImpl(string m, string p, *hash<auto> h, *data b, Promise pr) { return 0; }
+    int submitRequestWithNotifierImpl(string m, string p, *hash<auto> h, *data b, Promise pr, EventNotifier n) { return 0; }
+    cancelRequestImpl(int sid) {}
+    closeImpl(*timeout t) {}
+}
+#! tries to get the module's token through a connection of its own class, and the kept connection's socket with it
+string sub steal() {
+    try {
+        KeepingConn kc();
+        kc.close();
+        kc.notifyPendingData();
+        if (!stolen) {
+            return \"no token\";
+        }
+        sock = conn.getPollOperation().getSocketFor(stolen);
+        return \"taken\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+our *HttpClientConnectionManager own_mgr;
+#! pins a connection of a manager of its own in the lent manager
+string sub pin(HttpClientConnectionManager lent, string url) {
+    own_mgr = new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+        \"protocol\": \"h1\", \"accept_all_certs\": True, \"request_timeout\": 20s,
+    });
+    on_exit own_mgr.closeAll();
+    try {
+        request(own_mgr, url, \"/ok\");
+        lent.pinConnection(conn);
+        return \"pinned\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+#! returns the kept connection
+HttpClientConnection sub getConn() {
+    return conn;
+}
 #! returns the ID of the kept connection
 int sub connId() {
     return conn.getConnectionId();
@@ -198,6 +256,9 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
             \upgradeNoSwitchTest());
         addTestCase("the builtin socket accessor of a poll operation is refused through reflection", \reflectionTest());
         addTestCase("the connection of a poll operation is not cut off or replaced by other code", \cutTest());
+        addTestCase("the module's token is not given to a poll operation of a borrower's class", \tokenTest());
+        addTestCase("a borrower cannot pin a connection in a lent manager", \pinTest());
+        addTestCase("HTTP/1.1: a leased connection is not taken", \leasedTest());
         set_return_value(main());
     }
 
@@ -390,5 +451,40 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         assertNeq("done", p.callFunction("cut", "set"), "setConnection() is private");
         list<auto> r = hostRequest(mgr, srv.url, "/after");
         assertEq(200, r[0], "the connection still serves requests");
+    }
+
+    tokenTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        assertEq("no token", p.callFunction("steal"), "a poll operation of the borrower's class gets no token");
+    }
+
+    pinTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq("PERMISSION-DENIED", p.callFunction("pin", mgr, srv.url), "the borrower cannot pin a connection");
+        list<auto> r = hostRequest(mgr, srv.url, "/after");
+        assertEq(200, r[0], "the host's request uses the manager's own connection");
+    }
+
+    leasedTest() {
+        hash<auto> srv = startServer(False);
+        on_exit srv.server.stop();
+        HttpClientConnectionManager mgr = getManager("h1");
+        on_exit mgr.closeAll();
+        Program p = getBorrower(srv.port);
+        assertEq(200, p.callFunction("request", mgr, srv.url, "/ok"), "the borrower's request");
+        # the host leases the idle connection for a session of its own
+        HttpClientConnection c = p.callFunction("getConn");
+        c.setLeased(True);
+        on_exit c.setLeased(False);
+        assertEq("PERMISSION-DENIED", p.callFunction("take", "conn"), "a leased connection is not taken");
     }
 }

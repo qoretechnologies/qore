@@ -115,12 +115,12 @@ public class Http2ClientConnection inherits HttpClientConnection {
             throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the socket of a HTTP/2 connection of a "
                 "connection manager that it does not own";
         }
-        return poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+        return HttpClientIoSocketAccess::socketOf(poll_op);
     }
 
     #! Returns the underlying socket for the connection's own code (qore#7544)
     private Socket getSocketIntern() {
-        return poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+        return HttpClientIoSocketAccess::socketOf(poll_op);
     }
 
     #! Submits a request on this connection (protocol-specific)

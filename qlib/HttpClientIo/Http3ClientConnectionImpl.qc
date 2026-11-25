@@ -125,12 +125,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "PERMISSION-DENIED", "code that a sandbox restricts cannot take the socket of a HTTP/3 connection of a "
                 "connection manager that it does not own";
         }
-        return poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+        return HttpClientIoSocketAccess::socketOf(poll_op);
     }
 
     #! Returns the underlying socket for the connection's own code (qore#7544)
     private Socket getSocketIntern() {
-        return poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+        return HttpClientIoSocketAccess::socketOf(poll_op);
     }
 
     #! Returns @ref True once the QUIC handshake of the connection has completed, also after it has closed
@@ -339,7 +339,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send trailers in state: %y", self.getConnectionState());
         }
-        Socket sock = poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+        Socket sock = HttpClientIoSocketAccess::socketOf(poll_op);
         if (sock.isQuicSessionClosed()) {
             setCloseReason("its QUIC session is closed");
             self.setClosed();
@@ -388,7 +388,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
-        Socket sock = poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+        Socket sock = HttpClientIoSocketAccess::socketOf(poll_op);
         # Check if the underlying QUIC session is dead before sending
         if (sock.isQuicSessionClosed()) {
             setCloseReason("its QUIC session is closed");

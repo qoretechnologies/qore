@@ -118,7 +118,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             *int sid = h3conn.getSessionId();
             if (sid) {
                 try {
-                    h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).unregisterQuicDatagramQueue(sid, stream_id);
+                    (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).unregisterQuicDatagramQueue(sid, stream_id);
                 } catch () {
                     # Best-effort cleanup during teardown; session may already be gone
                 }
@@ -190,7 +190,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
         }
         try {
-            h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).submitQuicDatagram(qsid, sid, datagram);
+            (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).submitQuicDatagram(qsid, sid, datagram);
         } catch (hash<ExceptionInfo> ex) {
             # Cancel the request we just submitted
             try { conn.cancelRequest(sid); } catch () {}
@@ -442,7 +442,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             }
             sid = stream_id;
         }
-        return h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).waitForQuicClientStreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+        return HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation()).waitForQuicClientStreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
     }
 
     #! True while the request write side of a streamed request is open: it was not ended by a send (qore#7443)
@@ -751,7 +751,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             throw "HTTPCLIENT-STATE-ERROR", "QUIC session not yet established";
         }
-        h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).submitQuicDatagram(sid, stream_id, data);
+        (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).submitQuicDatagram(sid, stream_id, data);
         # Wake the I/O controller so the datagram is written promptly
         conn.notifyPendingData();
     }
@@ -782,7 +782,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         # block on a bounded Queue.
         if (!exists datagram_queue) {
             datagram_queue = new Queue(-1);
-            h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).registerQuicDatagramQueue(sid, stream_id, datagram_queue);
+            (HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation())).registerQuicDatagramQueue(sid, stream_id, datagram_queue);
         }
         try {
             auto v = datagram_queue.get(timeout_ms);
@@ -803,7 +803,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             return False;
         }
-        return h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).isQuicDatagramSupported(sid);
+        return HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation()).isQuicDatagramSupported(sid);
     }
 
     #! Get the maximum datagram payload size for this connection
@@ -815,7 +815,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         if (!sid) {
             return 0;
         }
-        return h3conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).getQuicMaxDatagramSize(sid, stream_id);
+        return HttpClientIoSocketAccess::socketOf(h3conn.getPollOperation()).getQuicMaxDatagramSize(sid, stream_id);
     }
 
     #! Records on the stream's frame state that the application sends its WebSocket close frame itself

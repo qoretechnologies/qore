@@ -198,6 +198,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             if (exists taker_pgm_id) {
                 return taker_pgm_id == caller;
             }
+            # a leased connection is its session's (qore#6194)
+            if (leased) {
+                return False;
+            }
         }
         # the reservation fails if a request uses the connection or reserved it; it is not released
         if (getOutstandingStreamCount() || !tryReserveStream()) {
@@ -220,13 +224,35 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     private bool markTaken(int caller) {
         {
             AutoLock al(lock);
-            if (exists taker_pgm_id) {
-                return taker_pgm_id == caller;
+            if (!markTakenLocked(caller)) {
+                return False;
             }
-            taker_pgm_id = caller;
         }
         setLeased(True);
         return True;
+    }
+
+    #! Takes the connection out of the pool for the code of the given %Program; the caller holds \c lock
+    /** The caller leases the connection (setLeased()) once it released \c lock
+
+        @return @ref True if the connection is that code's now, @ref False if other code took it before
+
+        @since HttpClientIo 1.0
+    */
+    private bool markTakenLocked(int caller) {
+        if (exists taker_pgm_id) {
+            return taker_pgm_id == caller;
+        }
+        taker_pgm_id = caller;
+        return True;
+    }
+
+    #! Returns @ref True if code that a sandbox restricts took the connection out of the pool (qore#7544)
+    /** @since HttpClientIo 1.0
+    */
+    bool isTaken() {
+        AutoLock al(lock);
+        return exists taker_pgm_id;
     }
 
     #! Returns the poll operation for this connection
@@ -612,7 +638,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (!suppress_wake && ctl) {
-            ctl.wakeSocket(sock: getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()));
+            ctl.wakeSocket(sock: HttpClientIoSocketAccess::socketOf(getPollOperation()));
         }
 
         # Return the Promise alongside the Future so the caller keeps it alive
@@ -668,7 +694,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         HttpClientConnectionBase::releaseStreamReservation();
 
         if (ctl) {
-            ctl.wakeSocket(sock: getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()));
+            ctl.wakeSocket(sock: HttpClientIoSocketAccess::socketOf(getPollOperation()));
         }
 
         return {
@@ -697,7 +723,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(sock: getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()));
+            ctl.wakeSocket(sock: HttpClientIoSocketAccess::socketOf(getPollOperation()));
         }
     }
 
@@ -802,7 +828,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         closeImpl(close_timeout);
         # the connection and its poll operation reference each other: the cycle is broken once the connection is
         # closed, or neither is ever released (#6286)
-        getPollOperation().clearConnection(HttpClientIoSocketAccess::get());
+        HttpClientIoSocketAccess::clearConnectionOf(getPollOperation());
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session

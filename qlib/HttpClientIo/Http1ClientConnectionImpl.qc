@@ -157,8 +157,13 @@ public class Http1ClientConnection inherits HttpClientConnection {
                 }
                 # restricted code takes the switched stream of its own upgrade request, while it is the
                 # connection's: switched, or still active
+                # the connection is taken in the same critical section, so that it cannot return to the pool and serve
+                # another request between the check and the take
                 if (exists caller && caller == upgrade_owner_pgm_id
                         && (poll_op.isProtocolSwitched() || poll_op.getActiveStreamCount() > 0)) {
+                    if (!markTakenLocked(caller)) {
+                        throw "PERMISSION-DENIED", "the socket of this HTTP connection was taken by other code";
+                    }
                     taken_over_stream_id = upgrade_stream_id;
                     take_own = True;
                 }
@@ -167,9 +172,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         # the connection is taken out of the pool for good, also when the server answers the upgrade request with
         # another status, after which the connection would serve other requests (qore#7544)
         if (take_own) {
-            if (!markTaken(caller)) {
-                throw "PERMISSION-DENIED", "the socket of this HTTP connection was taken by other code";
-            }
+            setLeased(True);
             return getSocketIntern();
         }
         if (!owner && !takeIdleForRestrictedCaller()) {
@@ -235,7 +238,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
     #! Returns the underlying socket (cached for stable identity) without taking it over
     private Socket getSocketIntern() {
         if (!cached_socket) {
-            cached_socket = poll_op.getSocketFor(HttpClientIoSocketAccess::get());
+            cached_socket = HttpClientIoSocketAccess::socketOf(poll_op);
         }
         return cached_socket;
     }

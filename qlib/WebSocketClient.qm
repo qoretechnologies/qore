@@ -2595,8 +2595,9 @@ ws.connect();
         *HttpClientIo::HttpClientStreamHandle stream = hcio_stream;
         if (stream) {
             try {
-                # the poll operation's socket, which this module's code takes also for code that a sandbox restricts:
-                # the connection's own accessor refuses such code for a connection that it does not own (qore#7544)
+                # the public accessor of the poll operation, which applies the rules of the connection for code that a
+                # sandbox restricts: the socket of a shared connection is refused, and an idle HTTP/1.1 connection is
+                # taken out of the pool (qore#7544); a refusal gives no socket here
                 return stream.getConnection().getPollOperation().getSocket();
             } catch () {
             }

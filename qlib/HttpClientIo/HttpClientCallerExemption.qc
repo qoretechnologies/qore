@@ -39,9 +39,33 @@ class HttpClientIoSocketAccess {
         static object token = new Mutex();
     }
 
-    #! Returns the token
-    static object get() {
-        return token;
+    #! Returns the socket of a poll operation for the code of this module
+    /** The token is given only to a poll operation whose class is not of a restricted %Program
+        (@ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()", failing
+        closed): a subclass that restricted code declares could keep it; such an operation gives its socket with its
+        public accessor, which applies the rules of the connection for the calling code (qore#7544)
+    */
+    static Socket socketOf(HttpClientPollOperation op) {
+        if (HttpClientIoSocketAccess::isModuleObject(op)) {
+            return op.getSocketFor(token);
+        }
+        return op.getSocket();
+    }
+
+    #! Releases the connection of a poll operation for the code of this module; see socketOf()
+    static clearConnectionOf(HttpClientPollOperation op) {
+        if (HttpClientIoSocketAccess::isModuleObject(op)) {
+            op.clearConnection(token);
+        }
+    }
+
+    #! Returns @ref True if the class of the object is not of a restricted %Program; fails closed
+    private:internal static bool isModuleObject(object o) {
+        try {
+            return !SandboxManager::isFromRestrictedProgram(o);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! Raises an exception if the given object is not the token

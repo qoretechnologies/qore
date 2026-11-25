@@ -838,18 +838,52 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         session-scoped (not per request) so it works no matter which thread issues a request.  This
         manager is per remote connection, so the pin only affects that connection's own traffic.
 
+        The pin carries every request of the manager, so code that a sandbox restricts and whose %Program does not
+        own the manager cannot set it, and a connection that restricted code took out of the pool is never pinned
+        (qore#7544).
+
+        @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager, or
+        restricted code took the connection
+
         @since HttpClientIo 1.0
     */
     pinConnection(HttpClientConnection conn) {
+        checkPinCaller();
+        if (conn.isTaken()) {
+            throw "PERMISSION-DENIED", "a connection that code that a sandbox restricts took out of the pool cannot be "
+                "pinned";
+        }
         AutoLock al(pin_lock);
         pinned_conn = conn;
     }
 
     #! Clears the persistent-session connection pin
-    /** @since HttpClientIo 1.0 */
+    /** @throw PERMISSION-DENIED the calling code is restricted by a sandbox and does not own the manager (qore#7544)
+
+        @since HttpClientIo 1.0
+    */
     unpinConnection() {
+        checkPinCaller();
         AutoLock al(pin_lock);
         remove pinned_conn;
+    }
+
+    #! Raises an exception if restricted code that does not own the manager changes its pin (qore#7544)
+    private:internal checkPinCaller() {
+        bool restricted;
+        try {
+            restricted = SandboxManager::isRestricted();
+        } catch (hash<ExceptionInfo> ex) {
+            restricted = True;
+        }
+        if (!restricted) {
+            return;
+        }
+        *int caller = SandboxManager::getCallerProgramId();
+        if (!exists caller || !exists owner_pgm_id || caller != owner_pgm_id) {
+            throw "PERMISSION-DENIED", "code that a sandbox restricts cannot change the pinned connection of a "
+                "connection manager that it does not own";
+        }
     }
 
     #! Returns the pinned persistent-session connection, or @ref nothing
@@ -3401,7 +3435,7 @@ printf("%d connection(s) migrated\n", migrated);
         # directly to setUserTimeout(int).
         if (opts.tcp_user_timeout > 0) {
             try {
-                conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).setUserTimeout(opts.tcp_user_timeout);
+                (HttpClientIoSocketAccess::socketOf(conn.getPollOperation())).setUserTimeout(opts.tcp_user_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG,
                     "TCP_USER_TIMEOUT could not be applied: %s: %s",
@@ -4862,7 +4896,7 @@ printf("%d connection(s) migrated\n", migrated);
         HttpClientPollOperation op = conn.getPollOperation();
         # the socket of the poll operation, the object that HttpClientConnection::getSocket() returns as well, which
         # a caller takes over with it after a 101 response (qore#7500)
-        Socket sock = conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get());
+        Socket sock = HttpClientIoSocketAccess::socketOf(conn.getPollOperation());
         string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
@@ -5585,7 +5619,7 @@ printf("%d connection(s) migrated\n", migrated);
         }
         # the socket of the poll operation: HttpClientConnection::getSocket() takes the socket of a connection whose
         # protocol is switched over from its stream (qore#7500)
-        if (!conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).isOpen()) {
+        if (!HttpClientIoSocketAccess::socketOf(conn.getPollOperation()).isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
                 conn.getConnectionId());
             return False;

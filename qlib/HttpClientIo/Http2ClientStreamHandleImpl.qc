@@ -508,7 +508,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             }
             sid = stream_id;
         }
-        return h2conn.getPollOperation().getSocketFor(HttpClientIoSocketAccess::get()).waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
+        return HttpClientIoSocketAccess::socketOf(h2conn.getPollOperation()).waitForHttp2StreamFlushed(sid, timeout_ms) == 1 ? 1 : 0;
     }
 
     #! True while the request write side of a streamed request is open: it was not ended by a send (qore#7443)
