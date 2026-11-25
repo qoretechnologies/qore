@@ -5606,6 +5606,9 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 # stream that it is sent on, the socket given to an SSE or WebSocket connection) depend only on the
                 # server's own values, also if the handler keeps the reference (qore#6953)
                 hash<auto> handler_cx = cx;
+                # what the handler's trusted authenticator added to the context and the handler's code does not get
+                # (qore#7303)
+                *hash<auto> platform_changes;
 
                 # preform any pre-processing on the request that can aid in authentication and has to be performed to
                 # handle the request anyway
@@ -5640,15 +5643,17 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
                 if (!ah) {
                     try {
-                        if (restricted_handler) {
+                        if (restricted_handler && handler.handlerClassIsRestricted()) {
                             # the handler's trusted authenticator consumes the credentials of the raw request; the
-                            # code of the handler gets the request without them (qore#7303)
+                            # code of the handler gets the request without them (qore#7303); a handler of a trusted
+                            # class that serves a request for restricted code authenticates it itself, as before
                             *object platform_auth;
                             on_exit delete platform_auth;
-                            ah = handler.authenticatePlatform(hview, hdr, \handler_cx, \platform_auth);
+                            ah = handler.authenticatePlatform(hview, hdr, \handler_cx, \platform_auth,
+                                \platform_changes);
                             if (!ah) {
                                 hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(
-                                    handler_cx, hdr);
+                                    handler_cx, hdr, platform_changes);
                                 hash<auto> fcx = filtered.cx;
                                 ah = handler.authenticateRequest(hview, filtered.hdr, \fcx);
                                 handler_cx = http_merge_handler_changes(handler_cx, filtered.cx, fcx);
@@ -5720,7 +5725,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     # that code's own (qore#7303)
                     hash<auto!> hrv;
                     if (restricted_handler) {
-                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr);
+                        hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(cx, hdr,
+                            platform_changes);
                         hrv = handler.handleRequest(hview,
                             request_helper.handler_sock ?? http_handler_connection_socket(s), filtered.cx,
                             filtered.hdr, body);
