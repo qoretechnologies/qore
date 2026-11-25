@@ -28,6 +28,9 @@
     - \c debug.q: the debugger events of constructors and destructors, with the call stacks of their code
     - \c nonet.q: the builtin base class constructor of classes with user constructors (called directly, and as the
       implicit constructor of a base class) refused by the runtime parse options of their Program
+    - \c lent.q: the user constructor of a lent object (qore#7052) that the code it was lent to calls runs as a method
+      of the lent object (a capability call): the object that it creates of another module's class is not lent, with
+      \c LentMod.qm
 */
 class ObjectConstructionShortcutsTest inherits QUnit::Test {
     private {
@@ -44,6 +47,7 @@ class ObjectConstructionShortcutsTest inherits QUnit::Test {
             "users",
             "debug",
             "nonet",
+            "lent",
         );
 
         #! the scripts that do not run on the IR tier: a call that starts while a debugger is attached runs on the AST

@@ -260,6 +260,8 @@ public:
     const QoreTypeInfo* typeInfo;       //!< resolved type info (for built-in types)
     QoreParseTypeInfo* parseTypeInfo;   //!< parse-time type info (for complex types)
     bool pub;
+    // Namespace members are installed at the closing brace. Keep the options at the declaration.
+    ParseWarnOptions decl_opts = qore_program_private::getParseWarnOptions(getProgram());
 
     DLLLOCAL TypedefNode(const QoreProgramLocation* loc, char* n, const QoreTypeInfo* ti,
             QoreParseTypeInfo* pti, bool p = false)
@@ -1566,10 +1568,12 @@ struct NSNode {
                 delete n.cn;
                 break;
             }
-            case NSN_TYPEDEF:
+            case NSN_TYPEDEF: {
+                ParseWarnHelper wh(n.td->decl_opts);
                 ns.parseAddTypedef(n.td->loc, n.td->name, n.td->getTypeInfo(), n.td->takeParseTypeInfo(), n.td->pub);
                 delete n.td;
                 break;
+            }
             case NSN_NS:
                 if (parse_check_restriction(QoreParseOptions::NO_NAMESPACE_DEFS)) {
                     parse_error(*qore_ns_private::get(*n.ns)->loc,

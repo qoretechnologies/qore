@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of += on weak references to objects
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class WeakReferenceObjectPlusAssignTest
+
+#! += on an lvalue that holds a weak reference to an object merges into the object (qore#7403)
+/** += on an lvalue that holds a weak reference to an object replaced the weak reference with an integer in every mode,
+    where += on the object itself merges a hash or the members of an object into its members and leaves it unchanged
+    for any other operand.  It now changes the object as += on the object itself does, and the lvalue keeps the weak
+    reference; the value of the operator is the object.  The other compound operators replace a weak reference as a
+    plain assignment does, as they replace an object lvalue (the rule of qore#7297 for weak lists and hashes).  The
+    program covers auto, object and typed lvalues, hash and object operands, operands that change nothing, typed,
+    undeclared and private members, a weak reference to the object itself and to the object merged from, weak
+    references held by a member, a hash, a list, a closure and a global, a deleted object, an object that its last
+    reference released, a merge whose destructor releases the last reference to the object, cycles, the value of the
+    operator and the same without a weak reference.  A second program, which needs the library debugging functions,
+    checks that the recursive graph of the object is kept: an object that is still referenced is not collected, and
+    cycles made and broken through the weak reference are collected.  Every mode must print the output of the AST.
+
+    The programs are in \c weak-reference-object-plus-assign/.
+*/
+class WeakReferenceObjectPlusAssignTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/weak-reference-object-plus-assign";
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const Programs = ("weak-reference-object-plus-assign",);
+        #! programs that need the library debugging functions (a debug build)
+        const GraphPrograms = ("weak-reference-object-plus-assign-graph",);
+    }
+
+    constructor() : QUnit::Test("WeakReferenceObjectPlusAssignTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the recursive graph of the object is kept in every mode", \testGraph());
+        set_return_value(main());
+    }
+
+    private string expected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    private string run(string name, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
+        assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
+        return r.stdout;
+    }
+
+    testAst() {
+        foreach string name in (Programs) {
+            assertEq(expected(name), run(name, "ast"), name + " ast");
+        }
+    }
+
+    testModes() {
+        foreach string name in (Programs) {
+            foreach string mode in (Modes) {
+                if (mode == "ast") {
+                    continue;
+                }
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testGraph() {
+        # the program keeps an object alive with a reference from outside Qore (dbg_object_external_ref())
+        if (!exists_function("dbg_object_external_ref")) {
+            testSkip("the library debugging functions are not available (not a debug build)");
+        }
+        foreach string name in (GraphPrograms) {
+            foreach string mode in (Modes) {
+                assertEq(expected(name), run(name, mode), name + " " + mode);
+            }
+        }
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string path = backquote("command -v qcc 2>/dev/null");
+            trim path;
+            if (!path) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = path;
+        }
+        TmpDir tmp("qore-weak-reference-object-plus-assign-");
+        foreach string name in (Programs) {
+            foreach string opt in (("0", "3")) {
+                string exe = sprintf("%s/%s-O%s", tmp.path, name, opt);
+                int rc;
+                string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, name), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: qcc compiles the program: %s", name, opt, out));
+                if (rc || !is_file(exe)) {
+                    continue;
+                }
+                # -b must be the first argument of a compiled program
+                string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+                assertEq(0, rc, sprintf("%s -O%s: exit status (output: %y)", name, opt, result));
+                assertEq(expected(name), result, sprintf("%s -O%s", name, opt));
+            }
+        }
+    }
+}

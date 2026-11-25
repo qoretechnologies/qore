@@ -33,6 +33,7 @@
 #define _QORE_INTERN_SYNCPARSEOPTIONS_H
 
 #include <qore/QoreParseOptions.h>
+#include <qore/Restrictions.h>
 #include "qore/intern/ParseWarnOptions.h"
 
 #include <atomic>
@@ -234,6 +235,19 @@ public:
     Reads are implicit (a conversion to QoreParseOptions and the read-only operators), so that code reading the
     options is unchanged; the assignments take the write lock themselves.
 */
+//! true once the options of any Program had a restriction of a functional domain (qore#7052)
+/** Monotonic: set by the Programs' options (SyncParseOptions::trackProgramRestrictions()) and never cleared.  Every
+    restriction that the caller walk finds comes from the options of a Program (its own, or recorded from them: the
+    restrictions of a sandboxed caller, the origin of objects and call references, those of the code that started a
+    thread), so while it is false, no code on any thread is restricted, and a call of a method of a lent object needs no
+    capability frame (see ProgramThreadCountContextHelper::set())
+*/
+DLLLOCAL extern std::atomic<bool> qore_program_restrictions_seen;
+
+//! returns true if the given options of a Program restrict a functional domain; sets qore_program_restrictions_seen
+//! if they do
+DLLLOCAL bool qore_note_program_parse_options(const QoreParseOptions& po);
+
 class SyncParseOptions {
 public:
     DLLLOCAL SyncParseOptions() : SyncParseOptions(QoreParseOptions()) {
@@ -244,6 +258,28 @@ public:
 
     SyncParseOptions(const SyncParseOptions&) = delete;
     SyncParseOptions& operator=(const SyncParseOptions&) = delete;
+
+    //! marks the options as a Program's own: their restrictions set qore_program_restrictions_seen (qore#7052)
+    DLLLOCAL void trackProgramRestrictions() {
+        program_options = true;
+        noteProgramOptions(loadShared());
+    }
+
+    //! returns the Program kinds that its options have ever had (a mask of ProgramOptionsSeen) (qore#7052)
+    /** Monotonic: a kind is set when the options gain it, and never cleared; read with one relaxed load where a call
+        enters a lent object's method (see ProgramThreadCountContextHelper::set())
+    */
+    DLLLOCAL unsigned optionsSeen() const {
+        return options_seen.load(std::memory_order_relaxed);
+    }
+
+    //! the kinds recorded by optionsSeen()
+    enum ProgramOptionsSeen : unsigned {
+        //! a restriction of a functional domain
+        POS_DOMAIN_RESTRICTED = 1 << 0,
+        //! a module's Program (PO_IN_MODULE)
+        POS_MODULE = 1 << 1,
+    };
 
     //! returns the options in effect for the current thread: its own scoped options if it has any for this object,
     //! otherwise the Program's own options; takes no lock
@@ -372,6 +408,19 @@ private:
         that sees one looks for a frame of its own and finds none.
     */
     mutable std::atomic<unsigned> overlays{0};
+    //! true for the options of a Program (see trackProgramRestrictions())
+    bool program_options = false;
+    //! the kinds that the options of the Program have had (see optionsSeen())
+    std::atomic<unsigned> options_seen{0};
+
+    //! records what optionsSeen() reports for the given options of the Program
+    DLLLOCAL void noteProgramOptions(const QoreParseOptions& po) {
+        unsigned seen = (qore_note_program_parse_options(po) ? POS_DOMAIN_RESTRICTED : 0)
+            | (po.hasAny(QoreParseOptions(PO_IN_MODULE)) ? POS_MODULE : 0);
+        if (seen & ~options_seen.load(std::memory_order_relaxed)) {
+            options_seen.fetch_or(seen, std::memory_order_relaxed);
+        }
+    }
 
     //! returns the options in effect for the current thread when a frame may be linked
     DLLLOCAL QoreParseOptions loadView() const;
@@ -387,8 +436,13 @@ private:
             || !q_parse_overlay_find(this));
 #endif
         // the insertion is never under way when the process is copied by fork() (issue #6177)
-        std::lock_guard<std::mutex> lg(qore_parse_options_values_mutex);
-        cur.store(&*values.insert(po).first, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lg(qore_parse_options_values_mutex);
+            cur.store(&*values.insert(po).first, std::memory_order_release);
+        }
+        if (program_options) {
+            noteProgramOptions(po);
+        }
     }
 };
 
@@ -400,9 +454,11 @@ struct ProgramParseWarnOptions {
     SyncParseOptions parse_options;
 
     DLLLOCAL ProgramParseWarnOptions() {
+        parse_options.trackProgramRestrictions();
     }
 
     DLLLOCAL ProgramParseWarnOptions(const QoreParseOptions& po) : parse_options(po) {
+        parse_options.trackProgramRestrictions();
     }
 
     //! returns a copy of the options in effect for the current thread (see SyncParseOptions::load())

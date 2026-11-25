@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Operators Change the Container of a Weak Reference Held by Their Lvalue
+    The operators that change an lvalue's list or hash (+=, hash -=, push, unshift, pop, shift, splice, extract, trim,
+    chomp) change the container of the @ref weak_assignment_operator "weak reference" it holds, as remove does; they
+    raised an error or replaced the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue
+    7297</a>, <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>).
 
     @par Restricted REST Classes and Stream Requests Get the Request Without the Server's Objects and Credentials
     REST classes and stream requests whose sandbox does not trust their code get the request context without the
@@ -804,6 +809,10 @@
     After @ref QoreTypeSafeReferenceHelper::removeHashObjKey() invokes a native member gate or accessor, the helper
     is invalid and unlocked and must be reset before further value access, or closed, so a callback can safely
     replace its parent; see @ref native_member_callback_lvalue "native member callbacks".
+
+    @par Compiled Method Calls Can Transfer Temporary Arguments
+    A program or module built with @ref qcc_tool "qcc" can hand a temporary argument directly to a method that
+    reassigns its parameter and requires a runtime supporting the new AOT format (issue #6860).
 
     @par Binary Modules Implement Module API 2.3
     Every external binary module must be rebuilt for module API 2.3, which registers its metadata with a
@@ -1541,7 +1550,7 @@
 
     @par Warning for a User Symbol that Unqualified Resolution Cannot Reach
     The strict @ref warning-language-traps "language-traps" warning is raised at the declaration of a user function,
-    class, constant, hashdecl or global variable named like a @ref Qore "Qore" namespace symbol, which
+    class, constant, hashdecl, typedef or global variable named like a @ref Qore "Qore" namespace symbol, which
     @ref unqualified_symbol_resolution "unqualified resolution" reaches instead
     (<a href="https://github.com/qoretechnologies/qore/issues/6034">issue 6034</a>).
 
@@ -2834,6 +2843,7 @@
     - @ref onerecordclientintro "OneRecordClient": IATA ONE Record client for air cargo data sharing
     - @ref onerecordserverhandlerintro "OneRecordServerHandler": IATA ONE Record server handler
     - @ref openapi3intro "OpenApi3": OpenAPI 3.x schemas for REST APIs
+      - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" builds schema objects faster while validating them eagerly
     - @ref openapi3dataproviderintro "OpenApi3DataProvider": data provider API for OpenAPI 3.0 / 3.1 schemas
     - @ref opensearchdataproviderintro "OpenSearchDataProvider": data provider and vector store for OpenSearch
     - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender": logger appender for OpenSearch
@@ -2956,6 +2966,8 @@
     - fixed a memory-safety issue with the builtin declarations in a namespace that a binary module adds to a Program
       at run time, which are now freed with their Program only once nothing uses them
       (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>)
+    - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
+      paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
       \c qore_get_parent_caller_location(), whose default offset is \c 1, return the frame at the given offset of the
       call stack; they returned @ref nothing for any offset other than \c 0
@@ -3063,6 +3075,35 @@
       class hierarchy calls a later parent class's public method of the name in every execution mode, as qcc
       executables did, also through a call reference (see @ref abstract_parent_implementation;
       <a href="https://github.com/qoretechnologies/qore/issues/7206">issue 7206</a>)
+    - a class can implement its abstract methods with the methods of a class that it inherits with \c private or
+      \c private:internal access; calls of such a method raised \c RUNTIME-OVERLOAD-ERROR, and they now have the
+      access of the abstract declaration, or of the implementing method if it is more restrictive (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7277">issue 7277</a>)
+    - a public method of a privately inherited class that implements an abstract method that the class reaches only
+      through private inheritance could be called from outside the class hierarchy (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7288">issue 7288</a>)
+    - a method of a class that a parent class inherits with <tt><b>private:internal</b></tt> access implemented an
+      abstract method of the class, so that code outside the class hierarchy could call it (see
+      @ref abstract_parent_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7316">issue 7316</a>)
+    - a class's own method did not implement a parent class's abstract variant when another parent class declared
+      another overload of the method, so that the class could not be instantiated (see
+      @ref abstract_own_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7330">issue 7330</a>)
+    - abstract declarations of the same signature in a class of a \c qcc \c -m module and a parsed class, or naming a
+      type differently, were two abstract variants of a class that inherits both, and declarations of different
+      classes of the same name were one (see @ref abstract_same_signature;
+      <a href="https://github.com/qoretechnologies/qore/issues/7331">issue 7331</a>)
+    - a class whose parent class from a module implemented an abstract method called the parent class's method
+      instead of its own of the same signature when other parent classes declared and implemented the method's other
+      overloads (see @ref abstract_own_implementation;
+      <a href="https://github.com/qoretechnologies/qore/issues/7337">issue 7337</a>)
+    - a variant of a method that a public path reaches could not be called when an ancestor of the method that the
+      caller cannot access, such as one inherited privately, came before it, for example a method that a class
+      creates to implement an abstract variant with a privately inherited class's variant (see
+      @ref multiple_path_inheritance; <a href="https://github.com/qoretechnologies/qore/issues/7381">issue 7381</a>)
     - @ref Qore::call_static_method() "call_static_method()" and the related calls call the static method that a static
       method call in the caller's code calls: they refused a later parent class's public method behind a private one,
       and called a method of a privately inherited class from outside it
@@ -3087,6 +3128,14 @@
       <tt>(w := new C()).method()</tt>) now lives until the end of the statement, as any temporary value does; it was
       destroyed when the assignment ended, so that the rest of the statement saw a destroyed object
       (<a href="https://github.com/qoretechnologies/qore/issues/7085">issue 7085</a>)
+    - a @ref weak_assignment_operator "weak assignment" of a typed hash or list to an lvalue that strips the container's
+      type (ex: an element of an untyped list) designates the container assigned, not a copy that read as empty after
+      the statement; a type that converts it to another container raises an exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/7237">issue 7237</a>)
+    - the operators that change an lvalue's list or hash (+=, push, pop, splice, trim, ...) change the container that
+      a @ref weak_assignment_operator "weak reference" held by the lvalue designates; they raised an error or replaced
+      the lvalue (<a href="https://github.com/qoretechnologies/qore/issues/7297">issue 7297</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/7312">issue 7312</a>)
     - the strings of \c ARGV and \c QORE_ARGV are tagged with the
       @ref default_encoding "default character encoding" of the process, where they were tagged \c UTF-8 whatever the
       default encoding (see @ref command_line_processing; issue #7045)
@@ -3119,6 +3168,9 @@
     - <tt>-=</tt> on a variable that holds a @ref weak_assignment_operator "weak reference" to an object removes the
       members from the object and keeps the weak reference, instead of replacing it with an integer
       (<a href="https://github.com/qoretechnologies/qore/issues/7368">issue 7368</a>)
+    - <tt>+=</tt> on a variable that holds a @ref weak_assignment_operator "weak reference" to an object merges a hash
+      or an object's members into the object and keeps the weak reference, instead of replacing it with an integer
+      (<a href="https://github.com/qoretechnologies/qore/issues/7403">issue 7403</a>)
     - @ref httpserverintro "HttpServer" answers a handler's informational response (1xx) other than 101 with an error
       instead of sending it as the final response
       (<a href="https://github.com/qoretechnologies/qore/issues/7222">issue 7222</a>)
@@ -3126,6 +3178,8 @@
       of @ref httpserverintro "HttpServer" refuse an informational status (1xx) as a final response, which made the
       client fail the connection with its other streams or wait for the response forever
       (<a href="https://github.com/qoretechnologies/qore/issues/7212">issue 7212</a>)
+    - AOT format v52 preserves symbolic wildcard bounds in @ref union_type "union types" and requires
+      rebuilding all v51 and older executables and modules with the updated qcc (issue #7184).
     - generic specialization and compiled programs retain all declared alternatives of a @ref union_type "union type"
       that begins with a parameterized class, and code compiled with such a union before this fix must be recompiled
       (<a href="https://github.com/qoretechnologies/qore/issues/7147">issue 7147</a>)
@@ -3135,6 +3189,9 @@
       <a href="https://github.com/qoretechnologies/qore/issues/7061">issue 7061</a>)
     - fixed a crash when a debugger paused or terminated a debugged Program while it was being torn down and one of its
       threads had just ended (<a href="https://github.com/qoretechnologies/qore/issues/7103">issue 7103</a>)
+    - \c qcc reads the block of a module as the module loader does, so that it compiles a module whose block has a
+      brace or an escaped quote in a string, a single-quoted string or a closure, and refuses the blocks that the
+      loader refuses with the loader's diagnostics (see @ref qcc_modules; issue #7315)
     - a Program that the code of a user module creates does not inherit the module mark (\c PO_IN_MODULE) from the
       module's Program, so it is not taken for module code; see @ref Qore::Program "Program"
       (<a href="https://github.com/qoretechnologies/qore/issues/7067">issue 7067</a>)
@@ -3146,6 +3203,9 @@
       location's scheme (\c FILESYSTEM for \c file locations, \c NETWORK for \c http, \c ftp, \c sftp and \c rest
       locations); see @ref filelocationhandler_v3_0
       (<a href="https://github.com/qoretechnologies/qore/issues/6959">issue 6959</a>)
+    - \c qcc refuses a user module for the warnings that the module loader refuses it for, with the loader's
+      diagnostics, so that a module that \c qcc compiles also loads from source (see @ref qcc_module_warnings;
+      issue #7314)
     - fixed a crash when the members of a deleted object are merged into another object with the
       @ref plus_equals_operator "+= operator", which now raises an \c OBJECT-ALREADY-DELETED exception, as does a
       merge into a deleted object also when there is nothing to merge
@@ -3246,9 +3306,18 @@
     - the default @ref Qore::Logger::LoggerInterface::detail() "LoggerInterface::detail()" passes its format arguments
       to \c logArgs() as one list, so it no longer raises \c RUNTIME-OVERLOAD-ERROR with more than one
       (<a href="https://github.com/qoretechnologies/qore/issues/7197">issue 7197</a>)
+    - @ref Qore::Program::importClass() "Program::importClass()" checks class ownership when restricted code uses
+      class injection (<a href="https://github.com/qoretechnologies/qore/issues/7049">issue 7049</a>)
     - fixed a @ref sqlutilintro "SqlUtil" schema alignment on PostgreSQL and Oracle that turns a unique constraint into
       the primary key on the same columns, whose SQL failed as the primary key used the dropped constraint's index
       (<a href="https://github.com/qoretechnologies/qore/issues/6734">issue 6734</a>); see @ref sqlutilv3_11_0
+    - the namespaces, functions and enums of a namespace are enumerated by the \c reflection module
+      (@ref Qore::Reflection::Namespace::getNamespaces() "Namespace::getNamespaces()",
+      @ref Qore::Reflection::Namespace::getFunctions() "Namespace::getFunctions()",
+      @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()") in the order in which they were declared;
+      before, the order depended on how often the namespace had been copied, so a program compiled with \c qcc
+      returned another one than the interpreter
+      (<a href="https://github.com/qoretechnologies/qore/issues/7171">issue 7171</a>)
     - a call reference obtained by a class-scoped method name for an object applies the access rule of a method call
       on the object, where code of a subclass could get a reference to a parent class's private method through an
       object of another subclass (<a href="https://github.com/qoretechnologies/qore/issues/6806">issue 6806</a>)
