@@ -5647,17 +5647,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             # the handler's trusted authenticator consumes the credentials of the raw request; the
                             # code of the handler gets the request without them (qore#7303); a handler of a trusted
                             # class that serves a request for restricted code authenticates it itself, as before
-                            *object platform_auth;
-                            on_exit delete platform_auth;
-                            ah = handler.authenticatePlatform(hview, hdr, \handler_cx, \platform_auth,
-                                \platform_changes);
-                            if (!ah) {
-                                hash<HttpFilteredRequestInfo> filtered = handler.withholdCredentialsForDispatch(
-                                    handler_cx, hdr, platform_changes);
-                                hash<auto> fcx = filtered.cx;
-                                ah = handler.authenticateRequest(hview, filtered.hdr, \fcx);
-                                handler_cx = http_merge_handler_changes(handler_cx, filtered.cx, fcx);
-                            }
+                            ah = handler.authenticateRestrictedRequest(hview, hdr, \handler_cx, \platform_changes);
                         } else {
                             ah = handler.authenticateRequest(hview, hdr, \handler_cx);
                         }
