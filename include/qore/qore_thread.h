@@ -146,8 +146,9 @@ DLLEXPORT int remove_thread_resource(const ResolvedCallReferenceNode* rcr, Excep
     \c 0 is the location of the current call, \c 1 (the default) that of the caller of the current function, and so
     on
 
-    @return a CallStackInfo hash for the entry at \a offset, or nullptr if the call stack has no entry at that offset;
-    the caller owns the reference
+    @return a CallStackInfo hash for the entry at \a offset, or nullptr if the call stack has no entry at that offset
+    or if the current thread has no %Qore thread data (a thread that is not registered with %Qore); the caller owns
+    the reference
 
     @note Before %Qore 3.0 (issue 7564), any offset other than \c 0, also the default, returned nullptr; a module
     that calls it with the default or another non-zero offset now gets a hash, which it must dereference

@@ -2910,6 +2910,9 @@
       \c qore_get_parent_caller_location(), whose default offset is \c 1, return the frame at the given offset of the
       call stack; they returned @ref nothing for any offset other than \c 0
       (<a href="https://github.com/qoretechnologies/qore/issues/7564">issue 7564</a>)
+    - the C++ API \c qore_get_parent_caller_location() returns \c nullptr in a thread that is not registered with
+      %Qore, where it crashed (see @ref Qore::get_parent_caller_location() "get_parent_caller_location()";
+      <a href="https://github.com/qoretechnologies/qore/issues/7594">issue 7594</a>)
     - the body of a plain function and of a closure created outside a class runs with its own
       @ref Qore::Program "Program" as the Program of the calls that it makes, as a method runs with its class's, in
       every execution mode: the frames of its calls name it (@ref Qore::CallStackInfo "CallStackInfo" \c programid),
