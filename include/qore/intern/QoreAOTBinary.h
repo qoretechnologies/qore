@@ -4289,6 +4289,8 @@ private:
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);
     bool resolveClassBases(std::string& error);
+    //! refuses a class injected in place of a class that reaches it through its base classes (qore#7664)
+    bool checkClassInjectionCycles(std::string& error);
     bool resolveInstanceMembers(std::string& error);
     bool importInheritedMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);

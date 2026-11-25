@@ -2929,6 +2929,14 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a class injected with @ref Qore::Program::importClass() "Program::importClass()" keeps the class that it is
+      injected in place of, with the declarations that that class names, for as long as the injected class exists:
+      the type checks of the injected class's objects (\c instanceof, typed assignments and casts, for example) read
+      freed memory once the @ref Qore::Program "Program" that declared the replaced class was deleted, when that was
+      not the Program that the injected class came from; a compiled program in which a class is injected in place of
+      itself, or of a class that leads back to it through the classes that it is injected in place of or inherits, is
+      no longer loaded
+      (<a href="https://github.com/qoretechnologies/qore/issues/7664">issue 7664</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)

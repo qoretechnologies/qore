@@ -3646,6 +3646,13 @@ public:
     QoreClassTypeInfo* typeInfo = nullptr;
     QoreClassOrNothingTypeInfo* orNothingTypeInfo = nullptr;
 
+    //! The class that this class is injected in place of (Program::importClass() with injection), referenced by this
+    //! class (qore#7664)
+    /** The Program that owns that class can be deleted before this class, whose type checks still compare it with
+        that class; the reference is released when this class is destroyed (~qore_class_private()).  Set when the class
+        is made (the import constructor, or the AOT loader); never this class, nor a class that reaches this class
+        through the classes that it references (its injected class, base classes or import source)
+    */
     const qore_class_private* injectedClass = nullptr;
 
     //! The class that this class was imported from in another Program, referenced by this class (issue #5790)
@@ -7003,6 +7010,10 @@ protected:
         }
         if (import_source) {
             refs.push_back(&import_source->type_owner);
+        }
+        // the class that this class is injected in place of (qore#7664)
+        if (injectedClass) {
+            refs.push_back(&const_cast<qore_class_private*>(injectedClass)->type_owner);
         }
     }
 

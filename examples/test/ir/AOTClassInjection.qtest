@@ -1,0 +1,189 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc .qmod compilation, linking and dylib loading of the compiled modules
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTClassInjectionTest
+
+#! the class injections of a compiled module are loaded, and an injection that leads back to the class is refused
+#! (qore#7664)
+/** A class of a compiled program can be injected in place of another class of the program; the loader relates the
+    classes again, and the injected class references the class that it stands in for.  A class injected in place of
+    itself, or in place of a class that reaches it through the classes that it references (the class that it is
+    injected in place of, or its base classes), would keep the classes alive for ever, and is refused.  No compiler
+    writes such a module: the DEBUG-build hook QORE_AOT_TEST_INJECTED_CLASS writes the injections given for the
+    classes named; the cases that use it skip in other builds.
+*/
+class AOTClassInjectionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+
+        #! the module: two classes with other signatures, and a subclass of one of them
+        const ModuleSource = "%modern
+module InjectProbe {
+    version = \"1.0\";
+    desc = \"classes for the class injection of a compiled module\";
+    author = \"Qore Technologies, s.r.o.\";
+}
+
+public namespace InjectProbe {
+    public class Base {
+        string value() { return \"base\"; }
+    }
+
+    public class Stand {
+        string value() { return \"stand\"; }
+        int extra() { return 1; }
+    }
+
+    public class Sub inherits Base {
+    }
+}
+";
+
+        #! the child: loads the module and reports whether a Stand is a Base
+        const ChildSource = "%modern
+try {
+    load_module(\"InjectProbe\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"load: %s: %s\\n\", ex.err, ex.desc);
+    exit(0);
+}
+Program p(PO_MODERN);
+p.parse(\"%requires InjectProbe
+bool sub is_base() { return new InjectProbe::Stand() instanceof InjectProbe::Base; }
+string sub as_base() {
+    try {
+        # checked at run time: the declared types are unrelated unless the module relates them
+        object o = new InjectProbe::Stand();
+        InjectProbe::Base b = o;
+        return b.value();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+\", \"probe\");
+printf(\"is base: %y\\n\", p.callFunction(\"is_base\"));
+printf(\"as base: %s\\n\", p.callFunction(\"as_base\"));
+";
+
+        #! what the child reports for a module without injections
+        const Unrelated = "is base: False
+as base: RUNTIME-TYPE-ERROR
+";
+
+        #! what the child reports for a module in which Stand is injected in place of Base
+        const Injected = "is base: True
+as base: stand
+";
+    }
+
+    constructor() : QUnit::Test("AOTClassInjectionTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a module parsed from source", \sourceTest());
+        addTestCase("a compiled module", \compiledTest());
+        addTestCase("a compiled module with a class injection", \injectedTest());
+        addTestCase("a compiled module with a class injected in place of itself", \selfTest());
+        addTestCase("a compiled module with a cycle of class injections", \cycleTest());
+        addTestCase("a compiled module with a class injected in place of its subclass", \subclassTest());
+        set_return_value(main());
+    }
+
+    sourceTest() {
+        TmpDir tmp("qore-aot-class-injection-");
+        string src_dir = writeModule(tmp.path);
+        assertEq(Unrelated, child(tmp.path, src_dir), "source");
+    }
+
+    compiledTest() {
+        TmpDir tmp("qore-aot-class-injection-");
+        assertEq(Unrelated, child(tmp.path, compile(tmp.path)), "qmod");
+    }
+
+    injectedTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        assertEq(Injected, child(tmp.path, compile(tmp.path, "Stand=InjectProbe::Base")), "qmod with an injection");
+    }
+
+    selfTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        assertRegex("^load: .*'Stand' cannot be injected in place of 'InjectProbe::Stand': the injection leads back "
+            "to the class itself", child(tmp.path, compile(tmp.path, "Stand=InjectProbe::Stand")));
+    }
+
+    cycleTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        assertRegex("^load: .*cannot be injected in place of .*: the injection leads back to the class itself",
+            child(tmp.path, compile(tmp.path, "Stand=InjectProbe::Base,Base=InjectProbe::Stand")));
+    }
+
+    subclassTest() {
+        checkHook();
+        TmpDir tmp("qore-aot-class-injection-");
+        # the subclass references the class through its base class list
+        assertRegex("^load: .*'Base' cannot be injected in place of '(::)?InjectProbe::Sub': the injection leads "
+            "back to the class itself", child(tmp.path, compile(tmp.path, "Base=InjectProbe::Sub")));
+    }
+
+    private checkHook() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("QORE_AOT_TEST_INJECTED_CLASS is only available in a library-debug build");
+        }
+    }
+
+    #! writes the module source to a directory of its own and returns the directory
+    private static string writeModule(string dir) {
+        string src_dir = dir + DirSep + "src";
+        mkdir(src_dir);
+        File f();
+        f.open2(src_dir + DirSep + "InjectProbe.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ModuleSource);
+        f.close();
+        return src_dir;
+    }
+
+    #! compiles the module, with the injections given, if any, and returns the directory of the qmod
+    private string compile(string dir, *string injections) {
+        string src_dir = writeModule(dir);
+        string art_dir = dir + DirSep + "art";
+        mkdir(art_dir);
+        string qmod = art_dir + DirSep + "InjectProbe.qmod";
+        string out = backquote(sprintf("%s %s %s -O0 -m -o %s %s 2>&1", env,
+            injections ? "QORE_AOT_TEST_INJECTED_CLASS=" + injections : "", qcc_bin, qmod,
+            src_dir + DirSep + "InjectProbe.qm"));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        return art_dir;
+    }
+
+    #! runs the child with the module directory first in the module path; returns what it printed
+    private string child(string dir, string mod_dir) {
+        string script = dir + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+        int rc;
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s %s 2>&1", env, mod_dir, qore_bin, script), \rc);
+        assertEq(0, rc, "child: " + out);
+        return out;
+    }
+}

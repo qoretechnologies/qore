@@ -1330,6 +1330,39 @@ static const QoreClass* qoreAOTFindClassInMap(
     return nullptr;
 }
 
+//! Returns true if \a target is \a from or is reached from it through the references that classes hold on other
+//! classes: the class that a class is injected in place of, its base classes and the source of an imported class
+/** A class injected in place of a class that reaches it would keep both alive for ever (qore#7664)
+*/
+static bool qoreAOTClassReaches(const qore_class_private* from, const qore_class_private* target) {
+    std::vector<const qore_class_private*> work{from};
+    std::unordered_set<const qore_class_private*> seen;
+    while (!work.empty()) {
+        const qore_class_private* p = work.back();
+        work.pop_back();
+        if (p == target) {
+            return true;
+        }
+        if (!seen.insert(p).second) {
+            continue;
+        }
+        if (p->injectedClass) {
+            work.push_back(p->injectedClass);
+        }
+        if (p->import_source) {
+            work.push_back(p->import_source);
+        }
+        if (p->scl) {
+            for (const BCNode* bcn : *p->scl) {
+                if (bcn->sclass) {
+                    work.push_back(qore_class_private::get(*bcn->sclass));
+                }
+            }
+        }
+    }
+    return false;
+}
+
 static void qoreAOTAddClassLookupAliases(
         std::unordered_map<std::string, QoreClass*>& class_map,
         QoreClass* qc) {
@@ -11780,7 +11813,29 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             writer.writeBytes(empty_hash, SH_SIZE);
         }
         if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0) {
-            writer.writeStringRef(priv->injectedClass ? priv->injectedClass->path.c_str() : "");
+            std::string injected_path = priv->injectedClass ? priv->injectedClass->path : std::string();
+#ifdef DEBUG
+            // test hook: "<class>=<path>[,<class>=<path>...]" writes each named class as injected in place of the
+            // class at the path given, as a damaged or crafted image can, so that a test checks what the loader
+            // accepts and refuses (qore#7664)
+            if (QoreEnvironmentValue injected_holder("QORE_AOT_TEST_INJECTED_CLASS"); injected_holder.c_str()) {
+                std::string spec = injected_holder.c_str();
+                size_t start = 0;
+                while (start <= spec.size()) {
+                    size_t end = spec.find(',', start);
+                    if (end == std::string::npos) {
+                        end = spec.size();
+                    }
+                    std::string entry = spec.substr(start, end - start);
+                    size_t eq = entry.find('=');
+                    if (eq != std::string::npos && entry.compare(0, eq, priv->name) == 0) {
+                        injected_path = entry.substr(eq + 1);
+                    }
+                    start = end + 1;
+                }
+            }
+#endif
+            writer.writeStringRef(injected_path.c_str());
         }
         if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0) {
             uint32_t type_param_count = static_cast<uint32_t>(priv->getTypeParamCount());
@@ -17153,6 +17208,9 @@ bool QoreAOTBinaryDeserializer::resolveTypes(std::string& error) {
     if (!resolveClassBases(error)) {
         return false;
     }
+    if (!checkClassInjectionCycles(error)) {
+        return false;
+    }
     // Resolve typedefs first (multi-pass for forward refs), then enum base types and hashdecl members
     // Order matters: enum base types and hashdecl members may reference typedefs
     if (!resolveTypedefs(error)) {
@@ -18409,10 +18467,52 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                     + std::string(class_list[i]->getName()) + "'";
                 return false;
             }
-            qore_class_private::get(*class_list[i])->injectedClass = qore_class_private::get(*injected);
+            qore_class_private* cpriv = qore_class_private::get(*class_list[i]);
+            const qore_class_private* ipriv = qore_class_private::get(*injected);
+            // the class references the class that it is injected in place of (qore#7664): a class is never injected
+            // in place of itself, nor in place of a class that reaches it, which would keep the classes alive for
+            // ever; the base classes are not resolved yet, so the classes are checked again with them in
+            // checkClassInjectionCycles()
+            if (qoreAOTClassReaches(ipriv, cpriv)) {
+                error = "AOT class '" + std::string(class_list[i]->getName())
+                    + "' cannot be injected in place of '" + std::string(class_injected_paths[i].c_str())
+                    + "': the injection leads back to the class itself";
+                return false;
+            }
+            assert(!cpriv->injectedClass);
+            if (cpriv->injectedClass) {
+                const_cast<qore_class_private*>(cpriv->injectedClass)->deref(false, false, false);
+            }
+            ipriv->ref();
+            cpriv->injectedClass = ipriv;
         }
     }
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::checkClassInjectionCycles(std::string& error) {
+    for (uint32_t i = 0; i < class_list.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class injection check")) {
+            error = "AOT class injection check cancelled";
+            return false;
+        }
+        if (!class_list[i] || preexisting_classes.count(i)) {
+            continue;
+        }
+        qore_class_private* cpriv = qore_class_private::get(*class_list[i]);
+        const qore_class_private* ipriv = cpriv->injectedClass;
+        if (!ipriv || !qoreAOTClassReaches(ipriv, cpriv)) {
+            continue;
+        }
+        error = "AOT class '" + std::string(class_list[i]->getName()) + "' cannot be injected in place of '"
+            + ipriv->path + "': the injection leads back to the class itself";
+        // the reference is released here, as it would keep the class and the class that it is injected in place of
+        // alive for ever (qore#7664)
+        cpriv->injectedClass = nullptr;
+        const_cast<qore_class_private*>(ipriv)->deref(false, false, false);
+        return false;
+    }
     return true;
 }
 
