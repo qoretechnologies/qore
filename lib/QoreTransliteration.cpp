@@ -64,20 +64,84 @@ void QoreTransliteration::finishTarget() {
       parse_error(*loc, "no end character for character range at end of target pattern in transliteration");
 }
 
-void QoreTransliteration::doRange(QoreString& str, char end) {
-   if (!str.strlen()) {
-      parse_error(*loc, "no start character for character range in transliteration");
-      return;
-   }
-   char start = str.c_str()[str.strlen() - 1];
-   str.terminate(str.strlen() - 1);
-   if (start > end) {
-      parse_error(*loc, "invalid range '%c' - '%c' in transliteration operator", start, end);
-      return;
-   }
-   do
-      str.concat(start++);
-   while (start <= end);
+void QoreTransliteration::doRange(QoreString& str, char last, ExceptionSink* xsink) {
+    if (str.empty()) {
+        if (xsink) {
+            xsink->raiseException("TRANSLITERATION-ERROR", "no start character for range in transliteration");
+        } else {
+            parse_error(*loc, "no start character for character range in transliteration");
+        }
+        return;
+    }
+    unsigned start = static_cast<unsigned char>(str.c_str()[str.size() - 1]);
+    unsigned end = static_cast<unsigned char>(last);
+    if (start > end) {
+        if (xsink) {
+            xsink->raiseException("TRANSLITERATION-ERROR", "invalid descending range in transliteration");
+        } else {
+            parse_error(*loc, "invalid range '%c' - '%c' in transliteration operator", start, end);
+        }
+        return;
+    }
+    for (unsigned c = start + 1; c <= end; ++c) {
+        str.concat(static_cast<char>(c));
+    }
+}
+
+bool QoreTransliteration::compilePattern(QoreString& result, const QoreString& pattern, ExceptionSink* xsink) {
+    TempEncodingHelper text(&pattern, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return false;
+    }
+    bool range = false;
+    for (size_t i = 0; i < text->size(); ++i) {
+        char c = text->c_str()[i];
+        if (c == '-') {
+            range = true;
+            continue;
+        }
+        if (c == '\\') {
+            if (++i == text->size()) {
+                xsink->raiseException("TRANSLITERATION-ERROR", "unfinished escape in transliteration pattern");
+                return false;
+            }
+            c = text->c_str()[i];
+            switch (c) {
+                case 'n': c = '\n'; break;
+                case 't': c = '\t'; break;
+                case 'r': c = '\r'; break;
+                case 'b': c = '\b'; break;
+                case 'f': c = '\f'; break;
+            }
+        }
+        if (range) {
+            doRange(result, c, xsink);
+            if (*xsink) {
+                return false;
+            }
+            range = false;
+        } else {
+            result.concat(c);
+        }
+    }
+    if (range) {
+        xsink->raiseException("TRANSLITERATION-ERROR", "no end character for range in transliteration");
+        return false;
+    }
+    return true;
+}
+
+QoreStringNode* QoreTransliteration::translate(const QoreString& input, const QoreString& from,
+        const QoreString& to, ExceptionSink* xsink) {
+    QoreTransliteration tr(nullptr);
+    if (!tr.compilePattern(tr.source, from, xsink) || !tr.compilePattern(tr.target, to, xsink)) {
+        return nullptr;
+    }
+    if (!tr.source.empty() && tr.target.empty()) {
+        xsink->raiseException("TRANSLITERATION-ERROR", "a nonempty source pattern needs a target character");
+        return nullptr;
+    }
+    return tr.exec(&input, xsink);
 }
 
 void QoreTransliteration::concatSource(char c) {
@@ -107,7 +171,7 @@ QoreStringNode* QoreTransliteration::exec(const QoreString* str, ExceptionSink* 
    SimpleRefHolder<QoreStringNode> ns(new QoreStringNode);
    for (size_t i = 0; i < tstr->strlen(); ++i) {
       char c = (**tstr)[i];
-      const char *p = strchr(source.c_str(), c);
+      const char* p = static_cast<const char*>(memchr(source.c_str(), c, source.size()));
       if (p) {
          size_t pos = p - source.c_str();
          if (target.strlen() <= pos)

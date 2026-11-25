@@ -37,9 +37,17 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
 
+#include <charconv>
 #include <cstdlib>
 
-#define Q_MAX_EXCEPTIONS 10
+// Read once per report so a running host can adjust its next report without changing a report in progress.
+static unsigned exception_report_limit() {
+    QoreEnvironmentValue setting("QORE_EXCEPTION_REPORT_LIMIT");
+    const std::string& text = setting.str();
+    unsigned limit;
+    auto result = std::from_chars(text.data(), text.data() + text.size(), limit);
+    return result.ec == std::errc{} && result.ptr == text.data() + text.size() && limit ? limit : 10;
+}
 
 void qore_es_private::assimilate(qore_es_private& xs) {
     if (xs.thread_exit) {
@@ -836,6 +844,7 @@ static void qore_write_sandboxed_report(const QoreException* e, const QoreString
             line.sprintf(":" QLLD ")", start_line + offset);
         }
     };
+    const unsigned limit = exception_report_limit();
     unsigned ecnt = 0;
     for (; e; e = e->next) {
         QoreString line(mark);
@@ -886,9 +895,9 @@ static void qore_write_sandboxed_report(const QoreException* e, const QoreString
             }
         }
         if (e->next) {
-            if (++ecnt == Q_MAX_EXCEPTIONS) {
+            if (++ecnt == limit) {
                 out.concat(mark.c_str(), mark.size());
-                out.sprintf("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
+                out.sprintf("*** maximum exception count reached (%u); suppressing further output\n", ecnt);
                 break;
             }
             out.concat(mark.c_str(), mark.size());
@@ -924,6 +933,7 @@ void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
         }
     }
 
+    const unsigned limit = exception_report_limit();
     unsigned ecnt = 0;
 
     while (e) {
@@ -1089,8 +1099,8 @@ void qore_exception_sink_ops::defaultExceptionHandler(QoreException* e) {
         e = e->next;
         if (e) {
             ++ecnt;
-            if (ecnt == Q_MAX_EXCEPTIONS) {
-                out.sprintf("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
+            if (ecnt == limit) {
+                out.sprintf("*** maximum exception count reached (%u); suppressing further output\n", ecnt);
                 break;
             }
             out.sprintf("chained exception:\n");
