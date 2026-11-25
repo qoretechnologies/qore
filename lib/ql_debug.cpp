@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include "qore/intern/QoreAllocFailure.h"
 #include "qore/intern/QoreSandboxLimits.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -385,6 +386,56 @@ QoreValue f_dbg_node_info(const QoreListNode* params, RuntimeConfig& rc, Excepti
     return s.release();
 }
 
+// the builtin function of the namespace of dbg_add_runtime_namespace(): returns the number of its arguments
+static QoreValue f_dbg_rt_func(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(num_args(params));
+}
+
+//! Adds a namespace with a builtin function, a constant, a class and a hashdecl to the root namespace of the calling
+//! Program at run time, through the public C++ API that a binary module calls (qore#7530)
+/** With a name \c "outer::inner", the declarations are in the subnamespace \c inner of the namespace \c outer that is
+    added.  With \c variant 1, the function also has a variant with a string parameter, and the namespace has a function
+    \c dbg_rt_new() with a parameter of the type of its class.  Adding a namespace with the same name again merges it
+    with the one that the Program has: a declaration that the Program already has is not added again (it is kept with
+    the namespace, as the declarations that are added can use its type), and nothing reaches the parse-error path, as
+    there is no parse
+*/
+static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    // a short string value is inline: read through the helper
+    QoreStringValueHelper name(get_hard_value_param(params, 0));
+    int64 variant = HARD_QORE_VALUE_INT(params, 1);
+    // "outer::inner": the declarations are in a subnamespace of the namespace that is added
+    std::string full = name->c_str();
+    size_t sep = full.find("::");
+    std::string inner = sep == std::string::npos ? full : full.substr(sep + 2);
+    std::string path = std::string("::") + full;
+    std::unique_ptr<QoreNamespace> ns(new QoreNamespace(inner.c_str()));
+    ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    if (variant == 1) {
+        ns->addBuiltinVariant("dbg_rt_func", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            stringTypeInfo, QORE_PARAM_NO_ARG, "str");
+    }
+    ns->addConstant("DbgRtConst", static_cast<int64>(variant));
+    QoreClass* qc = new QoreClass("DbgRtClass", (path + "::DbgRtClass").c_str());
+    ns->addSystemClass(qc);
+    if (variant == 1) {
+        // a function that uses the type of the class of this namespace, which is not added when the Program has it
+        ns->addBuiltinVariant("dbg_rt_new", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+    }
+    // the namespace takes the hashdecl and the class (their destructors are not public)
+    TypedHashDecl* hd = new TypedHashDecl("DbgRtHash", (path + "::DbgRtHash").c_str());
+    hd->addMember("a", bigIntTypeInfo, QoreValue(static_cast<int64>(variant)));
+    ns->addSystemHashDecl(hd);
+    if (sep != std::string::npos) {
+        std::unique_ptr<QoreNamespace> outer(new QoreNamespace(full.substr(0, sep).c_str()));
+        outer->addNamespace(ns.release());
+        ns.reset(outer.release());
+    }
+    getProgram()->getRootNS()->addNamespace(ns.release());
+    return QoreValue();
+}
+
 // returns a hash of all namespace information
 static QoreValue f_dbg_get_ns_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return getRootNS()->getInfo();
@@ -735,6 +786,36 @@ struct UnitTestCounters {
         printf("  FAIL: %s (line %d)\n", msg, __LINE__); \
     } \
 } while (0)
+
+#ifndef _Q_WINDOWS
+//! A private directory with room for a UNIX socket name even when TMPDIR exceeds sun_path
+class UtSocketDir {
+public:
+    DLLLOCAL UtSocketDir() {
+        if (mkdtemp(dir)) {
+            path = std::string(dir) + "/s";
+        }
+    }
+
+    DLLLOCAL ~UtSocketDir() {
+        if (!path.empty()) {
+            ::unlink(path.c_str());
+            ::rmdir(dir);
+        }
+    }
+
+    UtSocketDir(const UtSocketDir&) = delete;
+    UtSocketDir& operator=(const UtSocketDir&) = delete;
+
+    DLLLOCAL const std::string& socketPath() const {
+        return path;
+    }
+
+private:
+    char dir[sizeof("/tmp/qore-ut-XXXXXX")] = "/tmp/qore-ut-XXXXXX";
+    std::string path;
+};
+#endif
 
 //! Holds a loopback TCP port that nothing listens on, for a connection to it that must be refused
 /** A listener on 127.0.0.1 that does not reuse the address is connected to, the connection is accepted, and the
@@ -9482,9 +9563,12 @@ public:
                     : (mode == UCM_AFTER_CONNECTED ? " (UNIX connection closed after it is connected)"
                         : " (UNIX connection closed and given another descriptor before it is connected)")));
         ExceptionSink xsink;
-        const char* tmp = getenv("TMPDIR");
-        std::string path = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-unix-close-" + std::to_string(getpid());
-        ::unlink(path.c_str());
+        UtSocketDir dir;
+        const std::string& path = dir.socketPath();
+        UT_ASSERT(c, !path.empty(), ("the UNIX socket directory is made" + when).c_str());
+        if (path.empty()) {
+            return;
+        }
         int lfd = ::socket(AF_UNIX, SOCK_STREAM, 0);
         UT_ASSERT(c, lfd >= 0, ("the listener is created" + when).c_str());
         if (lfd < 0) {
@@ -9492,10 +9576,8 @@ public:
         }
         struct Closer {
             int fd;
-            std::string path;
             ~Closer() {
                 ::close(fd);
-                ::unlink(path.c_str());
                 // the socket that took a released number in the check
                 if (unix_check_peer >= 0) {
                     ::close(unix_check_peer);
@@ -9512,7 +9594,7 @@ public:
                 unix_reopen_peer = -1;
                 unix_reopen_fd = -1;
             }
-        } closer{lfd, path};
+        } closer{lfd};
         struct sockaddr_un sun = {};
         sun.sun_family = AF_UNIX;
         strncpy(sun.sun_path, path.c_str(), sizeof(sun.sun_path) - 1);
@@ -10742,30 +10824,21 @@ public:
     */
     static void runConnectUnixClosedSocket(UnitTestCounters& c) {
         ExceptionSink xsink;
-        const char* tmp = getenv("TMPDIR");
-        std::string dir_template = std::string(tmp && *tmp ? tmp : "/tmp") + "/qore-ut-7003-XXXXXX";
-        std::vector<char> dir_buf(dir_template.begin(), dir_template.end());
-        dir_buf.push_back('\0');
-        char* dir = dir_buf.data();
-        bool made = mkdtemp(dir) != nullptr;
-        UT_ASSERT(c, made, "unix connect close: the directory is created");
-        if (!made) {
+        UtSocketDir dir;
+        const std::string& path = dir.socketPath();
+        UT_ASSERT(c, !path.empty(), "unix connect close: the directory is created");
+        if (path.empty()) {
             return;
         }
-        std::string path = std::string(dir) + "/s";
         std::vector<int> fds;
         struct Cleanup {
             std::vector<int>& fds;
-            const char* dir;
-            std::string& path;
             ~Cleanup() {
                 for (int fd : fds) {
                     ::close(fd);
                 }
-                ::unlink(path.c_str());
-                ::rmdir(dir);
             }
-        } cleanup{fds, dir, path};
+        } cleanup{fds};
 
         struct sockaddr_un sa = {};
         sa.sun_family = AF_UNIX;
@@ -27510,52 +27583,6 @@ private:
         return listener.getPort();
     }
 
-    //! A temporary directory for a UNIX socket, removed with the socket file when it goes out of scope
-    class SocketDir {
-    public:
-        DLLLOCAL SocketDir() {
-            std::string dir;
-            {
-                QoreEnvironmentValue tmp("TMPDIR");
-                if (tmp.c_str() && *tmp.c_str()) {
-                    dir = tmp.c_str();
-                }
-            }
-            if (dir.empty()) {
-                dir = "/tmp";
-            }
-            while (dir.size() > 1 && dir.back() == '/') {
-                dir.pop_back();
-            }
-            std::vector<char> tmpl(dir.begin(), dir.end());
-            const char* suffix = "/qore-ut-connect-XXXXXX";
-            tmpl.insert(tmpl.end(), suffix, suffix + strlen(suffix) + 1);
-            if (mkdtemp(tmpl.data())) {
-                path = tmpl.data();
-                socket_path = path + "/s";
-            }
-        }
-
-        DLLLOCAL ~SocketDir() {
-            if (!path.empty()) {
-                unlink(socket_path.c_str());
-                rmdir(path.c_str());
-            }
-        }
-
-        SocketDir(const SocketDir&) = delete;
-        SocketDir& operator=(const SocketDir&) = delete;
-
-        //! the socket's path, or empty if the directory could not be made
-        DLLLOCAL const std::string& socketPath() const {
-            return socket_path;
-        }
-
-    private:
-        std::string path;
-        std::string socket_path;
-    };
-
     //! A connect refused by the system reports ECONNREFUSED without the hook
     /** With @p close_errno, errno is changed after the failed attempt is given up
     */
@@ -27712,7 +27739,7 @@ private:
     /** With @p close_errno, errno is changed after the socket is closed
     */
     static void runUnix(UnitTestCounters& c, bool close_errno) {
-        SocketDir dir;
+        UtSocketDir dir;
         UT_ASSERT(c, !dir.socketPath().empty(), "connect error: the UNIX socket directory is made");
         if (dir.socketPath().empty()) {
             return;
@@ -27751,7 +27778,7 @@ private:
     /** The socket is bound and does not listen, so the system refuses the connect in connect()
     */
     static void runUnixRealRefusal(UnitTestCounters& c) {
-        SocketDir dir;
+        UtSocketDir dir;
         UT_ASSERT(c, !dir.socketPath().empty(), "connect error: the UNIX socket directory of the refusal is made");
         if (dir.socketPath().empty()) {
             return;
@@ -34170,6 +34197,48 @@ static QoreValue f_dbg_http2_release_stream_data(const QoreListNode* params, Run
 }
 
 namespace {
+//! the HTTP/2 stream whose RST_STREAM is held back, set by dbg_http2_hold_stream_reset(); -1: none
+std::atomic<int64_t> dbg_h2_hold_stream_reset{-1};
+}
+
+bool qore_dbg_h2_stream_reset_held(int32_t stream_id) {
+    return dbg_h2_hold_stream_reset.load(std::memory_order_acquire) == stream_id;
+}
+
+bool qore_dbg_h2_stream_reset_release(int32_t stream_id) {
+    int64_t expected = stream_id;
+    return dbg_h2_hold_stream_reset.compare_exchange_strong(expected, -1, std::memory_order_acq_rel);
+}
+
+//! holds the RST_STREAM of an HTTP/2 stream that the application resets back from the transport (qore#7532)
+/** As when the I/O thread has not run yet since the reset: a session with the stream reset by the application and its
+    RST_STREAM not yet sent collects no frames from nghttp2 until the hold ends, so that nghttp2 keeps the stream.  The
+    hold ends when the application reads the stream's progress count (Socket::getHttp2StreamTakenBytes()), which then
+    wakes the socket's I/O thread, or with dbg_http2_release_stream_reset().  Only one stream is held at a time, by
+    its ID in every session of the process that resets a stream with that ID (a test holds the stream of a connection
+    that its server resets; its client does not reset it).
+
+    @param stream_id the HTTP/2 stream ID
+*/
+static QoreValue f_dbg_http2_hold_stream_reset(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64_t stream_id = get_param_value(params, 0).getAsBigInt();
+    if (stream_id <= 0) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http2_hold_stream_reset(): invalid stream ID %lld",
+            (long long)stream_id);
+        return QoreValue();
+    }
+    dbg_h2_hold_stream_reset.store(stream_id, std::memory_order_release);
+    return QoreValue();
+}
+
+//! ends the hold of dbg_http2_hold_stream_reset(); the RST_STREAM is sent with the session's next write
+static QoreValue f_dbg_http2_release_stream_reset(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    dbg_h2_hold_stream_reset.store(-1, std::memory_order_release);
+    return QoreValue();
+}
+
+namespace {
 //! the stream whose acknowledged byte count dbg_quic_simulate_stream_progress() advances, the number of reads of the
 //! count that still advance it, and the progress added so far
 std::atomic<int64_t> dbg_quic_progress_stream{-1};
@@ -36095,6 +36164,14 @@ static QoreValue f_dbg_release_thread_start(const QoreListNode* params, RuntimeC
     return QoreValue();
 }
 
+//! Makes the given allocation of a string's or a list's storage of at least the given size that follows in the current
+//! thread fail with std::bad_alloc; 0 disarms it (qore#7466)
+static QoreValue f_dbg_fail_allocation(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 min_size = get_param_value(params, 1).getAsBigInt();
+    qore_dbg_fail_allocation(get_param_value(params, 0).getAsBigInt(), min_size > 0 ? (size_t)min_size : 0);
+    return QoreValue();
+}
+
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     qore_dbg_fail_next_program_entry(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -36614,6 +36691,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant");
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_datasource_pending_tests", f_dbg_run_datasource_pending_tests, QCF_NO_FLAGS,
@@ -36713,6 +36792,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_release_thread_start", f_dbg_release_thread_start, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_fail_allocation", f_dbg_fail_allocation,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "n", bigIntTypeInfo, QoreValue((int64)0), "min_size");
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
@@ -37351,6 +37433,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_http2_hold_stream_data", f_dbg_http2_hold_stream_data, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
     qns.addBuiltinVariant("dbg_http2_release_stream_data", f_dbg_http2_release_stream_data, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_http2_hold_stream_reset", f_dbg_http2_hold_stream_reset, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id");
+    qns.addBuiltinVariant("dbg_http2_release_stream_reset", f_dbg_http2_release_stream_reset, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_http2_simulate_stream_progress", f_dbg_quic_simulate_stream_progress,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "stream_id",

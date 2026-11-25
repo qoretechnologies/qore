@@ -3626,6 +3626,7 @@ if (DOXYGEN_FOUND)
     # run by the check-module-release-notes CI job, so it is optional here when Python is not available
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if (Python3_Interpreter_FOUND)
+        set(QORE_DOC_PRUNE_SEARCH ${Python3_EXECUTABLE} -I "${CMAKE_SOURCE_DIR}/doxygen/prune-module-search.py")
         add_custom_target(check-release-notes
             COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_SOURCE_DIR}/doxygen/check-release-notes.py
                 ${CMAKE_SOURCE_DIR}/doxygen/lang/900_release_notes.dox.tmpl

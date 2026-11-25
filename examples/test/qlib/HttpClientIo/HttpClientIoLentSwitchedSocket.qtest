@@ -1,0 +1,334 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP sockets taken over after a 101 response, and the network policy check of their connects
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# After a 101 response, the connection of a streamed HttpClientIo request belongs to its caller, who takes its socket
+# over with getConnection().getSocket() (qore#7487, qore#7500).  This test checks that code restricted from the
+# network that was lent a connection manager can use the socket that it takes over no further than the lent
+# connection allows (qore#7535):
+# - code restricted from the NETWORK functional domain gets the socket, but every builtin method of the socket is
+#   refused to it at run time (INVALID-FUNCTION-ACCESS), also through a call reference and call_object_method(); the
+#   switched stream is left intact, and the code ends it with the connection's close()
+# - code that a sandbox governs uses the socket of the switched stream, but a connect of the socket elsewhere is
+#   checked against its network policy (NETWORK-ACCESS-DENIED)
+# - unrestricted code reaches the network with the same calls, so the refusals above are not failures of the calls
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+%requires HttpClientIo
+
+%exec-class HttpClientIoLentSwitchedSocketTest
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! An HTTP/1.1 server: answers a request with an Upgrade header with 101 and then speaks a protocol of its own on the
+#! connection (it answers "PING" with "PONG") until the client closes it; the end of each connection is pushed to
+#! \c ends
+class UpgradeServer {
+    public {
+        #! "closed" for each connection that ended after a 101 response
+        Queue ends();
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter running();
+        bool stopped;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    #! stops the server; the connections of the clients must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            running.inc();
+            background serve(s);
+        }
+    }
+
+    private serve(Socket s) {
+        on_exit running.dec();
+        on_exit s.close();
+        hash<auto> h;
+        try {
+            h = s.readHTTPHeader(Timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        if (!h.upgrade) {
+            s.send("HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            return;
+        }
+        s.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n");
+        on_exit ends.push("closed");
+        while (True) {
+            *binary b;
+            try {
+                # longer than the wait of a test for the end of a connection, so that only the client's close of
+                # the connection ends it in time
+                b = s.recvBinary(-1, Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!b) {
+                return;
+            }
+            if (b.toString() =~ /PING/) {
+                s.send("PONG");
+            }
+        }
+    }
+}
+
+class HttpClientIoLentSwitchedSocketTest inherits QUnit::Test {
+    private {
+        const Modes = {"ast": EM_AST, "ir": EM_IR, "jit": EM_JIT, "tiered": EM_TIERED};
+
+        #! the code of the borrower: it takes the socket of a switched stream over and uses it
+        const BorrowerCode = "%modern
+%requires HttpClientIo
+
+# untyped, so that the calls of the socket's methods are resolved at run time: code restricted from the network
+# cannot name the Socket class or its methods when it is parsed; global, so that every thread sees them
+our object sh;
+our object conn;
+our object sock;
+
+#! takes over the socket of a request answered with 101 by the lent manager; returns the status code
+int sub take(HttpClientConnectionManager mgr, string url) {
+    sh = mgr.acquireAndStartStreaming(url, \"GET\", \"/up\", {\"Upgrade\": \"foo\", \"Connection\": \"Upgrade\"});
+    int status = sh.readData(20s).status_code;
+    conn = sh.getConnection();
+    sock = conn.getSocket();
+    return status;
+}
+
+#! returns the socket for the host, which checks the switched stream with it
+object sub getSocket() {
+    return sock;
+}
+
+#! calls a method of the socket; returns \"ok\" or the error
+string sub call(string what, int other_port) {
+    string target = \"127.0.0.1:\" + other_port;
+    try {
+        switch (what) {
+            case \"send\": sock.send(\"PING\"); break;
+            case \"recv\": sock.recvBinary(4, 2s); break;
+            case \"ping\":
+                sock.send(\"PING\");
+                if (sock.recvBinary(4, 20s).toString() != \"PONG\") {
+                    return \"no PONG\";
+                }
+                break;
+            case \"setNoDelay\": sock.setNoDelay(True); break;
+            case \"getPeerInfo\": sock.getPeerInfo(); break;
+            case \"upgradeClientToSSL\": sock.upgradeClientToSSL(2s); break;
+            case \"shutdown\": sock.shutdown(); break;
+            case \"close\": sock.close(); break;
+            case \"connect\": sock.connect(target, 20s); break;
+            case \"connect a new socket\": {
+                object s = create_object(\"Qore::Socket\");
+                s.connect(target, 20s);
+                s.close();
+                break;
+            }
+            case \"call reference\": { code c = \\sock.connect(); c(target, 20s); break; }
+            case \"call_object_method\": call_object_method(sock, \"connect\", target, 20s); break;
+            case \"close the connection\": conn.close(); break;
+            default: return \"unknown: \" + what;
+        }
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+#! calls each method without arguments on the socket; returns the result of each
+hash<string, string> sub sweep(list<string> names) {
+    hash<string, string> rv;
+    foreach string name in (names) {
+        try {
+            call_object_method(sock, name);
+            rv{name} = \"ok\";
+        } catch (hash<ExceptionInfo> ex) {
+            rv{name} = ex.err;
+        }
+    }
+    return rv;
+}
+";
+
+        #! the calls refused to code restricted from the network
+        const Refused = ("send", "recv", "setNoDelay", "getPeerInfo", "upgradeClientToSSL", "shutdown", "close",
+            "connect", "call reference", "call_object_method");
+    }
+
+    private {
+        #! the public builtin methods of Socket that take no arguments
+        list<string> no_arg_methods;
+    }
+
+    constructor() : QUnit::Test("HttpClientIoLentSwitchedSocket", "1.0", \ARGV) {
+        hash<string, bool> names;
+        foreach AbstractMethod m in (Class::forName("Qore::Socket").getMethods()) {
+            if (!(m instanceof NormalMethod) || m.getName() == "copy") {
+                continue;
+            }
+            foreach AbstractVariant v in (m.getVariants()) {
+                if (!v.numParams()) {
+                    names{m.getName()} = True;
+                }
+            }
+        }
+        no_arg_methods = keys names;
+
+        foreach string mode in (keys Modes) {
+            string m = mode;
+            addTestCase("a borrower restricted from the network, " + m, sub () { testNoNetwork(m); });
+            addTestCase("a sandboxed borrower, " + m, sub () { testSandbox(m); });
+            addTestCase("an unrestricted borrower, " + m, sub () { testUnrestricted(m); });
+        }
+        set_return_value(main());
+    }
+
+    #! a manager that the host creates and lends
+    static HttpClientConnectionManager getManager() {
+        return new HttpClientConnectionManager(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_request_retries": 0,
+            "request_timeout": Timeout,
+        });
+    }
+
+    #! a listener that only the unrestricted borrower may reach
+    static Socket getOther() {
+        Socket other();
+        other.bind("127.0.0.1:0");
+        other.listen();
+        return other;
+    }
+
+    #! returns a Program with the borrower's code
+    static Program getBorrower(int po, string mode, *SandboxManager sm) {
+        Program p(PO_NEW_STYLE | po);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.setExecMode(Modes{mode});
+        p.parse(BorrowerCode, "borrower");
+        return p;
+    }
+
+    #! code restricted from the NETWORK domain can use no builtin method of the socket of the switched stream
+    testNoNetwork(string mode) {
+        UpgradeServer server();
+        on_exit server.stop();
+        Socket other = getOther();
+        int other_port = other.getSocketInfo().port;
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        Program p = getBorrower(PO_NO_NETWORK, mode);
+        assertEq(101, p.callFunction("take", mgr, server.getUrl()), mode);
+        foreach string what in (Refused) {
+            assertEq("INVALID-FUNCTION-ACCESS", p.callFunction("call", what, other_port), what + ", " + mode);
+        }
+        # nor can it create a socket of its own
+        assertEq("CREATE-OBJECT-ERROR", p.callFunction("call", "connect a new socket", other_port), mode);
+        hash<string, string> sweep = p.callFunction("sweep", no_arg_methods);
+        assertEq((map {$1: "INVALID-FUNCTION-ACCESS"}, no_arg_methods), sweep, "methods without arguments, " + mode);
+        # nothing reached the other listener
+        assertEq(NOTHING, other.accept(0), "the other listener, " + mode);
+
+        # the switched stream is intact: the host speaks the new protocol on it
+        Socket s = p.callFunction("getSocket");
+        s.send("PING");
+        assertEq("PONG", s.recvBinary(4, Timeout).toString(), "the switched stream, " + mode);
+        assertEq(0, server.ends.size(), mode);
+        # the borrower ends the connection that it was lent
+        assertEq("ok", p.callFunction("call", "close the connection", other_port), mode);
+        assertEq("closed", server.ends.get(Timeout), mode);
+    }
+
+    #! code that a sandbox governs uses the switched stream, and its socket connects only where its sandbox allows
+    testSandbox(string mode) {
+        UpgradeServer server();
+        on_exit server.stop();
+        Socket other = getOther();
+        int other_port = other.getSocketInfo().port;
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        sm.addNetworkAllowedPort(server.getPort());
+        Program p = getBorrower(0, mode, sm);
+        assertEq(101, p.callFunction("take", mgr, server.getUrl()), mode);
+        assertEq("ok", p.callFunction("call", "ping", other_port), "the switched stream, " + mode);
+        foreach string what in (("connect a new socket", "call reference", "call_object_method", "connect")) {
+            assertEq("NETWORK-ACCESS-DENIED", p.callFunction("call", what, other_port), what + ", " + mode);
+        }
+        assertEq(NOTHING, other.accept(0), "the other listener, " + mode);
+        assertEq("ok", p.callFunction("call", "close the connection", other_port), mode);
+        assertEq("closed", server.ends.get(Timeout), mode);
+    }
+
+    #! unrestricted code reaches the network with the same calls
+    testUnrestricted(string mode) {
+        UpgradeServer server();
+        on_exit server.stop();
+        Socket other = getOther();
+        int other_port = other.getSocketInfo().port;
+        HttpClientConnectionManager mgr = getManager();
+        on_exit mgr.closeAll();
+
+        Program p = getBorrower(0, mode);
+        assertEq(101, p.callFunction("take", mgr, server.getUrl()), mode);
+        assertEq("ok", p.callFunction("call", "ping", other_port), "the switched stream, " + mode);
+        assertEq("ok", p.callFunction("call", "close", other_port), mode);
+        assertEq("closed", server.ends.get(Timeout), mode);
+        assertEq("ok", p.callFunction("call", "connect", other_port), mode);
+        *Socket a = other.accept(Timeout);
+        assertTrue(exists a, "the other listener, " + mode);
+        assertEq("ok", p.callFunction("call", "close the connection", other_port), mode);
+    }
+}

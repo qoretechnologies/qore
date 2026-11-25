@@ -90,6 +90,9 @@ class HeldConnection inherits WebSocketConnection {
             call_function("dbg_quic_hold_stream_data", session_id, stream_id);
         } else {
             call_function("dbg_http2_hold_stream_data", stream_id);
+            # the RST_STREAM stays unsent until connectionClosed() has read the stream's count, as when the I/O
+            # thread has not run since the reset: the reset itself releases the stream (qore#7532)
+            call_function("dbg_http2_hold_stream_reset", stream_id);
         }
         send(binary(strmul("a", Payload)));
         # waits for the stream's send buffer, which never drains, and drops the connection
@@ -97,10 +100,12 @@ class HeldConnection inherits WebSocketConnection {
     }
 
     #! records whether the server still has the stream when the connection ends (after its stream was closed)
-    /** An HTTP/2 stream is released by the reset itself.  An HTTP/3 stream's data is released when the QUIC stream
-        closes, once the peer has answered the reset (STOP_SENDING and RESET_STREAM), as nghttp3 may still refer to
-        it until then: its release is waited for, woken by the stream's close; before the fix, its end of the stream
-        was staged behind the held data, and it never closed.  Only a force-stopped connection is waited for.
+    /** An HTTP/2 stream is released by the reset itself, before its RST_STREAM is sent: in the held case, the
+        RST_STREAM is held until the count has been read, whose read ends the hold (qore#7532).  An HTTP/3 stream's
+        data is released when the QUIC stream closes, once the peer has answered the reset (STOP_SENDING and
+        RESET_STREAM), as nghttp3 may still refer to it until then: its release is waited for, woken by the stream's
+        close; before the fix, its end of the stream was staged behind the held data, and it never closed.  Only a
+        force-stopped connection is waited for.
     */
     connectionClosed() {
         hash<StreamEndInfo> info = <StreamEndInfo>{
@@ -237,6 +242,7 @@ class WebSocketStreamForcedCloseTest inherits QUnit::Test {
         on_exit {
             call_function("dbg_quic_release_stream_data");
             call_function("dbg_http2_release_stream_data");
+            call_function("dbg_http2_release_stream_reset");
         }
         wsc.connect();
         assertEq(ver == "3.0", wsc.isHttp3(), "the connection uses the HTTP version");

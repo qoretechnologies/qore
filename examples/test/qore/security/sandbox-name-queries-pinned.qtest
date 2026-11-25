@@ -1,0 +1,401 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - status queries relative to directory descriptors (fstatat(), readlinkat(), O_NOFOLLOW)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The status and existence queries of sandboxed code answer for the path that the sandbox file-system policy checked:
+# a component of the path that is replaced by a link to a directory outside of the allowed directory after the check
+# does not make the query answer for an object there (qore#7518).  The replacement is made with
+# dbg_fs_swap_on_open() (debug builds) between the check and the query.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class SandboxNameQueriesPinnedTest
+
+class SandboxNameQueriesPinnedTest inherits QUnit::Test {
+    private {
+        string dir;
+        string allowed;
+        string real;
+        string link;
+        string outside;
+        Program sandbox;
+        # a sandbox whose policy allows every path, for the comparison of results with those without a policy
+        Program open_sandbox;
+    }
+
+    const SandboxCode = '
+# the result of a query, or the error number for a failed one; the queries that are compared with the results without
+# a policy
+auto sub query(string op, string a) {
+    auto v;
+    switch (op) {
+        case "hstat": v = hstat(a).type; break;
+        case "hlstat": v = hlstat(a).type; break;
+        case "stat": v = stat(a)[2] & 0170000; break;
+        case "lstat": v = lstat(a)[2] & 0170000; break;
+        case "is_file": v = is_file(a); break;
+        case "is_dir": v = is_dir(a); break;
+        case "is_link": v = is_link(a); break;
+        case "is_readable": v = is_readable(a); break;
+        case "statvfs": v = exists statvfs(a); break;
+        case "readlink": try { v = readlink(a); } catch (hash<ExceptionInfo> ex) { v = ex.err; } break;
+        case "File::hlstat": try { v = File::hlstat(a).type; } catch (hash<ExceptionInfo> ex) { v = ex.err; } break;
+        case "realpath": try { v = realpath(a); } catch (hash<ExceptionInfo> ex) { v = ex.err; } break;
+        default: throw "TEST-ERROR", sprintf("unknown query %y", op);
+    }
+    return (v, exists v ? 0 : errno());
+}
+
+auto sub run(string op, string a) {
+    switch (op) {
+        case "hstat": return hstat(a).size;
+        case "stat": return stat(a)[7];
+        case "hlstat": return hlstat(a).size;
+        case "is_file": return is_file(a);
+        case "is_link": return is_link(a);
+        case "readlink": return readlink(a);
+        case "is_readable": return is_readable(a);
+        case "is_executable": return is_executable(a);
+        case "lstat": return lstat(a)[7];
+        case "File::stat": return File::stat(a)[7];
+        case "File::lstat": return File::lstat(a)[7];
+        case "File::hstat": return File::hstat(a).size;
+        case "File::hlstat": return File::hlstat(a).size;
+        case "is_dir": return is_dir(a);
+        case "is_writable": return is_writable(a);
+        case "statvfs": return exists statvfs(a);
+        case "File::statvfs": try { return exists File::statvfs(a); } catch (hash<ExceptionInfo> ex) { return False; }
+        case "realpath": return realpath(a);
+        case "hlstat-inode": return hlstat(a).inode;
+        case "lchown": return lchown(a);
+        case "unlink": return unlink(a);
+        case "chmod": return chmod(a, 0600);
+        case "is_writable-alias": return is_writable(a);
+        case "Dir::hstat": { Dir d(); d.chdir(a); return d.hstat().inode; }
+        case "Dir::stat": { Dir d(); d.chdir(a); return d.stat()[1]; }
+        case "Dir::statvfs": { Dir d(); d.chdir(a); try { return exists d.statvfs(); } catch (hash<ExceptionInfo> ex) { return False; } }
+    }
+    throw "TEST-ERROR", sprintf("unknown operation %y", op);
+}
+';
+
+    constructor() : QUnit::Test("sandbox name-based queries pinned", "1.0", \ARGV) {
+        addTestCase("hstat(), stat() and hlstat() give the status of the file checked", \statTest());
+        addTestCase("is_file() answers for the file checked", \isFileTest());
+        addTestCase("is_link() and readlink() answer for the link checked", \linkTest());
+        addTestCase("is_readable() answers for the file checked", \readableTest());
+        addTestCase("is_executable() answers for the file checked", \executableTest());
+        addTestCase("Dir::hstat() gives the status of the directory checked", \dirStatTest());
+        addTestCase("lstat(), File::*stat() and is_dir() answer for the file checked", \moreStatTest());
+        addTestCase("statvfs(), File::statvfs() and Dir::statvfs() answer for the path checked", \statvfsTest());
+        addTestCase("Dir::stat() gives the status of the directory checked", \dirStatListTest());
+        addTestCase("is_writable() answers for the file checked", \writableTest());
+        addTestCase("realpath() does not give a path outside of the policy", \realpathTest());
+        addTestCase("a link named with a trailing slash is reported for the directory checked", \trailingSlashLinkTest());
+        addTestCase("the results are those without a policy", \sameResultsTest());
+        addTestCase("is_readable() does not block on a FIFO", \fifoTest());
+        addTestCase("a descriptor alias is not changed and not reached through a link", \aliasTest());
+        addTestCase("realpath() of a path replaced after the check does not tell whether a file exists outside",
+            \realpathOracleTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = make_tmp_dir("qore-name-queries-pinned-");
+        allowed = dir + DirSep + "allowed";
+        real = allowed + DirSep + "real";
+        link = allowed + DirSep + "dlink";
+        outside = dir + DirSep + "outside";
+        mkdir(allowed);
+        mkdir(real);
+        mkdir(outside);
+
+        SandboxManager manager();
+        manager.setFilesystemDefaultPolicy(False);
+        manager.addFilesystemAllowedPath(allowed, QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE | QSEC_EXECUTE);
+        sandbox = new Program(PO_MODERN);
+        sandbox.setSandboxManager(manager);
+        sandbox.parse(SandboxCode, "sandbox");
+
+        SandboxManager open_manager();
+        open_manager.setFilesystemDefaultPolicy(False);
+        open_manager.addFilesystemAllowedPath("/", QSEC_READ);
+        open_sandbox = new Program(PO_MODERN);
+        open_sandbox.setSandboxManager(open_manager);
+        open_sandbox.parse(SandboxCode, "open sandbox");
+    }
+
+    globalTearDown() {
+        if (dir) {
+            # a file made unreadable is removed
+            map chmod($1, 0644), (outside + DirSep + "r",);
+            remove_tree(dir);
+        }
+    }
+
+    setUp() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the replacement of the link needs dbg_fs_swap_on_open()");
+        }
+        unlink(link);
+        symlink(real, link);
+    }
+
+    tearDown() {
+        call_function("dbg_fs_swap_on_open", "", "");
+    }
+
+    statTest() {
+        writeFile(real + DirSep + "s", "inside");
+        writeFile(outside + DirSep + "s", "outside!!");
+        foreach string op in (("hstat", "stat", "hlstat")) {
+            arm();
+            assertEq(6, sandbox.callFunction("run", op, link + DirSep + "s"), op);
+            unlink(link);
+            symlink(real, link);
+        }
+    }
+
+    isFileTest() {
+        writeFile(real + DirSep + "x", "inside");
+        mkdir(outside + DirSep + "x");
+        arm();
+        assertTrue(sandbox.callFunction("run", "is_file", link + DirSep + "x"));
+    }
+
+    linkTest() {
+        symlink("in", real + DirSep + "l");
+        symlink("out", outside + DirSep + "l");
+        arm();
+        assertEq("in", sandbox.callFunction("run", "readlink", link + DirSep + "l"));
+        unlink(link);
+        symlink(real, link);
+        writeFile(real + DirSep + "nl", "inside");
+        symlink("out", outside + DirSep + "nl");
+        arm();
+        assertFalse(sandbox.callFunction("run", "is_link", link + DirSep + "nl"));
+    }
+
+    readableTest() {
+        if (!getuid()) {
+            testSkip("root can read any file");
+        }
+        writeFile(real + DirSep + "r", "inside");
+        writeFile(outside + DirSep + "r", "outside");
+        chmod(outside + DirSep + "r", 0);
+        arm();
+        assertTrue(sandbox.callFunction("run", "is_readable", link + DirSep + "r"));
+    }
+
+    executableTest() {
+        writeFile(real + DirSep + "e", "inside");
+        writeFile(outside + DirSep + "e", "outside");
+        chmod(real + DirSep + "e", 0755);
+        chmod(outside + DirSep + "e", 0644);
+        arm();
+        assertTrue(sandbox.callFunction("run", "is_executable", link + DirSep + "e"));
+    }
+
+    dirStatTest() {
+        call_function("dbg_fs_swap_on_open", link, outside);
+        assertEq(hstat(real).inode, sandbox.callFunction("run", "Dir::hstat", link));
+    }
+
+    moreStatTest() {
+        writeFile(real + DirSep + "m", "inside");
+        writeFile(outside + DirSep + "m", "outside!!");
+        foreach string op in (("lstat", "File::stat", "File::lstat", "File::hstat", "File::hlstat")) {
+            arm();
+            assertEq(6, sandbox.callFunction("run", op, link + DirSep + "m"), op);
+            relink();
+        }
+        mkdir(real + DirSep + "d");
+        writeFile(outside + DirSep + "d", "outside");
+        arm();
+        assertTrue(sandbox.callFunction("run", "is_dir", link + DirSep + "d"));
+    }
+
+    statvfsTest() {
+        # the file is only in the directory checked
+        writeFile(real + DirSep + "v", "inside");
+        foreach string op in (("statvfs", "File::statvfs")) {
+            arm();
+            assertTrue(sandbox.callFunction("run", op, link + DirSep + "v"), op);
+            relink();
+        }
+        call_function("dbg_fs_swap_on_open", link, dir + DirSep + "missing");
+        assertTrue(sandbox.callFunction("run", "Dir::statvfs", link), "Dir::statvfs");
+    }
+
+    dirStatListTest() {
+        call_function("dbg_fs_swap_on_open", link, outside);
+        assertEq(hstat(real).inode, sandbox.callFunction("run", "Dir::stat", link));
+    }
+
+    writableTest() {
+        if (!getuid()) {
+            testSkip("root can write any file");
+        }
+        writeFile(real + DirSep + "w", "inside");
+        writeFile(outside + DirSep + "w", "outside");
+        chmod(real + DirSep + "w", 0444);
+        # the replacement is made after the path is pinned for the check of access (the second pinning)
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", outside, 1);
+        assertFalse(sandbox.callFunction("run", "is_writable", link + DirSep + "w"));
+    }
+
+    realpathTest() {
+        writeFile(real + DirSep + "p", "inside");
+        writeFile(outside + DirSep + "p", "outside");
+        arm();
+        try {
+            string rv = sandbox.callFunction("run", "realpath", link + DirSep + "p");
+            assertEq(realpath(real + DirSep + "p"), rv);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err);
+        }
+    }
+
+    trailingSlashLinkTest() {
+        int real_inode = hstat(real).inode;
+        arm();
+        assertEq(real_inode, sandbox.callFunction("run", "hlstat-inode", link + DirSep));
+        relink();
+        # lchown() of a link named with a trailing slash acts on the directory checked (the owner is unchanged); with
+        # the link replaced by one to a missing path, it would fail with ENOENT
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", dir + DirSep + "missing");
+        assertEq(0, sandbox.callFunction("run", "lchown", link + DirSep));
+    }
+
+    sameResultsTest() {
+        string same = dir + DirSep + "same";
+        mkdir(same);
+        string file = same + DirSep + "file";
+        writeFile(file, "x");
+        symlink(file, same + DirSep + "lfile");
+        symlink(same, same + DirSep + "ldir");
+        symlink(same + DirSep + "none", same + DirSep + "dangling");
+        list<string> names = (
+            DirSep, ".", "..", same, same + DirSep, same + DirSep + ".", same + DirSep + "..", file, file + DirSep,
+            file + DirSep + ".", same + DirSep + "lfile", same + DirSep + "lfile" + DirSep, same + DirSep + "ldir",
+            same + DirSep + "ldir" + DirSep, same + DirSep + "dangling", same + DirSep + "dangling" + DirSep,
+            same + DirSep + "none", same + DirSep + "none" + DirSep, same + DirSep + "ldir" + DirSep + "file",
+        );
+        foreach string op in (("hstat", "hlstat", "stat", "lstat", "is_file", "is_dir", "is_link", "is_readable",
+                "statvfs", "readlink", "File::hlstat", "realpath")) {
+            foreach string name in (names) {
+                auto expected = callQueryWithoutPolicy(op, name);
+                # the realpath() of macOS ignores a trailing '/' after a file that is not a directory, although stat()
+                # of the name fails with ENOTDIR; under a policy, the name with its '/' must name a directory
+                if (op == "realpath" && expected[0] != "REALPATH-ERROR" && !exists hstat(name)
+                    && errno() == ENOTDIR) {
+                    assertEq(("REALPATH-ERROR", 0), open_sandbox.callFunction("query", op, name),
+                        sprintf("%s(%y) under a policy", op, name));
+                    continue;
+                }
+                assertEq(expected, open_sandbox.callFunction("query", op, name), sprintf("%s(%y)", op, name));
+            }
+        }
+    }
+
+    fifoTest() {
+        string fifo = real + DirSep + "fifo";
+        mkfifo(fifo);
+        assertTrue(sandbox.callFunction("run", "is_readable", fifo));
+    }
+
+    aliasTest() {
+        string file = real + DirSep + "fdfile";
+        writeFile(file, "inside");
+        File f();
+        f.open2(file);
+        *string fd = findDescriptor(file);
+        if (!fd) {
+            testSkip("the descriptor of the open file is not found in /dev/fd");
+        }
+        string fdlink = allowed + DirSep + "fdlink";
+        symlink("/dev/fd", fdlink);
+        # a name that reaches /dev/fd through a link names no descriptor that the policy can check
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("run", "unlink", fdlink + DirSep + fd));
+        assertTrue(is_file(file), "the file of the descriptor is not removed");
+        if (is_link("/dev/fd")) {
+            # /dev/fd/N is resolved to the path of the file (Linux)
+            return;
+        }
+        # the status of a descriptor alias is that of the file of its descriptor
+        assertEq(6, sandbox.callFunction("run", "hstat", "/dev/fd/" + fd), "the status of a descriptor alias");
+        assertTrue(sandbox.callFunction("run", "is_readable", "/dev/fd/" + fd), "is_readable() of a descriptor alias");
+        # the descriptor is open for reading only
+        assertFalse(sandbox.callFunction("run", "is_writable-alias", "/dev/fd/" + fd),
+            "is_writable() of a descriptor alias");
+        # a descriptor alias is not changed, as the file of its descriptor can be another one when it is changed
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("run", "chmod", "/dev/fd/" + fd));
+        # a descriptor alias reached through a link or named with a trailing slash is not given
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("run", "hstat", fdlink + DirSep + fd));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("run", "hstat", "/dev/fd/" + fd + "/"));
+        # the file of the descriptor of an alias is checked: a file outside of the policy is denied
+        string ofile = outside + DirSep + "fdfile";
+        writeFile(ofile, "outside");
+        File of();
+        of.open2(ofile);
+        *string ofd = findDescriptor(ofile);
+        assertTrue(exists ofd, "the descriptor of the file outside is found");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandbox.callFunction(), ("run", "hstat", "/dev/fd/" + ofd));
+    }
+
+    realpathOracleTest() {
+        # the result does not depend on whether the file exists outside of the policy
+        writeFile(outside + DirSep + "exists", "outside");
+        list<auto> results;
+        foreach string name in (("exists", "missing")) {
+            arm();
+            try {
+                results += sandbox.callFunction("run", "realpath", link + DirSep + name);
+            } catch (hash<ExceptionInfo> ex) {
+                results += ex.err;
+            }
+            relink();
+        }
+        assertEq(results[1], results[0]);
+        assertEq("REALPATH-ERROR", results[0], "the error of the path checked");
+    }
+
+    # the descriptor number of an open file in /dev/fd
+    private *string findDescriptor(string file) {
+        hash<StatInfo> h = hstat(file);
+        Dir fds();
+        fds.chdir("/dev/fd");
+        # the device of /dev/fd/N is that of /dev/fd on macOS, so the regular file is identified by its inode
+        return (select fds.list(), hstat("/dev/fd/" + $1).inode == h.inode
+            && hstat("/dev/fd/" + $1).type == "REGULAR")[0];
+    }
+
+    private auto callQueryWithoutPolicy(string op, string name) {
+        Program p(PO_MODERN);
+        p.parse(SandboxCode, "no policy");
+        return p.callFunction("query", op, name);
+    }
+
+    private relink() {
+        unlink(link);
+        symlink(real, link);
+    }
+
+    private arm() {
+        call_function("dbg_fs_swap_on_open", link + DirSep + "*", outside);
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+}

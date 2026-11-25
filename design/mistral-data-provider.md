@@ -1,6 +1,6 @@
 # Mistral data provider
 
-MistralDataProvider 1.1 exposes 164 completed-response operations from Mistral's official
+MistralDataProvider 1.1 exposes 189 completed-response actions from Mistral's official
 OpenAPI document, vendored in the module (see below).
 The original `chat-completion`, `create-embeddings`, and `ocr` action IDs and public
 provider classes are retained. Their request and response classes now use the
@@ -9,22 +9,24 @@ Chat responses retain the original epoch-to-date conversion of `created`.
 
 The committed schema determines paths, HTTP methods, requiredness, nested types,
 validation, and wire formats. `MistralManifest` selects stable action names and adds
-presentation, finite choices, examples, and 26 resource dropdowns. Nullable enums
+presentation, finite choices, examples, and 30 resource dropdowns. Nullable enums
 and arrays retain the same choices and element lookups as their non-nullable forms.
 Parent-scoped dropdowns require the selected library, agent, conversation, or dataset. Listings fetch one
 page; custom identifiers remain accepted and normal action options expose pagination. Dataset-record selectors enumerate one page of records
 for each dataset in the first dataset page, because records are addressed globally but listed per dataset.
 
-The 164 actions cover models, chat, fill-in-the-middle completion, embeddings,
+The 189 actions cover models, chat, fill-in-the-middle completion, embeddings,
 moderation/classification, files, batch inference, OCR, audio, agents, conversations,
 libraries and documents, connectors and their credentials, evaluation datasets, observability
-(logs, traces, spans, span evaluations and evaluation pipelines), and workflows, from 160 of the
+(logs, traces, spans, span evaluations and evaluation pipelines), and workflows, from 185 of the
 document's 347 operations (some operations back more than one action). The others are not
 exported: deprecated operations, streaming-only variants (streaming chat belongs to the Mistral
 LLM provider), and APIs that no action covers yet, such as administration, the observability
-projects, evaluations, evaluation runs, optimizations and scorers, prompts, skills, triggers and
+projects, evaluations, evaluation runs, optimizations and scorers, triggers and
 webhooks (qore#6503). Publishing an upstream operation requires an explicit
 manifest change.
+
+The Responses and agent completion actions return a complete JSON response. Prompt and skill versions are listed for the selected parent. The v2 voice listing accepts a cursor, and library and document updates send only supplied metadata.
 
 The observability search and aggregation actions take a search expression over the fields that
 the matching `list-*-fields` action lists; the `field_name` of a `list-*-field-options` action is
@@ -55,7 +57,7 @@ QORE_MODULE_DIR=qlib tools/rest-schema-import.qr --spec qlib/MistralDataProvider
 
 Review provenance and run the importer drift
 check against `MistralSchema::getActionSet()` before adopting a newer revision.
-The import records three reviewed upstream defects:
+The import records four reviewed upstream defects:
 
 - `SharingDelete` requires an absent `level` property. The official SDK requires
   only `share_with_uuid` and `share_with_type`. The repair checks the old required list.
@@ -65,6 +67,8 @@ The import records three reviewed upstream defects:
   sources, and changed parameter counts fail the import.
 - The `text/event-stream` response of `POST /v1/audio/speech` refers to its local `$defs` as `#/$defs/...`, which
   resolves against the document root. The repair drops that streaming response; `generate-speech` does not stream.
+- The Responses streaming schema references missing event types. The completed `create-response` action keeps
+  the JSON response and omits the streaming representation during import.
 
 Operations that the official document no longer declares are not exported: the observability campaign,
 chat-completion event and field, explorer and judge operations, whose endpoints answer 404 or 410, and the

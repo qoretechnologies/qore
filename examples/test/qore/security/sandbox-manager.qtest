@@ -11,6 +11,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 
 %requires QUnit
+%requires ../../TestSocketDir.qm
 %requires FsUtil
 %requires Util
 
@@ -2697,7 +2698,7 @@ code<nothing()> sub make_bind_task(Queue q, string addr) {
         if (PlatformOS == "Windows") {
             testSkip("UNIX domain sockets are not available on Windows");
         }
-        TmpDir tmp("qore-sandbox-unix-");
+        TestSocketDir tmp();
         string path = tmp.path + "/service.sock";
         Socket service();
         service.bindUNIX(path);

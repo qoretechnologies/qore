@@ -197,6 +197,11 @@ module SqlUtil {
       configuration, and a datasource is restored with a registered deserializer or the new
       @ref SqlUtil::sqlutil_register_ds_credential_resolver() "sqlutil_register_ds_credential_resolver()"; data of
       an earlier version with credentials is still restored (see @ref sqlutil_serialization; issue #7016)
+    - a table is named in messages without the default schema of the connection, which some databases name after it
+      (Oracle: the user, MySQL: the database), with the new
+      @ref SqlUtil::AbstractTable::getMessageName() "AbstractTable::getMessageName()", which
+      @ref SqlUtil::AbstractTable::getDesc() "AbstractTable::getDesc()" uses
+      (<a href="https://github.com/qoretechnologies/qore/issues/7018">issue 7018</a>)
     - the description of a datasource in messages
       (@ref SqlUtil::AbstractSqlUtilBase::makeDatasourceDesc() "AbstractSqlUtilBase::makeDatasourceDesc()",
       @ref SqlUtil::AbstractSqlUtilBase::getDatasourceDesc() "getDatasourceDesc()",

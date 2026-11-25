@@ -99,7 +99,12 @@ class MistralWireHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         AutoLock al(lock);
         request = hdr;
+        request.raw_path = cx.raw_path;
         payload = body;
+        if (hdr.path == "v1/responses/input_tokens") {
+            return makeResponse(200, "{\"object\":\"response.input_tokens\",\"input_tokens\":7}",
+                {"Content-Type": "application/json"});
+        }
         return makeResponse(200, "{}", {"Content-Type": "application/json"});
     }
     hash<auto> getRequest() {
@@ -165,9 +170,9 @@ public class MistralDataProviderTest inherits QUnit::Test {
     constructor() : Test("MistralDataProvider Test", "1.0", \ARGV, MyOpts) {
         conn_name = LiveProvider::get("mistral", "MISTRAL_CONNECTION", m_options.conn);
 
-        addTestCase("factory + app + 164 actions registered", \registrationTest());
+        addTestCase("factory + app + 189 actions registered", \registrationTest());
         addTestCase("read-only operations declare that they change nothing", \readOnlyActionsTest());
-        addTestCase("root provider lists 164 children",       \rootProviderTest());
+        addTestCase("root provider lists 189 children",       \rootProviderTest());
         addTestCase("chat-completion converts created date", \chatRequestTest());
         addTestCase("create-embeddings forwards body unchanged",
             \embeddingRequestTest());
@@ -195,6 +200,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         }
         addTestCase("a tool's type names exactly one kind of tool", \toolTypeNegativeTest());
         addTestCase("HTTP authentication, paths and named multipart files", \wireTest());
+        addTestCase("content actions on the wire", \contentWireTest());
         addTestCase("invalid requests and transport failures", \negativeTest());
         hash<auto> fixtures = parse_json(File::readTextFile(get_script_dir() + "/requests.json"));
         foreach hash<RestSchemaActionInfo> info in (MistralManifest::Manifest) {
@@ -216,7 +222,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
     #! the POST operations that the vendored API description documents as pure queries, validations,
     #! estimates or stateless inference declare mutates_state False; the others keep the default (qore#7454)
     private readOnlyActionsTest() {
-        foreach string name in (("chat-completion", "complete-code", "create-embeddings", "moderate-text", "moderate-chat", "ocr", "classify-text", "classify-chat", "transcribe-audio", "generate-speech", "query-workflow-execution", "search-logs", "search-traces", "aggregate-traces", "search-spans", "aggregate-spans", "search-span-evaluations", "search-latest-span-evaluations", "aggregate-span-evaluations", "search-pipeline-results",)) {
+        foreach string name in (("agent-completion", "create-response", "count-response-input-tokens", "chat-completion", "complete-code", "create-embeddings", "moderate-text", "moderate-chat", "ocr", "classify-text", "classify-chat", "transcribe-audio", "generate-speech", "query-workflow-execution", "search-logs", "search-traces", "aggregate-traces", "search-spans", "aggregate-spans", "search-span-evaluations", "search-latest-span-evaluations", "aggregate-span-evaluations", "search-pipeline-results",)) {
             hash<DataProvider::DataProviderActionInfo> action =
                 DataProvider::DataProviderActionCatalog::getAppActionEx("MistralAi", name);
             assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
@@ -248,7 +254,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions = select
             DataProvider::DataProviderActionCatalog::getActions("MistralAi"),
             $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(164, actions.size());
+        assertEq(189, actions.size());
         list<string> action_names = sort(map $1.action, actions);
         assertEq(sort(map $1.action, MistralManifest::Manifest), action_names);
     }
@@ -369,6 +375,13 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertFalse(exists chat.stream);
         assertEq("models", chat.model.getAttributes().ref_data);
         assertTrue(chat.tool_choice.getAllowedValues().size() > 1);
+        foreach string name in ("agent-completion", "create-response") {
+            assertFalse(exists actions.getOperationEx(name).getRequestFields().stream, name);
+        }
+        foreach string noun in ("prompt", "skill") {
+            assertEq(noun + "-versions", actions.getOperationEx("get-" + noun).getRequestFields()
+                .version.getAttributes().ref_data, noun);
+        }
         hash<string, AbstractDataField> connector = actions.getOperationEx("create-connector").getRequestFields();
         assertTrue(connector.headers.getAttributes().sensitive);
         foreach string scope in ("organization", "workspace", "user") {
@@ -436,7 +449,7 @@ public class MistralDataProviderTest inherits QUnit::Test {
                 records = records.getFields(){path}.getType();
             }
             assertEq(NT_LIST, records.getBaseTypeCode(), decl.name + " reaches an API response list");
-            hash<auto> row = {decl.value_field: decl.name == "agent-versions" ? 7
+            hash<auto> row = {decl.value_field: decl.value_field == "version" ? 7
                 : "00000000-0000-4000-8000-000000000001"};
             if (decl.value_field != decl.display_field) {
                 row{decl.display_field} = "Invoices";
@@ -661,6 +674,77 @@ public class MistralDataProviderTest inherits QUnit::Test {
         assertEq("en", parts.language.body);
         assertEq("voxtral-mini-latest", parts.model.body);
         assertEq(NOTHING, parts.model.filename);
+    }
+
+    private contentWireTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        MistralWireHandler handler();
+        server.setDefaultHandler("content", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        MistralRestClient::MistralRestClientIo client({"url": sprintf("http://127.0.0.1:%d", port),
+            "apikey": "wire-key", "http_version": "1.1"});
+        MistralDataProvider::MistralDataProvider root(client);
+        hash<auto> fixtures = parse_json(File::readTextFile(get_script_dir() + "/requests.json"));
+        # Each case gives the expected HTTP method and route independently of the action manifest.
+        foreach list<string> route in (
+            ("delete-batch-job", "DELETE", "/v1/batch/jobs/{job_id}"),
+            ("agent-completion", "POST", "/v1/agents/completions"),
+            ("patch-library", "PATCH", "/v1/libraries/{library_id}"),
+            ("patch-library-document", "PATCH", "/v1/libraries/{library_id}/documents/{document_id}"),
+            ("create-response", "POST", "/v1/responses"),
+            ("count-response-input-tokens", "POST", "/v1/responses/input_tokens"),
+            ("list-voices-v2", "GET", "/v2/audio/voices"),
+            ("list-prompts", "GET", "/v2/prompts"),
+            ("create-prompt", "POST", "/v2/prompts"),
+            ("get-prompt", "GET", "/v2/prompts/{prompt_id}"),
+            ("delete-prompt", "DELETE", "/v2/prompts/{prompt_id}"),
+            ("update-prompt", "PATCH", "/v2/prompts/{prompt_id}"),
+            ("list-prompt-versions", "GET", "/v2/prompts/{prompt_id}/versions"),
+            ("create-prompt-version", "POST", "/v2/prompts/{prompt_id}/versions"),
+            ("get-prompt-version", "GET", "/v2/prompts/{prompt_id}/versions/{version}"),
+            ("update-prompt-version", "PATCH", "/v2/prompts/{prompt_id}/versions/{version}"),
+            ("list-skills", "GET", "/v2/skills"),
+            ("create-skill", "POST", "/v2/skills"),
+            ("get-skill", "GET", "/v2/skills/{skill_id}"),
+            ("delete-skill", "DELETE", "/v2/skills/{skill_id}"),
+            ("update-skill", "PATCH", "/v2/skills/{skill_id}"),
+            ("list-skill-versions", "GET", "/v2/skills/{skill_id}/versions"),
+            ("create-skill-version", "POST", "/v2/skills/{skill_id}/versions"),
+            ("get-skill-version", "GET", "/v2/skills/{skill_id}/versions/{version}"),
+            ("update-skill-version", "PATCH", "/v2/skills/{skill_id}/versions/{version}"),
+        ) {
+            string action = route[0];
+            hash<auto> options = fixtures{action};
+            auto result = root.getChildProvider(action).doRequest(options);
+            hash<auto> hdr = handler.getRequest();
+            assertEq(route[1], hdr.method, action);
+            string path = route[2];
+            list<string> path_keys = (path =~ x/\{([^}]+)\}/g) ?? ();
+            foreach string key in (path_keys) {
+                path = replace(path, "{" + key + "}", options{key}.toString());
+                remove options{key};
+            }
+            hash<UriQueryInfo> target = parse_uri_query(hdr.raw_path);
+            assertEq(path, target.method, action);
+            if (route[1] == "GET") {
+                foreach hash<auto> entry in (options.pairIterator()) {
+                    assertEq(entry.value.toString(), target.params{entry.key}.toString(), action + " " + entry.key);
+                }
+            } else if (options) {
+                hash<auto> body = parse_json(handler.getBody().toString());
+                foreach hash<auto> entry in (options.pairIterator()) {
+                    assertEq(entry.value, body{entry.key}, action + " " + entry.key);
+                }
+                foreach string key in (path_keys) {
+                    assertFalse(exists body{key}, action + " excludes path parameter " + key + " from the body");
+                }
+                assertFalse(exists body.stream, action);
+            }
+            if (action == "count-response-input-tokens") {
+                assertEq(7, result.input_tokens);
+            }
+        }
     }
 
     private negativeTest() {

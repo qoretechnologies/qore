@@ -1170,7 +1170,37 @@ int Http2Session::submitRstStream(int32_t stream_id, uint32_t error_code, Except
     if (stream) {
         stream->rst_submitted = true;
     }
+#ifdef DEBUG
+    if (nghttp2_session_find_stream(session, stream_id)) {
+        dbg_rst_unsent_streams.insert(stream_id);
+    }
+#endif
     return 0;
+}
+
+void Http2Session::releaseResetStream(int32_t stream_id, uint32_t error_code) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return;
+    }
+    app_reset_unsent_streams[stream_id] = error_code;
+    // the state that the data provider and the stream's sends use; the data provider's context is kept until the
+    // stream closes, as nghttp2 refers to it until then, and it defers while the stream has no buffered data (no
+    // DATA goes out before the RST_STREAM anyway, as nghttp2 sends its control frames first)
+    pending_body_data.erase(stream_id);
+    pending_pongs.erase(stream_id);
+    stream_send_limits.erase(stream_id);
+    stream_refused_len.erase(stream_id);
+    stream_taken_total.erase(stream_id);
+    // an InputStream sending on the stream stops, as when the stream closes (see onStreamCloseCallback())
+    {
+        auto iit = stream_input_streams_.find(stream_id);
+        if (iit != stream_input_streams_.end()) {
+            iit->second.eof = true;
+        }
+    }
+    // waiters for the stream's buffer to drain are done
+    notifyStreamDrain();
 }
 
 int Http2Session::submitGoaway(uint32_t error_code, const char* opaque_data,
@@ -1471,6 +1501,13 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
                 capped = true;
                 break;
             }
+#ifdef DEBUG
+            // dbg_http2_hold_stream_reset(): the session's frames, the RST_STREAM of the held stream among them, stay
+            // in nghttp2 until the hold ends, as when the I/O thread has not run yet since the reset (qore#7532)
+            if (dbgStreamResetHeld()) {
+                break;
+            }
+#endif
             const uint8_t* data;
 #ifdef QORE_USE_NGHTTP2_MEM_SEND2
             nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
@@ -2323,6 +2360,13 @@ bool Http2Session::wantRead() const {
 
 bool Http2Session::wantWrite() const {
     std::lock_guard<std::recursive_mutex> lg(m);
+#ifdef DEBUG
+    // dbg_http2_hold_stream_reset(): sendPendingData() collects nothing from nghttp2 while the hold lasts, so the
+    // frames that nghttp2 has do not make the I/O thread poll for a write in a loop
+    if (dbgStreamResetHeld()) {
+        return send_offset < send_buffer.size();
+    }
+#endif
     return nghttp2_session_want_write(session) != 0 || send_offset < send_buffer.size();
 }
 
@@ -2906,6 +2950,10 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     h2->stream_refused_len.erase(stream_id);
     h2->stream_taken_total.erase(stream_id);
     h2->streamed_response_rules.erase(stream_id);
+    h2->app_reset_unsent_streams.erase(stream_id);
+#ifdef DEBUG
+    h2->dbg_rst_unsent_streams.erase(stream_id);
+#endif
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -3054,7 +3102,9 @@ ssize_t Http2Session::dataProviderReadCallbackIntern(nghttp2_session* session, i
 
     auto it = h2->pending_body_data.find(stream_id);
     if (it == h2->pending_body_data.end()) {
-        if (ctx->defer_on_empty) {
+        // a stream that the application has reset sends nothing more, not even its end (releaseResetStream())
+        if (ctx->defer_on_empty
+                || h2->app_reset_unsent_streams.find(stream_id) != h2->app_reset_unsent_streams.end()) {
             printd(5, "dataProviderReadCallback() stream_id=%d requested=%zu deferred\n", stream_id, length);
             return NGHTTP2_ERR_DEFERRED;
         }
@@ -3337,8 +3387,10 @@ int Http2Session::setStreamSendLimit(int32_t stream_id, int64_t limit, Exception
     }
     std::lock_guard<std::recursive_mutex> lg(m);
     Http2StreamInfo* stream = getStream(stream_id);
-    if ((!stream || stream->state == Http2StreamState::Closed)
-            && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+    // a stream that the application has reset is not open, also before its RST_STREAM is sent (qore#7532)
+    if (((!stream || stream->state == Http2StreamState::Closed)
+                && pending_data_providers.find(stream_id) == pending_data_providers.end())
+            || app_reset_unsent_streams.find(stream_id) != app_reset_unsent_streams.end()) {
         xsink->raiseException("HTTP2-ERROR", "cannot set the send limit of stream %d: the stream is not open",
             stream_id);
         return -1;
@@ -3356,6 +3408,19 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         fflush(stderr);
     }
     printd(5, "sendStreamData() stream_id=%d len=%zu end_stream=%d isServer=%d\n", stream_id, len, end_stream, is_server);
+    // a stream that the application has reset is closed for its sends, also before its RST_STREAM is sent
+    // (releaseResetStream()): a stream that it tracks reports the reset, as it does after the stream closes, and
+    // another reports a closed stream
+    {
+        auto rit = app_reset_unsent_streams.find(stream_id);
+        if (rit != app_reset_unsent_streams.end()) {
+            if (getStream(stream_id)) {
+                raiseStreamReset(stream_id, rit->second, xsink);
+                return -1;
+            }
+            return sendOnClosedStream(stream_id, len, end_stream, xsink);
+        }
+    }
     // For streaming responses, the stream may have been moved to completed_streams
     // when the request was fully received (markStreamComplete), but the response
     // is still being sent via the deferred data provider. Check both streams and
@@ -3640,7 +3705,17 @@ int Http2Session::submitTrailers(int32_t stream_id,
     // after markStreamComplete(), but the data provider should still be active for response
     // streaming.  Check both streams and pending_data_providers (same pattern as sendStreamData).
     Http2StreamInfo* stream = getStream(stream_id);
-    if (!stream && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+    // a stream that the application has reset sends nothing more, also before its RST_STREAM is sent: a stream that
+    // it tracks reports the reset, as sendStreamData() does (qore#7532)
+    {
+        auto rit = app_reset_unsent_streams.find(stream_id);
+        if (rit != app_reset_unsent_streams.end() && stream) {
+            raiseStreamReset(stream_id, rit->second, xsink);
+            return -1;
+        }
+    }
+    if ((!stream && pending_data_providers.find(stream_id) == pending_data_providers.end())
+            || app_reset_unsent_streams.find(stream_id) != app_reset_unsent_streams.end()) {
         xsink->raiseException("HTTP2-ERROR", "stream %d not found; cannot send trailers on a "
             "closed or non-existent stream", stream_id);
         return -1;
@@ -3876,6 +3951,16 @@ void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, Exce
 }
 
 #ifdef DEBUG
+bool Http2Session::dbgStreamResetHeld() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (int32_t stream_id : dbg_rst_unsent_streams) {
+        if (qore_dbg_h2_stream_reset_held(stream_id)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Http2Session::dbgResumeHeldStreams() {
     std::vector<std::weak_ptr<Http2Session>> sessions;
     {
@@ -3906,8 +3991,9 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     auto it = pending_body_data.find(stream_id);
     if (it == pending_body_data.end()) {
         // the buffer of a stream is dropped once nghttp2 has taken all its data: a stream that nghttp2 still has is
-        // drained, not gone (issue #6908)
-        if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        // drained, not gone (issue #6908); a stream that the application has reset is gone (qore#7532)
+        if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)
+                || app_reset_unsent_streams.find(stream_id) != app_reset_unsent_streams.end()) {
             return -1;  // stream not found
         }
         return 0;
@@ -3926,7 +4012,9 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
 
 int64_t Http2Session::streamTakenBytes(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+    // a stream that the application has reset is gone, also before its RST_STREAM is sent (qore#7532)
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)
+            || app_reset_unsent_streams.find(stream_id) != app_reset_unsent_streams.end()) {
         return -1;
     }
     auto it = stream_taken_total.find(stream_id);
@@ -3940,8 +4028,10 @@ int64_t Http2Session::streamTakenBytes(int32_t stream_id) {
 
 int Http2Session::streamSendFlushed(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    // nothing more is sent on a closed session or a stream that nghttp2 no longer has
-    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+    // nothing more is sent on a closed session, a stream that nghttp2 no longer has, or one that the application has
+    // reset (qore#7532)
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)
+            || app_reset_unsent_streams.find(stream_id) != app_reset_unsent_streams.end()) {
         return 0;
     }
     auto it = pending_body_data.find(stream_id);

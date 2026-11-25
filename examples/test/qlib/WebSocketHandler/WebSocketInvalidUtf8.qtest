@@ -42,10 +42,13 @@ class EchoConnection inherits WebSocketConnection {
 
     private {
         EchoHandler h;
+        string cid;
     }
 
-    constructor(EchoHandler handler) : WebSocketConnection(handler) {
+    constructor(EchoHandler handler, string cid) : WebSocketConnection(handler) {
         h = handler;
+        self.cid = cid;
+        h.addEvent({"event": "open", "cid": cid});
     }
 
     int gotRawMessage(hash<WsMsgInfo> msg) {
@@ -66,7 +69,9 @@ class EchoConnection inherits WebSocketConnection {
 
     connectionClosed() {
         on_exit h.open.dec();
-        h.closed.push({"code": getCloseCode(), "reason": getCloseReason()});
+        hash<auto> closed = {"code": getCloseCode(), "reason": getCloseReason()};
+        h.addEvent({"event": "closed", "cid": cid} + closed);
+        h.closed.push(closed);
     }
 }
 
@@ -80,6 +85,14 @@ class EchoHandler inherits WebSocketHandler {
         Counter open();
     }
 
+    private {
+        # what happened to the connections, in order, reported when a close code is not the expected one (issue
+        # #7542)
+        list<hash<auto>> events = ();
+        Mutex event_lock();
+        Sequence event_seq();
+    }
+
     # the close timeout is a hang guard only: the server waits for the client's answer to its close frame however
     # long a slow run takes to send it (a close that times out has the close code 1006)
     constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts + {"close_timeout": 60s}) {
@@ -87,11 +100,27 @@ class EchoHandler inherits WebSocketHandler {
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         open.inc();
-        return last = new EchoConnection(self);
+        return last = new EchoConnection(self, cid);
     }
 
     logError(string fmt) {
-        errs.push(vsprintf(fmt, argv));
+        string err = vsprintf(fmt, argv);
+        addEvent({"event": "error", "err": err});
+        errs.push(err);
+    }
+
+    #! records an event of a connection, with its order, thread and time
+    addEvent(hash<auto> event) {
+        AutoLock al(event_lock);
+        events += {"seq": event_seq.next(), "tid": gettid(), "us": clock_get_monotonic_us()} + event;
+    }
+
+    #! returns the events recorded since the last call, and forgets them
+    list<hash<auto>> takeEvents() {
+        AutoLock al(event_lock);
+        list<hash<auto>> rv = events;
+        events = ();
+        return rv;
     }
 }
 
@@ -153,6 +182,8 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         plain.closed.clear();
         deflate.errs.clear();
         deflate.closed.clear();
+        plain.takeEvents();
+        deflate.takeEvents();
     }
 
     private openRaw(Socket s, string path, *string extensions) {
@@ -530,6 +561,32 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         return wsc;
     }
 
+    #! Checks the close code that connectionClosed() got for the connection of an HTTP/2 case
+    /** When it is not the expected one, what happened to the connections of the case is reported: the order of their
+        opening, of the errors logged and of connectionClosed(), the close codes and errors queued after it, and the
+        connections still open (issue #7542)
+    */
+    private checkClosedCode(int code, string label) {
+        hash<auto> closed = plain.closed.get(30s);
+        if (closed.code != code) {
+            bool ended = !plain.open.waitForZero(30s);
+            list<auto> later_closed = ();
+            while (*hash<auto> r = plain.closed.tryGet()) {
+                later_closed += r.value;
+            }
+            list<auto> later_errs = ();
+            while (*hash<auto> r = plain.errs.tryGet()) {
+                later_errs += r.value;
+            }
+            # the errors stay queued for the checks that follow
+            map plain.errs.push($1), later_errs;
+            printf("%s: connectionClosed() got %y; all connections ended: %y (open: %d); close codes queued after it: "
+                "%y; errors queued: %y; events of the case:\n%s\n", label, closed, ended, plain.open.getCount(),
+                later_closed, later_errs, (map sprintf("  %y", $1), plain.takeEvents()).join("\n"));
+        }
+        assertEq(code, closed.code, label);
+    }
+
     http2Test() {
         Queue msgs();
         WebSocketClient wsc = getHttp2Client(msgs);
@@ -540,7 +597,7 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         assertRegex("not valid UTF-8", plain.errs.get(30s));
         assertNothing(msgs.get(30s), "the connection is closed");
         assertEq(WSCC_InvalidData, wsc.getCloseCode(), "the client is told the close code");
-        assertEq(WSCC_InvalidData, plain.closed.get(30s).code, "connectionClosed() gets the close code");
+        checkClosedCode(WSCC_InvalidData, "connectionClosed() gets the close code");
     }
 
     http2CloseTest() {
@@ -553,13 +610,15 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
             "4999": (4999.encodeMsb(2), 4999, NOTHING),
         };
         foreach hash<auto> i in (cases.pairIterator()) {
+            # the events of this case only are reported
+            plain.takeEvents();
             Queue msgs();
             WebSocketClient wsc = getHttp2Client(msgs);
             on_exit delete wsc;
             wsc.send(i.value[0], WSOP_Close, True);
             assertNothing(msgs.get(30s), i.key + ": the connection is closed");
             assertEq(i.value[1], wsc.getCloseCode(), i.key + ": the client is told the close code");
-            assertEq(i.value[1], plain.closed.get(30s).code, i.key + ": connectionClosed() gets the close code");
+            checkClosedCode(i.value[1], i.key + ": connectionClosed() gets the close code");
             if (i.value[2]) {
                 assertRegex(i.value[2], plain.errs.get(30s), i.key + ": the handler logs the error");
             } else {

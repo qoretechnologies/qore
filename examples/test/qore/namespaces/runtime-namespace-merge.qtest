@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeNamespaceMergeTest
+
+#! A namespace added at run time through the C++ API is merged with the one of the same name that the Program has
+/** A binary module can add a namespace to a Program's root namespace at run time (QoreNamespace::addNamespace()),
+    also one that the Program already has. The merge is not a parse: a declaration that the Program already has (a
+    function, a constant, a class, a hashdecl) is not added again, but kept with the namespace, as a new declaration
+    that is added can use its type, and nothing reaches the parse-error path, which needs a parse and would read the
+    parse location of a builtin variant that has none (qore#7530). The namespace is kept also for a subnamespace of a
+    namespace that is added and for a child Program. The namespace is added with the debug function
+    dbg_add_runtime_namespace(), so the test needs a library with debugging.
+*/
+public class RuntimeNamespaceMergeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("runtime namespace merge", "1.0") {
+        addTestCase("a namespace added again at run time is merged", \mergeTest());
+        addTestCase("a subnamespace added again at run time is merged", \nestedTest());
+        addTestCase("a child Program keeps the types of the merged namespace", \childTest());
+        set_return_value(main());
+    }
+
+    mergeTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_namespace")) {
+            testSkip("the library has no debugging");
+        }
+        Program p(PO_NEW_STYLE);
+        # a Program is parsed once: the merged namespace is used at run time
+        p.parse("sub add(string name, int variant) { dbg_add_runtime_namespace(name, variant); }
+auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }
+hash<auto> sub info() { return dbg_get_ns_info().subnamespaces.DbgRtNs; }", "add");
+        # the namespace is added, then added again with the same declarations and a new function variant
+        p.callFunction("add", "DbgRtNs", 0);
+        p.callFunction("add", "DbgRtNs", 1);
+        p.callFunction("add", "DbgRtNs", 1);
+
+        # the function that the Program had is kept as it was: the variant of the namespace added again is not added
+        assertEq(0, p.callFunction("call", "DbgRtNs::dbg_rt_func", ()), "the function that the Program had");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), ("call", "DbgRtNs::dbg_rt_func", ("x",)),
+            "the variant of a function that the Program had");
+        # a new function is added, also one with a parameter of the type of a class that was not added, whose type
+        # stays valid
+        assertEq(1, p.callFunction("call", "DbgRtNs::dbg_rt_new", (NOTHING,)), "a new function");
+        # the constant and the class that the Program had are kept, once each
+        hash<auto> info = p.callFunction("info");
+        assertEq({"DbgRtConst": 0}, info.constants, "the constant that the Program had");
+        assertEq(("DbgRtClass",), keys info.classes, "the class that the Program had");
+    }
+
+    nestedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_namespace")) {
+            testSkip("the library has no debugging");
+        }
+        Program p(PO_NEW_STYLE);
+        p.parse("sub add(string name, int variant) { dbg_add_runtime_namespace(name, variant); }
+auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }", "add");
+        # the outer namespace has nothing left after the merge, its subnamespace has the class that is not added
+        p.callFunction("add", "DbgRtOuter::DbgRtInner", 0);
+        p.callFunction("add", "DbgRtOuter::DbgRtInner", 1);
+        assertEq(0, p.callFunction("call", "DbgRtOuter::DbgRtInner::dbg_rt_func", ()), "the function that it had");
+        assertEq(1, p.callFunction("call", "DbgRtOuter::DbgRtInner::dbg_rt_new", (NOTHING,)), "a new function");
+        # the Program is cleared and deleted with the kept namespace
+        delete p;
+    }
+
+    childTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_namespace")) {
+            testSkip("the library has no debugging");
+        }
+        Program p(PO_NEW_STYLE);
+        p.parse("sub add(string name, int variant) { dbg_add_runtime_namespace(name, variant); }
+Program sub child() {
+    Program c(PO_NEW_STYLE);
+    c.parse(\"int sub t() { return call_function(\\\"DbgRtNs::dbg_rt_new\\\", NOTHING); }\", \"child\");
+    return c;
+}", "add");
+        p.callFunction("add", "DbgRtNs", 0);
+        p.callFunction("add", "DbgRtNs", 1);
+        # a child Program of the Program copies the new function, which uses the type of the class that was not added
+        Program c = p.callFunction("child");
+        delete p;
+        assertEq(1, c.callFunction("t"), "the new function in a child Program after its parent is deleted");
+    }
+}

@@ -160,6 +160,14 @@ class SseNotifierPollOperation inherits Qore::AbstractPollOperation<auto> {
 } # namespace Priv
 
 public class SseObservable inherits DataProvider::DelayedObservable {
+    private:internal {
+        #! The maximum number of queued events delivered in one run of the async I/O controller thread
+        /** A stream that queues events faster than its observers handle them then lets the thread serve its other
+            operations between the runs, instead of keeping it until the stream ends
+        */
+        const MaxEventsPerDrain = 64;
+    }
+
     private {
         #! Connection manager
         HttpClientIo::HttpClientConnectionManager mgr;
@@ -706,16 +714,26 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             notifyClosed();
         }
 
+        int delivered = 0;
         while (True) {
             bool stopped;
+            *EventNotifier own_notifier;
             {
                 AutoLock al(m);
                 stopped = stop;
+                own_notifier = notifier;
             }
             if (stopped) {
                 notifyClosed();
                 terminate = True;
                 return True;
+            }
+
+            # the controller thread serves its other operations between batches: the notifier is signaled so that
+            # the poll operation runs again for the rest of the queue
+            if (delivered == MaxEventsPerDrain && own_notifier && !sse_queue.empty()) {
+                own_notifier.notify();
+                return False;
             }
 
             auto item = sse_queue.tryGet();
@@ -738,6 +756,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
                 return False;
             }
 
+            ++delivered;
             auto evt = item.value;
             # Reset idle deadline on any received event (including errors)
             last_event_us = clock_getmicros();

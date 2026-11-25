@@ -2459,6 +2459,9 @@
 
     - @ref sqlutilintro "SqlUtil" module
       - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
+      - messages name a table without the default schema of the connection, which Oracle and MySQL name after its
+        user or database (see @ref SqlUtil::AbstractTable::getMessageName() "AbstractTable::getMessageName()")
+        (<a href="https://github.com/qoretechnologies/qore/issues/7018">issue 7018</a>)
       - portable table partitioning APIs for PostgreSQL, Oracle, MySQL/MariaDB and SQL Server
       - deferrable foreign constraints for PostgreSQL and Oracle
         (<a href="https://github.com/qoretechnologies/qore/issues/5373">issue 5373</a>)
@@ -2872,6 +2875,27 @@
       <a href="https://github.com/qoretechnologies/qore/issues/7324">issue 7324</a>)
     - @ref Qore::SQL::Datasource::getPort() "Datasource::getPort()" returns the port configured for the next
       connection, including after a port change on an open datasource.
+    - memory that cannot be allocated fails a call of builtin code (in the AST mode also a statement) with a catchable
+      \c MEMORY-ALLOCATION-ERROR exception and leaves the string or list that could not grow unchanged, where the
+      process ended with a segmentation fault or \c std::terminate() (@ref exception_memory "allocation failures";
+      <a href="https://github.com/qoretechnologies/qore/issues/7466">issue 7466</a>)
+    - a method called through a weak reference while another thread releases the last strong reference to its object
+      keeps the object, which is destroyed when the call releases it, instead of being destroyed while the call runs
+      (see @ref weak_assignment_operator; <a href="https://github.com/qoretechnologies/qore/issues/7509">issue
+      7509</a>)
+    - an HTTP/2 stream that the application resets with @ref Qore::Socket::resetHttp2Stream()
+      "Socket::resetHttp2Stream()" (as @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" does for a connection
+      that it stops) releases its buffered data when the call returns, where the stream kept it until the I/O thread
+      next sent the session's frames (<a href="https://github.com/qoretechnologies/qore/issues/7532">issue 7532</a>)
+    - the Doxygen search indexes of the documentation of a user module leave out the imported modules that its pages
+      do not link to, which made up 29% of their size
+      (<a href="https://github.com/qoretechnologies/qore/issues/6376">issue 6376</a>)
+    - @ref qoreocrutilsintro "QoreOcrUtils" document OCR keeps the readable text of a PDF document and reports blank,
+      partially readable and unreadable pages one by one, also when the optional PDF reader is not available
+      (<a href="https://github.com/qoretechnologies/qore/issues/6764">issue 6764</a>)
+    - the tests that create UNIX socket files use short private directories, so they pass with a \c TMPDIR whose
+      path is too long for a UNIX socket name (<a href="https://github.com/qoretechnologies/qore/issues/7462">issue
+      7462</a>)
     - a pseudo-method call runs the method of the pseudo-class of the value's type at run time, also when the parser
       resolved the call from another type, and the code of a pseudo-class refuses a value of another type with an
       exception (see the note on pseudo-classes in @ref qore_classes;
@@ -2917,6 +2941,9 @@
     - the @ref garbage_collection "garbage collector" collects a cycle through a hash, list or object holding an
       object that a member was removed from, which it missed, and a write to a member by its bare name no longer
       counts the object as holding a value to scan when it holds none (issue #7348)
+    - @ref Qore::delete_all_thread_data() could use a freed member, or never end, when a destructor that it ran read
+      or saved thread-local data; a destructor now reads the values not freed yet, and the values saved during the
+      release are freed while nothing can be saved (issue #7265)
     - The @ref garbage_collection "garbage collector" now collects object cycles through reversed
       lists and lists whose elements were converted in place (issue #7159).
     - @ref string_formatting "Value formatting" now displays a back-reference when several paths reach the same

@@ -218,6 +218,27 @@ void HashDeclList::assimilate(HashDeclList& n, qore_ns_private& ns,
     }
 }
 
+void HashDeclList::runtimeAssimilate(HashDeclList& n, qore_ns_private& ns) {
+    // the hashdecls that are added; one that conflicts with a declaration of the namespace stays in the list that is
+    // merged, which is kept with the namespace that was added, as the other declarations of that namespace can use its
+    // type (qore_ns_private::runtimeAssimilate(), qore#7530)
+    std::vector<const char*> added;
+    for (hm_qth_t::iterator i = n.hm.begin(), e = n.hm.end(); i != e; ++i) {
+        if (!ns.classList.find(i->first) && !ns.hashDeclList.find(i->first) && !find(i->first)) {
+            added.push_back(i->first);
+        }
+    }
+    for (const char* name : added) {
+        hm_qth_t::iterator i = n.hm.find(name);
+        assert(i != n.hm.end());
+        TypedHashDecl* hd = i->second;
+        n.hm.erase(i);
+        // "move" data to new list
+        hm[hd->getName()] = hd;
+        typed_hash_decl_private::get(*hd)->setNamespace(&ns);
+    }
+}
+
 bool HashDeclListIterator::isPublic() const {
     return typed_hash_decl_private::get(*i->second)->isPublic();
 }

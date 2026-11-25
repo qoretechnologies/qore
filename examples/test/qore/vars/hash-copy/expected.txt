@@ -1,0 +1,126 @@
+size0 copy: 1 ok added=0
+size0 changed copy: ok
+size0 changed copy keys: 41 ["added", "new0", "new1", "new2", "new3", "new4"]
+size0 original: ok
+size0 original keys: 0
+size1 copy: 2 ok k0=0,added=1
+size1 changed copy: ok
+size1 changed copy keys: 41 ["added", "new0", "new1", "new2", "new3", "new4"]
+size1 original: ok
+size1 original keys: 1
+size2 copy: 3 ok k0=0,k1=1,added=2
+size2 changed copy: ok
+size2 changed copy keys: 42 ["k1", "added", "new0", "new1", "new2", "new3"]
+size2 original: ok
+size2 original keys: 2
+size3 copy: 4 ok k0=0,k1=1,k2=2,added=3
+size3 changed copy: ok
+size3 changed copy keys: 42 ["k1", "added", "new0", "new1", "new2", "new3"]
+size3 original: ok
+size3 original keys: 3
+size7 copy: 8 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,added=7
+size7 changed copy: ok
+size7 changed copy keys: 44 ["k1", "k3", "k5", "added", "new0", "new1"]
+size7 original: ok
+size7 original keys: 7
+size8 copy: 9 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,added=8
+size8 changed copy: ok
+size8 changed copy keys: 45 ["k1", "k3", "k5", "k7", "added", "new0"]
+size8 original: ok
+size8 original keys: 8
+size12 copy: 13 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,added=12
+size12 changed copy: ok
+size12 changed copy keys: 47 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size12 original: ok
+size12 original keys: 12
+size13 copy: 14 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,added=13
+size13 changed copy: ok
+size13 changed copy keys: 47 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size13 original: ok
+size13 original keys: 13
+size14 copy: 15 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,k13=13,added=14
+size14 changed copy: ok
+size14 changed copy keys: 48 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size14 original: ok
+size14 original keys: 14
+size25 copy: 26 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k19=19,k20=20,k21=21,k22=22,k23=23,k24=24,added=25
+size25 changed copy: ok
+size25 changed copy keys: 53 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size25 original: ok
+size25 original keys: 25
+size26 copy: 27 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k19=19,k20=20,k21=21,k22=22,k23=23,k24=24,k25=25,added=26
+size26 changed copy: ok
+size26 changed copy keys: 54 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size26 original: ok
+size26 original keys: 26
+size27 copy: 28 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k19=19,k20=20,k21=21,k22=22,k23=23,k24=24,k25=25,k26=26,added=27
+size27 changed copy: ok
+size27 changed copy keys: 54 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size27 original: ok
+size27 original keys: 27
+size29 copy: 30 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k19=19,k20=20,k21=21,k22=22,k23=23,k24=24,k25=25,k26=26,k27=27,k28=28,added=29
+size29 changed copy: ok
+size29 changed copy keys: 55 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size29 original: ok
+size29 original keys: 29
+size30 copy: 31 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9,k10=10,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k19=19,k20=20,k21=21,k22=22,k23=23,k24=24,k25=25,k26=26,k27=27,k28=28,k29=29,added=30
+size30 changed copy: ok
+size30 changed copy keys: 56 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size30 original: ok
+size30 original keys: 30
+size100 copy: ok
+size100 copy keys: 101 first "k0" last "added"
+size100 changed copy: ok
+size100 changed copy keys: 91 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size100 original: ok
+size100 original keys: 100
+size1000 copy: ok
+size1000 copy keys: 1001 first "k0" last "added"
+size1000 changed copy: ok
+size1000 changed copy keys: 541 ["k1", "k3", "k5", "k7", "k9", "k11"]
+size1000 original: ok
+size1000 original keys: 1000
+empty copy: 1 ok a=1
+empty original: 0 ok 
+deleted copy: 16 ok k1="changed",k2=2,k3=3,k4=4,k7=7,k8=8,k9=9,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k5="re-added"
+deleted original: 16 ok k1=1,k2=2,k3=3,k4=4,k7=7,k8=8,k9=9,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k5="re-added"
+deleted copy re-added: 16 ok k2=2,k3=3,k4=4,k7=7,k8=8,k9=9,k11=11,k12=12,k13=13,k14=14,k15=15,k16=16,k17=17,k18=18,k5="re-added",k1="last"
+non-ascii copy: 8 ok ="empty",naïve=1,日本語="changed",Ünïcödé-key-longer-than-sixteen-bytes=3,abcdefghijklmnopqrstuvwxyz0=4,abcdefghijklmnopqrstuvwxyz1=5,x=6,€=7
+non-ascii original: 8 ok ="empty",naïve=1,日本語=2,Ünïcödé-key-longer-than-sixteen-bytes=3,abcdefghijklmnopqrstuvwxyz0=4,abcdefghijklmnopqrstuvwxyz1=5,x=6,€=7
+non-ascii lookup: 1 "empty" 7
+non-ascii lookup iso-8859-1: 1
+non-ascii lookup utf-16le: 7
+nested copy: {a: 1, n: {x: 1, y: {z: 3}, w: 4}, l: [1, 2, 3, 4]}
+nested original: {a: 1, n: {x: 1, y: {z: 2}}, l: [1, 2, 3]}
+nested verify: ok ok ok
+copies h: 10 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9
+copies c1: 10 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5="c1",k6=6,k7=7,k8=8,k9=9
+copies c2: 10 ok k0="c2",k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9=9
+copies c3: 10 ok k0="c2",k1=1,k2=2,k3=3,k4=4,k5=5,k6=6,k7=7,k8=8,k9="c3"
+typed copy: hash<string, int> 4 ok a=1,b=20,c=3,d=4
+typed original: hash<string, int> 3 ok a=1,b=2,c=3
+typed wrong value: RUNTIME-TYPE-ERROR
+typed sum: hash<string, int> 4 ok a=1,b=2,c=3,e=5
+typed plus object: 5 ok a=1,b=2,c=3,x=1,h={k: 1}
+typed to auto: hash<auto> 4 ok a=1,b=2,c=3,z="z"
+hashdecl copy: hash<HD> 2 ok a=10,b="two"
+hashdecl original: hash<HD> 2 ok a=1,b="two"
+hashdecl invalid member: INVALID-MEMBER
+hashdecl child copy: hash<HD2> 3 ok a=1,b="two",d=[1, 2, 3]
+hashdecl child original: hash<HD2> 3 ok a=1,b="two",d=[1, 2]
+hashdecl sum: hash<auto> 3 ok a=1,b="two",d=[1, 2]
+hashdecl to auto: 3 ok a=1,b="changed",q=1
+literal: 5 ok x=5,s="five",sum=6,n={x: 5},naïve="five!"
+hashdecl literal: 2 ok a=5,b="five"
+hashdecl literal wrong type: RUNTIME-TYPE-ERROR
+typed literal: hash<string, int> 2 ok a=5,b=10
+plus: 6 ok k0=0,k1=1,k2="two",k3=3,k4=4,k9=9
+plus equals: 7 ok k0="zero",k1=1,k2="two",k3=3,k4=4,k9=9,k10=10
+plus original: 5 ok k0=0,k1=1,k2=2,k3=3,k4=4
+slice: 3 ok k1=1,k3=3,k4=4
+compare: True False
+object copy: {x: 2, naïve: "changed", extra: 1, extra2: 2, h: {k: 1}}
+object original: {x: 1, naïve: "n", extra: 1, extra2: null, h: {k: 1}}
+object copy removed: {x: 2, naïve: "changed", extra: null, extra2: 2, h: {k: 1}} {x: 1, naïve: "n", extra: 1, extra2: null, h: {k: 1}}
+iterated copy: 8 ok k0=0,k2=2,k4=4,k5=5,k0x=1,k2x=1,k4x=1,k5x=1
+iterated original: 6 ok k0=0,k1=1,k2=2,k3=3,k4=4,k5=5

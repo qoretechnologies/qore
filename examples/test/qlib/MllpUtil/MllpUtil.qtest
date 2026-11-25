@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - TCP and UNIX socket listeners and TLS connections
 # test-loopback: localhost - listeners are bound to the host name "localhost" to test binding by name, which listens on its first address and holds the port on the other loopback address, and its clients connect to that name; "http://localhost:2575" is a URL that is rejected without connecting; the 127.0.0.1 listeners have 127.0.0.1 clients
 
 /*  MllpUtil.qtest Copyright 2026 Qore Technologies, s.r.o.
@@ -28,6 +29,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ../../TestSocketDir.qm
 %requires ConnectionProvider
 %requires Hl7v2Util
 %requires MllpUtil
@@ -190,8 +192,8 @@ class MllpUtilTest inherits QUnit::Test {
         }
 
 %ifndef Windows
-        string path = sprintf("%s/mllp-%d-%s.sock", tmp_location(), getpid(), get_random_string(8));
-        on_exit unlink(path);
+        TestSocketDir socket_dir();
+        string path = socket_dir.path + "/server.sock";
         MllpUtil::MllpListener unix_listener(path);
         unix_listener.start(*string sub (string msg) {
             return MllpUtil::mllp_build_ack(msg);

@@ -29,8 +29,10 @@ public namespace DataProviderML {
     files. Automatically detects the format and applies the best text extraction
     strategy — digital text extraction for PDFs, OCR for images and scanned pages.
 
-    Ideal for building document ingestion pipelines that need to handle any file
-    format a user might upload.
+    The returned record includes \c document_page_results with a @ref QoreOcrUtils::PdfPageOcrResult for
+    each page. \c document_review_pages lists the zero-based indexes of partial and unreadable pages.
+    For a PDF, \c document_confidence is the arithmetic mean across all pages. Digital text scores 1.0,
+    OCR text uses the recognition score, and blank, partial, or unreadable pages score 0.0.
 
     @par Example:
     @code{.py}
@@ -206,8 +208,20 @@ public class QoreDocumentOcrProcessor inherits AbstractDataProviderMLProcessor {
         result.document_pages = ocr_result.page_count;
         result.document_ocr_pages = ocr_result.ocr_page_count;
         result.document_confidence = ocr_result.avg_confidence;
+        result.document_page_results = ocr_result.pages;
+        result.document_review_pages = reviewPages(ocr_result);
 
         return result;
+    }
+
+    private static list<int> reviewPages(hash<QoreOcrUtils::DocumentOcrResult> result) {
+        list<int> review = ();
+        foreach hash<QoreOcrUtils::PdfPageOcrResult> page in (result.pages) {
+            if (page.status == "unreadable" || page.status == "partial") {
+                push review, page.page_index;
+            }
+        }
+        return review;
     }
 
     #! Processes records in bulk hash-of-lists format without row materialization when possible
@@ -252,6 +266,8 @@ public class QoreDocumentOcrProcessor inherits AbstractDataProviderMLProcessor {
         list<int> pages;
         list<int> ocr_pages;
         list<float> confidences;
+        list<auto> page_results;
+        list<auto> review_pages;
         for (int row = 0; row < count; ++row) {
             binary doc_data = documents[row];
             *string mime_type = mime_types ? mime_types[row] : NOTHING;
@@ -262,6 +278,8 @@ public class QoreDocumentOcrProcessor inherits AbstractDataProviderMLProcessor {
             push pages, ocr_result.page_count;
             push ocr_pages, ocr_result.ocr_page_count;
             push confidences, ocr_result.avg_confidence;
+            push page_results, ocr_result.pages;
+            push review_pages, reviewPages(ocr_result);
         }
 
         return DataProvider::AbstractDataProcessor::appendShapeColumns(records, shape, {
@@ -270,6 +288,8 @@ public class QoreDocumentOcrProcessor inherits AbstractDataProviderMLProcessor {
             "document_pages": pages,
             "document_ocr_pages": ocr_pages,
             "document_confidence": confidences,
+            "document_page_results": page_results,
+            "document_review_pages": review_pages,
         });
     }
 

@@ -583,5 +583,126 @@
         }
       ]
     }
+  },
+  "delete-batch-job": {
+    "job_id": "00000000-0000-4000-8000-000000000001"
+  },
+  "agent-completion": {
+    "agent_id": "agent-1",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
+  },
+  "create-response": {
+    "model": "mistral-small-latest",
+    "input": "Hello"
+  },
+  "count-response-input-tokens": {
+    "model": "mistral-small-latest",
+    "input": "Hello"
+  },
+  "list-voices-v2": {
+    "page_token": "next",
+    "page_size": 5,
+    "type": "preset"
+  },
+  "list-prompts": {
+    "pageSize": 3,
+    "pageToken": "next"
+  },
+  "create-prompt": {
+    "name": "invoice",
+    "definition": {
+      "content": "Summarize this invoice."
+    }
+  },
+  "get-prompt": {
+    "prompt_id": "prompt-1"
+  },
+  "delete-prompt": {
+    "prompt_id": "prompt-1"
+  },
+  "update-prompt": {
+    "prompt_id": "prompt-1",
+    "title": "Invoices"
+  },
+  "list-prompt-versions": {
+    "prompt_id": "prompt-1"
+  },
+  "create-prompt-version": {
+    "prompt_id": "prompt-1",
+    "definition": {
+      "content": "Summarize this invoice."
+    }
+  },
+  "get-prompt-version": {
+    "prompt_id": "prompt-1",
+    "version": 2
+  },
+  "update-prompt-version": {
+    "prompt_id": "prompt-1",
+    "version": 2,
+    "notes": "Reviewed",
+    "aliases": {
+      "values": [
+        "invoice"
+      ]
+    }
+  },
+  "list-skills": {
+    "pageSize": 3,
+    "pageToken": "next"
+  },
+  "create-skill": {
+    "name": "invoice",
+    "definition": {
+      "description": "Summarize invoices",
+      "body": "Read the invoice and summarize it."
+    }
+  },
+  "get-skill": {
+    "skill_id": "skill-1"
+  },
+  "delete-skill": {
+    "skill_id": "skill-1"
+  },
+  "update-skill": {
+    "skill_id": "skill-1",
+    "sharingScope": "private"
+  },
+  "list-skill-versions": {
+    "skill_id": "skill-1"
+  },
+  "create-skill-version": {
+    "skill_id": "skill-1",
+    "definition": {
+      "description": "Summarize invoices",
+      "body": "Read the invoice and summarize it."
+    }
+  },
+  "get-skill-version": {
+    "skill_id": "skill-1",
+    "version": 2
+  },
+  "update-skill-version": {
+    "skill_id": "skill-1",
+    "version": 2,
+    "notes": "Reviewed"
+  },
+  "patch-library": {
+    "library_id": "00000000-0000-4000-8000-000000000001",
+    "name": "Invoices",
+    "description": "Invoice archive"
+  },
+  "patch-library-document": {
+    "library_id": "00000000-0000-4000-8000-000000000001",
+    "document_id": "00000000-0000-4000-8000-000000000002",
+    "name": "April",
+    "attributes": {
+      "year": 2026
+    }
   }
 }
