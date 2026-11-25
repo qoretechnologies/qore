@@ -65,3 +65,6 @@ thread_local receiver: C
 map plain: ["C:0", "C:1"]
 map closure: ["C:0", "C:1"]
 done destroyed=42
+weak literals: [1, 2] [1, 2] [3, 4]
+weak computed containers: 0 0
+deferred literal: [1, 2] [1, 2]
