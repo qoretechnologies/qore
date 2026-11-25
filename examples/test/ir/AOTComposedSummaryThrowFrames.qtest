@@ -19,6 +19,9 @@
     \c faultDivide(), whose division can raise \c DIVISION-BY-ZERO.  A caller that inlined the summary of
     \c faultOuter() ran it in the inline frame of \c faultOuter() alone, so the exception had no frame of
     \c faultDivide() and the location of the call in \c faultOuter() instead of that of the division.
+
+    The probe raises in the innermost callee of chains of functions, of static methods and of methods, also with hash
+    projections; a callee that divides by a nonzero constant cannot raise and is still composed (\c quarterOuter()).
 */
 class AOTComposedSummaryThrowFramesTest inherits QUnit::Test {
     private {
@@ -33,16 +36,27 @@ class AOTComposedSummaryThrowFramesTest inherits QUnit::Test {
         addTestCase("AST reports the frames of the callees", \astReference());
         addTestCase("compiled modes match AST", \sourceModes());
         addTestCase("qcc executables match AST", \compiled());
+        addTestCase("summaries compose callees that cannot raise", \summaries());
         set_return_value(main());
     }
 
     astReference() {
         list<string> lines = trim(getAst()).split("\n");
-        assertEq(14, lines.size());
+        assertEq(39, lines.size());
         foreach string line in ("DIVISION-BY-ZERO:11:faultDivide:14,faultOuter:17,faultNested:",
                 "DIVISION-BY-ZERO:20:faultModulo:23,faultModuloOuter:26,faultModuloNested:",
                 "DIVISION-BY-ZERO:38:faultBeforeReturn:42,faultBeforeReturnOuter:45,faultBeforeReturnNested:",
-                "DIVISION-BY-ZERO:29:faultFloat:32,faultFloatOuter:35,faultFloatNested:") {
+                "DIVISION-BY-ZERO:29:faultFloat:32,faultFloatOuter:35,faultFloatNested:",
+                "DIVISION-BY-ZERO:49:faultHashKey:52,faultHashKeyOuter:55,faultHashKeyNested:",
+                "DIVISION-BY-ZERO:58:faultHashDivide:61,faultHashDivideOuter:64,faultHashDivideNested:",
+                "DIVISION-BY-ZERO:67:faultHashFloat:70,faultHashFloatOuter:73,faultHashFloatNested:",
+                "DIVISION-BY-ZERO:76:faultHashFloatDivide:79,faultHashFloatDivideOuter:82,faultHashFloatDivideNested:",
+                "DIVISION-BY-ZERO:88:FaultChain::divide:91,FaultChain::outer:107,faultStaticNested:",
+                "DIVISION-BY-ZERO:94:FaultChain::divideFloat:97,FaultChain::outerFloat:110,faultStaticFloatNested:",
+                "DIVISION-BY-ZERO:100:FaultChain::modulo:113,faultMethodOuter:116,faultMethodNested:",
+                "DIVISION-BY-ZERO:100:FaultChain::modulo:103,FaultChain::moduloOuter:119,faultSelfMethodNested:",
+                "DIVISION-BY-ZERO:11:faultDivide:143,faultAfterQuarter:146,faultAfterQuarterNested:",
+                "quarter:4:9:-7:3:7:-5:4.25:9.5") {
             assertTrue(getAst().find("\n" + line) >= 0, line);
         }
     }
@@ -69,6 +83,34 @@ class AOTComposedSummaryThrowFramesTest inherits QUnit::Test {
                     sprintf("qcc %s stripped: %y", level, stripped));
             }
         }
+    }
+
+    #! a division by a nonzero constant cannot raise: such a callee is composed, a callee that can raise is not
+    summaries() {
+        TmpDir dir("qore-aot-composed-summary-index-");
+        run((qcc_bin, "-O3", "-c", "--output-dir=" + dir.path, probe));
+        string index = run((qcc_bin, "--dump-index-json", dir.path + "/probe.qo"));
+        # composed: a division and a modulo by a nonzero constant
+        checkSummary(index, "quarterOuter(int)", "int", True);
+        checkSummary(index, "remainderOuter(int)", "int", True);
+        checkSummary(index, "quarterFloatOuter(float)", "float", True);
+        # called: a callee that can raise
+        checkSummary(index, "faultOuter(int)", "int", False);
+        checkSummary(index, "faultModuloOuter(int)", "int", False);
+        checkSummary(index, "faultAfterQuarter(int)", "int", False);
+        checkSummary(index, "faultFloatOuter(float)", "float", False);
+    }
+
+    #! checks that the function at \a path has a summary of the \a kind ("int" or "float") if \a composed, or none
+    private checkSummary(string index, string path, string kind, bool composed) {
+        string pattern = "\"qore_path\": \"" + quote_regex(path) + "\"[^\n]*\"" + kind + "_expression_nodes\": "
+            + (composed ? "\\[\\{" : "\\[\\]");
+        assertRegex(pattern, index, sprintf("%s summary: %y", path, composed));
+    }
+
+    #! returns the pattern that matches \a str literally
+    private static string quote_regex(string str) {
+        return "\\Q" + str + "\\E";
     }
 
     private string getAst() {
