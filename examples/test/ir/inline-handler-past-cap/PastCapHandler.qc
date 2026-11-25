@@ -65,9 +65,9 @@ class PastCapHandlerBase inherits QUnit::Test {
     }
 
     #! adds a test case that runs only in the given part
-    private addPartCase(int p, string name, code call, auto arg) {
-        if (p == part) {
-            addTestCase(name, call, arg);
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
         }
     }
 
