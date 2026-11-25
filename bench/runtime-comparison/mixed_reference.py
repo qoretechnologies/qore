@@ -51,6 +51,10 @@ def validate_checks(output):
     for line in output.splitlines():
         tag, name, count, seed, value = line.split('\t')
         key = (name, int(count), int(seed))
-        assert tag == 'CHECK' and key not in actual, line
+        if tag != 'CHECK' or key in actual:
+            raise ValueError(f'invalid/duplicate check record: {line}')
         actual[key] = int(value)
-    assert actual == expected, [(key, expected[key], actual.get(key)) for key in expected if actual.get(key) != expected[key]]
+    if actual != expected:
+        raise ValueError('mixed workload results differ from the reference: %r' % [
+            (key, expected.get(key), actual.get(key)) for key in sorted(expected.keys() | actual.keys())
+            if actual.get(key) != expected.get(key)])

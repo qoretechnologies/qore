@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 
-from run import HERE, ROOT, digest, parse_qore, summarize
+from run import HERE, ROOT, CommandFailed, digest, parse_qore, run_bounded, summarize
 
 
 SCENARIOS = [(f"{context}-{count}-{batch}", int(context == "sandbox"), count, batch)
@@ -70,12 +70,12 @@ def main():
         command = list(map(str, command))
         commands.append({"label": label, "argv": command, "library_path": env[loader]})
         (output / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
-        result = subprocess.run(command, text=True, capture_output=True, env=env, timeout=timeout)
-        (output / (label + ".stdout")).write_text(result.stdout)
-        (output / (label + ".stderr")).write_text(result.stderr)
-        if result.returncode:
-            raise RuntimeError(f"{label} exited {result.returncode}; see {output}")
-        return result.stdout
+        returncode, stdout, stderr = run_bounded(command, env=env, timeout=timeout, cwd=ROOT)
+        (output / (label + ".stdout")).write_text(stdout)
+        (output / (label + ".stderr")).write_text(stderr)
+        if returncode:
+            raise CommandFailed(f"{label} exited {returncode}; see {output / (label + '.stderr')}")
+        return stdout
 
     variants = [("", qore.parent)]
     if args.baseline_libdir:

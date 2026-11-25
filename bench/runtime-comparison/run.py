@@ -12,6 +12,7 @@ from pathlib import Path
 import platform
 import random
 import shutil
+import signal
 import statistics
 import subprocess
 import sys
@@ -34,7 +35,9 @@ KERNELS = ("arithmetic", "direct_call", "method_call", "indirect_call", "polymor
            "indirect_affine", "indirect_affine_wide", "indirect_branch_int",
            "dispatch_control", "list_read", "list_build",
            "list_mutate", "temporary_list", "temporary_hash", "closure_call", "closure_capture")
-MODES = ("qore-ir", "qore-aot", "java-int", "java-jit")
+# the interpreter modes run kernels.qr with "qore --exec-mode=<mode>"; qore-aot runs a qcc -O3 executable
+QORE_EXEC_MODES = {"qore-ast": "ast", "qore-ir": "ir", "qore-jit": "jit"}
+MODES = (*QORE_EXEC_MODES, "qore-aot", "java-int", "java-jit")
 MAIN = "org.qore.bench.RuntimeBench"
 # JMH 1.37 and its runtime/annotation-processor dependencies, from Maven Central.
 ARTIFACTS = {
@@ -47,6 +50,34 @@ ARTIFACTS = {
     "org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar":
         "1e56d7b058d28b65abd256b8458e3885b674c1d588fa43cd7d1cbb9c7ef2b308",
 }
+
+
+class CommandFailed(RuntimeError):
+    """A child process exited with a nonzero status"""
+
+
+def run_bounded(command, *, env=None, timeout, cwd=None):
+    """Runs a command in a process group of its own and returns (returncode, stdout, stderr).
+
+    The command must end within timeout seconds.  When it does not, or when anything interrupts the wait (an
+    exception, a signal raised as KeyboardInterrupt), the whole process group is killed, so that the processes the
+    command started (the JVM that JMH forks, for example) end with it, and the exception is raised again.
+    """
+    if timeout is None or timeout <= 0:
+        raise ValueError("every child process needs a positive timeout")
+    with subprocess.Popen(list(map(str, command)), env=env, cwd=cwd, text=True, stdin=subprocess.DEVNULL,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except BaseException:
+            # the leader is not reaped yet, so its process group ID still belongs to this command
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+            raise
+    return process.returncode, stdout, stderr
 
 
 def digest(path):
@@ -202,7 +233,9 @@ def main():
     parser.add_argument("--reuse-aot-for-baseline", action="store_true",
                         help="run one identical AOT executable against both compatible libraries (runtime-only changes)")
     parser.add_argument("--output-root", type=Path, default=ROOT / "build/bench-runtime-comparison")
-    parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
+    parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES),
+                        help="qore-ast, qore-ir and qore-jit run kernels.qr in that --exec-mode; qore-aot runs a "
+                             "qcc -O3 executable; java-int and java-jit run RuntimeBench.java")
     parser.add_argument("--kernels", nargs="+", choices=KERNELS, default=list(KERNELS))
     parser.add_argument("--forks", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=3)
@@ -260,13 +293,13 @@ def main():
         commands.append({"label": label, "argv": command})
         (output / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
         start = time.perf_counter_ns()
-        result = subprocess.run(command, env=environment or env, text=True, capture_output=True, timeout=timeout)
+        returncode, stdout, stderr = run_bounded(command, env=environment or env, timeout=timeout, cwd=ROOT)
         elapsed = (time.perf_counter_ns() - start) / 1e6
-        (output / (label + ".stdout")).write_text(result.stdout)
-        (output / (label + ".stderr")).write_text(result.stderr)
-        if result.returncode:
-            raise RuntimeError(f"{label} exited {result.returncode}; see {output / (label + '.stderr')}")
-        return result.stdout, elapsed
+        (output / (label + ".stdout")).write_text(stdout)
+        (output / (label + ".stderr")).write_text(stderr)
+        if returncode:
+            raise CommandFailed(f"{label} exited {returncode}; see {output / (label + '.stderr')}")
+        return stdout, elapsed
 
     metadata = {"platform": platform.platform(), "machine": platform.machine(),
                 "python": platform.python_version(), "settings": vars(args).copy(),
@@ -284,9 +317,11 @@ def main():
         libraries = sorted(Path(qore).parent.glob("libqore*.dylib"))
         libraries += sorted(Path(qore).parent.glob("libqore.so*"))
         metadata["qore_libraries"] = {str(p.resolve()): digest(p) for p in libraries}
-        base["qore-ir"] = [qore, "--exec-mode=ir", str(output / "kernels.qr")]
+        for mode, exec_mode in QORE_EXEC_MODES.items():
+            base[mode] = [qore, "--exec-mode=" + exec_mode, str(output / "kernels.qr")]
+            if args.baseline_libdir:
+                base[mode + "-before"] = base[mode]
         if args.baseline_libdir:
-            base["qore-ir-before"] = base["qore-ir"]
             libraries = sorted(Path(args.baseline_libdir).glob("libqore*.dylib"))
             libraries += sorted(Path(args.baseline_libdir).glob("libqore.so*"))
             metadata["baseline_libraries"] = {str(p.resolve()): digest(p) for p in libraries}

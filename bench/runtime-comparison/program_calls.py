@@ -12,9 +12,10 @@ import random
 import shutil
 import statistics
 import subprocess
+import sys
 import tempfile
 
-from run import HERE, ROOT, digest, parse_qore, reference, summarize
+from run import HERE, ROOT, CommandFailed, digest, parse_qore, reference, run_bounded, summarize
 
 NAMES = ("same_program", "cross_program")
 
@@ -87,11 +88,12 @@ def main():
         command = [str(qore), "--exec-mode=ir", str(output / "program_calls.qr"), *map(str, arguments)]
         metadata["commands"].append({"mode": mode, "label": label, "command": command})
         (output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
-        result = subprocess.run(command, env=environments[mode], capture_output=True, text=True, timeout=timeout)
-        (output / (label + ".stdout")).write_text(result.stdout)
-        (output / (label + ".stderr")).write_text(result.stderr)
-        result.check_returncode()
-        return result.stdout
+        returncode, stdout, stderr = run_bounded(command, env=environments[mode], timeout=timeout, cwd=ROOT)
+        (output / (label + ".stdout")).write_text(stdout)
+        (output / (label + ".stderr")).write_text(stderr)
+        if returncode:
+            raise CommandFailed(f"{label} exited {returncode}; see {output / (label + '.stderr')}")
+        return stdout
 
     for mode in libdirs:
         validate(run(mode, "check-" + mode, ["check"]))
@@ -120,4 +122,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (ValueError, RuntimeError, OSError, subprocess.SubprocessError) as error:
+        sys.exit(str(error))

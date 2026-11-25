@@ -29,15 +29,15 @@ class MixedReferenceTests(unittest.TestCase):
         validate_checks(self.output())
 
     def test_missing_record(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             validate_checks('\n'.join(self.output().splitlines()[1:]))
 
     def test_duplicate_record(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             validate_checks(self.output() + self.output().splitlines()[0] + '\n')
 
     def test_wrong_value(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             validate_checks(self.output().replace('\t70\n', '\t71\n', 1))
 
     def test_unknown_workload(self):

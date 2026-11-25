@@ -3,6 +3,8 @@
 # Copyright (c) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 
+import fcntl
+import os
 import subprocess
 import sys
 import tempfile
@@ -181,10 +183,10 @@ class RunnerTest(unittest.TestCase):
         for arguments in (("--samples", "0"), ("--forks", "0"), ("--time-ms", "0"),
                           ("--warmup", "-1"), ("--baseline-libdir", str(run.HERE))):
             with self.subTest(arguments=arguments):
-                result = subprocess.run([sys.executable, str(run.HERE / "thread_pool.py"), *arguments],
-                                        text=True, capture_output=True, timeout=10)
-                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
-                self.assertIn("error:", result.stderr)
+                returncode, stdout, stderr = run.run_bounded(
+                    [sys.executable, run.HERE / "thread_pool.py", *arguments], timeout=60)
+                self.assertEqual(2, returncode, stdout + stderr)
+                self.assertIn("error:", stderr)
 
     def test_program_checks(self):
         checks = "".join(f"CHECK\t{name}\t{count}\t{seed}\t{run.reference('direct_call', count, seed)}\n"
@@ -203,10 +205,10 @@ class RunnerTest(unittest.TestCase):
                           ("--warmup", "-1"), ("--count", "1000001"),
                           ("--baseline-libdir", str(run.HERE)), ("--qore", str(run.HERE))):
             with self.subTest(arguments=arguments):
-                result = subprocess.run([sys.executable, str(run.HERE / "program_calls.py"), *arguments],
-                                        text=True, capture_output=True, timeout=10)
-                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
-                self.assertIn("error:", result.stderr)
+                returncode, stdout, stderr = run.run_bounded(
+                    [sys.executable, run.HERE / "program_calls.py", *arguments], timeout=60)
+                self.assertEqual(2, returncode, stdout + stderr)
+                self.assertIn("error:", stderr)
 
     def test_invalid_arguments(self):
         for arguments in (("--samples", "0"), ("--count", "0"), ("--count", "1000001"),
@@ -217,10 +219,72 @@ class RunnerTest(unittest.TestCase):
                            "--baseline-libdir", str(run.HERE)),
                           ("--baseline-libdir", str(run.HERE))):
             with self.subTest(arguments=arguments):
-                result = subprocess.run([sys.executable, str(run.HERE / "run.py"), *arguments],
-                                        text=True, capture_output=True, timeout=10)
-                self.assertEqual(2, result.returncode, result.stdout + result.stderr)
-                self.assertIn("error:", result.stderr)
+                returncode, stdout, stderr = run.run_bounded(
+                    [sys.executable, run.HERE / "run.py", *arguments], timeout=60)
+                self.assertEqual(2, returncode, stdout + stderr)
+                self.assertIn("error:", stderr)
+
+    def test_modes(self):
+        self.assertEqual(("qore-ast", "qore-ir", "qore-jit", "qore-aot", "java-int", "java-jit"), run.MODES)
+        self.assertEqual({"qore-ast": "ast", "qore-ir": "ir", "qore-jit": "jit"}, run.QORE_EXEC_MODES)
+        returncode, stdout, stderr = run.run_bounded([sys.executable, run.HERE / "run.py", "--modes", "qore-tiered"],
+                                                     timeout=60)
+        self.assertEqual(2, returncode, stdout + stderr)
+        self.assertIn("invalid choice", stderr)
+
+
+class BoundedRunTest(unittest.TestCase):
+    """run_bounded() returns the output of a command, and ends the processes a command starts when it times out"""
+
+    def test_output_and_status(self):
+        self.assertEqual((0, "out\n", "err\n"), run.run_bounded(
+            [sys.executable, "-c", "import sys; print('out'); print('err', file=sys.stderr)"], timeout=60))
+        self.assertEqual((3, "", ""), run.run_bounded([sys.executable, "-c", "raise SystemExit(3)"], timeout=60))
+
+    def test_environment_and_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = dict(os.environ, BENCH_PROBE="value")
+            returncode, stdout, _ = run.run_bounded(
+                [sys.executable, "-c", "import os; print(os.environ['BENCH_PROBE']); print(os.getcwd())"],
+                env=env, timeout=60, cwd=directory)
+            self.assertEqual(0, returncode)
+            self.assertEqual(["value", str(Path(directory).resolve())],
+                             [stdout.splitlines()[0], str(Path(stdout.splitlines()[1]).resolve())])
+
+    def test_no_stdin(self):
+        # a child that reads its input gets end of file instead of waiting for the harness's terminal
+        self.assertEqual((0, "''\n", ""), run.run_bounded(
+            [sys.executable, "-c", "import sys; print(repr(sys.stdin.read()))"], timeout=60))
+
+    def test_requires_timeout(self):
+        for timeout in (None, 0, -1):
+            with self.subTest(timeout=timeout), self.assertRaises(ValueError):
+                run.run_bounded([sys.executable, "-c", "pass"], timeout=timeout)
+
+    def test_missing_command(self):
+        with self.assertRaises(OSError):
+            run.run_bounded([str(run.HERE / "no-such-command")], timeout=60)
+
+    def test_timeout_ends_process_group(self):
+        # the command starts a grandchild that holds an exclusive lock on a file and signals that it holds it; both
+        # then block forever reading a pipe whose write end each of them also holds, so the grandchild does not end
+        # when the command ends; after the timeout, taking the lock succeeds only because the grandchild has ended
+        grandchild = ("import fcntl, os, sys; f = open(sys.argv[1], 'w'); fcntl.flock(f, fcntl.LOCK_EX); "
+                      "open(sys.argv[2], 'w').close(); os.read(int(sys.argv[3]), 1)")
+        child = ("import os, subprocess, sys; r, w = os.pipe(); "
+                 "p = subprocess.Popen([sys.executable, '-c', sys.argv[1], sys.argv[2], sys.argv[3], str(r)], "
+                 "pass_fds=(r, w)); os.read(r, 1)")
+        with tempfile.TemporaryDirectory() as directory:
+            lock, ready = Path(directory) / "lock", Path(directory) / "ready"
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run.run_bounded([sys.executable, "-c", child, grandchild, lock, ready], timeout=3)
+            self.assertTrue(ready.exists(), "the grandchild did not take the lock before the timeout")
+            # a blocking lock attempt in a bounded child: it returns at once when the grandchild has ended, and times
+            # out (failing the test) when it still holds the lock
+            take = "import fcntl, sys; fcntl.flock(open(sys.argv[1], 'w'), fcntl.LOCK_EX); print('locked')"
+            self.assertEqual((0, "locked\n", ""), run.run_bounded([sys.executable, "-c", take, lock], timeout=60))
+            with open(lock, "w") as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 if __name__ == "__main__":
