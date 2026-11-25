@@ -3708,8 +3708,9 @@ public:
     DLLLOCAL QoreValue evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
         QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
 
-    //! evalClosure() for a closure that runs in another Program than the one that compiled it: holds that Program
-    //! before anything of the variant is read (qore#7202); out of line, so that the other closures only test for it
+    //! evalClosure() for a closure whose own Program is not the one that compiled its code: runs it in the Program
+    //! that compiled it, which it holds before anything of the variant is read (qore#7202); out of line, so that the
+    //! other closures only test for it
     DLLLOCAL QORE_INTERN_NOINLINE QoreValue evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
         const QoreListNode* args, QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink,
         bool tmp_args) const;

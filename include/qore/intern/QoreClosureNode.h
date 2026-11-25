@@ -133,7 +133,8 @@ struct QoreClosureTypeContext {
 
 class QoreClosureBase : public ResolvedCallReferenceNode {
 public:
-    //! returns true if the closure runs in another Program than the one that compiled its code (qore#7202)
+    //! returns true if the closure's own Program is not the one that compiled its code (qore#7202); the closure then
+    //! runs in the Program that compiled it (see UserClosureFunction::evalForeignClosure())
     DLLLOCAL bool runsForeign() const {
         return runs_foreign;
     }
@@ -174,8 +175,8 @@ protected:
         the closure is created and never changed
     */
     bool module_init;
-    //! true if the closure runs in another Program than the one that compiled its code (qore#7202); set when the
-    //! closure is created and never changed (see qore_closure_note_execution_program())
+    //! true if the closure's own Program is not the one that compiled its code (qore#7202); set when the closure is
+    //! created and never changed (see qore_closure_note_execution_program())
     bool runs_foreign = false;
 
     //! copies the type arguments and the receiver type of the code that creates the closure

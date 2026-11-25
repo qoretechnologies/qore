@@ -385,24 +385,25 @@ authenticate();
       it made during trusted startup with
       @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()": what that builds
       keeps no sandbox of the caller, and is governed only by the manager that the host gives it
-    - <b>Code keeps the restrictions and the sandbox of the %Program that compiled it</b>: code compiled in one
-      %Program that runs in another %Program runs with the restrictions of both (and with only the explicitly-allowed
-      options that both have) and is never the code of the %Program that it runs in: the checks of the calling code
-      (such as @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()",
+    - <b>Code runs in the %Program that compiled it</b>: the methods of a class that a %Program imported from another
+      %Program, the functions that it imported from it and the @ref closure_program "closures" and call references
+      that their code creates run in the %Program that compiled them, wherever they are called from, with that
+      %Program's restrictions and sandbox: the checks of the calling code (such as
+      @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()",
       @ref Qore::SandboxManager::callerMayReadExternalInfo() "SandboxManager::callerMayReadExternalInfo()",
       @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()",
       and the terminal, see @ref sandbox_terminal_io), made by that code or by the module code that it calls, count
-      the %Program that compiled it, and so do the tests of sandboxed or restricted code that the code itself makes
-      (such as those that refuse to change a sandbox, the host's registry values and the sandbox introspection APIs;
-      module code that it calls answers for itself in them); the sandbox of that %Program governs it, and it is
-      sandboxed code if that %Program is sandboxed.  The host code that it calls answers for
-      itself, and a host grant lends what it lends, as for the code of the %Program itself.  The names that such code
-      looks up at run time (with @ref Qore::call_function() "call_function()",
-      @ref Qore::create_object() "create_object()" and the like) are resolved in the %Program that it runs in, and
-      the code found there is that %Program's code, which answers for itself like any host code that it calls: a host
-      should not run code of another %Program in a %Program that defines code that the other %Program must not use.
-      The deletion of the %Program that compiled it waits for such code that runs, as for its own code, and such
-      code is refused with \c PROGRAM-ERROR once that deletion has started (qore#7202)
+      that %Program, and so do the tests of sandboxed or restricted code that the code itself makes (such as those that
+      refuse to change a sandbox, the host's registry values and the sandbox introspection APIs; module code that it
+      calls answers for itself in them).  The names that the code looks up at run time (with
+      @ref Qore::call_function() "call_function()", @ref Qore::create_object() "create_object()",
+      @ref Qore::get_call_reference() "get_call_reference()" and the like) are resolved in that %Program as well: such
+      code finds by name what its own %Program has, never the code of the %Program that it is called from.  The host code that
+      it calls answers for itself, and a host grant lends what it lends.  Code compiled in one %Program is never the
+      code of another %Program: should it run in another %Program, it runs with the restrictions of both (and with
+      only the explicitly-allowed options that both have), its %Program counts in the checks above, and the sandbox
+      of that %Program governs it.  The deletion of the %Program that compiled the code waits for such code that
+      runs, and the code is refused with \c PROGRAM-ERROR once that deletion has started (qore#7202)
     - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
       @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
       host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
@@ -998,9 +999,9 @@ authenticate();
     It follows that when the host calls a method of a module object that restricted code created (such as a logger
     with a terminal appender and a layout of its own), the module code writes to the terminal what the object holds:
     the host decides whether to make the call, and should not call such objects when the terminal must stay closed to
-    that code.  Code compiled in another %Program than the one it runs in (see @ref sandbox_program_capability) is
-    never trusted host code: the restrictions of the %Program that compiled it decide for the terminal, also when it
-    runs in a %Program of the host.
+    that code.  The code of another %Program that the host calls runs in the %Program that compiled it and is never
+    trusted host code (see @ref sandbox_program_capability): the restrictions of that %Program decide for the
+    terminal, also when the code is called from a %Program of the host.
 
     @subsection sandbox_exception_reports Exception Reports of Sandboxed Code
 

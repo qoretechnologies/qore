@@ -20,8 +20,10 @@
     and by the module code that it calls, count the restrictions of the Program that compiled it, its run-time options
     have them, and the sandbox of that Program governs it; the host code that it calls answers for itself, a host grant
     lends what it lends, the code of a Program without restrictions is not affected, and the code is refused once its
-    Program is deleted.  The checks are in foreign-program-code/foreign-program-code-worker.q, whose output must be one
-    "ok" line per case, in each execution mode and as a program compiled with qcc.
+    Program is deleted.  Closures and call references run in the Program that compiled them, wherever they are called
+    from, so the names that their code looks up at run time resolve there.  The checks are in the workers in
+    foreign-program-code/, whose output must be one "ok" line per case, in each execution mode and as a program
+    compiled with qcc.
 */
 class ForeignProgramCodeTest inherits QUnit::Test {
     public {
@@ -46,6 +48,12 @@ class ForeignProgramCodeTest inherits QUnit::Test {
                 "restricted-module-barrier-own", "restricted-module-barrier-foreign", "sandboxed-module-cmd-own", "sandboxed-module-cmd-foreign",
                 "sandboxed-defer-own", "sandboxed-defer-foreign", "callback-background", "callback-thread-pool",
                 "callback-timer", "callback-destructor", "callback-thread-pool-sandboxed"),
+            "foreign-program-code-byname-worker.q": ("byname-method", "byname-closure", "byname-closure-in-host",
+                "byname-closure-arg", "byname-closure-named", "byname-nested", "byname-nested-returned",
+                "byname-static-closure", "byname-method-ref", "byname-method-ref-host", "byname-background",
+                "byname-background-callback", "byname-thread-pool", "byname-timer", "byname-hot", "byname-hot-arg",
+                "byname-calls-host", "byname-own-host", "byname-own-tenant", "byname-subclass-host",
+                "byname-subclass-tenant", "byname-deleted"),
         };
     }
 

@@ -174,8 +174,19 @@ temporary views. Cleanup retains provenance, including when releasing a bound cl
 
 ## Code compiled in another Program than the one it runs in (qore#7202)
 
-Rule: code compiled in one Program that runs in another Program runs with the restrictions of both and is never the
-code of the Program that it runs in; the sandbox of the Program that compiled it governs it.
+Rule: code runs in the Program that compiled it. Methods of imported classes and imported functions enter their
+Program (`qore_get_method_pgm_context()`, `qore_get_function_pgm_context()`), and so do closures: a closure whose
+Program (the Program of its object, `QoreObjectClosureNode::getProgram()`, or the current Program where it was
+created) is not the one that compiled its code, as for a closure created in a method of an imported class, is marked
+when it is created (`qore_closure_note_execution_program()`, `QoreClosureBase::runs_foreign`), and its call path
+(`UserClosureFunction::evalForeignClosure()`, out of line, and `evalClosureNamed()`) holds the compiling Program and
+passes it to the call helper, which enters it as a method call does. The names that the code looks up at run time
+(`call_function()`, `create_object()`, `get_call_reference()`, the global variables, namespace paths) therefore
+resolve in that Program, and its options and sandbox are that Program's. Ordinary closures only test the flag.
+
+As defence in depth, code compiled in one Program that nevertheless runs in another Program runs with the
+restrictions of both and is never the code of the Program that it runs in; the sandbox of the Program that compiled it
+governs it.
 
 Every path that calls a user variant sets its runtime parse options override
 (`qore_set_user_call_runtime_po_override()`); for code that is not a module's, the case `exec_pgm != uvb->pgm` takes
@@ -192,7 +203,8 @@ it, as the code refers to what is deleted with it (functions, classes, constants
 `UserVariantExecHelper` (`ProgramThreadCountContextHelper::holdForeignCodeProgram()`, released with the context's
 other exit work, `exit_work`, which costs a context that has none nothing more) and, with `QoreForeignCodeProgramHold`,
 on the other paths that run such code: the call path of closures (`UserClosureFunction::evalClosure()` and
-`evalClosureNamed()`, before the call helper reads the variant's parameter types) and the installation of the options captured for a thread or callback
+`evalClosureNamed()`, before the call helper reads the variant's parameter types; the call then enters the Program as
+well) and the installation of the options captured for a thread or callback
 (`QoreThreadRuntimeParseOptionsHelper`), so the expression of a thread that such code starts holds the Program for the
 thread's life, and does not run if the Program cannot be held. A closure that runs in another Program than the one
 that compiled it marks its variant when it is created (`qore_closure_note_execution_program()`,
@@ -242,10 +254,9 @@ inlines, selects them from a table (`qore_override_replace_options`), so that it
 vectorized (a branch or a mask computed from the flag made GCC use scalar code there, with more registers saved in
 `swap_runtime_statement_location()`).
 
-Names that such code looks up at run time (`call_function()`, `create_object()`) are resolved in the Program that it
-runs in, and what is found there is that Program's code, which answers for itself as any host code that the foreign
-code calls; this is documented in `sandbox_program_capability` rather than changed (a rule that resolves them in the
-compiling Program is a possible follow-up).
+Names that code looks up at run time are resolved in the Program that it runs in, which is the Program that compiled
+it (see the rule above); a closure that its Program runs in its own Program (the usual case) is not marked and does
+not take the out-of-line path.
 
 ## Objects that the host lends are grants (qore#7052)
 

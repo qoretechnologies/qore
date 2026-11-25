@@ -11078,16 +11078,31 @@ int QoreFunction::parseInitIntern(qore_ns_private* ns) {
     return err;
 }
 
-//! holds the Program that compiled a closure's code if the closure runs in another Program (qore#7202)
-/** @return true if the Program cannot be held (PROGRAM-ERROR is raised)
+//! selects the Program that compiled a closure's code to run the closure in (qore#7202)
+/** A closure runs in the Program that compiled its code, as a method does, wherever it is called from.  A closure whose
+    own Program is another one (the Program of its object, for a closure created in a method of a class that the
+    object's Program imported from another Program) is called with the Program that compiled it, which the call enters
+    (CodeEvaluationHelper), so that the names that its code looks up at run time resolve there; that Program is held
+    first, before anything of the variant (its parameter types) is read, as the code refers to what is deleted with it.
+
+    @param hold holds the Program that compiled the closure's code if it is not \a exec_pgm
+    @param variant the closure's variant
+    @param exec_pgm the closure's own Program; set to the Program that compiled its code if that is another one
+    @param xsink for PROGRAM-ERROR if the Program that compiled the code cannot be held
+
+    @return true if the Program that compiled the code cannot be held (PROGRAM-ERROR is raised)
 */
-static bool holdForeignClosureProgram(QoreForeignCodeProgramHold& hold, const AbstractQoreFunctionVariant* variant,
-        QoreProgram* exec_pgm, ExceptionSink* xsink) {
+static bool enterForeignClosureProgram(QoreForeignCodeProgramHold& hold, const AbstractQoreFunctionVariant* variant,
+        QoreProgram*& exec_pgm, ExceptionSink* xsink) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || !uvb->pgm || !exec_pgm || exec_pgm == uvb->pgm) {
         return false;
     }
-    return hold.hold(uvb->pgm, xsink) != 0;
+    if (hold.hold(uvb->pgm, xsink)) {
+        return true;
+    }
+    exec_pgm = uvb->pgm;
+    return false;
 }
 
 QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
@@ -11102,10 +11117,10 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
 QoreValue UserClosureFunction::evalForeignClosure(const QoreClosureBase& closure_base, QoreProgram* pgm,
         const QoreListNode* args, QoreObject *self, const qore_class_private* class_ctx, ExceptionSink* xsink,
         bool tmp_args) const {
-    // the Program that compiled the closure's code is held before anything of the variant (its parameter types) is
-    // read: the code refers to what is deleted with it (qore#7202)
+    // the closure runs in the Program that compiled its code, which is held before anything of the variant (its
+    // parameter types) is read: the code refers to what is deleted with it (qore#7202)
     QoreForeignCodeProgramHold foreign_hold;
-    if (holdForeignClosureProgram(foreign_hold, first(), pgm, xsink)) {
+    if (enterForeignClosureProgram(foreign_hold, first(), pgm, xsink)) {
         return QoreValue();
     }
     return evalClosureBody(closure_base, pgm, args, self, class_ctx, xsink, tmp_args);
@@ -11160,10 +11175,10 @@ QoreValue UserClosureFunction::evalClosureNamed(const QoreClosureBase& closure_b
     // Program that is being deleted is refused before the signature is read) and with the type arguments of the code
     // that created the closure, as for a call with positional arguments (see evalClosure())
     const AbstractQoreFunctionVariant* variant = nullptr;
-    // a closure that runs in another Program than the one that compiled it holds that Program first (see
-    // evalForeignClosure())
+    // a closure that runs in another Program than the one that compiled it runs in that Program, which it holds
+    // first (see evalForeignClosure())
     QoreForeignCodeProgramHold foreign_hold;
-    if (closure_base.runsForeign() && holdForeignClosureProgram(foreign_hold, first(), pgm, xsink)) {
+    if (closure_base.runsForeign() && enterForeignClosureProgram(foreign_hold, first(), pgm, xsink)) {
         return QoreValue();
     }
     QoreClosureTypeContextHelper type_context(&closure_base);

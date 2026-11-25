@@ -83,14 +83,15 @@ DLLLOCAL QoreParseOptions qore_creation_origin_for(const QoreProgram* code_pgm, 
     qore#6844); does nothing if they are empty
 */
 DLLLOCAL void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm);
-//! Records that a closure runs in another Program than the one that compiled its code, if it does (qore#7202)
+//! Records that the own Program of a closure is not the one that compiled its code, if it is not (qore#7202)
 /** The variant of the closure is then called through the call path, which holds the Program that compiled it before
-    anything of the variant is read (UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN)
+    anything of the variant is read and runs the closure in it (UserVariantBase::FAST_CALL_BLOCK_RUNS_FOREIGN,
+    UserClosureFunction::evalForeignClosure())
 
     @param closure the closure, which is created
-    @param exec_pgm the Program that the closure runs in
+    @param exec_pgm the closure's own Program: the Program of its object, or the Program current where it is created
 
-    @return true if the closure runs in another Program than the one that compiled its code
+    @return true if the closure's own Program is not the one that compiled its code
 */
 DLLLOCAL bool qore_closure_note_execution_program(const ResolvedCallReferenceNode* closure,
     const QoreProgram* exec_pgm);

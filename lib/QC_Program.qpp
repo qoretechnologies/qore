@@ -2614,6 +2614,11 @@ pgm.importClass("MyNamespace::MyClass");
     @throw CLASS-IMPORT-ERROR \a reexport is @ref True "True" and the caller is governed by a sandbox or has parse options that restrict a functional domain; such code cannot re-export classes to the modules that a Program loads (see @ref sandbox_module_init)
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
+    @note The methods of the imported class run in the Program that it is imported from, with that Program's options
+    and names, also for objects created in the Program that imports it, and so do the @ref closure_program "closures"
+    that they create, wherever they are called (since %Qore 3.0; such closures ran in the Program of their object
+    before)
+
     @param reexport if @ref True "True", the imported class is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported class so the child's parse can resolve unqualified references to it.  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic and avoids diamond conflicts with namespace-merged public classes that the host never opted to expose.
 
     @since

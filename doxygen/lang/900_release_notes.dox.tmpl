@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Closures Run in the Program That Compiled Them
+    A closure created in a method of a class imported from another @ref Qore::Program "Program" runs in the %Program
+    that compiled it, as the method does, so the names that its code looks up at run time resolve there (see
+    @ref closure_program; <a href="https://github.com/qoretechnologies/qore/issues/7202">issue 7202</a>).
+
     @par Library Code Gives Restricted Code No Values of the Host's Environment
     For code restricted from external information, @ref Util::substitute_env_vars() "substitute_env_vars()", the file
     URLs of @ref Util::get_file_from_url() "get_file_from_url()", Swagger schema references and the \c %%E{} field of
