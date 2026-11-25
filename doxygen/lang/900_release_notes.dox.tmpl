@@ -1427,6 +1427,10 @@
     the same for the %Program of a call reference or a closure
     (<a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>).
 
+    @par Configurable Exception Report Limit
+    @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" controls how many chained exceptions appear in an
+    unhandled text report, including the errors from a syntax check (issue #2311).
+
     @par The Program ID of a Caller Frame
     @ref Qore::get_caller_program_id() "get_caller_program_id()" and its C++ API \c qore_get_caller_program_id() give
     the ID of the Program of a frame of the call stack without building a @ref Qore::CallStackInfo "CallStackInfo"
