@@ -51,7 +51,7 @@ class DiscordMessageSendTest inherits QUnit::Test {
             many += ({"name": "n", "value": "v"},);
         }
         assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"embeds": ({"fields": many},)});
-        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"embeds": many});
+        assertThrows("DISCORD-MESSAGE-ERROR", "Expected a list of at most 10 embeds", \DiscordMessageSend::prepare(), {"embeds": many});
     }
 
     private destinations() {
@@ -59,6 +59,7 @@ class DiscordMessageSendTest inherits QUnit::Test {
         assertEq(stickers, DiscordMessageSend::prepare(stickers));
         assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), (stickers, True));
         assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"content": strmul("a", 2001)});
-        assertThrows("DISCORD-MESSAGE-ERROR", \DiscordMessageSend::prepare(), {"allowed_mentions": {"parse": ()}});
+        assertThrows("DISCORD-MESSAGE-ERROR", "The message needs text, an embed or another element Discord can send",
+            \DiscordMessageSend::prepare(), {"allowed_mentions": {"parse": ()}});
     }
 }

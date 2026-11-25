@@ -29,7 +29,7 @@ public class DiscordMessageSend {
     public {
         #! Mention policy. An empty parse list disables category-wide mentions.
         const AllowedMentions = new HashDataType(AutoHashOrNothingType, "DiscordAllowedMentions").addQoreFields({
-            "parse": {"type": new ListDataType(StringType, True), "desc": "Mention categories to parse (everyone, users, roles). An empty list permits none."},
+            "parse": {"type": new ListDataType(StringType, True), "desc": "Kinds of mention that notify people: everyone, users, roles. An empty list notifies no one."},
             "users": {"type": new ListDataType(StringType, True), "desc": "User IDs explicitly allowed to receive mentions."},
             "roles": {"type": new ListDataType(StringType, True), "desc": "Role IDs explicitly allowed to receive mentions."},
             "replied_user": {"type": BoolOrNothingType, "desc": "Whether to mention the author of the message being replied to."},
@@ -92,7 +92,7 @@ public class DiscordMessageSend {
         }
         if (exists message.embeds) {
             if (message.embeds.typeCode() != NT_LIST || message.embeds.size() > 10) {
-                throw "DISCORD-MESSAGE-ERROR", "Expected a list of at most ten embeds";
+                throw "DISCORD-MESSAGE-ERROR", "Expected a list of at most 10 embeds";
             }
             int total = 0;
             foreach auto embed in (message.embeds) {
@@ -107,14 +107,14 @@ public class DiscordMessageSend {
         }
         # Discord's IS_COMPONENTS_V2 flag reserves the message body for components.
         if ((message.flags & (1 << 15)) && (message.content || message.embeds || message.poll || message.sticker_ids)) {
-            throw "DISCORD-MESSAGE-ERROR", "Components v2 cannot be combined with text, embeds, polls or stickers";
+            throw "DISCORD-MESSAGE-ERROR", "Discord components cannot be combined with text, embeds, polls or stickers";
         }
         if (webhook && message.sticker_ids) {
             throw "DISCORD-MESSAGE-ERROR", "Webhooks cannot send stickers";
         }
         if (!message.content.size() && !message.embeds && !message.sticker_ids && !message.components
                 && !message.attachments && !message.poll && (webhook || message.message_reference.type != 1)) {
-            throw "DISCORD-MESSAGE-ERROR", "The message requires content or another sendable message element";
+            throw "DISCORD-MESSAGE-ERROR", "The message needs text, an embed or another element Discord can send";
         }
         if (remove message.suppress_notifications) {
             message.flags |= DMT_SUPPRESS_NOTIFICATIONS;
@@ -152,7 +152,7 @@ public class DiscordMessageSend {
             }
         }
         if (exists policy.replied_user && policy.replied_user.typeCode() != NT_BOOLEAN) {
-            throw "DISCORD-MESSAGE-ERROR", "Expected a boolean reply mention flag";
+            throw "DISCORD-MESSAGE-ERROR", "Replied User must be true or false";
         }
     }
 
