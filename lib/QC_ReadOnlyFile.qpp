@@ -1240,12 +1240,15 @@ bool ReadOnlyFile::isForegroundTty() [flags=CONSTANT] {
 *string fn = f.getFileName();
     @endcode
 
-    @return the file path/name used to open the file if the file is open, otherwise @ref nothing
+    @return the file path/name used to open the file if the file is open, otherwise @ref nothing; code restricted
+    from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets the name of a file opened
+    with @ref Qore::Dir::openFile() "Dir::openFile()" in a directory that derives from the current directory of the
+    process relative to that directory (see @ref sandbox_fs_dir_cwd)
 
     @since %Qore 0.8.6
  */
 *string ReadOnlyFile::getFileName() [flags=CONSTANT] {
-   return f->getFileName();
+   return qore_qf_private::get(*f)->getFileNameForCaller();
 }
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read a file from the filesystem

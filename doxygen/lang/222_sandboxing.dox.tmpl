@@ -1253,6 +1253,27 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     is outside the sandbox root.  The same holds for the \c SANDBOX-CONFIG-ERROR of an allowed path outside the root,
     which gives such code the path that it passed instead of its canonical form.
 
+    @subsection sandbox_fs_dir_cwd The Current Directory of Dir Objects
+
+    A @ref Qore::Dir "Dir" object starts in the current directory of the process, which code restricted from external
+    information may not read (@ref Qore::getcwd() "getcwd()").  While the path of the object derives from that
+    directory, such code gets it relative to it: \c "." for the directory itself, a path starting with \c "./" below
+    it (ex: \c "./sub") and one starting with \c ".." otherwise (ex: \c "../x"):
+    - @ref Qore::Dir::path() "Dir::path()", also of an object made with @ref Qore::Dir::copy() "Dir::copy()" or
+      @ref Qore::Dir::openDir() "Dir::openDir()"
+    - @ref Qore::ReadOnlyFile::getFileName() "ReadOnlyFile::getFileName()" of a file opened with
+      @ref Qore::Dir::openFile() "Dir::openFile()"
+    - the paths in the errors of the operations of the object, including the denials of the filesystem policy
+
+    An absolute path that the code gives to @ref Qore::Dir::chdir() "Dir::chdir()" replaces the current directory,
+    and the paths that derive from it are given as they are.  The form depends on the code that gets the path, not on
+    the code that made the object: the host gets the paths of the host from an object that restricted code made, and
+    restricted code gets relative paths from an object that the host lends it.  Code that is not restricted from
+    external information, including sandboxed code, which may call @ref Qore::getcwd() "getcwd()", gets the paths of
+    the host.
+
+    @since %Qore 3.0
+
     @subsection path_nul_characters Paths With NUL Characters
 
     An operating system path is a NUL-terminated string, so a string with a NUL character cannot

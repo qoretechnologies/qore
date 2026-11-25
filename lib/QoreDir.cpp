@@ -114,6 +114,15 @@ static int check_dir_policy(const qore_qd_private& priv, int access_mode, Except
     return smh->checkFilesystemAccess(dir->c_str(), access_mode, xsink) ? 0 : -1;
 }
 
+// the messages of an operation on the directory of a Dir object, or on a relative path in it, name the paths that
+// derive from the process's current directory that the object started in relative to it for code that is not given
+// host directories that it did not give itself (QoreHostDirBaseMessageScopeHelper, qore#7662); this returns the base
+// directory of such a scope for an operation on a path given in the directory: none for an absolute path that the code
+// gave
+static std::string dir_msg_base(const qore_qd_private& priv, const char* path) {
+    return q_absolute_path(path) ? std::string() : priv.getCwdBase();
+}
+
 QoreDir::QoreDir(ExceptionSink* xsink, const QoreEncoding* cs, const char* dir) : priv(new qore_qd_private(xsink, cs, dir)) {}
 
 QoreDir::QoreDir(ExceptionSink* xsink, const QoreDir &old) : priv(new qore_qd_private(xsink, *old.priv)) {
@@ -128,9 +137,22 @@ QoreStringNode *QoreDir::dirname() const {
     return priv->get_dir_string();
 }
 
+QoreStringNode* QoreDir::dirnameForCaller() const {
+    return priv->get_dir_string_for_caller();
+}
+
+std::string QoreDir::getCwdBase() const {
+    return priv->getCwdBase();
+}
+
+void QoreDir::setCwdBase(const std::string& base) {
+    priv->setCwdBase(base);
+}
+
 // change directory from current location on
 // return 0 if directory exists and is openable
 int QoreDir::chdir(const char* ndir, ExceptionSink* xsink) {
+    QoreHostDirBaseMessageScopeHelper msg_scope(dir_msg_base(*priv, ndir));
     // Check sandbox security restrictions
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
@@ -187,7 +209,8 @@ static int create_pinned(QoreSandboxManager& sm, const qore_qd_private& priv, in
                 local_xsink.clear();
                 errno = EACCES;
             } else if (xsink && !*xsink) {
-                xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'", path.c_str());
+                xsink->raiseErrnoException("DIR-CREATE-FAILURE", errno, "cannot mkdir '%s'",
+                    qore_msg_path(path.c_str()).c_str());
             }
             return -1;
         }
@@ -198,6 +221,7 @@ static int create_pinned(QoreSandboxManager& sm, const qore_qd_private& priv, in
 #endif
 
 int QoreDir::create(int mode, ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (checkCreatePolicy(xsink)) {
         return -1;
     }
@@ -211,6 +235,7 @@ int QoreDir::create(int mode, ExceptionSink* xsink) const {
 }
 
 int QoreDir::checkCreatePolicy(ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return 0;
@@ -248,6 +273,7 @@ int QoreDir::create(int mode) const {
 // the filter will be applied to the file's mode for filtering.
 // directories '.' and '..' will be skipped
 QoreListNode* QoreDir::list(ExceptionSink* xsink, int stat_filter, const QoreString* regex, int regex_options, bool full) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
@@ -256,6 +282,7 @@ QoreListNode* QoreDir::list(ExceptionSink* xsink, int stat_filter, const QoreStr
 
 QoreListNode* QoreDir::listReadable(ExceptionSink* xsink, int stat_filter, const QoreString* regex, int regex_options,
         bool full) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
@@ -263,6 +290,7 @@ QoreListNode* QoreDir::listReadable(ExceptionSink* xsink, int stat_filter, const
 }
 
 int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(dir_msg_base(*priv, subdir));
     // Check sandbox security restrictions
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
@@ -284,7 +312,8 @@ int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
             rc = mkdirat(pin.dirfd, pin.leaf.c_str(), mode);
         }
         if (rc && !*xsink) {
-            xsink->raiseErrnoException("DIR-MKDIR-FAILURE", errno, "error creating directory '%s'", path.c_str());
+            xsink->raiseErrnoException("DIR-MKDIR-FAILURE", errno, "error creating directory '%s'",
+                qore_msg_path(path.c_str()).c_str());
         }
         return rc ? -1 : 0;
 #endif
@@ -293,6 +322,7 @@ int QoreDir::mkdir(ExceptionSink* xsink, const char* subdir, int mode) const {
 }
 
 int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(dir_msg_base(*priv, subdir));
     // Check sandbox security restrictions
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (smh) {
@@ -314,7 +344,8 @@ int QoreDir::rmdir(const char* subdir, ExceptionSink* xsink) const {
             rc = unlinkat(pin.dirfd, pin.leaf.c_str(), AT_REMOVEDIR);
         }
         if (rc && !*xsink) {
-            xsink->raiseErrnoException("DIR-RMDIR-FAILURE", errno, "error removing directory '%s'", path.c_str());
+            xsink->raiseErrnoException("DIR-RMDIR-FAILURE", errno, "error removing directory '%s'",
+                qore_msg_path(path.c_str()).c_str());
         }
         return rc ? -1 : 0;
 #endif
@@ -331,6 +362,7 @@ int QoreDir::checkPath() const {
 }
 
 int QoreDir::checkPath(ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return -1;
     }
@@ -338,6 +370,7 @@ int QoreDir::checkPath(ExceptionSink* xsink) const {
 }
 
 int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_WRITE, xsink)) {
         return -1;
     }
@@ -353,7 +386,8 @@ int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
                 rc = q_fchmodat_nofollow(pin.dirfd, pin.leaf.c_str(), mode);
             }
             if (rc && !*xsink) {
-                xsink->raiseErrnoException("DIR-CHMOD-FAILURE", errno, "error in Dir::chmod() on '%s'", path.c_str());
+                xsink->raiseErrnoException("DIR-CHMOD-FAILURE", errno, "error in Dir::chmod() on '%s'",
+                    qore_msg_path(path.c_str()).c_str());
             }
             return rc ? -1 : 0;
         }
@@ -364,6 +398,7 @@ int QoreDir::chmod(int mode, ExceptionSink* xsink) const {
 
 #ifdef HAVE_PWD_H
 int QoreDir::chown(uid_t uid, gid_t gid, ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_WRITE, xsink)) {
         return -1;
     }
@@ -380,7 +415,8 @@ int QoreDir::chown(uid_t uid, gid_t gid, ExceptionSink* xsink) const {
                 rc = fchownat(pin.dirfd, pin.leaf.c_str(), uid, gid, AT_SYMLINK_NOFOLLOW);
             }
             if (rc && !*xsink) {
-                xsink->raiseErrnoException("DIR-CHOWN-FAILURE", errno, "error in Dir::chown() on '%s'", path.c_str());
+                xsink->raiseErrnoException("DIR-CHOWN-FAILURE", errno, "error in Dir::chown() on '%s'",
+                    qore_msg_path(path.c_str()).c_str());
             }
             return rc ? -1 : 0;
         }
@@ -399,7 +435,7 @@ static int dir_pinned_stat(QoreSandboxManager& sm, const std::string& path, stru
         ExceptionSink* xsink) {
     if (q_sandbox_pinned_stat(sm, path.c_str(), true, sbuf, xsink)) {
         if (!*xsink) {
-            xsink->raiseErrnoException(err, errno, "stat() call failed on '%s'", path.c_str());
+            xsink->raiseErrnoException(err, errno, "stat() call failed on '%s'", qore_msg_path(path.c_str()).c_str());
         }
         return -1;
     }
@@ -408,6 +444,7 @@ static int dir_pinned_stat(QoreSandboxManager& sm, const std::string& path, stru
 #endif
 
 QoreListNode *QoreDir::stat(ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
@@ -425,6 +462,7 @@ QoreListNode *QoreDir::stat(ExceptionSink* xsink) const {
 }
 
 QoreHashNode *QoreDir::hstat(ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
@@ -443,6 +481,7 @@ QoreHashNode *QoreDir::hstat(ExceptionSink* xsink) const {
 
 #ifdef Q_HAVE_STATVFS
 QoreHashNode *QoreDir::statvfs(ExceptionSink* xsink) const {
+    QoreHostDirBaseMessageScopeHelper msg_scope(priv->getCwdBase());
     if (check_dir_policy(*priv, QSEC_READ, xsink)) {
         return nullptr;
     }
@@ -455,7 +494,7 @@ QoreHashNode *QoreDir::statvfs(ExceptionSink* xsink) const {
             if (q_sandbox_pinned_statvfs(*smh.get(), path.c_str(), vfs, xsink)) {
                 if (!*xsink) {
                     xsink->raiseErrnoException("DIR-STATVFS-FAILURE", errno, "statvfs() call failed on '%s'",
-                        path.c_str());
+                        qore_msg_path(path.c_str()).c_str());
                 }
                 return nullptr;
             }

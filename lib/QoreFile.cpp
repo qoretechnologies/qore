@@ -1275,7 +1275,8 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
 
     if (rc) {
         if (!*xsink) {
-            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", fn);
+            // the message names the file in the form for the code that it is built for (qore#7507, qore#7662)
+            xsink->raiseErrnoException("FILE-OPEN2-ERROR", errno, "cannot open '%s'", qore_msg_path(fn).c_str());
         }
         return -1;
     }

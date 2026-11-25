@@ -10443,12 +10443,97 @@ bool qore_msg_restricted() {
     return qore_msg_restricted_scope;
 }
 
+// the host directory that paths in messages are given relative to, while a scope of
+// QoreHostDirBaseMessageScopeHelper is active (qore#7662)
+static thread_local const std::string* qore_msg_host_dir_base = nullptr;
+
+// splits an absolute path into its components, with "." and ".." folded; ".." at the root stays at the root
+static void qore_split_abs_path(const char* path, std::vector<std::string>& comps) {
+    const char* p = path;
+    while (*p) {
+#ifdef _Q_WINDOWS
+        while (*p == '/' || *p == '\\') {
+#else
+        while (*p == '/') {
+#endif
+            ++p;
+        }
+        if (!*p) {
+            break;
+        }
+        const char* start = p;
+#ifdef _Q_WINDOWS
+        while (*p && *p != '/' && *p != '\\') {
+#else
+        while (*p && *p != '/') {
+#endif
+            ++p;
+        }
+        std::string comp(start, p - start);
+        if (comp == ".") {
+            continue;
+        }
+        if (comp == "..") {
+            if (!comps.empty()) {
+                comps.pop_back();
+            }
+            continue;
+        }
+        comps.push_back(std::move(comp));
+    }
+}
+
+std::string qore_path_relative_to_base(const char* path, const std::string& base) {
+    if (!q_absolute_path(path)) {
+        return std::string(path);
+    }
+    std::vector<std::string> pcomps, bcomps;
+    qore_split_abs_path(path, pcomps);
+    qore_split_abs_path(base.c_str(), bcomps);
+    size_t common = 0;
+    while (common < pcomps.size() && common < bcomps.size() && pcomps[common] == bcomps[common]) {
+        ++common;
+    }
+    std::string rv;
+    for (size_t i = common; i < bcomps.size(); ++i) {
+        if (!rv.empty()) {
+            rv += QORE_DIR_SEP;
+        }
+        rv += "..";
+    }
+    if (rv.empty()) {
+        rv = ".";
+    }
+    for (size_t i = common; i < pcomps.size(); ++i) {
+        rv += QORE_DIR_SEP;
+        rv += pcomps[i];
+    }
+    return rv;
+}
+
+bool qore_caller_no_host_dirs() {
+    return qore_msg_restricted_scope || qore_caller_no_external_info();
+}
+
+QoreHostDirBaseMessageScopeHelper::QoreHostDirBaseMessageScopeHelper(std::string b) : base(std::move(b)),
+        old(qore_msg_host_dir_base) {
+    if (!base.empty() && qore_caller_no_host_dirs()) {
+        qore_msg_host_dir_base = &base;
+    }
+}
+
+QoreHostDirBaseMessageScopeHelper::~QoreHostDirBaseMessageScopeHelper() {
+    qore_msg_host_dir_base = old;
+}
+
 std::string qore_caller_msg_path(const char* path, const QoreProgram* pgm) {
     if (!path) {
         return std::string();
     }
-    return qore_msg_restricted_scope || qore_caller_no_external_info(pgm) ? qore_path_file_name(path)
-        : std::string(path);
+    if (qore_msg_restricted_scope || qore_caller_no_external_info(pgm)) {
+        return qore_path_file_name(path);
+    }
+    return qore_msg_host_dir_base ? qore_path_relative_to_base(path, *qore_msg_host_dir_base) : std::string(path);
 }
 
 bool qore_caller_no_external_info(const QoreProgram* pgm) {
@@ -10466,7 +10551,10 @@ std::string qore_msg_path(const char* path) {
     if (!path) {
         return std::string();
     }
-    return qore_msg_restricted_scope ? qore_path_file_name(path) : std::string(path);
+    if (qore_msg_restricted_scope) {
+        return qore_path_file_name(path);
+    }
+    return qore_msg_host_dir_base ? qore_path_relative_to_base(path, *qore_msg_host_dir_base) : std::string(path);
 }
 
 QoreStringNode* qore_msg_path_node(const char* path) {

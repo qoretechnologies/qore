@@ -34,6 +34,7 @@
 #include "qore/intern/QC_File.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_qd_private.h"
+#include "qore/intern/qore_qf_private.h"
 #include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
@@ -104,7 +105,8 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
 
     DIR *dptr = opendir(dirname.c_str());
     if (!dptr) {
-        xsink->raiseErrnoException("DIR-READ-FAILURE", errno, "error opening directory '%s' for reading", dirname.c_str());
+        xsink->raiseErrnoException("DIR-READ-FAILURE", errno, "error opening directory '%s' for reading",
+            qore_msg_path(dirname.c_str()).c_str());
         return nullptr;
     }
     ON_BLOCK_EXIT(closedir, dptr);
@@ -125,7 +127,7 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
             if (fstat(dirfd(dptr), &dbuf) || q_get_open_file_path(dirfd(dptr), dbuf, dirname.c_str(), canon)) {
                 xsink->raiseException("FILESYSTEM-ACCESS-DENIED", "Access to '%s' denied: the directory opened "
                     "cannot be identified by a path, so the security policy cannot be applied to it",
-                    dirname.c_str());
+                    qore_msg_path(dirname.c_str()).c_str());
                 return nullptr;
             }
             check_dir = std::move(canon);
@@ -203,7 +205,8 @@ QoreListNode* qore_qd_private::list(ExceptionSink *xsink, int stat_filter, const
                     char lbuf[QORE_PATH_MAX + 1];
                     qore_offset_t len = dir_entry_readlink(dptr, de->d_name, fname, lbuf, QORE_PATH_MAX);
                     if (len < 0) {
-                        xsink->raiseErrnoException("DIR-READ-FAILURE", errno, "readlink('%s') failed", fname.getBuffer());
+                        xsink->raiseErrnoException("DIR-READ-FAILURE", errno, "readlink('%s') failed",
+                            qore_msg_path(fname.getBuffer()).c_str());
                         return 0;
                     }
                     assert(len <= QORE_PATH_MAX);
@@ -252,7 +255,8 @@ QoreHashNode* qore_qd_private::hstat(ExceptionSink *xsink) const {
 
     struct stat sbuf;
     if (::stat(dirname.c_str(), &sbuf)) {
-        xsink->raiseErrnoException("DIR-HSTAT-FAILURE", errno, "stat() call failed on '%s'", dirname.c_str());
+        xsink->raiseErrnoException("DIR-HSTAT-FAILURE", errno, "stat() call failed on '%s'",
+            qore_msg_path(dirname.c_str()).c_str());
         return nullptr;
     }
 
@@ -280,6 +284,9 @@ qclass Dir [arg=Dir* d; dom=FILESYSTEM];
 
 //! Creates the Directory object
 /** The object will point to the currect directory of the process
+
+    Code restricted from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets the paths
+    that derive from this directory relative to it; see @ref sandbox_fs_dir_cwd
 
     @param encoding the name of the default character encoding for filenames retrieved; if this argument is not given, filename strings retrieved will be tagged with the @ref default_encoding "default character encoding" of the process
 
@@ -340,6 +347,12 @@ bool Dir::chdir(string path) [flags=NAMED_ARGS] {
 //! Returns the path of the Dir object or @ref nothing if no path is set
 /** This path does not necessarily need to exist; the path is adjusted to remove \c "." and \c ".." from the path if present
 
+    While the path derives from the current directory of the process, which the object starts in, code restricted
+    from external information (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") gets it relative to that
+    directory: \c "." for the directory itself, a path starting with \c "./" below it and one starting with \c ".."
+    otherwise; an absolute path that the code gave to chdir() and the paths that derive from it are given as they
+    are; see @ref sandbox_fs_dir_cwd
+
     @return the path of the Dir object or @ref nothing if no path is set
 
     @par Example:
@@ -348,7 +361,7 @@ bool Dir::chdir(string path) [flags=NAMED_ARGS] {
     @endcode
  */
 *string Dir::path() {
-    return d->dirname();
+    return d->dirnameForCaller();
 }
 
 //! Returns @ref True if the path in the Dir object points to a directory that already exists and is openable by the current user, @ref False otherwise
@@ -1353,11 +1366,19 @@ File Dir::openFile(string filename, int flags = O_RDONLY, int mode = 0666, *stri
    // open the file with exception
    ReferenceHolder<File> f(new File(qe), xsink);
    std::string path = d->getPath(filename->getBuffer());
+   std::string cwd_base = d->getCwdBase();
 
-   if (f->open2(xsink, path.c_str(), flags, mode, qe)) {
-      assert(*xsink);
-      return QoreValue();
+   {
+      // the messages name a path that derives from the process's current directory relative to it for code that is
+      // not given host directories that it did not give itself (qore#7662)
+      QoreHostDirBaseMessageScopeHelper msg_scope(cwd_base);
+      if (f->open2(xsink, path.c_str(), flags, mode, qe)) {
+         assert(*xsink);
+         return QoreValue();
+      }
    }
+   // the name of the file derives from the same directory (see ReadOnlyFile::getFileName())
+   qore_qf_private::get(**f)->setCwdBase(cwd_base);
 
    // create the QoreObject and set the File object as private data of the class tagged with the CID_FILE class ID
    return new QoreObject(QC_FILE, getProgram(), f.release());
@@ -1388,6 +1409,8 @@ Dir Dir::openDir(string subdir, *string encoding) [flags=NAMED_ARGS] {
 
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : d->getEncoding();
    ReferenceHolder<Dir> dc(new Dir(xsink, qe, d->getPath(subdir->getBuffer()).c_str()), xsink);
+   // the path of the new object derives from the process's current directory if this one's does (qore#7662)
+   dc->setCwdBase(d->getCwdBase());
    // create the qoreObject and set the Dir object as private data of the class tagged with the CID_DIR class ID
    return new QoreObject(QC_DIR, getProgram(), dc.release());
 }
@@ -1424,6 +1447,10 @@ bool Dir::removeFile(string filename) [flags=NAMED_ARGS] {
       return xsink->raiseException("DIR-REMOVEFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
    std::string path = d->getPath(filename->getBuffer());
+
+   // the messages name a path that derives from the process's current directory relative to it for code that is not
+   // given host directories that it did not give itself (qore#7662)
+   QoreHostDirBaseMessageScopeHelper msg_scope(d->getCwdBase());
 
    // the sandbox policy must allow the file to be deleted
    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);

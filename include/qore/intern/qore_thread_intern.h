@@ -1705,6 +1705,41 @@ DLLLOCAL QoreStringNode* qore_msg_path_node(const char* path);
 */
 DLLLOCAL const char* qore_msg_detail(const char* text);
 
+//! Returns true if a host directory that the code running on the thread did not give itself, such as the process's
+//! current directory, is hidden from it: the messages are restricted (qore_msg_restricted()) or the code is restricted
+//! from external information (qore_caller_no_external_info(); qore#7662)
+DLLLOCAL bool qore_caller_no_host_dirs();
+
+//! Returns \a path relative to the host directory \a base, a directory that the code did not give itself (qore#7662)
+/** Both paths are absolute; \c "." and \c ".." components are folded first.  The result is \c "." for \a base itself,
+    starts with \c "./" for a path below it and with \c ".." otherwise, as relative results of Util::normalize_dir()
+    for code restricted from external information do (qore#7586); a path that is not absolute is returned unchanged.
+*/
+DLLLOCAL std::string qore_path_relative_to_base(const char* path, const std::string& base);
+
+//! Names the paths that derive from a host directory that the code did not give itself (the process's current
+//! directory that a Dir object starts in) relative to it in the messages built in its scope (qore#7662)
+/** While the scope is active, qore_msg_path() and qore_caller_msg_path() give absolute paths relative to the base
+    directory (qore_path_relative_to_base()), unless a scope of QoreRestrictedMessageScopeHelper gives them without
+    their directories.  It is active only if the base is not empty and the code running on the thread does not get
+    host directories that it did not give itself (qore_caller_no_host_dirs()); it is set up only for operations on
+    paths that derive from the base, never for an absolute path that the code gave.
+*/
+class QoreHostDirBaseMessageScopeHelper {
+public:
+    //! Starts the scope with the given base directory, if it is not empty and the code is restricted
+    DLLLOCAL QoreHostDirBaseMessageScopeHelper(std::string base);
+
+    DLLLOCAL ~QoreHostDirBaseMessageScopeHelper();
+
+    QoreHostDirBaseMessageScopeHelper(const QoreHostDirBaseMessageScopeHelper&) = delete;
+    QoreHostDirBaseMessageScopeHelper& operator=(const QoreHostDirBaseMessageScopeHelper&) = delete;
+
+private:
+    std::string base;
+    const std::string* old;
+};
+
 DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 //! Records that the code being parsed uses functionality that the given restriction forbids, and returns true if the
 //! restriction is set

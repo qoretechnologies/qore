@@ -207,6 +207,18 @@ public:
     */
     DLLEXPORT QoreStringNode* dirname() const;
 
+    //! returns the current directory name for the code running on the thread or nullptr if none is set
+    /** A path that derives from the process's current directory that the object started in is given relative to it
+        to code that is not given host directories that it did not give itself (qore#7662)
+    */
+    DLLLOCAL QoreStringNode* dirnameForCaller() const;
+
+    //! returns the process's current directory that the path derives from, or an empty string (qore#7662)
+    DLLLOCAL std::string getCwdBase() const;
+
+    //! sets the process's current directory that the path derives from (an object for a subdirectory; qore#7662)
+    DLLLOCAL void setCwdBase(const std::string& base);
+
     //! returns a complete path with the argument appended to the current directory name
     /** @param sub the subdirectory name to append to the current directory name
         @return a complete path with the argument appended to the current directory name
