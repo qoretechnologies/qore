@@ -250,7 +250,6 @@ try {
 
 
     @section geminibodyshape_v1_0 GeminiBodyShape v1.0
-    - Gemini 4 request bodies use the model's supported @ref geminibodyshapegeneration "thinking levels" (issue #7599)
     - initial release
 */
 
