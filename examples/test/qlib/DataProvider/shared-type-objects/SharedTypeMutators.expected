@@ -1,0 +1,11 @@
+shared objects:
+QoreDataField::appendDescription(): SANDBOX-REGISTRATION-ERROR
+HashDataType::checkConvertOrNothing(): SANDBOX-REGISTRATION-ERROR
+OpenApi3UnionDataType::setResponseDirection(): SANDBOX-REGISTRATION-ERROR
+the tenant's own objects:
+QoreDataField::appendDescription(): changed
+HashDataType::checkConvertOrNothing(): changed
+OpenApi3UnionDataType::setResponseDirection(): changed
+a call that changes nothing: changed
+the shared field's description: "shared"
+the shared hash type is "or nothing": False

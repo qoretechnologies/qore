@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - the object member write paths of the JIT and AOT native code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class SharedObjectWritesTest
+
+#! Regression test for qore#6843: sandboxed code cannot change or delete an object that trusted code marked as shared
+/** A tenant (a sandboxed Program) is refused (SHARED-OBJECT-ERROR) by every form of member write on an object marked
+    with SandboxManager::shareObject() (the assignment and other lvalue operators, also typed, which use the resolved
+    and scalar store paths of the native code, nested container elements, remove and delete of members and slices,
+    writes through references, += with a hash, the members of a held object through the object, a class of its own
+    that inherits the object's class, a method guarded with SandboxManager::checkSharedObjectChange()) and by the
+    delete operator; the state of the object is unchanged.  An object that is not marked is changed, reads work, the
+    object's own class code and trusted callers change it, and the tenant's copy is its own.
+
+    SharedObjectWrites.q checks these changes; its output must be the one in SharedObjectWrites.expected in every
+    execution mode, and in programs compiled with qcc -O0 and -O3.
+*/
+class SharedObjectWritesTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/SharedObjectWrites.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/SharedObjectWrites.expected");
+    }
+
+    constructor() : QUnit::Test("shared object writes", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                # the checks run in child Programs and in the library modules, whose code (the catalog worker that
+                # builds the lazy values) chooses its own execution, so the native compilation is not checked
+                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+            });
+        }
+        # no IR tier case: the library modules' own code (the catalog worker) is compiled to native code there too
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/shared-object-writes";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        # the output of the fixture only: a library module that the program loads from source because its binary
+        # module was built for another Qore library warns on stderr
+        assertEq(expected, backquote(shellQuote(program) + " 2>/dev/null"));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

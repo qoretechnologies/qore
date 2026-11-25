@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation and a qcc executable compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%exec-class HashMemberOrderTest
+
+#! Hashes keep the order of their members, and their iterators, as members are deleted and added, in every execution
+#! mode (qore#7272)
+/** The members of a hash are a list linked through the members, which are also the nodes of the key map.  The probe
+    checks the order of hashes with every way of iterating them (forward, in reverse, keys, pairs, values, first and
+    last keys) after keys are assigned, deleted, removed and added again, at every size where the key map grows, for a
+    large hash that grows, loses most of its keys and grows again, and for objects and hash expressions; it changes
+    hashes while iterators iterate them.  The output must be the expected one, which the AST interpreter gave before
+    the change, in every execution mode and as a qcc-compiled executable.
+*/
+class HashMemberOrderTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probe = get_script_dir() + "/hash-member-order/probe.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/hash-member-order/expected.txt");
+    }
+
+    constructor() : QUnit::Test("hash member order test", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        addTestCase("hash member order in every execution mode and in AOT", \testOrder());
+        set_return_value(main());
+    }
+
+    testOrder() {
+        # the expected output has the results that the probe is about
+        assertTrue(expected =~ /^order re-added: 5 ok ok \[a,b,y,z,m\]$/m, "order re-added");
+        assertTrue(expected =~ /^large regrown: 27143 ok ok /m, "large regrown");
+        assertTrue(expected =~ /^large lookups: 7143$/m, "large lookups");
+        assertTrue(expected =~ /^iterator snapshot: \["k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8", "k9"\] /m,
+            "iterator snapshot");
+        # every check of the probe passed: verify() and orders() report a missing key, a wrong value, a key that the
+        # hash should not have, a wrong size and an iteration in another order; show() reports an exception
+        assertFalse(expected =~ /(no key \x22|value of \x22|has \x22|size [0-9]+ keys|Iterator \[|values \[|first \x22|: [A-Z][-A-Z]+: )/,
+            "no failed check");
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir,
+            libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe)), mode);
+        }
+        TmpDir tmp("qore-hash-member-order-");
+        string exe = tmp.path + DirSep + "probe";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(expected, backquote(sprintf("%s %s 2>&1", env, exe)), "executable");
+    }
+}
