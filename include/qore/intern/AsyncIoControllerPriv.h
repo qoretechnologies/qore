@@ -1643,8 +1643,9 @@ private:
         }
 
         //! Sets the owner of the entry when an operation takes it over from the operation of its thread that it replaced
-        /** The thread's operation is replaced when the submission is processed, so a submission of another thread that
-            is queued after that is decided against the new owner
+        /** Called as soon as the token is taken over, before the replaced operation is canceled: its canceled result is
+            the first thing that code of another thread can see, and a submission it makes then is decided against the
+            new owner
         */
         DLLLOCAL void update(const std::string& key, uint64_t token, qore_program_id_t app_id,
                 const QoreObject* spop_obj) noexcept {
