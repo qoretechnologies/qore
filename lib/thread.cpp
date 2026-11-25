@@ -11485,15 +11485,29 @@ public:
 
     void complete(ThreadArg* arg) {
         arg->native_id = pthread_self();
-        AutoLocker al(mutex);
-        assert(started && !stopping && !arg->next);
-        if (tail) {
-            tail->next = arg;
-        } else {
-            head = arg;
+        {
+            AutoLocker al(mutex);
+            if (started) {
+                assert(!stopping && !arg->next);
+                if (tail) {
+                    tail->next = arg;
+                } else {
+                    head = arg;
+                }
+                tail = arg;
+                condition.signal();
+                return;
+            }
         }
-        tail = arg;
-        condition.signal();
+        // the thread started before a fork() that it made, and ends in the child, where the reaper of the parent
+        // does not exist (see forkChild()) and no thread can join it: it detaches itself and releases what the reaper
+        // would have released after joining it (qore#7579); a reaper is not started for it, as it would keep the child
+        // alive after its last thread has ended.  The count is released before the thread's thread-local destructors
+        // run, as in completeCounted()
+        assert(forked);
+        pthread_detach(pthread_self());
+        delete arg;
+        qore_counter_ops(tp_thread_counter).dec();
     }
 
     // Only called after the external counter reaches zero, either by
@@ -11547,6 +11561,7 @@ public:
     */
     void forkChild() {
         started = stopping = false;
+        forked = true;
         // the reapers do not exist in the child
         reapers.clear();
         ended.clear();
@@ -11578,6 +11593,8 @@ private:
     //! the number of reapers that are waiting for a thread to join, or starting
     unsigned idle = 0;
     bool started = false;
+    //! true in a child process created with fork(), where the reaper of the parent does not exist
+    bool forked = false;
     bool stopping = false;
 
     static void* entry(void* arg) {
