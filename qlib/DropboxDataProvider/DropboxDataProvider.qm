@@ -65,6 +65,15 @@ module DropboxDataProvider {
                 "- **Organization**: create folders, and copy, move, and remove files\n\n"
                 "Dropbox is a trademark of Dropbox, Inc.",
             "scheme": "dropbox",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "dropboxapi.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://www.dropbox.com/developers/reference/data-transport-limit",
+                "effective_date": 2026-11-25,
+            },
             "logo": DropboxLogo,
             "logo_file_name": "dropbox-logo.svg",
             "logo_mime_type": MimeTypeSvg,

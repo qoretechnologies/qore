@@ -4252,6 +4252,12 @@ hash<auto> h = get_qore_library_info();
     @ref Qore::BuildHost "BuildHost", @ref Qore::Compiler "Compiler", @ref Qore::CFLAGS "CFLAGS" and
     @ref Qore::LDFLAGS "LDFLAGS" still give build details to code with this restriction, as constants have no
     @ref function_domains "functional domain"
+
+    @note the \c init and \c del closures of a user module's declaration have the restrictions of the module header,
+    which include @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO", so a closure that calls this function needs
+    the module to declare the domain in its header (<tt>domains = "EXTERNAL_INFO";</tt>, see
+    @ref user_module_declarations "User Module Declarations"), as for the other external information functions;
+    code of the module after its declaration has the options of the module's own %Program
 */
 hash<auto> get_qore_library_info() [flags=CONSTANT;dom=EXTERNAL_INFO] {
    QoreHashNode* h = new QoreHashNode(autoTypeInfo);

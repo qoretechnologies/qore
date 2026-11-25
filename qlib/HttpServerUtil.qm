@@ -249,6 +249,8 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::http_get_url_from_bind() "http_get_url_from_bind()" preserves the user name and optional
+      password from the bind address (issue #7595)
     - added @ref HttpServer::AbstractStreamRequest::getContext() "AbstractStreamRequest::getContext()",
       @ref HttpServer::AbstractStreamRequest::getHeaders() "getHeaders()" and
       @ref HttpServer::AbstractStreamRequest::getBody() "getBody()" for subclasses, which cannot use the private
@@ -1496,9 +1498,9 @@ public string sub http_get_url_from_bind(softstring bind, *string host) {
         h.host = "[" + h.host + "]";
     }
 
-    string login = h.password ? (h.password + ":") : "";
-    if (h.username) {
-        login += sprintf("%s@", h.password);
+    string login = "";
+    if (exists h.username) {
+        login = h.username + (exists h.password ? ":" + h.password : "") + "@";
     }
 
     return sprintf("%s://%s%s%s", h.protocol ? h.protocol : "http", login, h.host,

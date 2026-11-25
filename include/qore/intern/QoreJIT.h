@@ -619,6 +619,8 @@ struct BatchCalleeInfo {
     bool single_variant_function = false; //!< True when call_ref_path names exactly one function variant
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
+    bool local_method_takes_args = false; //!< A locally lowered method with a parameter that takes its argument over
+    bool guarded_method_entry = false; //!< Local owning entry that requires the declaring method context
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     //! True if the body of the JIT fast entry does not observe the object and class context it runs in, so that a
@@ -1101,6 +1103,12 @@ public:
     */
     bool dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func);
 
+    //! For tests: the next background compile of the function named that is accepted arms an epoch hold of type
+    //! retirement, as the compile of a specialization does (see enqueueBgCompile(); qore#7549)
+    /** @param func the name of the root function of the compile (the name of its IR function up to the \c "@")
+    */
+    void dbgForceBgCompileEpochHold(const std::string& func);
+
     //! For tests: waits until the background compile thread is stopped at the given hold point
     /** @return false if it was not stopped there within \a timeout_ms milliseconds
     */
@@ -1474,6 +1482,9 @@ private:
     std::string dbg_bg_hold_func[static_cast<int>(BgCompileHoldPoint::Count)];
     //! the name of the in-progress compile's root function up to the "@"; protected by bg_queue_mutex
     std::string dbg_bg_in_progress_func;
+    //! the function whose next accepted work arms an epoch hold, none if empty (dbgForceBgCompileEpochHold());
+    //! protected by bg_queue_mutex
+    std::string dbg_bg_force_epoch_hold;
 
     //! Stops the compile thread at \a point if a test armed a hold there; bg_queue_mutex is held
     void dbgBgHoldLocked(std::unique_lock<std::mutex>& lock, BgCompileHoldPoint point);

@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class OnlineServicesBillingTest
+
+class OnlineServicesBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("OnlineServices provider billing") {
+        addVendor("GitHub", "Github", "github.com", "included",
+            "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api");
+        addVendor("OneDrive", "OneDrive", "microsoft.com", "unknown",
+            "https://learn.microsoft.com/en-us/graph/metered-api-list", {
+                "get-drive-info": "included", "create-folder": "included",
+                "make-api-call": "unknown",
+            });
+        addVendor("SharePoint", "SharePoint", "microsoft.com", "unknown",
+            "https://learn.microsoft.com/en-us/graph/metered-api-list", {
+                "list-sites": "included", "get-drive-info": "included",
+                "make-api-call": "unknown",
+            });
+        addVendor("EmpathicBuilding", "EmpathicBuilding", "haltian.com", "unknown",
+            NOTHING);
+        set_return_value(main());
+    }
+}

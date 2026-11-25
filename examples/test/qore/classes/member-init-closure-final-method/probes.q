@@ -1,8 +1,9 @@
 # probes of member-init-closure-final-method.qtest (qore#5901): a closure in a member initializer that calls a final
 # method of its class (also in a try block and through self, a private final method, a method of a final class, a
-# final method of a base class from a subclass's member initializer, alongside a distinct static method of the subclass)
-# is read from a qcc executable, whose AOT image reads the closures of member initializers before the methods of the
-# classes are committed; probes() returns one line per pass, so that the code runs on every tier with tiered execution
+# final method of a base class from a subclass's member initializer, also when the subclass has a static method with
+# the same name, which the call does not resolve to) is read from a qcc executable, whose AOT image reads the closures
+# of member initializers before the methods of the classes are committed; probes() returns one line per pass, so that
+# the code runs on every tier with tiered execution
 
 %modern
 
@@ -35,9 +36,9 @@ class Q {
 
 class QS inherits Q {
     public {
-        code c = auto sub () { return self.x() + x() + label(); };
+        code c = auto sub () { return self.x() + x(); };
     }
-    static string label() { return "QS"; }
+    static string x() { return "QS"; }
 }
 
 string sub probes() {

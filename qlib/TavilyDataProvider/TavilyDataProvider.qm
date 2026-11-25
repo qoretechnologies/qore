@@ -66,6 +66,15 @@ module TavilyDataProvider {
                 "citations, so the retrieval step of a RAG pipeline or an agent tool becomes one "
                 "call — and the research tasks handle the questions that no single search settles.",
             "scheme": "tavily",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "tavily.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://docs.tavily.com/documentation/api-credits",
+                "effective_date": 2026-11-25,
+            },
             "logo": TavilyLogo,
             "logo_file_name": "tavily-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -76,6 +85,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/search",
             "action": "search",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Search the Web",
             "short_desc": "Search the web and optionally get an answer written over the results",
             "desc": "Searches the web on meaning rather than keywords and returns ranked results, "
@@ -114,6 +124,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/extract",
             "action": "extract",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Read Pages",
             "short_desc": "Fetch pages and return their main content",
             "desc": "Fetches the given pages and returns the main content of each, with the "
@@ -147,6 +158,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/crawl",
             "action": "crawl",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Crawl a Site",
             "short_desc": "Follow links from a page and return the content of everything found",
             "desc": "Follows links from a starting page and returns the content of every page it "
@@ -181,6 +193,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/map",
             "action": "map",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Map a Site",
             "short_desc": "List the URLs reachable from a page without reading them",
             "desc": "Follows links from a starting page and returns the URLs it finds, without "
@@ -212,6 +225,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/research",
             "action": "research",
+            "billing": <DataProviderBillingInfo>{"unit": "credit"},
             "display_name": "Start Research",
             "short_desc": "Set an agent to research a question and return the task it started",
             "desc": "Starts a research task: an agent searches, reads and reasons over the web "
@@ -243,6 +257,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/get-research",
             "action": "get-research",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Research Report",
             "short_desc": "Read a research task and its report once it has finished",
             "desc": "Reads a research task started by **Start Research**.\n\n"
@@ -264,6 +279,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/usage",
             "action": "usage",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "Get Credit Usage",
             "short_desc": "Report what the API key and the account have spent",
             "desc": "Reports what this API key and the whole account have spent in the current "
@@ -283,6 +299,7 @@ module TavilyDataProvider {
             "app": TavilyDataProvider::AppName,
             "path": "/logs",
             "action": "logs",
+            "billing": <DataProviderBillingInfo>{"model": "included"},
             "display_name": "List API Usage Logs",
             "short_desc": "List the requests made against the account, newest first",
             "desc": "Lists the requests made against the account, newest first, each with the "

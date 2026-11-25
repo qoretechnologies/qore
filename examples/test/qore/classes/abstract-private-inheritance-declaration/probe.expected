@@ -1,0 +1,79 @@
+1 outside: METHOD-IS-PRIVATE
+1 outside ref: ILLEGAL-CALL-REFERENCE
+1 outside call_object_method: METHOD-IS-PRIVATE
+1 class: "Secret::m"
+1 class typed: "Secret::m"
+1 class ref: "Secret::m"
+1 class ref called outside: "Secret::m"
+1 class call_object_method: METHOD-IS-PRIVATE
+1 declaring class: "Secret::m"
+1 subclass object outside: METHOD-IS-PRIVATE
+1 subclass: "Secret::m"
+1 control outside: BASE-CLASS-IS-PRIVATE
+1 control class: "Secret::m"
+1 control class call_object_method: BASE-CLASS-IS-PRIVATE
+2 outside: "Secret::m"
+3 outside: "Secret::m"
+4 outside: METHOD-DOES-NOT-EXIST
+4 class: "Secret::m"
+4 subclass object outside: METHOD-DOES-NOT-EXIST
+4 subclass: METHOD-DOES-NOT-EXIST
+4 control outside: METHOD-DOES-NOT-EXIST
+4 control class: "Secret::m"
+4 control subclass: METHOD-DOES-NOT-EXIST
+5 outside: BASE-CLASS-IS-PRIVATE
+5 class: "Secret::m"
+5 subclass: "Secret::m"
+6 outside: METHOD-IS-PRIVATE
+6 class: "Secret::m"
+6 subclass: "Secret::m"
+7 outside: METHOD-IS-PRIVATE
+7 class: "Secret::m"
+8 outside: "Secret::m"
+9 outside: METHOD-IS-PRIVATE
+9 class: "Secret::m"
+10 outside: BASE-CLASS-IS-PRIVATE
+10 class: "Secret::m"
+11 outside: "Secret::m"
+12 private overload outside: RUNTIME-OVERLOAD-ERROR
+12 public overload outside: "Secret2::m(string)"
+12 private overload class: "Secret2::m(int)"
+12 public overload class: "Secret2::m(string)"
+13 outside: METHOD-IS-PRIVATE
+13 class: "Secret2::m(int)"
+18 private overload outside: RUNTIME-OVERLOAD-ERROR
+18 public overload outside: "Secret2::m(string)"
+18 private overload class: "Secret2::m(int)"
+14 outside: METHOD-IS-PRIVATE
+14 class: "Secret::m"
+15 outside: METHOD-IS-PRIVATE
+15 class: "SecretPriv::m"
+16 outside: METHOD-IS-PRIVATE
+16 class: "Secret::m"
+17 outside: "Secret::m"
+19/20 A1 outside: "Secret::m"
+19/20 A1 outside ref: "Secret::m"
+19/20 A1 outside call_object_method: "Secret::m"
+19/20 A2 outside: "Secret::m"
+19/20 A2 outside ref: "Secret::m"
+19/20 A2 outside call_object_method: "Secret::m"
+19/20 A3 outside: "Secret::m"
+19/20 A3 outside ref: "Secret::m"
+19/20 A3 outside call_object_method: "Secret::m"
+19/20 A4 outside: "Secret::m"
+19/20 A4 outside ref: "Secret::m"
+19/20 A4 outside call_object_method: "Secret::m"
+19/20 A5 outside: METHOD-IS-PRIVATE
+19/20 A5 outside ref: ILLEGAL-CALL-REFERENCE
+19/20 A5 outside call_object_method: METHOD-IS-PRIVATE
+19/20 XC1 outside: "SecretC::m"
+19/20 XC1 outside ref: "SecretC::m"
+19/20 XC1 outside call_object_method: "SecretC::m"
+19/20 XC2 outside: "SecretC::m"
+19/20 XC2 outside ref: "SecretC::m"
+19/20 XC2 outside call_object_method: "SecretC::m"
+19/20 XC3 outside: METHOD-IS-PRIVATE
+19/20 XC3 outside ref: ILLEGAL-CALL-REFERENCE
+19/20 XC3 outside call_object_method: METHOD-IS-PRIVATE
+21 outside: METHOD-IS-PRIVATE
+21 class: "Secret::m"

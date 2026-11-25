@@ -164,7 +164,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
         code_pgm = oc->getProgram();
     }
     std::unique_ptr<QoreSandboxContext> provenance(qore_capture_sandbox_provenance(code_pgm,
-        code_pgm && qc->spansPrograms()));
+        code_pgm && qc->spansPrograms(), &capability_origin));
     //printd(5, "qore_object_private::qore_object_private() this: %p obj: %p '%s'\n", this, obj, oc->getName());
 #ifdef QORE_DEBUG_OBJ_REFS
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
@@ -246,6 +246,9 @@ void qore_object_private::obliterateMembers(ExceptionSink* xsink) {
 
     // The caller retains ownership while recursive member references are released.
     status = OS_DELETED;
+    // detached with the lock held, as in doDeleteIntern()
+    KeyList* pd = privateData;
+    privateData = nullptr;
     cdmap_t* cdm = cdmap;
     cdmap = nullptr;
     QoreHashNode* td = data;
@@ -253,16 +256,25 @@ void qore_object_private::obliterateMembers(ExceptionSink* xsink) {
     removeInvalidateRSetIntern();
     sl.unlock();
 
-    cleanup(xsink, td, cdm);
+    cleanup(xsink, pd, td, cdm);
 }
 
-void qore_object_private::cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm) {
-    if (privateData) {
-        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, privateData);
-        privateData->derefAll(xsink);
-        delete privateData;
 #ifdef DEBUG
-        privateData = nullptr;
+std::atomic<qore_object_private::dbg_cleanup_t> qore_object_private::dbg_cleanup_hook{nullptr};
+#endif
+
+void qore_object_private::cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm) {
+    // the private data was detached from the object with its lock held, when the object was marked deleted: a thread
+    // that takes the lock later finds none, also while it is freed here
+    assert(!privateData);
+    if (pd) {
+        printd(5, "qore_object_private::cleanup() this: %p privateData: %p\n", this, pd);
+        pd->derefAll(xsink);
+        delete pd;
+#ifdef DEBUG
+        if (dbg_cleanup_t hook = dbg_cleanup_hook.load(std::memory_order_acquire)) {
+            hook(*obj);
+        }
 #endif
     }
 
@@ -2212,7 +2224,9 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
 
     //printd(5, "qore_object_private::getLValue() this: %p %s::%s type %s for_remove: %d int: %d odata: %p\n", this, theclass->getName(), key, QoreTypeInfo::getName(mti), for_remove, internal_member, odata);
 
-    HashMember* m = odata->priv->findMember(key, len);
+    // the name is hashed once, for the search and for a new member (qore#7265)
+    qore_hash_lookup_key lookup_key(key, len);
+    HashMember* m = odata->priv->findMember(lookup_key);
     if (!m) {
         if (for_remove) {
             return -1;
@@ -2222,7 +2236,7 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
         if (checkMemberWrite(key, nullptr, class_ctx, xsink)) {
             return -1;
         }
-        m = odata->priv->createMemberKnownAbsent(key);
+        m = odata->priv->createMemberKnownAbsent(lookup_key);
     }
 
     lvh.setValue(m->val, mti);
@@ -2548,9 +2562,9 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
     printd(5, "qore_object_private::doDeleteIntern() execing destructor() obj: %p\n", obj);
 
     // increment reference count temporarily for destructor, unless the dereference that decided to delete the object
-    // has taken it while marking the object (takeDeleteReference()); an explicit deletion's caller holds a reference,
-    // so the count is not zero here: an increment from zero would take no weak reference for the release that takes
-    // the count to zero again (see takeDeleteReference())
+    // has taken it while marking the object (takeLastDeleteReference(), takeCollectDeleteReference()); an explicit
+    // deletion's caller holds a reference, so the count is not zero here: an increment from zero would take no weak
+    // reference for the release that takes the count to zero again (see takeCollectDeleteReference())
     if (!ref_taken) {
         AutoLocker slr(rlck);
         assert(obj->references > 0);
@@ -2564,6 +2578,7 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         qore_class_private::get(*theclass)->execDestructor(obj, rc, xsink);
     }
 
+    KeyList* pd;
     cdmap_t* cdm;
     QoreHashNode* td;
     {
@@ -2571,6 +2586,11 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         assert(status != OS_DELETED);
         assert(data);
         status = OS_DELETED;
+
+        // the private data is detached with the lock held: a thread that takes the lock once the object is marked
+        // deleted finds none, so it cannot use it while it is freed outside the lock
+        pd = privateData;
+        privateData = nullptr;
 
         cdm = cdmap;
         cdmap = nullptr;
@@ -2581,7 +2601,7 @@ void qore_object_private::doDeleteIntern(ExceptionSink* xsink, bool ref_taken) {
         removeInvalidateRSetIntern();
     }
 
-    cleanup(xsink, td, cdm);
+    cleanup(xsink, pd, td, cdm);
 
     obj->deref(xsink);
 }
@@ -2696,6 +2716,10 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // in other cases, the references value could change in another thread
 
         bool rrf = false;
+        // the count with which a collection was decided, and the releases of the locking path read with it
+        // (RSet::canDelete(), takeCollectDeleteReference())
+        int decided_refs = 0;
+        unsigned decided_releases = 0;
         // set once this dereference has rescanned; see RSet::keepNeedsRescan()
         bool rescanned = false;
         if (ref_copy) {
@@ -2792,7 +2816,8 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                             }
                         }
                     } else {
-                        rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
+                        rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup, &decided_refs,
+                            &decided_releases);
                     }
 
                     if (!rc) {
@@ -2803,6 +2828,12 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                         printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' invalid rset, "
                             "recalculating\n", this, getClassName());
                         recalc = true;
+                    } else {
+                        // the collection is decided while the object is in a committed set: its releases are made
+                        // in the locking path from now on, until it is marked or the deletion is abandoned, so that
+                        // a reference taken since the decision can be told from one released since (qore#7509)
+                        AutoLocker al(rlck);
+                        collect_pending.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
                 if (recalc) {
@@ -2855,11 +2886,17 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         QoreSafeVarRWWriteLocker sl(rml);
 
+        // restored if the deletion is abandoned
+        bool prev_recursive_ref_found = recursive_ref_found;
         if (rrf)
             recursive_ref_found = true;
 
         // if the destructor has already been run, then just run tDeref() which should delete the QoreObject
         if (in_destructor || status != OS_OK) {
+            if (rrf) {
+                AutoLocker al(rlck);
+                collect_pending.fetch_sub(1, std::memory_order_relaxed);
+            }
             sl.unlock();
             //printd(5, "qore_object_private::customDeref() this: %p obj: %p %s deleting\n", this, obj,
             //    getClassName());
@@ -2867,18 +2904,32 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
             return;
         }
 
+        // the deletion's reference is taken before the object is marked, under its lock, so that no other dereference
+        // finds it being destroyed before: references that remained when this dereference decided to collect the
+        // object can be released from now on; a reference that another thread has taken since the decision (through
+        // a weak reference: a call, or a value read from one) keeps the object: the deletion is abandoned, and that
+        // thread's last release decides again, so that a call that holds a reference never runs while the object is
+        // destroyed (qore#7509)
+        bool abandoned = rrf ? !takeCollectDeleteReference(decided_refs, decided_releases)
+            : !takeLastDeleteReference();
+        if (abandoned) [[unlikely]] {
+            recursive_ref_found = prev_recursive_ref_found;
+            sl.unlock();
+            qodh.abandonDelete();
+            if (!qodh.getRefs()) {
+                // the thread that took the count from zero took the weak reference that the dereference to zero that
+                // deletes the object releases (customRefIntern()); this dereference to zero does not delete it
+#ifdef DEBUG
+                dbgReleaseZeroCountWeakRef();
+#endif
+                tDeref();
+            }
+            return;
+        }
+
         in_destructor = true;
-
-        //printd(5, "qore_object_private::customDeref() class: %s this: %p going out of scope\n", getClassName(),
-        //   this);
-
         // mark status as in destructor
         status = q_gettid();
-
-        // the deletion's reference is taken while the object is marked, before any other dereference can find it
-        // being destroyed: references that remained when this dereference decided to collect the object can be
-        // released from now on (see takeDeleteReference())
-        takeDeleteReference(qodh.getRefs() != 0);
 
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
@@ -3361,9 +3412,12 @@ void qore_object_private::customRefIntern(bool real) {
         qore_trace_object_ref("ref", this, obj, getClassName(), references.load(), references.load() + 1, real);
     }
     // No lock: the count is atomic, and a reference taken when there were none (a destructor making its object
-    // reachable again) takes the weak reference that keeps the object allocated; nothing else can release that
-    // reference before this thread does, so taking the weak one right after the increment is safe.  Relaxed, as
-    // for any reference count increment: the reference being copied already keeps the object alive.
+    // reachable again, or a thread reading a weak reference to it while the thread that released the last reference
+    // decides to delete it, qore#7509) takes the weak reference that the dereference to zero that deletes the object
+    // releases; a dereference that abandons the deletion because of this reference can release it first
+    // (takeLastDeleteReference(), takeCollectDeleteReference()), which is safe, as the weak reference through which
+    // this thread reached the object keeps it allocated.  Relaxed, as for any reference count increment: the reference
+    // being copied already keeps the object alive.
     if (!references.fetch_add(1, std::memory_order_relaxed)) {
         tRef();
 #ifdef DEBUG
@@ -3729,10 +3783,12 @@ AbstractPrivateData* QoreObject::getAndClearPrivateData(qore_classid_t key, Exce
     QoreSafeVarRWWriteLocker sl(priv->rml);
 
     //printd(5, "QoreObject::getAndClearPrivateData this: %p, privateData: %p, key: %d, getkey: %p\n", this, priv->privateData, key, priv->privateData ? priv->privateData->getAndClearPtr(key): nullptr);
-    if (priv->privateData)
+    // a deleted object has no private data to give, also while it is freed (the caller raises OBJECT-ALREADY-DELETED)
+    if (priv->status != OS_DELETED && priv->privateData) {
         return priv->privateData->getAndClearPtr(key);
+    }
 
-    return 0;
+    return nullptr;
 }
 
 // called only during constructor execution, therefore no need for locking

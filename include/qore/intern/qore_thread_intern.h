@@ -323,8 +323,8 @@ enum QoreBackgroundHelperSelf : uint8_t {
     expression is, or the object of a call of a method (which is checked as the AST interpreter checks the callee;
     qore#7087), QBH_CHECK_IN_THREAD if the expression has no such callee among the values (the new thread computes the
     code that it calls, which is checked when it is called: qore_check_background_direct_entry()), or
-    QBH_CALLEE_UNKNOWN if the starting code does not say (the code of a compiled module: every closure, call reference
-    and object of the values is checked then, qore#7056)
+    QBH_CALLEE_UNKNOWN if the starting code does not say (every closure, call reference and object of the values is
+    checked then, qore#7056)
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
@@ -1161,6 +1161,10 @@ DLLLOCAL bool qore_program_has_policy_sandbox(QoreProgram* pgm);
 //! returns the current Program of the thread, or nullptr, also on a thread without thread data (a native thread)
 DLLLOCAL QoreProgram* qore_thread_current_program_if_any();
 
+//! returns the Program of the code that calls the library: the nearest Program on the call stack that is not a
+//! module's (the code of a module acts for its caller), or nullptr if there is none
+DLLLOCAL QoreProgram* qore_get_calling_program();
+
 //! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
 /** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
     qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without
@@ -1320,6 +1324,9 @@ public:
     QoreSandboxBudgetList budgets;
     //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
     bool in_build = false;
+    //! true for the context of a call reference (not of an object): a method of a lent object that a reference that
+    //! restricted code created calls runs for that code (qore#7052)
+    bool reference = false;
     //! the isolation of the trusted build in which the context was captured (referenced), or nullptr: it holds in the
     //! continuation as well (qore#6536)
     QoreSandboxIsolation* isolation = nullptr;
@@ -2230,6 +2237,9 @@ DLLLOCAL void qore_program_cache_release_values(QoreProgram* pgm, ExceptionSink*
 //! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
 DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
 
+//! Returns true if the Program is sandboxed or its parse options restrict a functional domain
+DLLLOCAL bool qore_program_code_is_untrusted(const QoreProgram* pgm);
+
 //! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
 /** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
     Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
@@ -2364,6 +2374,15 @@ DLLLOCAL void qore_append_line_safe_text(QoreString& out, const char* text, size
     that the host chose (its loggers, its own code called from such an object) is written
 */
 DLLLOCAL bool qore_caller_restricts_terminal_io();
+
+//! Returns true if the code that a method of a lent object was lent to is restricted from any of the given domains
+/** As qore_caller_restricts_domain(), but a method of an object that the host lent (a capability frame, qore#7052)
+    lends nothing: the code below it, which the object was lent to, counts, so library code that binds what it does
+    to the target that the object's creator gave (qore#7262) sees the restrictions of the borrower; the host's policy
+    barriers and system-policy capabilities still lend what they lend.  Without a capability frame it answers as
+    qore_caller_restricts_domain(); it never answers less restricted than that
+*/
+DLLLOCAL bool qore_caller_lent_to_restricts_domain(int64 domain);
 
 //! returns 1 if the calling code is sandboxed (see qore_caller_is_sandboxed()), 0 if not, and -1 if the governing
 //! sandbox cannot be resolved for lack of memory
@@ -3640,7 +3659,6 @@ private:
    QoreProgram* referenced_class_pgm = nullptr;
    //! the sink for the release of \a referenced_class_pgm
    ExceptionSink* call_pgm_xsink = nullptr;
-   bool do_rc_update;
    //! true if the constructor changed the call Program context
    bool call_pgm_switched = false;
 
@@ -3946,6 +3964,11 @@ public:
             bool runtime) {
         set(xsink, pgm, runtime);
     }
+    //! enters the Program of a method of the given object, as set() with the object does
+    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime,
+            const QoreObject* obj) {
+        set(xsink, pgm, runtime, obj);
+    }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
     //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
@@ -3956,6 +3979,13 @@ public:
         #6255).
     */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! enters the Program of a method of \a obj as set() does
+    /** If the call switches to the Program and the object is a capability (lent by the host, qore#7052), the context
+        entered is marked as a grant that the caller walk stops at (see ThreadData::CapabilityFrame); a call within the
+        Program, the usual case, does nothing more than set()
+    */
+    DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime, const QoreObject* obj);
 
     //! enters the Program as set() does, except that a C++ exception of the entry propagates
     /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
@@ -4087,6 +4117,12 @@ protected:
 
     //! set() raised an exception; see enterFailed()
     bool failed = false;
+
+private:
+    //! the part of set() after the check for a call within the current Program
+    DLLLOCAL void setSlow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    //! marks the context entered for a method of a lent object (qore#7052)
+    DLLLOCAL void markCapability(const QoreObject* obj);
 
 private:
     //! restores the thread's context as it was before set() switched it

@@ -53,6 +53,15 @@ module GorgiasDataProvider {
                 "and SaaS businesses.\n\n"
                 "This integration supports managing tickets, customers, tags, messages, "
                 "and monitoring ticket events.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "gorgias.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://www.gorgias.com/pricing",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "gorgiasrest",
             "logo": GorgiasLogo,
             "logo_file_name": "gorgias-logo.svg",

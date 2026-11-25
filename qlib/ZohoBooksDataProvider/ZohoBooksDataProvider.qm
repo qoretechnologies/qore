@@ -57,6 +57,15 @@ module ZohoBooksDataProvider {
                 "This integration supports invoices, bills, payments, contacts, expenses, estimates, "
                 "sales orders, purchase orders, and items.",
             "scheme": "zohobooks",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "zohoapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://www.zoho.com/books/api/v3/introduction/",
+                "effective_date": 2026-11-25,
+            },
             "logo": ZohoBooksLogo,
             "logo_file_name": "zohobooks-logo.svg",
             "logo_mime_type": MimeTypeSvg,

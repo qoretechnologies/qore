@@ -255,6 +255,11 @@ public:
     QoreProgram* pgm;
     //! Immutable creation context; does not retain a Program or any Qore object
     QoreSandboxContext* sandbox_provenance = nullptr;
+    //! true if the object is a capability (qore#7052): an object of module code that the host's code created without
+    //! restrictions; a call of one of its methods that enters the Program of its code marks the context that it
+    //! enters as a grant (see ProgramThreadCountContextHelper::set() and ThreadData::CapabilityFrame); read only when
+    //! a call enters another Program, never by calls within one
+    bool capability_origin = false;
     cdmap_t* cdmap = nullptr;
 
     // used for garbage collection
@@ -308,8 +313,8 @@ public:
     //! The weak references that the dereferences taking the count to zero may release
     /** The object's base weak reference, plus one for each reference taken when the count was zero (a destructor
         making its object reachable again, or the deletion's own reference when others released the count to zero
-        first; see takeDeleteReference()).  Each dereference that takes the count to zero once the object is being
-        destroyed releases one of them, and they must never run out: a release beyond them frees the object while
+        first; see takeCollectDeleteReference()).  Each dereference that takes the count to zero once the object is
+        being destroyed releases one of them, and they must never run out: a release beyond them frees the object while
         other weak references (the self reference of a poll operation's private data, for one) still use it.
     */
     std::atomic<int> dbg_zero_count_weak_refs{1};
@@ -840,8 +845,8 @@ public:
     /** Lock not held on entry.
 
         @param ref_taken true if the reference that the deletion holds while the destructor runs has been taken
-        already (takeDeleteReference(), when a dereference decided to delete the object), false to take it here (an
-        explicit deletion, whose caller holds a reference of its own)
+        already (takeLastDeleteReference() or takeCollectDeleteReference(), when a dereference decided to delete the
+        object), false to take it here (an explicit deletion, whose caller holds a reference of its own)
     */
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink, bool ref_taken = false);
 
@@ -864,17 +869,71 @@ public:
 
         @param refs_remained true if references remained when the dereference decided to delete the object
     */
-    DLLLOCAL void takeDeleteReference(bool refs_remained) {
-        // no rlck: the count is atomic, as in customRefIntern(); the object's lock is held exclusively
-        if (!references.fetch_add(1, std::memory_order_acq_rel) && refs_remained) {
+    //! takes the deletion's reference for a dereference that released the last reference, unless another thread
+    //! has taken one since
+    /** @return true if the reference was taken; false if another thread has taken a reference (through a weak
+        reference) since the count reached zero: the deletion is abandoned, as that thread's last release decides
+        again (qore#7509)
+
+        No lock: a reference taken since is held while the count is above zero, which the compare-and-swap sees; one
+        taken and released since leaves the count at zero, and its release decides as well (it finds the object
+        being destroyed, or decides itself if this dereference abandons).  The object's lock is held exclusively.
+    */
+    DLLLOCAL bool takeLastDeleteReference() {
+        int refs = 0;
+        return references.compare_exchange_strong(refs, 1, std::memory_order_acq_rel, std::memory_order_acquire);
+    }
+
+    //! takes the deletion's reference for a dereference that decided to collect the object as part of a recursive
+    //! set, unless another thread has taken a reference since the decision; lowers collect_pending
+    /** @param decided the count with which the collection was decided (RSet::canDelete())
+        @param releases RObject::locked_releases, read with that count
+
+        @return true if the reference was taken; false if another thread has taken a reference (through a weak
+        reference) since the decision: the collection is abandoned, as that thread's last release decides again
+        (qore#7509).  The count alone cannot tell: references counted at the decision can be released since, by
+        threads that reached the object through other weak references, while one is taken; but every release made
+        since is made in the locking path, which counts it (collect_pending), so the count plus the releases since the
+        decision is above \a decided exactly when a reference has been taken since.
+
+        rlck orders this with the releases of the locking path; increments take no lock, and are seen by the
+        compare-and-swap.  The object's lock is held exclusively.
+    */
+    DLLLOCAL bool takeCollectDeleteReference(int decided, unsigned releases) {
+        AutoLocker al(rlck);
+        collect_pending.fetch_sub(1, std::memory_order_relaxed);
+        int since = static_cast<int>(locked_releases - releases);
+        int refs = references.load(std::memory_order_acquire);
+        do {
+            if (refs + since > decided) {
+                return false;
+            }
+        } while (!references.compare_exchange_weak(refs, refs + 1, std::memory_order_acq_rel,
+            std::memory_order_acquire));
+        if (!refs) {
+            // the references that remained were released first: see dbg_zero_count_weak_refs
             tRef();
 #ifdef DEBUG
             ++dbg_zero_count_weak_refs;
 #endif
         }
+        return true;
     }
 
-    DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
+    //! frees the private data, members and class-specific members that were detached from a deleted object
+    /** Called without the object's lock, once the object is marked deleted and the storage is detached from it with the
+        lock held
+    */
+    DLLLOCAL void cleanup(ExceptionSink* xsink, KeyList* pd, QoreHashNode* td, cdmap_t* cdm);
+
+#ifdef DEBUG
+    //! Test hook run by cleanup() once the private data of a deleted object is freed, before its members are released
+    /** Tests hold the cleanup of a deleted object here to make a call that another thread makes with the object
+        deterministic; see dbg_hold_object_cleanup().
+    */
+    typedef void (*dbg_cleanup_t)(QoreObject& obj);
+    DLLLOCAL static std::atomic<dbg_cleanup_t> dbg_cleanup_hook;
+#endif
 
     //! Invalidate an incomplete object while its owner keeps its reference alive.
     /** Clears member and native storage without calling user destructors or
@@ -908,12 +967,13 @@ public:
     }
 
     DLLLOCAL void doPrivateException(const char* mem, ExceptionSink* xsink) const {
-        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem, theclass->getName());
+        xsink->raiseException("PRIVATE-MEMBER", "'%s' is a private member of class '%s'", mem,
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL void doPublicException(const char* mem, ExceptionSink* xsink) const {
         xsink->raiseException("INVALID-MEMBER", "'%s' is not a registered member of class '%s'", mem,
-            theclass->getName());
+            qore_class_private::get(*theclass)->memberDiagnosticName());
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -1006,8 +1066,15 @@ public:
     // add virtual IDs for private data to class list
     DLLLOCAL void addVirtualPrivateData(qore_classid_t key, AbstractPrivateData* apd);
 
+    //! removes the private data of the given class from the object and returns it; the caller owns it
+    /** Raises OBJECT-ALREADY-DELETED and returns nullptr if the object is deleted, also while its private data is freed
+    */
     DLLLOCAL AbstractPrivateData* getAndRemovePrivateData(qore_classid_t key, ExceptionSink* xsink) {
         QoreSafeVarRWWriteLocker sl(rml);
+        if (status == OS_DELETED) {
+            makeAccessDeletedObjectException(xsink, theclass->getName());
+            return nullptr;
+        }
         return privateData ? privateData->getAndRemovePtr(key) : nullptr;
     }
 
@@ -1127,7 +1194,7 @@ public:
     //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
         // only a dereference that decided to delete the object defers or makes its deletion, and it has taken the
-        // deletion's reference (takeDeleteReference())
+        // deletion's reference (takeLastDeleteReference(), takeCollectDeleteReference())
         doDeleteIntern(xsink, true);
     }
 

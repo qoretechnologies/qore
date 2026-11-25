@@ -843,8 +843,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             "raw_cx": "class T inherits HttpServer::AbstractStreamRequest { auto f() { return raw_cx; } }",
             # the filter of a handler cannot be replaced
             "withholdRequestCredentials": "class T inherits HttpServer::AbstractHttpRequestHandler { "
-                "private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr, "
-                "reference<*object> h) { return <HttpFilteredRequestInfo>{\"cx\": cx, \"hdr\": hdr}; } }",
+                "private hash<HttpFilteredRequestInfo> withholdRequestCredentials(hash<auto> cx, hash<auto> hdr) { "
+                "return <HttpFilteredRequestInfo>{\"cx\": cx, \"hdr\": hdr}; } }",
             "filterRequestForHandler": "class T inherits HttpServer::AbstractHttpRequestHandler { "
                 "private hash<HttpFilteredRequestInfo> filterRequestForHandler(hash<auto> cx, hash<auto> hdr) { "
                 "return <HttpFilteredRequestInfo>{\"cx\": cx, \"hdr\": hdr}; } }",

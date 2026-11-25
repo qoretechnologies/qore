@@ -27,6 +27,7 @@ class MaskDatasourceDriverOptionsTest inherits QUnit::Test {
         addTestCase("driver not loaded, then loaded", \driverLoadTest());
         addTestCase("values that can be shown", \valueTest());
         addTestCase("forms without show_options", \noOptionsTest());
+        addTestCase("the pool size options min and max", \poolSizeTest());
         set_return_value(main());
     }
 
@@ -97,5 +98,25 @@ class MaskDatasourceDriverOptionsTest inherits QUnit::Test {
     private static string maskedString() {
         return mask_datasource("dbitest:user/s3cr3t-7070@db{secret=s3cr3t-7070,rows=3,undeclared=s3cr3t-7070}",
             {"show_db": True, "show_options": True});
+    }
+
+    #! Qore's own pool size options are shown whatever the driver, as a non-negative integer only (qore#7545)
+    poolSizeTest() {
+        # a driver that is not loaded: its own options are masked, the pool size is shown
+        string ds = "notloaded:user/pass@db{min=1,max=5,timeout=30}";
+        assertFalse(inlist("notloaded", get_module_hash().keys()));
+        assertEq({"min": "1", "max": "5", "timeout": "****"}, mask_datasource_hash(ds, Opts).options);
+        assertEq("notloaded:****/****@db{min=1,max=5,timeout=****}", mask_datasource(ds, Opts));
+        assertEq({"min": "2", "max": "10"}, mask_datasource_options("notloaded", {"min": 2, "max": "10"}));
+        # any other value of these options is masked
+        foreach auto v in (-1, "-1", "1.5", 1.5, "ten", "", " 1", "1234567890123456789", True) {
+            assertEq({"min": "****"}, mask_datasource_options("notloaded", {"min": v}), sprintf("%y", v));
+        }
+        # only the exact names: a driver option named like them is not a pool size option
+        assertEq({"MIN": "****", "min_rows": "****"},
+            mask_datasource_options("notloaded", {"MIN": 1, "min_rows": 2}));
+        # the masked description for messages still shows no option at all
+        assertFalse(mask_datasource(ds).find("min=1") >= 0);
+        assertFalse(mask_datasource(ds).find("pass") >= 0);
     }
 }

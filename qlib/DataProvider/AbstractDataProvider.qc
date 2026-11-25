@@ -1341,6 +1341,16 @@ public hashdecl DataProviderBaseInfo {
     */
     bool supports_observable = False;
 
+    #! Whether the source redelivers an event refused by an observer
+    /** An exception from @ref DataProvider::Observer::update() "Observer::update()" refuses the event.
+        When this flag is @ref True, the provider leaves the event unacknowledged and the source delivers it
+        again, possibly after a back-off. With the default @ref False, a refused event may be lost.
+
+        @see dataprovider_watch_delivery
+        @since %DataProvider 3.13
+    */
+    bool supports_refusal_redelivery = False;
+
     #! Output message support
     /** @see dataprovider_message_support
 
@@ -2576,6 +2586,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         }
         if (!exists rv.has_record) {
             rv.has_record = rv.supports_read;
+        }
+        if (self instanceof AbstractWatchDataProviderBase) {
+            rv.supports_refusal_redelivery = True;
         }
         if (!rv.events && rv.supports_observable) {
             rv.events = getEventTypes();

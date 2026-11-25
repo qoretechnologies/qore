@@ -351,6 +351,15 @@ struct qore_qf_private {
     */
     DLLLOCAL static int openFd(const char* fn, int flags, int mode, ExceptionSink* xsink);
 
+#ifndef _Q_WINDOWS
+    //! opens a file under a sandbox policy relative to its pinned path (qore#7518)
+    /** @return the descriptor, -1 for an error of the open (errno is set), or -2 for a denial (an exception is raised
+        in xsink if given, otherwise errno is EACCES)
+    */
+    DLLLOCAL static int openPinned(QoreSandboxManager& sm, const char* fn, int oflags, int mode, int access_mode,
+            ExceptionSink* xsink);
+#endif
+
     DLLLOCAL int open(const char* fn, int flags, int mode, const QoreEncoding* cs, ExceptionSink* xsink = nullptr) {
         if (!fn || special_file)
             return -1;
