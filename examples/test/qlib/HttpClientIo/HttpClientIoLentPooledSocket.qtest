@@ -294,15 +294,15 @@ class HttpClientIoLentPooledSocketTest inherits QUnit::Test {
         HoldHandler handler();
         HttpServer server(<HttpServerOptionInfo>{});
         server.setDefaultHandler("hold", handler);
-        hash<auto> lopts = {"node": "127.0.0.1", "service": 0};
-        if (tls) {
-            lopts += {
+        int port = tls
+            ? server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
                 "http_version": "2.0",
-            };
-        }
-        int port = server.addListener(cast<hash<HttpListenerOptionInfo>>(lopts)).port;
+            }).port
+            : server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         server.waitForAsyncIo();
         return {
             "server": server,
