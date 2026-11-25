@@ -1,0 +1,72 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DocumentProviderBillingTest
+
+class DocumentProviderBillingTest inherits QUnit::Test {
+    constructor() : Test("Document provider processing and billing", "1.0", \ARGV) {
+        addTestCase("Textract analysis, polling and adapter training", sub () {
+            check("AwsTextract", "amazonaws.com", "https://aws.amazon.com/textract/pricing/", {
+                "detect-document-text": "page", "analyze-document": "page", "analyze-expense": "page",
+                "analyze-id": "page", "start-lending-analysis": "page", "get-lending-analysis": "included",
+                "list-adapters": "included", "create-adapter-version": "metered",
+            });
+        });
+        addTestCase("Azure document analysis, polling and training", sub () {
+            check("AzureDocumentIntelligence", "cognitiveservices.azure.com",
+                "https://azure.microsoft.com/en-us/pricing/details/ai-document-intelligence/", {
+                    "analyze-document": "page", "start-analysis": "page", "start-classification": "page",
+                    "start-batch-analysis": "page", "get-analysis-result": "included", "build-model": "metered",
+                });
+        });
+        addTestCase("Google Document AI processing depends on the chosen processor", sub () {
+            check("GoogleDocumentAi", "googleapis.com", "https://cloud.google.com/document-ai/pricing", {
+                "process-document": "metered", "wait-for-operation": "included", "list-processors": "included",
+            });
+        });
+        addTestCase("LlamaParse jobs and job metadata", sub () {
+            check("LlamaParse", "llamaindex.ai", "https://www.llamaindex.ai/pricing", {
+                "parse-document": "credit", "parse-file": "credit", "classify-document": "credit",
+                "extract-from-document": "credit", "split-document": "credit", "get-parse-job": "included",
+                "list-files": "included",
+            });
+        });
+        set_return_value(main());
+    }
+
+    private check(string app, string recipient, string source, hash<string, string> actions) {
+        load_module(app + "DataProvider");
+        hash<DataProviderProcessingInfo> processing = <DataProviderProcessingInfo>{
+            "locality": "external", "external_recipient": recipient,
+        };
+        hash<DataProviderBillingInfo> billing = <DataProviderBillingInfo>{
+            "model": "metered", "source": source, "effective_date": 2026-11-25,
+        };
+        hash<DataProviderAppInfo> info = DataProviderActionCatalog::getAppEx(app);
+        assertEq(processing, info.processing);
+        assertEq(billing, info.billing);
+        actions{AbstractDataProvider::GenericApiCallActionName} = "metered";
+        foreach hash<auto> entry in (actions.pairIterator()) {
+            hash<DataProviderBillingInfo> expected = billing;
+            switch (entry.value) {
+                case "included":
+                case "metered":
+                    expected.model = entry.value;
+                    break;
+                default:
+                    expected.unit = entry.value;
+            }
+            assertEq(expected, DataProviderActionCatalog::getActionBilling(app, entry.key), entry.key);
+        }
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app)) {
+            assertEq(processing, DataProviderActionCatalog::getActionProcessing(app, action.action), action.action);
+            assertEq(source, DataProviderActionCatalog::getActionBilling(app, action.action).source, action.action);
+        }
+    }
+}

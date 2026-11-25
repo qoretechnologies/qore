@@ -63,6 +63,15 @@ module AzureDocumentIntelligenceDataProvider {
                 "Use `prebuilt-layout` with `features=keyValuePairs` for general extraction. "
                 "Custom model identifiers can be selected from this resource or entered directly.",
             "scheme": "azure-documentintelligence",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "cognitiveservices.azure.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "metered",
+                "source": "https://azure.microsoft.com/en-us/pricing/details/ai-document-intelligence/",
+                "effective_date": 2026-11-25,
+            },
             "logo": Priv::AzureDocumentIntelligenceLogo,
             "logo_file_name": "azure-document-intelligence-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -76,13 +85,23 @@ module AzureDocumentIntelligenceDataProvider {
         # them, not when the module is loaded; see the DataProvider module's lazy action registration
         DataProviderActionCatalog::registerLazyAppActions(AzureDocumentIntelligenceDataProvider::AppName, sub () {
             foreach RestSchemaActionSet actions in (AzureDocumentIntelligenceSchema::getActionSets()) {
-                actions.registerActions(AzureDocumentIntelligenceDataProvider::AppName);
+                foreach hash<DataProviderActionInfo> action in (actions.getActionInfoList(
+                        AzureDocumentIntelligenceDataProvider::AppName)) {
+                    if (inlist(action.action, ("start-analysis", "start-batch-analysis", "start-analysis-stream",
+                            "start-classification", "start-classification-stream"))) {
+                        action.billing = <DataProviderBillingInfo>{"unit": "page"};
+                    } else if (actions.getOperationEx(action.action).getMethod().upr() == "GET") {
+                        action.billing = <DataProviderBillingInfo>{"model": "included"};
+                    }
+                    DataProviderActionCatalog::registerAction(action);
+                }
             }
 
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
                 "app": AzureDocumentIntelligenceDataProvider::AppName,
                 "path": "/analyze-document",
                 "action": "analyze-document",
+                "billing": <DataProviderBillingInfo>{"unit": "page"},
                 "display_name": "Analyze Document",
                 "short_desc": "Run a Document Intelligence model over a document (async)",
                 "desc": "Submits a document to a Document Intelligence model and "

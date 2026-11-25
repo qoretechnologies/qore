@@ -69,7 +69,15 @@ public class AwsTextractActions {
                 options.AdapterVersion.ref_data = "adapter-versions";
                 options.AdapterVersion.depends_on = ("AdapterId",);
             }
+            *hash<DataProviderBillingInfo> billing;
+            if (inlist(entry.key, ("analyze-expense", "analyze-id", "start-document-analysis",
+                    "start-document-text-detection", "start-expense-analysis", "start-lending-analysis"))) {
+                billing = <DataProviderBillingInfo>{"unit": "page"};
+            } else if (op.operation =~ /^(Get|List)/) {
+                billing = <DataProviderBillingInfo>{"model": "included"};
+            }
             DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "billing": billing,
                 "app": AppName, "action": entry.key, "path": "/" + entry.key,
                 "display_name": op.display_name, "short_desc": op.short_desc, "desc": op.desc,
                 "action_code": DPAT_API, "options": options,
