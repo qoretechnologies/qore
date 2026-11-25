@@ -12,6 +12,16 @@ pair [1] 7
 list nested write [7]
 pair {n: 1} {other: 7}
 replaced local {other: 7}
+pair {n: 1} 2
+read then write 2
+pair {n: 2} 3
+read then change through weak reference 3
+pair [1] 2
+list read then write [2]
+pair [2] 3
+list read then write [3]
+pair 4 [3]
+named read then write [4]
 untyped inside 1
 pair {n: 1} 1
 after untyped null
