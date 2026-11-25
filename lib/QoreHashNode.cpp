@@ -387,13 +387,29 @@ HashMember* qore_hash_member_map::findSlow(const char* str) const {
 
 HashMember* qore_hash_member_map::findKeyed(const char* str, size_t len) const {
     assert(isHardened() && count);
-    size_t h = qore_hash_keyed_bytes(str, len);
-    for (HashMember* m = buckets[h & getMask()]; m; m = m->bucket_next) {
-        if (m->hash == h && qore_key_equal(m->key.data(), m->key.size(), str, len)) {
+    // the bucket is given by the keyed hash; the members keep their member hashes, so the keys are compared
+    for (HashMember* m = buckets[qore_hash_keyed_bytes(str, len) & getMask()]; m; m = m->bucket_next) {
+        if (qore_key_equal(m->key.data(), m->key.size(), str, len)) {
             return m;
         }
     }
     return nullptr;
+}
+
+size_t qore_hash_member_map::keyedBucket(const HashMember* m) const {
+    assert(isHardened());
+    return qore_hash_keyed_bytes(m->key.data(), m->key.size()) & getMask();
+}
+
+void qore_hash_member_map::eraseHardened(HashMember* m) {
+    assert(count && isHardened());
+    HashMember** p = &buckets[keyedBucket(m)];
+    while (*p != m) {
+        assert(*p);
+        p = &(*p)->bucket_next;
+    }
+    *p = m->bucket_next;
+    --count;
 }
 
 void qore_hash_member_map::insertSlow(HashMember* m) {
@@ -411,8 +427,10 @@ void qore_hash_member_map::insertSlow(HashMember* m) {
             return;
         }
     }
-    m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
-    HashMember*& b = buckets[m->hash & getMask()];
+    // a hardened map: the member keeps the member hash of its key (a debug function can have given it another
+    // hash), and its bucket is given by the keyed hash
+    m->hash = qore_hash_lookup_key::hashBytes(m->key.data(), m->key.size());
+    HashMember*& b = buckets[keyedBucket(m)];
     m->bucket_next = b;
     b = m;
     ++count;
@@ -441,12 +459,14 @@ void qore_hash_member_map::harden() {
 #endif
     size_t n = bucket_count();
     HashMember** nb = new HashMember*[n]();
-    // nothing can fail from here on
+    // nothing can fail from here on; the members keep the member hashes of their keys (a debug function can have
+    // given them other hashes), and their buckets are given by the keyed hashes
+    uint32_t mask = getMask();
     for (size_t b = 0; b < n; ++b) {
         for (HashMember* m = buckets[b]; m;) {
             HashMember* next = m->bucket_next;
-            m->hash = qore_hash_keyed_bytes(m->key.data(), m->key.size());
-            HashMember*& nbucket = nb[m->hash & getMask()];
+            m->hash = qore_hash_lookup_key::hashBytes(m->key.data(), m->key.size());
+            HashMember*& nbucket = nb[qore_hash_keyed_bytes(m->key.data(), m->key.size()) & mask];
             m->bucket_next = nbucket;
             nbucket = m;
             m = next;
@@ -454,7 +474,7 @@ void qore_hash_member_map::harden() {
     }
     delete[] buckets;
     buckets = nb;
-    // every insert into a hardened map takes the slow path
+    // every insert into a hardened map takes the slow path, and its searches are made by findSlow()
     setLimit(0);
 }
 
@@ -491,7 +511,9 @@ void qore_hash_member_map::rehash(size_t n) {
         for (size_t b = 0, e = bucket_count(); b < e; ++b) {
             for (HashMember* m = buckets[b]; m;) {
                 HashMember* next = m->bucket_next;
-                HashMember*& nbucket = nb[m->hash & nmask];
+                // the bucket of a member of a hardened map is given by the keyed hash of its key
+                HashMember*& nbucket = nb[(set_limit ? m->hash : qore_hash_keyed_bytes(m->key.data(), m->key.size()))
+                    & nmask];
                 m->bucket_next = nbucket;
                 nbucket = m;
                 m = next;
