@@ -11003,24 +11003,32 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             return loadVarRef(left_var, error, "assignment result", assign->getLeft());
         }
     } else if (assign->getLeft().hasNode()) {
+        // the value of the assignment is the value stored, which the element's type can convert (a softint element
+        // stores an integer for a string, an untyped element strips a complex type), as the AST interpreter gives it
+        // (qore#7575): a store fast path whose value is used gives the value stored as its result (qore#7589)
+        bool fast_store = !is_weak;
+        bool needs_result = assign->needsReturnValue();
         // Fast path: const-key hash subscript → LoadLocal + HashKeyStore (no EXPR_TREE)
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (!is_weak && isConstKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_name, key_expr)) {
+        if (fast_store && isConstKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_name,
+                key_expr)) {
             return emitHashKeyDirectStore(container_var, key_name, key_expr, right, expr,
-                assign->loc, error);
+                assign->loc, error, needs_result);
         }
         // Fast path: dynamic-key hash subscript → LoadLocal + HashKeyStoreDynamic (no EXPR_TREE)
-        if (!is_weak && isDynamicKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var, key_expr)) {
+        if (fast_store && isDynamicKeyHashSubscript(foreach_element_locals, assign->getLeft(), container_var,
+                key_expr)) {
             return emitHashKeyDynamicStore(container_var, key_expr, right, expr,
-                assign->loc, error);
+                assign->loc, error, needs_result);
         }
         // Fast path: const-index list subscript → LoadLocal + ListIndexStore (no EXPR_TREE)
         QoreValue index_expr;
-        if (!is_weak && isConstIndexListSubscript(foreach_element_locals, assign->getLeft(), container_var, index_expr)) {
+        if (fast_store && isConstIndexListSubscript(foreach_element_locals, assign->getLeft(), container_var,
+                index_expr)) {
             return emitListIndexDirectStore(container_var, index_expr, right, expr,
-                assign->loc, error);
+                assign->loc, error, needs_result);
         }
         // LValuePath: structured path for all remaining lvalue cases (reference vars,
         // object vars, non-VarRef containers, nested member access, etc.)
@@ -17223,7 +17231,7 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
 QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
         const VarRefNode* container_var, const std::string& key_name, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error) {
+        const QoreProgramLocation* loc, std::string& error, bool needs_result) {
     // Load the hash container without refcount inflation (auto_ref=false)
     QoreIRValue hash_val;
     if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
@@ -17249,6 +17257,10 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
     }
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
+    if (needs_result) {
+        store_inst->result = builder.getFunction()->createValue();
+        return store_inst->result;
+    }
 
     return value;
 }
@@ -17258,7 +17270,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
 QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
         const VarRefNode* container_var, const QoreValue& key_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error) {
+        const QoreProgramLocation* loc, std::string& error, bool needs_result) {
     // the key is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves the
     // container: an expression that assigns the container variable (h{(h = x).firstKey()} = v) then gives the container
     // written, and the container, loaded without a reference (auto_ref=false), is not released before its use
@@ -17294,6 +17306,10 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(key_val);
+    if (needs_result) {
+        store_inst->result = builder.getFunction()->createValue();
+        return store_inst->result;
+    }
 
     return value;
 }
@@ -17525,7 +17541,7 @@ void QoreIRLowering::emitPartialSliceRemove(QoreIRBasicBlock* partial_block, con
 QoreIRValue QoreIRLowering::emitListIndexDirectStore(
         const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
-        const QoreProgramLocation* loc, std::string& error) {
+        const QoreProgramLocation* loc, std::string& error, bool needs_result) {
     // the index is evaluated before the container is loaded, as the AST interpreter evaluates it before it resolves
     // the container: an expression that assigns the container variable (l[(l = x).size() - 1] = v) then gives the
     // container written, and the container, loaded without a reference (auto_ref=false), is not released before its use
@@ -17561,6 +17577,10 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     store_inst->operands.push_back(list_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(index_val);
+    if (needs_result) {
+        store_inst->result = builder.getFunction()->createValue();
+        return store_inst->result;
+    }
 
     return value;
 }

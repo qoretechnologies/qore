@@ -3340,8 +3340,79 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
     return rv;
 }
 
-static void assignObjectMemberValue(QoreObject* obj, const char* key, const QoreValue& value,
+//! gives the value stored by a store instruction whose value is used to its result slot, or releases it after an
+//! exception (qore#7589)
+static void qore_ir_set_store_result(IRValueSlots& values, IRCleanupSlots& cleanup, uint32_t result_id, QoreValue rv,
         ExceptionSink* xsink) {
+    if (xsink && *xsink) {
+        rv.discard(xsink);
+        return;
+    }
+    setOwnedValueSlot(values, cleanup, result_id, rv, xsink);
+}
+
+// The store instructions (HashKeyStore, HashKeyStoreDynamic, ListIndexStore) whose value is used give the value stored
+// as their result (qore#7589); the functions below make the store and set the result: out of line, so that
+// QoreIRInterpreter::execute() keeps the code of a store whose value is not used as it is and makes only a test of the
+// result for one whose value is used
+
+//! assigns a key of a hash through the reference that it holds (qore#6661) or to the key, setting the result
+static __attribute__((noinline)) void qore_ir_store_hash_key_result(QoreHashNode* h, const char* key,
+        const QoreValue& val, ExceptionSink* xsink, IRValueSlots& values, IRCleanupSlots& cleanup,
+        uint32_t result_id) {
+    QoreValue rv;
+    if (!qore_assign_through_element_reference(h->getKeyValue(key), val, xsink, rv)) {
+        qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, rv);
+    }
+    qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
+}
+
+//! assigns a key of a hash created for the store, setting the result
+static __attribute__((noinline)) void qore_ir_store_new_hash_key_result(QoreHashNode* h, const char* key,
+        const QoreValue& val, ExceptionSink* xsink, IRValueSlots& values, IRCleanupSlots& cleanup,
+        uint32_t result_id) {
+    QoreValue rv;
+    qore_hash_private::setKeyValueCanonical(*h, key, val.refSelf(), xsink, rv);
+    qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
+}
+
+//! assigns an element of a list that holds a reference through it (qore#6661), setting the result
+static __attribute__((noinline)) bool qore_ir_assign_through_list_element_result(const QoreValue& cur,
+        const QoreValue& val, ExceptionSink* xsink, IRValueSlots& values, IRCleanupSlots& cleanup,
+        uint32_t result_id) {
+    QoreValue rv;
+    if (!qore_assign_through_element_reference(cur, val, xsink, rv)) {
+        return false;
+    }
+    qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
+    return true;
+}
+
+//! sets the result to the element of a list that the store stored
+static __attribute__((noinline)) void qore_ir_list_store_result(const QoreListNode* l, size_t index,
+        IRValueSlots& values, IRCleanupSlots& cleanup, uint32_t result_id, ExceptionSink* xsink) {
+    qore_ir_set_store_result(values, cleanup, result_id, l->retrieveEntry(index).refSelf(), xsink);
+}
+
+//! assigns an element of a container that a local designates through a weak reference
+//! (qore_weak_local_container_store()), setting the result if \a result_id is not 0
+static __attribute__((noinline)) bool qore_ir_weak_container_store(const LocalVar* lv,
+        const AbstractQoreNode* container, const char* key, int64 index, const QoreValue& val, ExceptionSink* xsink,
+        IRValueSlots& values,
+        IRCleanupSlots& cleanup, uint32_t result_id) {
+    if (!result_id) {
+        return qore_weak_local_container_store(lv, container, key, index, val, xsink);
+    }
+    QoreValue rv;
+    if (!qore_weak_local_container_store(lv, container, key, index, val, xsink, &rv)) {
+        return false;
+    }
+    qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
+    return true;
+}
+
+static void assignObjectMemberValue(QoreObject* obj, const char* key, const QoreValue& value,
+        ExceptionSink* xsink, QoreValue* res = nullptr) {
     const qore_class_private* class_ctx = runtime_get_class();
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
         // a class on the private:internal path to the member uses it (issue #6800)
@@ -3364,7 +3435,23 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
     }
 
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
-    helper.assign(stored);
+    // the value of the assignment is the value stored, as the AST interpreter gives it (qore#7589)
+    if (!helper.assign(stored) && res) {
+        *res = helper.getReferencedValue();
+    }
+}
+
+//! assigns a member of an object for a hash store instruction, setting the result if \a result_id is not 0 (qore#7589)
+static __attribute__((noinline)) void qore_ir_assign_object_member(QoreObject* obj, const char* key,
+        const QoreValue& value, ExceptionSink* xsink, IRValueSlots& values, IRCleanupSlots& cleanup,
+        uint32_t result_id) {
+    if (!result_id) {
+        assignObjectMemberValue(obj, key, value, xsink);
+        return;
+    }
+    QoreValue rv;
+    assignObjectMemberValue(obj, key, value, xsink, &rv);
+    qore_ir_set_store_result(values, cleanup, result_id, rv, xsink);
 }
 
 static void updateLocalVarFromLvalue(
@@ -15258,8 +15345,8 @@ load_local_done:
                             }
                             // a hash that the local designates through a weak reference is changed, not copied, as
                             // the AST interpreter changes it (qore#7299)
-                            if (!is_closure && qore_weak_local_container_store(lv, h, hks_inst->key_name.c_str(), 0,
-                                    val, xsink)) {
+                            if (!is_closure && qore_ir_weak_container_store(lv, h, hks_inst->key_name.c_str(), 0,
+                                    val, xsink, values, cleanup, hks_inst->result.id)) {
                                 return true;
                             }
                             // COW: create unique copy and update the local variable.
@@ -15285,8 +15372,11 @@ load_local_done:
                         // Make the update with already-referenced value.
                         // (hash is already in TLS and will be cleaned up normally); an element that holds a
                         // reference is assigned through it, as the AST interpreter assigns it (qore#6661)
-                        if (!qore_assign_through_element_reference(h->getKeyValue(hks_inst->key_name.c_str()), val,
-                                xsink)) {
+                        if (hks_inst->result.isValid()) {
+                            qore_ir_store_hash_key_result(h, hks_inst->key_name.c_str(), val, xsink, values, cleanup,
+                                hks_inst->result.id);
+                        } else if (!qore_assign_through_element_reference(h->getKeyValue(hks_inst->key_name.c_str()),
+                                val, xsink)) {
                             qore_hash_private::setKeyValueCanonical(*h, hks_inst->key_name.c_str(), val.refSelf(),
                                 xsink);
                         }
@@ -15328,7 +15418,13 @@ load_local_done:
                             // cannot be reported to a catch block, so the instruction aborts
                             return new_h || (xsink && *xsink);
                         }
-                        qore_hash_private::setKeyValueCanonical(*new_h, hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                        if (hks_inst->result.isValid()) {
+                            qore_ir_store_new_hash_key_result(new_h, hks_inst->key_name.c_str(), val, xsink, values,
+                                cleanup, hks_inst->result.id);
+                        } else {
+                            qore_hash_private::setKeyValueCanonical(*new_h, hks_inst->key_name.c_str(),
+                                val.refSelf(), xsink);
+                        }
                         if (xsink && *xsink) {
                             // the hash was created for this store only, so the rejected store leaves no value behind
                             new_h->deref(xsink);
@@ -15350,8 +15446,8 @@ load_local_done:
                         discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
                             isClosureContainer(hks_inst->container_lv, hks_inst->container));
                     } else if (hash_val.getType() == NT_OBJECT) {
-                        assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
-                            hks_inst->key_name.c_str(), val, xsink);
+                        qore_ir_assign_object_member(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
+                            hks_inst->key_name.c_str(), val, xsink, values, cleanup, hks_inst->result.id);
                     }
                     return true;
                 };
@@ -15371,9 +15467,6 @@ load_local_done:
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
-                }
-                if (hks_inst->result.isValid()) {
-                    setValueSlot(values, hks_inst->result.id, val, xsink);
                 }
                 ++ip;
                 break;
@@ -15432,8 +15525,8 @@ load_local_done:
                             }
                             // a hash that the local designates through a weak reference is changed, not copied, as
                             // the AST interpreter changes it (qore#7299)
-                            if (!is_closure && qore_weak_local_container_store(lv, h, key_str.c_str(), 0, val,
-                                    xsink)) {
+                            if (!is_closure && qore_ir_weak_container_store(lv, h, key_str.c_str(), 0, val,
+                                    xsink, values, cleanup, hksd_inst->result.id)) {
                                 return;
                             }
                             // COW: see HashKeyStore above for rationale on *Transfer variants
@@ -15449,7 +15542,11 @@ load_local_done:
                             h = new_h;
                         }
                         // an element that holds a reference is assigned through it (qore#6661)
-                        if (!qore_assign_through_element_reference(h->getKeyValue(key_str.c_str()), val, xsink)) {
+                        if (hksd_inst->result.isValid()) {
+                            qore_ir_store_hash_key_result(h, key_str.c_str(), val, xsink, values, cleanup,
+                                hksd_inst->result.id);
+                        } else if (!qore_assign_through_element_reference(h->getKeyValue(key_str.c_str()), val,
+                                xsink)) {
                             qore_hash_private::setKeyValueCanonical(*h, key_str.c_str(), val.refSelf(), xsink);
                         }
                         clearLoadSlots(hksd_inst->container_slot_id);
@@ -15483,7 +15580,12 @@ load_local_done:
                             new_h->deref(xsink);
                             return;
                         }
-                        qore_hash_private::setKeyValueCanonical(*new_h, key_str.c_str(), val.refSelf(), xsink);
+                        if (hksd_inst->result.isValid()) {
+                            qore_ir_store_new_hash_key_result(new_h, key_str.c_str(), val, xsink, values, cleanup,
+                                hksd_inst->result.id);
+                        } else {
+                            qore_hash_private::setKeyValueCanonical(*new_h, key_str.c_str(), val.refSelf(), xsink);
+                        }
                         if (xsink && *xsink) {
                             new_h->deref(xsink);
                             return;
@@ -15504,8 +15606,8 @@ load_local_done:
                         discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
                             isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
                     } else if (hash_val.getType() == NT_OBJECT) {
-                        assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
-                            key_str.c_str(), val, xsink);
+                        qore_ir_assign_object_member(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
+                            key_str.c_str(), val, xsink, values, cleanup, hksd_inst->result.id);
                     }
                 };
                 store_dynamic_key();
@@ -15520,9 +15622,6 @@ load_local_done:
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
-                }
-                if (hksd_inst->result.isValid()) {
-                    setValueSlot(values, hksd_inst->result.id, val, xsink);
                 }
                 ++ip;
                 break;
@@ -15605,7 +15704,8 @@ load_local_done:
                             }
                             // a list that the local designates through a weak reference is changed, not copied, as
                             // the AST interpreter changes it (qore#7299)
-                            if (!is_closure && qore_weak_local_container_store(lv, l, nullptr, index, val, xsink)) {
+                            if (!is_closure && qore_ir_weak_container_store(lv, l, nullptr, index, val, xsink,
+                                    values, cleanup, lis_inst->result.id)) {
                                 break;
                             }
                             // COW: see HashKeyStore above for rationale on *Transfer variants.
@@ -15651,7 +15751,10 @@ load_local_done:
                             // an element that holds a reference is assigned through it, as the AST interpreter
                             // assigns it, before the value is checked against the element type (qore#6661)
                             && !(static_cast<size_t>(index) < l->size()
-                                && qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink))) {
+                                && (lis_inst->result.isValid()
+                                    ? qore_ir_assign_through_list_element_result(l->retrieveEntry(index), val, xsink,
+                                        values, cleanup, lis_inst->result.id)
+                                    : qore_assign_through_element_reference(l->retrieveEntry(index), val, xsink)))) {
                             // Apply element type coercion if the list has a typed value type
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -15671,6 +15774,10 @@ load_local_done:
                                 // Make the update with already-referenced (and potentially coerced) value.
                                 // (list is already in TLS and will be cleaned up normally)
                                 l->setEntry(index, entry, xsink);
+                                // the value stored, which the element type can convert
+                                if (lis_inst->result.isValid() && !*xsink) {
+                                    qore_ir_list_store_result(l, index, values, cleanup, lis_inst->result.id, xsink);
+                                }
                             }
                         }
 
@@ -15720,8 +15827,12 @@ load_local_done:
                             ? lis_inst->container->getTypeInfo()
                             : (lv ? qore_substitute_type_params_if_needed(lv->getTypeInfoForLValue())
                                   : nullptr);
+                        // an untyped declaration takes an untyped list, as the AST interpreter vivifies it, so that the
+                        // local's assignment does not convert the list after the store (qore#7589)
                         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
-                        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+                        QoreListNode* new_l = qore_lvalue_vivifies_untyped_list(varTI)
+                            ? new QoreListNode
+                            : new QoreListNode(elemTI ? elemTI : autoTypeInfo);
                         {
                             const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
@@ -15743,6 +15854,9 @@ load_local_done:
                         if (xsink && *xsink) {
                             new_l->deref(xsink);
                             break;
+                        }
+                        if (lis_inst->result.isValid()) {
+                            qore_ir_list_store_result(new_l, index, values, cleanup, lis_inst->result.id, xsink);
                         }
                         if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
@@ -15772,9 +15886,6 @@ load_local_done:
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
-                }
-                if (lis_inst->result.isValid()) {
-                    setValueSlot(values, lis_inst->result.id, val, xsink);
                 }
                 ++ip;
                 break;
