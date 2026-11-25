@@ -744,6 +744,10 @@ void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings) {
             qore_append_escaped_report_text(out, *text);
         }
     };
+    // the report stops at the same number of diagnostics as the legacy report (QORE_EXCEPTION_REPORT_LIMIT), read once
+    // per report, with a one-line notice of its own
+    const unsigned limit = exception_report_limit();
+    unsigned count = 0;
     for (const QoreException* e = first; e; e = e->next) {
         QoreString out(QCS_UTF8);
         if (e->file.empty() || e->isBuiltin()) {
@@ -762,6 +766,11 @@ void qore_report_parse_diagnostics(ExceptionSink& sink, bool warnings) {
         out.concat(": ");
         append_value(out, e->desc);
         out.concat('\n');
+        if (e->next && ++count == limit) {
+            out.sprintf("qore: note: maximum exception count reached (%u); suppressing further output\n", count);
+            write_report(out);
+            break;
+        }
         write_report(out);
     }
     sink.clear();
