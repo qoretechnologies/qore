@@ -111,6 +111,14 @@ string what = ARGV[1];
 string data = ARGV[2];
 string own_path = ARGV[3];
 SandboxManager sm();
+# the module files that the sandboxed code loads are read with the policy of its sandbox, which must allow them
+# (qore#7518)
+if (what =~ /\\//) {
+    sm.addFilesystemAllowedPath(dirname(what), QSEC_READ);
+}
+if (own_path != \"-\") {
+    sm.addFilesystemAllowedPath(own_path, QSEC_READ);
+}
 # restricted: also restricted with a functional domain that the module does not use; restricted-only: restricted
 # with no sandbox
 Program loader(PO_NEW_STYLE | (how =~ /^restricted/ ? PO_NO_PROCESS_CONTROL : 0), True);

@@ -1069,6 +1069,16 @@ authenticate();
     time and CPU time limits count the time that the initialization takes, and its memory limit the memory that it
     allocates.
 
+    A module that code which is not trusted loads by path from outside of the directories of library code is read with
+    the filesystem policy of that code: its source files, and the resources beside it that it reads when it is
+    initialized, are read only if the policy allows them to be read, as is any file that its code includes (a library
+    module reads the resources in its own directory when it is initialized, whatever the policy of the loading code;
+    a library module that code which is not trusted loads into a container of its own reads its own source files as
+    library code, and anything else with the policy of that code).  Native code (binary modules) is
+    loaded only from the module path when code that is not trusted loads it; the directories of the module path are
+    therefore part of the trusted computing base: an application must not give code that is not trusted write access
+    to them.
+
     Library code that code that is not trusted loads is not shaped by that code:
     - its source is parsed with the parse defines that the loading %Program's host set (with
       @ref Qore::Program::define() "Program::define()" by trusted code, or by the embedding application), but not
