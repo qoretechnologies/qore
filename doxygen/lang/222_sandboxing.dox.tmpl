@@ -968,6 +968,11 @@ authenticate();
       such code may neither set nor get its process-wide logger, which receives the module's diagnostics that name
       them; such code still looks up apps, actions, factories and schemes in the index (see
       @ref providerindexutil_external_info "the ProviderIndexUtil module")
+    - the process-wide logger of the data providers: such code neither gets
+      (@ref DataProvider::DataProvider::getGlobalLogger() "DataProvider::getGlobalLogger()" returns @ref nothing) nor
+      sets it (\c INVALID-FUNCTION-ACCESS), as it receives the messages of every caller, which name host information
+      (ex: the modules of \c QORE_DATA_PROVIDERS, and the paths of the index when the host gives ProviderIndexUtil the
+      same logger)
 
     Information about the host other than the environment is not used for such code either, as it may not read it
     itself (@ref Qore::getcwd() "getcwd()", @ref Qore::gethostname() "gethostname()",

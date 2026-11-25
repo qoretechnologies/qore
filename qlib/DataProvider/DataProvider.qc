@@ -494,14 +494,25 @@ public class DataProvider {
 
         @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller: it would change what the module does for other
         tenants and for trusted code
+        @throw INVALID-FUNCTION-ACCESS the calling code may not read external information
+        (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"): the logger receives the messages that the module and
+        the modules that log through it produce for every caller, which can name host information (ex: the modules of
+        \c QORE_DATA_PROVIDERS, the paths of the data provider index; see @ref sandbox_ambient_host_data)
 
         @note the messages that the module produces for any caller, also for sandboxed code, go to this logger
 
         @since DataProvider 3.0
+        @since DataProvider 3.12 code restricted from external information cannot set the logger
     */
     static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
+        # the logger receives the messages of every caller, which can name host information (qore#7597)
+        if (!SandboxManager::callerMayReadExternalInfo()) {
+            throw "INVALID-FUNCTION-ACCESS", "DataProvider::setGlobalLogger(): the logger receives the messages of "
+                "every caller, which can name host information that the calling code may not read "
+                "(PO_NO_EXTERNAL_INFO)";
+        }
         DataProviderGlobalLogger::logger = logger;
     }
 
@@ -568,17 +579,21 @@ DataProvider::setModuleHostHooks("TypeScriptActionInterface", {
     /** The logger is process-wide and set by trusted code: code that is sandboxed or acts for sandboxed code does not
         get the logger object, as if no logger were set, so that it cannot change the host's logger or use it
         directly (see @ref sandbox_process_wide_registries); the messages that the module produces while it serves
-        such code still go to the logger
+        such code still go to the logger.  Code restricted from external information
+        (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") does not get it either, as it receives the messages of
+        every caller, which can name host information (an appender that such code added to it would get them; see
+        @ref sandbox_ambient_host_data)
 
         @return the global data provider logger, or @ref nothing "NOTHING" if none is set or if the caller is code that
-        is sandboxed or acts for sandboxed code
+        is sandboxed or acts for sandboxed code, or that may not read external information
 
         @since DataProvider 3.0
-        @since DataProvider 3.12 sandboxed code does not get the logger
+        @since DataProvider 3.12 sandboxed code and code restricted from external information do not get the logger
     */
     static *LoggerInterface getGlobalLogger() {
-        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746)
-        if (!SandboxManager::isProcessWideRegistrationAllowed()) {
+        # the logger is process-wide and configured by the host: not handed to sandboxed code (qore#6746), nor to
+        # code that may not read the host information that the messages of other callers name (qore#7597)
+        if (!SandboxManager::isProcessWideRegistrationAllowed() || !SandboxManager::callerMayReadExternalInfo()) {
             return;
         }
         return DataProviderGlobalLogger::logger;

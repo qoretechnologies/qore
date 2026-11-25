@@ -64,6 +64,18 @@ try {
     q_r.logger_set = ex.err;
 }
 
+# the logger of the data providers, which the host also gives ProviderIndexUtil
+try { q_r.dp_logger_get = exists DataProvider::DataProvider::getGlobalLogger(); } catch (hash<ExceptionInfo> ex) { q_r.dp_logger_get = ex.err; }
+try {
+    *Logger::LoggerInterface old = DataProvider::DataProvider::getGlobalLogger();
+    DataProvider::DataProvider::setGlobalLogger(new Logger::Logger("q7597-child", Logger::LoggerLevel::getLevelAll()));
+    # the host's logger is restored
+    DataProvider::DataProvider::setGlobalLogger(old);
+    q_r.dp_logger_set = "set";
+} catch (hash<ExceptionInfo> ex) {
+    q_r.dp_logger_set = ex.err;
+}
+
 # the index directory cannot be written to
 q_set_writable(False);
 on_exit q_set_writable(True);

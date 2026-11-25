@@ -20,8 +20,9 @@
     of QORE_PROVIDER_INDEX_MAX_CANONICAL_BYTES and the user and group IDs of the process in the errors of the access
     check of the directory are information about the host: the public methods that return them refuse code restricted
     from external information (PO_NO_EXTERNAL_INFO), the errors and results that they are part of leave them out for
-    such code, the process-wide logger that receives the module's diagnostics is neither set nor given to such code
-    (while the host's logger still gets them), and such code still looks up apps in the index.  The checks are in
+    such code, the process-wide loggers of ProviderIndexUtil and DataProvider, which receive the module's diagnostics
+    (the host gives both the same logger), are neither set nor given to such code (while the host's logger still gets
+    them), and such code still looks up apps in the index.  The checks are in
     provider-index-host-info/provider-index-host-info-worker.q (in Programs of each kind in each execution mode, whose
     top-level code calls the methods), whose output must be one "ok" line per check, run by the interpreter and as
     programs compiled with qcc.
@@ -33,7 +34,7 @@ class ProviderIndexHostInfoTest inherits QUnit::Test {
         #! the execution modes of the worker's Programs
         const Modes = 4;
         #! the checks of each Program
-        const Cases = 22;
+        const Cases = 24;
     }
 
     private {

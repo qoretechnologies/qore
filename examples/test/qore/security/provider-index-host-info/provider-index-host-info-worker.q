@@ -16,9 +16,10 @@
 
 %requires ProviderIndexUtil
 %requires ProviderIndex
+%requires DataProvider
 
 #! the modules that the host preloads into each Program
-const Modules = ("ProviderIndexUtil", "ProviderIndex");
+const Modules = ("ProviderIndexUtil", "ProviderIndex", "DataProvider");
 
 #! the kinds of Programs: whether the code may read external information
 const Kinds = {
@@ -61,12 +62,14 @@ class Capture inherits Logger::LoggerAppenderWithLayout {
     }
 }
 
-# the module's diagnostics go to the host's logger, which records them, instead of stderr
+# the module's diagnostics go to the host's logger, which records them, instead of stderr; the host gives the data
+# providers the same logger
 Capture host_capture();
 {
     Logger::Logger host_logger("q7597", Logger::LoggerLevel::getLevelInfo());
     host_logger.addAppender(host_capture);
     ProviderIndexUtil::setGlobalLogger(host_logger);
+    DataProvider::DataProvider::setGlobalLogger(host_logger);
 }
 
 string child_source = ReadOnlyFile::readTextFile(ENV.Q7597_CHILD);
@@ -162,6 +165,8 @@ hash<auto> may_read = {
     "writable_denied": "names the directory and the IDs",
     "logger_get": True,
     "logger_set": "set",
+    "dp_logger_get": True,
+    "dp_logger_set": "set",
 };
 
 #! what code restricted from external information gets: no index directory, no paths under it and no IDs
@@ -182,6 +187,8 @@ hash<auto> may_not_read = may_read + {
     "writable_denied": "INVALID-FUNCTION-ACCESS",
     "logger_get": False,
     "logger_set": "INVALID-FUNCTION-ACCESS",
+    "dp_logger_get": False,
+    "dp_logger_set": "INVALID-FUNCTION-ACCESS",
 };
 
 #! what sandboxed code gets in addition: the process-wide logger is not shared with it, whether it may read external
@@ -189,6 +196,8 @@ hash<auto> may_not_read = may_read + {
 const Sandboxed = {
     "logger_get": False,
     "logger_set": "PROVIDER-INDEX-REGISTRATION-DENIED",
+    "dp_logger_get": False,
+    "dp_logger_set": "DATA-PROVIDER-CALLBACK-ERROR",
 };
 
 const Classified = ("reload_error", "read_error", "write_denied", "pi_denied", "pi_workers", "writable_denied");
