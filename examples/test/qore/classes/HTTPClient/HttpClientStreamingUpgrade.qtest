@@ -1,0 +1,349 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - 101 responses to streamed HTTP/1.1 requests read from TCP sockets, socket hand-over and close
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A streamed HTTP/1.1 request that asks for a protocol upgrade with an Upgrade header and is answered with a 101
+# response ends at once with the 101 response, instead of waiting for a response body that never comes until the
+# request times out (qore#7487).  HTTPClient, which has no way to give the connection to its caller, closes it, and
+# the next request takes a new connection; a stream of the HttpClientIo connection manager ends with the 101 header
+# and the end of the stream, and its caller takes the socket over (as WebSocketClient does) or closes the connection,
+# which the manager never gives to another request.  A WebSocket connection is made as before.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketClient
+
+%exec-class HttpClientStreamingUpgradeTest
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the timeout of a request; a request that waits for a response body that never comes ends with it
+const RequestTimeout = 10s;
+
+#! the time in which a request answered with a 101 response must end: far less than RequestTimeout
+const Prompt = 1s;
+
+#! the request header fields that ask for an upgrade to a protocol other than WebSocket
+const UpgradeHeaders = {"Upgrade": "foo", "Connection": "Upgrade"};
+
+#! An HTTP/1.1 server: answers a request with an Upgrade header with 101 and then speaks a protocol of its own on the
+#! connection (it answers "PING" with "PONG"); a WebSocket upgrade with a WebSocket echo; any other request with 200
+class UpgradeServer {
+    public {
+        #! the end of each connection after a 101 response: "<connection number>:closed"
+        Queue ends();
+        #! the request line and connection number of each request received
+        Queue requests();
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    #! stops the server; the connections of the clients must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        while (True) {
+            hash<auto> h;
+            try {
+                # longer than the wait of a test for the end of a connection, so that only the client's close of the
+                # connection ends it in time
+                h = s.readHTTPHeader(Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!h.method) {
+                return;
+            }
+            requests.push(sprintf("%d %s %s", n, h.method, h.path));
+            if (h."transfer-encoding" =~ /chunked/i) {
+                s.readHTTPChunkedBody(Timeout);
+            }
+            if (h.upgrade == "websocket") {
+                s.send(sprintf("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                    "Sec-WebSocket-Accept: %s\r\n\r\n", ws_get_response_key(h."sec-websocket-key")));
+                webSocketEcho(s);
+                return;
+            }
+            if (h.upgrade) {
+                s.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: foo\r\nConnection: Upgrade\r\n\r\n");
+                otherProtocol(s, n);
+                return;
+            }
+            s.send("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nplain");
+        }
+    }
+
+    #! the protocol after the 101 response: "PING" is answered with "PONG" until the client closes the connection
+    private otherProtocol(Socket s, int n) {
+        on_exit ends.push(sprintf("%d:closed", n));
+        while (True) {
+            *binary b;
+            try {
+                b = s.recvBinary(-1, Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (!b) {
+                return;
+            }
+            if (b.toString() =~ /PING/) {
+                s.send("PONG");
+            }
+        }
+    }
+
+    #! echoes WebSocket messages until the client closes the connection
+    private webSocketEcho(Socket s) {
+        while (True) {
+            hash<WsMsgInfo> msg;
+            try {
+                msg = ws_read_message(s, Timeout * 2);
+            } catch (hash<ExceptionInfo> ex) {
+                return;
+            }
+            if (msg.op == WSOP_Close) {
+                try {
+                    s.send(ws_encode_message(msg.msg ?? binary(), WSOP_Close));
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                return;
+            }
+            if (msg.op == WSOP_Text || msg.op == WSOP_Binary) {
+                s.send(ws_encode_message(msg.msg, msg.op));
+            }
+        }
+    }
+}
+
+class HttpClientStreamingUpgradeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpClientStreamingUpgrade", "1.0") {
+        addTestCase("HTTPClient::sendWithRecvCallback(): 101 ends the request, the connection is closed",
+            \testHttpClient(), ("recv",));
+        addTestCase("HTTPClient::sendWithCallbacks(): 101 ends the request, the connection is closed",
+            \testHttpClient(), ("callbacks",));
+        addTestCase("HTTPClient::sendAndStream(): the body after 101 ends at once, the connection is closed",
+            \testHttpClient(), ("stream",));
+        addTestCase("HttpClientConnectionManager::acquireAndStartStreaming(): the stream ends with 101, the caller "
+            "takes the socket over", \testManager(), (True, True));
+        addTestCase("HttpClientStreamHandle::startStreaming(): the stream ends with 101, the caller takes the socket "
+            "over", \testManager(), (False, True));
+        addTestCase("HttpClientConnectionManager::acquireAndStartStreaming(): the stream ends with 101, the caller "
+            "closes the connection", \testManager(), (True, False));
+        addTestCase("HTTPClient::sendWithRecvCallback(): an error of the receive callback after 101: the connection is "
+            "closed", \testHttpClientCallbackError());
+        addTestCase("HttpClientConnectionManager::request(): 101 is returned at once, the connection is closed",
+            \testManagerResponse(), ("request",));
+        addTestCase("HttpClientConnectionManager::openStream(): the body of the 101 ends at once, the connection is "
+            "closed", \testManagerResponse(), ("openStream",));
+        addTestCase("WebSocketClient: the 101 upgrade to WebSocket works as before", \testWebSocket());
+        set_return_value(main());
+    }
+
+    #! a streamed HTTPClient request answered with 101 ends at once; the connection is closed
+    testHttpClient(string api) {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        HTTPClient hc({"url": server.getUrl(), "timeout": RequestTimeout});
+        on_exit hc.disconnect();
+
+        list<hash<auto>> received = ();
+        code recv = sub (hash<auto> h) {
+            received += h;
+        };
+        int start = clock_get_monotonic_us();
+        int status;
+        switch (api) {
+            case "recv":
+                hc.sendWithRecvCallback(recv, NOTHING, "GET", "/up", UpgradeHeaders);
+                status = received[0].hdr.status_code;
+                # the end of the response is reported to the callback
+                assertTrue(received.last().hasKey("hdr"));
+                assertEq(NOTHING, received.last().hdr);
+                break;
+            case "callbacks":
+                hc.sendWithCallbacks(sub () {}, recv, "POST", "/up", UpgradeHeaders);
+                status = received[0].hdr.status_code;
+                assertTrue(received.last().hasKey("hdr"));
+                assertEq(NOTHING, received.last().hdr);
+                break;
+            case "stream":
+                status = hc.sendAndStream("GET", "/up", NOTHING, UpgradeHeaders).status_code;
+                # the response has no body
+                assertEq({}, hc.readHTTPChunk(RequestTimeout));
+                break;
+        }
+        int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+        assertEq(101, status);
+        assertLt(Prompt.durationMilliseconds(), elapsed_ms, "the request ends at once");
+
+        # HTTPClient closes the connection, whose data is no longer HTTP
+        assertEq("1:closed", server.ends.get(Timeout));
+        # the next request takes a new connection
+        assertEq("plain", hc.get("/plain"));
+        assertEq(2, server.getConnectionCount());
+    }
+
+    #! a stream of the connection manager answered with 101 ends at once; its caller takes the socket over or closes
+    #! the connection, which the manager never gives to another request
+    testManager(bool acquire_and_start, bool take_over) {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_request_retries": 0,
+            "request_timeout": RequestTimeout,
+        });
+        on_exit mgr.closeAll();
+
+        int start = clock_get_monotonic_us();
+        HttpClientStreamHandle sh;
+        if (acquire_and_start) {
+            sh = mgr.acquireAndStartStreaming(server.getUrl(), "GET", "/up", UpgradeHeaders);
+        } else {
+            sh = mgr.acquireStream(server.getUrl());
+            sh.startStreaming("GET", "/up", UpgradeHeaders, False);
+        }
+        auto hdr = sh.readData(RequestTimeout);
+        assertEq(101, hdr.status_code);
+        assertEq("foo", hdr.headers.upgrade);
+        # the stream ends with the 101 response
+        assertEq({"end_stream": True}, sh.readData(RequestTimeout));
+        int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+        assertLt(Prompt.durationMilliseconds(), elapsed_ms, "the stream ends at once");
+
+        # the manager never gives the connection to another request: a new one is made
+        assertEq("plain", mgr.request(server.getUrl(), "GET", "/plain").body);
+        assertEq(2, server.getConnectionCount());
+
+        HttpClientConnection conn = sh.getConnection();
+        if (take_over) {
+            # the caller speaks the new protocol on the socket
+            Socket s = conn.getSocket();
+            s.send("PING");
+            assertEq("PONG", s.recvBinary(4, Timeout).toString());
+        }
+        # the caller ends the connection
+        conn.close();
+        assertEq("1:closed", server.ends.get(Timeout));
+    }
+
+    #! the connection is closed after a 101 response also when the request fails after it
+    testHttpClientCallbackError() {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        HTTPClient hc({"url": server.getUrl(), "timeout": RequestTimeout});
+        on_exit hc.disconnect();
+
+        code recv = sub (hash<auto> h) {
+            # the end of the response
+            if (h.hasKey("hdr") && !exists h.hdr) {
+                throw "CALLBACK-ERROR", "error in the callback";
+            }
+        };
+        assertThrows("CALLBACK-ERROR", \hc.sendWithRecvCallback(), (recv, NOTHING, "GET", "/up", UpgradeHeaders));
+        assertEq("1:closed", server.ends.get(Timeout));
+        assertEq("plain", hc.get("/plain"));
+        assertEq(2, server.getConnectionCount());
+    }
+
+    #! the requests of the connection manager that return the response close the connection after a 101 response
+    testManagerResponse(string api) {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_request_retries": 0,
+            "request_timeout": RequestTimeout,
+        });
+        on_exit mgr.closeAll();
+
+        int start = clock_get_monotonic_us();
+        if (api == "request") {
+            hash<auto> resp = mgr.request(server.getUrl(), "GET", "/up", UpgradeHeaders);
+            assertEq(101, resp.status_code);
+        } else {
+            HttpClientResponseStream s = mgr.openStream(server.getUrl() + "/up", UpgradeHeaders);
+            assertEq(101, s.getStatusCode());
+            assertEq(NOTHING, s.read(RequestTimeout));
+        }
+        int elapsed_ms = (clock_get_monotonic_us() - start) / 1000;
+        assertLt(Prompt.durationMilliseconds(), elapsed_ms, "the request ends at once");
+        assertEq("1:closed", server.ends.get(Timeout));
+        assertEq("plain", mgr.request(server.getUrl(), "GET", "/plain").body);
+        assertEq(2, server.getConnectionCount());
+    }
+
+    #! the HTTP/1.1 upgrade to WebSocket works as before
+    testWebSocket() {
+        UpgradeServer server();
+        on_exit server.stop();
+
+        Queue messages();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                messages.push(msg);
+            }
+        }, {"url": "ws" + server.getUrl().substr(4), "http_version": "1.1"});
+        wsc.connect();
+        on_exit wsc.disconnect();
+        wsc.send("hello");
+        assertEq("hello", messages.get(Timeout));
+    }
+}

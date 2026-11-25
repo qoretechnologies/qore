@@ -25,7 +25,7 @@ class MemberInitClosureFinalMethodTest inherits QUnit::Test {
     public {
         const ExecModes = ("ast", "ir", "jit", "tiered");
 
-        const Line = "\"fm1\" \"fm2\" \"pfm3fm3\" \"F4\" \"fm15\" \"QQ\"";
+        const Line = "\"fm1\" \"fm2\" \"pfm3fm3\" \"F4\" \"fm15\" \"QQQS\"";
     }
 
     private {

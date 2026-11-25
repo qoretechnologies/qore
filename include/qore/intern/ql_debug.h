@@ -191,6 +191,12 @@ DLLLOCAL void qore_dbg_quic_flush_releases_held(int64_t session_id);
 //! session has no stream ID left (NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE; qore#7443)
 DLLLOCAL extern std::atomic<bool> qore_dbg_h2_fail_next_submit;
 
+//! armed by dbg_fs_swap_on_open(): replaces a symbolic link before the next open of it that the sandbox filesystem
+//! policy checked, between the check of its name and the open (qore#7498)
+/** @param fn the name being opened; the link is replaced only if it is the name given to dbg_fs_swap_on_open()
+*/
+DLLLOCAL void qore_dbg_fs_swap_on_open(const char* fn);
+
 //! the stateless resets that the QUIC listeners of the process sent and that its QUIC clients received (qore#6931);
 //! see dbg_quic_stateless_reset_counts()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_stateless_resets_sent;

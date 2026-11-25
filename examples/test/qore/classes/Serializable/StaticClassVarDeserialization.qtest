@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class StaticClassVarDeserializationTest
+
+#! A class with hash-valued and scalar static class variables
+class StaticHolder inherits Serializable {
+    public {
+        static hash<auto> h = {"a": 1, "x": "orig"};
+        static *hash<auto> nh;
+        static string s = "orig";
+    }
+
+    public {
+        int i = 1;
+    }
+}
+
+#! Deserializing static class variables leaves each variable with a valid value of its own
+class StaticClassVarDeserializationTest inherits QUnit::Test {
+    constructor() : Test("Deserializing static class variables", "1.0") {
+        addTestCase("static vars are replaced without the merge flag", \replaceTest());
+        addTestCase("hash static vars are merged with the merge flag", \mergeTest());
+        addTestCase("static vars from data without the merge flag", \replaceDataTest());
+        addTestCase("static vars from data with the merge flag", \mergeDataTest());
+        addTestCase("repeated deserialization", \repeatTest());
+
+        set_return_value(main());
+    }
+
+    private reset() {
+        StaticHolder::h = {"a": 1, "x": "orig"};
+        StaticHolder::nh = {"n": "orig"};
+        StaticHolder::s = "orig";
+    }
+
+    private binary getData() {
+        reset();
+        return Serializable::serialize(new StaticHolder(), QSF_INCLUDE_STATIC_CLASS_VARS);
+    }
+
+    private setOther() {
+        StaticHolder::h = {"y": 2, "x": "other"};
+        StaticHolder::nh = NOTHING;
+        StaticHolder::s = "other";
+    }
+
+    #! Uses the static vars after deserialization: reads and changes them
+    private checkUse(hash<auto> expected) {
+        assertEq(expected, StaticHolder::h);
+        assertEq({"n": "orig"}, StaticHolder::nh);
+        assertEq("orig", StaticHolder::s);
+
+        StaticHolder::h.z = 3;
+        StaticHolder::h.x += "-changed";
+        hash<auto> h = StaticHolder::h;
+        assertEq(expected + {"z": 3, "x": expected.x + "-changed"}, h);
+        StaticHolder::nh.m = "new";
+        assertEq({"n": "orig", "m": "new"}, StaticHolder::nh);
+
+        # replacing the value releases the deserialized one
+        StaticHolder::h = {"r": 1};
+        assertEq({"r": 1}, StaticHolder::h);
+        # the copy taken before still has its own value
+        assertEq(expected + {"z": 3, "x": expected.x + "-changed"}, h);
+    }
+
+    replaceTest() {
+        binary b = getData();
+        setOther();
+        auto obj = Serializable::deserialize(b, QDF_STATIC_CLASS_VARS);
+        assertEq(1, obj.i);
+        delete obj;
+        checkUse({"a": 1, "x": "orig"});
+    }
+
+    mergeTest() {
+        binary b = getData();
+        setOther();
+        auto obj = Serializable::deserialize(b, QDF_MERGE_STATIC_CLASS_VARS);
+        assertEq(1, obj.i);
+        delete obj;
+        # the deserialized hash is merged into the current one; "nh" had no value, so it is set
+        checkUse({"y": 2, "x": "orig", "a": 1});
+    }
+
+    replaceDataTest() {
+        hash<SerializationInfo> data = Serializable::deserializeToData(getData());
+        setOther();
+        auto obj = Serializable::deserialize(data, QDF_STATIC_CLASS_VARS);
+        assertEq(1, obj.i);
+        delete obj;
+        checkUse({"a": 1, "x": "orig"});
+    }
+
+    mergeDataTest() {
+        hash<SerializationInfo> data = Serializable::deserializeToData(getData());
+        setOther();
+        auto obj = Serializable::deserialize(data, QDF_MERGE_STATIC_CLASS_VARS);
+        assertEq(1, obj.i);
+        delete obj;
+        checkUse({"y": 2, "x": "orig", "a": 1});
+    }
+
+    repeatTest() {
+        binary b = getData();
+        for (int i = 0; i < 20; ++i) {
+            setOther();
+            Serializable::deserialize(b, QDF_STATIC_CLASS_VARS);
+            checkUse({"a": 1, "x": "orig"});
+            setOther();
+            Serializable::deserialize(b, QDF_MERGE_STATIC_CLASS_VARS);
+            checkUse({"y": 2, "x": "orig", "a": 1});
+        }
+    }
+}

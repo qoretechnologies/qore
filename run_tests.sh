@@ -1532,6 +1532,11 @@ fi
 # use the same build binary rather than the system-installed qore.
 export QORE_EXECUTABLE="$QORE"
 
+# Every valgrind that a test starts reads its options from VALGRIND_OPTS as well: the suppressions of the reports of
+# the libraries that Qore uses that are not errors of Qore (LLVM's JIT; see examples/test/valgrind.supp) apply to all
+# of them; the options of the caller's environment come after, so that they can add to them
+export VALGRIND_OPTS="--suppressions=$QORE_SOURCE_DIR/examples/test/valgrind.supp${VALGRIND_OPTS:+ $VALGRIND_OPTS}"
+
 # Keep qore tests hermetic by default. Developer shells often have Qorus or
 # application provider discovery configured, which can make negative provider
 # lookup tests print unrelated module-load diagnostics.

@@ -1667,6 +1667,39 @@ static bool SandboxManager::isFromSandboxedProgram(object obj) [flags=RET_VALUE_
     return qore_object_program_is_sandboxed(obj);
 }
 
+//! Returns the ID of the Program of the class of the given object if a sandbox governs it
+/** The Program is that of isFromSandboxedProgram(): the Program whose code declares the class of the object (or into
+    which the class was imported), not the Program of the code that created the object or that calls it; an object of a
+    builtin class, which has no Program, has the Program of the code that created it.  As a Program that sandboxed code
+    creates is governed by its creator's sandbox, the ID can be that of such a Program, which the host did not create
+    itself.  Library code
+    that marks what the code of an object of a class that sandboxed code declares produces, such as the messages that
+    such an object writes to a log that the host configured, uses it to name the tenant whose code chose them
+    (qore#7110), as the code that calls the object can be another tenant's or the host's.
+
+    It reveals only the ID of a %Program whose class an object that the caller holds has, so it is not restricted.
+
+    @param obj the object
+
+    @return the ID of the Program of the class of the object, or @ref nothing if no sandbox governs that Program
+
+    @par Example:
+    @code{.py}
+*int tenant_id = SandboxManager::getSandboxedProgramId(obj);
+    @endcode
+
+    @see isFromSandboxedProgram()
+
+    @since %Qore 3.0
+*/
+static *int SandboxManager::getSandboxedProgramId(object obj) [flags=RET_VALUE_ONLY] {
+    qore_program_id_t id;
+    if (!qore_object_sandboxed_program_id(obj, id)) {
+        return QoreValue();
+    }
+    return static_cast<int64>(id);
+}
+
 //! Returns the @ref sandbox_isolation_domains "isolation domain" (the tenant) of the code that calls the library
 /** Library code that keeps process-wide state for its callers (a registry, a cache) uses it to keep the entries of
     each tenant apart: the domain of the sandbox that governs the calling code, also when that code calls the library

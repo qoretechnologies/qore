@@ -633,6 +633,14 @@ class PreparationTestServer inherits HttpServer {
     }
 }
 
+#! answers with a streamed body of a known length (qore#7488: the server sends it with the streaming operation)
+class IdleStreamHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, new StringInputStream("streamed"), {"Content-Length": 8});
+    }
+}
+
 public class HttpServerTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -3263,10 +3271,15 @@ public class HttpServerTest inherits QUnit::Test {
         return hdr;
     }
 
-    #! Verifies that async-mode connections are closed after the idle TTL expires.
-    #! This tests the fix that changed timeout from -1s (infinite) to
-    #! milliseconds(ttl) + DefaultIoOperationTimeout for KeepAlive and
-    #! SendAndReadHeader states.
+    #! Verifies that async-mode connections are closed when the idle TTL expires.
+    /** A connection that waits for its next request after a response is closed at its TTL: the server's operation
+        wakes at the idle deadline (qore#7488), where it waited only for data before, so that the TTL was checked only
+        when the next request came, and the connection was otherwise closed only by the operation's overall timeout
+        (the TTL + the I/O operation timeout).  The server's I/O operation timeout is 10 minutes here, so that only
+        the TTL can close the connection within the read's bound: the case waits for the close (an event, bounded
+        only against a hang), not for a time.  This also covers the earlier fix that replaced the infinite timeout of
+        the KeepAlive and SendAndReadHeader states.
+    */
     asyncModeIdleTimeoutTest() {
         Logger logger("async-idle-timeout-test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -3275,11 +3288,14 @@ public class HttpServerTest inherits QUnit::Test {
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
+            # only the TTL closes the idle connection within the read's bound below
+            "io_operation_timeout": 10m,
         };
         HttpServer server(opts);
         on_exit server.stop();
 
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setHandler("idle-stream", "/idle-stream", NOTHING, new IdleStreamHandler());
         server.setDefaultHandler("my-handler", new ReqHandler());
         int test_port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         assertTrue(server.waitForAsyncIo(MustSucceedTimeout), "async I/O should be ready");
@@ -3289,33 +3305,32 @@ public class HttpServerTest inherits QUnit::Test {
         server.setTtl(200ms);
         on_exit server.setTtl(orig_ttl);
 
-        # Open a connection and make a request to establish keep-alive
-        Socket sock();
-        sock.connect("127.0.0.1:" + test_port);
-        sock.send("GET /idle-test HTTP/1.1\r\nHost: localhost\r\n\r\n");
-        # Read the full HTTP response (header + body) using protocol-aware methods
-        hash<auto> resp = readRawHttpResponse(sock);
-        assertEq(200, resp.status_code, "should be 200 OK");
+        # a response sent whole, and a streamed one (the two operations that wait for the next request)
+        foreach string path in (("/idle-test", "/idle-stream")) {
+            # Open a connection and make a request to establish keep-alive
+            Socket sock();
+            sock.connect("127.0.0.1:" + test_port);
+            sock.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", path));
+            # Read the full HTTP response (header + body) using protocol-aware methods
+            hash<auto> resp = readRawHttpResponse(sock);
+            assertEq(200, resp.status_code, path + ": should be 200 OK");
+            if (path == "/idle-stream") {
+                # the streamed handler answered (with the streaming operation)
+                assertEq("streamed", resp.body, path + ": streamed body");
+            }
 
-        # Now sit idle past the TTL: the sleep is a lower bound of the idle time, which a loaded machine can only
-        # lengthen
-        usleep(500ms);
-
-        # Send another request: the server closes the connection, which has been idle for longer than the TTL, instead
-        # of serving it.  The read waits for the close and only bounds a hang (qore#7477): a response, or a timeout
-        # (the server kept the connection open), fails the check.  The server checks the TTL of a connection that
-        # waits for its next request only when the request comes (qore#7488); once it closes an idle connection at
-        # its TTL, this case can wait for the close without a request
-        string result;
-        try {
-            sock.send("GET /idle-test2 HTTP/1.1\r\nHost: localhost\r\n\r\n");
-            readRawHttpResponse(sock, MustSucceedTimeout);
-            result = "a response on the idle connection";
-        } catch (hash<ExceptionInfo> ex) {
-            result = ex.err;
+            # Now stay idle: the server closes the connection when its TTL expires.  The read waits for the close, and
+            # its bound only catches a hang: data, or a timeout (the server kept the idle connection open past its
+            # TTL), fails the check (qore#7488)
+            string result;
+            try {
+                sock.readHTTPHeader(MustSucceedTimeout);
+                result = "data on the idle connection";
+            } catch (hash<ExceptionInfo> ex) {
+                result = ex.err;
+            }
+            assertEq("SOCKET-CLOSED", result, path + ": idle connection should be closed by server after TTL");
         }
-        assertTrue(inlist(result, ("SOCKET-SEND-ERROR", "SOCKET-CLOSED", "SOCKET-NOT-OPEN", "SOCKET-RECV-ERROR",
-            "SOCKET-HTTP-ERROR")), "idle connection should be closed by server after TTL: " + result);
 
         # Verify the server is still operational
         HTTPClient client({"url": "http://127.0.0.1:" + test_port,
@@ -4219,7 +4234,7 @@ public class HttpServerTest inherits QUnit::Test {
         }
 
         # --- Scenario 4c: the same half-open server, recovered through io_timeout ---
-        # io_timeout (10s) is shorter than the request's timeout: the stale attempt fails
+        # io_timeout (MustSucceedTimeout) is shorter than the request's timeout: the stale attempt fails
         # on its inactivity timeout, and the request is sent again once on a fresh
         # connection within its remaining time, which the server answers.
         {
@@ -4234,10 +4249,11 @@ public class HttpServerTest inherits QUnit::Test {
                 "data": "json",
                 "connect_timeout": MustSucceedTimeout,
                 # the stale attempt fails on io_timeout, and the request is sent again within its remaining time; the
-                # io_timeout is long enough for a loaded machine's server to answer the requests that must not time out
-                # (the first one and the retry), as a slow answer would make another retry (qore#7477)
-                "timeout": MustSucceedTimeout * 2,
-                "io_timeout": 10s,
+                # io_timeout also bounds the requests that must succeed (the first one and the retry), so it only
+                # bounds a hang (qore#7477: 10 s was exceeded by the retry at a load average of about 400); the
+                # stale attempt waits for it on the normal path
+                "timeout": MustSucceedTimeout * 3,
+                "io_timeout": MustSucceedTimeout,
                 "logger": logger,
             });
 
@@ -4401,16 +4417,33 @@ public class HttpServerTest inherits QUnit::Test {
         the assertion's own exception being caught as the expected failure.  The connection is refused at once, but
         the connect timeout is long, so that a client that does not see the refusal and waits gives a timeout error
         instead of the connect error: the error tells the two apart, not the time it took.
+
+        The UDP port of the TCP port's number is held as well, by a socket that never answers (see
+        @ref holdRefusingPorts()), so the case also checks that the \c https request does not depend on it (an
+        \c http request uses HTTP/1.1 over TCP only): with the \c "auto" protocol, an \c https request races HTTP/3
+        against TCP, and that race does not end on the refusal of TCP while the QUIC handshake can still complete; it
+        waits for the handshake up to \c connect_timeout (see
+        \c HttpClientConnectionManager::createConnectionHappyEyeballs()).  The \c https request therefore uses HTTP/2
+        only: TLS over the TCP connection that this case tests (qore#7525).
     */
     private checkConnectionRefused(string scheme) {
-        int closed_port = getUnusedPort();
+        list<Socket> held = holdRefusingPorts();
+        on_exit {
+            map $1.close(), held;
+        }
+        # the local port of the server end of the connection that holds the TCP port
+        int closed_port = held[1].getSocketInfo().port;
         *hash<ExceptionInfo> err;
         try {
-            RestClientIo rc({
+            hash<auto> opts = {
                 "url": sprintf("%s://127.0.0.1:%d", scheme, closed_port),
                 "connect_timeout": 60s,
                 "timeout": 60s,
-            });
+            };
+            if (scheme == "https") {
+                opts.protocol = "h2";
+            }
+            RestClientIo rc(opts);
             rc.restGet("/test");
         } catch (hash<ExceptionInfo> ex) {
             err = ex;
@@ -4422,16 +4455,56 @@ public class HttpServerTest inherits QUnit::Test {
         assertRegex("refused", err.desc ?? "", sprintf("%s connection refused error description", scheme));
     }
 
-    #! returns a port on 127.0.0.1 that no socket is bound to at the time of the call
-    /** binds a socket to port 0, so that the system assigns a free port, and closes it again; a fixed port can be in
-        use on the host, for example by a listener of another test run at the same time
+    #! Returns sockets that hold a TCP port of 127.0.0.1 that refuses connections and the UDP port of the same number
+    /** The TCP port is held by a connection to it: the port is bound without \c SO_REUSEADDR, a connection is made to
+        it and accepted, and the listening socket is closed, so a connection request to the port finds no listening
+        socket and is refused at once, on macOS as on Linux (a socket that is bound but does not listen is not enough:
+        macOS drops a connection request to it instead of refusing it, qore#6347).  The UDP port is held by a socket
+        that never reads, so a datagram sent to it gets no answer.  While the sockets are open, no socket of another
+        test running at the same time can bind the port in either protocol (qore#7525).  A port whose UDP port is taken
+        is not used.
+
+        @return the sockets, all of which the caller closes: the client and server ends of the connection that holds
+        the TCP port, then the UDP socket
     */
-    private static int getUnusedPort() {
-        Socket s();
-        s.bindINET("127.0.0.1", "0", False, AF_INET);
-        int port = s.getSocketInfo().port;
-        s.close();
-        return port;
+    private static list<Socket> holdRefusingPorts() {
+        for (int attempt = 1; True; ++attempt) {
+            list<Socket> held = ();
+            try {
+                Socket listener();
+                on_exit {
+                    listener.close();
+                }
+                listener.bindINET("127.0.0.1", "0", False, AF_INET);
+                int port = listener.getSocketInfo().port;
+                if (listener.listen(1)) {
+                    throw "LISTEN-ERROR", strerror();
+                }
+                Socket client();
+                held += client;
+                client.connect(sprintf("127.0.0.1:%d", port), 30s);
+                *Socket server_end = listener.accept(30s);
+                if (!server_end) {
+                    throw "ACCEPT-ERROR", "the connection that holds the TCP port was not accepted";
+                }
+                held += server_end;
+            } catch (hash<ExceptionInfo> ex) {
+                map $1.close(), held;
+                rethrow;
+            }
+            try {
+                Socket udp();
+                # the local port of the server end is the held port
+                udp.bindINET("127.0.0.1", held[1].getSocketInfo().port, False, AF_INET, SOCK_DGRAM);
+                return held + udp;
+            } catch (hash<ExceptionInfo> ex) {
+                # the UDP port is in use: another port is taken
+                map $1.close(), held;
+                if (attempt == 20) {
+                    rethrow;
+                }
+            }
+        }
     }
 }
 

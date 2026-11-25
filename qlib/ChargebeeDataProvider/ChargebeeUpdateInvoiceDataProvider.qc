@@ -54,12 +54,6 @@ public class ChargebeeUpdateInvoiceRequestDataType inherits HashDataType {
                 "short_desc": "Comment on the invoice",
                 "desc": "A comment to add to the invoice",
             },
-            "meta_data": {
-                "type": AutoHashOrNothingType,
-                "display_name": "Metadata",
-                "short_desc": "Custom metadata",
-                "desc": "A set of key-value pairs for storing additional information about the invoice",
-            },
         };
     }
 
@@ -115,7 +109,9 @@ public class ChargebeeUpdateInvoiceDataProvider inherits ChargebeeDataProviderBa
         hash<auto> body = req - "id";
         @debug(log(LoggerLevel::DEBUG, "doRequestImpl: updating invoice %s", id));
 
-        hash<auto> response = doPost("/invoices/" + id, body);
+        # Chargebee documents the operation as POST /invoices/{invoice-id}/update_details, which takes no metadata
+        # (qore#7511)
+        hash<auto> response = doPost("/invoices/" + id + "/update_details", body);
         return response.invoice;
     }
 
