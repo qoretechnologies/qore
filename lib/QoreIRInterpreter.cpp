@@ -1051,6 +1051,17 @@ int QoreIRInterpreter::execStatement(QoreIROpcode op, const AbstractStatement* s
 static thread_local QoreIROpcode tls_last_silent_fail_opcode = QoreIROpcode::ConstNothing;
 static thread_local const QoreProgramLocation* tls_last_silent_fail_loc = nullptr;
 
+//! records the instruction that execute() dispatches, for silent-failure tracing
+/** Out of line, as qore_ir_restore_innermost_tls(): an inline store in execute()'s dispatch loop lets GCC keep the
+    address of the thread-local variables of this file live across execute(), in a slot of its frame, when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2, issue #7006); only called with tracing enabled
+*/
+static QORE_INTERN_NOINLINE void qore_ir_record_silent_fail(const QoreIRInstruction* inst) {
+    assert(inst);
+    tls_last_silent_fail_opcode = inst->opcode;
+    tls_last_silent_fail_loc = inst->loc;
+}
+
 void QoreIRInterpreter::dumpLastSilentFail(const char* tag) {
     const QoreProgramLocation* loc = tls_last_silent_fail_loc;
     fprintf(stderr, "[ir-silent-fail:%s] opcode=%d @ %s:%d\n",
@@ -2316,6 +2327,18 @@ static thread_local const std::vector<const LocalVar*>* tls_innermost_ir_instant
 int64 q_get_ir_innermost_instantiated_local_entries() {
     return tls_innermost_ir_instantiated_locals
         ? static_cast<int64>(tls_innermost_ir_instantiated_locals->size()) : 0;
+}
+
+//! restores the innermost cleanup vector and instantiated locals of the caller of execute() on every exit of it
+/** Out of line: with the store at execute()'s exit inline, GCC keeps the address of the thread-local variables of
+    this file, which the stores at its entry computed, live across execute() in a slot of its frame when they are
+    accessed through TLS descriptors (-mtls-dialect=gnu2), which each level of a recursion of interpreted code pays
+    (issue #7006); a call here computes the address itself, as the stores at the entry do
+*/
+static QORE_INTERN_NOINLINE void qore_ir_restore_innermost_tls(const IRCleanupSlots* prev,
+        const std::vector<const LocalVar*>* prev_instantiated_locals) noexcept {
+    tls_innermost_ir_cleanup = prev;
+    tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
 }
 #endif // QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 
@@ -6811,6 +6834,22 @@ private:
     QoreProgramLocationHelper loc_helper;
 };
 
+//! Runs the body of a plain function that an inline call of the IR interpreter runs in another Program with the call
+//! Program context of that Program (qore#7394)
+/** Out of line, so that the frames of the inline calls within one Program, such as the levels of a recursion, hold
+    neither the helper nor its code; the helper restores the caller's call Program context on every exit
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_execute_inline_body_in_call_program_context(QoreProgram* exec_pgm,
+        const QoreIRFunction* callee_ir, QoreValue& ir_return_value, ExceptionSink* xsink, const UserVariantBase* uvb,
+        const IRDirectParams* direct_params) {
+    // the caller runs the body here only when the call entered another Program (exec_pgm is not the caller's); six
+    // arguments, so that the frame of the inline call passes none on the stack; the thread data is looked up here
+    QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, nullptr);
+    return QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+}
+
 //! Runs a plain function inline in the interpreter, if it can
 /** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
     class context (CalleeContextHelper)
@@ -6918,9 +6957,14 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         if (inst->cached_switches_context) {
             callee_context.emplace(thread_data);
         }
-        ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-            nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context, out of line (qore#7394); a call within one Program keeps the caller's, which is that Program's
+        ok = __builtin_expect(exec_pgm && exec_pgm != caller_pgm, 0)
+            ? qore_ir_execute_inline_body_in_call_program_context(exec_pgm, callee_ir, ir_return_value, xsink, uvb,
+                direct_params)
+            : QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+                nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+                nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
         if (ok && !(xsink && *xsink)) {
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
@@ -11135,8 +11179,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         const IRCleanupSlots* prev;
         const std::vector<const LocalVar*>* prev_instantiated_locals;
         ~CleanupTlsGuard() {
-            tls_innermost_ir_cleanup = prev;
-            tls_innermost_ir_instantiated_locals = prev_instantiated_locals;
+            qore_ir_restore_innermost_tls(prev, prev_instantiated_locals);
         }
     } cleanup_tls_guard{tls_innermost_ir_cleanup, tls_innermost_ir_instantiated_locals};
     tls_innermost_ir_cleanup = &cleanup;
@@ -12957,8 +13000,7 @@ next_instruction:
         // the caller (StatementBlock::execImpl / evalTiered fallback) can
         // read it post-return without plumbing it through the return value.
         if (trace_silent_fail) {
-            tls_last_silent_fail_opcode = inst->opcode;
-            tls_last_silent_fail_loc = inst->loc;
+            qore_ir_record_silent_fail(inst);
         }
         // Unified per-line overhead: only update runtime_loc and check ephemeral refs
         // when the source line changes.  Multiple IR instructions

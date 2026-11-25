@@ -348,6 +348,7 @@ class HttpServerConnectionSocketGuardTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("HTTP server connection socket guard", "1.0", \ARGV) {
         addTestCase("a server's connection socket is refused to sandboxed code", \guardTest());
+        addTestCase("code under a permissive sandbox uses a server's connection socket", \permissiveGuardTest());
         addTestCase("close and shutdown are refused to code that a sandbox's policy governs", \closeTest());
         addTestCase("other classes and functions refuse a server's connection socket to sandboxed code",
             \otherClassesTest());
@@ -572,12 +573,35 @@ class HttpServerConnectionSocketGuardTest inherits QUnit::Test {
         assertEq("served /second", readResponse(c), "the next request is served");
     }
 
-    #! returns a sandboxed Program with the tenant's code
-    private Program getTenantProgram() {
+    #! code that a sandbox governs only for its policy, and that may use uncontrolled APIs, is trusted: it uses a
+    #! server's connection socket as any trusted code (qore#7577)
+    permissiveGuardTest() {
+        hash<auto> conn = getConnection();
+        on_exit conn.client.close();
+        Socket s = conn.server;
+        s.setServerOwned();
+        Program p = getTenantProgram(True);
+        assertEq("OK", p.callFunction("use", s, "send"), "send");
+        assertEq("x", conn.client.recv(1, HangGuard), "the client gets the data");
+        conn.client.send("y");
+        assertEq("OK", p.callFunction("use", s, "recv"), "recv");
+        foreach string op in ("setNoDelay", "isDataAvailable", "getPeerInfo") {
+            assertEq("OK", p.callFunction("use", s, op), op);
+        }
+        assertEq("OK", p.callFunction("use", s, "shutdown"), "shutdown");
+        assertEq("OK", p.callFunction("use", s, "close"), "close");
+        assertFalse(s.isOpen(), "closed by the trusted code");
+    }
+
+    #! returns a sandboxed Program with the tenant's code; a permissive sandbox allows uncontrolled APIs (qore#7577)
+    private Program getTenantProgram(bool permissive = False) {
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.parse(TenantCode, "tenant");
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
+        if (permissive) {
+            sm.setUncontrolledApiPolicy(True);
+        }
         p.setSandboxManager(sm);
         return p;
     }

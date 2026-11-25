@@ -153,8 +153,10 @@ AMBIGUOUS-CALL-RESOLUTION: call to function 'f()' is ambiguous; matches: 'A::f()
     (with @ref allow-bare-refs "%allow-bare-refs"), then to a constant, then to a static variable, and a name with a
     class scope refers to a constant before a static variable, so a static variable hidden this way may not be
     reached by any name (diagnostic ID \c CLASS-CONSTANT-SHADOWS-MEMBER; it is raised in the class that declares one
-    of them or that inherits them from different parent classes). Each condition has a distinct
-    structured diagnostic ID and a targeted hint.
+    of them or that inherits them from different parent classes), or adding a variant with another signature under
+    the name of a @ref final_methods "final" method of a parent class, which a call that the final method cannot take
+    selects (diagnostic ID \c NEW-VARIANT-UNDER-FINAL-NAME; overriding a variant that a parent class already has under
+    that name is not reported). Each condition has a distinct structured diagnostic ID and a targeted hint.
 
     This is a strict warning: it is not included in @ref enable-all-warnings "%enable-all-warnings". Enable
     it by name, with @ref strict-warnings "%strict-warnings", or with @ref Qore::WARN_LANGUAGE_TRAPS "WARN_LANGUAGE_TRAPS" through the

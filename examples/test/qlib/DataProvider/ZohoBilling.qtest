@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%include VendorAppBilling.qc
+
+%exec-class ZohoBillingTest
+
+class ZohoBillingTest inherits VendorAppBillingTest {
+    constructor() : VendorAppBillingTest("Zoho provider billing") {
+        addVendor("ZohoInvoice", "ZohoInvoice", "zohoapis.com", "included",
+            "https://www.zoho.com/invoice/pricing/");
+        addVendor("ZohoBooks", "ZohoBooks", "zohoapis.com", "included",
+            "https://www.zoho.com/books/api/v3/introduction/");
+        addVendor("ZohoInventory", "ZohoInventory", "zohoapis.com", "included",
+            "https://www.zoho.com/inventory/api/v1/introduction/");
+        set_return_value(main());
+    }
+}

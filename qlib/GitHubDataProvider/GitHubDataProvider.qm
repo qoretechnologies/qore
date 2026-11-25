@@ -82,6 +82,15 @@ module GitHubDataProvider {
 
 "
                 "GitHub is a trademark of GitHub, Inc.",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "github.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+                "effective_date": 2026-11-25,
+            },
             "scheme": "github",
             "logo": Priv::GitHubLogo,
             "logo_file_name": "github-logo.svg",

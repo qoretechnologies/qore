@@ -54,6 +54,15 @@ module GmailDataProvider {
             "short_desc": "Gmail services",
             "desc": "Gmail services",
             "scheme": "gmail",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "googleapis.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "included",
+                "source": "https://developers.google.com/workspace/gmail/api/reference/quota",
+                "effective_date": 2026-11-25,
+            },
             "logo": GmailLogo,
             "logo_file_name": "gmail-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -381,6 +390,12 @@ module GmailDataProvider {
             "app": GmailDataProvider::AppName,
             "path": "/send-message",
             "action": "send-message",
+            "message_formats": {"default": {
+                "plain": {"content": "body", "subject": "subject", "selector": "body-mime-type",
+                    "selector_value": "text/plain", "plain_alternative": False},
+                "html": {"content": "body", "subject": "subject", "selector": "body-mime-type",
+                    "selector_value": "text/html", "plain_alternative": False},
+            }},
             "display_name": "Send a Message",
             "short_desc": "Create and transmit a new outgoing email through Gmail",
             "desc": "Creates a new outgoing email from the supplied recipient addresses, subject, body, "

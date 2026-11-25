@@ -56,6 +56,15 @@ module KatanaDataProvider {
                 "plus inventory visibility, batch stock tracking, and native webhook and "
                 "polling event triggers.",
             "scheme": "katanarest",
+            "processing": <DataProviderProcessingInfo>{
+                "locality": "external",
+                "external_recipient": "katanamrp.com",
+            },
+            "billing": <DataProviderBillingInfo>{
+                "model": "subscription",
+                "source": "https://katanamrp.com/pricing/",
+                "effective_date": 2026-11-25,
+            },
             "logo": KatanaDataProvider::KatanaLogo,
             "logo_file_name": "katana-logo.svg",
             "logo_mime_type": MimeTypeSvg,

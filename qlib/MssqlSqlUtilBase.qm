@@ -1779,8 +1779,11 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         *hash<auto> row = ds.selectRow("select convert(varchar(64), seq.start_value) start_value, "
             "convert(varchar(64), seq.increment) increment, convert(varchar(64), seq.minimum_value) minimum_value, "
             "convert(varchar(64), seq.maximum_value) maximum_value, seq.is_cycling, seq.is_cached, seq.cache_size, "
-            "t.name type_name, seq.precision from sys.sequences seq join sys.schemas s on s.schema_id = seq.schema_id "
-            "join sys.types t on t.user_type_id = seq.system_type_id where s.name = %v and seq.name = %v", schema,
+            "t.name type_name, seq.precision, case when dt.is_user_defined = 1 then "
+            "quotename(schema_name(dt.schema_id)) + '.' + quotename(dt.name) end alias_type "
+            "from sys.sequences seq join sys.schemas s on s.schema_id = seq.schema_id "
+            "join sys.types t on t.user_type_id = seq.system_type_id "
+            "join sys.types dt on dt.user_type_id = seq.user_type_id where s.name = %v and seq.name = %v", schema,
             sname);
         if (!row) {
             return;
@@ -1794,6 +1797,9 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
         MssqlSequence seq(name, row.start_value.toNumber(), row.increment.toNumber(),
             max == limits.max ? NOTHING : max, min == limits.min ? NOTHING : min, row.is_cycling.toBool(), cache);
         seq.setTypeLimits(limits.min, limits.max);
+        seq.ownership = <SqlSequenceOwnershipInfo>{"kind": "standalone"};
+        seq.data_type = row.alias_type.val() ? row.alias_type : (row.type_name == "decimal" || row.type_name == "numeric"
+            ? sprintf("%s(%d,0)", row.type_name, row.precision) : row.type_name);
         return seq;
     }
 
