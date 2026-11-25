@@ -12,7 +12,8 @@
 # connection: its reset has another token, which the client does not take.  The connect timeout of the client is long,
 # so that a request that waited for it would fail the checks of the reset; the counts of the resets that the process
 # sent and received (dbg_quic_stateless_reset_counts()) show which happened, with no clock involved.  The server is
-# stopped as a killed one is with dbg_quic_silent_server_close() (debug builds).
+# stopped as a killed one is with dbg_quic_silent_server_close() (debug builds), once neither the client nor the server
+# has anything in flight (dbg_quic_wait_all_idle()), so that the client sends nothing more until the request.
 
 %modern
 
@@ -31,12 +32,14 @@
 #! The bound on a blocking wait: a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
-#! The connect timeout of the client when the server resets the connection: a request that waits for it (as before
-#! qore#6931) is ended by it, with HTTP3-PEER-UNRESPONSIVE, and fails the checks of the reset
+#! The connect timeout of the client, which the load of the machine cannot exceed: a request that waits for it when
+#! the server resets the connection (as before qore#6931) is ended by it, with HTTP3-PEER-UNRESPONSIVE, and fails the
+#! checks of the reset
 const LongConnectTimeout = 20s;
 
-#! The connect timeout of the client when the server cannot reset the connection
-const ShortConnectTimeout = 1s;
+#! The peer response timeout of the old connection when the server cannot reset it, set only once the old server is
+#! gone (dbg_quic_set_client_peer_response_timeout()), so that no other wait is bounded by it
+const ShortPeerResponseTimeout = 1s;
 
 #! a certificate and key other than those of TestCertificates.qm
 const OtherCertPem = "-----BEGIN CERTIFICATE-----
@@ -108,6 +111,8 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
         addTestCase("a POST raises HTTP3-STATELESS-RESET, and the next request takes a new connection", \resetTest(),
             "POST");
         addTestCase("a server with another key cannot reset the connection", \otherKeyTest());
+        # no path MTU probe is sent once nothing is in flight (debug builds; see connectAndStop())
+        setenv("QORE_QUIC_TEST_DISABLE_PMTUD", "1");
         set_return_value(main());
     }
 
@@ -127,12 +132,42 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
         return (server, p);
     }
 
+    #! starts a server that is to be restarted on its port; returns the server and its port
+    /** The port is below the range of the ports that the OS assigns to a socket bound to port 0 (ephemeral ports:
+        32768-60999 by default on Linux, read from /proc/sys/net/ipv4/ip_local_port_range when available; 49152-65535
+        on macOS), so that no socket of another process, such as a client socket of a test running beside this one,
+        can take it while the server restarts on it; a port that a socket bound explicitly is in use is skipped
+    */
+    private list<auto> startRestartableServer(AbstractHttpRequestHandler handler) {
+        int first_ephemeral = 32768;
+        if (is_file("/proc/sys/net/ipv4/ip_local_port_range")) {
+            *string first = (ReadOnlyFile::readTextFile("/proc/sys/net/ipv4/ip_local_port_range") =~ x/^\s*([0-9]+)/)[0];
+            if (first) {
+                first_ephemeral = first.toInt();
+            }
+        }
+        if (first_ephemeral <= 10000) {
+            # no range is left below the ephemeral ports
+            return startServer(0, handler);
+        }
+        for (int attempt = 0; ; ++attempt) {
+            int port = 10000 + (rand() % (first_ephemeral - 10000));
+            try {
+                return startServer(port, handler);
+            } catch (hash<ExceptionInfo> ex) {
+                if (attempt == 100 || ex.desc !~ /in use/) {
+                    rethrow;
+                }
+            }
+        }
+    }
+
     #! returns a client on HTTP/3 to a server that then stops as a killed server process does, and the server's port
-    private list<auto> connectAndStop(timeout connect_timeout) {
+    private list<auto> connectAndStop() {
         CountingHandler first_handler();
         HttpServer first;
         int port;
-        (first, port) = startServer(0, first_handler);
+        (first, port) = startRestartableServer(first_handler);
         on_exit if (first) {
             first.stop();
         }
@@ -140,7 +175,7 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
             "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "timeout": HangGuard,
-            "connect_timeout": connect_timeout,
+            "connect_timeout": LongConnectTimeout,
             "serialization": "json",
         });
         # the first response offers HTTP/3 (Alt-Svc), which the next request takes
@@ -148,6 +183,11 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
             assertEq("GET", rc.get("/").body.method);
         }
         assertTrue(rc.isHttp3Active(), "the client uses HTTP/3");
+        # the server stops only when neither side has anything to send (qore#7452): a packet of the client sent after it
+        # stopped would reach the new server before the request, which would reset the connection before the request
+        # was submitted, and a packet of the old server could arrive after the request; path MTU discovery, whose
+        # probes follow one another also when nothing is in flight, is disabled for the test's connections
+        assertTrue(call_function("dbg_quic_wait_all_idle", HangGuard), "nothing is in flight");
         call_function("dbg_quic_silent_server_close", True);
         on_exit call_function("dbg_quic_silent_server_close", False);
         first.stop();
@@ -161,7 +201,7 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
         }
         RestClient rc;
         int port;
-        (rc, port) = connectAndStop(LongConnectTimeout);
+        (rc, port) = connectAndStop();
         CountingHandler handler();
         HttpServer second = startServer(port, handler)[0];
         on_exit second.stop();
@@ -192,14 +232,16 @@ class RestClientH3StatelessResetTest inherits QUnit::Test {
         }
         RestClient rc;
         int port;
-        (rc, port) = connectAndStop(ShortConnectTimeout);
+        (rc, port) = connectAndStop();
         CountingHandler handler();
         HttpServer second = startServer(port, handler, True)[0];
         on_exit second.stop();
+        assertGe(1, call_function("dbg_quic_set_client_peer_response_timeout", ShortPeerResponseTimeout),
+            "the peer response timeout of the old connection was shortened");
 
         hash<auto> before = call_function("dbg_quic_stateless_reset_counts");
-        # the reset of the new server has another token: the client ends the connection after its connect timeout
-        # (qore#6930), and repeats the request on a new connection
+        # the reset of the new server has another token: the client ends the connection after its peer response
+        # timeout (qore#6930), and repeats the request on a new connection
         assertEq("GET", rc.get("/").body.method, "the new server answered the request");
         assertEq(1, handler.requests.getCount(), "the new server received the request once");
         hash<auto> after = call_function("dbg_quic_stateless_reset_counts");

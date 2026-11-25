@@ -111,8 +111,6 @@ module QoreLlmTypes {
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - initial release
-    - asynchronous chat calls that hold no thread while they wait for the provider
-      (@ref qorellmtypesasync)
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -2290,7 +2288,13 @@ public class LlmAsyncOperation {
         #! The error of the call
         *hash<ExceptionInfo> error;
 
-        #! Tasks waiting to run, in order; each is a hash with "task" and "is_final" keys
+        #! Tasks waiting to run, in order; each is a hash with "task", "is_final" and "handle" keys
+        /** \c handle is a handle of the work of the module cleanup that posted the task (0 outside of such work),
+            released once the task has run or is dropped, so that the cleanup at the end of the process waits for the
+            task as for the work itself (see
+            @ref Qore::AsyncIoController::holdModuleCleanupWork() "AsyncIoController::holdModuleCleanupWork()",
+            qore#7339)
+        */
         list<hash<auto>> pending = ();
 
         #! True while a task of the executor runs the pending tasks
@@ -2319,6 +2323,16 @@ public class LlmAsyncOperation {
         self.executor = executor;
         self.cancellation = cancellation ?? new LlmCancellation();
         self.on_complete = on_complete;
+    }
+
+    #! Releases the handles of work of the module cleanup of the tasks that did not run
+    /** Tasks are left only if the executor dropped the task that runs them (qore#7339): the cleanup at the end of the
+        process does not then wait for them
+    */
+    destructor() {
+        foreach hash<auto> item in (pending) {
+            AsyncIoController::releaseModuleCleanupWork(item.handle);
+        }
     }
 
     #! Creates the operation of a call and gives the call the operation's token
@@ -2548,12 +2562,19 @@ public class LlmAsyncOperation {
                 item = shift pending;
                 # a step given after the call has ended is not run
                 if (finished && !item.is_final) {
+                    AsyncIoController::releaseModuleCleanupWork(item.handle);
                     continue;
                 }
             }
             try {
                 code<nothing()> task = item.task;
-                task();
+                # the task runs as the work of the module cleanup that posted it, if any, which then waits for it; the
+                # handle is released when it has run (qore#7339)
+                if (item.handle) {
+                    AsyncIoController::runModuleCleanupWork(item.handle, task);
+                } else {
+                    task();
+                }
             } catch (hash<ExceptionInfo> ex) {
                 if (item.is_final) {
                     # the completion callback is the caller's code, whose error cannot change the result
@@ -2572,7 +2593,10 @@ public class LlmAsyncOperation {
             if (done) {
                 return;
             }
-            pending += {"task": task, "is_final": is_final};
+            # work of the module cleanup at the end of the process that posts the task (an HTTP or SSE callback of a
+            # canceled request, for example) hands itself over to the thread of the executor that runs it (0 outside
+            # of such work) (qore#7339)
+            pending += {"task": task, "is_final": is_final, "handle": AsyncIoController::holdModuleCleanupWork()};
             if (draining) {
                 return;
             }
@@ -2590,11 +2614,15 @@ public class LlmAsyncOperation {
     #! Ends the call when the executor refuses its tasks; the completion callback, which needs a thread of the
     #! executor, is not run
     private:internal executorFailed(hash<ExceptionInfo> ex) {
+        list<hash<auto>> dropped;
         {
             AutoLock al(m);
+            dropped = pending;
             pending = ();
             draining = False;
         }
+        # the tasks do not run: the cleanup does not wait for them
+        map AsyncIoController::releaseModuleCleanupWork($1.handle), dropped;
         setFinished(NOTHING, ex);
         markDone();
     }
@@ -3063,7 +3091,16 @@ public class LlmAsyncSseRequest {
             LlmAsyncSseRequest::runStop(s);
             return;
         }
-        background LlmAsyncSseRequest::runStop(s);
+        # work of the module cleanup that releases the request hands itself over to the thread that stops the
+        # transport (qore#7339); wrapped here, in this thread, as background evaluates its expression in the new
+        # thread; the call is created by a static method, so that it does not refer to this object
+        code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(LlmAsyncSseRequest::getStop(s));
+        background c();
+    }
+
+    #! Returns a call that stops a transport; static, so that it does not refer to an object
+    private:internal static code<nothing()> getStop(code<nothing()> stop_transport) {
+        return sub () { LlmAsyncSseRequest::runStop(stop_transport); };
     }
 
     #! Stops a transport

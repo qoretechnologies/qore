@@ -33,6 +33,7 @@
 #define _QORE_QORENAMESPACEINTERN_H
 
 #include "qore/intern/QoreClassList.h"
+#include "qore/intern/DeclSeq.h"
 #include "qore/intern/HashDeclList.h"
 #include "qore/intern/EnumList.h"
 #include "qore/intern/QoreNamespaceList.h"
@@ -78,6 +79,8 @@ struct TypedefEntry {
     //! the namespace that declares the typedef while the Program that declares it is parsed, in which its type is
     //! resolved; not copied: a copy imported into another Program has the resolved type
     qore_ns_private* parse_ns = nullptr;
+    //! Check for shadowing once the complete namespace tree is available (declaration-time opt-in).
+    bool check_shadow = false;
     //! true while the type is being resolved, so that a typedef that refers to itself is an error
     bool resolving = false;
 
@@ -157,12 +160,18 @@ typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
         QoreValue value, QoreValue compiled_define);
 
+//! returns the namespaces of a namespace map in the order in which they were declared (issue #7171)
+DLLLOCAL std::vector<QoreNamespace*> qore_namespaces_in_declaration_order(const nsmap_t& m);
+
 class qore_ns_private {
 public:
     const QoreProgramLocation* loc;
     std::string name;
     // the fully-justified reference including the namespace name
     std::string path;
+    //! the order in which the namespace was declared; a copy has the number of the namespace that it is a copy of
+    //! (issue #7171)
+    uint64_t decl_seq = qore_next_decl_seq();
 
     QoreNamespace* ns = nullptr;
 
@@ -241,6 +250,7 @@ public:
     DLLLOCAL qore_ns_private(const char* n, const qore_ns_private& old)
         : name(n),
             path(old.path),
+            decl_seq(old.decl_seq),
             ns(new QoreNamespace(this)),
             constant(this), pub(old.pub),
             builtin(old.builtin),
@@ -256,6 +266,7 @@ public:
     DLLLOCAL qore_ns_private(const qore_ns_private& old, const QoreParseOptions& po, QoreNamespace* ns)
         : name(old.name),
             path(old.path),
+            decl_seq(old.decl_seq),
             ns(ns),
             classList(old.classList, po, this),
             hashDeclList(old.hashDeclList, po, this),
@@ -1907,6 +1918,10 @@ protected:
     DLLLOCAL void parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
             const qore_ns_private* declaring_ns);
 
+    //! Checks a typedef declaration for a Qore-namespace alias that unqualified lookup selects first.
+    DLLLOCAL void parseCheckTypedefShadowedByQore(const QoreProgramLocation* loc, const char* name,
+        const qore_ns_private* declaring_ns);
+
     //! Checks, and raises the warning, for a global variable declared in \a declaring_ns
     DLLLOCAL void parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
             const qore_ns_private* declaring_ns);
@@ -3507,7 +3522,8 @@ private:
         return best;
     }
 
-    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname) {
+    DLLLOCAL TypedefEntry* parseFindQoreTypedefIntern(const char* tdname,
+            const qore_ns_private** found_ns = nullptr) {
         const qore_ns_private* qore_ns = getQore();
         if (!qore_ns) {
             return nullptr;
@@ -3529,6 +3545,9 @@ private:
             if (!best || ns_priv->depth < best_depth) {
                 best = const_cast<TypedefEntry*>(td);
                 best_depth = ns_priv->depth;
+                if (found_ns) {
+                    *found_ns = ns_priv;
+                }
             }
         }
         return best;

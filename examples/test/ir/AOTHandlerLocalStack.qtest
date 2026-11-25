@@ -1,0 +1,288 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and linking of a compiled module
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTHandlerLocalStackTest
+
+#! Tests that the locals that the block exit handlers of AOT code use leave the runtime local stack balanced
+/** The native code of a function puts the IR-only locals that its on_exit, on_error and on_success handlers use on
+    the runtime local stack while the handlers run out of line, and removes them afterwards.  AOT code pushed a second
+    entry for a local whose entry the frame already held (a body local of a standard entry, or a parameter) and
+    removed only its value, so every such run left an entry on the stack: the removals that followed took the wrong
+    entries, and the values they should have released, such as the reference of an argument (\c \\var) and the
+    variable it refers to, were never released (qore#7501).
+
+    The checks count the destructions of the objects that the calls create, the values that the handlers see and the
+    size of the runtime local variable stack around the calls (qore_test_local_var_stack_size()), in every execution
+    mode and with a compiled module.
+*/
+class AOTHandlerLocalStackTest inherits QUnit::Test {
+    public {
+        const ModuleSource = "%modern
+module HandlerStack {
+    version = \"1.0\";
+    desc = \"block exit handler local stack checks\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace HandlerStack {
+public class Tracked {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+public class Log {
+    public {
+        static list<string> l = ();
+    }
+}
+
+sub log(string s) {
+    Log::l += s;
+}
+
+public class C {
+    # the handler locals are declared in a block of their own
+    private int nested(*hash<auto> opts, *reference<*Tracked> ref, bool fail) {
+        int n;
+        {
+            int x = 1;
+            on_exit {
+                log(sprintf(\"nested exit x=%d\", x));
+            }
+            n = opts.v;
+            int y = 2;
+            on_error if (y > 1) {
+                log(sprintf(\"nested error y=%d\", y));
+            }
+            if (fail) {
+                throw \"NESTED\", \"thrown\";
+            }
+        }
+        return n;
+    }
+
+    # the handler locals are declared in the root scope of the function
+    private int root(*hash<auto> opts, *reference<*Tracked> ref, bool fail) {
+        int x = 3;
+        on_exit {
+            log(sprintf(\"root exit x=%d\", x));
+        }
+        int y = 4;
+        on_error if (y > 1) {
+            log(sprintf(\"root error y=%d\", y));
+        }
+        on_success if (y > 1) {
+            log(sprintf(\"root success y=%d\", y));
+        }
+        if (fail) {
+            throw \"ROOT\", \"thrown\";
+        }
+        return opts.v;
+    }
+
+    int callNested(bool fail) {
+        *Tracked t = new Tracked();
+        return nested({\"v\": 10}, \\t, fail);
+    }
+
+    int callRoot(bool fail) {
+        *Tracked t = new Tracked();
+        return root({\"v\": 20}, \\t, fail);
+    }
+
+    static int staticNested(*hash<auto> opts, *reference<*Tracked> ref, bool fail) {
+        int n;
+        {
+            int x = 5;
+            on_exit {
+                log(sprintf(\"static exit x=%d\", x));
+            }
+            n = opts.v;
+            int y = 6;
+            on_error if (y > 1) {
+                log(sprintf(\"static error y=%d\", y));
+            }
+            if (fail) {
+                throw \"STATIC\", \"thrown\";
+            }
+        }
+        return n;
+    }
+
+    static int callStatic(bool fail) {
+        *Tracked t = new Tracked();
+        return C::staticNested({\"v\": 30}, \\t, fail);
+    }
+}
+
+int sub function_nested(*hash<auto> opts, *reference<*Tracked> ref, bool fail) {
+    int n;
+    {
+        int x = 7;
+        on_exit {
+            log(sprintf(\"function exit x=%d\", x));
+        }
+        n = opts.v;
+        int y = 8;
+        on_error if (y > 1) {
+            log(sprintf(\"function error y=%d\", y));
+        }
+        if (fail) {
+            throw \"FUNCTION\", \"thrown\";
+        }
+    }
+    return n;
+}
+
+int sub call_plain_function(bool fail) {
+    *Tracked t = new Tracked();
+    return function_nested({\"v\": 40}, \\t, fail);
+}
+
+# a function whose locals are all IR-only, which compiled code calls through its direct fast entry
+int sub fast_handler(int a) {
+    int x = a * 2;
+    on_exit {
+        log(sprintf(\"fast exit x=%d\", x));
+    }
+    if (a < 0) {
+        throw \"FAST\", \"thrown\";
+    }
+    return x;
+}
+
+public list<string> sub run() {
+    Log::l = ();
+    Tracked::destroyed = 0;
+    C c();
+    int sum;
+    # the calls leave the runtime local variable stack as they found it
+    int before = qore_test_local_var_stack_size();
+    for (int i = 0; i < 3; ++i) {
+        sum += c.callNested(False);
+        sum += c.callRoot(False);
+        sum += C::callStatic(False);
+        sum += call_plain_function(False);
+        sum += fast_handler(25);
+        # the calls that raise an exception, whose handlers run out of line
+        foreach code c0 in ((sub () { c.callNested(True); }, sub () { c.callRoot(True); },
+                sub () { C::callStatic(True); }, sub () { call_plain_function(True); },
+                sub () { fast_handler(-1); })) {
+            try {
+                c0();
+            } catch (hash<ExceptionInfo> ex) {
+                log(\"caught \" + ex.err);
+            }
+        }
+    }
+    return (sprintf(\"sum=%d destroyed=%d stack=%d\", sum, Tracked::destroyed,
+        qore_test_local_var_stack_size() - before),) + Log::l;
+}
+}
+";
+
+        #! the worker printing the results of the checks, three times so tiered execution runs native code
+        const Worker = "%modern
+%requires HandlerStack
+for (int i = 0; i < 3; ++i) {
+    print(HandlerStack::run().join(\"|\") + \"\\n\");
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("AOTHandlerLocalStack", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        # each round: the calls that return, then those that raise an exception; every call but those of
+        # fast_handler() creates one object, which is destroyed when the call returns
+        list<string> round = (
+            "nested exit x=1", "root success y=4", "root exit x=3", "static exit x=5", "function exit x=7",
+            "fast exit x=50",
+            "nested error y=2", "nested exit x=1", "caught NESTED",
+            "root error y=4", "root exit x=3", "caught ROOT",
+            "static error y=6", "static exit x=5", "caught STATIC",
+            "function error y=8", "function exit x=7", "caught FUNCTION",
+            "fast exit x=-2", "caught FAST",
+        );
+        list<string> l = ("sum=450 destroyed=24 stack=0",);
+        for (int i = 0; i < 3; ++i) {
+            l += round;
+        }
+        expected = l.join("|");
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        TmpDir tmp("qore-aot-handler-stack-src-");
+        writeSources(tmp.path);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            checkOutput(mode, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b "
+                "--exec-mode=%s %s", libqore_dir, tmp.path, qore_bin, mode, tmp.path + DirSep + "worker.q")));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-aot-handler-stack-");
+        writeSources(tmp.path);
+        string mod_dir = tmp.path + DirSep + "modules";
+        mkdir(mod_dir);
+        string qmod = mod_dir + DirSep + "HandlerStack.qmod";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod, tmp.path + DirSep + "HandlerStack.qm"));
+        assertTrue(is_file(qmod), "compiled the module: " + out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkOutput("aot", ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s",
+            libqore_dir, mod_dir, qore_bin, tmp.path + DirSep + "worker.q")));
+    }
+
+    private writeSources(string dir) {
+        writeFile(dir + DirSep + "HandlerStack.qm", ModuleSource);
+        writeFile(dir + DirSep + "worker.q", Worker);
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    private checkOutput(string label, string out) {
+        list<string> lines = (map $1, out.split("\n"), $1.val());
+        assertEq(3, lines.size(), label + ": rounds: " + out);
+        foreach string line in (lines) {
+            assertEq(expected, line, sprintf("%s: round %d", label, $#));
+        }
+    }
+}

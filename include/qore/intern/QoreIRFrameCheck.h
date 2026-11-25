@@ -56,6 +56,18 @@ class Module;
     of every function of the module.  Every other function's frame is checked against the threshold in the same way: a
     frame above it with a stack check fails the code generation.
 */
+//! The parameter attribute of each argument of a fast entry that takes its arguments over whose reference the entry
+//! owns, which the thunk releases when the stack has no room for the entry's frame (issue #6105)
+/** a parameter attribute and not an index in a function attribute: LLVM's interprocedural passes remove arguments of
+    an internal function whose values it does not need (dead-argument elimination), and keep the attributes of the
+    arguments that remain (qore#7072)
+*/
+#define QORE_OWNED_FAST_ENTRY_ARG_ATTR "qore-owned-arg"
+
+//! The parameter attribute of the ExceptionSink argument of a function whose entry checks the stack (the function
+//! attribute "qore-frame-check"), which the thunk of a large frame raises the exception with (qore#7072)
+#define QORE_FRAME_CHECK_XSINK_ATTR "qore-frame-check-xsink"
+
 class QoreIRFrameCheck {
 public:
     //! the suffix of the name of the code of a function whose frame is checked by a thunk

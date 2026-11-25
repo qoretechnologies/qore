@@ -212,3 +212,36 @@ of a compound or increment operation does not inherit the integer range of the
 value it replaces. `IRScalarReplacementTemporaryLifetime.qtest` checks integers
 outside the inline range and boxed doubles in fixed hashes and lists, including
 loop-carried and branch values, in every execution mode and compiled code.
+Since the slot ownership follows the final facts, the local loads that the
+scalar replacement forwards with a native representation keep it when
+`qore_ir_refine_local_value_facts()` runs after the replacement: the replacement
+forwards only a value whose facts are native and never NOTHING, which the
+lowering gives a local load only where the read itself is assigned (the parse
+records the assignment state of each read; a read that may be unassigned, or of
+a local that delete or remove can clear, has its type or NOTHING and stays
+boxed), and the refinement's dataflow is less precise (a
+handler entry starts with nothing known), so it found such a load after a try
+statement only possibly assigned and gave it boxed facts; the interpreter then
+kept the value as a temporary of the statement that loaded it, and the reads of
+the members in later statements gave NOTHING (qore#7356).  The removal of the
+dead loads of a local initialized with a constant keeps a load whose value
+replaces a member's reads: after a try statement, the load is not forwarded from
+the store, and the member's value is the load's.
+`IRHandlerJoinScalarReplacement.qtest` checks members built after try, on_exit,
+on_error and on_success statements in every execution mode and compiled code.
+Native code keeps such a value as a native double or integer: a local whose
+storage there is boxed (a local that may be unassigned somewhere, a parameter,
+a local of the runtime stack) gives a read that is borrowed from the local, or
+a reference of its own released with the temporaries of the statement, which a
+later write to the local or the end of its statement releases.  The lowering
+(`QoreIRToLLVM::findNativeLocalReads()`) therefore unboxes every read of a local
+with native facts where it is read (qore#7372); in a debug build,
+`QoreIRToLLVM::assertNativeLocalReadsUnboxed()` asserts it after the function's
+blocks are lowered.  The facts must therefore be exact: the refinement takes a
+local whose type accepts NOTHING as assigned only after a store of a value that
+cannot be NULL, as such a local stores NULL as NOTHING.
+`IRForwardedLocalRead.qtest` checks
+members whose local is written after the aggregate is built (compound
+assignments, increments, assignments, writes through a reference and by a
+closure, writes in loops and branches, member and element stores) or goes out of
+scope, in every execution mode and compiled code.

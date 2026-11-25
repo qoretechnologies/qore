@@ -1227,10 +1227,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         }
         server = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
         server.setDefaultHandler("ws-handler", new LifecycleWsHandler());
-        ports.h1 = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        ports.h1 = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         try {
             ports.h2 = server.addListener(<HttpListenerOptionInfo>{
-                "node": "localhost",
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(TestCertificates::CertPem),
                 "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -1238,7 +1238,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
                 "enable_h3": False,
             }).port;
             ports.h3 = server.addListener(<HttpListenerOptionInfo>{
-                "node": "localhost",
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": new SSLCertificate(TestCertificates::CertPem),
                 "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -1277,10 +1277,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         o.logger = logger;
         o += opts;
         if (proto == "h1") {
-            o.url = "ws://localhost:" + ports.h1;
+            o.url = "ws://127.0.0.1:" + ports.h1;
         } else {
             o += {
-                "url": "wss://localhost:" + ports{proto},
+                "url": "wss://127.0.0.1:" + ports{proto},
                 "http_version": "auto",
                 "ssl_verify_cert": False,
             };
@@ -1454,7 +1454,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     cancelledLibraryThreadTest() {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger});
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + ports.h1, "logger": logger});
         Counter running(1);
         Counter block(1);
         on_exit if (block.getCount()) {
@@ -1488,7 +1488,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         on_exit TestThreads::cancel_expected = False;
         GatedStarter starter();
         on_exit starter.dropPending();
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + ports.h1, "logger": logger,
             "start_thread": \starter.start()});
         starter.gate_next = True;
         Queue started_tid();
@@ -1507,7 +1507,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
         Queue tids();
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": int sub (code c) {
                 int t = background TestThreads::run(c);
                 tids.push(t);
@@ -1543,7 +1543,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     cancelledConnectAsyncWorkerTest() {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + ports.h1, "logger": logger,
             "connect_timeout": LifecycleWsClient::HandoffTimeout});
         Queue events = c.events;
         Counter release = c.release_worker;
@@ -1577,7 +1577,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
         # the action wait of the waiter is bounded only by a timeout far longer than the test's own waits
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + ports.h1, "logger": logger,
             "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
         Queue events = c.events;
         Counter release = c.release_worker;
@@ -1684,7 +1684,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     cancelledConnectAsyncCallerAndWorkerTest() {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + ports.h1, "logger": logger,
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + ports.h1, "logger": logger,
             "connect_timeout": LifecycleWsClient::HandoffTimeout});
         Queue events = c.events;
         Counter release = c.release_worker;
@@ -2285,7 +2285,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             return WSC_Process;
         };
         ctx.wsc = client = new LifecycleWsClient(ctx.getCallback(), {
-            "url": "ws://localhost:" + ports.h1,
+            "url": "ws://127.0.0.1:" + ports.h1,
             "logger": logger,
             "raw_callback": raw,
         });
@@ -2774,10 +2774,10 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         hash<auto> opts = {};
         opts.logger = logger;
         if (proto == "h1") {
-            opts.url = "ws://localhost:" + ports.h1;
+            opts.url = "ws://127.0.0.1:" + ports.h1;
         } else {
             opts += {
-                "url": "wss://localhost:" + ports{proto},
+                "url": "wss://127.0.0.1:" + ports{proto},
                 "http_version": "auto",
                 "ssl_verify_cert": False,
             };
@@ -3021,7 +3021,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! record: the record is not detached (only a destructor running on the heartbeat thread detaches it)
     discordInlineReconnectNotDetachedTest() {
         FailingStarter starter();
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": \starter.start()});
         on_exit {
             d.releaseAll();
@@ -3047,7 +3047,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
         if (!ports.h2) {
             testSkip("h2 listener not available");
         }
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + ports.h2, "http_version": "auto",
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://127.0.0.1:" + ports.h2, "http_version": "auto",
             "ssl_verify_cert": False, "logger": logger});
         Queue events = c.events;
         Counter release = c.release_tunnel_read;
@@ -3084,7 +3084,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! once, and the destructor shuts the connection manager down instead of waiting for the connect timeout
     destroyDuringTlsHandshakeTest(string http_version) {
         Socket srv();
-        srv.bindINET("localhost", "0");
+        srv.bindINET("127.0.0.1", "0");
         srv.listen();
         int port = srv.getSocketInfo().port;
         Queue accepted();
@@ -3098,7 +3098,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             accepted.push(exists s);
             server_done.waitForZero(LifecycleWsClient::HandoffTimeout * 4);
         });
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://localhost:" + port, "http_version": http_version,
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "wss://127.0.0.1:" + port, "http_version": http_version,
             "ssl_verify_cert": False, "logger": logger, "timeout": LifecycleWsClient::HandoffTimeout * 4,
             "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
         Queue ready();
@@ -3261,7 +3261,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A Discord client whose HELLO is handled while its connection is reported open keeps no HELLO watchdog armed
     discordHelloTest() {
-        HelloDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HelloDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit delete d;
         HelloObserver o(d);
         d.registerObserver(o);
@@ -3278,7 +3278,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! An EVENT_WS_CONNECTED observer run by the delivery task, which makes the open report, gets the reply it waits
     #! for
     observerOnDeliveryTaskTest() {
-        ReplyClient c({"url": "ws://localhost:" + ports.h1, "logger": logger});
+        ReplyClient c({"url": "ws://127.0.0.1:" + ports.h1, "logger": logger});
         on_exit delete c;
         ReplyObserver o(c);
         c.registerObserver(o);
@@ -3331,7 +3331,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! 100 ms interval on a slow host; the case is about the stops of a heartbeat, so the client ignores the
     #! acknowledgements (qore#7088)
     discordHeartbeatStopRaceTest(bool acks) {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3394,7 +3394,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! An automatic reconnect superseded by an explicit connect neither arms nor cancels the HELLO watchdog of the
     #! explicit connect's connection
     discordWatchdogSupersededReconnectTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger, "reconnect": True});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger, "reconnect": True});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3433,7 +3433,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A connect that times out waiting for another action does not cancel the HELLO watchdog of the connection the
     #! client keeps
     discordWatchdogFailedConnectTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger, "connect_timeout": 500});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger, "connect_timeout": 500});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3463,7 +3463,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! The close of an older connection, reported while a connect runs its handshake, does not cancel the HELLO
     #! watchdog of the connection the connect makes
     discordWatchdogCloseDuringHandshakeTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3526,7 +3526,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A HELLO watchdog that cannot be armed is logged; the connect succeeds
     discordArmFailsTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3541,7 +3541,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A connect whose connection was published (arming its watchdog) and whose start then fails cancels the watchdog
     #! of that connection, which is no longer the client's
     discordPublishedConnectFailsTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3556,7 +3556,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A reconnect forced for a connection that an explicit connect replaced while it waited is not made
     discordForcedReconnectNewerConnectionTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3588,7 +3588,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A reconnect forced for a connection that an explicit disconnect, ahead of it, closed is not made
     discordForcedReconnectAfterDisconnectTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3620,7 +3620,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A HELLO watchdog timer whose callback runs after the watchdog was re-armed for a newer connection does nothing
     discordStaleHelloFireTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3646,7 +3646,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! As discordStaleHelloFireTest() for the RESUME watchdog
     discordStaleResumeFireTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3669,7 +3669,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! The RESUME watchdog is canceled by the events and the close of its own connection only
     discordResumeKeyedTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3688,7 +3688,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A heartbeat that detected a zombie connection whose reconnect is not made is cleared once its thread ended, so
     #! a new connection starts its own
     discordZombieHandoffFailsTest() {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3711,7 +3711,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A Discord client raises EVENT_WS_CLOSED, and its gateway data provider its connection and disconnection
     #! events
     discordClosedEventTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
         }
@@ -3745,7 +3745,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A gateway data provider created from a client the caller keeps is destroyed when it goes out of scope: it
     #! disconnects the client and is no longer its observer
     discordProviderScopeTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3764,7 +3764,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A deleted gateway data provider is no longer an observer of the client, so later events do not reach it
     discordProviderDeleteTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3786,7 +3786,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! Two gateway data providers on one client both get its events and both stop observing it
     discordTwoProvidersTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3817,7 +3817,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! The destructor waits for a forced reconnect that waits for the action, so the reconnect does not run on a
     #! destroyed client
     discordDestructorWaitsReconnectTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         Queue events = d.events;
         Counter release_action = d.release_action;
         on_exit if (release_action.getCount()) {
@@ -3845,7 +3845,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! When the heartbeat thread releases the last reference to the client, the destructor runs on it and completes
     discordLastRefOnHeartbeatThreadTest() {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         Queue events = d.events;
         Queue lifecycle = d.lifecycle;
         Queue hb_tids = d.hb_tids;
@@ -3876,7 +3876,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! Dropping the last reference to a connected client whose heartbeat runs destroys it at once
     discordDropConnectedClientTest() {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         Queue events = d.events;
         Queue lifecycle = d.lifecycle;
         # no HELLO, so no delivery task holds a reference: the heartbeat is started directly
@@ -3893,7 +3893,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     discordDestructorOnCancelledThreadTest() {
         TestThreads::cancel_expected = True;
         on_exit TestThreads::cancel_expected = False;
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         Queue events = d.events;
         Queue lifecycle = d.lifecycle;
         # no HELLO, so no delivery task holds a reference: the heartbeat is started directly
@@ -3932,7 +3932,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! EVENT_WS_CLOSED is raised also when a step of the Discord closing callback fails
     discordClosedOnStepErrorTest() {
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3950,7 +3950,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! heartbeatHandoffFailed() called on the heartbeat thread does not wait for that thread
     discordHandoffOnHeartbeatThreadTest() {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -3965,7 +3965,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A heartbeat thread started with the start_thread option holds no reference to the client while it waits
     discordStartThreadHeartbeatDropTest() {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": int sub (code c) { return background TestThreads::run(c); }});
         Queue events = d.events;
         Queue lifecycle = d.lifecycle;
@@ -3983,7 +3983,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     */
     discordDestructorOnHeartbeatWithReconnectTest(*bool beat_first) {
         GatedStarter starter();
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": \starter.start()});
         if (beat_first) {
             starter.wait_before_return = d.zombie_reached;
@@ -4024,7 +4024,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! waits for the heartbeat thread, which stops its own record in the reconnect, and does not detach it
     discordDeleteDuringInlineReconnectTest() {
         FailingStarter starter();
-        InlineHoldDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        InlineHoldDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": \starter.start()});
         Queue events = d.events;
         Counter rel1 = d.release_inline;
@@ -4061,7 +4061,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! then waits for the heartbeat thread to end
     discordDeleteAfterInlineStopTest() {
         FailingStarter starter();
-        InlineHoldDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        InlineHoldDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": \starter.start()});
         Queue events = d.events;
         Counter rel1 = d.release_inline;
@@ -4097,7 +4097,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! thread that will never run it
     discordDroppedStartTest() {
         Queue dropped();
-        WdDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        WdDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": int sub (code c) { dropped.push(True); return 0; }});
         d.connect();
         d.triggerZombieForTest(d.getCurrentConnectionId());
@@ -4114,7 +4114,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! the hook's thread then ends without running it: the destructor, on the heartbeat thread, does not wait for it
     discordDestructorOnHeartbeatDroppedReconnectTest() {
         GatedStarter starter();
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger,
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger,
             "start_thread": \starter.start()});
         Queue events = d.events;
         Queue lifecycle = d.lifecycle;
@@ -4146,7 +4146,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
 
     #! A step of the closing callback that fails does not keep the heartbeat from being stopped
     discordClosingStepsGuardedTest() {
-        HbDiscord d({"url": "ws://localhost:" + ports.h1, "token": "x", "logger": logger});
+        HbDiscord d({"url": "ws://127.0.0.1:" + ports.h1, "token": "x", "logger": logger});
         on_exit {
             d.releaseAll();
             delete d;
@@ -4630,7 +4630,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
     #! A connectAsync() worker waiting for the handshake response of a silent server is canceled by the destructor
     handshakeCanceledOnDestroyTest() {
         Socket srv();
-        srv.bindINET("localhost", "0");
+        srv.bindINET("127.0.0.1", "0");
         srv.listen();
         int port = srv.getSocketInfo().port;
         Queue server_events();
@@ -4654,7 +4654,7 @@ class WebSocketClientStaleShutdownTest inherits QUnit::Test {
             server_events.push("request");
             server_done.waitForZero(LifecycleWsClient::HandoffTimeout * 2);
         });
-        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://localhost:" + port, "logger": logger,
+        LifecycleWsClient c(sub (*data msg) {}, {"url": "ws://127.0.0.1:" + port, "logger": logger,
             "timeout": LifecycleWsClient::HandoffTimeout * 4, "connect_timeout": LifecycleWsClient::HandoffTimeout * 4});
         Queue ready();
         c.connectAsync(NOTHING, ready);
@@ -4917,11 +4917,14 @@ class HbDiscord inherits DiscordWebSocketClient {
         }
         if (block_hb && v.typeCode() == NT_HASH && v.op == 1) {
             block_hb = False;
+            # read before the beat is reported: once it has the report, the test can release the beat and set up the
+            # next one, giving release_hb a new counter that this beat would wait for (qore#7392); and a test can
+            # release its reference to the client before it releases the beat
+            Counter release = release_hb;
+            bool drop = drop_held_hb;
             hb_tids.push(gettid());
             events.push("hb-blocked");
-            # read before the wait, which the test ends by releasing its reference to the client
-            bool drop = drop_held_hb;
-            release_hb.waitForZero(LifecycleWsClient::HandoffTimeout);
+            release.waitForZero(LifecycleWsClient::HandoffTimeout);
             if (drop) {
                 return False;
             }

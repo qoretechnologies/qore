@@ -1,0 +1,274 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc .qmod compilation, linking and dylib loading of the compiled modules
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTModuleLoaderWarningsTest
+
+#! qcc refuses a module for the warnings that the module loader refuses it for (qore#7314, qore#7324)
+/** The module loader parses a user module with the warning mask of a module load (\c QP_WARN_MODULES) and raises its
+    warnings as errors, in a module file and in the files of a separated module, including the warnings found when the
+    module is committed (qore#7324).  qcc parsed a module with the default warning mask and reported its warnings as
+    warnings, so that it compiled modules that do not load from source, which the loader falls back to when a
+    compiled module cannot be used.  It now parses and commits a module as the loader does, and refuses it with the
+    loader's diagnostic.
+*/
+class AOTModuleLoaderWarningsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+        int seq = 0;
+
+        #! code that raises a warning of the mask of a module load, by the warning it raises
+        const WarningCode = {
+            # the left-hand side of the index is a bool, so the expression always returns NOTHING (the case of the
+            # issue)
+            "INVALID-OPERATION": "public bool sub f(bool required, string k) { return required{k} ?? False; }",
+            "DUPLICATE-HASH-KEY": "public hash<auto> sub f() { return {\"a\": 1, \"a\": 2}; }",
+            "UNREACHABLE-CODE": "public int sub f() { return 1; int x = 2; return x; }",
+            "NON-EXISTENT-METHOD-CALL": "public class C { int m() { return 1; } } "
+                "public int sub f() { C c(); return c.nope(); }",
+            # enabled by %modern
+            "DUPLICATE-LOCAL-VARIABLE": "public int sub f() { int x = 1; { int x = 2; return x; } }",
+        };
+
+        #! code without a warning
+        const CleanCode = "public int sub f() { return 1; }";
+    }
+
+    constructor() : QUnit::Test("AOTModuleLoaderWarningsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("a module file with a warning of a module load", \moduleFileTest());
+        addTestCase("a module file whose warning is disabled", \disabledTest());
+        addTestCase("a warning that a module does not raise", \outsideMaskTest());
+        addTestCase("a warning of a directive", \directiveWarningTest());
+        addTestCase("a separated module with a warning", \separatedModuleTest());
+        addTestCase("the per-file objects, the module built from them and an archive", \objectModesTest());
+        set_return_value(main());
+    }
+
+    moduleFileTest() {
+        foreach hash<auto> i in (WarningCode.pairIterator()) {
+            TmpDir tmp("qore-aot-module-warnings-");
+            string name = uniqueName("WFile");
+            string path = writeModuleFile(tmp.path, name, "", i.value);
+            # the loader refuses the module for the warning
+            *hash<ExceptionInfo> ex = loadError(path);
+            assertEq(i.key, ex.err, i.key + ": loader");
+            # qcc refuses it with the loader's diagnostic, and builds no module
+            checkRefused(tmp.path, name, path, i.key, ex);
+        }
+    }
+
+    disabledTest() {
+        # a module that disables the warning loads from source and compiles
+        TmpDir tmp("qore-aot-module-warnings-");
+        string name = uniqueName("WOff");
+        string path = writeModuleFile(tmp.path, name, "%disable-warning invalid-operation\n",
+            WarningCode."INVALID-OPERATION");
+        assertNothing(loadError(path), "loader");
+        string qmod = tmp.path + DirSep + name + ".qmod";
+        string out = qcc(sprintf("-m -o %s %s", qmod, path));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        assertEq("False", call(tmp.path, name, "True, \"k\""), "qmod");
+    }
+
+    outsideMaskTest() {
+        # an unreferenced local variable raises no warning in a module, even with all warnings enabled: the loader
+        # accepts the module, and so does qcc
+        TmpDir tmp("qore-aot-module-warnings-");
+        string name = uniqueName("WOut");
+        string path = writeModuleFile(tmp.path, name, "%enable-all-warnings\n",
+            "public int sub f() { int unused = 1; return 2; }");
+        assertNothing(loadError(path), "loader");
+        string qmod = tmp.path + DirSep + name + ".qmod";
+        string out = qcc(sprintf("-m -o %s %s", qmod, path));
+        assertTrue(is_file(qmod), "qcc: " + out);
+        assertEq("2", call(tmp.path, name, ""), "qmod");
+    }
+
+    directiveWarningTest() {
+        # an unknown warning name in a directive raises UNKNOWN-WARNING, which %modern enables: the loader refuses the
+        # module, and so does qcc
+        TmpDir tmp("qore-aot-module-warnings-");
+        string name = uniqueName("WUnk");
+        string path = writeModuleFile(tmp.path, name, "%disable-warning no-such-warning\n", CleanCode);
+        *hash<ExceptionInfo> ex = loadError(path);
+        assertEq("UNKNOWN-WARNING", ex.err, "loader");
+        checkRefused(tmp.path, name, path, "UNKNOWN-WARNING", ex);
+    }
+
+    separatedModuleTest() {
+        foreach hash<auto> i in (WarningCode.pairIterator()) {
+            TmpDir tmp("qore-aot-module-warnings-");
+            # the same code in a module file, which the loader refuses
+            string file_name = uniqueName("WSepFile");
+            string file_path = writeModuleFile(tmp.path, file_name, "", i.value);
+            *hash<ExceptionInfo> file_ex = loadError(file_path);
+            assertEq(i.key, file_ex.err, i.key + ": loader, module file");
+
+            string name = uniqueName("WSep");
+            string dir = writeSeparatedModule(tmp.path, name, i.value);
+            # the diagnostic of the module file in the separated module, whose code is on line 2 of F.qc
+            string qc_path = dir + DirSep + "F.qc";
+            hash<ExceptionInfo> sep_ex = file_ex;
+            sep_ex.file = qc_path;
+            sep_ex.line = 2;
+            sep_ex.desc = replace(replace(file_ex.desc, sprintf("%s:%d", file_path, file_ex.line), qc_path + ":2"),
+                file_name, name);
+
+            *hash<ExceptionInfo> ex = loadError(dir);
+            # the loader refuses the separated module as the module file, with its diagnostic, including for the
+            # warnings found only when the module is committed (qore#7324), and qcc refuses it with the loader's
+            # diagnostic
+            assertEq(i.key, ex.err, i.key + ": loader");
+            assertEq(loaderDiag(sep_ex), loaderDiag(ex), i.key + ": the diagnostic of the module file");
+            checkRefused(tmp.path, name, dir, i.key, ex);
+        }
+    }
+
+    objectModesTest() {
+        TmpDir tmp("qore-aot-module-warnings-");
+        string name = uniqueName("WObj");
+        string dir = writeSeparatedModule(tmp.path, name, WarningCode."DUPLICATE-HASH-KEY");
+        *hash<ExceptionInfo> ex = loadError(dir);
+        assertEq("DUPLICATE-HASH-KEY", ex.err, "loader");
+        string diag = loaderDiag(ex);
+
+        # each per-file compile parses the module's files, and refuses the module
+        foreach string file in ((name + ".qm", "F.qc")) {
+            string obj = tmp.path + DirSep + file + ".qo";
+            int rc;
+            string out = qcc(sprintf("-c --context=%s -o %s %s", dir, obj, dir + DirSep + file), \rc);
+            assertNeq(0, rc, "per-file compile of " + file + ": " + out);
+            assertFalse(is_file(obj), "per-file compile of " + file);
+            assertRegex(":[0-9]+(:[0-9]+)?: error: DUPLICATE-HASH-KEY: " + quoteRegex(diag), out,
+                "per-file compile of " + file);
+        }
+
+        # the module built from objects and an archive parse the module's files too: the objects of a module without
+        # the warning are given, so that only the parse of the module's files can refuse it
+        string clean_dir = writeSeparatedModule(tmp.path + DirSep + "clean", name, CleanCode);
+        list<string> objs = ();
+        foreach string file in ((name + ".qm", "F.qc")) {
+            string obj = tmp.path + DirSep + "clean-" + file + ".qo";
+            string out = qcc(sprintf("-c --context=%s -o %s %s", clean_dir, obj, clean_dir + DirSep + file));
+            assertTrue(is_file(obj), "per-file compile of the module without the warning: " + out);
+            objs += obj;
+        }
+        string qmod = tmp.path + DirSep + name + ".qmod";
+        int rc;
+        string out = qcc(sprintf("-m --from-objects --context=%s -o %s %s", dir, qmod, objs.join(" ")), \rc);
+        assertNeq(0, rc, "module from objects: " + out);
+        assertFalse(is_file(qmod), "module from objects");
+        assertRegex(":[0-9]+(:[0-9]+)?: error: DUPLICATE-HASH-KEY: " + quoteRegex(diag), out,
+            "module from objects");
+
+        string qoa = tmp.path + DirSep + name + ".qoa";
+        out = qcc(sprintf("-a --context=%s -o %s %s", dir, qoa, objs.join(" ")), \rc);
+        assertNeq(0, rc, "archive: " + out);
+        assertFalse(is_file(qoa), "archive");
+        assertRegex(":[0-9]+(:[0-9]+)?: error: DUPLICATE-HASH-KEY: " + quoteRegex(diag), out, "archive");
+    }
+
+    #! checks that qcc refuses the module with the loader's diagnostic and builds no module
+    private checkRefused(string tmp_dir, string name, string src, string code, hash<ExceptionInfo> ex) {
+        string qmod = tmp_dir + DirSep + name + ".qmod";
+        int rc;
+        string out = qcc(sprintf("-m -o %s %s", qmod, src), \rc);
+        assertNeq(0, rc, code + ": qcc exit code: " + out);
+        assertFalse(is_file(qmod), code + ": no qmod");
+        # the diagnostic of qcc is that of the loader, at the same location
+        assertRegex(sprintf("%s:%d(:[0-9]+)?: error: %s: %s", quoteRegex(ex.file), ex.line, code,
+            quoteRegex(loaderDiag(ex))), out, code + ": qcc diagnostic");
+    }
+
+    #! returns the description of a loader exception without the description of the load that the loader adds
+    private static string loaderDiag(hash<ExceptionInfo> ex) {
+        return regex_subst(ex.desc, " \\(while loading user module .*$", "");
+    }
+
+    #! returns the exception raised when the module at the given path is loaded from source in a new Program
+    private *hash<ExceptionInfo> loadError(string path) {
+        try {
+            Program p();
+            p.parse(sprintf("%%requires %s\n", path), "load");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! returns what the function f() of the module gives for the given arguments in a child process that loads the
+    #! compiled module from the given directory
+    private string call(string dir, string name, string args) {
+        int rc;
+        string out = backquote(sprintf("%s QORE_MODULE_DIR=%s %s -ne 'load_module(\"%s\"); "
+            "printf(\"%%y\", call_function(\"%s::f\"%s));' 2>&1", env, dir, qore_bin, name, name,
+            args ? ", " + args : ""), \rc);
+        assertEq(0, rc, "load of " + name + " from " + dir + ": " + out);
+        return out;
+    }
+
+    #! writes a module file with the given directives and code and returns its path
+    private static string writeModuleFile(string dir, string name, string directives, string code) {
+        string path = dir + DirSep + name + ".qm";
+        writeFile(path, sprintf("%%modern\n%smodule %s {\n    version = \"1.0\";\n    desc = \"warning test\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n}\n\npublic namespace %s {\n%s\n}\n", directives, name, name,
+            code));
+        return path;
+    }
+
+    #! writes a separated module with the given code in its F.qc file and returns its directory
+    private static string writeSeparatedModule(string parent, string name, string code) {
+        if (!is_dir(parent)) {
+            mkdir(parent);
+        }
+        string dir = parent + DirSep + name;
+        mkdir(dir);
+        writeFile(dir + DirSep + name + ".qm", sprintf("%%modern\nmodule %s {\n    version = \"1.0\";\n"
+            "    desc = \"warning test\";\n    author = \"Qore Technologies, s.r.o.\";\n}\n", name));
+        writeFile(dir + DirSep + "F.qc", sprintf("public namespace %s {\n%s\n}\n", name, code));
+        return dir;
+    }
+
+    #! runs qcc with the given arguments and returns its output
+    private string qcc(string args) {
+        int rc;
+        return qcc(args, \rc);
+    }
+
+    #! runs qcc with the given arguments and returns its output, setting its exit code
+    private string qcc(string args, reference<int> rc) {
+        return backquote(sprintf("%s %s -O0 %s 2>&1", env, qcc_bin, args), \rc);
+    }
+
+    private string uniqueName(string prefix) {
+        return sprintf("%s%d%d", prefix, getpid(), ++seq);
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+
+    #! returns a regular expression that matches the given text
+    private static string quoteRegex(string text) {
+        return regex_subst(text, "([\\\\^$.|?*+()\\[\\]{}])", "\\\\$1", Qore::RE_Global);
+    }
+}

@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the JIT's choice of the form of the reload-chain flush and the size of the code it lowers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class JITReloadChainCostTest
+
+#! the form of the reload-chain flush of a function with few tracked locals and many boundaries (qore#7187)
+/** The native code of a function rotates the reload chain of each tracked local at each temp boundary: inline, with
+    two blocks for each local, or with a call of a runtime helper.  The form was chosen by the number of tracked locals
+    alone (QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD, 32), so that a long function with fewer tracked locals kept the inline
+    form, whose code is in the product of its tracked locals and its boundaries; a function whose tracked locals times
+    its IR instructions reach QORE_JIT_RELOAD_CHAIN_COST_BUDGET (default 40000, 0 to disable the rule) uses the helper
+    now.  The lowered size is that which a compilation skipped for the LLVM budget reports (qore#7174).
+*/
+class JITReloadChainCostTest inherits QUnit::Test {
+    public {
+        #! the trace line of a compilation of big() skipped for its lowered size, which gives the size
+        const SkippedSizePattern = "^\\[JIT\\] skipped native compilation of 'big@[^']*' \\(LLVM budget exceeded; "
+            "([0-9]+) LLVM instructions";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JIT reload-chain cost", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a long function of few tracked locals uses the helper", \testForm());
+        set_return_value(main());
+    }
+
+    testForm() {
+        # 10 untyped locals and 200 statements: about 4000 IR instructions and 12 tracked locals
+        string code = getCode(200);
+        int inline_size = loweredSize(code, "QORE_JIT_RELOAD_CHAIN_COST_BUDGET=0");
+        int default_size = loweredSize(code, "");
+        assertTrue(inline_size > 0 && default_size > 0, "sizes reported");
+        # the helper form saves the two blocks of each tracked local at each boundary
+        assertTrue(default_size < inline_size * 9 / 10, sprintf("smaller with the helper: %d < %d", default_size,
+            inline_size));
+        # the inline form for every function keeps it
+        assertEq(inline_size, loweredSize(code, "QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD=0"), "inline when asked for");
+        # a budget that the function does not reach keeps the inline form
+        assertEq(inline_size, loweredSize(code, "QORE_JIT_RELOAD_CHAIN_COST_BUDGET=100000000"),
+            "inline under the budget");
+        # the results of both forms are those of the AST
+        string expected = getAstOutput(code);
+        assertEq(expected, run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=0").stdout, "results with the helper");
+        assertEq(expected, run(code, "QORE_JIT_MAX_LLVM_INSTRUCTIONS=0 QORE_JIT_RELOAD_CHAIN_COST_BUDGET=0").stdout,
+            "results with the inline form");
+    }
+
+    #! runs \a code in the jit mode with the native compilation trace and the environment \a env
+    private hash<auto> run(string code, string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s --exec-mode=jit %s",
+            env, qore_bin, tmp.path));
+        ExecModeHarness::check_loader_warnings(r);
+        assertEq(0, r.rc, "exit status: " + r.stderr);
+        return r;
+    }
+
+    #! returns the output of \a code in the AST interpreter
+    private string getAstOutput(string code) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return backquote(sprintf("%s --exec-mode=ast %s", qore_bin, tmp.path));
+    }
+
+    #! returns the lowered size of big() in \a code with the environment \a env, or 0
+    private int loweredSize(string code, string env) {
+        hash<auto> r = run(code, env + " QORE_JIT_MAX_LLVM_INSTRUCTIONS=1");
+        foreach string line in (r.trace) {
+            *list<*string> m = regex_extract(line, SkippedSizePattern);
+            if (m) {
+                return m[0].toInt();
+            }
+        }
+        return 0;
+    }
+
+    #! Returns a script with a function of 10 untyped locals set in catch blocks and \a stmts statements that use them
+    private static string getCode(int stmts) {
+        string code = "%modern
+string log;
+class D {
+    private { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { log += \"~\" + n; }
+    string get() { return n; }
+}
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+sub touch(reference<int> z) {}
+string sub big(int n) {
+    auto r = 0;
+    int z = 0;
+    touch(\\z);
+    *D keep;
+";
+        for (int i = 0; i < 10; ++i) {
+            code += sprintf("    auto l%d = 0;
+    try {
+        r += may_throw(n - %d);
+        keep = new D(\"t%d\");
+    } catch (hash<ExceptionInfo> ex) {
+        l%d = r + %d;
+    }
+", i, i % 7 == 3 ? 1000 : 0, i, i, i);
+        }
+        for (int i = 0; i < stmts; ++i) {
+            code += sprintf("    l%d += may_throw(r + %d) + (\"x\" + string(r)).size();\n", i % 10, i);
+        }
+        code += "    return sprintf(\"%d:%s %s\", r, keep.get(), log);
+}
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    printf(\"rv%d:%s\\n\", c, big(c));
+}
+";
+        return code;
+    }
+}

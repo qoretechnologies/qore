@@ -249,7 +249,7 @@ class TestRunIsolationTest inherits QUnit::Test {
             "}\n"
             "h.pgsql = PgsqlRunSchema::setup(\"pgsql:u/p@db%%localhost:1\", \"x\");\n"
             "h.pgsql_jdbc = PgsqlRunSchema::setup(\"jdbc:u/p@db{url=postgresql://localhost:1/db}\", \"x\");\n"
-            "h.pgoptions = getenv(\"PGOPTIONS\");\n" # live-provider-optin: PGOPTIONS of the local PostgreSQL client
+            "h.pgoptions = getenv(\"PGOPTIONS\");\n"
             "h.mysql = MysqlRunDatabase::getConnectionString(\"mysql:u/p@db%%localhost:1\", \"x\");\n"
             "h.mssql = MssqlRunDatabase::getConnectionString(\"freetds:u/p@db%%localhost:1\", \"x\");\n"
             "h.mssql_jdbc = MssqlRunDatabase::getConnectionString(\"jdbc:u/p@db{url=sqlserver://localhost:1}\", "

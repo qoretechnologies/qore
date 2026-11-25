@@ -123,6 +123,10 @@ public:
         sock->deref();
     }
 
+    DLLLOCAL qore_socket_private* getPollSocket() const override {
+        return sock;
+    }
+
     DLLLOCAL virtual int getPollableDescriptor() const override {
         return sock->sock;
     }
@@ -864,8 +868,14 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
         return -1;
     }
 
-    int32_t stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(),
-        data_prd, this);
+    int32_t stream_id;
+#ifdef DEBUG
+    // a test makes the submit fail as when the session has no stream ID left (qore#7443)
+    if (qore_dbg_h2_fail_next_submit.exchange(false, std::memory_order_acq_rel)) {
+        stream_id = NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE;
+    } else
+#endif
+    stream_id = nghttp2_submit_request(session, nullptr, nva.data(), nva.size(), data_prd, this);
 
     if (stream_id < 0) {
         xsink->raiseException("HTTP2-ERROR", "failed to submit request: %s",
@@ -2122,6 +2132,12 @@ bool Http2Session::isStreamRemoteClosed(int32_t stream_id) const {
         return true;
     }
     return nghttp2_session_get_stream_remote_close(session, stream_id) == 1;
+}
+
+bool Http2Session::isStreamLocalOpen(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // 0: the local side is open; 1: closed; -1: no such stream
+    return session && nghttp2_session_get_stream_local_close(session, stream_id) == 0;
 }
 
 bool Http2Session::isStreamBodyTooLarge(int32_t stream_id) const {
@@ -3885,7 +3901,6 @@ void Http2Session::dbgResumeHeldStreams() {
 #endif
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     (void)timeout_ms;
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = pending_body_data.find(stream_id);
@@ -4015,137 +4030,178 @@ void Http2Session::wakeStreamDrainWaiters() {
     }
 }
 
-void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
-    std::lock_guard<std::recursive_mutex> lg(m);
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+void Http2Session::resetFailedInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink& error,
+        ExceptionSink* xsink) {
+    QoreStringValueHelper err(error.getExceptionErr());
+    QoreStringValueHelper desc(error.getExceptionDesc());
+    qore_async_io_log(QORE_LOG_LEVEL_ERROR, "HTTP/2 response body on stream %d failed: %s: %s", stream_id,
+        err->c_str(), desc->c_str());
+    error.clear();
+    info.eof = true;
+    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
+}
 
-    printd(5, "Http2Session::processStreamInputStreams() count=%zu\n", stream_input_streams_.size());
-    for (auto& [stream_id, info] : stream_input_streams_) {
-        if (info.eof) {
-            continue;
+void Http2Session::processStreamInputStream(int32_t stream_id, StreamInputStreamInfo& info, ExceptionSink* xsink) {
+    // Backpressure: skip if buffer full
+    auto it = pending_body_data.find(stream_id);
+    if (it != pending_body_data.end()) {
+        size_t pending = it->second.data.size() - it->second.offset;
+        if (pending > MAX_STREAM_BUFFER) {
+            return;
         }
+    }
 
-        // Backpressure: skip if buffer full
-        auto it = pending_body_data.find(stream_id);
-        if (it != pending_body_data.end()) {
-            size_t pending = it->second.data.size() - it->second.offset;
-            if (pending > MAX_STREAM_BUFFER) {
-                continue;
-            }
+    // Thread reassignment (first call only)
+    if (info.need_reassign) {
+        info.input_stream->reassignThread(xsink);
+        if (*xsink) {
+            return;
         }
+        info.need_reassign = false;
+    }
 
-        // Thread reassignment (first call only)
-        if (info.need_reassign) {
-            info.input_stream->reassignThread(xsink);
+    // a chunk that the stream's send limit refused is sent before anything more is read, so that no data is lost and
+    // the body is not ended early (qore#7460); first, so that a path chosen later cannot leave it behind
+    if (info.retained_chunk) {
+        size_t rs = info.retained_chunk->size();
+        int rv = sendStreamData(stream_id, info.retained_chunk->getPtr(), rs, false, xsink);
+        if (*xsink || rv == 1) {
+            return;
+        }
+        info.bytes_sent += (int64_t)rs;
+        info.retained_chunk = nullptr;
+        return;
+    }
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+    // io_uring path for regular files — truly async kernel reads
+    if (info.is_regular_file && io_uring) {
+        // First, try to deliver any pending buffer retained due to backpressure
+        if (info.pending_iouring_buf) {
+            int rv = sendStreamData(stream_id, info.pending_iouring_buf.get(),
+                info.pending_iouring_len, false, xsink);
             if (*xsink) {
                 return;
             }
-            info.need_reassign = false;
-        }
-
-#if defined(__linux__) && defined(HAVE_IO_URING)
-        // io_uring path for regular files — truly async kernel reads
-        if (info.is_regular_file && io_uring) {
-            // First, try to deliver any pending buffer retained due to backpressure
-            if (info.pending_iouring_buf) {
-                int rv = sendStreamData(stream_id, info.pending_iouring_buf.get(),
-                    info.pending_iouring_len, false, xsink);
-                if (*xsink) {
-                    info.eof = true;
-                    continue;
-                }
-                if (rv == 1) {
-                    // Still full — skip this stream and try again next iteration
-                    continue;
-                }
-                // Successfully delivered — advance offset and release buffer
-                info.file_offset += info.pending_iouring_len;
-                info.pending_iouring_buf.reset();
-                info.pending_iouring_len = 0;
+            if (rv == 1) {
+                // Still full — skip this stream and try again next iteration
+                return;
             }
-            if (!info.iouring_read_pending) {
-                int rv = io_uring->submitRead(info.stream_fd, info.file_offset,
-                                               IOURING_READ_SIZE, stream_id,
-                                               shared_from_this());
-                if (rv == 0) {
-                    info.iouring_read_pending = true;
-                }
-                // If SQ full (rv == -1), try again next iteration
-            }
-            // Data delivery happens in handleAsyncReadCompletion()
-            continue;
+            // Successfully delivered — advance offset and release buffer
+            info.file_offset += info.pending_iouring_len;
+            info.pending_iouring_buf.reset();
+            info.pending_iouring_len = 0;
         }
+        if (!info.iouring_read_pending) {
+            int rv = io_uring->submitRead(info.stream_fd, info.file_offset,
+                                           IOURING_READ_SIZE, stream_id,
+                                           shared_from_this());
+            if (rv == 0) {
+                info.iouring_read_pending = true;
+            }
+            // If SQ full (rv == -1), try again next iteration
+        }
+        // Data delivery happens in handleAsyncReadCompletion()
+        return;
+    }
 #endif
 
-        // Read one chunk per stream per iteration
-        if (info.is_pollable) {
-            SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
-            chunk->preallocate(65536);
-            int64 count = info.input_stream->readNonBlock(
-                const_cast<void*>(chunk->getPtr()), 65536, xsink);
-            if (*xsink) {
-                info.eof = true;
-                continue;
-            }
-            if (count < 0) {
-                // EAGAIN — not ready yet, event loop will wake us
-                continue;
-            }
-            if (count == 0) {
-                // EOF — if Content-Length was declared and we are short,
-                // send RST_STREAM instead of END_STREAM so the client
-                // detects the truncation instead of waiting for the
-                // promised byte count (FUTURE-TIMEOUT on the wire).
-                info.eof = true;
-                if (info.content_length >= 0
-                        && info.bytes_sent < info.content_length) {
-                    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
-                } else {
-                    sendStreamData(stream_id, nullptr, 0, true, xsink);
-                }
+    // Read one chunk per stream per iteration
+    if (info.is_pollable) {
+        SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
+        chunk->preallocate(65536);
+        int64 count = info.input_stream->readNonBlock(
+            const_cast<void*>(chunk->getPtr()), 65536, xsink);
+        if (*xsink) {
+            return;
+        }
+        if (count < 0) {
+            // EAGAIN — not ready yet, event loop will wake us
+            return;
+        }
+        if (count == 0) {
+            // EOF — if Content-Length was declared and we are short,
+            // send RST_STREAM instead of END_STREAM so the client
+            // detects the truncation instead of waiting for the
+            // promised byte count (FUTURE-TIMEOUT on the wire).
+            info.eof = true;
+            if (info.content_length >= 0
+                    && info.bytes_sent < info.content_length) {
+                submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
             } else {
-                chunk->setSize(count);
-                sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
-                info.bytes_sent += (int64_t)count;
-                // Keep info.file_offset in sync with the FileInputStream's
-                // internal position.  io_uring reads use pread (positional)
-                // off info.file_offset, while readNonBlock advances the
-                // stream's own seekable position.  These two counters are
-                // independent: if io_uring is set up lazily AFTER the first
-                // sync-path read (Phase 3 setIoUring race — see
-                // AsyncIoControllerPriv.cpp:3460), the next io_uring submit
-                // would pread() from the stale info.file_offset (still 0)
-                // and re-read the same range already buffered by the sync
-                // path.  Result: server sends more body bytes than the
-                // declared Content-Length, client emits RST_STREAM with
-                // NGHTTP2_PROTOCOL_ERROR per RFC 7540 §8.1.2.6, and the
-                // RestClient surfaces HTTP2-STREAM-RESET.
-                info.file_offset += (size_t)count;
+                sendStreamData(stream_id, nullptr, 0, true, xsink);
             }
         } else {
-            // Non-pollable (memory streams) — readHelper never blocks
-            SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
+            chunk->setSize(count);
+            int rv = sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
             if (*xsink) {
-                info.eof = true;
-                continue;
+                return;
             }
-            if (!chunk || !chunk->size()) {
-                info.eof = true;
-                // Short-stream detection (see is_pollable branch above).
-                if (info.content_length >= 0
-                        && info.bytes_sent < info.content_length) {
-                    submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
-                } else {
-                    sendStreamData(stream_id, nullptr, 0, true, xsink);
-                }
+            if (rv == 1) {
+                // refused by the stream's send limit: kept and sent first in a later pass (qore#7460)
+                info.retained_chunk = chunk.release();
             } else {
-                size_t cs = chunk->size();
-                sendStreamData(stream_id, chunk->getPtr(), cs, false, xsink);
+                info.bytes_sent += (int64_t)count;
+            }
+            // Keep info.file_offset in sync with the FileInputStream's
+            // internal position.  io_uring reads use pread (positional)
+            // off info.file_offset, while readNonBlock advances the
+            // stream's own seekable position.  These two counters are
+            // independent: if io_uring is set up lazily AFTER the first
+            // sync-path read (Phase 3 setIoUring race — see
+            // AsyncIoControllerPriv.cpp:3460), the next io_uring submit
+            // would pread() from the stale info.file_offset (still 0)
+            // and re-read the same range already buffered by the sync
+            // path.  Result: server sends more body bytes than the
+            // declared Content-Length, client emits RST_STREAM with
+            // NGHTTP2_PROTOCOL_ERROR per RFC 7540 §8.1.2.6, and the
+            // RestClient surfaces HTTP2-STREAM-RESET.
+            info.file_offset += (size_t)count;
+        }
+    } else {
+        // Non-pollable (memory streams) — readHelper never blocks
+        SimpleRefHolder<BinaryNode> chunk(info.input_stream->readHelper(65536, xsink));
+        if (*xsink) {
+            return;
+        }
+        if (!chunk || !chunk->size()) {
+            info.eof = true;
+            // Short-stream detection (see is_pollable branch above).
+            if (info.content_length >= 0
+                    && info.bytes_sent < info.content_length) {
+                submitRstStream(stream_id, NGHTTP2_INTERNAL_ERROR, xsink);
+            } else {
+                sendStreamData(stream_id, nullptr, 0, true, xsink);
+            }
+        } else {
+            size_t cs = chunk->size();
+            int rv = sendStreamData(stream_id, chunk->getPtr(), cs, false, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (rv == 1) {
+                // refused by the stream's send limit: kept and sent first in a later pass (qore#7460)
+                info.retained_chunk = chunk.release();
+            } else {
                 info.bytes_sent += (int64_t)cs;
             }
         }
-        if (*xsink) {
-            return;
+    }
+}
+
+void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    printd(5, "Http2Session::processStreamInputStreams() count=%zu\n", stream_input_streams_.size());
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (!info.eof) {
+            ExceptionSink stream_error;
+            processStreamInputStream(stream_id, info, &stream_error);
+            if (stream_error) {
+                resetFailedInputStream(stream_id, info, stream_error, xsink);
+                if (*xsink) {
+                    return;
+                }
+            }
         }
     }
 
@@ -4170,6 +4226,56 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
     if (stream_input_streams_.empty()) {
         has_active_input_streams_.store(false, std::memory_order_release);
     }
+}
+
+bool Http2Session::needsInputStreamPass() const {
+    if (!hasActiveStreamInputStreams()) {
+        return false;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [stream_id, info] : stream_input_streams_) {
+        if (info.eof) {
+            continue;
+        }
+        // in the order of processStreamInputStreams(): a full send buffer waits for the peer's credit, which comes as
+        // a frame
+        auto it = pending_body_data.find(stream_id);
+        size_t pending = it == pending_body_data.end() ? 0 : it->second.data.size() - it->second.offset;
+        if (pending > MAX_STREAM_BUFFER) {
+            continue;
+        }
+        // the first pass claims the InputStream for the I/O thread
+        if (info.need_reassign) {
+            return true;
+        }
+        // a chunk retained after a refused send is retried only when the send would now take it (qore#7460)
+        if (info.retained_chunk) {
+            if (hasSendRoomUnlocked(stream_id, pending, info.retained_chunk->size())) {
+                return true;
+            }
+            continue;
+        }
+        // a read in flight completes by itself, and the I/O thread that delivers its completion runs the connection's
+        // operation again
+        if (info.iouring_read_pending) {
+            continue;
+        }
+        // a buffer retained after a refused send is retried only when the send would now take it, by the stream's
+        // own send limit if it has one, as sendStreamData() decides
+        if (info.pending_iouring_buf) {
+            if (hasSendRoomUnlocked(stream_id, pending, info.pending_iouring_len)) {
+                return true;
+            }
+            continue;
+        }
+        // a monitored descriptor wakes the operation when it can be read
+        if (info.is_pollable && info.stream_fd >= 0 && info.is_epoll_compatible) {
+            continue;
+        }
+        // memory streams and regular files are read in the pass itself
+        return true;
+    }
+    return false;
 }
 
 void Http2Session::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {
@@ -4198,12 +4304,13 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
     auto& info = it->second;
     info.iouring_read_pending = false;
 
+    if (info.eof) {
+        return;
+    }
+    ExceptionSink stream_error;
     if (error) {
-        printd(2, "Http2Session::handleAsyncReadCompletion() stream=%d error=%s\n",
-            stream_id, strerror(error));
-        xsink->raiseException("FILE-READ-ERROR",
-            "async file read failed for stream %d: %s", stream_id, strerror(error));
-        info.eof = true;
+        stream_error.raiseErrnoException("FILE-READ-ERROR", error, "async file read failed for stream %d", stream_id);
+        resetFailedInputStream(stream_id, info, stream_error, xsink);
         return;
     }
 
@@ -4211,26 +4318,26 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
         // EOF
         printd(5, "Http2Session::handleAsyncReadCompletion() stream=%d EOF\n", stream_id);
         info.eof = true;
-        sendStreamData(stream_id, nullptr, 0, true, xsink);
+        sendStreamData(stream_id, nullptr, 0, true, &stream_error);
     } else {
         // Try to send data; handle backpressure (buffer full)
         printd(5, "Http2Session::handleAsyncReadCompletion() stream=%d %zu bytes offset=%zu\n",
             stream_id, length, info.file_offset);
-        int rv = sendStreamData(stream_id, data, length, false, xsink);
-        if (*xsink) {
-            // sendStreamData failed — stop the stream to prevent infinite retry
-            info.eof = true;
-        } else if (rv == 1) {
+        int rv = sendStreamData(stream_id, data, length, false, &stream_error);
+        if (rv == 1) {
             // Buffer full — retain the buffer for retry in processStreamInputStreams()
             // Do NOT advance file_offset until data is successfully delivered
             printd(3, "Http2Session::handleAsyncReadCompletion() stream=%d backpressure, "
                 "retaining %zu bytes for later delivery\n", stream_id, length);
             info.pending_iouring_buf = std::move(buffer);
             info.pending_iouring_len = length;
-        } else {
+        } else if (!stream_error) {
             // Successfully enqueued — advance file offset
             info.file_offset += length;
         }
+    }
+    if (stream_error) {
+        resetFailedInputStream(stream_id, info, stream_error, xsink);
     }
 }
 

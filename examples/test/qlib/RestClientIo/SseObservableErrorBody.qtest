@@ -62,7 +62,7 @@ public class SseObservableErrorBodyTest inherits QUnit::Test {
         # the synchronous reader's error
         hash<ExceptionInfo> sync_ex;
         {
-            RestClientIo::RestClientIo rest({"url": sprintf("http://localhost:%d", serveOnce(response, served)),
+            RestClientIo::RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", serveOnce(response, served)),
                 "data": "json", "protocol": "h1"});
             try {
                 rest.restSseReaderTarget("POST", <RestClient::RestRequestTarget>{"path": "stream"}, NOTHING,
@@ -73,7 +73,7 @@ public class SseObservableErrorBodyTest inherits QUnit::Test {
         }
         assertEq("REST-RESPONSE-ERROR", sync_ex.err);
 
-        RestClientIo::RestClientIo rest({"url": sprintf("http://localhost:%d", serveOnce(response, served)),
+        RestClientIo::RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", serveOnce(response, served)),
             "data": "json", "protocol": "h1"});
         HttpClientStreamingIo::SseObservable obs = rest.restObserveSseTarget("POST",
             <RestClient::RestRequestTarget>{"path": "stream"}, {"prompt": "x"});
@@ -113,7 +113,7 @@ public class SseObservableErrorBodyTest inherits QUnit::Test {
             listener.close();
         }
 
-        RestClientIo::RestClientIo rest({"url": sprintf("http://localhost:%d", port), "data": "json", "protocol": "h1"});
+        RestClientIo::RestClientIo rest({"url": sprintf("http://127.0.0.1:%d", port), "data": "json", "protocol": "h1"});
         HttpClientStreamingIo::SseObservable obs = rest.restObserveSseTarget("POST",
             <RestClient::RestRequestTarget>{"path": "stream"}, {"prompt": "x"});
         QueueObserver observer();

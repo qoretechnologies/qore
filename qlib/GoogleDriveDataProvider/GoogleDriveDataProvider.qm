@@ -105,6 +105,7 @@ module GoogleDriveDataProvider {
                 "Results are paginated; when `next_page_token` is returned, pass it back in `page_token` to "
                 "retrieve the following page.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": GoogleDriveListFilesResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -121,6 +122,7 @@ module GoogleDriveDataProvider {
             "desc": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\n"
                 "Use `download-file` to retrieve the content itself.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": GoogleDriveFileDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -141,6 +143,7 @@ module GoogleDriveDataProvider {
                 "Google-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be "
                 "downloaded; use `export-file` to convert one to a concrete format instead.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": GoogleDriveContentResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -162,6 +165,7 @@ module GoogleDriveDataProvider {
                 "The formats available depend on the document type; exporting a Sheet to `text/csv` returns the "
                 "first sheet only.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": GoogleDriveContentResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -416,6 +420,7 @@ module GoogleDriveDataProvider {
                 "person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` "
                 "as `drive_id` to `list-files` to work within it.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Organization",),
             "output_type": GoogleDriveListSharedDrivesResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -434,6 +439,7 @@ module GoogleDriveDataProvider {
                 "as an ordinary write failure rather than as a capacity problem.  Files in the trash still "
                 "count against the quota, so `usage_in_drive_trash` is what emptying it would recover.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Organization",),
             "output_type": GoogleDriveStorageQuotaDataType,
         });
@@ -447,6 +453,7 @@ module GoogleDriveDataProvider {
             "desc": "Lists the permissions granted on a file: who has access, and at what level.\n\n"
                 "Each permission carries the `id` needed to withdraw it with `remove-permission`.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Sharing",),
             "output_type": GoogleDriveListPermissionsResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -488,6 +495,7 @@ module GoogleDriveDataProvider {
                 "**Drive removes older revisions on its own** unless they are marked `keep_forever`, so a "
                 "revision listed here is not guaranteed to remain indefinitely.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": GoogleDriveListRevisionsResponseDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -507,6 +515,7 @@ module GoogleDriveDataProvider {
             "desc": "Returns the details of one revision of a file: when it was made, how large it is, and "
                 "whether Drive will keep it indefinitely.",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "groups": ("Files",),
             "output_type": GoogleDriveRevisionDataType,
             "options": DataProviderActionCatalog::getActionOptionFromFields(

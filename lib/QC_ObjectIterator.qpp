@@ -37,6 +37,9 @@ extern QoreClass* QC_HASHITERATOR;
 /** Call ObjectIterator::next() to iterate through the object; do not use the iterator if ObjectIterator::next() returns @ref False.
     An object can be iterated in reverse order by calling ObjectIterator::prev() instead of ObjectIterator::next()
 
+    Object iterator constructors take a snapshot of the members visible in the caller's class scope, as
+    @ref Qore::hash() "hash(object)" does.
+
     @par Example: ObjectIterator basic usage
     @code{.py}
     class Class1 {
@@ -78,7 +81,7 @@ ObjectIterator i(obj);
     @endcode
  */
 ObjectIterator::constructor(object object_value) [flags=NAMED_ARGS] {
-   self->setPrivate(CID_OBJECTITERATOR, new QoreObjectIterator(object_value));
+   self->setPrivate(CID_OBJECTITERATOR, new QoreObjectIterator(object_value, runtime_get_caller_class()));
 }
 
 //! Creates an empty object iterator object

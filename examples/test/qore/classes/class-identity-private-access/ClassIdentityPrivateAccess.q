@@ -564,19 +564,6 @@ auto sub qualified(string what) {
 }
 ";
 
-#! a handler that keeps the listener object that it is given
-class KeepingHandler inherits AbstractHttpRequestHandler {
-    public {
-        *HttpListenerInterface kept;
-    }
-
-    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
-            *data body) {
-        kept = listener;
-        return makeResponse(200, "kept");
-    }
-}
-
 #! the result of an operation: its value, or the exception that it raised
 string sub result(code c) {
     try {
@@ -724,17 +711,12 @@ printf("stream subclass read: %s\n", result(auto sub () {
 
 # (i) the listener object that the handlers of HttpServer get: HttpServer::HttpListenerHandlerView
 {
-    KeepingHandler handler();
     HttpServer server(<HttpServerOptionInfo>{});
     on_exit delete server;
-    server.setDefaultHandler("keep", handler);
-    int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
-    server.waitForAsyncIo();
-    HTTPClient hc({"url": "http://127.0.0.1:" + port, "timeout": 10s});
-    hc.get("/");
-    object view = handler.kept;
-    HttpListener l(new HttpServer(<HttpServerOptionInfo>{}), sub () {}, 0, new Sequence(),
-        <HttpListenerOptionInfo>{"name": "look-alike", "no_bind": True});
+    HttpListener l(server, sub () {}, 0, new Sequence(),
+        <HttpListenerOptionInfo>{"name": "test", "no_bind": True});
+    # HttpServer passes this view to request handlers.
+    object view = l.getHandlerView();
     target = view;
     # the reads first: a write that is not refused changes the object
     printf("view namespace read: %s\n", result(auto sub () {

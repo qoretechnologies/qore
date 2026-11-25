@@ -1,0 +1,318 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The scenario of IRHandlerJoinScalarReplacement.qtest (qore#7356): a local hash or list with a fixed layout is built
+# from locals after a statement with an exception handler (a try statement, an on_exit, on_error or on_success
+# statement), and its members are read by later statements.  The members hold values that the interpreter keeps in
+# boxed nodes (a negative NaN, a double whose bits collide with a value tag, an integer outside the inline range) and
+# values that it keeps inline, strings, binaries and dates.  Every call runs three times, so that tiered execution runs
+# it on the AST tier, the IR tier and as native code.
+
+%modern
+
+hashdecl HandlerJoinMember {
+    float f;
+    int i;
+}
+
+# prints a value through a call, which reads it in a statement after the one that built the aggregate
+sub show(string label, auto v) {
+    printf("%s: %y\n", label, v);
+}
+
+# a try statement whose handler runs: the original reproduction of qore#7356
+sub tryCaught(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    float unassigned;
+    try {
+        if (unassigned.nanp()) {
+        }
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("tryCaught.f", h.f);
+    show("tryCaught.i", h.i);
+}
+
+# a try statement whose handler does not run
+sub tryNotCaught(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        f += 0.0;
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("tryNotCaught.f", h.f);
+    show("tryNotCaught.i", h.i);
+}
+
+# a handler that throws and catches
+sub tryThrow(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("tryThrow.f", h.f);
+    show("tryThrow.i", h.i);
+}
+
+# the member read in its own statement before the call
+sub tryRead(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    float rf = h.f;
+    int ri = h.i;
+    show("tryRead", (rf, ri));
+}
+
+# a rethrow in a nested try statement
+sub tryRethrow(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        try {
+            throw "ERR";
+        } catch () {
+            rethrow;
+        }
+    } catch () {
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("tryRethrow.f", h.f);
+    show("tryRethrow.i", h.i);
+}
+
+# the aggregate is built in the catch block
+sub inCatch(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        throw "ERR";
+    } catch () {
+        hash<auto> h = {"f": f, "i": i};
+        show("inCatch.f", h.f);
+        show("inCatch.i", h.i);
+    }
+}
+
+# the try statement and the aggregate are in a loop
+sub inLoop(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    for (int n = 0; n < 2; ++n) {
+        try {
+            if (n) {
+                throw "ERR";
+            }
+        } catch () {
+        }
+        hash<auto> h = {"f": f, "i": i};
+        show("inLoop.f", h.f);
+        show("inLoop.i", h.i);
+    }
+}
+
+# the try statement is in a switch, the aggregate after it
+sub inSwitch(float fv, int iv, int sel) {
+    float f = fv;
+    int i = iv;
+    switch (sel) {
+        case 1:
+            try {
+                throw "ERR";
+            } catch () {
+            }
+            break;
+        default:
+            break;
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("inSwitch.f", h.f);
+    show("inSwitch.i", h.i);
+}
+
+# the try statement is in a nested block
+sub inBlock(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    {
+        {
+            try {
+                throw "ERR";
+            } catch () {
+            }
+        }
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("inBlock.f", h.f);
+    show("inBlock.i", h.i);
+}
+
+# on_exit, on_error and on_success statements
+sub onExit(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    on_exit {
+        f += 0.0;
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("onExit.f", h.f);
+    show("onExit.i", h.i);
+}
+
+sub onError(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    on_error {
+        f += 0.0;
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("onError.f", h.f);
+    show("onError.i", h.i);
+}
+
+sub onSuccess(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    on_success {
+        f += 0.0;
+    }
+    hash<auto> h = {"f": f, "i": i};
+    show("onSuccess.f", h.f);
+    show("onSuccess.i", h.i);
+}
+
+# typed containers and a hashdecl
+sub typedHash(float fv) {
+    float f = fv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    hash<string, float> h = {"f": f};
+    show("typedHash.f", h.f);
+}
+
+sub floatList(float fv) {
+    float f = fv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    list<float> l = (f, f);
+    show("floatList", l[1]);
+}
+
+sub intList(int iv) {
+    int i = iv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    list<int> l = (i, i);
+    show("intList", l[1]);
+}
+
+sub hashDecl(float fv, int iv) {
+    float f = fv;
+    int i = iv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    hash<HandlerJoinMember> h = <HandlerJoinMember>{"f": f, "i": i};
+    show("hashDecl.f", h.f);
+    show("hashDecl.i", h.i);
+}
+
+# locals initialized with constants: after a try statement their loads are not forwarded from their stores; the
+# original reproduction of qore#7356, and an int member, whose load was removed as a dead selector load
+sub constantLocals() {
+    float neg_nan = -@nan@;
+    float tag_float = -4e307;
+    int big = (1 << 60) + 3;
+    int small = 7;
+    string str = "str-const";
+    float unassigned;
+    try {
+        if (unassigned.nanp()) {
+        }
+    } catch () {
+    }
+    hash<auto> h = {"neg_nan": neg_nan, "tag_float": tag_float, "big": big, "small": small};
+    show("constantLocals.neg_nan", h.neg_nan);
+    show("constantLocals.tag_float", h.tag_float);
+    show("constantLocals.big", h.big);
+    show("constantLocals.small", h.small);
+    hash<string, int> ih = {"big": big};
+    show("constantLocals.ih.big", ih.big);
+    hash<string, string> sh = {"str": str};
+    show("constantLocals.sh.str", sh.str);
+    list<int> l = (big, small);
+    show("constantLocals.l", l[0]);
+}
+
+# boxed values of other types
+sub otherTypes(string sv, binary bv, date dv, bool b, number nv) {
+    string s = sv;
+    binary bin = bv;
+    date d = dv;
+    bool flag = b;
+    number n = nv;
+    try {
+        throw "ERR";
+    } catch () {
+    }
+    hash<auto> h = {"s": s, "b": bin, "d": d, "flag": flag, "n": n};
+    show("otherTypes.s", h.s);
+    show("otherTypes.b", h.b);
+    show("otherTypes.d", h.d);
+    show("otherTypes.flag", h.flag);
+    show("otherTypes.n", h.n);
+}
+
+# a negative NaN, a double whose bits collide with a value tag, an inline double; integers outside and inside the
+# inline range
+const Floats = (-@nan@, -4e307, 1.5);
+const Ints = ((1 << 60) + 3, -(1 << 61) - 5, 7);
+
+sub run(code call) {
+    for (int n = 0; n < 3; ++n) {
+        call();
+    }
+}
+
+foreach float fv in (Floats) {
+    foreach int iv in (Ints) {
+        run(sub () { tryCaught(fv, iv); });
+        run(sub () { tryNotCaught(fv, iv); });
+        run(sub () { tryThrow(fv, iv); });
+        run(sub () { tryRead(fv, iv); });
+        run(sub () { tryRethrow(fv, iv); });
+        run(sub () { inCatch(fv, iv); });
+        run(sub () { inLoop(fv, iv); });
+        run(sub () { inSwitch(fv, iv, 1); });
+        run(sub () { inBlock(fv, iv); });
+        run(sub () { onExit(fv, iv); });
+        run(sub () { onError(fv, iv); });
+        run(sub () { onSuccess(fv, iv); });
+        run(sub () { intList(iv); });
+        run(sub () { hashDecl(fv, iv); });
+    }
+    run(sub () { typedHash(fv); });
+    run(sub () { floatList(fv); });
+}
+run(sub () { constantLocals(); });
+run(sub () { otherTypes("str-" + "value", <0102ff>, 2026-11-23T10:20:30.123456Z, True, 1.25n); });

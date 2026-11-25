@@ -35,12 +35,124 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/CallReferenceNode.h"
+
+#include <atomic>
 
 extern qore_classid_t CID_QUEUE;
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_QUEUE;
 
 // Helper: get the singleton's priv data and QoreObject (both ref'd); caller must deref both
+// takes a handle of the work of the module cleanup that the current thread runs, described by who runs it and by the
+// location of the Qore code that called the builtin (qore#7239); 0 outside of such work
+static int64 module_cleanup_hold_here(ExceptionSink* xsink) {
+    // outside of work that the module cleanup counts (in particular before the end of the process): no handle, and
+    // nothing is formatted, as gates call this at run time for every notification that they leave to another thread
+    if (!qore_module_cleanup_counted_work_running()) {
+        return 0;
+    }
+    std::string where;
+    try {
+        if (qore_module_cleanup_counted_owner && !qore_module_cleanup_counted_owner->empty()) {
+            where = "owner '";
+            where += *qore_module_cleanup_counted_owner;
+            where += "'";
+        } else {
+            where = "a task or work handed over";
+        }
+        // the location of the code that called the builtin
+        ReferenceHolder<QoreHashNode> loc(qore_get_parent_caller_location(0), xsink);
+        QoreStringDataHelper file(loc ? loc->getKeyValue("file") : QoreValue());
+        where += " at ";
+        where += file ? file.c_str() : "<unknown>";
+        if (loc) {
+            char buf[32];
+            snprintf(buf, sizeof buf, ":" QLLD, loc->getKeyValue("line").getAsBigInt());
+            where += buf;
+        }
+    } catch (std::bad_alloc&) {
+        // the handle is taken without its description
+    }
+    return qore_module_cleanup_hold_work(where);
+}
+
+// the code that AsyncIoController::wrapModuleCleanupWork() returns: runs the code given to it as work that the module
+// cleanup counts, holding a handle of that work until the code has run, or until it is destroyed (qore#7339); the
+// handle is released when the code returns, also if it raises an exception, or when this reference is destroyed
+// without the code having run (a pool that drops its queued tasks, a caller that refuses the code), so that the cleanup
+// never waits for code that does not run; the code runs once: the first call takes it and releases it, and with it
+// what only it keeps alive, inside the counted work before the handle is released, and a later call raises an
+// exception
+class ModuleCleanupWorkReferenceNode : public ResolvedCallReferenceNodeIntern {
+public:
+    DLLLOCAL ModuleCleanupWorkReferenceNode(int64 handle, ResolvedCallReferenceNode* code)
+            : ResolvedCallReferenceNodeIntern(&loc_builtin), handle(handle), code(code) {
+    }
+
+    DLLLOCAL ~ModuleCleanupWorkReferenceNode() {
+        assert(!code.load());
+    }
+
+    DLLLOCAL QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        // released when the code has run, also if it raises an exception
+        struct ReleaseHelper {
+            int64 handle;
+            DLLLOCAL ~ReleaseHelper() {
+                if (handle) {
+                    qore_module_cleanup_release_work(handle);
+                }
+            }
+        } release_helper{handle};
+        // the code runs as work that the cleanup counts while its handle is held, so that it can hand work over in
+        // turn
+        QoreModuleCleanupCountedWorkScope counted_scope(qore_module_cleanup_handle_held(handle), nullptr);
+        // the code is released in the counted work, before the handle: anything that only it keeps alive is
+        // destroyed as work that the cleanup waits for
+        ReferenceHolder<ResolvedCallReferenceNode> c(code.exchange(nullptr), xsink);
+        if (!c) {
+            // the handle belongs to the first call, which may still be running
+            release_helper.handle = 0;
+            xsink->raiseException("MODULE-CLEANUP-WORK-ERROR", "code wrapped by "
+                "AsyncIoController::wrapModuleCleanupWork() runs once; it has already been called");
+            return QoreValue();
+        }
+        return c->invoke(args, xsink);
+    }
+
+    DLLLOCAL bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const override {
+        return is_equal_hard(v, xsink);
+    }
+
+    DLLLOCAL bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const override {
+        return v == this;
+    }
+
+    DLLLOCAL QoreFunction* getFunction() const override {
+        return nullptr;
+    }
+
+protected:
+    DLLLOCAL bool derefImpl(ExceptionSink* xsink) override {
+        // the code was not run, or was: releasing the handle again has no effect; the code, if it was not run, is
+        // released first, while the handle is still held
+        ResolvedCallReferenceNode* c = code.exchange(nullptr);
+        if (c) {
+            // released as work that the cleanup counts, so that what only the code keeps alive can hand work over
+            QoreModuleCleanupCountedWorkScope counted_scope(qore_module_cleanup_handle_held(handle), nullptr);
+            c->deref(xsink);
+        }
+        qore_module_cleanup_release_work(handle);
+        return ResolvedCallReferenceNodeIntern::derefImpl(xsink);
+    }
+
+private:
+    // the handle of the work of the module cleanup that the code runs as
+    int64 handle;
+    // the code (a reference), taken by the first call
+    mutable std::atomic<ResolvedCallReferenceNode*> code;
+};
+
 static AsyncIoControllerPriv* get_singleton(QoreObject*& obj, ExceptionSink* xsink) {
     obj = qore_get_async_io_controller_obj(xsink);
     if (!obj) {
@@ -399,9 +511,14 @@ AsyncIoController::copy() {
     the application that module code runs for (also module code that other module code calls for it), or none for
     the initialization of library code (also in a callback); an operation submitted by a callback of an operation
     belongs to that operation's application, unless the callback is the sandboxed code of an application Program,
-    whose operations belong to its own application.  Code that is sandboxed, or acts for sandboxed code, does not
-    replace the operation of another application with \a replace_existing, nor, if it runs for no known application,
-    any operation other than its own operation object: on the I/O thread of the key, the submission raises
+    whose operations belong to its own application; the trusted code of another Program that runs in such a callback
+    runs for the operation's application as well.  The code of a trusted Program that runs for sandboxed code in
+    another way (a method of an object of the trusted Program that sandboxed code calls, or a thread or a task that
+    trusted code in a callback starts) runs for the trusted Program's application, as when the trusted Program calls
+    it itself: trusted code that serves sandboxed code checks the keys and owners that it is given (see
+    <a href="https://github.com/qoretechnologies/qore/issues/7148">issue #7148</a>).  Code that is sandboxed, or acts
+    for sandboxed code, does not replace the operation of another application with \a replace_existing, nor, if it
+    runs for no known application, any operation other than its own operation object: on the I/O thread of the key, the submission raises
     \c ASYNC-IO-KEY-ERROR; from another thread, its operation is not started and its result is a canceled result whose
     \c ex is that error.  Without \a replace_existing, a submission with a key in use is refused as for any caller
     (\c ASYNC-IO-ERROR).  The operation with the key is not affected
@@ -1167,6 +1284,9 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
     dispatches the callback to a worker thread in the async-I/O controller's dispatcher
     pool — it is @b not invoked on the I/O thread.
 
+    The callback runs with the options of the code that set it and in the context of the host, also for a timer that
+    sandboxed code added: not in the sandbox of the code that added the timer, whose data it receives.
+
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
 
@@ -1357,35 +1477,7 @@ on_exit AsyncIoController::releaseModuleCleanupWork(h);
     @since %Qore 3.0
 */
 static int AsyncIoController::holdModuleCleanupWork() {
-    // outside of work that the module cleanup counts (in particular before the end of the process): no handle, and
-    // nothing is formatted, as gates call this method at run time for every notification that they leave to another
-    // thread
-    if (!qore_module_cleanup_counted_work_running()) {
-        return 0;
-    }
-    std::string where;
-    try {
-        if (qore_module_cleanup_counted_owner && !qore_module_cleanup_counted_owner->empty()) {
-            where = "owner '";
-            where += *qore_module_cleanup_counted_owner;
-            where += "'";
-        } else {
-            where = "a task or work handed over";
-        }
-        // the location of the code that called this method
-        ReferenceHolder<QoreHashNode> loc(qore_get_parent_caller_location(0), xsink);
-        QoreStringDataHelper file(loc ? loc->getKeyValue("file") : QoreValue());
-        where += " at ";
-        where += file ? file.c_str() : "<unknown>";
-        if (loc) {
-            char buf[32];
-            snprintf(buf, sizeof buf, ":" QLLD, loc->getKeyValue("line").getAsBigInt());
-            where += buf;
-        }
-    } catch (std::bad_alloc&) {
-        // the handle is taken without its description
-    }
-    return qore_module_cleanup_hold_work(where);
+    return module_cleanup_hold_here(xsink);
 }
 
 //! Releases a handle of holdModuleCleanupWork()
@@ -1411,6 +1503,9 @@ static bool AsyncIoController::releaseModuleCleanupWork(int handle) {
 
     @param handle a handle of @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()"
     @param c the code to run
+    @param release if @ref False "False", the handle is not released when the code returns: for a thread that runs
+    work for handles that it releases itself later, such as a gate's thread that reads a stream for the notifications
+    left to it, which runs each pass as work that the cleanup counts under the first handle left to it (qore#7339)
 
     @par Example:
     @code{.py}
@@ -1420,15 +1515,81 @@ background AsyncIoController::runModuleCleanupWork(h, sub () { notifyListeners()
 
     @since %Qore 3.0
 */
-static nothing AsyncIoController::runModuleCleanupWork(int handle, code<nothing()> c) {
-    // released when the code has run, also if it raises an exception
+static nothing AsyncIoController::runModuleCleanupWork(int handle, code<nothing()> c, bool release = True) {
+    // released when the code has run, also if it raises an exception, unless the caller releases it itself
     struct ReleaseHelper {
         int64 handle;
         DLLLOCAL ~ReleaseHelper() {
-            qore_module_cleanup_release_work(handle);
+            if (handle) {
+                qore_module_cleanup_release_work(handle);
+            }
         }
-    } release_helper{handle};
+    } release_helper{release ? handle : 0};
     QoreModuleCleanupCountedWorkScope counted_scope(qore_module_cleanup_handle_held(handle), nullptr);
     c->execValue(nullptr, xsink).discard(xsink);
     return QoreValue();
+}
+
+//! Returns code that runs the given code as work of the module cleanup, for code that such work leaves to another thread
+/** At the end of the process, the module cleanup waits for the work that it counts before it deletes the modules and
+    their Programs; code that such work leaves to another thread (a thread of its own started with \c background, a
+    task of a thread pool or of an executor, a callback that another component runs later) is not waited for, and can
+    run in a module that the cleanup is deleting.  Code given to another thread through this method is: in work that
+    the module cleanup counts, the method takes a handle of that work (see
+    @ref Qore::AsyncIoController::holdModuleCleanupWork() "holdModuleCleanupWork()") and returns code that runs \a c as
+    work that the cleanup counts (so that it can hand work over in turn) and releases the handle when \a c returns,
+    also if it raises an exception, or when the returned code is destroyed without having been run (a pool that drops
+    its queued tasks, a caller that refuses the code), so that the cleanup does not wait for code that does not run.
+    The returned code runs \a c once: it releases \a c, and with it what only \a c keeps alive, as work that the
+    cleanup counts before it releases the handle, and a second call raises an exception.
+
+    Outside of work that the module cleanup counts (in particular before the end of the process), and for code that this
+    method returned already, \a c is returned as it is, so the method costs nothing at run time.
+
+    @param c the code to run on another thread
+
+    @return the code to give to the other thread: \a c itself outside of work that the module cleanup counts
+
+    @throw PERMISSION-DENIED \a c was authored by code restricted from the \c THREAD_CONTROL domain, so it cannot be run
+    on another thread (see @ref Qore::check_thread_callable() "check_thread_callable()"); checked only in work that
+    the module cleanup counts, as the other thread's own start checks it otherwise
+    @throw MODULE-CLEANUP-WORK-ERROR (raised by the returned code, not by this method) the code returned for work of
+    the module cleanup was called a second time
+
+    @par Example:
+    @code{.py}
+# in a callback of the asynchronous I/O controller, which can run as work of the module cleanup; the code is wrapped
+# in this thread, before background, which evaluates its whole expression in the new thread
+code<nothing()> c = AsyncIoController::wrapModuleCleanupWork(sub () { notifyListeners(); });
+background c();
+    @endcode
+
+    @since %Qore 3.0
+*/
+static code AsyncIoController::wrapModuleCleanupWork(code<nothing()> c) {
+    // code returned by this method already holds its handle
+    if (dynamic_cast<const ModuleCleanupWorkReferenceNode*>(c)) {
+        return c->refRefSelf();
+    }
+    if (!qore_module_cleanup_counted_work_running()) {
+        return c->refRefSelf();
+    }
+    // the code runs on another thread: code that cannot start threads cannot have its code run there (qore#7056)
+    if (qore_check_thread_callable(c, QDOM_THREAD_CONTROL, "AsyncIoController::wrapModuleCleanupWork()", xsink)) {
+        return QoreValue();
+    }
+    int64 handle = module_cleanup_hold_here(xsink);
+    if (!handle) {
+        // the cleanup no longer waits for handed-over work (or there is no memory for it): the code runs as before
+        return c->refRefSelf();
+    }
+    ResolvedCallReferenceNode* code = c->refRefSelf();
+    try {
+        return new ModuleCleanupWorkReferenceNode(handle, code);
+    } catch (std::bad_alloc&) {
+        // the reference and the handle are released, and the exception goes on
+        code->deref(xsink);
+        qore_module_cleanup_release_work(handle);
+        throw;
+    }
 }

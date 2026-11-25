@@ -130,6 +130,24 @@ public:
         ABANDONED,
     };
 
+    //! The state of the request body of a streamed request after a 101 response to it (qore#7503)
+    /** A server can answer a request that asked for a protocol upgrade with 101 before it has read the whole request
+        body, which the client must still complete (RFC 9110 section 7.8).  The body data in hand when the 101
+        response arrives is sent by the I/O thread, without reading from the connection, whose data belongs to the
+        new protocol; the rest is written in the thread that gives it (see pushSendData()), once the I/O thread is no
+        longer sending, so that the body is never mixed with the data of the new protocol that the caller of the
+        request sends on the socket it takes over after the end of the stream.  Protected by @ref stream_lock.
+
+        @since %Qore 3.0
+    */
+    enum class SwitchedBody {
+        NONE,       //!< no 101 response was received with the request body still being sent
+        IO,         //!< the I/O thread sends the request body data queued when the 101 response arrived
+        CALLER,     //!< the request body is open: the thread that gives the rest of it writes it to the socket
+        DONE,       //!< the request body is complete
+        FAILED,     //!< the request body could not be completed
+    };
+
     //! Creates the poll operation with an initial TCP connect operation
     DLLLOCAL Http1ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
             SocketPollOperationBase* connect_op, bool ssl_required, bool proxy_tunnel,
@@ -236,10 +254,18 @@ public:
         bool streaming_send, ExceptionSink* xsink);
 
     //! Queues body data for incremental chunked TE send (app thread)
-    /** @param data body chunk to send; nullptr signals end-of-body
+    /** After a 101 response, once the I/O thread has sent the body data queued before it, the data is written to
+        the socket in the calling thread instead (see @ref SwitchedBody; qore#7503).
+
+        @param data body chunk to send; nullptr signals end-of-body
         @param xsink exception sink
+        @param timeout_ms the time to wait for a write in the calling thread after a 101 response; < 0 means no
+        limit
+
+        @throw HTTPCLIENT-STATE-ERROR data is given after the end of the request body, or after a 101 response that
+        ended the request body (it was complete, or could not be completed)
     */
-    DLLLOCAL void pushSendData(const QoreStringNode* data, ExceptionSink* xsink);
+    DLLLOCAL void pushSendData(const QoreStringNode* data, ExceptionSink* xsink, int timeout_ms = -1);
 
     //! Sets HTTP trailers to be sent with the final chunk (app thread)
     /** Must be called before pushing the end sentinel (nullptr) via pushSendData().
@@ -611,7 +637,7 @@ private:
     //! The error description of the failed send; see @ref send_failure_pending
     std::string send_failure_desc;
 
-    //! Number of "100 Continue" responses received for the request in flight
+    //! Number of interim (1xx other than 101) responses received for the request in flight
     /** Bounds the work a peer can make the client do - and the recursion depth
         in handleRecvHeader() - by streaming interim responses without ever
         sending a final one.  Reset when a request starts.  I/O thread only.
@@ -661,6 +687,12 @@ private:
 
     //! True after a 101 Switching Protocols response has been received
     bool protocol_switched = false;
+
+    //! True while the I/O thread sends the request body data queued when a 101 response arrived (qore#7503)
+    /** @ref protocol_switched, which completes the operation, is set when it is done (see handleSwitchedSend()).  I/O
+        thread only.
+    */
+    bool switched_sending_io = false;
 
     //! Remaining bytes for streaming body with Content-Length
     int64_t streaming_body_remaining = 0;
@@ -750,6 +782,14 @@ private:
     //! Active request method (for HEAD / 1xx / 204 / 304 handling)
     std::string active_method;
 
+    //! True if the active request has an \c Upgrade header, which alone allows a 101 response to it
+    /** RFC 9110 section 15.2.2: a server sends a 101 response only to a request that asks for a protocol upgrade;
+        a 101 response to any other request is an error of the response.  Written with @ref active_method.
+
+        @since %Qore 3.0
+    */
+    bool active_upgrade = false;
+
     //! Next stream ID counter
     int next_stream_id = 0;
 
@@ -774,6 +814,15 @@ private:
     //! Queue of body chunks for streaming send (nullptr = end sentinel)
     std::deque<QoreStringNode*> send_body_queue;
 
+    //! True once the end of the streamed request body was given with pushSendData() (qore#7503)
+    bool send_body_ended = false;
+
+    //! The state of the request body after a 101 response (qore#7503)
+    SwitchedBody switched_body = SwitchedBody::NONE;
+
+    //! Serializes the writes of the request body after a 101 response in the threads that give it (qore#7503)
+    QoreThreadLock switched_send_lock;
+
     //! Trailers to send with the final chunk (ref'd or nullptr)
     QoreHashNode* send_trailers = nullptr;
 
@@ -795,8 +844,16 @@ private:
 
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr size_t STREAMING_CHUNK_SIZE = 16384;
-    //! Maximum number of "100 Continue" responses accepted before the final response
+    //! Maximum number of interim (1xx other than 101) responses accepted before the final response
+    /** Each one is read with the size limit of a response header, so the bytes a server can send before the final
+        response are bounded too.
+    */
     static constexpr int MAX_INTERIM_RESPONSES = 16;
+
+    //! Returns true if the status is that of an interim response: 1xx other than 101 (RFC 9110 section 15.2)
+    DLLLOCAL static constexpr bool isInterimStatus(int code) {
+        return code >= 100 && code < 200 && code != 101;
+    }
 
     // --- Internal methods (I/O thread only) ---
 
@@ -1017,13 +1074,53 @@ private:
     DLLLOCAL void setBodyClosedError(int64_t received, int64_t size, const char* what, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvBodyClose(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProtocolSwitched(ExceptionSink* xsink);
+    //! Sends the request body data queued when a 101 response arrived to a streamed request (qore#7503)
+    /** Drives the send side alone, writing only, as the data of the connection belongs to the new protocol; once
+        nothing is in flight or queued, the rest of an open request body is left to the threads that give it
+        (@ref SwitchedBody::CALLER), and the end of the response stream is delivered.  I/O thread only.
+
+        @return the poll info for the rest of a partial write, or nullptr once the operation is done
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* handleSwitchedSend(ExceptionSink* xsink);
+    //! Writes request body data after a 101 response in the calling thread (qore#7503)
+    /** @param data the body chunk, or nullptr for the end of the body (the final chunk with any trailers)
+        @param xsink exception sink
+        @param timeout_ms the time to wait for the write; < 0 means no limit
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void writeSwitchedBody(const QoreStringNode* data, ExceptionSink* xsink, int timeout_ms);
+    //! Returns a new chunk of a chunked request body with \a data
+    DLLLOCAL static BinaryNode* makeBodyChunk(const QoreStringNode* data);
+    //! Returns the final chunk of a chunked request body with the trailers given, which it releases
+    DLLLOCAL static BinaryNode* makeFinalBodyChunk(QoreHashNode* trailers, ExceptionSink* xsink);
 
     // Response dispatch
     DLLLOCAL QoreHashNode* dispatchResponse(ExceptionSink* xsink);
+    //! Returns true if the connection is not used again after the complete response
+    /** It is not when data follows the response on it: bytes that the socket has already read past the end of the
+        response, or bytes that can be read now (RFC 9112 section 9.3: a connection is reused only if its data ends
+        where the response ends); a response with no body (to HEAD, 204, 304) is checked as any other.  Nor is it
+        after a 101 response, which ends HTTP/1.x on the connection, or when it failed or was closed locally.  Never
+        blocks.  I/O thread only.
+    */
+    DLLLOCAL bool connectionEndsWithResponse();
     //! Delivers the response headers to the stream; returns true if they were delivered (a stream is active, and no
     //! exception was raised)
     DLLLOCAL bool dispatchStreamingHeaders(ExceptionSink* xsink);
     DLLLOCAL void dispatchStreamingData(const BinaryNode* data, ExceptionSink* xsink);
+    //! Delivers the end of the stream after the 101 response to a streamed request that asked for an upgrade
+    /** A 101 response has no content (RFC 9110 section 15.2), and what follows it on the connection is the data of
+        the new protocol, which the caller reads from the socket that it takes over: the stream ends with the 101
+        header, so that its reader is not left waiting for a body that never comes (qore#7487).  The stream is not
+        released, unlike in dispatchStreamingEnd(): the connection, in H1State::PROTOCOL_SWITCHED, belongs to the
+        caller of the request, keeps its active stream, and is never given to another request.  I/O thread only.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void dispatchStreamingSwitchEnd(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* dispatchStreamingEnd(ExceptionSink* xsink);
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);
 

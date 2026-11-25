@@ -22,8 +22,7 @@ referenced image bytes, not allocated memory.
 ## Caller lifetime audit
 
 |!Caller|!Input provenance and decision
-|`qore_aot_run_v2`|Generated executable blob and descriptors: borrow if the image check succeeds; otherwise copy
-|`qore_aot_run_v3`|Generated executable blob and descriptors: same check
+|`qore_aot_run_v4`|Generated executable blob and descriptors: borrow if the image check succeeds; otherwise copy (#6898)
 |`qore_aot_module_init_v2`|Mapped qmod or statically linked module: same check; loader keeps successful modules mapped
 |`qore_aot_module_init_v3`|Mapped qmod or statically linked module: same check
 |`runAOTModuleInitForProgram`|Deferred initializer fallback owns a shared vector snapshot: copy remains the default

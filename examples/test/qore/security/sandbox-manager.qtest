@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-platform: macos - sandbox root and allowed-path canonicalization through /tmp -> /private/tmp, UNIX sockets
+# test-loopback: localhost - it tests the network policy of host names and loopback binds with the name localhost; its localhost client connects to a listener on all interfaces (dual-stack), and its 127.0.0.1 binds check the bind policy and have no clients
 
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
@@ -608,47 +609,40 @@ sub doWhileLoop() {
 
         p.parse("
 %modern
-our int counter = 0;
-sub runLoop() {
-    while (True) {
-        counter++;
+sub runLoop(Counter started) {
+    for (bool first = True; True; first = False) {
+        if (first) {
+            started.dec();
+        }
     }
-}
-int sub getCounter() {
-    return counter;
 }
         ", "thread_interrupt");
 
+        Counter started(1);
         Counter done(1);
         bool caught = False;
         string exErr;
 
         # Start the loop in a background thread
         background sub() {
+            on_exit done.dec();
             try {
-                p.callFunction("runLoop");
+                p.callFunction("runLoop", started);
             } catch (hash<ExceptionInfo> ex) {
                 caught = True;
                 exErr = ex.err;
             }
-            done.dec();
         }();
 
-        # Give the loop time to start running
-        usleep(50000);  # 50ms
-
-        # Request interrupt from main thread
+        # Interrupt after the worker enters the loop, even if scheduling delays its start.
+        int startStatus = started.waitForZero(5s);
         sm.requestInterrupt();
+        int doneStatus = done.waitForZero(5s);
 
-        # Wait for the background thread to finish
-        done.waitForZero(5s);
-
+        assertEq(0, startStatus, "Loop entered its first iteration before the interrupt");
+        assertEq(0, doneStatus, "Worker finished after the interrupt");
         assertEq(True, caught, "Loop was interrupted from another thread");
         assertEq("PROGRAM-INTERRUPTED", exErr, "Correct exception from thread interrupt");
-
-        # Verify the counter was incremented (loop was actually running)
-        int finalCounter = p.callFunction("getCounter");
-        assertEq(True, finalCounter > 0, "Loop was running before interrupt (counter: " + finalCounter + ")");
     }
 
     testSleepInterrupt() {
@@ -2352,19 +2346,26 @@ nothing sub probeSymlink(string target, string link_path) {
         sm.setFilesystemSandboxRoot(inside);
         Program p = makeFsProbeProgram(sm);
 
-        # a link created by the sandboxed code itself, pointing at a file outside the root that
-        # does not exist yet
-        p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
-        assertTrue(is_link(inside + "/escape"), "the sandboxed program created the link");
+        # the sandboxed code cannot create a link to a file outside the root that does not exist yet, nor one through
+        # such a link: the target of a link is checked as the link reaches it (qore#7498)
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
+        }, NOTHING, "the sandboxed program cannot create a dangling link to outside the root");
+        assertFalse(is_link(inside + "/escape"), "no link was created");
 
+        # a dangling link to outside the root that the sandbox did not create (here the host's)
+        symlink(outside + "/created.txt", inside + "/escape");
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
             p.callFunction("probeWrite", inside + "/escape", "PWNED");
         }, NOTHING, "writing through a dangling link to outside the root is denied");
         assertFalse(is_file(outside + "/created.txt"), "nothing was created outside the root");
 
-        # the same through a chain of dangling links
-        p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
-        p.callFunction("probeSymlink", inside + "/escape2", inside + "/escape3");
+        # the same through a chain of dangling links, which the sandboxed code cannot extend either
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
+        }, NOTHING, "the sandboxed program cannot create a link through a dangling link to outside the root");
+        symlink(inside + "/escape", inside + "/escape2");
+        symlink(inside + "/escape2", inside + "/escape3");
         assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
             p.callFunction("probeWrite", inside + "/escape3", "PWNED");
         }, NOTHING, "writing through a chain of dangling links to outside the root is denied");

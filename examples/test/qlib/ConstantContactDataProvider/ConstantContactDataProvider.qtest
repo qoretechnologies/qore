@@ -82,6 +82,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
 
         # Integration tests (require Constant Contact credentials)
         addTestCase("integration tests", \integrationTests());
@@ -96,6 +97,24 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         }
 
         set_return_value(main());
+    }
+
+    #! Tests that the actions that only read declare that they do not change state (qore#7454)
+    private readOnlyActionTests() {
+        # both actions only make a GET request
+        list<string> read_only = ("get-account", "get-email-summary");
+        list<hash<DataProviderActionInfo>> actions = select
+            DataProvider::DataProviderActionCatalog::getActions(ConstantContactDataProvider::AppName),
+            read_only.contains($1.action);
+        assertEq(read_only, sort(map $1.action, actions));
+        map assertEq(NT_BOOLEAN, $1.mutates_state.typeCode(), $1.action), actions;
+        map assertFalse($1.mutates_state, $1.action), actions;
+        map assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState($1), $1.action), actions;
+        # an action that changes state still reports it
+        hash<DataProviderActionInfo> update = (select
+            DataProvider::DataProviderActionCatalog::getActions(ConstantContactDataProvider::AppName),
+            $1.action == "update-account")[0];
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(update));
     }
 
     #! Sets up the Constant Contact client for integration tests

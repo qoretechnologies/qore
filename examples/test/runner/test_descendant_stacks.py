@@ -33,6 +33,13 @@ from test_watchdog import HAVE_TIMEOUT, ROOT, RunnerTree, end_session, start_in_
 # the root helper of the CI jobs (see examples/test/docker_test/ci-stack-capture.sh)
 HELPER = ROOT / "examples/test/docker_test/ci-stack-capture.sh"
 LINUX = os.path.isdir("/proc/self")
+# a Python built without its _ctypes extension has no ctypes: the test of a process whose main thread has ended calls
+# prctl() and pthread_exit() through it, in a child run with this Python
+try:
+    import ctypes  # noqa: F401
+    HAVE_CTYPES = True
+except ImportError:
+    HAVE_CTYPES = False
 
 
 # the tools that run_tests.sh tries by default
@@ -50,6 +57,11 @@ os.read(latch, 1)
 
 # The time limit of the tests: long enough for a test to have started its children (Python processes) under load
 LIMIT = 5
+
+# The time limit of the test of a process whose main thread has ended: its child starts a process of its own and
+# reports that the child is ready, which the runner must not find still starting at the limit (qore#7304: with the
+# child later than the limit the section of the test has no line of it and the case fails on that, not on what it checks)
+MAIN_THREAD_ENDED_LIMIT = 20
 
 # A test that starts {children} children (CHILD, in stuck_child.py next to it) and waits for them, so it exceeds its
 # time limit; it does not handle SIGUSR1, so the runner aborts it at once (SIGABRT) after the captures
@@ -709,29 +721,37 @@ class LinuxScanAndHelperTest(StacksCase):
             self.assertNotIn("ptrace restricted", output)
             self.assertEqual(["attached to %d" % child], (tree.root / "calls").read_text().splitlines())
 
+    @unittest.skipUnless(HAVE_CTYPES, "the child ends its main thread with pthread_exit() through ctypes")
     def test_a_process_whose_main_thread_has_ended_is_captured(self):
         # A process whose main thread has ended (pthread_exit()) while another thread runs shows that thread as a
         # zombie (state Z): it was reported as ended, without its stacks.  The child ends its main thread once a
         # process of its own, which the kernel sends SIGTERM when the thread that started it ends (PR_SET_PDEATHSIG),
         # is ready; that process then reports that the main thread has ended.
+        #
+        # The runner captures at the time limit of the test, so the child must be ready by then: it is made as cheaply
+        # as it can be (the watcher is a fork of the child, not a Python process of its own with a pre-exec hook, and
+        # the thread that the child keeps running starts after that fork, as a fork in a process with threads is not
+        # safe), and the test has a limit of its own (MAIN_THREAD_ENDED_LIMIT) that a host under load does not exceed
+        # for it (qore#7304)
         child = textwrap.dedent("""\
             import ctypes
             import os
-            import subprocess
-            import sys
+            import signal
             import threading
-            r, w = os.pipe()
-            threading.Thread(target=os.read, args=(r, 1)).start()
             ready_r, ready_w = os.pipe()
-            watcher = subprocess.Popen(
-                [sys.executable, "-c", "import os, signal, sys\\n"
-                 "signal.signal(signal.SIGTERM, lambda *a: print('main thread ended', flush=True))\\n"
-                 "os.write(int(sys.argv[1]), b'x')\\n"
-                 "r, w = os.pipe()\\n"
-                 "os.read(r, 1)\\n", str(ready_w)],
-                pass_fds=(ready_w,), preexec_fn=lambda: ctypes.CDLL(None).prctl(1, 15))
+            if os.fork() == 0:
+                # the watcher: the kernel sends it SIGTERM when the thread that forked it, the main thread of its
+                # parent, ends
+                ctypes.CDLL(None).prctl(1, 15)
+                signal.signal(signal.SIGTERM, lambda *a: print('main thread ended', flush=True))
+                os.write(ready_w, b'x')
+                r, w = os.pipe()
+                os.read(r, 1)
+                os._exit(0)
             os.close(ready_w)
             os.read(ready_r, 1)
+            r, w = os.pipe()
+            threading.Thread(target=os.read, args=(r, 1)).start()
             print("child %d started" % os.getpid(), flush=True)
             ctypes.CDLL(None).pthread_exit(None)
             """)
@@ -742,7 +762,7 @@ class LinuxScanAndHelperTest(StacksCase):
             latch = tree.root / "latch"
             os.mkfifo(latch)
             tree.add_test("threads.qtest", f"""\
-                # test-timeout: {LIMIT}
+                # test-timeout: {MAIN_THREAD_ENDED_LIMIT}
                 import os
                 import subprocess
                 import sys
@@ -752,7 +772,9 @@ class LinuxScanAndHelperTest(StacksCase):
             tree.write_script("printing-tool", '#!/bin/sh\necho "stacks of $1 from a stand-in"\n')
             result = tree.run(QORE_TEST_STACK_TOOLS="printing-tool")
             output = RunnerTree.sections(result.output)["threads.qtest"]
-            pid = int(re.search(r"^child (\d+) started$", output, re.M).group(1))
+            started = re.search(r"^child (\d+) started$", output, re.M)
+            self.assertIsNotNone(started, "the child was not ready at the time limit of the test; its section:\n" + output)
+            pid = int(started.group(1))
             self.assertIn("main thread ended", output)
             self.assertIn("stacks of %d from a stand-in" % pid, output)
             self.assertNotIn("*** process %d has ended ***" % pid, output)

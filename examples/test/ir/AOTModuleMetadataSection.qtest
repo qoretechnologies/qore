@@ -220,7 +220,7 @@ public namespace MetaMod {
         return r.readu4LSB();
     }
 
-    #! returns the offset of the declared functional domains in the version 4 record at the given offset of a binary
+    #! returns the offset of the declared functional domains in the version 5 record at the given offset of a binary
     /** they follow the module name, the five lists of names and the list of dependency restrictions (each a name, four
         words of options and a word of flags)
     */
@@ -337,7 +337,7 @@ public namespace MetaMod {
         assertEq(("MetaDep",), info.compiled_with);
         binary data = readFile(qmod);
         assertEq(RecordMagic, getLe32(data, info.offset), "the record starts with its magic number");
-        assertEq(4, getLe32(data, info.offset + 4), "the record has format version 4");
+        assertEq(5, getLe32(data, info.offset + 4), "the record has format version 5");
         assertEq(info.size - 12, getLe32(data, info.offset + 8), "the record gives the size of its payload");
 
         if (PlatformOS == "Darwin") {
@@ -513,10 +513,13 @@ public namespace MetaMod {
             {"offset": info.offset, "data": le32(0x58414d49), "error": "the record has an invalid magic number "
                 "0x58414d49; the file is damaged"},
             {"offset": info.offset + 4, "data": le32(1), "error": "the record has format version 1, but this Qore "
-                "runtime reads version 4; rebuild the module with the qcc of this Qore installation"},
-            # a record of the previous version (a qcc of AOT format version 44, before the declared domains)
+                "runtime reads version 5; rebuild the module with the qcc of this Qore installation"},
+            # a record of an earlier version (a qcc of AOT format version 44, before the declared domains)
             {"offset": info.offset + 4, "data": le32(3), "error": "the record has format version 3, but this Qore "
-                "runtime reads version 4; rebuild the module with the qcc of this Qore installation"},
+                "runtime reads version 5; rebuild the module with the qcc of this Qore installation"},
+            # a record of the previous version (a qcc before the builtin API identity, qore#7183)
+            {"offset": info.offset + 4, "data": le32(4), "error": "the record has format version 4, but this Qore "
+                "runtime reads version 5; rebuild the module with the qcc of this Qore installation"},
             {"offset": info.offset + 8, "data": le32(info.size - 11), "error": "the record gives a size of "
                 + (info.size - 11) + " bytes, but holds " + (info.size - 12) + "; the file is damaged"},
             {"offset": info.offset + 12, "data": le32(0), "error": "the record has an invalid module name; the "
@@ -528,8 +531,14 @@ public namespace MetaMod {
             # is none
             {"offset": declaredDomainsOffset(orig, info.offset) + 4, "data": le32(0x80000000), "error": "the record "
                 "declares unknown functional domain bits; the file is damaged"},
-            {"offset": info.offset + info.size - 4, "data": le32(0x80000000), "error": "the record restricts unknown "
-                "functional domain bits; the file is damaged"},
+            # the restricted domains are followed by the builtin API identity: its length and 64 digits
+            {"offset": info.offset + info.size - 68 - 4, "data": le32(0x80000000), "error": "the record restricts "
+                "unknown functional domain bits; the file is damaged"},
+            # the builtin API identity is 64 lowercase hexadecimal digits (qore#7183)
+            {"offset": info.offset + info.size - 64, "data": binary("ABCD"), "error": "the record has no valid "
+                "builtin API identity; the file is damaged"},
+            {"offset": info.offset + info.size - 68, "data": le32(63), "error": "the record has no valid builtin API "
+                "identity; the file is damaged"},
         );
         foreach hash<auto> c in (cases) {
             string label = "damage " + $#;

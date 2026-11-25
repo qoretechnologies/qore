@@ -83,9 +83,6 @@ module AzureOpenAiDataProvider {
             foreach RestSchemaActionSet actions in (AzureOpenAiSchema::getActionSets()) {
                 foreach hash<DataProviderActionInfo> action in (
                         actions.getActionInfoList(AzureOpenAiDataProvider::AppName)) {
-                    if (action.action == "embedding") {
-                        action.mutates_state = False;
-                    }
                     DataProviderActionCatalog::registerAction(action);
                 }
             }

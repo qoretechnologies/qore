@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# test-platform: macos - AOT module loading of a class whose parent class is in another compiled module
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class TypeRetirementAotParentTest
+
+#! Tests that a class whose parent class is loaded from a compiled module of another module is retired (qore#7464)
+/** The record of a retired class (its tombstone) is made from its parent classes, and is not made when a parent class
+    of the class is not in the class's list of ancestors, which keeps the parent classes alive (a class of an invalid
+    hierarchy).  The list of a class loaded from a compiled module holds the QoreClass of a parent class of another
+    module that the module imported, while the parent class edge holds the canonical one: the record was not made, and
+    the retired class of a deleted Program was then never freed.  A child Program defines a class that inherits such a
+    class, names it in a derived type that outlives the Program, and is deleted: with the modules loaded from source
+    and compiled, the class must be retired with tombstones and freed.
+*/
+class TypeRetirementAotParentTest inherits QUnit::Test {
+    public {
+        #! the module with the parent class
+        const ParentModule = "# -*- mode: qore; indent-tabs-mode: nil -*-
+%new-style
+%require-types
+%strict-args
+module TraAotParentA {
+    version = \"1.0\";
+    desc = \"parent class module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+public namespace TraAotParentA {
+public class A {}
+}
+";
+
+        #! the module with a class whose parent class is in the other module
+        const ChildModule = "# -*- mode: qore; indent-tabs-mode: nil -*-
+%new-style
+%require-types
+%strict-args
+%requires TraAotParentA
+module TraAotParentB {
+    version = \"1.0\";
+    desc = \"subclass module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+public namespace TraAotParentB {
+public class B inherits TraAotParentA::A {}
+}
+";
+
+        #! the child script: prints the tombstones made, the declarations freed and those still pending
+        const Script = "%new-style
+%require-types
+%strict-args
+hash<auto> sub info() { return call_function(\"dbg_type_retirement_info\"); }
+Program p(PO_NEW_STYLE);
+p.loadModule(\"TraAotParentB\");
+p.parse(\"class Foo inherits TraAotParentB::B {}\\nlist<auto> sub mk() { list<Foo> a = (); return (a,); }\", \"x\");
+list<auto> kept = p.callFunction(\"mk\");
+hash<auto> b = info();
+delete p;
+call_function(\"dbg_wait_bg_compile_idle\");
+int freed = call_function(\"dbg_type_retirement_free\");
+hash<auto> a = info();
+printf(\"tombstones: %d\\nfreed: %d\\npending: %d\\n\", a.\"tombstone classes\" - b.\"tombstone classes\", freed,
+    a.\"pending declarations\");
+";
+
+        #! the seconds that a command may take
+        const Timeout = 300;
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        TmpDir tmp("qore-type-retirement-aot-parent-");
+    }
+
+    constructor() : QUnit::Test("TypeRetirementAotParentTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        addTestCase("retired class with a parent class of another module", \testRetirement());
+        set_return_value(main());
+    }
+
+    testRetirement() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the debug functions require a debug build");
+        }
+        if (!qcc_bin) {
+            testSkip("qcc is not available");
+        }
+        string src = tmp.path + DirSep + "src";
+        string aot = tmp.path + DirSep + "aot";
+        mkdir(src);
+        mkdir(aot);
+        writeFile(src + DirSep + "TraAotParentA.qm", ParentModule);
+        writeFile(src + DirSep + "TraAotParentB.qm", ChildModule);
+        string script = tmp.path + DirSep + "retire.q";
+        writeFile(script, Script);
+
+        foreach string mod in (("TraAotParentA", "TraAotParentB")) {
+            hash<auto> r = runCmd(sprintf("QORE_MODULE_DIR=%s %s -m -o %s %s", src, qcc_bin,
+                aot + DirSep + mod + ".qmod", src + DirSep + mod + ".qm"));
+            assertEq(0, r.rc, "qcc -m " + mod + ": " + r.out);
+        }
+
+        foreach hash<auto> i in ({"source": src, "compiled": aot}.pairIterator()) {
+            hash<auto> r = runCmd(sprintf("QORE_MODULE_DIR=%s %s -b %s", i.value, qore_bin, script));
+            assertEq(0, r.rc, i.key + ": " + r.out);
+            hash<auto> res;
+            foreach string line in (r.out.split("\n")) {
+                *list<*string> m = (line =~ x/^([a-z]+): ([0-9]+)$/);
+                if (m) {
+                    res{m[0]} = m[1].toInt();
+                }
+            }
+            # the class Foo and its two parent classes
+            assertEq(3, res.tombstones, i.key + ": tombstones: " + r.out);
+            assertEq(1, res.freed, i.key + ": freed: " + r.out);
+            assertEq(0, res.pending, i.key + ": pending: " + r.out);
+        }
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    #! runs a command with the build's library and a time limit where a timeout command is available
+    private hash<auto> runCmd(string cmd) {
+        string timeout_cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null "
+            "|| true"));
+        if (timeout_cmd) {
+            cmd = sprintf("%s %d env %s", timeout_cmd, Timeout, cmd);
+        }
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir,
+            cmd), \rc);
+        return {"rc": rc, "out": out};
+    }
+}

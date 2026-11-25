@@ -735,7 +735,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         McpClient::McpClient c = s.client;
 
         # negative: no token
-        hash<auto> e = callError(c, "qore_debug_attach", {"url": sprintf("localhost:%d", port)});
+        hash<auto> e = callError(c, "qore_debug_attach", {"url": sprintf("127.0.0.1:%d", port)});
         assertRegex("401", e.desc);
         # negative: no debug server listens on the port: the error tells what to check
         {
@@ -749,7 +749,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         }
 
         # the thread of the program that the server holds at its start is the current thread
-        hash<auto> r = call(c, "qore_debug_attach", {"url": sprintf("localhost:%d", port), "token": "t0ken"});
+        hash<auto> r = call(c, "qore_debug_attach", {"url": sprintf("127.0.0.1:%d", port), "token": "t0ken"});
         assertTrue(r.ok);
         assertTrue(r.state.paused);
         assertEq(("user", "system", "uncaught"), r.exceptionFilters);

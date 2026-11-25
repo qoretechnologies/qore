@@ -1,0 +1,116 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - sandboxed Programs and qcc-compiled class ownership checks
+
+%modern
+%allow-injection
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class ClassInjectionOwnershipTest
+
+class HostTag {
+}
+
+class OtherHostTag {
+}
+
+class ClassInjectionOwnershipTest inherits QUnit::Test {
+    private {
+        const Code = "
+class LocalTag {}
+class Marker { static string label() { return \"local\"; } }
+object sub local_tag() { return new LocalTag(); }
+string sub inject(Program dst, string source, string name) {
+    try {
+        dst.importClass(source, name, True);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+    }
+
+    constructor() : Test("class injection ownership", "1.0", \ARGV) {
+        addTestCase("sandboxed caller and foreign original", sub () { testForeign("Marker", "SharedTag"); });
+        addTestCase("sandboxed caller and foreign replacement", sub () { testForeign("SharedTag", "LocalTag"); });
+        addTestCase("caller of a bound method", \testBoundCaller());
+        addTestCase("sandboxed caller and its own classes", \testOwn());
+        addTestCase("compiled restricted caller", \testCompiled());
+        addTestCase("trusted injection of a class imported from another Program", \testTrusted());
+        set_return_value(main());
+    }
+
+    private static Program actor(bool sandboxed) {
+        Program p(PO_NEW_STYLE | PO_NO_USER_API);
+        p.importClass("HostTag", "SharedTag");
+        p.parse(Code, "marker-classes");
+        if (sandboxed) {
+            p.setSandboxManager(new SandboxManager());
+        }
+        return p;
+    }
+
+    private testForeign(string source, string name) {
+        Program p = actor(True);
+        Program dst(PO_NEW_STYLE | PO_NO_USER_API | PO_ALLOW_INJECTION);
+        # Occupy both names so neither import can publish a relation, including on the unpatched runtime.
+        dst.parse("class SharedTag {} class LocalTag {}", "occupied-names");
+        string result = p.callFunction("inject", dst, source, name);
+        assertRegex("^CLASS-IMPORT-ERROR: .*declaring Program", result);
+    }
+
+    testBoundCaller() {
+        Program dst(PO_NEW_STYLE | PO_NO_USER_API | PO_ALLOW_INJECTION);
+        dst.parse("class HostTag {}", "occupied-host-name");
+        Program p(PO_NEW_STYLE | PO_NO_USER_API);
+        p.parse("string sub check(code bound) {"
+            "try { bound(\"OtherHostTag\", \"HostTag\", True); return \"ok\"; }"
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }}", "class-owner-check");
+        p.setSandboxManager(new SandboxManager());
+        assertRegex("^CLASS-IMPORT-ERROR: .*declaring Program", p.callFunction("check", \dst.importClass()));
+    }
+
+    testOwn() {
+        Program p = actor(True);
+        Program dst(PO_NEW_STYLE | PO_NO_USER_API | PO_ALLOW_INJECTION);
+        assertEq("ok", p.callFunction("inject", dst, "Marker", "LocalTag"));
+        dst.parse("string sub label() { return LocalTag::label(); }"
+            "bool sub accepts(object tag) { return tag instanceof LocalTag; }", "owned-marker");
+        assertEq("local", dst.callFunction("label"));
+        assertTrue(dst.callFunction("accepts", p.callFunction("local_tag")));
+    }
+
+    testCompiled() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is unavailable");
+        }
+        TmpDir tmp("class-injection-caller-");
+        string exe = tmp.path + "/caller";
+        string src = get_script_dir() + "/class-injection-ownership/compiled-caller.q";
+        int rc;
+        string out = backquote(shellQuote(qcc) + " -O0 -o " + shellQuote(exe) + " " + shellQuote(src) + " 2>&1",
+            \rc);
+        assertEq(0, rc, out);
+        out = backquote(shellQuote(exe) + " 2>&1", \rc);
+        assertEq(0, rc, out);
+    }
+
+    private static string shellQuote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    testTrusted() {
+        Program p = actor(False);
+        Program dst(PO_NEW_STYLE | PO_NO_USER_API | PO_ALLOW_INJECTION);
+        assertEq("ok", p.callFunction("inject", dst, "Marker", "SharedTag"));
+        dst.parse("string sub label() { return SharedTag::label(); }"
+            "bool sub accepts(object tag) { return tag instanceof SharedTag; }", "trusted-marker");
+        assertEq("local", dst.callFunction("label"));
+        assertTrue(dst.callFunction("accepts", new HostTag()));
+    }
+}

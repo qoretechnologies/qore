@@ -890,23 +890,34 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadA
     }
 }
 
-LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
-        bool for_assignment)
-        : vl(xsink), assignment_only(for_assignment) {
-    if (for_remove) {
-        startRemovalPath();
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, ReferenceBind)
+        : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
+    startRemovalPath();
+    QoreReferenceBindScope bind_scope(&vl, this);
+    RuntimeReferenceHelper rh(ref, xsink);
+    if (!*xsink) {
+        doLValue(lvalue_ref::get(&ref)->vexp, true);
     }
-    // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
-    //printd(5, "LValueHelper::LValueHelper() exp: %p (%s %d)\n", exp, get_type_name(exp), get_node_type(exp));
-    if (!exp.isNothing() && exp.hasNode()) {
-        try {
-            doLValue(exp, for_remove);
-        } catch (...) {
-            // the lvalue can be reached through references, whose Programs the destructor leaves; it does not run
-            ref_pgms.release(nullptr);
-            throw;
+}
+
+LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReferenceBind)
+        : vl(xsink) {
+    startRemovalPath();
+    QoreReferenceBindScope bind_scope(&vl, this);
+    try {
+        RuntimeReferenceHelper rh(ref, xsink);
+        if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, true)) {
+            // see LValueHelper(const ReferenceNode&, ExceptionSink*, bool, bool)
+            adoptReferenceProgram(rh.takeProgramEntry());
         }
+    } catch (...) {
+        ref_pgms.release(nullptr);
+        throw;
     }
+}
+
+LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
+        bool for_assignment) : LValueHelper(InlineExpression{}, exp, xsink, for_remove, for_assignment) {
 }
 
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, WeakSourceAccess)
@@ -976,14 +987,15 @@ LValueHelper::LValueHelper(ExceptionSink* xsink, bool for_assignment) : vl(xsink
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
         ref_pgms(std::move(o.ref_pgms)), ocvec(std::move(o.ocvec)), path_has_weak_step(o.path_has_weak_step),
-        holds_weak_locks(o.holds_weak_locks), before(o.before),
+        holds_weak_locks(o.holds_weak_locks), before(o.before), weak_lock_count(o.weak_lock_count),
         removal_objects(std::move(o.removal_objects)), removed_objects(std::move(o.removed_objects)), rdt(o.rdt),
         vivified(std::move(o.vivified)), member_lvalue(std::move(o.member_lvalue)),
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
         write_protected(o.write_protected),
         read_only_resolution(o.read_only_resolution), read_value_only(o.read_value_only),
-        weak_source_resolution(o.weak_source_resolution),
+        weak_target_view(o.weak_target_view), unchanged_lvalue(o.unchanged_lvalue),
+        unchanged_lvalue_scan(o.unchanged_lvalue_scan), weak_source_resolution(o.weak_source_resolution),
         ref_list_type(o.ref_list_type), ref_decl_type(o.ref_decl_type),
 #ifdef DEBUG
         removal_path(o.removal_path),
@@ -1000,6 +1012,19 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
     o.buffer_lvalue = nullptr;
     o.buffer_lvalue_index = 0;
     o.buffer_lvalue_value = QoreValue();
+    // the helper designates the container of the lvalue's weak reference: the view is its own, as is its qv
+    if (weak_target_view) [[unlikely]] {
+        new (&weak_view) QoreValue(o.weak_view);
+        qv = &weak_view;
+        o.weak_target_view = false;
+    }
+#ifndef NDEBUG
+    // the changes allowed through the weak reference end with the new helper (see viewWeakContainer())
+    weak_change_list = o.weak_change_list;
+    weak_change_hash = o.weak_change_hash;
+    o.weak_change_list = nullptr;
+    o.weak_change_hash = nullptr;
+#endif
 }
 
 #ifdef DEBUG
@@ -1202,7 +1227,9 @@ LValueHelper::~LValueHelper() {
         // see if we have any object count changes
         if (!ocvec.empty()) {
             // v && qv could be nullptr if the constructor taking QoreObject& was used (to scan objects after initialization)
-            if (qv) {
+            // the storage of an lvalue that the operation did not change is not read: its scan state is unchanged
+            // (qore#7297, qore#7402)
+            if (qv && !unchanged_lvalue) {
                 if (rdt) {
                     assert(qv && !qv->isNothing());
                     if (!obj_chg) {
@@ -1227,7 +1254,9 @@ LValueHelper::~LValueHelper() {
             // write changes to container hierarchy
             if (path_has_weak_step) [[unlikely]] {
                 // a path that crosses a weak reference can reach containers that are already on it (qore#7321)
-                writeWeakPathChanges(qv ? qv->getInternalNode() : nullptr);
+                // the storage of an lvalue left unchanged is not read (it can have been freed, qore#7402), and its
+                // change was not written to the last container of the path
+                writeWeakPathChanges(qv && !unchanged_lvalue ? qv->getInternalNode() : nullptr);
             } else if (ocvec.size() > 1) {
                 for (int i = ocvec.size() - 2; i >= 0; --i) {
                     int dt = ocvec[i + 1].getDifference();
@@ -1241,7 +1270,7 @@ LValueHelper::~LValueHelper() {
             }
         }
 
-        if (!obj_chg && (val ? val->needsScan() : needs_scan(*qv))) {
+        if (!obj_chg && (unchanged_lvalue ? unchanged_lvalue_scan : (val ? val->needsScan() : needs_scan(*qv)))) {
             obj_chg = true;
         } else if (obj_chg && removalKeptGraph()) {
             // the removal took out no value that can take part in a recursive graph
@@ -1258,10 +1287,20 @@ LValueHelper::~LValueHelper() {
 
 #ifdef DEBUG
     // a test can hold the thread here, after it has assigned an lvalue reached through a reference
-    if (lvid_set && !*vl.xsink && (val || qv) && getType() == NT_INT) {
+    if (lvid_set && !*vl.xsink && (val || qv) && !unchanged_lvalue && getType() == NT_INT) {
         if (qore_dbg_reference_lvalue_hook_t hook = qore_dbg_reference_lvalue_hook.load()) {
             hook(getValue().getAsBigInt());
         }
+    }
+#endif
+
+#ifndef NDEBUG
+    // the changes through the weak reference end before the container is released (see getListForChange())
+    if (weak_change_list) {
+        --qore_list_private::get(*weak_change_list)->weak_change;
+    }
+    if (weak_change_hash) {
+        --qore_hash_private::get(*weak_change_hash)->weak_change;
     }
 #endif
 
@@ -1309,9 +1348,15 @@ LValueHelper::~LValueHelper() {
 
     delete lvid_set;
 
+    // set if the scan of the root scanned the objects of the values removed and replaced
+    bool removals_scanned = false;
     if (robj) {
         // recalculate recursive references for objects if necessary
-        if (obj_chg && !no_object_scan) {
+        // a member removed from an object that the lvalue holds through a weak reference changes the object's graph
+        // as one removed through a strong reference does (objectRemoved(), which sets robj), although the weak
+        // reference needs no scan itself (qore#7346); tested here, where robj is set, which a write to a local
+        // variable does not do
+        if ((obj_chg || removal_object_scan) && !no_object_scan) {
 #ifdef DEBUG
             ++lvalue_scan_count;
 #endif
@@ -1345,6 +1390,7 @@ LValueHelper::~LValueHelper() {
             // edge, so that a cycle that it is part of is never collected (#6335).  An object in no recursive set
             // has no set to repair, so the scan costs nothing for an ordinary removal.
             if (root_in_set) {
+                removals_scanned = true;
                 if (!removed_objects.empty()) {
                     removed_objects.forEach([this] (RObject* o) {
                         if (qore_removed_object_needs_scan(o, robj)) {
@@ -1380,6 +1426,11 @@ LValueHelper::~LValueHelper() {
             robj->tDeref();
         }
     }
+    if (holds_weak_locks && !removals_scanned && (!insertion_only || !removed_objects.empty())) [[unlikely]] {
+        // a value removed or replaced in a list or a hash reached through a weak reference, whose holders are not
+        // known here: the root of the lvalue, if any, is not the holder of the container (qore#7373)
+        scanWeakContainerRemovals();
+    }
 
     // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
     // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
@@ -1393,6 +1444,46 @@ LValueHelper::~LValueHelper() {
 
     for (RObject* o : removal_objects) {
         o->tDeref();
+    }
+}
+
+void LValueHelper::keepRemovedThroughWeak(const QoreValue& v) noexcept {
+    // only a value that can hold an object is scanned
+    if (!needs_scan(v)) {
+        return;
+    }
+    AbstractQoreNode* n = const_cast<AbstractQoreNode*>(v.getInternalNode());
+    assert(n);
+    n->ref();
+    // no exception leaves here: the caller holds the value taken out of the list in a plain QoreValue; if the entry
+    // cannot be allocated, the value is not kept, and its objects are not scanned
+    try {
+        tvec.push_back(n);
+    } catch (...) {
+        n->deref(nullptr);
+    }
+}
+
+__attribute__((cold, noinline)) void LValueHelper::scanWeakContainerRemovals() {
+    // the objects removed: each one that is in a recursive set and referenced elsewhere is scanned, as the scan of
+    // the holder of the container would have repaired its set, which still counts the removed edge, so that the
+    // object would be collected while it is still referenced
+    removed_objects.forEach([this] (RObject* o) {
+        if (qore_removed_object_needs_scan(o, nullptr)) {
+#ifdef DEBUG
+            ++lvalue_scan_count;
+#endif
+            RSetHelper rsh(*o, vl.xsink, &removed_objects);
+        }
+    });
+    // the values that an assignment replaced, after the helper's own locks of the containers of weak references at
+    // the start of tvec (holdWeakLock()), which are changed in place and lost no edge; a replaced list or hash lost
+    // its edge from the holder also when another holder still shares it
+    for (size_t i = weak_lock_count, e = tvec.size(); i < e; ++i) {
+        AbstractQoreNode* n = tvec[i];
+        if (n && needs_scan(n)) {
+            qore_scan_removed_value_objects(QoreValue(n), nullptr, vl.xsink);
+        }
     }
 }
 
@@ -1570,8 +1661,9 @@ void LValueHelper::startContainerRemoval() {
 
 bool LValueHelper::removalKeptGraph() const {
     // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
-    // replaced is still held in tvec here, so its address cannot have been reused
-    if (removal_no_skip || !removal_container || getInternalNode() != removal_container) {
+    // replaced is still held in tvec here, so its address cannot have been reused; the storage of an lvalue left
+    // unchanged is not read: it can have been freed (qore#7402)
+    if (removal_no_skip || !removal_container || unchanged_lvalue || getInternalNode() != removal_container) {
         return false;
     }
     switch (removal_container->getType()) {
@@ -1709,6 +1801,72 @@ QoreListNode* LValueHelper::lockWeakList() {
     return l;
 }
 
+int LValueHelper::viewWeakContainer() {
+    if (weak_target_view) {
+        return 0;
+    }
+    qore_type_t t = getType();
+    if (t == NT_WEAKREF_LIST) [[unlikely]] {
+        // the weak reference, as an assignment through it and a removal do (qore#7198): a member held through a write
+        // gate or an accessor is written back
+        ensureUnique();
+        QoreListNode* l = lockWeakList();
+        // the lvalue keeps the weak reference; its storage can be an entry of the list
+        leaveUnchangedLValue();
+        qore_list_private* lp = qore_list_private::get(*l);
+        if (lp->checkValid(vl.xsink)) {
+            return -1;
+        }
+#ifndef NDEBUG
+        assert(!weak_change_list);
+        weak_change_list = l;
+        ++lp->weak_change;
+#endif
+        new (&weak_view) QoreValue(l);
+        typeInfo = l->getTypeInfo();
+    } else if (t == NT_WEAKREF_HASH) [[unlikely]] {
+        ensureUnique();
+        QoreHashNode* h = lockWeakHash();
+        leaveUnchangedLValue();
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        if (hp->checkValid(vl.xsink)) {
+            return -1;
+        }
+#ifndef NDEBUG
+        assert(!weak_change_hash);
+        weak_change_hash = h;
+        ++hp->weak_change;
+#endif
+        new (&weak_view) QoreValue(h);
+        typeInfo = h->getTypeInfo();
+    } else {
+        return 0;
+    }
+    // the helper designates the container from now on; the lvalue's storage is not read again
+    qv = &weak_view;
+    val = nullptr;
+    weak_target_view = true;
+    return 0;
+}
+
+QoreListNode* LValueHelper::getListForChange() {
+    if (viewWeakContainer()) {
+        return nullptr;
+    }
+    assert(getType() == NT_LIST);
+    ensureUnique();
+    return getValue().get<QoreListNode>();
+}
+
+QoreHashNode* LValueHelper::getHashForChange() {
+    if (viewWeakContainer()) {
+        return nullptr;
+    }
+    assert(getType() == NT_HASH);
+    ensureUnique();
+    return getValue().get<QoreHashNode>();
+}
+
 QoreHashNode* LValueHelper::lockWeakHash() {
     QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->lock();
     holdWeakLock(h);
@@ -1716,9 +1874,16 @@ QoreHashNode* LValueHelper::lockWeakHash() {
 }
 
 void LValueHelper::holdWeakLock(AbstractQoreNode* n) {
-    // the reference is released with the helper's other temporaries
+    // the reference is released with the helper's other temporaries; the helper's own locks are kept at the start of
+    // tvec, so that scanWeakContainerRemovals() can tell them from the values that the change replaced (qore#7373)
     try {
-        tvec.push_back(n);
+        if (weak_lock_count < UINT8_MAX) {
+            tvec.insert(tvec.begin() + weak_lock_count, n);
+            ++weak_lock_count;
+        } else {
+            // more locks than the count holds: walked by the scan, which only costs time
+            tvec.push_back(n);
+        }
     } catch (...) {
         n->deref(nullptr);
         throw;
@@ -1744,6 +1909,10 @@ bool LValueHelper::releaseOwnWeakLocks(AbstractQoreNode* n) {
     for (size_t i = tvec.size(); i-- > 0;) {
         if (tvec[i] == n) {
             tvec.erase(tvec.begin() + i);
+            // one of the helper's own locks, which are at the start of tvec (holdWeakLock())
+            if (i < weak_lock_count) {
+                --weak_lock_count;
+            }
             // not the last reference: the lvalue holds the node
             n->deref(nullptr);
         }
@@ -1757,6 +1926,9 @@ QoreListNode* LValueHelper::getWeakRemovalList() {
     ensureUnique();
     // held by the helper while the change through the weak reference is made (qore#7198)
     QoreListNode* l = lockWeakList();
+    // the lvalue keeps the weak reference, and its storage can be an entry of the list, which the removal frees or
+    // moves: it is not read again (qore#7402)
+    leaveUnchangedLValue();
     // a list freed under the weak reference cannot be changed (qore#7163)
     if (qore_list_private::get(*l)->checkValid(vl.xsink)) {
         return nullptr;
@@ -1768,6 +1940,8 @@ QoreHashNode* LValueHelper::getWeakRemovalHash() {
     assert(getType() == NT_WEAKREF_HASH);
     ensureUnique();
     QoreHashNode* h = lockWeakHash();
+    // as for a list: the lvalue's storage can be a key of the hash (qore#7402)
+    leaveUnchangedLValue();
     if (qore_hash_private::get(*h)->checkValid(vl.xsink)) {
         return nullptr;
     }
@@ -2299,8 +2473,20 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
     return 0;
 }
 
+void qore_raise_reference_bind_user_code(QoreObject* object, const char* member, ExceptionSink* xsink) {
+    xsink->raiseException("REFERENCE-BIND-ERROR", "cannot bind a reference to member '%s' of class '%s' while assigning "
+        "to a member of the same object: the class runs code for the member, which cannot run under the object's lock",
+        member, object->getClassName());
+}
+
 int LValueHelper::setMemberWriteGateLValue(QoreObject* object, const char* member,
         const QoreMemberInfo* accessor_info) {
+    // a gate is Qore code, which cannot run under the lock of the assignment being checked (qore#7380, qore#7391)
+    QoreVarRWLock& object_lock = qore_object_private::get(*object)->rml;
+    if (qore_auto_vlock_ops(vl).getRWL() != &object_lock && qore_var_rwlock_ops(object_lock).heldForBind(&vl)) {
+        qore_raise_reference_bind_user_code(object, member, vl.xsink);
+        return -1;
+    }
     auto entry = std::make_unique<MemberLValue>(object, member, accessor_info, vl.xsink);
     // Keep the receiver before unlocking the parent lvalue; a gate can call external or Qore code.
     vl.del();
@@ -2385,7 +2571,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
                     // the container was created for this assignment; a rejected assignment removes it again
                     trackVivifiedContainer();
                 } else {
-                    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+                    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
                     if (thd) {
                         // we cannot initialize a hashdecl value here while holding lvalue locks
                         // so we have to throw an exception
@@ -2929,9 +3115,18 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
     return 0;
 }
 
+thread_local const void* qore_reference_bind_vl = nullptr;
+thread_local void* qore_reference_bind_helper = nullptr;
+
+void qore_reference_bind_note_reused_lock() {
+    static_cast<LValueHelper*>(qore_reference_bind_helper)->noteReusedBindLock();
+}
+
 void LValueHelper::setAndLock(QoreVarRWLock& rwl) {
-    qore_var_rwlock_ops(rwl).wrlock();
-    qore_auto_vlock_ops(vl).set(&rwl);
+    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
+    if (qore_var_rwlock_ops(rwl).wrlockUnlessHeldForBind(&vl)) {
+        qore_auto_vlock_ops(vl).set(&rwl);
+    }
 }
 
 void LValueHelper::set(QoreVarRWLock& rwl) {
@@ -3005,6 +3200,49 @@ bool qore_weak_local_container_store(const LocalVar* lv, const AbstractQoreNode*
     }
     lvh.assign(val.refSelf(), "<lvalue>");
     return true;
+}
+
+bool qore_try_read_unique_weak_path(const LVPathStep* steps, size_t size, QoreValue& result) {
+    if (size != 2 || steps[0].kind != LVPathStepKind::LocalVar || !steps[0].ref_ptr) {
+        return false;
+    }
+    const auto* local = static_cast<const LocalVar*>(steps[0].ref_ptr);
+    if (local->closureUse() || local->isReadOnly()) {
+        return false;
+    }
+    LocalVarValue* slot = thread_try_find_lvar(local);
+    if (!slot || slot->finalized || !slot->val.assigned || slot->val.static_assignment
+            || slot->val.type != QV_Node) {
+        return false;
+    }
+    // This root belongs to this thread. A reference, captured local, opaque value or shared
+    // container needs the ordinary navigation and its locking or copy-on-write.
+    QoreValue root = slot->val.getValue();
+    if (!root.isPlainPointer()) {
+        return false;
+    }
+    const LVPathStep& key = steps[1];
+    QoreValue value;
+    if (key.kind == LVPathStepKind::HashKeyConst) {
+        if (root.getType() == NT_OBJECT) {
+            return qore_object_private::get(*root.get<QoreObject>())->tryReadUniqueWeakMember(key.name, result);
+        }
+        if (root.getType() != NT_HASH || !root.get<const QoreHashNode>()->is_unique()) {
+            return false;
+        }
+        value = root.get<const QoreHashNode>()->getKeyValue(key.name.c_str());
+    } else if (key.kind == LVPathStepKind::ListIndex && root.getType() == NT_LIST
+            && (key.slice_values.empty() || key.slice_values.front().getType() == NT_INT)
+            && key.index >= 0 && root.get<const QoreListNode>()->is_unique()) {
+        const auto* list = root.get<const QoreListNode>();
+        if (static_cast<uint64_t>(key.index) >= list->size()) {
+            return false;
+        }
+        value = list->retrieveEntry(key.index);
+    } else {
+        return false;
+    }
+    return qore_try_ref_unique_container(value, result);
 }
 
 int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
@@ -3743,12 +3981,87 @@ bool qore_is_indirect_ref_value(const QoreValue& val) {
     }
 }
 
+//! Returns true if \a v is a list or hash without a complex type of its own: a plain list or hash, or one of \c auto
+static bool qore_weak_assign_is_plain_container(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_LIST: {
+            const QoreTypeInfo* ti = v.get<const QoreListNode>()->getTypeInfo();
+            return ti == listTypeInfo || ti == autoListTypeInfo;
+        }
+        case NT_HASH: {
+            const QoreTypeInfo* ti = v.get<const QoreHashNode>()->getTypeInfo();
+            return ti == hashTypeInfo || ti == autoHashTypeInfo;
+        }
+        default:
+            return false;
+    }
+}
+
+//! Returns the container that the weak assignment of \a source assigns: the target of a weak reference, borrowed
+static QoreValue qore_weak_assign_source_container(const QoreValue& source) {
+    switch (source.getType()) {
+        case NT_WEAKREF_LIST:
+            return QoreValue(reinterpret_cast<const WeakListReferenceNode*>(source.getInternalNode())->borrow());
+        case NT_WEAKREF_HASH:
+            return QoreValue(reinterpret_cast<const WeakHashReferenceNode*>(source.getInternalNode())->borrow());
+        default:
+            return source;
+    }
+}
+
+int qore_weak_assignment_conversion(const QoreValue& source, const QoreValue& converted, const char* desc,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    assert(source.getType() == NT_LIST || source.getType() == NT_HASH || source.getType() == NT_WEAKREF_LIST
+        || source.getType() == NT_WEAKREF_HASH);
+    if (converted.getInternalNode() == source.getInternalNode()) {
+        return 0;
+    }
+    // the container that a weak reference designates is compared, which a type converts as it converts the reference
+    QoreValue container = qore_weak_assign_source_container(source);
+    if (converted.getInternalNode() == container.getInternalNode()) {
+        return 0;
+    }
+    // a type that only strips the container's type (an untyped lvalue, list, hash, any, a list or hash of auto!):
+    // the container assigned is kept, as its own type accepts what it holds, and a change of it is read through the
+    // weak reference
+    if (converted.getType() == container.getType() && qore_weak_assign_is_plain_container(converted)) {
+        return 1;
+    }
+    // a type that converts the container to another (ex: to another element type, or a hash to a softlist): the weak
+    // reference would designate the converted copy, which nothing else holds
+    xsink->raiseException("RUNTIME-TYPE-ERROR", "%s: a weak assignment (:=) of a value of type '%s' converts the "
+        "container assigned to a new value of type '%s', which only the weak reference would hold; assign a container "
+        "of the lvalue's type, or make a normal assignment (=)", desc, container.getFullTypeName(),
+        converted.getFullTypeName());
+    return -1;
+}
+
+int LValueHelper::keepWeakAssignmentContainer(QoreValue& weak_source, QoreValue& n, const char* desc) {
+    int rc = qore_weak_assignment_conversion(weak_source, n, desc, vl.xsink);
+    if (rc > 0) {
+        // the copy is released as it is held, and the container assigned takes its place with the reference kept
+        saveTemp(n);
+        n = weak_source;
+    } else {
+        saveTemp(weak_source);
+    }
+    weak_source.clear();
+    return rc < 0 ? -1 : 0;
+}
+
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
+    if (mode == AssignmentMode::Weak) [[unlikely]] {
+        return assignImpl<false, false, true>(n, desc, check_types, mode, {});
+    }
     return assignImpl<false>(n, desc, check_types, mode, {});
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, LexicalSemanticPolicy policy, bool check_types,
         AssignmentMode mode) {
+    if (mode == AssignmentMode::Weak) [[unlikely]] {
+        return assignImpl<true, false, true>(n, desc, check_types, mode, policy);
+    }
     return assignImpl<true>(n, desc, check_types, mode, policy);
 }
 
@@ -3756,9 +4069,14 @@ int LValueHelper::assignNative(QoreValue n, const char* desc) {
     return assignImpl<false, true>(n, desc, true, AssignmentMode::Normal, {});
 }
 
-template <bool Lexical, bool Native>
+template <bool Lexical, bool Native, bool Weak>
 int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, AssignmentMode mode,
         LexicalSemanticPolicy policy) {
+    // a weak assignment is compiled in its own instantiation (see assign())
+    assert(Weak == (mode == AssignmentMode::Weak));
+    // the container of the lvalue's weak reference is changed in place, never replaced (see viewWeakContainer()):
+    // no operation assigns through a helper that designates it
+    assert(!weak_target_view);
     member_lvalue_modified = true;
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
@@ -3768,6 +4086,23 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     //printd(5, "LValueHelper::assign() this: %p '%s' ti: %p '%s' check_types: %d n: '%s' (%d) val: %p qv: %p\n",
     //    this, desc, typeInfo, QoreTypeInfo::getName(typeInfo), check_types, n.getFullTypeName(), n.getType(), val,
     //    qv);
+    // a weak reference designates the container assigned, which a conversion by the lvalue's type must not replace
+    // with a copy that only the weak reference would hold (qore#7237): a reference of its own is kept to compare it;
+    // a weak reference assigned as it is (a store of the IR interpreter) is kept to compare the container that it
+    // designates
+    QoreValue weak_source;
+    if constexpr (Weak) {
+        switch (n.getType()) {
+            case NT_LIST:
+            case NT_HASH:
+            case NT_WEAKREF_LIST:
+            case NT_WEAKREF_HASH:
+                weak_source = n.refSelf();
+                break;
+            default:
+                break;
+        }
+    }
     if (check_types) {
         // check type for assignment
         if constexpr (Native) {
@@ -3780,6 +4115,11 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
         if (*vl.xsink) {
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
+            if constexpr (Weak) {
+                if (weak_source.hasNode()) {
+                    saveTemp(weak_source);
+                }
+            }
             saveTempRef(n);
             // the containers navigated to reach the target must not keep the entries created for this assignment
             rollbackVivification();
@@ -3790,6 +4130,8 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     if (lvid_set && n.getType() == NT_REFERENCE
         && (lvid_set->find(lvalue_ref::get(reinterpret_cast<const ReferenceNode*>(n.getInternalNode()))->lvalue_id)
             != lvid_set->end())) {
+        // a reference is never a container assigned weakly
+        assert(!weak_source.hasNode());
         saveTempRef(n);
         int rc = doRecursiveException();
         // as for a rejected type, the containers navigated to reach the target keep no entry for this assignment
@@ -3801,12 +4143,24 @@ int LValueHelper::assignImpl(QoreValue n, const char* desc, bool check_types, As
     // (shared with parameter binding — see QoreTypeInfo::applyNoNarrowCoercion())
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
+    if constexpr (Weak) {
+        if (weak_source.hasNode() && (*vl.xsink || keepWeakAssignmentContainer(weak_source, n, desc))) [[unlikely]] {
+            if (weak_source.hasNode()) {
+                saveTemp(weak_source);
+            }
+            saveTemp(n);
+            n.clear();
+            rollbackVivification();
+            return -1;
+        }
+    }
+
     // process weak assignment
     // the value replaced by its weak or opaque form is released through the temporary list as it is held, as the
     // target cannot be dereferenced while the lvalue lock is held: a value read through an opaque reference keeps its
     // opaque representation, and releasing it as a plain node would leave its registration with the opaque target
     // registry (see design/dgc.md, "Opaque references")
-    if (mode == AssignmentMode::Weak) {
+    if constexpr (Weak) {
         QoreValue old = n;
         if (n.getType() == NT_OBJECT) {
             n = new WeakReferenceNode(n.get<QoreObject>());
@@ -4199,24 +4553,7 @@ int64 LValueHelper::shiftRightEqualsBigInt(int64 va, const char* desc) {
 }
 
 int64 LValueHelper::preIncrementBigInt(const char* desc) {
-    if (intResultNeedsConversion()) {
-        return storeIntResult(getAsBigInt() + 1, desc);
-    }
-    if (val) {
-        if (makeIntVal(desc)) {
-            return 0;
-        }
-        return val->preIncrementBigInt();
-    }
-    if (makeIntQv(desc)) {
-        return 0;
-    }
-    // computed from the old value, as in postIncrementBigInt(): the compiler keeps one register less than for a new
-    // value that is both stored and returned
-    int64 oldVal = qv->getAsBigInt();
-    saveTemp(*qv);
-    qv->set(oldVal + 1);
-    return oldVal + 1;
+    return preIncrementBigIntInline(desc);
 }
 
 int64 LValueHelper::preDecrementBigInt(const char* desc) {
@@ -4864,6 +5201,10 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
         h = lvh.getRemovalHash(t);
     } else if (t == NT_OBJECT) {
         o = lvh.getValue().get<QoreObject>();
+    } else if (t == NT_WEAKREF) {
+        // the object that the lvalue holds through a weak reference, whose member is removed, as in the IR
+        // interpreter and the JIT (executeLVHashKeySliceRemove(), qore#7346)
+        o = lvh.getValue().get<const WeakReferenceNode>()->get();
     }
     if (!o && !h)
         return;
@@ -5847,7 +6188,9 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
     // a variable that only its frame can use is changed like a plain local variable: without the lock, and with
     // no recursive-reference scan, since nothing refers to it that a cycle could run through
     bool exclusive = frameExclusive();
-    QoreSafeVarRWWriteLocker sl(rml, !exclusive);
+    QoreSafeVarRWWriteLocker sl(rml, false);
+    // a lock that the assignment of this thread holds while it binds a reference stays with that assignment (qore#7380)
+    bool locked = !exclusive && sl.lockUnlessHeldForBind(&lvh.vl);
     if (!exclusive && QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
@@ -5876,7 +6219,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return 0;
     }
 
-    if (!exclusive) {
+    if (locked) {
         lvh.set(rml);
         sl.stay_locked();
     }

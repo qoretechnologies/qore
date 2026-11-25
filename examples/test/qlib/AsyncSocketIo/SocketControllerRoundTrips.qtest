@@ -322,7 +322,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         }
 
         int start = counter.total();
-        client.sendHTTPMessage("GET", "/x", "1.1", {"Host": "localhost"});
+        client.sendHTTPMessage("GET", "/x", "1.1", {"Host": "127.0.0.1"});
         assertEq(1, counter.total() - start, "the message is one submission");
         hash<auto> hdr = server.readHTTPHeader(10s);
         assertEq("GET", hdr.method);
@@ -412,7 +412,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         on_exit delete srv;
         srv.setDefaultHandler("echo", new EchoHandler());
         int port = srv.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
@@ -422,7 +422,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
         AsyncIoController::setLogger(counter_logger);
 
         HTTPClient client({
-            "url": "https://localhost:" + port,
+            "url": "https://127.0.0.1:" + port,
             "ssl_verify_cert": False,
             "http_version": "2.0",
             "timeout": 10s,
@@ -480,7 +480,7 @@ qiurSfIBhXYMDdqWsl9GD+c=
     #! Sends a chunked POST request and returns the response header
     private hash<auto> sendChunked(Socket s, int port, string body) {
         s.sendHTTPMessage("POST", "/limit", "1.1", {
-            "Host": "localhost:" + port,
+            "Host": "127.0.0.1:" + port,
             "Transfer-Encoding": "chunked",
             "Content-Type": "application/octet-stream",
         });

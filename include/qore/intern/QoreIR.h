@@ -3419,8 +3419,8 @@ public:
         it calls; -2 (QBH_CHECK_IN_THREAD) for any other expression, whose callee the new thread computes (a call of a
         function, a static method or a method of the object of the starting code, which may dispatch to an override, or
         a callable that an operator, an index, a call or a global variable gives): the code that it calls is checked
-        when it is called; -1 (QBH_CALLEE_UNKNOWN), the default, for an instruction that does not record it
-        (serialized IR): every closure, call reference and object of the operands is checked when the thread starts
+        when it is called; -1 (QBH_CALLEE_UNKNOWN), the default, for an instruction that does not record it:
+        every closure, call reference and object of the operands is checked when the thread starts
     */
     int helper_callee = -1;
 };

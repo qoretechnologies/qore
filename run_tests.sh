@@ -102,12 +102,11 @@ print_usage () {
   echo "                           since, or an include/ header that a module was built with but libqore was not;"
   echo "                           ccache's hard_link or file_clone can make a built change look older (see the"
   echo "                           comment of check_build() in run_tests.sh)."
-  echo "  QORE_MODULE_DIR_ONLY     When set, QORE_MODULE_DIR is the complete module path: the directories of the"
-  echo "                           installed modules that the build compiled its qmods against (listed by cmake in"
-  echo "                           qore-external-module-dirs.txt in the build directory) are not appended to it."
-  echo "                           Otherwise they are appended to QORE_MODULE_DIR (those it already holds are not"
-  echo "                           added again), so they are searched after it and before the module directories"
-  echo "                           compiled into the qore of the build (its installation prefix)."
+  echo "  QORE_MODULE_DIR_ONLY     Configured builds use QORE_EXTERNAL_MODULE_DIRS from CMake after the build and"
+  echo "                           source paths. Set QORE_MODULE_DIR_ONLY (even to an empty value) to use the"
+  echo "                           external paths in QORE_MODULE_DIR instead. Older builds keep in-tree caller paths."
+  echo "  QORE_TEST_ALLOW_EXTERNAL_INCLUDES"
+  echo "                           Set to 1 to preserve QORE_INCLUDE_DIR entries outside the source and build trees."
   echo "  QORE_TEST_BUILD_JOBS     Jobs a test that builds a CMake project runs (default: the number of CPUs, at"
   echo "                           least 2), e.g. examples/test/ir/CMakeBuildHelpers*.qtest."
   echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
@@ -1461,19 +1460,56 @@ if [ -n "$BUILD_MODULE_DIRS" ]; then
         TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
     fi
 fi
-if [ -n "$TEST_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
-else
-    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib:$QORE_MODULE_DIR
+# Print the existing directories under the source or build root, in search order. Resolve relative paths here,
+# before the runner enters the test directories. Resolve symlinks and .. before checking the directory boundary.
+in_tree_search_path() (
+    remaining=$1
+    filtered=
+    while [ -n "$remaining" ]; do
+        entry=${remaining%%:*}
+        case "$remaining" in
+            *:*) remaining=${remaining#*:} ;;
+            *) remaining= ;;
+        esac
+        [ -n "$entry" ] || continue
+        case "$entry" in
+            /*) ;;
+            *) entry=$QORE_SOURCE_DIR/$entry ;;
+        esac
+        dir=$(CDPATH= cd -P "$entry" 2>/dev/null && pwd -P) || continue
+        case "$dir/" in
+            "${QORE_SOURCE_DIR%/}/"*|"${QORE_BUILD_DIR%/}/"*) filtered=${filtered:+$filtered:}$dir ;;
+        esac
+    done
+    printf '%s' "$filtered"
+)
+
+if [ "$QORE_TEST_ALLOW_EXTERNAL_INCLUDES" != 1 ] && [ -n "${QORE_INCLUDE_DIR+set}" ]; then
+    QORE_INCLUDE_DIR=$(in_tree_search_path "$QORE_INCLUDE_DIR")
+    if [ -z "$QORE_INCLUDE_DIR" ]; then
+        unset QORE_INCLUDE_DIR
+    fi
 fi
-# The directories of the installed modules that the build compiled its qlib qmods against (written by cmake): a qmod
-# requires the modules it was compiled with, and the build's qore does not search these directories when they are
-# outside its prefix, so without them the qmod falls back to its source (BINARY-MODULE-SOURCE-FALLBACK).  They come
-# last in QORE_MODULE_DIR, so the modules of the build and of this tree come first; qore searches QORE_MODULE_DIR before
-# the module directories compiled into it, so they also come before those of its installation prefix.  A directory
-# that QORE_MODULE_DIR already holds is not added again.  With QORE_MODULE_DIR_ONLY set, the caller gives the
-# complete module path (the CI jobs give a link farm of the native modules only), and none are added; qore reads it
-# as set even when it is empty.
+
+# A configured build uses exactly its recorded paths. Older builds append their recorded paths to the caller's
+# in-tree paths. A caller setting QORE_MODULE_DIR_ONLY explicitly supplies its own external paths in either case.
+if [ -z "${QORE_MODULE_DIR_ONLY+set}" ]; then
+    if [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ] && \
+            grep -q '^QORE_EXTERNAL_MODULE_DIRS:STRING=' "$QORE_BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
+        QORE_MODULE_DIR=$(cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt")
+        export QORE_MODULE_DIR_ONLY=1
+    elif [ -n "$QORE_MODULE_DIR" ]; then
+        QORE_MODULE_DIR=$(in_tree_search_path "$QORE_MODULE_DIR")
+    fi
+fi
+if [ -n "$TEST_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+else
+    export QORE_MODULE_DIR=$QORE_SOURCE_DIR/qlib${QORE_MODULE_DIR:+:$QORE_MODULE_DIR}
+fi
+# Older builds append their recorded paths after the caller directories.
+# A caller that sets QORE_MODULE_DIR_ONLY supplies its own external paths (the CI jobs use a native module farm).
+# The runtime treats even an empty QORE_MODULE_DIR_ONLY as set.
 if [ -z "${QORE_MODULE_DIR_ONLY+set}" ] && [ -f "$QORE_BUILD_DIR/qore-external-module-dirs.txt" ]; then
     _external_module_dirs=`cat "$QORE_BUILD_DIR/qore-external-module-dirs.txt"`
     _old_ifs=$IFS
@@ -1495,6 +1531,11 @@ fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.
 export QORE_EXECUTABLE="$QORE"
+
+# Every valgrind that a test starts reads its options from VALGRIND_OPTS as well: the suppressions of the reports of
+# the libraries that Qore uses that are not errors of Qore (LLVM's JIT; see examples/test/valgrind.supp) apply to all
+# of them; the options of the caller's environment come after, so that they can add to them
+export VALGRIND_OPTS="--suppressions=$QORE_SOURCE_DIR/examples/test/valgrind.supp${VALGRIND_OPTS:+ $VALGRIND_OPTS}"
 
 # Keep qore tests hermetic by default. Developer shells often have Qorus or
 # application provider discovery configured, which can make negative provider

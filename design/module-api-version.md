@@ -57,6 +57,11 @@ Adding new exported functions, or new types that old modules do not use, needs n
   library may load sets the field only if `is_module_api_supported(2, 3)` is true.  2.2 libraries were already
   installed in development images when the field was added, so the API was incremented and 2.2 modules are refused.
 
+  The native code produced by qcc for calls that hand temporaries to methods uses two additive libqore exports,
+  `qore_rt_try_enter_native_method_v1` and `qore_rt_leave_native_method_v1` (#6860). The compiler reserves a
+  256-byte, 16-byte-aligned buffer per calling frame. The module API stays at 2.3. AOT images using these entries
+  require the matching AOT format and runtime identity.
+
 ## Guard
 
 `tools/qore-module-api-headers.py` hashes the installed public header set: the files that
@@ -66,7 +71,7 @@ and the excluded files are not hashed, and the headers without an extension, suc
 git checkout it hashes the files of `include/qore` that git tracks (`git ls-files`), so that untracked files in a
 development tree (`.DS_Store`, `*.orig`, `*.rej`, editor swap files) do not fail it; in a source tarball, every file of
 the directory.  The
-hash is recorded with the module API it was recorded for in `cmake/module-api-headers.txt`.  The check fails when:
+hash is recorded with the module API it was recorded for in `cmake/module-api-headers.txt`.  Resolve and stage all index conflicts under `include/qore` before checking or updating the record.  The check fails when:
 
 - the hash differs and the API does not: the author either increments `QORE_MODULE_API_MINOR` (a change that a
   compiled module would get wrong), or, for a change that cannot affect a compiled module (a new function or type
