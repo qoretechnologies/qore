@@ -8720,6 +8720,9 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
 
     const QoreMethod* w;
     ClassAccess access;
+    // the access error is raised after the lookup, in the context of the caller's Program, whose classes decide how
+    // the error names the class (see memberDiagnosticName(); qore#7626), and without the lookup's namespace lock
+    bool inaccessible = false;
 
     //printd(5, "qore_class_private::getMethodForEval() %s::%s() class_ctx: %p %s\n", name.c_str(), nme, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
@@ -8773,7 +8776,7 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
                 // a method that the caller cannot call: no method of the name can be called from outside the class
                 // hierarchy
                 if (access > Public) {
-                    return raiseInaccessibleMethodError(nme, w, xsink);
+                    inaccessible = true;
                 }
             } else {
                 // a private method of the class context itself or of the object's class does not raise the access
@@ -8784,7 +8787,7 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
                 // trusted code declared, as from outside the class hierarchy (qore#6843)
                 if (class_ctx->sandbox_ctx && w->getAccess() == Private
                         && sandboxDeniesPrivateAccess(get(*w->getClass()), class_ctx)) {
-                    return raiseInaccessibleMethodError(nme, w, xsink);
+                    inaccessible = true;
                 }
             }
         } else {
@@ -8792,6 +8795,10 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
             // (qore#6798)
             w = runtimeCheckPublicContextOverride(nme, w, access, class_ctx);
         }
+    }
+
+    if (inaccessible) {
+        return raiseInaccessibleMethodError(nme, w, xsink);
     }
 
     //printd(5, "QoreClass::getMethodForEval() %s::%s() found method %p class %s\n", name.c_str(), nme, w, w->getClassName());
@@ -8812,11 +8819,12 @@ const QoreMethod* qore_class_private::raiseInaccessibleMethodError(const char* n
     if (w == constructor || w == destructor) {
         xsink->raiseException("ILLEGAL-EXPLICIT-METHOD-CALL", "explicit calls to ::%s() methods are not allowed", nme);
     } else if (w->isPrivate()) {
+        // the class is named as in the member diagnostics: by its path when another class has its name (qore#7626)
         xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally",
-            name.c_str(), nme);
+            memberDiagnosticName(), nme);
     } else {
         xsink->raiseException("BASE-CLASS-IS-PRIVATE", "%s() is a method of a privately-inherited class %s", nme,
-            name.c_str());
+            memberDiagnosticName());
     }
     return nullptr;
 }
@@ -9860,7 +9868,7 @@ QoreObject* qore_class_private::execCopyImpl(LexicalSemanticPolicy policy, QoreO
     // check for illegal private calls
     if (copyMethod && copyMethod->isPrivate() && cls != getStackClass()) {
         xsink->raiseException("METHOD-IS-PRIVATE", "%s::copy() is private and cannot be accessed externally",
-            name.c_str());
+            memberDiagnosticName());
         return nullptr;
     }
 

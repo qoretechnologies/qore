@@ -2424,7 +2424,8 @@ QORE_INTERN_ALWAYS_INLINE int CodeEvaluationHelper::findVariantImpl(const QoreFu
         if ((va > Public && !class_ctx) || (va == Internal
             && !qore_class_private::get(*mv->getClass())->sameClass(*qc))) {
             xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s(%s) is not accessible in this context",
-                mv->className(), func->getName(), mv->getSignature()->getSignatureText());
+                qore_class_private::get(*mv->getClass())->memberDiagnosticName(), func->getName(),
+                mv->getSignature()->getSignatureText());
             return -1;
         }
     }

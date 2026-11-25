@@ -1092,7 +1092,8 @@ int FunctionCallBase::parseFindCallVariant(const QoreProgramLocation* loc, QoreP
                     parseCommitVirtualNamedCall();
                     return err;
                 } else if (mv->isPrivate() && !qore_class_private::parseCheckPrivateClassAccess(*qc)) {
-                    parse_error(*loc, "illegal call to private method variant %s::%s(%s)", qc->getName(),
+                    parse_error(*loc, "illegal call to private method variant %s::%s(%s)",
+                        qore_class_private::get(*qc)->memberDiagnosticName(),
                         func->getName(), variant->getSignature()->getSignatureText());
                     if (!err) {
                         err = -1;
@@ -2221,13 +2222,15 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         || (variant && CONMV_const(variant)->isPrivate()))
             && !qore_class_private::parseCheckPrivateClassAccess(*oc)) {
         if (variant) {
-            parse_error(*loc, "illegal external access to private constructor %s::constructor(%s)", oc->getName(),
+            parse_error(*loc, "illegal external access to private constructor %s::constructor(%s)",
+                qore_class_private::get(*oc)->memberDiagnosticName(),
                 variant->getSignature()->getSignatureText());
             if (!err) {
                 err = -1;
             }
         } else {
-            parse_error(*loc, "illegal external access to private constructor of class %s", oc->getName());
+            parse_error(*loc, "illegal external access to private constructor of class %s",
+                qore_class_private::get(*oc)->memberDiagnosticName());
             if (!err) {
                 err = -1;
             }
