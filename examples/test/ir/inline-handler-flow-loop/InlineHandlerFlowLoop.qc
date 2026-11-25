@@ -34,7 +34,8 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "twoHandlersLoop", "twoHandlers", "twoHandlersInner", "twoHandlersInnerReturn", "twoHandlersMid",
             "twoHandlersTry", "twoHandlersLaterReturn", "threeHandlers", "mixedHandlers",
             "mixedHandlersLoop", "mixedInHandler", "abandonedReturn", "abandonedObject", "outerPendingReturn", "eagerOuter",
-            "innerLoopPending", "unchangedObject");
+            "innerLoopPending", "unchangedObject", "nrcLost", "dtorThrow", "abandonTiming", "abandonedNested",
+            "abandonedNestedTry", "outerPendingTry");
 
         #! Expected return values and destructor order when a debugger request abandons a return (#7022).
         const AbandonedResults = {
@@ -52,6 +53,18 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
             "outerPendingReturn/object": "RESULT:null LOG:[\"released\", \"last\"]",
             "outerPendingReturn/object-list": "RESULT:null LOG:[\"released\", \"last\"]",
             "outerPendingReturn/object-opaque": "RESULT:null LOG:[\"released\", \"last\"]",
+            # the return of an earlier handler resumes when a later handler takes the request
+            "nrcLost": "RESULT:3 LOG:[\"last\"]",
+            # the release of the abandoned object throws, and the next handler runs (bug 380)
+            "dtorThrow": "RESULT:MARKER-ERROR: the destructor threw LOG:[\"throw\", \"last\"]",
+            # the abandoned object is released when the request abandons its return, before the handler of the
+            # enclosing block
+            "abandonTiming": "RESULT:-7 LOG:[\"released\", \"between\", \"last\"]",
+            "abandonedNested": "RESULT:null LOG:[\"outer\", \"inner\"]",
+            "abandonedNestedTry": "RESULT:null LOG:[\"outer\", \"inner\"]",
+            "outerPendingTry": "RESULT:-7 LOG:[\"last\"]",
+            "outerPendingTry/string": "RESULT:restored LOG:[\"last\"]",
+            "outerPendingTry/object": "RESULT:null LOG:[\"released\", \"last\"]",
         };
 
         #! the function, the request, the tag of its statement and the hit of its step event, and optionally a second
@@ -59,6 +72,14 @@ class InlineHandlerFlowLoopBase inherits QUnit::Test {
         const Requests = (
             ("abandonedReturn", "continue", "abandoned_step", 1, "return", "abandoned_step", 2),
             ("abandonedObject", "break", "abandoned_object", 1),
+            ("nrcLost", "break", "nrc_mid", 1),
+            ("dtorThrow", "break", "dtor_throw", 1),
+            ("abandonTiming", "break", "abandon_timing", 1),
+            ("abandonedNested", "continue", "abandoned_nested_inner", 1, "return", "abandoned_nested_outer", 2),
+            ("abandonedNestedTry", "continue", "abandoned_try_inner", 1, "return", "abandoned_try_outer", 2),
+            ("outerPendingTry", "break", "outer_pending_try", 1),
+            ("outerPendingTry/string", "break", "outer_pending_try", 1),
+            ("outerPendingTry/object", "break", "outer_pending_try", 1),
             ("innerLoopPending", "break", "inner_loop_pending", 1),
             ("innerLoopPending", "continue", "inner_loop_pending", 1),
             ("unchangedObject", "break", "keep_marker", 1),

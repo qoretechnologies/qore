@@ -54,8 +54,24 @@ class QoreIRFunction;
 struct QoreAOTContext;
 class BCList;
 
-//! Notifies the active debugger return snapshots when a source return replaces the value of this slot.
-DLLLOCAL void qore_replacing_return(QoreValue& slot);
+//! The innermost pending return snapshot of the current thread (StatementBlock.cpp), or nullptr if none is active
+/** A snapshot is active only while the exit handlers of a block, or the body of a loop, run with a pending return
+    (#7022); constant-initialized, so that its reads need no TLS initialization guard, with the default TLS model (see
+    q_thread_stack_limit_tls)
+*/
+DLLLOCAL extern constinit thread_local void* qore_pending_return_snapshot_tls;
+
+//! Notifies the active pending return snapshots that a return replaces the value of this slot (#7022)
+DLLLOCAL void qore_replacing_return_notify(QoreValue& slot);
+
+//! Notifies the active pending return snapshots, if any, when a source return replaces the value of this slot
+/** A TLS read inline: the snapshots are only active while handlers or a loop run with a pending return (#7022)
+*/
+DLLLOCAL inline void qore_replacing_return(QoreValue& slot) {
+    if (qore_pending_return_snapshot_tls) {
+        qore_replacing_return_notify(slot);
+    }
+}
 class LVList {
 public:
     typedef std::vector<LocalVar*> lv_vec_t;
@@ -151,7 +167,18 @@ public:
     //! A loop or switch consumes a break (and optionally a continue), abandoning the value of that exit.
     DLLLOCAL int execLoopBody(QoreValue& return_value, ExceptionSink* xsink, bool takes_continue = true);
     DLLLOCAL int execLoopBody(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
-            bool takes_continue = true);
+            bool takes_continue = true) {
+        // a loop that runs with no pending return (the common case) needs no snapshot: a value left in the slot by
+        // an iteration whose return a break or a continue abandons is released (#7022)
+        if (return_value.isNothing()) {
+            int flow = execImpl(rc, return_value, xsink);
+            if ((flow == RC_BREAK || (takes_continue && flow == RC_CONTINUE)) && !return_value.isNothing()) {
+                releaseAbandonedReturn(return_value, xsink);
+            }
+            return flow;
+        }
+        return execLoopBodyPending(rc, return_value, xsink, takes_continue);
+    }
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context);
 
     DLLLOCAL void del();
@@ -253,6 +280,12 @@ protected:
     DLLLOCAL int parseCheckReturn(const UserVariantBase* uvb);
 
     DLLLOCAL int execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& return_value, ExceptionSink* xsink);
+    //! A loop body that runs with a pending return: its snapshot restores that return when a break or a continue
+    //! abandons another one (#7022)
+    DLLLOCAL int execLoopBodyPending(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+            bool takes_continue);
+    //! Releases the value of a return that a break or a continue abandons in a loop with no pending return (#7022)
+    DLLLOCAL static void releaseAbandonedReturn(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 

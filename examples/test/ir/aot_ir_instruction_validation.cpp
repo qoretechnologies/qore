@@ -583,11 +583,14 @@ int main() {
                 &inspect) && ok;
             ++count;
         };
-        static_assert(QORE_AOT_BINARY_MIN_VERSION == QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
+        static_assert(QORE_AOT_BINARY_MIN_VERSION >= QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION,
             "the reader refuses the layout before the callee");
         constexpr uint16_t old_version = QORE_AOT_BACKGROUND_HELPER_CALLEE_VERSION - 1;
-        callee("v51 helper without a callee", old_version, 0, 2, 0,
-            "unsupported binary format version 51 (supported 52-52); rebuild the artifact with this version of qcc");
+        // the versions that the reader supports, which a later batch can raise (qore#7379, qore#7022)
+        const std::string old_error = "unsupported binary format version " + std::to_string(old_version)
+            + " (supported " + std::to_string(QORE_AOT_BINARY_MIN_VERSION) + "-"
+            + std::to_string(QORE_AOT_BINARY_VERSION) + "); rebuild the artifact with this version of qcc";
+        callee("v51 helper without a callee", old_version, 0, 2, 0, old_error.c_str());
         callee("helper callee parameter 0", QORE_AOT_BINARY_VERSION, 0, 2, 0);
         callee("helper callee parameter 1", QORE_AOT_BINARY_VERSION, 1, 2, 1);
         callee("helper callee checked in the thread", QORE_AOT_BINARY_VERSION, QBH_CHECK_IN_THREAD, 2,

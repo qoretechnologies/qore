@@ -5934,6 +5934,10 @@ bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction
             ok = emitBlockCleanups(hf.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
                 hf.temp_depth, loc);
             if (ok && !blockHasTerminator(builder.getBlock())) {
+                // the cleanups can release a return that the request abandons, whose destructor can raise an
+                // exception: it is one of the handler's, raised before the code after the handler drops the handlers
+                // still registered, so that they run with it (bug 380; qore#7022)
+                builder.createCheckException(loc)->exception_target = hf.exception_target;
                 builder.createBranch(end, loc);
             }
         }
@@ -7316,6 +7320,8 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         hf.scope_id = scope_id;
         hf.return_walk = return_walk;
         hf.try_depth = try_depth;
+        // the target that the handler's code raises to (below)
+        hf.exception_target = set_exception_target ? handler_exception_target : getCurrentExceptionTarget();
         // the entry of the handler's scope, also for a handler that is not the last: it tells whether the handler is in
         // the body of the handler around it (qore#6949)
         if (scope_id) {
@@ -7754,6 +7760,10 @@ QoreIRBasicBlock* QoreIRLowering::lowerInlineHandlerOuterRequest(size_t hf_index
         ok = emitBlockCleanups(outer.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
             outer.temp_depth, nullptr, inner_depth);
         if (ok && !blockHasTerminator(builder.getBlock())) {
+            // the request goes on in the outer handler's code: an exception raised by the release of the return that
+            // it abandons goes to that handler's exception target, where its later handlers are still registered
+            // (bug 380; qore#7022)
+            builder.createCheckException(nullptr)->exception_target = outer.exception_target;
             builder.createBranch(outer_end, nullptr);
         }
     }

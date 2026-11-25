@@ -637,8 +637,8 @@ int sub check(int i) {
     When a debugger requests a break or continue in a handler and a loop or a later handler takes the request,
     the return that ran the handler is abandoned. Its value is released before execution continues. A subsequent
     debugger return gives @ref nothing if there is no pending return. If an enclosing return resumes, it gives its
-    pending data value. A nested return releases an object, or a container that owns an object, at the usual point
-    described above. If its return reference was released, the enclosing return gives @ref nothing.\n\n
+    pending data value. A nested return releases a pending object value, or a container that owns an object, at the
+    usual point described above, when it replaces it, so an enclosing return that resumes then gives @ref nothing.\n\n
     A return in a handler returns from the function, as a return in the block would, also when the block ends
     without a return or is left by a @ref break "break" or @ref continue "continue": the remaining handlers of the
     block run, and a handler that completes normally keeps the value, which the next handler's return replaces.  When

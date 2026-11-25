@@ -352,6 +352,7 @@ public:
             observed = &slot;
             previous = active;
             active = this;
+            qore_pending_return_snapshot_tls = this;
             replaced = false;
         }
     }
@@ -393,23 +394,33 @@ private:
         if (observed) {
             assert(active == this);
             active = previous;
+            qore_pending_return_snapshot_tls = previous;
             observed = nullptr;
         }
     }
 };
 
-thread_local PendingReturnSnapshot* PendingReturnSnapshot::active = nullptr;
+constinit thread_local PendingReturnSnapshot* PendingReturnSnapshot::active = nullptr;
 }
 
-void qore_replacing_return(QoreValue& slot) {
+constinit thread_local void* qore_pending_return_snapshot_tls = nullptr;
+
+void qore_replacing_return_notify(QoreValue& slot) {
     PendingReturnSnapshot::replacing(slot);
+}
+
+void StatementBlock::releaseAbandonedReturn(QoreValue& return_value, ExceptionSink* xsink) {
+    // the snapshots that observe this slot (none in a loop with no pending return: kept for consistency) are told
+    PendingReturnSnapshot::replacing(return_value);
+    ValueHolder abandoned(return_value, xsink);
+    return_value = QoreValue();
 }
 
 int StatementBlock::execLoopBody(QoreValue& return_value, ExceptionSink* xsink, bool takes_continue) {
     return execLoopBody(rc_get_current_ref(), return_value, xsink, takes_continue);
 }
 
-int StatementBlock::execLoopBody(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
+int StatementBlock::execLoopBodyPending(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink,
         bool takes_continue) {
     // A loop inside an exit handler can already have an enclosing return. Restore it when this iteration
     // abandons a different return, before the next iteration or the statement following the loop (#7022).
@@ -478,11 +489,34 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
     // A break or continue from a handler carries its value until it reaches a loop or another
     // handler replaces its request. Keep the return that was pending before that handler (#7022).
     PendingReturnSnapshot before_request(&obe_xsink);
+    // the flow of the handlers before the handler that made a request: a return of a handler that ran before it
+    // resumes with its value when a later handler takes the request, as compiled code resumes it (#7022)
+    int nrc_before_request = 0;
+    // a return of this block, or of one of its handlers, gave the value of the return slot
+    bool own_return = stmt_rc == RC_RETURN;
     bool error = xsink->isException();
     int ast_on_exit_count = 0;
     for (block_list_t::iterator i = popBlock(), e = on_block_exit_list.end(); i != e; ++i) {
         enum obe_type_e type = (*i).first;
-        if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+        auto runs = [&type, &error]() -> bool {
+            return type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error);
+        };
+        if (runs() && (*i).second && (nrc == RC_BREAK || nrc == RC_CONTINUE)) {
+            // this handler takes the request of the handler that ran before it: the return that the request
+            // abandoned is released (#7022), which can run a destructor that throws; its exception is merged as one
+            // of a handler (bug 380), so that it is not in the sink that the handler runs with, and this handler runs
+            // only if it still runs with that exception
+            ExceptionSink restore_xsink;
+            before_request.restore(return_value, &restore_xsink);
+            nrc = nrc_before_request;
+            if (restore_xsink) {
+                xsink->assimilate(restore_xsink);
+                if (!error && xsink->isException()) {
+                    error = true;
+                }
+            }
+        }
+        if (runs()) {
             if ((*i).second) {
                 ast_on_exit_count++;
                 {
@@ -500,16 +534,18 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
                         QoreStatementTempScope temps(&obe_xsink);
                         // a handler that completes normally keeps the return of a handler that ran before it
                         // (#6677), whose value a return in a later handler replaces (#5992); otherwise the block
-                        // takes the request of the last handler run (a debugger's break or continue: #6201)
-                        if (nrc == RC_BREAK || nrc == RC_CONTINUE) {
-                            before_request.restore(return_value, &obe_xsink);
-                        }
+                        // takes the request of the last handler run (a debugger's break or continue: #6201); the
+                        // return that a request abandoned was released above
                         if (std::next(i) != e) {
                             before_request.capture(return_value);
                         }
+                        nrc_before_request = nrc;
                         int hrc = (*i).second->execImpl(rc, return_value, &obe_xsink);
                         if (hrc != RC_BREAK && hrc != RC_CONTINUE) {
                             before_request.reset();
+                        }
+                        if (hrc == RC_RETURN) {
+                            own_return = true;
                         }
                         if (hrc || nrc != RC_RETURN) {
                             nrc = hrc;
@@ -532,6 +568,14 @@ int StatementBlock::execExitHandlers(RuntimeConfig& rc, int stmt_rc, QoreValue& 
                 }
             }
         }
+    }
+    // a request in the last handler run leaves the block with a break or a continue: it abandons the return of the
+    // block or of its handlers, whose value is released here if that can run an object destructor (an object, or a
+    // value that owns one: #5992), when the return is abandoned, as compiled code releases it; other data is
+    // released when a loop or a later handler takes the request (#7022)
+    if ((nrc == RC_BREAK || nrc == RC_CONTINUE) && own_return && qore_return_release_observable(return_value)) {
+        ValueHolder abandoned(return_value, xsink);
+        return_value = QoreValue();
     }
     if (ast_on_exit_count > 0) {
         static constinit QoreLazyValue<bool> debug_on_exit_setting([]() -> bool {

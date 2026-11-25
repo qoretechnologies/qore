@@ -992,6 +992,10 @@ private:
         //! handler around it below this one, ends that try statement, whose return value (none) replaces the value of
         //! the return that runs the handler, as in the AST interpreter (TryStatement::execImpl(), qore#6949)
         int try_depth = 0;
+        //! the exception target of the handler's code (lowerHandlerAtExit()): an exception raised on the code of a request
+        //! that ends the body (the release of a return that the request abandons, qore#7022) goes there before the code
+        //! after the handler drops the handlers still registered (ScopeTrim), so that they run with it (bug 380)
+        QoreIRBasicBlock* exception_target = nullptr;
         //! try_depth at the handler's scope: try_depth less the try statements that the exit running the handler left
         //! (an exit from a try statement in the scope's block); a request that goes on in the handler around it passes
         //! a try statement of that handler's body only if this differs from that handler's try_depth (qore#6949)

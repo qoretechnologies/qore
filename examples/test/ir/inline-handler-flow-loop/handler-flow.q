@@ -1158,6 +1158,135 @@ auto sub unchangedObject(int n) {
     return v instanceof ReturnMarker ? n : -1;
 }
 
+# A handler's own return, a request in a later handler, and a last handler that completes normally: the return
+# of the first handler resumes, also its request (the block does not end normally; #7022)
+auto sub nrcLost(int n) {
+    {
+        on_exit {
+            push log, "last";
+        }
+        on_exit {
+            push log, "mid";                        ### nrc_mid
+        }
+        on_exit {
+            return n;
+        }
+    }
+    push log, "after";
+    return -7;
+}
+
+class ThrowingMarker {
+    destructor() {
+        push log, "throw";
+        throw "MARKER-ERROR", "the destructor threw";
+    }
+}
+
+# The release of an abandoned return runs a destructor that throws: the next handler still runs (bug 380; #7022)
+auto sub dtorThrow(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### dtor_throw
+            }
+            return new ThrowingMarker();
+        }
+    }
+    return -7;
+}
+
+# A handler of an enclosing block in the handler runs after the request abandoned the return and before a later
+# handler of the function takes the request: the order of the abandoned object's release (#7022)
+auto sub abandonTiming(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "between";
+            }
+            {
+                on_exit {
+                    push log, "inner";              ### abandon_timing
+                }
+                return new ReturnMarker();
+            }
+        }
+    }
+    return -7;
+}
+
+# The issue's nested block handlers: a continue at the inner handler, then a return at the outer one (#7022)
+auto sub abandonedNested(int n) {
+    int i = 0;
+    while (i++ < 2) {
+        on_exit {
+            push log, "outer";                      ### abandoned_nested_outer
+        }
+        {
+            on_exit {
+                push log, "inner";                  ### abandoned_nested_inner
+            }
+            if (i == 1) {
+                return n;
+            }
+        }
+    }
+    return -1;
+}
+
+# ... with a try statement in the inner handler
+auto sub abandonedNestedTry(int n) {
+    int i = 0;
+    while (i++ < 2) {
+        on_exit {
+            push log, "outer";                      ### abandoned_try_outer
+        }
+        {
+            on_exit {
+                try {
+                    push log, "inner";              ### abandoned_try_inner
+                } catch (hash<ExceptionInfo> ex) {
+                    push log, ex.err;
+                }
+            }
+            if (i == 1) {
+                return n;
+            }
+        }
+    }
+    return -1;
+}
+
+# The return in the handler is in a try statement, which gives its value to the block (qore_try_give_return())
+auto sub outerPendingTry(int n) {
+    on_exit {
+        push log, "last";
+    }
+    on_exit {
+        {
+            on_exit {
+                push log, "inner";                  ### outer_pending_try
+            }
+            try {
+                return -5;
+            } catch (hash<ExceptionInfo> ex) {
+                push log, ex.err;
+            }
+        }
+    }
+    list<string> parts = ARGV[0].split("/");
+    if (parts.size() == 2) {
+        return pendingData(parts[1], n);
+    }
+    return -7;
+}
+
 const Flows = {"return": DebugFlowReturn, "break": DebugFlowBreak, "continue": DebugFlowContinue};
 string result;
 *FlowDebugger dbg;
