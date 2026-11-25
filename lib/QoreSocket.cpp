@@ -11806,6 +11806,10 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         QoreObject* poll_obj = nullptr;
         // first see if the object inherits AbstractPollableIoObjectBase
         TryPrivateDataRefHolder<AbstractPollableIoObjectBase> io(obj, CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink);
+        // the connection socket of a server is refused to sandboxed code (qore#7338)
+        if (*io && qore_pollable_server_guard(obj, *io, xsink)) {
+            return nullptr;
+        }
         if (*xsink) {
             return nullptr;
         }

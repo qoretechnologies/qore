@@ -3588,6 +3588,14 @@ private:
     DLLLOCAL static QoreObject* getSocketFromPollInfo(QoreHashNode* poll_info, std::string& sock_hash,
         int& events, ExceptionSink* xsink);
 
+    //! Refuses the connection socket of a server in the poll info that an operation's step returned (qore#7338)
+    /** Called on the worker that ran the step, with the submitter's sandbox context applied: the socket and the
+        pollables of the extra descriptors
+
+        @return 0 if allowed, -1 if not (the exception is raised)
+    */
+    DLLLOCAL static int checkPollInfoServerSockets(const QoreHashNode* poll_info, ExceptionSink* xsink);
+
     //! Call continuePoll on an AbstractPollOperation object
     //! Enqueue a continuePoll result from a worker thread back to the I/O thread
     /** @param key the operation key
