@@ -577,9 +577,8 @@ int ConstantEntry::parseInit(ClassNs ptr) {
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
             if (res == QTI_NOT_EQUAL && qore_program_ops(pgm).getParseExceptionSink()) {
                 QoreStringNode* edesc = new QoreStringNodeMaker("constant '%s' declared as ", name.c_str());
-                QoreTypeInfo::getThisType(declaredTypeInfo, *edesc);
-                edesc->concat(", but initializer expression is ");
-                QoreTypeInfo::getThisType(exprTypeInfo, *edesc);
+                QoreTypeInfo::describeTypeComparison(*edesc, declaredTypeInfo, ", but initializer expression is ",
+                    exprTypeInfo);
                 qore_program_private::makeParseException(pgm, *loc, "PARSE-TYPE-ERROR", edesc);
                 err = -1;
             }

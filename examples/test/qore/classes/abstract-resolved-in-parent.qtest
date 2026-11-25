@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved when parsing
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractResolvedInParentTest
+
+#! a qcc executable resolves the abstract methods of a class whose parent class implements them as the interpreter
+#! does (qore#7219)
+/** In X5 inherits A, D2 (A inherits C, whose private m() overrides R::m(); D2 inherits Abs2, which declares m()
+    abstract, and P, whose public m() implements it for D2), the image loader of a qcc executable imported Abs2's
+    abstract m() into X5 from D2 before D2 had resolved it, and then implemented it again in X5 with the first concrete
+    variant of X5's hierarchy, C's private one: calls resolved at run time called C::m() from P's code (or raised
+    METHOD-IS-PRIVATE from outside) where the interpreter calls P::m() (qore#7206 fixed the interpreter's order).  The
+    loader now drops the imported abstract variants that the parent classes have resolved, as
+    qore_class_private::parseResolveAbstract() does.  The output of every execution mode and of qcc executables (-O0,
+    -O3) must be the expected one.
+
+    The program is in \c abstract-resolved-in-parent/.
+*/
+class AbstractResolvedInParentTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-resolved-in-parent";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractResolvedInParentTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        TmpDir tmp("qore-abstract-resolved-in-parent-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

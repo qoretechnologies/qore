@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# a module whose class declares its methods in an order that differs from the order of their names (qore#7169)
+
+%modern
+
+module MethodOrderMod {
+    version = "1.0";
+    desc = "method declaration order test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace MethodOrderMod {
+public class Ordered {
+    constructor() {}
+
+    nz() {}
+    na() {}
+
+    static string sz() {
+        return "sz";
+    }
+    static sa() {}
+    static sm() {}
+
+    nm() {}
+}
+}

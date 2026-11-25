@@ -10,6 +10,8 @@
 %requires QUnit
 %requires AsyncSocketIo
 %requires HttpClientIo
+# AwsEventStream is an AWS module: credentials are removed unless live calls are enabled
+%requires ../../LiveProviderTest.qm
 %requires AwsEventStream
 
 %exec-class AwsEventStreamQueueTest
@@ -314,6 +316,10 @@ class AwsEventStreamQueueTest inherits QUnit::Test {
     }
 
     #! an initial body given as a string is taken as its bytes
+    /** The binding of installEventStreamState() gives the decoder a string node also for a short string, so these
+        cases do not reach the inline short string path (issue #7038) that the decoder handles as SseAction does;
+        examples/test/runner/test_short_string_access.py checks that
+    */
     stringInitialBodyTest() {
         # shorter than a prelude
         foreach string initial in (("abc", strmul("x", 11))) {

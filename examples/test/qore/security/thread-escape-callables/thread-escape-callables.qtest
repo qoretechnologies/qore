@@ -30,9 +30,8 @@
     the arguments of the call (qore#7087).  Restricted code that the expression calls itself but computes in the new
     thread (an element of a list, a member of a hash, a global variable, the code that call_function() calls, the
     override that a call of a method of the module's object dispatches to) is refused when it is called: the thread
-    ends with the refusal, which the test counts on stderr.  The helper module is loaded from its source in every
-    case; the code of a module compiled with qcc does not give the callee of such a call yet, and refuses every
-    closure, call reference and object of restricted code that the expression takes when the thread starts
+    ends with the refusal, which the test counts on stderr.  The helper module is loaded from its source, and compiled
+    with qcc, whose native code and serialized IR give the callee of each background expression as the other modes do
     (qore#7087).
 */
 class ThreadEscapeCallablesTest inherits QUnit::Test {
@@ -151,11 +150,8 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
         checkRun(r, Expected, "tiered --jit-ir-threshold=1");
     }
 
-    # the helper module compiled with qcc: its code does not give the callee of a background expression whose
-    # arguments or callee the new thread computes, and its closures are built from serialized IR, which does not
-    # record it either: every closure, call reference and object of the restricted code that such an expression takes
-    # is refused when the thread starts, also one that is only an argument of a call of the module's own code
-    # (qore#7087)
+    # the helper module compiled with qcc: its native code and the serialized IR of its closures give the callee of
+    # each background expression, so that its results are those of the module loaded from its source (qore#7087)
     aotModuleTest() {
         if (!is_file(qcc_bin)) {
             testSkip("qcc is not available at " + qcc_bin);
@@ -165,25 +161,12 @@ class ThreadEscapeCallablesTest inherits QUnit::Test {
         string out = backquote(sprintf("%s %s -m -o %s %s/ThreadEscapeHelper.qm 2>&1", env, qcc_bin, qmod,
             get_script_dir()));
         assertTrue(is_file(qmod), "qcc compiles the helper module: " + out);
-        string expected = replace(Expected, "module background, module function with a closure argument: ran\n",
-            "module background, module function with a closure argument: PERMISSION-DENIED\n");
-        # an expression that takes the closure or the object of the restricted code as a value when the thread starts
-        # is refused then, by the same check: the code that the expression calls is checked when it is called only if
-        # it is not such a value (an element of a list, a member of a hash, a global or static variable, the
-        # override that a call of a method of the module's object dispatches to)
-        foreach string probe in (("computed callee: null coalescing", "computed callee: conditional",
-                "computed callee: call result", "computed callee: call_function", "computed callee: call_function_args",
-                "computed object: method reference", "computed object: call_object_method",
-                "computed object: call_object_method_args", "thread resource")) {
-            expected = replace(expected, "module background, " + probe + ": not run\n",
-                "module background, " + probe + ": PERMISSION-DENIED\n");
-        }
         foreach string mode in (("ir", "jit")) {
             hash<ExecModeHarness::ModeRunResult> r =
                 ExecModeHarness::run_command(sprintf("THREAD_ESCAPE_HELPER=%s %s %s --exec-mode=%s %s",
                 qmod, env, qore_bin, mode, scriptPath()));
             ExecModeHarness::check_native(r);
-            checkRun(r, expected, "AOT helper module, " + mode);
+            checkRun(r, Expected, "AOT helper module, " + mode);
         }
     }
 
