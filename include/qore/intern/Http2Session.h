@@ -1571,7 +1571,8 @@ private:
     /** A body whose END_STREAM frame has not been serialized has its stream reset and its buffered data released; it
         stays bounded until the RST_STREAM frame has been written.  The frame that ends a body whose END_STREAM or
         RST_STREAM frame has been serialized is in the connection's send buffer, which only ending the connection
-        frees: an HTTP2-SEND-BOUND-ERROR exception is raised, which ends the connection's operation
+        frees: an HTTP2-SEND-BOUND-ERROR exception is raised, which ends the connection's operation; so it is when the
+        RST_STREAM frame cannot be submitted, as the body's data is not released without it
     */
     DLLLOCAL void endBoundBody(int32_t stream_id, const char* reason, ExceptionSink* xsink);
 
