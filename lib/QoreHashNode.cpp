@@ -160,6 +160,17 @@ void qore_hash_private::freeMembersOutOfLine(ExceptionSink* xsink) {
     freeMembers(xsink);
 }
 
+#ifdef DEBUG
+std::atomic<qore_dbg_hash_release_step_hook_t> qore_dbg_hash_release_step_hook{nullptr};
+
+void qore_hash_private::dbgReleaseStep() {
+    assert(releasing);
+    if (qore_dbg_hash_release_step_hook_t hook = qore_dbg_hash_release_step_hook.load()) {
+        hook(this);
+    }
+}
+#endif
+
 bool qore_hash_private::freeRunsNoCode(const QoreValue& v) {
     if (!v.hasNode()) {
         return true;
@@ -1559,6 +1570,11 @@ bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
         }
 #endif
     }
+#ifdef DEBUG
+    // no code can access the members until the release ends in finishFreeMembers(), on both paths: freeMembers() or
+    // freeNextMember() from free_nested_containers(), which can run in the constructor of the helper (qore#7569)
+    priv->releasing = true;
+#endif
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
         priv->freeMembers(xsink);
@@ -1792,11 +1808,19 @@ QoreStringNode* HashIterator::getKeyStringNode() const {
 }
 
 bool HashIterator::next() {
-    return h ? priv->next(h->priv->member_list) : false;
+    if (!h) {
+        return false;
+    }
+    h->priv->assertNotReleasing();
+    return priv->next(h->priv->member_list);
 }
 
 bool HashIterator::prev() {
-    return h ? priv->prev(h->priv->member_list) : false;
+    if (!h) {
+        return false;
+    }
+    h->priv->assertNotReleasing();
+    return priv->prev(h->priv->member_list);
 }
 
 const char* HashIterator::getKey() const {
@@ -1954,11 +1978,19 @@ QoreStringNode* ConstHashIterator::getKeyStringNode() const {
 }
 
 bool ConstHashIterator::next() {
-   return h ? priv->next(h->priv->member_list) : false;
+    if (!h) {
+        return false;
+    }
+    h->priv->assertNotReleasing();
+    return priv->next(h->priv->member_list);
 }
 
 bool ConstHashIterator::prev() {
-   return h ? priv->prev(h->priv->member_list) : false;
+    if (!h) {
+        return false;
+    }
+    h->priv->assertNotReleasing();
+    return priv->prev(h->priv->member_list);
 }
 
 const char* ConstHashIterator::getKey() const {
