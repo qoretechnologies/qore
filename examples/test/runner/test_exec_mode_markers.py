@@ -432,6 +432,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/diagnostics/exception-report-limit.qtest",
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/threads/fork-child-signal-thread.qtest",
                                  "examples/test/qore/threads/frame-check-qcc-o3.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
                                  "examples/test/qore/functions/number-round-exact.qtest",

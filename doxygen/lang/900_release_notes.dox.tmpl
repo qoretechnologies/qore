@@ -2957,6 +2957,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a child process that a thread other than the main thread created with @ref fork() "fork()" ends when its last
+      thread that %Qore started ends; the signal handling thread and the library's other helper threads kept it
+      running (<a href="https://github.com/qoretechnologies/qore/issues/7613">issue 7613</a>)
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)

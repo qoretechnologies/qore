@@ -11465,7 +11465,13 @@ bool qore_dbg_process_end_cbs_wait_waiter(void* cbs, int64 timeout_ms) {
 }
 #endif
 
-void qore_exit_process(int rc) {
+//! ends the process
+/** @param rc the exit status
+    @param last_thread true if called after the release of the TID of the last thread that runs Qore code in a child
+    process that has no main thread (qore_fork_child_threads_ended()): the calling thread has no TID and its thread
+    data are deleted, and its own share of the thread counters is not waited for
+*/
+static void qore_exit_process_intern(int rc, bool last_thread) {
     qore_exiting.store(true, std::memory_order_relaxed);
 
     // call exit() in a single-threaded process; flushes file buffers, etc
@@ -11476,9 +11482,17 @@ void qore_exit_process(int rc) {
     // External workers remain in tp_thread_counter until their native join,
     // including TLS destruction after releasing their Qore TID. Do not wait for
     // them here: exit() can be called by a worker or while its cleanup is blocked.
-    bool single_threaded = thread_list.getNumThreads() <= 1
+    if (last_thread && qore_tp_thread_counter_share) {
+        // the calling thread, which has external lifecycle management, does not reach the end of its thread, where
+        // the reaper would release its count after joining it (ExternalThreadReaper::complete()): released here
+        qore_counter_ops(tp_thread_counter).dec();
+        qore_tp_thread_counter_share = 0;
+    }
+    // the last thread of a child process without a main thread has released its TID (qore#7613): it is not the signal
+    // thread, and it is the only thread left that ran Qore code
+    bool single_threaded = thread_list.getNumThreads() <= (last_thread ? 0u : 1u)
 #ifdef HAVE_SIGNAL_HANDLING
-        && q_gettid() > 0
+        && (last_thread || q_gettid() > 0)
 #endif
         && !tp_thread_counter.getCount()
         && !qore_exit_wait_finishing_threads();
@@ -11491,6 +11505,10 @@ void qore_exit_process(int rc) {
         // static destruction and access the destroyed manager mutex unless it has been joined.
         // A running callback can depend on this thread, so it requires immediate process exit.
         if (!QSM.stopForExit()) {
+            if (last_thread) {
+                // as below
+                fflush(nullptr);
+            }
             _Exit(rc);
         }
 #endif
@@ -11518,7 +11536,16 @@ void qore_exit_process(int rc) {
     }
     // do not call exit here since it will try to execute cleanup, which will cause crashes
     // in multithreaded programs; call _Exit() instead
+    if (last_thread) {
+        // no thread that runs Qore code is left to write to the streams: their buffers are written as when the last
+        // thread of the process ends
+        fflush(nullptr);
+    }
     _Exit(rc);
+}
+
+void qore_exit_process(int rc) {
+    qore_exit_process_intern(rc, false);
 }
 
 #ifdef DEBUG
@@ -11798,7 +11825,7 @@ int q_deregister_foreign_thread() {
     assert(xsink.isException() || !td->active_exceptions);
 
     // delete internal thread data structure and release TID entry
-    thread_list.deleteDataRelease(tid);
+    thread_list.deleteDataRelease(tid, true);
 
     qore_thread_cleanup();
 
@@ -12002,7 +12029,8 @@ public:
             return false;
         }
         AutoLocker al(mutex);
-        if (!started || stopping) {
+        // the record of the thread that called fork() is used whether or not the reaper runs (see isForkThreadLocked())
+        if (isForkThreadLocked() || !started || stopping) {
             delete t;
             return false;
         }
@@ -12030,7 +12058,9 @@ public:
         arg->native_id = pthread_self();
         {
             AutoLocker al(mutex);
-            if (started) {
+            // the record of the thread that called fork() is used whether or not the reaper runs (see
+            // isForkThreadLocked())
+            if (!isForkThreadLocked() && started) {
                 assert(!stopping && !arg->next);
                 if (tail) {
                     tail->next = arg;
@@ -12045,8 +12075,10 @@ public:
         // the thread started before a fork() that it made, and ends in the child, where the reaper of the parent
         // does not exist (see forkChild()) and no thread can join it: it detaches itself and releases what the reaper
         // would have released after joining it (qore#7579); a reaper is not started for it, as it would keep the child
-        // alive after its last thread has ended.  The count is released before the thread's thread-local destructors
-        // run, as in completeCounted()
+        // alive after its last thread has ended.  It does so also when a thread of the child started a reaper, which
+        // cannot join it (see isForkThreadLocked()).  The count is released before the thread's thread-local
+        // destructors run, as in completeCounted(): exit() does not wait for them (issue #6412), which cannot be
+        // avoided for a thread that no thread can join
         assert(forked);
         pthread_detach(pthread_self());
         delete arg;
@@ -12105,6 +12137,9 @@ public:
     void forkChild() {
         started = stopping = false;
         forked = true;
+        // called in the thread that called fork() (see isForkThreadLocked())
+        fork_thread = pthread_self();
+        fork_thread_set = true;
         // the reapers do not exist in the child
         reapers.clear();
         ended.clear();
@@ -12117,6 +12152,26 @@ public:
     }
 
 private:
+    //! in a child process, the thread that called fork() (see isForkThreadLocked())
+    pthread_t fork_thread{};
+    //! true until the thread that called fork() has ended (see isForkThreadLocked())
+    bool fork_thread_set = false;
+
+    //! returns true in a child process for the thread that called fork(), which no other thread can join (qore#7613)
+    /** That thread is the child's thread-group leader: on Linux (glibc 2.43, kernel 7.0), pthread_join() of it does not
+        return after it has ended while other threads of the child run, so a reaper would wait for it for ever and
+        keep its count in thread_counter, which exit() waits for.  It detaches itself instead.  The record is used
+        once, by that thread as it ends, so that a later thread that gets its pthread_t (where a platform reuses them)
+        is joined.
+    */
+    bool isForkThreadLocked() {
+        if (forked && fork_thread_set && pthread_equal(pthread_self(), fork_thread)) {
+            fork_thread_set = false;
+            return true;
+        }
+        return false;
+    }
+
     //! a thread counted in thread_counter that is waiting to be joined
     struct CountedThread {
         pthread_t native_id;
@@ -13739,7 +13794,7 @@ void QoreThreadList::deleteData(int tid) {
     thread_data.set(nullptr);
 }
 
-void QoreThreadList::deleteDataRelease(int tid) {
+void QoreThreadList::deleteDataRelease(int tid, bool foreign) {
     // the thread's releases from here on take the locking path: its TID's slot can be given to a new thread
     qore_robject_hazard_unregister();
     {
@@ -13751,11 +13806,15 @@ void QoreThreadList::deleteDataRelease(int tid) {
     delete thread_data.get();
     thread_data.set(nullptr);
 
+    bool last;
     {
         AutoLocker al(lck);
-        releaseIntern(tid);
+        last = releaseIntern(tid, !foreign);
     }
     notifyJoiners();
+    if (last) {
+        afterLastRelease();
+    }
 }
 
 int QoreThreadList::joinThread(int tid, int64 timeout_ms, ExceptionSink* xsink) {
@@ -14370,6 +14429,10 @@ void QoreThreadList::forkChild(int tid) {
         }
     }
     num_threads = (tid > 0 && !entry[tid].available()) ? 1 : 0;
+    // the main thread ends the process when it ends; a child that another thread created has no main thread and ends
+    // when its last thread that runs Qore code ends (qore#7613)
+    fork_child_without_main = fork_thread_not_main;
+    fork_child_ending.store(false, std::memory_order_relaxed);
     // held by this thread since forkPrepare(): released, so that the release is seen (by ThreadSanitizer, which
     // otherwise considers it held by this thread for the rest of the child's life; issue #6817), as
     // QoreForkThreadLock::child() does
@@ -14382,6 +14445,18 @@ void QoreThreadList::forkChild(int tid) {
     dbg_wait_lck.reinitAfterFork();
     qore_condition_ops(dbg_wait_cond).reinitAfterFork();
 #endif
+}
+
+void qore_fork_child_threads_ended() {
+    // as with exit() in a process whose only thread runs Qore code
+    qore_exit_process_intern(0, true);
+}
+
+bool qore_fork_thread_is_not_main(bool process_without_main) {
+    ThreadData* td = thread_data.get();
+    // a foreign thread goes on with the code of the application that it belongs to; the main thread is the thread that
+    // initialized the library, which its application (the qore binary, an embedding application) ends the process in
+    return td && td->tid > 0 && !td->foreign && (process_without_main || td->tid != initial_thread);
 }
 
 int qore_fork_get_tid() {
