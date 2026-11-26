@@ -110,6 +110,7 @@ static_assert(QORE_IR_MAX_OPCODE == 443,
 #include <qore/intern/QoreRemoveOperatorNode.h>
 #include <qore/intern/QoreDeleteOperatorNode.h>
 
+
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
 extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
@@ -174,14 +175,14 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
 
 static bool qore_ir_try_safe_value_no_arg_pseudo_fast_path(bool pseudo, bool base_safe_value_dispatch,
         QoreIRIntrinsic intrinsic, const QoreValue& base, int nargs, QoreValue& res) {
-    if (!pseudo || !base_safe_value_dispatch || nargs) {
+    // the intrinsic is tested before the argument count: in QoreIRInterpreter::execute(), into which this is inlined,
+    // the intrinsic is in a register and the argument count can be spilled to the stack; written in this order, the
+    // common case (another intrinsic) is decided without reloading the argument count (qore#7272)
+    if (!pseudo || !base_safe_value_dispatch || intrinsic != QoreIRIntrinsic::ToNumber || nargs) {
         return false;
     }
-    if (intrinsic == QoreIRIntrinsic::ToNumber) {
-        res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
-        return true;
-    }
-    return false;
+    res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
+    return true;
 }
 
 static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_string,
@@ -232,6 +233,33 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
     return false;
 }
 
+//! the type of the target of a weak reference of type \a t, or \a t for a value of any other type
+static QORE_INTERN_ALWAYS_INLINE qore_type_t qore_ir_pseudo_weak_target_type(qore_type_t t) {
+    switch (t) {
+        case NT_WEAKREF:
+            return NT_OBJECT;
+        case NT_WEAKREF_HASH:
+            return NT_HASH;
+        case NT_WEAKREF_LIST:
+            return NT_LIST;
+        default:
+            return t;
+    }
+}
+
+//! the type name of the target of a weak reference of type \a t
+static const char* qore_ir_pseudo_weak_target_type_name(qore_type_t t) {
+    switch (t) {
+        case NT_WEAKREF:
+            return "object";
+        case NT_WEAKREF_HASH:
+            return "hash";
+        default:
+            assert(t == NT_WEAKREF_LIST);
+            return "list";
+    }
+}
+
 static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic,
         const QoreValue& base, int nargs, QoreValue& res) {
     if (nargs) {
@@ -240,10 +268,16 @@ static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic
 
     qore_type_t base_type = base.getType();
     switch (intrinsic) {
+        // the pseudo-methods of a weak reference are those of its target, as the call gives them the target
+        // (qore#7363): its type is the type of the target
         case QoreIRIntrinsic::TypeCode:
-            res = QoreValue(static_cast<int64_t>(base_type));
+            res = QoreValue(static_cast<int64_t>(qore_ir_pseudo_weak_target_type(base_type)));
             return true;
         case QoreIRIntrinsic::Type:
+            if (base_type != qore_ir_pseudo_weak_target_type(base_type)) [[unlikely]] {
+                res = QoreValue::makeStringValue(qore_ir_pseudo_weak_target_type_name(base_type));
+                return true;
+            }
             res = QoreValue::makeStringValue(base.getTypeName());
             return true;
         case QoreIRIntrinsic::Size:
@@ -387,7 +421,7 @@ static QoreHashNode* makeImplicitHashForLValueType(const QoreTypeInfo* typeInfo,
         return new QoreHashNode(sti);
     }
 
-    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
+    const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(qore_get_value_type(typeInfo));
     if (thd) {
         QoreStringNode* desc = new QoreStringNodeMaker("Cannot implicitly create typed hash '%s' "
             "with an assignment; to address this error, declare the typed hash before the assignment",
@@ -504,6 +538,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
 static constinit QoreEnvFlag ir_trace_bg_fallback_env("QORE_IR_TRACE_BG_FALLBACK");
@@ -619,7 +654,6 @@ static QoreValue evalAndRef(QoreValue& val, ExceptionSink* xsink) {
     }
     return evalAndRef(val.getInternalNode(), xsink);
 }
-
 
 static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     if (value.getType() == NT_LIST) {
@@ -3297,7 +3331,8 @@ static QoreValue assignGlobalVarValueStored(Var* var, const QoreValue& value, Ex
         return QoreValue();
     }
     // the value of a weak or opaque assignment is read while the helper keeps a container that the variable's type
-    // converted to a copy of its own (qore#7084)
+    // made of the value (the converted copy that an opaque reference owns, or the list that a softlist variable makes
+    // of a value that is not a list; qore#7084, qore#7237)
     QoreValue rv = helper.getReferencedValue();
     if (mode == AssignmentMode::Weak || mode == AssignmentMode::Opaque) {
         evaluateOwnedWeakReferenceResult(rv, xsink);
@@ -3331,7 +3366,6 @@ static void assignObjectMemberValue(QoreObject* obj, const char* key, const Qore
     QoreValue stored = value.needsRef() ? value.refSelf() : value;
     helper.assign(stored);
 }
-
 
 static void updateLocalVarFromLvalue(
         IRLocalVarSet& instantiated_locals,
@@ -6781,6 +6815,22 @@ private:
     QoreProgramLocationHelper loc_helper;
 };
 
+//! Runs the body of a plain function that an inline call of the IR interpreter runs in another Program with the call
+//! Program context of that Program (qore#7394)
+/** Out of line, so that the frames of the inline calls within one Program, such as the levels of a recursion, hold
+    neither the helper nor its code; the helper restores the caller's call Program context on every exit
+*/
+static QORE_INTERN_NOINLINE bool qore_ir_execute_inline_body_in_call_program_context(QoreProgram* exec_pgm,
+        const QoreIRFunction* callee_ir, QoreValue& ir_return_value, ExceptionSink* xsink, const UserVariantBase* uvb,
+        const IRDirectParams* direct_params) {
+    // the caller runs the body here only when the call entered another Program (exec_pgm is not the caller's); six
+    // arguments, so that the frame of the inline call passes none on the stack; the thread data is looked up here
+    QoreFunctionCallProgramContextHelper call_ctx(exec_pgm, nullptr);
+    return QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+        nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+        nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+}
+
 //! Runs a plain function inline in the interpreter, if it can
 /** @param thread_data the current thread's data (RuntimeLocationCache::thread_data), for the switch of the object and
     class context (CalleeContextHelper)
@@ -6888,9 +6938,14 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         if (inst->cached_switches_context) {
             callee_context.emplace(thread_data);
         }
-        ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
-            nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-            nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
+        // the body of a plain function that the call runs in another Program runs with that Program's call Program
+        // context, out of line (qore#7394); a call within one Program keeps the caller's, which is that Program's
+        ok = __builtin_expect(exec_pgm && exec_pgm != caller_pgm, 0)
+            ? qore_ir_execute_inline_body_in_call_program_context(exec_pgm, callee_ir, ir_return_value, xsink, uvb,
+                direct_params)
+            : QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
+                nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
+                nullptr, uvb->getDebugEntryStatementBlock(), exec_pgm, false, direct_params);
         if (ok && !(xsink && *xsink)) {
             acceptInterpreterIRReturnType(sig, inst->cached_return_type, nullptr, ir_return_value, xsink);
         }
@@ -10350,9 +10405,11 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
             ? direct_inst->fallback_method_name
             : (direct_inst->method ? direct_inst->method->getName() : nullptr);
         bool inline_may_invalidate_external_caches = true;
+        // the inline IR path is the common one: its block is placed on the straight path of the instruction
+        // (qore#7272: without the hint, GCC placed it out of line, with a jump back, after an unrelated change)
         if (mname && tryExecuteInterpreterInlineIRDotEvalMethod<GIVEN>(direct_inst, base, mname,
                 explicit_inst, pgm, nanboxed_args, nargs, res, xsink,
-                &inline_may_invalidate_external_caches, given.get())) {
+                &inline_may_invalidate_external_caches, given.get())) [[likely]] {
             // Result produced by the inline IR path.
             called_external = inline_may_invalidate_external_caches;
         } else if (direct_inst->method && direct_inst->qc) {
@@ -10826,6 +10883,15 @@ static QORE_INTERN_NOINLINE int qore_ir_run_lvalue_path_ternary(const QoreIRLVal
         // a vivifying navigation fails only with an exception
         assert(*xsink);
         return -1;
+    }
+    // a weak reference to a list: its list is changed; a value removed or inserted that needs a scan starts the scan
+    // of the lvalue's object (qore#7297)
+    if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+        return -1;
+    }
+    if (lvh.getType() == NT_LIST) {
+        lvh.changedScannedValue(lvh.getValue());
+        lvh.changedScannedValue(replacement_val);
     }
     qore_type_t vt = lvh.getType();
     if (vt == NT_NOTHING) {
@@ -15531,10 +15597,14 @@ load_local_done:
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
-                            if (QoreTypeInfo::hasType(vti)
-                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                                QoreTypeInfo::acceptAssignment(vti,
-                                    "<lvalue>", entry, xsink, QLVTS_List);
+                            // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+                            // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+                            if (QoreTypeInfo::hasType(vti)) {
+                                if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                    QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+                                }
+                            } else if (entry.isPointer()) {
+                                strip_untyped_list_element(vti, entry, xsink);
                             }
                             if (xsink && *xsink) {
                                 entry.discard(xsink);
@@ -15596,10 +15666,14 @@ load_local_done:
                         {
                             const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
-                            if (QoreTypeInfo::hasType(vti)
-                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                                QoreTypeInfo::acceptAssignment(vti,
-                                    "<lvalue>", entry, xsink, QLVTS_List);
+                            // an untyped element (list, softlist, list<any>) strips the complex type of a container,
+                            // as the AST interpreter's assignment does (QoreTypeInfo::acceptAssignment(), qore#7573)
+                            if (QoreTypeInfo::hasType(vti)) {
+                                if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                    QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+                                }
+                            } else if (entry.isPointer()) {
+                                strip_untyped_list_element(vti, entry, xsink);
                             }
                             if (!(xsink && *xsink)) {
                                 new_l->setEntry(index, entry, xsink);
@@ -20375,7 +20449,7 @@ load_local_done:
                     } else if (path_inst->result.isValid()) {
                         res = lvh.getReferencedValue();
                         // the value of a weak or opaque assignment is the value assigned, converted to the lvalue's
-                        // type, read while the helper keeps a container that the conversion copied (qore#7122)
+                        // type, read while the helper keeps a container that the conversion made (qore#7122, qore#7237)
                         if (path_inst->mode == AssignmentMode::Weak || path_inst->mode == AssignmentMode::Opaque) {
                             evaluateOwnedWeakReferenceResult(res, xsink);
                         }
@@ -20569,6 +20643,10 @@ load_local_done:
                     if (o->isSystemObject()) {
                         xsink->raiseException("SYSTEM-OBJECT-ERROR",
                             "cannot delete a system constant object (class '%s')", o->getClassName());
+                        return;
+                    }
+                    // sandboxed code cannot delete a shared object (qore#6843)
+                    if (qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
                         return;
                     }
                     o->doDelete(xsink);
@@ -20823,7 +20901,8 @@ load_local_done:
                                 if (o->isSystemObject()) {
                                     xsink->raiseException("SYSTEM-OBJECT-ERROR",
                                         "cannot delete a system constant object (class '%s')", o->getClassName());
-                                } else {
+                                } else if (!qore_object_private::get(*o)->checkSharedChange(nullptr, xsink, true)) {
+                                    // sandboxed code cannot delete a shared object (qore#6843)
                                     o->doDelete(xsink);
                                 }
                             }
@@ -20849,6 +20928,10 @@ load_local_done:
                             || path_inst->unary_op == LVUnaryOp::Trim
                             || path_inst->unary_op == LVUnaryOp::Chomp
                             || path_inst->unary_op == LVUnaryOp::EnsureUnique);
+                        if (path_inst->unary_op == LVUnaryOp::EnsureUnique
+                                && qore_try_read_unique_weak_path(path_copy.data(), path_copy.size(), res)) {
+                            return 0;
+                        }
                         LValueHelper lvh(xsink);
                         // the source of a weak assignment is read as an rvalue reads it (qore#7242)
                         if (path_inst->unary_op == LVUnaryOp::EnsureUnique) {
@@ -20889,6 +20972,10 @@ load_local_done:
                                 break;
                             }
                             case LVUnaryOp::Shift: {
+                                // a weak reference to a list: its list is changed (qore#7297)
+                                if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+                                    break;
+                                }
                                 if (lvh.getType() != NT_LIST) {
                                     // matches QoreShiftOperatorNode::evalImpl()
                                     if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
@@ -20901,12 +20988,17 @@ load_local_done:
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                 if (l && l->size() > 0) {
                                     res = l->shift();
+                                    lvh.changedScannedValue(res);
                                     // a value taken out of a list reached through a weak reference (qore#7373)
                                     lvh.removedValueThroughWeak(res);
                                 }
                                 break;
                             }
                             case LVUnaryOp::Pop: {
+                                // a weak reference to a list: its list is changed (qore#7297)
+                                if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+                                    break;
+                                }
                                 if (lvh.getType() != NT_LIST) {
                                     // matches QorePopOperatorNode::evalImpl()
                                     if (lvh.getType() != NT_NOTHING && qore_compiled_code_strict_args()) {
@@ -20919,12 +21011,17 @@ load_local_done:
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
                                 if (l && l->size() > 0) {
                                     res = l->pop();
+                                    lvh.changedScannedValue(res);
                                     // a value taken out of a list reached through a weak reference (qore#7373)
                                     lvh.removedValueThroughWeak(res);
                                 }
                                 break;
                             }
                             case LVUnaryOp::Trim: {
+                                // a weak reference to a list or a hash: its container is changed (qore#7297)
+                                if (lvh.viewWeakContainer()) {
+                                    return -1;
+                                }
                                 qore_type_t vtype = lvh.getType();
                                 // a string enum lvalue, and a container whose type refuses a plain string in the
                                 // place of an enum element, refuse the plain strings that the operation leaves, as
@@ -20967,7 +21064,7 @@ load_local_done:
                                         HashIterator hi(h);
                                         while (hi.next()) {
                                             if (hi.get().getType() == NT_STRING) {
-                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                                 ensure_unique(v, xsink);
                                                 if (v.get<QoreStringNode>()->trim(xsink)) {
                                                     return -1;
@@ -20980,6 +21077,10 @@ load_local_done:
                                 break;
                             }
                             case LVUnaryOp::Chomp: {
+                                // a weak reference to a list or a hash: its container is changed (qore#7297)
+                                if (lvh.viewWeakContainer()) {
+                                    return -1;
+                                }
                                 qore_type_t vtype = lvh.getType();
                                 // see LVUnaryOp::Trim (QoreChompOperatorNode::evalImpl(), qore#6195)
                                 if (vtype == NT_STRING) {
@@ -21022,7 +21123,7 @@ load_local_done:
                                         HashIterator hi(h);
                                         while (hi.next()) {
                                             if (hi.get().getType() == NT_STRING) {
-                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                QoreValue& v = qhi_priv::get(hi)->i->val;
                                                 ensure_unique(v, xsink);
                                                 if (*xsink) {
                                                     return -1;
@@ -21151,6 +21252,10 @@ load_local_done:
                         switch (path_inst->binary_mut_op) {
                             case LVBinaryMutOp::Push:
                             case LVBinaryMutOp::Unshift: {
+                                // a weak reference to a list: its list is changed (qore#7297)
+                                if (lvh.getType() == NT_WEAKREF_LIST && lvh.viewWeakContainer()) {
+                                    break;
+                                }
                                 // Auto-vivify NOTHING to empty list
                                 if (lvh.getType() == NT_NOTHING) {
                                     const QoreTypeInfo* vti = lvh.getTypeInfo();
@@ -21177,6 +21282,7 @@ load_local_done:
                                 }
                                 lvh.ensureUnique();
                                 QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                lvh.changedScannedValue(*rhs_holder);
                                 // the list takes the reference held for the value
                                 if (path_inst->binary_mut_op == LVBinaryMutOp::Push) {
                                     qore_list_private::pushCanonical(*l, rhs_holder.release(), xsink);
@@ -21786,7 +21892,10 @@ load_local_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir;
-                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) {
+                    // a call that gives its temporary arguments is the uncommon one: the common call stays on the
+                    // straight path of the instruction (qore#7272: without the hint, GCC placed it out of line, with a
+                    // jump back, after an unrelated change)
+                    if (inst->interpreter_gives_call_args && hasConsumedCallArgs(inst)) [[unlikely]] {
                         // the references of the temporary arguments are given to the call, which releases them in the
                         // callee's frame, as the AST interpreter moves its argument list into the parameters
                         used_inline_ir = irCallStaticDirectGiven(IRConsumedCallArgs{values, cleanup, consumed_call_args,
@@ -24784,33 +24893,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             return QoreValue();
         }
         case QoreIROpcode::ListIndexDynamic: {
-            // Dynamic list/container index: container[index]
-            qore_type_t bt = left.getType();
-            if (bt == NT_LIST || bt == NT_STRING || bt == NT_BINARY || bt == NT_BUFFER
-                    || right.getType() == NT_LIST) {
-                QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
-                    qore_compiled_code_negative_offsets(), xsink);
-                if (bt == NT_LIST && !(xsink && *xsink)) {
-                    evaluateOwnedListElement(out, xsink);
-                }
-                return out;
+            QoreValue out = QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, true,
+                qore_compiled_code_negative_offsets(), xsink);
+            if (left.getType() == NT_LIST && !(xsink && *xsink)) {
+                evaluateOwnedListElement(out, xsink);
             }
-            if (bt == NT_HASH) {
-                // hash[key] is equivalent to hash{key}
-                const QoreHashNode* h = left.get<const QoreHashNode>();
-                QoreHashKeyHelper kstr(right, xsink);
-                if (*xsink) {
-                    return QoreValue();
-                }
-                QoreValue result = h->getKeyValue(kstr.c_str(), xsink);
-                if (xsink && *xsink) {
-                    return QoreValue();
-                }
-                QoreValue out = result.refSelf();
-                evaluateOwnedWeakReferenceResult(out, xsink);
-                return out;
-            }
-            return QoreValue();
+            return out;
         }
         default:
             break;
@@ -25097,6 +25185,86 @@ static QoreValue qore_union_int_arith(int64 i, const QoreValue& right, bool minu
     return minus ? l->doMinus(**r) : l->doPlus(**r);
 }
 
+//! += on an lvalue that holds a weak reference to an object: a hash or an object operand is merged into the object, as
+//! through the object itself, and the lvalue keeps the weak reference (qore#7403)
+/** Any other operand leaves the object unchanged, as through a strong reference.  The lvalue's storage is not changed
+    and is not read again (LValueHelper::leaveUnchangedLValue()); the merge repairs the recursive sets of the object
+    itself (qore_object_private::mergeImpl()).
+
+    @return the object, as a read of the weak reference gives it, or NOTHING if the object's release has started or if
+    an exception was raised
+*/
+template <bool Lexical>
+static __attribute__((noinline, cold)) QoreValue plusEqualsWeakObject(LValueHelper& v, const QoreValue& right,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    QoreObject* o = v.getValue().get<const WeakReferenceNode>()->get();
+    const qore_type_t rtype = right.getType();
+    const bool merge = rtype == NT_HASH || rtype == NT_OBJECT;
+    // the weak reference keeps the object allocated, but not referenced: a reference is taken only while its count is
+    // not zero, as a reference taken once the last one was released would make an object whose release has started
+    // reachable again (see QoreValue::resolveIndirectRef()); a deleted object that is still referenced is merged into
+    // as through a strong reference, which raises OBJECT-ALREADY-DELETED (qore#7055)
+    if (!o->optRef()) {
+        if (merge) {
+            makeAccessDeletedObjectException(xsink, o->getClassName());
+        }
+        return QoreValue();
+    }
+    // the reference taken, which keeps the object while it is changed: the lvalue holds only a weak reference to it,
+    // and it is released before a setter of a member held in external storage runs
+    ReferenceHolder<QoreObject> holder(o, xsink);
+    v.leaveUnchangedLValue();
+    if (merge) {
+        // as for an object that the lvalue holds (doPlusEqualsOnLValueImpl()): the merge is made after the lvalue has
+        // released its lock when it holds that of the object merged into or merged from (qore#7107), and before the
+        // setters of members held in external storage run
+        const QoreVarRWLock* vl_lock = qore_auto_vlock_ops(&v.getAutoVLock()).getRWL();
+        if (qore_class_private::get(*o->getClass())->has_member_accessors
+                || (vl_lock && (vl_lock == &qore_object_private::get(*o)->rml
+                    || (rtype == NT_OBJECT && vl_lock == &qore_object_private::get(*right.get<QoreObject>())->rml)))) {
+            // the lvalue releases its locks and temporaries here; the object is kept by the reference taken above,
+            // which becomes the value of the operator, and is released with no lock held
+            v.finishForCallback();
+            if (*xsink) {
+                return QoreValue();
+            }
+            {
+                LValueHelper object_scan(*o, xsink, LValueHelper::ObjectScan{});
+                LValueMergeDerefHelper sdh(object_scan, xsink);
+                if constexpr (Lexical) {
+                    qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink,
+                        policy);
+                } else {
+                    qore_object_private::get(*o)->plusEquals(right.getInternalNode(), object_scan.vl, sdh, xsink);
+                }
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+            return QoreValue(holder.release());
+        }
+        {
+            LValueMergeDerefHelper sdh(v, xsink);
+            if constexpr (Lexical) {
+                qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink,
+                    policy);
+            } else {
+                qore_object_private::get(*o)->plusEquals(right.getInternalNode(), v.getAutoVLock(), sdh, xsink);
+            }
+        }
+        if (*xsink) {
+            // released by the lvalue after its locks
+            v.saveTemp(QoreValue(holder.release()));
+            return QoreValue();
+        }
+    }
+    // the value of the operator: the object, as a read of the weak reference gives it; while the lvalue keeps its
+    // locks, it also keeps one more reference, which it releases after them, so that the object's destructor does not
+    // run under them if the caller releases the value first and it is the last reference
+    v.saveTemp(QoreValue(o).refSelf());
+    return QoreValue(holder.release());
+}
+
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
 // documented in QoreIRInterpreter.h
@@ -25113,6 +25281,38 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     };
     const QoreValue right = *right_holder;
     qore_type_t vtype = v.getType();
+    // an lvalue that holds a weak reference to a list or a hash: the container that it designates is changed, as an
+    // element or key assignment through the lvalue changes it, and the lvalue keeps the weak reference (qore#7297);
+    // the container is held by the helper while it is changed, and one that was freed raises LIST-ERROR or
+    // HASH-ERROR
+    QoreListNode* weak_list = nullptr;
+    QoreHashNode* weak_hash = nullptr;
+    if (vtype == NT_WEAKREF_LIST) [[unlikely]] {
+        weak_list = v.getListForChange();
+        if (!weak_list) {
+            return QoreValue();
+        }
+        vtype = NT_LIST;
+    } else if (vtype == NT_WEAKREF_HASH) [[unlikely]] {
+        weak_hash = v.getHashForChange();
+        if (!weak_hash) {
+            return QoreValue();
+        }
+        vtype = NT_HASH;
+    } else if (vtype == NT_WEAKREF) [[unlikely]] {
+        // a weak reference to an object: a hash or an object is merged into the object, which the lvalue keeps the
+        // weak reference to (qore#7403)
+        return plusEqualsWeakObject<Lexical>(v, *right_holder, xsink, policy);
+    }
+    // the hash that the operation changes: the lvalue's own, made unique, or the one that its weak reference
+    // designates
+    auto target_hash = [&]() -> QoreHashNode* {
+        if (weak_hash) {
+            return weak_hash;
+        }
+        v.ensureUnique();
+        return v.getValue().get<QoreHashNode>();
+    };
     // a char is added exactly as its one-character string is, whatever the type of the lvalue: the branches whose
     // operation differs for a char replace it with the string (qore_plus_equals_replace_char()); the string, char,
     // binary and hash branches convert or ignore a char as they do its string, so the common string case is unchanged
@@ -25200,15 +25400,29 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     }
 
     if (vtype == NT_LIST) {
-        v.ensureUnique();
-        QoreListNode* l = v.getValue().get<QoreListNode>();
+        QoreListNode* l;
+        if (weak_list) {
+            l = weak_list;
+        } else {
+            v.ensureUnique();
+            l = v.getValue().get<QoreListNode>();
+        }
         // a list operand is a node; only a node value can be a list (QoreValue::getType())
         const AbstractQoreNode* right_node = right.isPointer() ? right.get<const AbstractQoreNode>() : nullptr;
         if (right_node && right_node->getType() == NT_LIST) {
+            const QoreListNode* rl = right.get<const QoreListNode>();
+            // the list that a weak reference designates, added to itself, is merged from a copy, as the merge reads
+            // the operand while it grows the list (an lvalue's own list is made unique first, so it is never the
+            // operand; qore#7297)
+            ReferenceHolder<QoreListNode> self_copy(xsink);
+            if (rl == l) [[unlikely]] {
+                self_copy = rl->copy();
+                rl = *self_copy;
+            }
             if constexpr (Lexical) {
-                qore_list_private::get(*l)->merge(right.get<const QoreListNode>(), xsink, policy);
+                qore_list_private::get(*l)->merge(rl, xsink, policy);
             } else {
-                qore_list_private::mergeCanonical(*l, right.get<const QoreListNode>(), xsink);
+                qore_list_private::mergeCanonical(*l, rl, xsink);
             }
         } else {
             // a char is appended as its one-character string is
@@ -25233,8 +25447,7 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
     } else if (vtype == NT_HASH) {
         LValueMergeDerefHelper sdh(v, xsink);
         if (right.getType() == NT_HASH) {
-            v.ensureUnique();
-            auto* hp = qore_hash_private::get(*v.getValue().get<QoreHashNode>());
+            auto* hp = qore_hash_private::get(*target_hash());
             if constexpr (Lexical) {
                 hp->merge(*qore_hash_private::get(*right.get<const QoreHashNode>()), sdh, xsink, policy);
             } else {
@@ -25255,19 +25468,18 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
                 if (*xsink) {
                     return QoreValue();
                 }
-                v.ensureUnique();
-                auto* hp = qore_hash_private::get(*v.getValue().get<QoreHashNode>());
+                auto* hp = qore_hash_private::get(*target_hash());
                 if constexpr (Lexical) {
                     hp->merge(*qore_hash_private::get(**members), sdh, xsink, policy);
                 } else {
                     hp->merge(*qore_hash_private::get(**members), sdh, xsink);
                 }
             } else {
-                v.ensureUnique();
+                QoreHashNode* h = target_hash();
                 if constexpr (Lexical) {
-                    op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink, policy);
+                    op->mergeDataToHash(h, sdh, xsink, policy);
                 } else {
-                    op->mergeDataToHash(v.getValue().get<QoreHashNode>(), sdh, xsink);
+                    op->mergeDataToHash(h, sdh, xsink);
                 }
             }
         }
@@ -25369,6 +25581,13 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
 
     if (*xsink) {
         return QoreValue();
+    }
+    // the value of the operation is the container changed, not the weak reference that the lvalue holds; a value
+    // added that needs a scan for recursive references starts the scan of the lvalue's object, as an element
+    // assignment through the weak reference does (qore#7297)
+    if (weak_list || weak_hash) [[unlikely]] {
+        v.changedScannedValue(right);
+        return weak_list ? weak_list->refSelf() : weak_hash->refSelf();
     }
     return v.getReferencedValue();
 }
@@ -25546,6 +25765,44 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
                 return v.getReferencedValue();
             }
         }
+    }
+
+    // a weak reference to a hash: the keys are removed from the hash that it designates, and the lvalue keeps the weak
+    // reference (qore#7297); a hash or an object operand removes nothing, as from the lvalue's own hash
+    if (vtype == NT_WEAKREF_HASH) [[unlikely]] {
+        QoreHashNode* vh = v.getHashForChange();
+        if (!vh) {
+            return QoreValue();
+        }
+        if (right.getType() != NT_HASH && right.getType() != NT_OBJECT) {
+            auto remove_key = [&](const QoreValue& key) {
+                QoreHashKeyHelper str(key, xsink);
+                if (*xsink) {
+                    return;
+                }
+                QoreValue removed = vh->takeKeyValue(str.c_str());
+                // a value removed that needs a scan starts the scan of the lvalue's object
+                v.changedScannedValue(removed);
+                // kept until the lvalue's scan has finished, as for the lvalue's own hash below
+                v.saveTemp(removed);
+            };
+            const QoreListNode* nrl = right.getType() == NT_LIST ? right.get<const QoreListNode>() : nullptr;
+            if (nrl && nrl->size()) {
+                ConstListIterator li(nrl);
+                while (li.next()) {
+                    remove_key(li.getValue());
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                }
+            } else {
+                remove_key(right);
+            }
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        return vh->refSelf();
     }
 
     if (vtype == NT_FLOAT) {
@@ -25749,6 +26006,10 @@ static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, Ex
     if (!val) {
         return QoreValue();
     }
+    // a weak reference to a list: its list is changed (qore#7297)
+    if (val.getType() == NT_WEAKREF_LIST && val.viewWeakContainer()) {
+        return QoreValue();
+    }
 
     // assign to a blank list if the lvalue has no value yet but is typed as a list or a softlist
     if (val.getType() == NT_NOTHING) {
@@ -25773,6 +26034,7 @@ static QoreValue evalUnshift(const QoreValue& lvalue, const QoreValue& right, Ex
 
     val.ensureUnique();
     QoreListNode* l = val.getValue().get<QoreListNode>();
+    val.changedScannedValue(right);
     qore_list_private::insertCanonical(*l, right.refSelf(), xsink);
 
     if (*xsink) {

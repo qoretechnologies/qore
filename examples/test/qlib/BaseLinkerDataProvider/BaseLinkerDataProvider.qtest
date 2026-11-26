@@ -82,6 +82,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
     constructor() : Test("BaseLinkerDataProvider Test", "1.0", \ARGV, MyOpts) {
         # Unit tests (always run, no credentials needed)
         addTestCase("sanity tests", \sanityTests());
+        addTestCase("read-only action tests", \readOnlyActionTests());
         addTestCase("factory tests", \factoryTests());
         addTestCase("metadata tests", \metadataTests());
         addTestCase("connection tests", \connectionTests());
@@ -718,5 +719,22 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
                 printf("Failed to clean up order %d: %s: %s\n", testOrderId, ex.err, ex.desc);
             }
         }
+    }
+
+    #! the actions that only read declare it, and the catalogue reports them as read-only (qore#7454)
+    readOnlyActionTests() {
+        list<string> read_only = (
+            "get-label",
+        );
+        foreach string name in (read_only) {
+            *hash<DataProvider::DataProviderActionInfo> action =
+                DataProvider::DataProviderActionCatalog::getAppAction("BaseLinker", name);
+            assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), name);
+            assertFalse(action.mutates_state, name);
+            assertFalse(DataProvider::DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        # deletes a package: reported as changing state
+        assertTrue(DataProvider::DataProviderActionCatalog::actionMutatesState(
+            DataProvider::DataProviderActionCatalog::getAppAction("BaseLinker", "delete-courier-package")));
     }
 }

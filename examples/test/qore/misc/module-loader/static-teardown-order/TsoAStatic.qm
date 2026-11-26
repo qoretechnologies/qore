@@ -1,0 +1,44 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TsoAStatic.qm - module of static-teardown-order.qtest: a class whose destructor uses its class's static members
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TsoAStatic {
+    version = "1.0";
+    desc = "module for the static teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! its name sorts before the name of the module that requires it (TsoZHolder), so that the order of the names is not
+#! the order in which the static members of their classes are cleared
+public namespace TsoAStatic {
+    #! an object whose destructor locks the static Mutex of its class and updates its static register
+    public class Resource {
+        private:internal {
+            static Mutex lock();
+            static hash<string, bool> live = {};
+            string name;
+        }
+
+        constructor(string name) {
+            self.name = name;
+            AutoLock al(lock);
+            live{name} = True;
+        }
+
+        destructor() {
+            AutoLock al(lock);
+            remove live{name};
+            printf("%s released; live: %d\n", name, live.size());
+        }
+    }
+    #! Creates the reverse edge at runtime. TsoZHolder statically requires this module.
+    public sub loadHolder() {
+        load_module("TsoZHolder");
+        call_function("TsoZHolder::touch");
+    }
+
+}

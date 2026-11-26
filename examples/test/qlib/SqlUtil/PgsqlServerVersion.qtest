@@ -124,7 +124,8 @@ class PgsqlServerVersionTest inherits QUnit::Test {
             PgsqlDatabase db(ds);
             *AbstractSequence seq = db.getSequence("s");
             assertEq("s", seq.name, i.key);
-            assertTrue((select ds.sql, $1 =~ /from pg_catalog\.pg_sequence/).size() == (i.value[1] == "pg_sequence" ? 1 : 0),
+            # The catalog can occur in FROM or JOIN when ownership is read alongside the sequence attributes.
+            assertEq(i.value[1] == "pg_sequence" ? 1 : 0, (select ds.sql, $1 =~ /\bpg_catalog\.pg_sequence\b/).size(),
                 i.key + ": " + ds.sql.join("; "));
             assertTrue((select ds.sql, $1 =~ /start_value/).size() == (i.value[1] == "start_value" ? 1 : 0),
                 i.key + ": " + ds.sql.join("; "));

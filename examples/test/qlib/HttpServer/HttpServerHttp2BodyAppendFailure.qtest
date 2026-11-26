@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/2 request body that the server collects for a handler, whose memory cannot be allocated, fails the
+    request: the handler is not given the part of the body that was collected, the request is answered with an error
+    on its stream, and the server keeps serving.  The allocation is made to fail by dbg_fail_binary_reserve_over()
+    (debug builds of the library only).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerHttp2BodyAppendFailureTest
+
+#! keeps the errors of the requests that the server logs
+class RequestErrorCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> errors = ();
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            *string err = (params =~ x/(SOCKET-RECV-ERROR): the memory for /)[0];
+            if (err) {
+                AutoLock al(lck);
+                errors += err;
+            }
+        }
+    }
+
+    #! returns the errors logged since the last call
+    list<string> takeErrors() {
+        AutoLock al(lck);
+        on_exit errors = ();
+        return errors;
+    }
+}
+
+#! answers a request with the size of the body that the server collected for it
+class BodySizeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return makeResponse(200, sprintf("served %d", body.size()), {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerHttp2BodyAppendFailureTest inherits QUnit::Test {
+    private {
+        #! the test certificate and its key
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+        #! the size of each part of the body that is sent
+        const PartSize = 16 * 1024;
+
+        #! the size over which the buffer of a binary value cannot grow
+        const Limit = 4 * 1024 * 1024;
+
+        #! the most attempts of a request
+        const MaxAttempts = 5;
+    }
+
+    constructor() : Test("HttpServerHttp2BodyAppendFailureTest", "1.0") {
+        addTestCase("an HTTP/2 request body whose memory cannot be allocated fails the request", \appendFailureTest());
+        set_return_value(main());
+    }
+
+    appendFailureTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_fail_binary_reserve_over() is only in debug builds of the library");
+        }
+
+        RequestErrorCapture capture();
+        Logger logger("test", LoggerLevel::getLevelError());
+        logger.addAppender(capture);
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+        });
+        on_exit delete server;
+        server.setDefaultHandler("size", new BodySizeHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "node": "127.0.0.1",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
+
+        # a body that the server can collect
+        hash<auto> r = send(port, 2 * Limit);
+        assertEq(200, r.resp.status_code);
+        assertEq(sprintf("served %d", 2 * Limit), r.resp.body);
+
+        # the body cannot grow over the limit
+        {
+            call_function("dbg_fail_binary_reserve_over", Limit);
+            on_exit call_function("dbg_fail_binary_reserve_over", 0);
+            r = send(port, 4 * Limit, capture);
+        }
+        # the request is not served with the part of the body that the server collected
+        if (r.resp) {
+            assertEq(500, r.resp.status_code, sprintf("response: %y", r.resp.body));
+        } else {
+            assertTrue(exists r.ex, "the request failed");
+        }
+        assertEq(("SOCKET-RECV-ERROR",), r.errors);
+
+        # the server keeps serving
+        r = send(port, PartSize);
+        assertEq(200, r.resp.status_code);
+        assertEq(sprintf("served %d", PartSize), r.resp.body);
+    }
+
+    #! sends a request with a body of the given size over HTTP/2
+    /** The HTTP/2 client refuses the data of the send callback with HTTP2-FLOW-CONTROL when more than 1 MiB of it
+        waits for the server (as a server that reads slowly under load can make it), so the request is sent again on
+        a new connection when that happens before the server logged an error.
+
+        @return a hash with the response in \c resp, or the exception in \c ex, and the errors that the server logged
+        in \c errors
+    */
+    private hash<auto> send(int port, int size, *RequestErrorCapture capture) {
+        binary block = binary(strmul("x", PartSize));
+        for (int attempt = 1; True; ++attempt) {
+            HTTPClient client({
+                "url": sprintf("https://127.0.0.1:%d", port),
+                "ssl_verify_cert": False,
+                "timeout": 60s,
+            });
+            on_exit client.disconnect();
+            int sent = 0;
+            code send_cb = *binary sub () {
+                if (sent == size) {
+                    return;
+                }
+                sent += PartSize;
+                return block;
+            };
+            hash<auto> rv;
+            try {
+                rv.resp = client.sendWithSendCallback(send_cb, "POST", "/body",
+                    {"Content-Type": "application/octet-stream"});
+                if (rv.resp.body.typeCode() == NT_BINARY) {
+                    rv.resp.body = binary_to_string(rv.resp.body);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                rv.ex = ex;
+            }
+            # the errors that the server logged when the request ended
+            if (capture) {
+                date end = now_us() + 10s;
+                bool failed = rv.ex || rv.resp.status_code != 200;
+                while (!(rv.errors = capture.takeErrors()) && failed && now_us() < end) {
+                    usleep(10ms);
+                }
+            }
+            if (!rv.errors && rv.ex.err == "HTTP2-FLOW-CONTROL" && attempt < MaxAttempts) {
+                continue;
+            }
+            return rv;
+        }
+    }
+}

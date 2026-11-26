@@ -48,6 +48,7 @@ class WeakReferenceUniqueSourceTest inherits QUnit::Test {
         addTestCase("the AST interpreter prints the expected output", \testAst());
         addTestCase("IR, JIT and tiered execution print the output of the AST", \testModes());
         addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("a second reader cannot claim a unique object member", \testMemberLock());
         set_return_value(main());
     }
 
@@ -60,6 +61,13 @@ class WeakReferenceUniqueSourceTest inherits QUnit::Test {
             "--exec-mode=%s %s/%s.q", qore_bin, mode, dir, name));
         assertEq(0, r.rc, sprintf("%s %s: exit status (output: %y)", name, mode, r.out));
         return r.stdout;
+    }
+
+    testMemberLock() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the controlled member-lock probe requires a debug build");
+        }
+        assertEq("True\nFalse\nTrue\nTrue\nFalse\nTrue\n", run("weak-member-read-lock", "ir"));
     }
 
     testAst() {

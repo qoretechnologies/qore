@@ -338,6 +338,13 @@ method calls has none) is the object's own code and is not applied again, so sel
 tests run only when the context is the innermost one. A recorded frame that is not on the thread's chain of
 provenance frames taints every frame from there (fail closed).
 
+Code compiled in a restricted or sandboxed Program that runs in another Program without entering a Program context
+(a hold of `ThreadData::foreign_code_entries`, qore#7202) taints the frame that it runs in: each entry records the
+program context helper current when it was made and the number of active `QoreProgramContextHelper` switches
+(`ThreadData::foreign_code_entry_switches`, pushed and removed with the entry), which identify the switch that entered
+that frame; an entry whose switch is not on the stack taints every frame (fail closed). This holds also when the host
+code that the foreign code calls has cleared `QoreRuntimePoState::code_pgm`. The cost is on the entry only.
+
 The immediate caller is restricted if its Program's code is (`qore_immediate_caller_pgm_restricted()`: a library
 module's code is trusted; any other Program, also a module loaded by its path, is restricted if
 `qore_program_code_is_untrusted()`; a non-module Program while foreign code counts, `QoreRuntimePoState::code_pgm`, is

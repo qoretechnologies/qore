@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*/
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ClassHierarchyWalkStackTest
+
+#! The walks of a deep class hierarchy that run in a thread do not overrun the thread's stack (qore#7539)
+/** The first construction of an object of a class decides whether its hierarchy has classes of another Program, a
+    private call from a class into a base class looks the base class up in the hierarchy, and the parse of a class
+    inheriting a hierarchy with a generic base class compares the generic instantiations and collects the methods of
+    the hierarchy, and the parse of a call of a method of a parent class by name looks for the classes with the name:
+    each walks the hierarchy, whose depth the parser accepts whatever the stack of the thread that runs
+    it.  These walks have stacks of their own, or fall back to one when the thread's stack is short, or check the stack
+    at each level: each succeeds or raises a stack limit exception in every thread, and never overruns the thread's
+    stack.  They run in threads with stack sizes from 128KB to 8MB.
+*/
+class ClassHierarchyWalkStackTest inherits QUnit::Test {
+    public {
+        #! the number of classes in the hierarchy
+        const Depth = 3000;
+
+        #! the smallest stack size of the threads in KB
+        const MinStackKb = 128;
+
+        #! the largest stack size of the threads in KB
+        const MaxStackKb = 8192;
+    }
+
+    constructor() : QUnit::Test("ClassHierarchyWalkStackTest", "1.0") {
+        addTestCase("the first construction of an object of a deep hierarchy", \constructionTest());
+        addTestCase("a private call into a base class of a deep hierarchy", \privateAccessTest());
+        addTestCase("the parse of a class inheriting a deep hierarchy with a generic base class", \genericParseTest());
+        addTestCase("the parse of a call of a method of a parent class by name", \parentNameParseTest());
+        set_return_value(main());
+    }
+
+    setUp() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+    }
+
+    #! returns the source of a hierarchy of Depth public classes, with a generic base class if \a generic
+    private static string getSource(bool generic = False) {
+        string code = generic
+            ? "public class G<T> {}\npublic class C0 inherits G<int> { private int priv() { return 0; } }\n"
+            : "public class C0 { private int priv() { return 0; } }\n";
+        for (int i = 1; i < Depth; ++i) {
+            code += sprintf("public class C%d inherits C%d {}\n", i, i - 1);
+        }
+        code += sprintf("public class Top inherits C%d { int callPriv(C0 o) { return o.priv() + 1; } }\n", Depth - 1);
+        code += "auto sub make() { return new Top(); }
+object sub makeBase() { return new C0(); }
+int sub callPriv(Top t, C0 o) { return t.callPriv(o); }
+Program sub child(string src) { Program c(PO_NEW_STYLE); c.parse(src, \"child\"); return c; }";
+        return code;
+    }
+
+    #! runs a call in a thread with the given stack size; returns its result or the error of its exception
+    private static auto runInThread(int kb, code call) {
+        int old_size = get_default_thread_stack_size();
+        on_exit set_default_thread_stack_size(old_size);
+        set_default_thread_stack_size(kb * 1024);
+        Queue q();
+        background sub () {
+            try {
+                q.push(call());
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    }
+
+    private constructionTest() {
+        hash<string, int> results;
+        for (int kb = MinStackKb; kb <= MaxStackKb; kb *= 2) {
+            # a new Program for each thread: the first construction of an object of a class walks its hierarchy
+            Program pgm(PO_NEW_STYLE);
+            pgm.parse(getSource(), "chain");
+            auto result = runInThread(kb, auto sub () { return pgm.callFunction("make"); });
+            string label = sprintf("%dK", kb);
+            if (result.typeCode() == NT_STRING) {
+                assertEq("STACK-LIMIT-EXCEEDED", result, label);
+                ++results.stack;
+            } else {
+                assertEq("Top", result.className(), label);
+                ++results.constructed;
+            }
+        }
+        assertGt(0, results.constructed, "construction succeeds with a large stack");
+    }
+
+    private privateAccessTest() {
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse(getSource(), "chain");
+        object top = pgm.callFunction("make");
+        object base = pgm.callFunction("makeBase");
+        for (int kb = MinStackKb; kb <= MaxStackKb; kb *= 2) {
+            # the lookup of the base class walks the hierarchy with a stack of its own when the thread's is short
+            assertEq(1, runInThread(kb, auto sub () { return pgm.callFunction("callPriv", top, base); }),
+                sprintf("%dK", kb));
+        }
+    }
+
+    private genericParseTest() {
+        Program pgm(PO_NEW_STYLE);
+        pgm.parse(getSource(True), "chain");
+        string src = sprintf("class X inherits C%d {}", Depth - 1);
+        hash<string, int> results;
+        for (int kb = MinStackKb; kb <= MaxStackKb; kb *= 2) {
+            auto result = runInThread(kb, auto sub () { return pgm.callFunction("child", src); });
+            string label = sprintf("%dK", kb);
+            if (result.typeCode() == NT_STRING) {
+                assertEq("PARSE-STACK-LIMIT-EXCEEDED", result, label);
+                ++results.stack;
+            } else {
+                assertTrue(result instanceof Program, label);
+                ++results.parsed;
+            }
+        }
+        assertGt(0, results.parsed, "the parse succeeds with a large stack");
+    }
+
+    private parentNameParseTest() {
+        # a call of a method of a parent class by a name that more than one class has (Base): the parse looks for the
+        # parent classes with the name in the whole hierarchy; the Program is parsed in the thread
+        string code = "namespace A { class Base {} }
+namespace Y { class Base { string foo() { return \"parent\"; } } }
+class C0 inherits Y::Base {}\n";
+        for (int i = 1; i < Depth; ++i) {
+            code += sprintf("class C%d inherits C%d {}\n", i, i - 1);
+        }
+        code += sprintf("class X inherits C%d { string t() { return Base::foo(); } }
+string sub f() { X x(); return x.t(); }", Depth - 1);
+        hash<string, int> results;
+        for (int kb = MinStackKb; kb <= MaxStackKb; kb *= 2) {
+            auto result = runInThread(kb, auto sub () {
+                Program p(PO_NEW_STYLE);
+                p.parse(code, "parent-name");
+                return p.callFunction("f");
+            });
+            string label = sprintf("%dK", kb);
+            if (result == "parent") {
+                ++results.parsed;
+            } else {
+                assertEq("PARSE-STACK-LIMIT-EXCEEDED", result, label);
+                ++results.stack;
+            }
+        }
+        assertGt(0, results.parsed, "the parse succeeds with a large stack");
+    }
+}

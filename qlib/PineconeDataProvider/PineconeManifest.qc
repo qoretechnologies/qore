@@ -1369,6 +1369,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "describe-index-stats",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/describe_index_stats",
                 "operation_id": "describeIndexStats",
                 "display_name": "Get Index Statistics",
@@ -1385,6 +1386,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "query-vectors",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/query",
                 "operation_id": "queryVectors",
                 "display_name": "Search with a Vector",
@@ -1618,6 +1620,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "fetch-vectors-by-metadata",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/vectors/fetch_by_metadata",
                 "operation_id": "fetch_vectors_by_metadata",
                 "display_name": "Fetch Vectors by Metadata",
@@ -1780,6 +1783,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "search-records",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/records/namespaces/{namespace}/search",
                 "operation_id": "searchRecordsNamespace",
                 "display_name": "Search with Text",
@@ -1899,6 +1903,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "search-documents",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/namespaces/{namespace}/documents/search",
                 "operation_id": "searchDocuments",
                 "display_name": "Search Documents",
@@ -1957,6 +1962,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "fetch-documents",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/namespaces/{namespace}/documents/fetch",
                 "operation_id": "fetchDocuments",
                 "display_name": "Fetch Documents",
@@ -2105,6 +2111,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "list-documents",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/namespaces/{namespace}/documents/list",
                 "operation_id": "listDocuments",
                 "display_name": "List Documents",
@@ -2239,6 +2246,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "embed",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/embed",
                 "operation_id": "embed",
                 "display_name": "Generate Embeddings",
@@ -2282,6 +2290,7 @@ public class PineconeManifest {
             <RestSchemaActionInfo>{
                 "action": "rerank",
                 "method": "POST",
+                "mutates_state": False,
                 "path": "/rerank",
                 "operation_id": "rerank",
                 "display_name": "Rerank Results",

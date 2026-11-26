@@ -438,9 +438,40 @@ int PollPipelinePriv::addSend(BinaryNode* data) {
     return (int)steps.size() - 1;
 }
 
+// the HTTP headers that a pipeline reads are those of responses when it checks the status code of a response
+// (addValidateStatus(), addBranchOnStatus()); a RECV_HEADER step, and the TRANSFORM or BRANCH step that checks the
+// status code, are then marked with Step::recv_as_string, which these step types do not use otherwise, so that the
+// layout of the public class does not change (qore#7485, design/module-api-version.md)
+static bool pp_reads_responses(const std::vector<PollPipelinePriv::Step>& steps) {
+    for (const PollPipelinePriv::Step& step : steps) {
+        if ((step.type == PollPipelinePriv::StepType::TRANSFORM || step.type == PollPipelinePriv::StepType::BRANCH)
+                && step.recv_as_string) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// marks the HTTP headers that the pipeline reads as those of responses, and the step \a status_step as a check of
+// the status code of a response (qore#7485)
+static int pp_mark_reads_responses(std::vector<PollPipelinePriv::Step>& steps, int status_step) {
+    if (status_step < 0) {
+        return status_step;
+    }
+    steps[status_step].recv_as_string = true;
+    for (PollPipelinePriv::Step& step : steps) {
+        if (step.type == PollPipelinePriv::StepType::RECV_HEADER) {
+            step.recv_as_string = true;
+        }
+    }
+    return status_step;
+}
+
 int PollPipelinePriv::addRecvHeader() {
     Step s;
     s.type = StepType::RECV_HEADER;
+    // the header is that of a response if the pipeline checks the status code of a response (qore#7485)
+    s.recv_as_string = pp_reads_responses(steps);
     steps.push_back(std::move(s));
     return (int)steps.size() - 1;
 }
@@ -528,21 +559,23 @@ int PollPipelinePriv::addTransform(TransformFn transform) {
 
 int PollPipelinePriv::addValidateStatus(int lo, int hi, const char* err_code) {
     std::string err(err_code);
-    return addTransform([lo, hi, err](Context& ctx, ExceptionSink* xsink) {
+    // the status code checked is that of a response: the headers read are those of responses (qore#7485)
+    return pp_mark_reads_responses(steps, addTransform([lo, hi, err](Context& ctx, ExceptionSink* xsink) {
         if (ctx.status_code < lo || ctx.status_code > hi) {
             xsink->raiseException(err.c_str(),
                 "request failed with HTTP code %d (expected %d-%d)",
                 ctx.status_code, lo, hi);
         }
-    });
+    }));
 }
 
 int PollPipelinePriv::addBranchOnStatus(int lo, int hi, int true_step, int false_step) {
-    return addBranch(
+    // the status code checked is that of a response: the headers read are those of responses (qore#7485)
+    return pp_mark_reads_responses(steps, addBranch(
         [lo, hi](const Context& ctx) {
             return ctx.status_code >= lo && ctx.status_code <= hi;
         },
-        true_step, false_step);
+        true_step, false_step));
 }
 
 // returns a header field of a response from the headers of the pipeline: the hash of a header read with
@@ -1910,8 +1943,12 @@ SocketPollOperationBase* qore_poll_pipeline_ops::createInnerOpImpl(PollPipelineP
 
         case StepType::RECV_HEADER: {
             b->sock_obj->ref();
-            ReferenceHolder<SocketReadHttpHeaderPollOperation> op(
-                new SocketReadHttpHeaderPollOperation(xsink, b->sock_obj),
+            // a pipeline that checks the status code reads responses, whose status line is checked whatever the
+            // header starts with (qore#7485; the step is marked with recv_as_string); any other reads a header as
+            // Socket::readHTTPHeader() does, which can be a request
+            ReferenceHolder<SocketReadHttpHeaderPollOperation> op(step.recv_as_string
+                ? new SocketReadHttpResponseHeaderPollOperation(xsink, b->sock_obj)
+                : new SocketReadHttpHeaderPollOperation(xsink, b->sock_obj),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1976,17 +2013,21 @@ SocketPollOperationBase* qore_poll_pipeline_ops::createInnerOpImpl(PollPipelineP
                 && !strcasecmp(step.target.c_str(), "HEAD");
 
             if (b->ctx.headers) {
-                // Check Transfer-Encoding: chunked
+                // Check Transfer-Encoding: the body is chunked if the final transfer coding is chunked, and is
+                // delimited by the end of the connection if not (RFC 9112 section 6.3); the header parser has
+                // refused a request with any other Transfer-Encoding
                 QoreValue te_val = pp_get_header_field(b->ctx.headers, "transfer-encoding");
-                if (te_val.getType() == NT_STRING) {
-                    QoreStringValueHelper te_str(te_val);
-                    const char* te = te_str->c_str();
-                    if (strcasestr(te, "chunked")) {
+                bool te_close = false;
+                if (!te_val.isNothing()) {
+                    if (qore_socket_private::isHttpResponseBodyChunked(te_val)) {
                         chunked = true;
+                    } else {
+                        te_close = true;
+                        conn_close = true;
                     }
                 }
-                // Check Content-Length
-                if (!chunked) {
+                // Check Content-Length; a Transfer-Encoding overrides it (RFC 9112 section 6.3)
+                if (!chunked && !te_close) {
                     QoreValue cl_val = pp_get_header_field(b->ctx.headers, "content-length");
                     if (!cl_val.isNullOrNothing()) {
                         content_length = cl_val.getAsBigInt();
@@ -2447,7 +2488,13 @@ int PollPipeline::addSend(data payload) [dom=NETWORK; flags=NAMED_ARGS] {
 }
 
 //! Adds an HTTP header read step
-/** @return the step index
+/** The header is read as Socket::readHTTPHeader() reads it: a header that starts with \c "HTTP/" is a response, whose
+    status line is checked, and any other a request.  In a pipeline that checks the status code of a response
+    (addValidateStatus(), addBranchOnStatus()), every header read is a response, and a header whose first line is not
+    a valid status line, such as one with data before it, raises a \c SOCKET-HTTP-ERROR exception (see
+    @ref httpclient_status_line "HTTPClient response status line").
+
+    @return the step index
 
     @since %Qore 3.0
 */
@@ -2608,7 +2655,8 @@ int PollPipeline::addValidateWebSocketAccept(string websocket_key, string error_
 //! Adds a status-code validation step that throws if the code is out of range
 /** Checks the pipeline context's status_code (populated by DELEGATE or
     RECV_HEADER steps). If the status code is not in the given range,
-    throws an exception with the given error code.
+    throws an exception with the given error code.  The HTTP headers that the pipeline reads (addReadHttpHeader()) are
+    then those of responses.
 
     @param min_status the lower bound (inclusive)
     @param max_status the upper bound (inclusive)
@@ -2628,6 +2676,8 @@ int PollPipeline::addValidateStatus(
     @param true_step the step index to jump to if the status code is in range
     @param false_step the step index to jump to if the status code is out of range
     @return the step index
+
+    The HTTP headers that the pipeline reads (addReadHttpHeader()) are then those of responses.
 
     @since %Qore 3.0
 */

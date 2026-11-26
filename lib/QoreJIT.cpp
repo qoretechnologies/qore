@@ -47,6 +47,10 @@
 #include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/Passes/PassBuilder.h>
+#ifdef DEBUG
+// qore_jit_dbg_pipeline_uninitialized_level()
+#include <llvm/IR/IRBuilder.h>
+#endif
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -1094,6 +1098,61 @@ static void optimizeModule(llvm::Module& module, int opt_level, const std::atomi
 
     delete tm;
 }
+
+#ifdef DEBUG
+// builds and runs the optimization pipeline of a module of one function with the calls of optimizeModule(), with an
+// optimization level whose bytes were never written, so that valgrind reports an uninitialised value that Qore's code
+// passes to LLVM (see examples/test/qore/misc/valgrind-suppressions.qtest: the suppressions of
+// examples/test/valgrind.supp must not hide it)
+int qore_jit_dbg_pipeline_uninitialized_level() {
+    // the native target, once for the process, as the JIT sets it up (the process may not have compiled code yet)
+    qore_llvm_initialize_targets();
+    llvm::LLVMContext ctx;
+    llvm::Module module("dbg", ctx);
+    llvm::Function* f = llvm::Function::Create(llvm::FunctionType::get(llvm::Type::getInt64Ty(ctx),
+        {llvm::Type::getInt64Ty(ctx)}, false), llvm::Function::ExternalLinkage, "f", module);
+    llvm::IRBuilder<> b(llvm::BasicBlock::Create(ctx, "entry", f));
+    b.CreateRet(b.CreateAdd(f->getArg(0), b.getInt64(1)));
+    std::string triple_str = llvm::sys::getDefaultTargetTriple();
+    llvm::Triple triple(triple_str);
+    std::string target_error;
+#if LLVM_VERSION_MAJOR >= 21
+    auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+#else
+    auto* target = llvm::TargetRegistry::lookupTarget(triple_str, target_error);
+#endif
+    if (!target) {
+        return -1;
+    }
+#if LLVM_VERSION_MAJOR >= 21
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#else
+    std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(triple_str, "generic", "",
+        llvm::TargetOptions{}, llvm::Reloc::PIC_));
+#endif
+    if (!tm) {
+        return -1;
+    }
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+    llvm::PassBuilder PB(tm.get(), llvm::PipelineTuningOptions(), std::nullopt, nullptr);
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    // the level is copied from memory that was never written, as a bug of Qore's code could pass one
+    std::unique_ptr<unsigned char[]> raw(new unsigned char[sizeof(llvm::OptimizationLevel)]);
+    llvm::OptimizationLevel level = llvm::OptimizationLevel::O2;
+    memcpy(static_cast<void*>(&level), raw.get(), sizeof(level));
+    auto MPM = PB.buildPerModuleDefaultPipeline(level);
+    MPM.run(module, MAM);
+    return 0;
+}
+#endif
 
 //! stops the background compile thread at process exit
 /** ~QoreJIT() used to do this; the singleton is immortal now, so the stop is registered from the
@@ -2481,6 +2540,52 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 llvm::DEBUG_METADATA_VERSION);
     }
 
+    auto lower_fast_entry = [&](const BatchCallee& callee, const BatchCalleeInfo& callee_info,
+            llvm::Function* fast_fn) -> bool {
+        const std::string& fast_name = callee_info.fast_name;
+        // Build param mapping: LocalVar* → LLVM function arg value
+        const UserVariantBase* uvb = callee.variant->getUserVariantBase();
+        const UserSignature* sig = uvb->getUserSignature();
+        std::unordered_map<const void*, llvm::Value*> param_map;
+        std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
+        for (unsigned i = 0; i < callee.num_params; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "JIT fast entry parameter mapping")) {
+                error = "cancelled during JIT fast entry parameter mapping";
+                return false;
+            }
+            const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+            param_map[key] = fast_fn->getArg(i);
+            param_kind_map[key] = i < callee_info.param_kinds.size()
+                ? callee_info.param_kinds[i] : BatchCalleeParamKind::Boxed;
+            fast_fn->getArg(i)->setName(std::string("arg") + std::to_string(i));
+        }
+        for (size_t i = 0; i < callee_info.capture_locals.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "JIT batch closure capture mapping")) {
+                error = "cancelled during JIT batch closure capture mapping";
+                return false;
+            }
+            const void* key = reinterpret_cast<const void*>(
+                callee_info.capture_locals[i]);
+            unsigned arg_index = callee.num_params + static_cast<unsigned>(i);
+            param_map[key] = fast_fn->getArg(arg_index);
+            param_kind_map[key] = callee_info.capture_kinds[i];
+            fast_fn->getArg(arg_index)->setName(
+                std::string("capture") + std::to_string(i));
+        }
+
+        QoreIRToLLVM fast_lowering(*ctx);
+        if (callee.deopt_counter) {
+            fast_lowering.setDeoptCounter(callee.deopt_counter);
+        }
+        fast_lowering.setBatchCallees(&batch_callee_map);
+        fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
+        fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
+            nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
+        return fast_lowering.lowerFunction(*callee.ir_func, *module, error);
+    };
+
     // Lower bodies for callees that aren't already compiled
     for (const auto& callee : callees) {
         if (!already_compiled.count(callee.ir_func->name)) {
@@ -2493,6 +2598,9 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             lowering.setBatchCallees(&batch_callee_map);
             lowering.setSharedDebugInfo(&di_builder, di_cu);
             if (!lowering.lowerFunction(*callee.ir_func, *module, error)) {
+                if (qore_check_cancel(nullptr, "JIT batch lowering fallback")) {
+                    return false;
+                }
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
@@ -2519,44 +2627,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             llvm::Function* fast_fn = module->getFunction(fast_name);
             assert(fast_fn && "fast entry function must be forward-declared");
 
-            // Build param mapping: LocalVar* → LLVM function arg value
-            const UserVariantBase* uvb = callee.variant->getUserVariantBase();
-            const UserSignature* sig = uvb->getUserSignature();
-            std::unordered_map<const void*, llvm::Value*> param_map;
-            std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
-            const auto& callee_info = batch_callee_map.at(callee.variant);
-            for (unsigned i = 0; i < callee.num_params; ++i) {
-                const void* key = reinterpret_cast<const void*>(sig->lv[i]);
-                param_map[key] = fast_fn->getArg(i);
-                param_kind_map[key] = i < callee_info.param_kinds.size()
-                    ? callee_info.param_kinds[i] : BatchCalleeParamKind::Boxed;
-                fast_fn->getArg(i)->setName(std::string("arg") + std::to_string(i));
-            }
-            for (size_t i = 0; i < callee_info.capture_locals.size(); ++i) {
-                if (i && !(i % 100)
-                        && qore_check_cancel(nullptr,
-                            "JIT batch closure capture mapping")) {
-                    error = "cancelled during JIT batch closure capture mapping";
+            if (!lower_fast_entry(callee, fast_info->second, fast_fn)) {
+                if (qore_check_cancel(nullptr, "JIT batch lowering fallback")) {
                     return false;
                 }
-                const void* key = reinterpret_cast<const void*>(
-                    callee_info.capture_locals[i]);
-                unsigned arg_index = callee.num_params + static_cast<unsigned>(i);
-                param_map[key] = fast_fn->getArg(arg_index);
-                param_kind_map[key] = callee_info.capture_kinds[i];
-                fast_fn->getArg(arg_index)->setName(
-                    std::string("capture") + std::to_string(i));
-            }
-
-            QoreIRToLLVM fast_lowering(*ctx);
-            if (callee.deopt_counter) {
-                fast_lowering.setDeoptCounter(callee.deopt_counter);
-            }
-            fast_lowering.setBatchCallees(&batch_callee_map);
-            fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
-            fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
-                nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
-            if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
                 // the fast entry was declared before the batch was lowered, and the code of the other members (and
                 // the callee's own standard entry) may call it already: the module is not compiled with an entry
                 // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
@@ -2591,8 +2665,61 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         }
     }
 
+    // A caller may request an owning entry after an earlier batch compiled the borrowing entry. Lower
+    // only the missing bodies needed for those specializations. Calls of the borrowing entry still bind
+    // to the earlier module. Lowering a body can request more entries for its own callees.
+    std::vector<llvm::Function*> borrowed_templates;
+    if (!already_defined_fast.empty()) {
+        std::unordered_map<std::string, const BatchCallee*> earlier;
+        size_t scanned = 0;
+        for (const auto& callee : callees) {
+            if (!(++scanned % 100) && qore_check_cancel(nullptr, "JIT owning entry collection")) {
+                error = "cancelled during JIT owning entry collection";
+                return false;
+            }
+            const auto& info = batch_callee_map.at(callee.variant);
+            if (info.approach_b_eligible && already_defined_fast.count(info.fast_name)) {
+                earlier.emplace(info.fast_name, &callee);
+            }
+        }
+        for (llvm::Function& fn : *module) {
+            if (!(++scanned % 100) && qore_check_cancel(nullptr, "JIT owning entry specialization")) {
+                error = "cancelled during JIT owning entry specialization";
+                return false;
+            }
+            auto pos = fn.getName().rfind(QORE_OWNED_FAST_ENTRY_INFIX);
+            if (!fn.isDeclaration() || pos == llvm::StringRef::npos) {
+                continue;
+            }
+            auto it = earlier.find(fn.getName().take_front(pos).str());
+            if (it == earlier.end()) {
+                continue;
+            }
+            const BatchCallee& callee = *it->second;
+            const auto& info = batch_callee_map.at(callee.variant);
+            llvm::Function* fast_fn = module->getFunction(info.fast_name);
+            if (!lower_fast_entry(callee, info, fast_fn)) {
+                return false;
+            }
+            borrowed_templates.push_back(fast_fn);
+            earlier.erase(it);
+        }
+    }
+
     // Finalize shared debug info after all functions are lowered
     di_builder.finalize();
+    if (!QoreIRToLLVM::materializeOwnedFastEntries(*module, error)) {
+        return false;
+    }
+    for (size_t i = 0; i < borrowed_templates.size(); ++i) {
+        if (i && !(i % 10) && qore_check_cancel(nullptr, "JIT owning entry template cleanup")) {
+            error = "cancelled during JIT owning entry template cleanup";
+            return false;
+        }
+        llvm::Function* fast_fn = borrowed_templates[i];
+        fast_fn->deleteBody();
+        fast_fn->setSubprogram(nullptr);
+    }
 
     // the optimization level is read from the Program while the lowering phase lasts
     const int opt_level = getEffectiveJITOptLevel(root_func.pgm);
@@ -3189,6 +3316,11 @@ bool QoreJIT::dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func
     return true;
 }
 
+void QoreJIT::dbgForceBgCompileEpochHold(const std::string& func) {
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    dbg_bg_force_epoch_hold = func;
+}
+
 bool QoreJIT::dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms) {
     std::unique_lock<std::mutex> lock(bg_queue_mutex);
     return bg_queue_empty_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, point]() {
@@ -3604,6 +3736,14 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         for (size_t i = 0, e = work.callees.size(); !specialized && i < e; ++i) {
             specialized = work.callees[i].ir_func && work.callees[i].ir_func->hasTypeSpecialization();
         }
+#ifdef DEBUG
+        // a test's hold, as the compile of a specialization makes
+        if (!dbg_bg_force_epoch_hold.empty() && work.ir_func
+                && !work.ir_func->name.compare(0, work.ir_func->name.find('@'), dbg_bg_force_epoch_hold)) {
+            dbg_bg_force_epoch_hold.clear();
+            specialized = true;
+        }
+#endif
         if (specialized) {
             work.type_epoch_hold.arm();
         }
@@ -4004,6 +4144,12 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     // compilation.  The work it had taken from the queue is lost with it: the function stays in the tier it is in.
     bg_thread_running.store(false, std::memory_order_relaxed);
     bg_compile_thread.abandonAfterFork();
+    // the epoch hold of the work that the thread was compiling is released: the work is never finished in the child,
+    // so the hold would keep everything retired since its epoch from being freed there (qore#7549); the work is in the
+    // copy of the thread's stack, and the hold's registry was handled before (its fork handler has a higher rank)
+    if (bg_in_progress) {
+        bg_in_progress->type_epoch_hold.abandonAfterFork();
+    }
     bg_in_progress = nullptr;
     bg_in_progress_pgms.clear();
     bg_in_progress_phase = BgCompilePhase::Lowering;
@@ -4021,6 +4167,7 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     dbg_bg_held = -1;
     dbg_bg_hold_release = false;
     dbg_bg_teardown_waits = 0;
+    dbg_bg_force_epoch_hold.clear();
 #endif
     // only the queued work is pending in the child
     bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);

@@ -146,6 +146,10 @@ public class GroqDataProviderTest inherits QUnit::Test {
         # no hardcoded model names offered: available models are fetched live
         assertNothing(chat.options.model.allowed_values);
         assertNothing(chat.options.model.example_value);
+        # POST /chat/completions is stateless inference: the action declares that it is read-only (qore#7454)
+        assertEq(NT_BOOLEAN, chat.mutates_state.typeCode());
+        assertFalse(chat.mutates_state);
+        assertFalse(DataProviderActionCatalog::actionMutatesState(chat));
 
         hash<DataProviderActionInfo> lm = amap."list-models";
         assertEq("/list-models", lm.path);

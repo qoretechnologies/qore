@@ -353,7 +353,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         on_exit server.stop();
         server.setDefaultHandler("tls", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -363,7 +363,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
 
         # a client whose connections negotiate their protocol with ALPN
         HTTPClient hc({
-            "url": sprintf("https://localhost:%d", port),
+            "url": sprintf("https://127.0.0.1:%d", port),
             "http3_mode": "disabled",
             "ssl_verify_cert": False,
         });
@@ -430,7 +430,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         on_exit server.stop();
         server.setDefaultHandler("tls", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -439,7 +439,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         server.waitForAsyncIo();
 
         HTTPClient hc({
-            "url": sprintf("https://localhost:%d", port),
+            "url": sprintf("https://127.0.0.1:%d", port),
             "http3_mode": "disabled",
             "ssl_verify_cert": False,
         });
@@ -519,13 +519,13 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         on_exit server.stop();
         server.setDefaultHandler("plain", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
         }).port;
         server.waitForAsyncIo();
 
         HTTPClient hc({
-            "url": sprintf("http://localhost:%d", port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "http3_mode": "disabled",
         });
 
@@ -599,7 +599,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         on_exit server.stop();
         server.setDefaultHandler("tls", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -608,7 +608,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         server.waitForAsyncIo();
 
         HTTPClient hc({
-            "url": sprintf("https://localhost:%d", port),
+            "url": sprintf("https://127.0.0.1:%d", port),
             "http3_mode": "disabled",
             "ssl_verify_cert": False,
         });
@@ -685,7 +685,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         on_exit server.stop();
         server.setDefaultHandler("tls", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{
-            "node": "localhost",
+            "node": "127.0.0.1",
             "service": 0,
             "cert": new SSLCertificate(TestCertificates::CertPem),
             "key": new SSLPrivateKey(TestCertificates::KeyPem),
@@ -694,7 +694,7 @@ class HttpClientPollGoalTest inherits QUnit::Test {
         server.waitForAsyncIo();
 
         HTTPClient hc({
-            "url": sprintf("https://localhost:%d", port),
+            "url": sprintf("https://127.0.0.1:%d", port),
             "http3_mode": "disabled",
             "ssl_verify_cert": False,
         });

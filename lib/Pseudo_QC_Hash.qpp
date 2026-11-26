@@ -35,6 +35,7 @@
 #include "qore/intern/QoreHashIterator.h"
 #include "qore/intern/QoreHashListIterator.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 extern QoreClass* QC_HASHLISTITERATOR;
 extern QoreClass* QC_HASHITERATOR;
@@ -44,7 +45,7 @@ extern QoreClass* QC_HASHPAIRITERATOR;
 //! Methods in this pseudo-class can be executed on @ref hash "hash values"
 /**
  */
-qclass <hash> [arg=const QoreHashNode* h = v.get<QoreHashNode>();vparent=<value>];
+qclass <hash> [arg=const QoreHashNode* h = qore_pseudo_receiver<QoreHashNode>(v, NT_HASH, "<hash>", xsink);vparent=<value>];
 
 //! Returns Qore::NT_HASH
 /**

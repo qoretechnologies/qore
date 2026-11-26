@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 stream limits of TLS and QUIC connections
+
+/*  HttpClientIoEndedTunnelCancel.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#7443: a stream whose response ended (END_STREAM, or the QUIC FIN) while its request write side was still
+    open, such as an extended CONNECT whose server answered it with a complete response, was left half-open when the
+    client cancelled it: cancel() did nothing for a stream whose response was complete, so the stream kept one of the
+    server's concurrent streams for the life of the connection, and once the server's limit (100) was reached no new
+    request could be sent on the connection (HTTP/2: the request waited for a stream until its timeout; HTTP/3:
+    HTTP3-CAPACITY-ERROR).  cancel() now resets such a stream.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientIoEndedTunnelCancelTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! More streams than the server's limit of concurrent streams on a connection (100)
+const Streams = 110;
+
+#! Answers every request whole: an extended CONNECT gets a complete response, which ends its stream
+class CompleteHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "done", {"Content-Type": MimeTypeText});
+    }
+}
+
+class HttpClientIoEndedTunnelCancelTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : QUnit::Test("HttpClientIoEndedTunnelCancelTest", "1.0") {
+        foreach string proto in (("h2", "h3")) {
+            addTestCase(sprintf("%s: cancelling streams whose response ended leaves the connection usable", proto),
+                \endedStreamsTest(), (proto,));
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setDefaultHandler("complete", new CompleteHandler());
+        server.waitForAsyncIo();
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+        url = "https://127.0.0.1:" + port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    endedStreamsTest(string proto) {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": proto,
+            "accept_all_certs": True,
+            "connect_timeout": HangGuard,
+            "request_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "the connection is up");
+        int conn_id = mgr.getConnectionInfo()[0].connection_id;
+
+        for (int i = 0; i < Streams; ++i) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url + "/tunnel");
+            # the request write side stays open (body streaming); the server answers whole, ending its side
+            stream.startStreaming("CONNECT", "/tunnel", {
+                ":protocol": "websocket",
+                "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+                "Sec-WebSocket-Version": "13",
+            }, True);
+            # the response, until its end; nothing within the hang guard: no stream could be opened for the request
+            while (True) {
+                auto rv = stream.readData(HangGuard);
+                if (!exists rv) {
+                    stream.cancel();
+                    fail(sprintf("stream %d got no response", i));
+                }
+                if (rv.typeCode() == NT_HASH && (rv.end_stream || rv.error)) {
+                    break;
+                }
+            }
+            stream.cancel();
+        }
+
+        # the connection can still open streams
+        assertEq(200, mgr.request(url, "GET", "/").status_code, "a request after the ended streams");
+        assertEq((conn_id,), (map $1.connection_id, mgr.getConnectionInfo()), "on the same connection");
+    }
+}

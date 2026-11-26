@@ -1,0 +1,505 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.x responses read from TCP and TLS sockets and the close of the connection
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The status line of an HTTP/1.x response must be "HTTP/" DIGIT "." DIGIT SP 3DIGIT [ SP [ reason-phrase ] ] (RFC 9112
+# section 4, which requires the space after the code; a line that ends right after it is accepted, as other clients
+# do), with a status code in the range 100 - 599 (RFC 9110 section 15): a response with any other first line,
+# such as one with data before the status line or a status code that is not three digits, fails the request with a
+# SOCKET-HTTP-ERROR exception, and the connection is closed, never reused; the request is not repeated, whatever its
+# method.  Both the HTTPClient class and the HttpClientIo connection manager are tested, and Socket::readHTTPHeader()
+# (qore#7485).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires HttpClientIo
+
+%exec-class HttpClientInvalidStatusLineTest
+
+#! a self-signed certificate for localhost, for the TLS server
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+#! the private key of the certificate
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! a hang guard only, never a timing assertion
+const Timeout = 20s;
+
+#! the timeout of a request
+const RequestTimeout = 10s;
+
+#! the header fields and body that follow the status line of the response to the first request
+const Rest = "\r\nContent-Length: 5\r\nConnection: keep-alive\r\n\r\nfirst";
+
+#! the response to each request but the first one
+const Answer = "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: keep-alive\r\n\r\nanswer";
+
+#! the start of responses whose status line is invalid: each is followed by @ref Rest
+const InvalidStatusLines = {
+    "data before the status line": "hello" + "HTTP/1.1 200 OK",
+    "an empty line before the status line": "\r\nHTTP/1.1 200 OK",
+    "a space before the status line": " HTTP/1.1 200 OK",
+    "a four-digit status code": "HTTP/1.1 1000 X",
+    "the status code 2000": "HTTP/1.1 2000 OK",
+    "a status code below 100": "HTTP/1.1 099 X",
+    "a status code above 599": "HTTP/1.1 600 X",
+    "a status code with a letter": "HTTP/1.1 10x X",
+    "two spaces before the status code": "HTTP/1.1  200 OK",
+    "a two-digit major version": "HTTP/12.1 200 OK",
+    "a version without a minor version": "HTTP/1 200 OK",
+    "a wrong protocol name": "HTTX/1.1 200 OK",
+    "a lower-case protocol name": "http/1.1 200 OK",
+    "a letter right after the status code": "HTTP/1.1 200x",
+    "a tab after the status code": "HTTP/1.1 200\tOK",
+    "a control character in the reason phrase": "HTTP/1.1 200 O\x01K",
+};
+
+#! An HTTP/1.1 server that answers the first request of its first connection with the given data, and every other
+#! request with @ref Answer
+class ScriptedServer {
+    public {
+        #! the number of the connection and the method and path of each request received
+        Queue requests();
+        #! decremented when the server's first connection has ended
+        Counter first_closed(1);
+        #! why the server's first connection ended: \c "closed" when the client closed it, the error otherwise
+        string first_end;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        bool tls;
+        Counter running();
+        int conn_count = 0;
+        bool stopped;
+        #! the data sent for the first request
+        string first_response;
+    }
+
+    constructor(string first_response, bool tls = False) {
+        self.first_response = first_response;
+        self.tls = tls;
+        if (tls) {
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        }
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    string getUrl() {
+        return sprintf("%s://127.0.0.1:%d", tls ? "https" : "http", port);
+    }
+
+    int getConnectionCount() {
+        return conn_count;
+    }
+
+    #! stops the server; the connections of the client must have been closed
+    stop() {
+        stopped = True;
+        listener.close();
+        running.waitForZero();
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!stopped) {
+            *Socket s;
+            try {
+                s = tls ? listener.acceptSSL(Timeout) : listener.accept(Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                # the listener was closed by stop()
+                break;
+            }
+            if (!s) {
+                continue;
+            }
+            int n = ++conn_count;
+            running.inc();
+            background serve(s, n);
+        }
+    }
+
+    private serve(Socket s, int n) {
+        on_exit running.dec();
+        on_exit s.close();
+        on_exit if (n == 1) {
+            first_closed.dec();
+        }
+        bool first = n == 1;
+        while (True) {
+            hash<auto> h;
+            try {
+                # longer than the wait of a test for the end of the connection, so that only the client's close of the
+                # connection ends it in time
+                h = s.readHTTPHeader(Timeout * 2);
+                if (h.method && h."content-length") {
+                    s.recv(h."content-length".toInt(), Timeout);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (n == 1) {
+                    first_end = ex.err == "SOCKET-CLOSED" ? "closed" : sprintf("%s: %s", ex.err, ex.desc);
+                }
+                return;
+            }
+            if (!h.method) {
+                # the client closed the connection
+                if (n == 1) {
+                    first_end = "closed";
+                }
+                return;
+            }
+            requests.push(sprintf("%d %s %s", n, h.method, h.path));
+            if (first) {
+                first = False;
+                s.send(first_response);
+            } else {
+                s.send(Answer);
+            }
+        }
+    }
+}
+
+class HttpClientInvalidStatusLineTest inherits QUnit::Test {
+    private {
+        const Clients = ("HTTPClient", "HttpClientIo");
+    }
+
+    constructor() : QUnit::Test("HttpClientInvalidStatusLine", "1.0") {
+        foreach string client in (Clients) {
+            foreach hash<auto> i in (InvalidStatusLines.pairIterator()) {
+                addTestCase(sprintf("%s: %s: an error, the connection is closed", client, i.key), \testInvalid(),
+                    (client, i.value + Rest));
+            }
+            addTestCase(client + ": TLS: data before the status line: an error, the connection is closed",
+                \testInvalid(), (client, "hello" + "HTTP/1.1 200 OK" + Rest, "GET", False, True));
+            addTestCase(client + ": streamed: a four-digit status code: an error, the connection is closed",
+                \testInvalid(), (client, "HTTP/1.1 1000 X" + Rest, "GET", True));
+            addTestCase(client + ": POST: data before the status line: an error, the request is not sent again",
+                \testInvalid(), (client, "hello" + "HTTP/1.1 200 OK" + Rest, "POST"));
+
+            addTestCase(client + ": HTTP/1.0 200 OK with keep-alive: the connection is reused", \testValid(),
+                (client, "HTTP/1.0 200 OK" + Rest, 200, "first"));
+            addTestCase(client + ": 204 No Content: the connection is reused", \testValid(),
+                (client, "HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n", 204));
+            addTestCase(client + ": no reason phrase and no space after the status code: the connection is reused",
+                \testValid(), (client, "HTTP/1.1 200" + Rest, 200, "first"));
+            addTestCase(client + ": no space after the status code, a line that ends with LF alone: the connection is "
+                "reused", \testValid(), (client, "HTTP/1.1 200\n" + Rest.substr(2), 200, "first"));
+            addTestCase(client + ": an empty reason phrase: the connection is reused", \testValid(),
+                (client, "HTTP/1.1 200 " + Rest, 200, "first"));
+            addTestCase(client + ": a reason phrase with spaces and a tab: the connection is reused", \testValid(),
+                (client, "HTTP/1.1 599 Some\tReason  Phrase " + Rest, 599, "first"));
+        }
+        # the manager's retries of a request: a request that fails with an invalid status line is not sent again,
+        # whatever its method
+        addTestCase("HttpClientIo: retries enabled: GET: data before the status line: not sent again",
+            \testInvalid(), ("HttpClientIo", "hello" + "HTTP/1.1 200 OK" + Rest, "GET", False, False, 3));
+        addTestCase("HttpClientIo: retries enabled: POST: a four-digit status code: not sent again",
+            \testInvalid(), ("HttpClientIo", "HTTP/1.1 1000 X" + Rest, "POST", False, False, 3));
+        # the data of the server is not given in the description of the error, so it cannot make the error look like
+        # that of a closed connection, which is retried
+        addTestCase("HttpClientIo: retries enabled: GET: the text of a closed connection before the status line: not "
+            "sent again", \testInvalid(), ("HttpClientIo", "remote end closed connection HTTP/1.1 200 OK" + Rest,
+            "GET", False, False, 3));
+        addTestCase("Socket::readHTTPHeader(): an invalid status line is refused", \testSocket());
+        addTestCase("PollPipeline: a pipeline that checks the status code reads responses", \testPipeline());
+        set_return_value(main());
+    }
+
+    #! sends a request whose response has an invalid status line, then a second request
+    testInvalid(string client, string response, string method = "GET", bool streamed = False, bool tls = False,
+            int retries = 0) {
+        ScriptedServer server(response, tls);
+        on_exit server.stop();
+        string url = server.getUrl();
+        *binary body = method == "POST" ? binary("body") : NOTHING;
+
+        *hash<ExceptionInfo> ex;
+        hash<auto> second;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout, "ssl_verify_cert": False});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            try {
+                if (streamed) {
+                    hc.sendWithRecvCallback(sub (hash<auto> h) {}, body, method, "/first");
+                } else {
+                    hash<auto> r = hc.send(body, method, "/first");
+                    if (m_options.verbose > 2) {
+                        printf("%s: unexpected response: %y\n", client, r);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+            # the client's close of the connection is seen before the next request
+            assertEq(0, server.first_closed.waitForZero(Timeout), "the connection is closed");
+            second = hc.send(NOTHING, "GET", "/second");
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "request_timeout": RequestTimeout,
+                "max_request_retries": retries,
+            });
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            try {
+                if (!streamed) {
+                    hash<auto> r = mgr.request(url, method, "/first", NOTHING, body, RequestTimeout);
+                    if (m_options.verbose > 2) {
+                        printf("%s: unexpected response: %y\n", client, r);
+                    }
+                } else {
+                    HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, method, "/first");
+                    # reads until the stream fails or ends
+                    while (True) {
+                        auto v = stream.readData(RequestTimeout);
+                        if (!exists v) {
+                            throw "TIMEOUT", "no data received from the stream";
+                        }
+                        if (v.typeCode() == NT_HASH && v.error) {
+                            throw v.error.err ?? "STREAM-ERROR", v.error.desc ?? sprintf("%y", v.error), v.error.arg;
+                        }
+                        if (v.typeCode() == NT_HASH && v.end_stream) {
+                            break;
+                        }
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex0) {
+                ex = ex0;
+            }
+            # the client's close of the connection is seen before the next request
+            assertEq(0, server.first_closed.waitForZero(Timeout), "the connection is closed");
+            second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
+        }
+        if (m_options.verbose > 2) {
+            printf("%s: %s: %s\n", client, ex.err, ex.desc);
+        }
+        assertTrue(exists ex, "the request fails");
+        # the connection manager gives the error of the connection in the description of its request error; a stream
+        # gives it as is
+        string err = sprintf("%s: %s", ex.err, ex.desc);
+        assertRegex((client == "HTTPClient" || streamed ? "^" : "^HTTPCLIENT-REQUEST-ERROR: ")
+            + "SOCKET-HTTP-ERROR: invalid HTTP response status line received: ", err, "the error is reported");
+        # the start of the line is given in the argument of the exception, not in its description
+        string line = getEscapedStatusLine(response);
+        assertEq(line, ex.arg, "the argument of the exception gives the start of the status line");
+        if (line.size() > 3) {
+            assertEq(-1, ex.desc.find(line), "the description does not give the line");
+        }
+        assertEq("1 " + method + " /first", server.requests.get(Timeout), "the request");
+        assertEq("closed", server.first_end, "the client closed the connection");
+        assertEq(200, second.status_code, "the second response");
+        assertEq("answer", second.body, "the second response is the server's answer to the second request");
+        assertEq("2 GET /second", server.requests.get(Timeout), "the second request is sent on a new connection");
+        assertEq(0, server.requests.size(), "the first request reached the server once");
+        assertEq(2, server.getConnectionCount(), "a new connection was made for the second request");
+    }
+
+    #! sends a request whose response has a valid status line, then a second request on the same connection
+    testValid(string client, string response, int code, *string body) {
+        ScriptedServer server(response);
+        on_exit server.stop();
+        string url = server.getUrl();
+
+        hash<auto> first;
+        hash<auto> second;
+        if (client == "HTTPClient") {
+            HTTPClient hc({"url": url, "error_passthru": True, "timeout": RequestTimeout});
+            # the client's connections are closed before the server is stopped
+            on_exit delete hc;
+            first = hc.send(NOTHING, "GET", "/first", NOTHING, True);
+            second = hc.send(NOTHING, "GET", "/second", NOTHING, True);
+        } else {
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+            # the client's connections are closed before the server is stopped
+            on_exit delete mgr;
+            first = mgr.request(url, "GET", "/first", NOTHING, NOTHING, RequestTimeout);
+            second = mgr.request(url, "GET", "/second", NOTHING, NOTHING, RequestTimeout);
+        }
+        assertEq(code, first.status_code, "the status code");
+        assertEq(body, first.body, "the body");
+        assertEq("1 GET /first", server.requests.get(Timeout), "the first request");
+        assertEq(200, second.status_code, "the second response");
+        assertEq("answer", second.body, "the second response");
+        assertEq("1 GET /second", server.requests.get(Timeout), "the connection is reused");
+        assertEq(1, server.getConnectionCount(), "no new connection was made");
+    }
+
+    #! returns the start of the first line of the given response as the argument of the exception gives it
+    static string getEscapedStatusLine(string response) {
+        binary b = binary(response);
+        int len = b.size();
+        int lf = response.find("\n");
+        if (lf >= 0) {
+            len = lf;
+        }
+        if (len && b[len - 1] == 0x0d) {
+            --len;
+        }
+        string rv = "";
+        for (int i = 0; i < len && i < 64; ++i) {
+            int c = b[i];
+            if (c < 0x20 || c >= 0x7f || c == 0x5c) {
+                rv += sprintf("\\x%02x", c);
+            } else {
+                rv += chr(c);
+            }
+        }
+        if (len > 64) {
+            rv += "...";
+        }
+        return rv;
+    }
+
+    #! a PollPipeline that checks the status code reads a response, whose status line is checked; one that does not
+    #! check it reads a header that does not start with "HTTP/" as a request
+    testPipeline() {
+        list<auto> results = ();
+        # the data sent, and whether the pipeline checks the status code
+        list<list<auto>> cases = (
+            ("helloHTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", True),
+            ("HTTP/1.1 999 X\r\nContent-Length: 0\r\n\r\n", True),
+            ("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n", True),
+            ("GET /path HTTP/1.1\r\nHost: x\r\n\r\n", False),
+        );
+        foreach list<auto> c in (cases) {
+            hash<auto> i = {"data": c[0], "check": c[1]};
+            Socket listener();
+            listener.bind("127.0.0.1:0");
+            listener.listen();
+            Socket client();
+            client.connect(sprintf("127.0.0.1:%d", listener.getSocketInfo().port), Timeout);
+            on_exit client.close();
+            Socket conn = listener.accept(Timeout);
+            on_exit conn.close();
+            listener.close();
+            conn.send(i.data);
+            PollPipeline p(client);
+            p.addReadHttpHeader();
+            if (i.check) {
+                p.addValidateStatus(200, 299, "PIPELINE-TEST-ERROR");
+            }
+            try {
+                int start = clock_getmicros_monotonic();
+                while (!p.goalReached()) {
+                    if ((clock_getmicros_monotonic() - start) > Timeout.durationMicroseconds()) {
+                        throw "POLL-TIMEOUT", sprintf("the pipeline timed out in state %y", p.getState());
+                    }
+                    *hash<SocketPollInfo> pi = p.continuePoll();
+                    if (pi) {
+                        Socket::poll((pi,), Timeout);
+                    }
+                }
+                auto out = p.getOutput();
+                push results, out.hdr.status_code ?? out.hdr.method ?? out.status_code;
+            } catch (hash<ExceptionInfo> ex) {
+                push results, sprintf("%s: %s", ex.err, ex.arg);
+            }
+        }
+        assertEq(("SOCKET-HTTP-ERROR: helloHTTP/1.1 200 OK", "SOCKET-HTTP-ERROR: HTTP/1.1 999 X", 200, "GET"),
+            results);
+    }
+
+    #! Socket::readHTTPHeader() refuses a response whose status line is invalid, and reads a valid one and a request
+    testSocket() {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+        Counter done(1);
+        list<string> data = (
+            "HTTP/1.1 1000 X\r\n\r\n",
+            "HTTP/1.1 200x\r\n\r\n",
+            "HTTP/1.1 204\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+            "GET /path HTTP/1.1\r\nHost: x\r\n\r\n",
+        );
+        *hash<ExceptionInfo> server_ex;
+        background sub () {
+            on_exit done.dec();
+            try {
+                foreach string d in (data) {
+                    Socket s = listener.accept(Timeout);
+                    on_exit s.close();
+                    s.send(d);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                server_ex = ex;
+            }
+        }();
+        on_exit {
+            listener.close();
+            done.waitForZero();
+        }
+        list<auto> results = ();
+        for (int i = 0; i < data.size(); ++i) {
+            Socket s();
+            s.connect(sprintf("127.0.0.1:%d", port), Timeout);
+            on_exit s.close();
+            try {
+                hash<auto> h = s.readHTTPHeader(Timeout);
+                push results, h.status_code ?? h.method;
+            } catch (hash<ExceptionInfo> ex) {
+                push results, ex.err + (ex.arg ? ": " + ex.arg : "");
+            }
+        }
+        assertEq(("SOCKET-HTTP-ERROR: HTTP/1.1 1000 X", "SOCKET-HTTP-ERROR: HTTP/1.1 200x", 204, 200, "GET"), results);
+        assertEq(0, done.waitForZero(Timeout), "the server ended");
+        assertNothing(server_ex);
+    }
+}

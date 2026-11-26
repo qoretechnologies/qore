@@ -225,7 +225,7 @@ public class QgetTest inherits QUnit::Test {
         assertEq(2, result.rc);
         assertRegex("invalid header", result.err);
 
-        result = runQget(tmp.path, "gopher://localhost/x");
+        result = runQget(tmp.path, "gopher://127.0.0.1/x");
         assertEq(2, result.rc);
         assertRegex("unsupported URL scheme", result.err);
         # the supported schemes are listed

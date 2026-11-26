@@ -22,6 +22,7 @@ public class DatasourceTest inherits QUnit::Test {
     }
 
     constructor() : Test("DatasourceTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("getPort reports the next connection port", \pendingPortTest());
         addTestCase("offline option test", \offlineOptionTest());
         addTestCase("invalid option test", \invalidOptionTest());
         addTestCase("Datasource string test", \datasourceStringTest());
@@ -39,6 +40,18 @@ public class DatasourceTest inherits QUnit::Test {
     private usageIntern() {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--conn=ARG", "set DB connection argument (ex: \"oracle:user/pass@db\")", OptionColumn);
+    }
+
+    pendingPortTest() {
+        Datasource ds("dbitest:u/p@db");
+        assertEq(NOTHING, ds.getPort());
+        ds.setPort(1001);
+        assertEq(1001, ds.getPort());
+        ds.open();
+        ds.setPort(1002);
+        assertEq(1002, ds.getPort(), "the next port is visible while the connection is open");
+        ds.setPort(0);
+        assertEq(NOTHING, ds.getPort(), "zero restores the driver's default");
     }
 
     offlineOptionTest() {

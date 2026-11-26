@@ -1,0 +1,37 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TsoZHolder.qm - module of static-teardown-order.qtest: holds an object of a class of the module that it requires in
+# a static member of a class of its own
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires(reexport) TsoAStatic
+
+module TsoZHolder {
+    version = "1.0";
+    desc = "module for the static teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TsoZHolder {
+    #! holds a TsoAStatic::Resource in a static member: it is released when the static members of this module's
+    #! classes are cleared at process exit, and its destructor uses the static members of its own class
+    public class Holder {
+        public {
+            static TsoAStatic::Resource resource("holder resource");
+        }
+    }
+
+    #! reads the static member
+    public sub touch() {
+        Holder::resource.className();
+    }
+
+    #! loads TsoZCyc, which requires this module, at run time into the Program of this module: the two modules make a
+    #! cycle, which requires TsoAStatic
+    public sub loadCycle() {
+        load_module("TsoZCyc");
+    }
+}

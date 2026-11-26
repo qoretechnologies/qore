@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation and linking of method calls resolved at run time
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class AbstractPrivateImplSubclassTest
+
+#! a subclass of a class that implements its abstract methods with the methods of a privately inherited parent class
+#! calls them as the class does, in every execution mode, in qcc executables and in qcc -m modules (qore#7307)
+/** A class that inherits an abstract declaration and, with private, private:hierarchy or private:internal
+    access, a class whose methods implement it: the method that resolving the abstract method creates in the class
+    was missing from the inheritance lists of the methods of its subclasses, which are built before abstract methods
+    are resolved, so that code outside the class hierarchy could not call the public variant on an object of a
+    subclass with a method of the name (an overload, also in a further subclass).  The subclasses now call what the
+    class calls: the public variant from outside, also typed, untyped, through call references and
+    call_object_method(), while the private variant stays refused there and callable from the code of the class
+    hierarchy; a subclass that overrides the public variant calls its own.  The output of every execution mode, of
+    qcc executables (-O0, -O3) and of a module (and of classes of a program that inherit its classes) loaded from its
+    source and as a qcc -m .qmod must be the expected one.
+
+    The programs and the module are in \c abstract-private-impl-subclass/.
+*/
+class AbstractPrivateImplSubclassTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/abstract-private-impl-subclass";
+
+        const Name = "probe";
+    }
+
+    constructor() : QUnit::Test("AbstractPrivateImplSubclassTest", "1.0", \ARGV) {
+        addTestCase("the AST interpreter prints the expected output", \testAst());
+        addTestCase("IR, JIT, tiered and IR-tier execution print the output of the AST", \testModes());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        addTestCase("the classes in a module and in a qcc -m .qmod", \testModule());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        string qcc_bin = ENV.QCC ?? ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        return is_file(qcc_bin) ? qcc_bin : "qcc";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/" + Name + ".expected");
+    }
+
+    private string command(string mode) {
+        return sprintf("%s -b --enable-debug --exec-mode=%s %s/%s.q", qore_bin, mode, dir, Name);
+    }
+
+    private string run(string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command(mode));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        ExecModeHarness::check_native(r);
+        return r.stdout;
+    }
+
+    testAst() {
+        assertEq(expected(), run("ast"), "ast");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), run(mode), mode);
+        }
+        # the IR tier of tiered execution runs the calls in the IR interpreter
+        assertEq(expected(), ExecModeHarness::run_ir_tier(command("tiered")), ExecModeHarness::IRTierName);
+    }
+
+    testModule() {
+        string expected = ReadOnlyFile::readTextFile(dir + "/module-user.expected");
+        # the module's source
+        string cmd = sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", dir, qore_bin, dir);
+        int rc;
+        string result = backquote(cmd, \rc);
+        assertEq(0, rc, sprintf("source module: exit status (output: %y)", result));
+        assertEq(expected, result, "source module");
+
+        # the module compiled by qcc -m, which the AOT loader resolves
+        TmpDir tmp("qore-abstract-private-impl-subclass-qmod-");
+        string out = backquote(sprintf("%s -m -o %s/AbstractImplSubclass.qmod %s/AbstractImplSubclass.qm 2>&1", qccBin(),
+            tmp.path, dir), \rc);
+        if (rc || !is_file(tmp.path + "/AbstractImplSubclass.qmod")) {
+            testSkip("qcc is not available or cannot compile the module: " + out);
+        }
+        result = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s/module-user.q 2>&1", tmp.path, qore_bin, dir), \rc);
+        assertEq(0, rc, sprintf("qmod: exit status (output: %y)", result));
+        assertEq(expected, result, "qmod");
+    }
+
+    testCompiled() {
+        string qcc_bin = qccBin();
+        TmpDir tmp("qore-abstract-private-impl-subclass-");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/%s-O%s", tmp.path, Name, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s/%s.q 2>&1", qcc_bin, opt, exe, dir, Name), \rc);
+            if (rc || !is_file(exe)) {
+                testSkip("qcc is not available or cannot compile " + Name + ": " + out);
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", exe), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

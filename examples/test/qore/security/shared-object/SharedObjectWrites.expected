@@ -1,0 +1,33 @@
+a new object is shared: False; a marked one: True
+assignment: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed assignment: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed scalar assignment: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
++=: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed +=: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+++: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed ++: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+nested hash element: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed nested hash element: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+list element: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+push: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed push: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+splice: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+extract: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+remove: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+typed remove: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+delete member: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+remove slice: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+delete slice: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+reference: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+reference argument: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
++= hash: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+member of a held object through the object: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+method of a tenant subclass: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+guarded method: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+Reflection NormalMember::setValue(): shared: REFLECTION-ACCESS-ERROR, unchanged; not shared: REFLECTION-ACCESS-ERROR, unchanged
+delete: shared: SHARED-OBJECT-ERROR, unchanged; not shared: changed, changed
+reads: "orig" 1 "v" 2 "inner" "orig" ["s", "i", "h", "l", "obj"]
+the object's own class code for the tenant: SHARED-OBJECT-ERROR, s: "orig"
+the tenant changes its copy: changed, s: "orig"
+a trusted caller: changed: s: "trusted method" i: 10 h: {} l: [1, 2, 3, 4] obj.x: "inner" members: ["s", "i", "h", "l", "obj"]
+trusted code deletes a shared object: OBJECT-ALREADY-DELETED

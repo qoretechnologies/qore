@@ -1227,14 +1227,14 @@ void inc_container_obj(const AbstractQoreNode* n, int dt) {
 }
 
 bool has_complex_type(const AbstractQoreNode* n) {
+    // the private accessors are inline, the public ones are calls into the library (qore#7573)
     switch (get_node_type(n)) {
         case NT_LIST: {
-            const QoreListNode* l = static_cast<const QoreListNode*>(n);
-            const QoreTypeInfo* ti = l->getValueTypeInfo();
+            const QoreTypeInfo* ti = qore_list_private::get(static_cast<const QoreListNode*>(n))->getValueTypeInfo();
             return ti && ti != anyTypeInfo;
         }
         case NT_HASH: {
-            const QoreHashNode* h = static_cast<const QoreHashNode*>(n);
+            const qore_hash_private* h = qore_hash_private::get(static_cast<const QoreHashNode*>(n));
             if (h->getHashDecl()) {
                 return true;
             }
@@ -1436,4 +1436,14 @@ DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n) {
         return n.refSelf();
     }
     return QoreValue(copy_strip_complex_types(n.getInternalNode()));
+}
+
+__attribute__((noinline, cold)) void strip_untyped_list_element(const QoreTypeInfo* vti, QoreValue& entry,
+        ExceptionSink* xsink) {
+    assert(entry.isPointer());
+    assert(!QoreTypeInfo::hasType(vti));
+    const AbstractQoreNode* n = entry.getPtr();
+    if (n && vti != autoTypeInfo && has_complex_type(n)) {
+        QoreTypeInfo::acceptAssignment(vti, "<lvalue>", entry, xsink, QLVTS_List);
+    }
 }

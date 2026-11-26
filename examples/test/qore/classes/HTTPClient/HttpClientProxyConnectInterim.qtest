@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - proxy CONNECT responses read from TCP and TLS sockets and TLS connections through the tunnel
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The interim (1xx other than 101) responses of a proxy to CONNECT are skipped, and the proxy's final response
+# decides whether the tunnel is made: a 2xx makes it, and a 101, any other final response or more than 16 interim
+# responses fail the connection; data that the proxy sends after its 2xx response, before the client starts the TLS
+# connection to the target server, fails it too, as it would otherwise be read as if the target server had sent it
+# (qore#7486).  HTTPClient (HTTP/1.1 and HTTP/2) and the HttpClientIo connection manager (h1 and h2) are tested through
+# an HTTP and an HTTPS proxy.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%include ../TestConnectProxy.qc
+
+%exec-class HttpClientProxyConnectInterimTest
+
+#! Answers every request with @ref HttpClientProxyConnectInterimTest::OriginBody
+class OriginHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, HttpClientProxyConnectInterimTest::OriginBody, {"Content-Type": MimeTypeText});
+    }
+}
+
+public class HttpClientProxyConnectInterimTest inherits QUnit::Test {
+    public {
+        #! a certificate for localhost and 127.0.0.1, valid until 2126
+        const Cert = "-----BEGIN CERTIFICATE-----
+MIIDOTCCAiGgAwIBAgIUb/hhtacVbMRFB9IjBCEsMk0fNK4wDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMUW9yZSBUZXN0IENBMCAXDTI2MDkyNzE1MzA0OFoYDzIx
+MjYwOTAzMTUzMDQ4WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3
+DQEBAQUAA4IBDwAwggEKAoIBAQCV1xww09YCd0nlSlHTcSvmd2+w+iECqGYJZ0LC
+yMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTuoN2qDfC+bV1iDezfH3wjW2Mi
+woWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGDaA78dfuKMfjVgouQq0j36xct
+Qp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQsnbyj3qWQb4OSH9r3MDqkCNA
+cPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwHP1x9R7zsMctD2utLzg8uE7PC
+xhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+DhMqer1HAgMBAAGjfjB8MBoG
+A1UdEQQTMBGCCWxvY2FsaG9zdIcEfwAAATAJBgNVHRMEAjAAMBMGA1UdJQQMMAoG
+CCsGAQUFBwMBMB0GA1UdDgQWBBRrykHXWldynutxb8kegXI2TDL/wjAfBgNVHSME
+GDAWgBQ2CBUEL5ruKIV7QY19uhPlrVqtezANBgkqhkiG9w0BAQsFAAOCAQEAICu/
+eAbP2pLfzfg2OehX2Md42ESOal0UMpXrfX5Y5FZuk7zbz4YhEUGlOTcayhkzJywt
+eO1a04VCpwhOhKMg47/d/sKaZ6s2y9kXG28nt/EtBSB1jlgyd1bETJTmqTAuLnUT
+qgZgZwmYJ+/UQJNySQQg2oi3hJsTfaK1VLe1+Eo1XwDocUsTZZy3h2hBKQgByMja
+Rwtsu7UOGp2wmXPpXcJIsX6lj/vY15f0EwbWBnUY2TN02TLQUaJmN1o4o1kOQe0H
+BruWF8zd4JEPIHXXq/5WJVF5UPDOktEsK+z4CTZmNxHPJyUrNrlKQBYNZkXIaM3M
+cT/QPnxjlFfMh4oBxA==
+-----END CERTIFICATE-----";
+        const Key = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCV1xww09YCd0nl
+SlHTcSvmd2+w+iECqGYJZ0LCyMv/5sL8912f7vPkkPluxhC99obnLdd63B4ULzTu
+oN2qDfC+bV1iDezfH3wjW2MiwoWXacUQLsqAA/1H5bVuafOEsnYn5azqb3rVDSGD
+aA78dfuKMfjVgouQq0j36xctQp9Sck6OEitp387lRoM0oXkC5iEvOQa+cqEV22xQ
+snbyj3qWQb4OSH9r3MDqkCNAcPXgVmXz8C8iJzROiKszGNugWm/9Wd+KqFsP7IwH
+P1x9R7zsMctD2utLzg8uE7PCxhz7QxfdRxF/Kt7AX5IEOhPKKX65lzAFMXfIMqB+
+DhMqer1HAgMBAAECggEAEuBGbOBC1YyxgnEaXcij/ySMrX7VKcCNGiIoBuHE0TgA
+2F1RLhSsJN8ejRXmhgfIdtcPjiqsn15TDLy3L/URnuuoF/IpJPKScOHSW06mBa0N
+Zjx+xiG6hpQphv9R7iWNPPlyDxZ8ItrEngk92hAC4CXrcvo/Grp5NsIm6Uy7RWdv
+hTyoL3EWBg6dLHzEGJJprmOh4t+2o5FF3Kt3Rckaw755ALw0sFwdPEnooAjF6ZE3
+rGt4b1GvGH157gzjGwav2ORYUQtcVlfr/+aSsKe6+Jl4OzlGopXF5Gfxcthlb0Ci
+NIswH9/Jaqou0gv8yYLPcld5wuxfXhlTiCPbC2++AQKBgQDSUjHpEn4SruKDNN4g
+rwxHHc2LL7HlrQLTre37sRF6xudsOp9LL7IFImX+Z9Vscp/OyzNEsRu+dwuWyBQd
+aeU9fjKh3A49hA7aL7Wirh88KlRvYyzuL+1YJQO4Lqr1ExLk4ZZtxervcFSV53Wl
+d48gApbBDFmRESlmge65Pkbf8wKBgQC2YjIzFRwbvi9Ph+OTM2auYl8SLXaDve8g
+JDb2wHz9bVR3jonHsLsuIEDQMlzXP1pF3jjL1+y/8eOz0AQ2B4S8bqa1FLCFrfdr
+pVmFffeFtVLqHqX+Or+1Ozzyz1XwGprSFBS2O7utgA4p32ivJPjaFwj9CYV5PjVU
+uuaxwjGWXQKBgD7N0J2aqg8GLhmkBdiYrP/nhGNVwLem7Dstqu0HuQKCtsR41Oxs
+t6oU1YQcmXyi1dm4j/ypLnG3trw1ztvhrVSphJEU1yPDdXPt3z1O5YDf2wrQALC3
+mxZBJ1UuilpYccHrIzJwcXFCh9+jmFvq0dBrNX08JNrO1yAHGLQ0RpHFAoGAI3zX
+57ijz4IiEoeOcIX/5M6fURonhVrfvJFPYJPzvhwX42uIw6JPyZndAqXKCtf46L9k
+rcVF+9NFSyeeqiSsXz3okjOEZX6ENh3mXWM1Vn8BsyxjgCROSSVNprFRN3b1yQq/
+PPZCfm/8UYl3BR1cjpMM3K+NmRnRprr3SH9QxsECgYEAgTR94CDtYFnOf6fYlKrS
+LS2vudPAPnPgvnMyoXqkdMVXPFaGt2H0jZbqJNeZ4rDD+F7xKw7Bh7dobks+nTpE
+DlzqJCYj569YNnMxXATrUXWlZKA2gUadYwrQYdoIe4eI8pAa5q2BgY7PsaqyFN0q
++QCcroH4V1WH5zPROGJoPVc=
+-----END PRIVATE KEY-----";
+
+        #! the body of every response of the target server
+        const OriginBody = "origin";
+
+        #! the body of a response that the proxy sends after its 200 response, which the client must never return
+        const InjectedBody = "injected";
+
+        #! interim responses
+        const P100 = "HTTP/1.1 100 Continue\r\n\r\n";
+        const P102 = "HTTP/1.1 102 Processing\r\n\r\n";
+        const P103 = "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload; as=style\r\n\r\n";
+        #! a 1xx code that is not defined, with header fields that do not apply to the final response
+        const P150 = "HTTP/1.1 150 Unknown\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n";
+
+        #! the final response that makes the tunnel
+        const Established = "HTTP/1.1 200 Connection established\r\n\r\n";
+
+        #! the number of interim responses that the client accepts before the final one
+        const MaxInterim = 16;
+
+        #! the clients: HTTPClient with an HTTP version, or the HttpClientIo connection manager with a protocol
+        const Clients = (
+            {"type": "HTTPClient", "version": "1.1"},
+            {"type": "HTTPClient", "version": "2.0"},
+            {"type": "HttpClientIo", "version": "h1"},
+            {"type": "HttpClientIo", "version": "h2"},
+        );
+    }
+
+    private {
+        HttpServer server;
+        int tls_port;
+        #! an HTTP proxy
+        TestConnectProxy http_proxy;
+        #! an HTTPS proxy
+        TestConnectProxy https_proxy;
+    }
+
+    constructor() : Test("HttpClientProxyConnectInterimTest", "1.0") {
+        addTestCase("interim responses before 200", \interimTest());
+        addTestCase("interim responses up to the limit", \interimLimitTest());
+        addTestCase("too many interim responses", \tooManyInterimTest());
+        addTestCase("101 response", \switchingTest());
+        addTestCase("interim responses before an error response", \interimErrorTest());
+        addTestCase("data after the 200 response", \dataAfterResponseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("proxy-connect-interim",
+            LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("origin", new OriginHandler());
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(Cert),
+            "key": new SSLPrivateKey(Key),
+        }).port;
+        http_proxy = new TestConnectProxy();
+        https_proxy = new TestConnectProxy(NOTHING, new SSLCertificate(Cert), new SSLPrivateKey(Key));
+    }
+
+    globalTearDown() {
+        http_proxy.shutdown();
+        https_proxy.shutdown();
+        server.stop();
+    }
+
+    #! interim responses of each kind, sent in one write and in one write each, are skipped
+    interimTest() {
+        list<string> interim = (P100, P103, P102, P150);
+        foreach bool split in ((False, True)) {
+            list<string> response = interim + Established;
+            if (!split) {
+                response = (response.join(""),);
+            }
+            map assertEq(OriginBody, request($1.proxy, $1.client), $1.msg + (split ? " (split)" : "")),
+                cases(response, True);
+        }
+    }
+
+    #! the client accepts as many interim responses as for any other request
+    interimLimitTest() {
+        string response = strmul(P100, MaxInterim) + Established;
+        map assertEq(OriginBody, request($1.proxy, $1.client), $1.msg), cases((response,), True);
+    }
+
+    #! more interim responses than the limit fail the connection
+    tooManyInterimTest() {
+        string response = strmul(P103, MaxInterim + 1) + Established;
+        map checkError("the proxy sent more than the maximum of 16 interim \\(1xx\\) responses to CONNECT", $1), cases((response,), False);
+    }
+
+    #! a 101 response, after interim responses or not, fails the connection
+    switchingTest() {
+        string switching = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: other\r\nConnection: Upgrade\r\n\r\n";
+        foreach string response in (switching, P100 + P103 + switching) {
+            map checkError("proxy CONNECT failed with HTTP 101", $1), cases((response,), False);
+        }
+    }
+
+    #! the final response after interim responses decides: an error response fails the connection
+    interimErrorTest() {
+        string response = P100 + P103 + "HTTP/1.1 407 Proxy Authentication Required\r\n"
+            "Proxy-Authenticate: Basic realm=\"test\"\r\nContent-Length: 0\r\n\r\n";
+        map checkError("proxy CONNECT failed with HTTP 407", $1), cases((response,), False);
+    }
+
+    #! data that the proxy sends right after its 200 response is not read as if the target server had sent it
+    dataAfterResponseTest() {
+        string injected = sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
+            InjectedBody.size(), InjectedBody);
+        foreach string response in (Established + injected, P100 + Established + injected) {
+            foreach hash<auto> c in (cases((response,), True)) {
+                string result = checkError(sprintf("the proxy sent %d bytes after its 200 response to CONNECT",
+                    injected.size()), c);
+                assertNRegex(InjectedBody, result, c.msg);
+            }
+        }
+    }
+
+    #! checks that the request of the case fails with the error of the client's proxy CONNECT; returns the error
+    private string checkError(string pattern, hash<auto> c) {
+        # the HttpClientIo h2 connection makes its tunnel itself; the others make it with an HTTP/1.1 connection
+        string err = c.client.version == "h2" ? "HTTP2-CONNECT-ERROR" : "HTTP1-CONNECT-ERROR";
+        string result = request(c.proxy, c.client);
+        assertRegex(err + ": " + pattern, result, c.msg);
+        return result;
+    }
+
+    #! returns the cases: each client through each proxy, which answers CONNECT with the given response
+    private list<hash<auto>> cases(list<string> response, bool tunnel) {
+        list<hash<auto>> rv = ();
+        foreach TestConnectProxy proxy in (http_proxy, https_proxy) {
+            proxy.setConnectResponse(response, tunnel);
+            string proxy_url = sprintf("%s://127.0.0.1:%d", proxy == http_proxy ? "http" : "https",
+                proxy.getPort());
+            foreach hash<auto> client in (Clients) {
+                rv += {
+                    "proxy": proxy_url,
+                    "client": client,
+                    "msg": sprintf("%s %s through %s", client.type, client.version, proxy_url),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! makes a request to the target server through the proxy; returns the body of the response or the error
+    private string request(string proxy, hash<auto> client) {
+        string url = sprintf("https://127.0.0.1:%d", tls_port);
+        try {
+            if (client.type == "HTTPClient") {
+                HTTPClient hc({
+                    "url": url,
+                    "proxy": proxy,
+                    "http_version": client.version,
+                    "timeout": 20s,
+                    "connect_timeout": 20s,
+                });
+                on_exit hc.disconnect();
+                hc.setSslVerifyMode(SSL_VERIFY_NONE);
+                return hc.get("/");
+            }
+            HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+                "protocol": client.version,
+                "proxy_url": proxy,
+                "accept_all_certs": True,
+                "max_request_retries": 0,
+                "accept_encoding": "",
+            });
+            on_exit mgr.closeAll();
+            return mgr.request(url, "GET", "/").body;
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
+    }
+}
