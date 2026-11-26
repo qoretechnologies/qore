@@ -488,6 +488,9 @@ private:
 
     //! Headers-only mode
     bool headers_only;
+    //! the maximum request body size (0 = unlimited), applied to each QUIC server operation that startReadRequest()
+    //! creates, so that the connections accepted after startReadNextRequest() have it too
+    int64_t max_request_body_size = 0;
 
     //! Effective drain timeout
     std::chrono::microseconds drain_timeout;
