@@ -783,6 +783,10 @@ authenticate();
     @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()" itself.  This applies to the schemas that
     serialized data provider types restore, which are not marked.
 
+    A binary module protects the objects that it keeps for every %Program in the same way with the C++ API in
+    <tt>qore/QoreSharedObject.h</tt> (\c qore_share_object(), \c qore_update_shared_object() and their relatives; see
+    @ref interruptible_io_sandbox_shared_objects).
+
     @since %Qore 3.0
 
     @subsection sandbox_isolation_domains Isolation Domains (Tenants)

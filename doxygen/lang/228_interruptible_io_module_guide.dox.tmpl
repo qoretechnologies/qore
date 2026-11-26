@@ -294,6 +294,94 @@ while (true) {
     Check on every reuse rather than once per caller: a sandbox can be tightened while the connection stays open.
     See <tt>design/pooled-connection-sandbox.md</tt> for how the HTTP client pools of %Qore do this.
 
+    @subsection interruptible_io_sandbox_shared_objects Objects Shared by Every Program
+
+    An object that a module creates once and keeps for every @ref Qore::Program "Program" of the process (a registry,
+    a cache, a client shared between Programs, an object in a constant or a static variable) is reachable by the code
+    of every tenant, so it is protected as a @ref sandbox_shared_objects "shared object", as a Qore module protects
+    one with @ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()".  The C++ API, declared in
+    <tt>qore/QoreSharedObject.h</tt> (included by <tt>qore/Qore.h</tt>; \c _QORE_HAS_SHARED_OBJECT_API is defined
+    if it is available), has the semantics of the Qore API:
+
+    |!C++ function|!Qore API|!Use
+    |<tt>qore_caller_creates_shared_objects()</tt>|\
+        @ref Qore::SandboxManager::createsSharedObjects() "SandboxManager::createsSharedObjects()"|\
+        true if what the calling code creates may be shared by every Program: mark it then
+    |<tt>qore_caller_can_share_objects()</tt>|\
+        @ref Qore::SandboxManager::canShareObjects() "SandboxManager::canShareObjects()"|\
+        true if the calling code may mark objects (false if it cannot be decided)
+    |<tt>qore_share_object()</tt>|@ref Qore::SandboxManager::shareObject() "SandboxManager::shareObject()"|\
+        marks an object, permanently; \c SHARED-OBJECT-ERROR if the calling code cannot share objects
+    |<tt>qore_object_is_shared()</tt>|@ref Qore::SandboxManager::isSharedObject() "SandboxManager::isSharedObject()"|\
+        true if the object is marked
+    |<tt>qore_check_shared_object_change()</tt>|\
+        @ref Qore::SandboxManager::checkSharedObjectChange() "SandboxManager::checkSharedObjectChange()"|\
+        called first by a C++ method that changes the private data of the object for its caller
+    |<tt>qore_check_shared_object_callback()</tt>|\
+        @ref Qore::SandboxManager::checkSharedObjectCallback() "SandboxManager::checkSharedObjectCallback()"|\
+        called by a C++ method that runs code that its caller gives while it holds the object's state
+    |<tt>qore_update_shared_object()</tt>|\
+        @ref Qore::SandboxManager::updateSharedObject() "SandboxManager::updateSharedObject()"|\
+        runs a C++ update in an update scope, such as a cache built on first use, also in a call for sandboxed code
+
+    Sandboxed code cannot change the members of a shared object or delete it, whatever code it calls; the private
+    data of a builtin class is the module's own, so each C++ method that changes it for its caller checks the caller
+    with <tt>qore_check_shared_object_change()</tt> before it changes anything.  State that the object builds from
+    itself, also in a call for sandboxed code, is changed in an update scope with <tt>qore_update_shared_object()</tt>:
+    the scope belongs to the object's Program, which must not be sandboxed (for an object that no Program owns, to the
+    Program of the calling code, if that code may share objects), and the update runs as the code of that Program,
+    as a closure of the object's class does; in it the C++ update can mark the objects that it
+    creates and caches with <tt>qore_share_object()</tt>, while code that sandboxed code supplied and that the update
+    calls (a callback of the caller) acts for sandboxed code and can do neither, nor open another scope.  The update
+    computes the new state from the object itself, never from data that its caller gives.  No C++ exception leaves
+    these functions: a failure is raised in the \c ExceptionSink, and a C++ exception that the update throws is
+    raised there too, after the scope has ended.
+
+    @code{.cpp}
+    // the constructor of a builtin class whose objects a module can keep for every Program
+    static void MyRegistry_constructor(QoreObject* self, const QoreListNode* args, q_rt_flags_t rtflags,
+            ExceptionSink* xsink) {
+        self->setPrivate(CID_MYREGISTRY, new MyRegistryData);
+        if (qore_caller_creates_shared_objects()) {
+            qore_share_object(self, xsink);
+        }
+    }
+
+    // a method that changes the registry for its caller
+    static QoreValue MyRegistry_add(QoreObject* self, MyRegistryData* reg, const QoreListNode* args,
+            q_rt_flags_t rtflags, ExceptionSink* xsink) {
+        if (qore_check_shared_object_change(self, "add an entry", xsink)) {
+            return QoreValue();
+        }
+        reg->add(args, xsink);
+        return QoreValue();
+    }
+
+    // an index that the registry builds from itself on first use, also for sandboxed callers
+    static QoreValue build_index(QoreObject* obj, void* arg, ExceptionSink* xsink) {
+        static_cast<MyRegistryData*>(arg)->buildIndex(xsink);
+        return QoreValue();
+    }
+
+    static QoreValue MyRegistry_lookup(QoreObject* self, MyRegistryData* reg, const QoreListNode* args,
+            q_rt_flags_t rtflags, ExceptionSink* xsink) {
+        if (!reg->hasIndex()) {
+            if (qore_object_is_shared(self)) {
+                qore_update_shared_object(self, build_index, reg, xsink);
+            } else {
+                reg->buildIndex(xsink);
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return reg->lookup(args, xsink);
+    }
+    @endcode
+
+    \c examples/test/qore/security/shared-object/shared-object-cpp-api.qtest in the source tree exercises the API
+    from a test module's builtin class (\c examples/test/module-cpp-api/QC_SharedObjectProbe.qpp).
+
     @section interruptible_io_testing Testing
 
     - A cancellation test blocks a thread in the wait, cancels it, and checks that the call ends with

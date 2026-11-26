@@ -1483,6 +1483,12 @@
 
     @subsection qore_3_0_0_new_features New Features in Qore
 
+    @par Shared Objects in Binary Modules
+    Binary modules mark the objects that they keep for every %Program as shared, check changes and callbacks and
+    update them in an update scope with a C++ API (\c qore_share_object(), \c qore_update_shared_object() and their
+    relatives; see @ref interruptible_io_sandbox_shared_objects;
+    <a href="https://github.com/qoretechnologies/qore/issues/7669">issue 7669</a>).
+
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as

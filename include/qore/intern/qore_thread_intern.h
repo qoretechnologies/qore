@@ -2608,12 +2608,8 @@ DLLLOCAL bool qore_caller_restricts_terminal_io();
 */
 DLLLOCAL int qore_caller_sandbox_state();
 
-//! returns true if what the calling code creates may be shared by every Program: the code is not sandboxed, or the
-//! governing sandbox cannot be resolved (fails closed: such an object is treated as shared, which sandboxed code
-//! cannot change)
-DLLLOCAL inline bool qore_caller_creates_shared_objects() {
-    return qore_caller_sandbox_state() != 1;
-}
+// qore_caller_creates_shared_objects(), which returns true if what the calling code creates may be shared by every
+// Program (qore_caller_sandbox_state() != 1), is exported in the public header qore/QoreSharedObject.h (qore#7669)
 
 class QoreCallerSandboxHelper;
 

@@ -1,0 +1,42 @@
+--- trusted code
+creates shared objects: True, can share objects: True
+a probe that it creates: shared: True (SandboxManager: True), has a Program: True
+set the value of a shared probe: "trusted"
+build the cache of a shared probe: "built from trusted" "built from trusted", updates: 1
+update and share an object in the scope: {can_share: True, child_shared: True}
+a C++ update that throws: SHARED-OBJECT-ERROR: the C++ update of a shared object of class 'SharedObjectProbe' threw a C++ exception: the probe update failed, can share objects: True
+run its own code locked: "trusted code"
+check no callback: ok
+a probe that it does not mark: shared: False, update: SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object
+build the cache of a probe that is not shared: "built from orig", updates: 1
+an object of a Qore class marked from C++: SandboxManager: True; update: ok: {can_share: True, inner: "set by a closure of the class"}
+an object marked with SandboxManager::shareObject(): C++: True
+a probe with no Program: shared: True, has a Program: False, update: ok: {can_share: True}
+a probe with no Program that is not shared: update: SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object
+null pointers: {is_shared: False, check_change: 0, check_callback: 0, share_rc: -1, share: "SHARED-OBJECT-ERROR", update: "SHARED-OBJECT-ERROR", update_no_function: "SHARED-OBJECT-ERROR"}
+--- a tenant
+creates shared objects: ok: False
+can share objects: ok: False
+a probe that it creates is shared: ok: False
+it marks a probe that it creates: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot mark an object of class 'SharedObjectProbe' as shared by every Program of the process
+it marks an object that it creates: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot mark an object of class 'SharedObjectProbe' as shared by every Program of the process
+a null object: ok: {is_shared: False, check_change: 0, check_callback: 0, share_rc: -1, share: "SHARED-OBJECT-ERROR", update: "SHARED-OBJECT-ERROR", update_no_function: "SHARED-OBJECT-ERROR"}
+set the value: shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot set the value of an object of class 'SharedObjectProbe': the object is shared by every Program of the process; not shared: ok: "tenant"
+check a change: shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot set the state of an object of class 'SharedObjectProbe': the object is shared by every Program of the process; not shared: ok: null
+mark it: shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot mark an object of class 'SharedObjectProbe' as shared by every Program of the process; not shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot mark an object of class 'SharedObjectProbe' as shared by every Program of the process
+build the cache on first use: shared: ok: ["built from orig", "built from orig", 1]; not shared: ok: ["built from orig", "built from orig", 1]
+update and share an object in the scope: shared: ok: {can_share: True, child_shared: True}; not shared: SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object
+its own code in the scope: shared: ok: {can_share: True, inner: [False, "SHARED-OBJECT-ERROR"]}; not shared: SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object
+its own code opens a nested scope: shared: ok: {can_share: True, inner: "SHARED-OBJECT-ERROR: code that sandboxed code called cannot open an update scope for an object of class 'SharedObjectProbe'"}; not shared: SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object
+a C++ update that throws: shared: ok: ["SHARED-OBJECT-ERROR: the C++ update of a shared object of class 'SharedObjectProbe' threw a C++ exception: the probe update failed", False, 1]; not shared: ok: ["SHARED-OBJECT-ERROR: an object of class 'SharedObjectProbe' is not shared; an update scope is only for a shared object", False, 0]
+run its own code locked: shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot run code locked of an object of class 'SharedObjectProbe' with code that is not a closure of a trusted class: the object is shared by every Program of the process; not shared: ok: "tenant closure"
+run a closure of a trusted class locked: shared: ok: "trusted closure"; not shared: ok: "trusted closure"
+check no callback: shared: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot run code of an object of class 'SharedObjectProbe' with code that is not a closure of a trusted class: the object is shared by every Program of the process; not shared: ok: null
+update a shared probe with no Program: SHARED-OBJECT-ERROR: an update scope for an object of class 'SharedObjectProbe' that has no Program can only be opened by code that may share objects
+update a probe of the tenant that trusted code marked: SHARED-OBJECT-ERROR: an update scope cannot be opened for an object of class 'SharedObjectProbe' whose Program is sandboxed
+change a member of an object marked from C++: SHARED-OBJECT-ERROR, "orig"
+update an object of a Qore class from C++: ok: {can_share: True}
+its own code changes the object in the update scope: SHARED-OBJECT-ERROR: code that is sandboxed or acts for sandboxed code cannot change member 'v' of an object of class 'HostObject': the object is shared by every Program of the process, "orig"
+a closure of the class changes the object in the update scope: ok: {can_share: True, inner: "set by a closure of the class"}, "set by a closure of the class"
+a closure of a trusted class opens a nested C++ scope: ok: {can_share: True, inner: {can_share: True}}
+a C++ scope in a Qore update scope: ok: ["built from orig", "in scope"]

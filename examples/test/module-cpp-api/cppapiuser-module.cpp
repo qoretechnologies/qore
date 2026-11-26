@@ -140,6 +140,7 @@ static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
     CppApiTestNs.addSystemClass(initSerializationIndexProbeClass(CppApiTestNs));
     CppApiTestNs.addSystemClass(initExceptionResultProbeClass(CppApiTestNs));
     CppApiTestNs.addSystemClass(initPollableProbeClass(CppApiTestNs));
+    CppApiTestNs.addSystemClass(initSharedObjectProbeClass(CppApiTestNs));
     QoreClass* write_probe = initMemberWriteProbeClass(CppApiTestNs);
     write_probe->setMemberWriteGate(member_write_probe);
     write_probe->addMember("declared", Public, bigIntTypeInfo, QoreValue(7ll));
