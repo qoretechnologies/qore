@@ -1,4 +1,6 @@
-warm-up 900
-module: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: mod_checked:18 <- call_module:81; exceptions: RUNTIME-TYPE-ERROR
-local: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: local_checked:22 <- call_local:82; exceptions: RUNTIME-TYPE-ERROR
-given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: given_checked:56 <- call_given:83; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+warm-up 1500
+module: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: mod_checked:18 <- call_module:100; exceptions: RUNTIME-TYPE-ERROR
+local: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: local_checked:22 <- call_local:101; exceptions: RUNTIME-TYPE-ERROR
+given: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: given_checked:60 <- call_given:102; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+given value: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: given_value:69 <- call_given_value:103; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR
+given value through a reference: RUNTIME-TYPE-ERROR: <return statement> expects type 'int', but got type 'string' instead; stack: given_value:74 <- call_given_ref:104; exceptions: RUNTIME-TYPE-ERROR,DESTRUCTOR-ERROR

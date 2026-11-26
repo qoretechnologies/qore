@@ -43,6 +43,10 @@ class Tmp {
     string name() {
         return n;
     }
+
+    auto value() {
+        return n == "ok" ? 1 : n;
+    }
 }
 
 int sub given_checked(Tmp t) {
@@ -54,6 +58,20 @@ int sub given_checked(Tmp t) {
 # before the parameter, whose destructor raises, is released
 int sub call_given(string s, bool raise) {
     return given_checked(new Tmp(s, raise));
+}
+
+# a function without locals of its own, which returns a value that it does not check itself
+int sub given_value(Tmp t) {
+    return t.value();
+}
+
+int sub call_given_value(string s, bool raise) {
+    return given_value(new Tmp(s, raise));
+}
+
+# the same call through a reference
+int sub call_given_ref(code f, string s, bool raise) {
+    return f(new Tmp(s, raise));
 }
 
 string sub errs(hash<ExceptionInfo> ex) {
@@ -72,15 +90,18 @@ string sub stack_of(hash<ExceptionInfo> ex) {
 
 int t = 0;
 for (int i = 0; i < 300; ++i) {
-    t += call_module("ok") + call_local("ok") + call_given("ok", False);
+    t += call_module("ok") + call_local("ok") + call_given("ok", False) + call_given_value("ok", False)
+        + call_given_ref(\given_value(), "ok", False);
 }
 printf("warm-up %d\n", t);
-foreach string name in (("module", "local", "given")) {
+foreach string name in (("module", "local", "given", "given value", "given value through a reference")) {
     try {
         switch (name) {
             case "module": call_module("bad"); break;
             case "local": call_local("bad"); break;
             case "given": call_given("bad", True); break;
+            case "given value": call_given_value("bad", True); break;
+            case "given value through a reference": call_given_ref(\given_value(), "bad", True); break;
         }
         printf("%s: no exception\n", name);
     } catch (hash<ExceptionInfo> ex) {

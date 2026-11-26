@@ -3,9 +3,10 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # The expression of the background operator calls, through a reference, a function of a Program that may not control
-# threads (qore#7087, qore#5578): the call is refused in the new thread, in every execution mode, also when the
-# reference's calls take the fast path; the refusal ends the thread with an exception on stderr.  Calls of the
-# reference that a thread makes itself run.
+# threads (qore#7087, qore#5578): the call is refused in the new thread, in every execution mode; the refusal ends the
+# thread with an exception on stderr.  Calls of the reference that a thread makes itself run.  The fast call through
+# a function reference ran the function in the IR, JIT and tiered modes when it entered other Programs than modules'
+# (it takes the generic call path for them now, and refuses such a call of a module's code itself)
 
 %modern
 %no-child-restrictions
