@@ -2978,7 +2978,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         in_destructor = true;
         // mark status as in destructor
-        status = q_gettid();
+        status = getDestroyingStatus();
 
         // released here and not at the end of the block, so that the hook below runs between the marking and the
         // end of this dereference (RObject::derefDone() in the helper's destructor)
@@ -3084,7 +3084,7 @@ void QoreObject::externalDelete(qore_classid_t key, ExceptionSink* xsink) {
         (void)pd;
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
 
     // run the destructor
@@ -3441,14 +3441,14 @@ void QoreObject::doDelete(ExceptionSink* xsink) {
         if (priv->status == OS_DELETED)
             return;
 
-        if (priv->in_destructor || priv->status > 0) {
+        if (priv->in_destructor || priv->status != OS_OK) {
             xsink->raiseException("DOUBLE-DELETE-EXCEPTION", "destructor called from within destructor for class %s",
                 getClassName());
             return;
         }
 
         // mark status as in destructor
-        priv->status = q_gettid();
+        priv->status = qore_object_private::getDestroyingStatus();
     }
     priv->doDeleteIntern(xsink);
 }
