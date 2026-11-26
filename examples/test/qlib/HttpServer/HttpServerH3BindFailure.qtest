@@ -189,6 +189,7 @@ class HttpServerH3BindFailureTest inherits QUnit::Test {
             hash<auto> s = getServer(9);
             FailingQuicServer srv = s.srv;
             try {
+                # all-interfaces: none; the callers give h3Options(), which listens on "node": "localhost"
                 hash<auto> li = srv.addListener(info);
                 return {"srv": srv, "rec": s.rec, "li": li};
             } catch (hash<ExceptionInfo> ex) {
