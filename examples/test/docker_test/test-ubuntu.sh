@@ -308,12 +308,14 @@ fi
 qore_ci_resource_report "before the tests"
 QORE_TEST_JOBS="${QORE_TEST_JOBS:-$(qore_ci_test_jobs)}"
 echo "QORE_TEST_JOBS=${QORE_TEST_JOBS}"
+# the job's suites run to their ends and the job ends with the summary of the failing ones (see ci-suites.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-suites.sh"
 TEST_RC=0
 # the root helper through which run_tests.sh captures the native call stacks of the processes of a test that exceeds
 # its time limit (see ci-stack-capture.sh): the tests run as qore, whose debugger yama's ptrace_scope may not let attach
 . "${QORE_SRC_DIR}/test/docker_test/ci-stack-capture.sh"
 qore_ci_start_stack_capture qore
-gosu qore:qore env \
+qore_ci_suite "Qore tests (run_tests.sh)" gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
     QORE_BINARY="${QORE_BINARY}" \
@@ -327,7 +329,7 @@ gosu qore:qore env \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     QORE_TEST_STACK_CAPTURE_HELPER="${QORE_TEST_STACK_CAPTURE_HELPER}" \
-    ./run_tests.sh || TEST_RC=$?
+    ./run_tests.sh
 # no process of the job may outlive it (see ci-job-processes.sh)
 qore_ci_stop_stack_capture
 qore_ci_resource_report "after the tests"
@@ -356,6 +358,7 @@ qore_ci_collect_cores "$CORE_DIR"
 # the notice of QORE_CI_NATIVE_MODULE_API_TRANSITION (the native modules whose tests were skipped, or that it is not
 # needed), at the end of the job's log
 qore_ci_native_module_notice
+qore_ci_suites_summary || TEST_RC=1
 if [ "${TEST_RC}" != "0" ]; then
     qore_ci_end_job_processes || true
     exit ${TEST_RC}

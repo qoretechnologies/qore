@@ -118,6 +118,10 @@
   same port number.  A test that needs the name `localhost` (a TLS host name check, an origin that must differ from
   `127.0.0.1`, a fallback from `::1`) listens on both loopback addresses, or holds the port on `::1`, and declares
   `# test-loopback: localhost - <why>`; `examples/test/runner/test_loopback_hosts.py` enforces it (#7469).
+- A CI job runs all of its test suites, also when an earlier one fails, and ends with one summary of every failing
+  suite and of its failing tests: the CI scripts run each suite with `qore_ci_suite` and end with
+  `qore_ci_suites_summary` (`examples/test/docker_test/ci-suites.sh`; `examples/test/runner/test_ci_suites.py`
+  checks it); a failed build still ends the job.  Run a new suite of a CI script the same way.
 - The `check-build-warnings` CI job reports the compiler warnings in Qore's own sources (not in bundled third-party
   code) from the logs of the jobs that build Qore (`examples/test/docker_test/ci-build-log.sh`: the Linux build jobs,
   the macOS job, the build of separate compilation units, which shows warnings that the single unit hides, and
