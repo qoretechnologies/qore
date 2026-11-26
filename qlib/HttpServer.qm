@@ -242,7 +242,9 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       @ref Qore::Socket::readHTTPChunkedBody() "readHTTPChunkedBody()" and its variants; a body with a
       \c Content-Length up to its length, which the server reads before the handler gets the request, except the
       part that it did not read of a body that a stream handler gets in parts (see
-      @ref HttpServer::Http1BodyReader "Http1BodyReader");
+      @ref HttpServer::Http1BodyReader "Http1BodyReader"); @ref Qore::Socket::isDataAvailable() "isDataAvailable()"
+      tells whether data of that body is available, and returns @ref False "False" once it is read (the data that
+      follows is the next request's);
     - has a character encoding and timeouts of its own, which do not change the connection's, and gives the
       connection's information, such as @ref Qore::Socket::getPeerInfo() "getPeerInfo()";
     - gives each send and read a timeout of at most the server's \c handler_socket_max_timeout option (see
@@ -253,7 +255,9 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       (@ref Qore::Socket::readHTTPHeader() "readHTTPHeader()"), for shutdown() and close() (a handler closes the
       connection with the \c close key of its response; code that is not sandboxed aborts it at once, as when a
       response is cut off midway, with @ref HttpServer::http_abort_connection() "http_abort_connection()"), and for
-      the methods that connect, bind, accept or upgrade a socket or change the connection's settings;
+      the methods that connect, bind, accept or upgrade a socket or change the connection's settings, and for every
+      other method of the connection's other uses (TLS settings, HTTP/2 and HTTP/3 streams, poll operations, the
+      server's own settings and queues);
     - ends before the server answers the request (when the handler's code returns, or when the request is answered
       before its handler gets it) or reads the next request: its sends and reads then raise
       \c HTTP-HANDLER-SOCKET-ERROR.
@@ -5340,7 +5344,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** Called only for a request whose handler gets the socket of its request; the callers of handleRequest() end it
         when it returns, and handleRequest() before the server answers the request
     */
-    private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10) {
+    private startHandlerSocket(RequestHelper request_helper, Socket s, bool head, bool http10, int stream_max_body) {
         # the callers end the socket of each request when the request is handled: a socket of a previous request on
         # the object that is still live is ended here all the same
         if (request_helper.h1_view) {
@@ -5351,12 +5355,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (request_helper.hs_state) {
             request_helper.handler_sock = new Http1HandlerSocket(real, request_helper.hs_state,
                 request_helper.hs_state.h1Reset(real, head, http10, handler_socket_max_timeout),
-                handler_socket_max_timeout);
+                handler_socket_max_timeout, stream_max_body);
         } else {
             # a new state, started for the request: its first generation
             request_helper.hs_state = new HandlerSocketState(real, head, http10, handler_socket_max_timeout);
             request_helper.handler_sock = new Http1HandlerSocket(real, request_helper.hs_state, 1,
-                handler_socket_max_timeout);
+                handler_socket_max_timeout, stream_max_body);
         }
         request_helper.h1_state = 0;
         request_helper.h1_view = True;
@@ -5585,7 +5589,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                     || SandboxManager::isRestricted();
             }
             if (handler_socket_view && !is_multiplexed && !request_helper.handler_sock) {
-                startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0");
+                # the limit of a body that the request's handler reads as a stream, which the socket of the request
+                # accepts as its maximum size of a chunked body from any code (qore#7567)
+                startHandlerSocket(request_helper, s, head, hdr.http_version == "1.0",
+                    cx."header-info".max_request_body_size ?? 0);
             }
 
             # on the thread of a dedicated persistent connection, the request runs with the thread context of its
@@ -11809,19 +11816,28 @@ enum Http1ResponseSend : int {
     Its character encoding (getEncoding(), setEncoding()) is its own: the strings that it sends are converted to it,
     and those that it reads are in it; the connection's encoding does not change.  Its timeouts
     (setSendTimeout(), setRecvTimeout()) are its own too: they apply to its sends and reads that are not given a
-    timeout.
+    timeout.  So is its maximum size of a chunked body (getMaxChunkedBodySize(), the connection's until it is set),
+    which applies to its read of the request's chunked body; restricted code can set it only to a limit that the
+    server set for the request (the listener's limit of a body read as a stream, or the connection's), so that it
+    cannot choose a limit of its own (qore#7567).
 
     Its readHTTPHeader() and readHTTPHeaderString(), which would read the next request on the connection, raise an
     exception, as do shutdown(), shutdownWrite(), shutdownSSL() and close() (a handler closes the connection after
     its response with the \c close key of its response, or \c cx.close, and code that is not sandboxed aborts it at
     once with @ref HttpServer::http_abort_connection() "http_abort_connection()"), the methods that connect, bind,
     listen, accept or upgrade a socket to TLS, those that change the connection's settings (\c TCP_NODELAY, its
-    user timeout, the maximum size of a chunked body), getPollableDescriptor(), and copy().
+    user timeout), getPollableDescriptor(), and copy().
 
     These give what concerns the handler's own request, from the connection's socket: getPeerInfo(),
     getSocketInfo(), isOpen(), isSecure(), isHttp2(), isQuic(), getSSLCipherName(), getSSLCipherVersion(),
-    getAlpnProtocol(), getRemoteCertificate(), verifyPeerCertificate() and pendingHttpChunkedBody().  Its other
-    methods are those of its own, unconnected socket.
+    getAlpnProtocol(), getRemoteCertificate(), verifyPeerCertificate(), pendingHttpChunkedBody(),
+    unfinishedHttpChunkedBody(), getPort(), getConnectionId(), getNoDelay(), getUserTimeout(), getMaxHeaderSize(),
+    getMaxLineSize(), getSslVerifyMode() and getAcceptAllCertificates().  isDataAvailable() tells whether data of
+    the request's body that was not read is available (its chunked body before it is read, the rest of a body with
+    a \c Content-Length that the server did not read), and isWriteFinished() whether what was sent on the connection
+    was written; both raise an exception once the request ended, as its reads and sends do.  getCharset() and
+    setCharset() are getEncoding() and setEncoding().  Every other method of Socket raises an exception: none runs
+    on the object's own socket, which is not connected (qore#7567).
 
     The server ends the object before it sends a response for the request, or reads the next request: its methods
     that send or read then raise an exception, and isOpen() returns @ref False "False"; a send or read of another
@@ -11847,6 +11863,11 @@ class Http1HandlerSocket inherits Qore::Socket {
         int send_to = -1;
         #! the timeout of the object's reads that are given none; -1 for the connection's
         int recv_to = -1;
+        #! the object's own maximum size of a chunked body, once it was set; the connection's until then
+        *int max_chunked;
+        #! the limit of the body of the request that its handler reads as a stream (the listener's), which any code
+        #! can set as the object's maximum size of a chunked body
+        int stream_max_body;
     }
 
     #! Creates the object for the current request on the connection's socket
@@ -11855,12 +11876,15 @@ class Http1HandlerSocket inherits Qore::Socket {
         @param gen the generation of the request's socket in the state (see HandlerSocketState::h1Reset())
         @param max_to the longest timeout of a send or a read of the object, in milliseconds (the server's
         \c handler_socket_max_timeout option)
+        @param stream_max_body the limit of the body of the request that its handler reads as a stream (the
+        listener's, 0 for none)
     */
-    constructor(Socket real, HandlerSocketState rh, int gen, int max_to) {
+    constructor(Socket real, HandlerSocketState rh, int gen, int max_to, int stream_max_body) {
         self.real = real;
         self.rh = rh;
         self.gen = gen;
         self.max_to = max_to;
+        self.stream_max_body = stream_max_body;
     }
 
     #! Returns the object's own character encoding: the connection's until setEncoding() is called
@@ -12045,8 +12069,608 @@ class Http1HandlerSocket inherits Qore::Socket {
     }
 
     #! Raises an exception
+    #! Sets the object's own maximum size of a chunked body, which applies to its read of the request's chunked body
+    /** Restricted code can set only the limits that the server set for the request: that of a body that the handler
+        reads as a stream (the listener's), which the code of the server's modules that reads the body of a stream
+        request sets, and the connection's; other code can set any limit (qore#7567).  The connection's limit does
+        not change
+
+        @throw HTTP-HANDLER-SOCKET-ERROR the calling code is restricted (see
+        @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()"), and the limit is neither of the
+        server's limits for the request
+    */
     nothing setMaxChunkedBodySize(int max_body_size) {
-        refuse("setMaxChunkedBodySize");
+        # a restricted caller cannot choose a limit of its own, also when it calls through code that is not
+        # restricted
+        if (max_body_size != stream_max_body && max_body_size != real.getMaxChunkedBodySize()
+                && SandboxManager::isRestricted()) {
+            throw "HTTP-HANDLER-SOCKET-ERROR", sprintf("Socket::setMaxChunkedBodySize(): sandboxed code can set only "
+                "the limits that the server set for the HTTP/1.x request of this socket (%d or %d), not %d",
+                stream_max_body, real.getMaxChunkedBodySize(), max_body_size);
+        }
+        # the value is checked as the socket checks it
+        Socket::setMaxChunkedBodySize(max_body_size);
+        max_chunked = max_body_size;
+    }
+
+    # the other methods of Socket, of the connection's other uses (TLS settings, HTTP/2 and HTTP/3 streams, poll
+    # operations, the server's own settings and queues), which would run on the object's own socket (qore#7567)
+    nothing acceptAllCertificates(bool accept_all = True) {
+        refuse("acceptAllCertificates");
+    }
+
+    nothing cancelHttp2Stream(int stream_id) {
+        refuse("cancelHttp2Stream");
+    }
+
+    nothing cancelQuicStream(int session_id, int stream_id) {
+        refuse("cancelQuicStream");
+    }
+
+    nothing cancelQuicStreamRead(int session_id, int stream_id) {
+        refuse("cancelQuicStreamRead");
+    }
+
+    bool captureRemoteCertificates(bool enabled = True) {
+        refuse("captureRemoteCertificates");
+    }
+
+    int checkIdleDataForAsyncPoll() {
+        refuse("checkIdleDataForAsyncPoll");
+    }
+
+    nothing cleanupHttp2Stream(int stream_id) {
+        refuse("cleanupHttp2Stream");
+    }
+
+    nothing cleanupQuicStream(int session_id, int stream_id) {
+        refuse("cleanupQuicStream");
+    }
+
+    nothing clearStats() {
+        refuse("clearStats");
+    }
+
+    nothing clearWarningQueue() {
+        refuse("clearWarningQueue");
+    }
+
+    nothing deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
+        refuse("deregisterQuicConnectStreamFrameState");
+    }
+
+    nothing deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
+        refuse("deregisterQuicConnectStreamQueue");
+    }
+
+    nothing drainHttpConnection(bool idle = False) {
+        refuse("drainHttpConnection");
+    }
+
+    nothing flushQuicPendingData(int session_id) {
+        refuse("flushQuicPendingData");
+    }
+
+    int getHttp2MaxRequestBodySize() {
+        refuse("getHttp2MaxRequestBodySize");
+    }
+
+    int getHttp2StreamTakenBytes(int stream_id) {
+        refuse("getHttp2StreamTakenBytes");
+    }
+
+    *hash<auto> getHttp2StreamTrailers(int stream_id) {
+        refuse("getHttp2StreamTrailers");
+    }
+
+    *WebSocketCloseRecord getHttp2StreamWebSocketCloseRecord(int stream_id) {
+        refuse("getHttp2StreamWebSocketCloseRecord");
+    }
+
+    bool getHttpFieldsAtTopLevel() {
+        refuse("getHttpFieldsAtTopLevel");
+    }
+
+    int getQuicClientStreamAckedBytes(int stream_id) {
+        refuse("getQuicClientStreamAckedBytes");
+    }
+
+    int getQuicMaxDatagramSize(int session_id, int stream_id) {
+        refuse("getQuicMaxDatagramSize");
+    }
+
+    *SSLCertificate getQuicPeerCertificate(int session_id) {
+        refuse("getQuicPeerCertificate");
+    }
+
+    *string getQuicSSLCipherName(int session_id) {
+        refuse("getQuicSSLCipherName");
+    }
+
+    *string getQuicSSLCipherVersion(int session_id) {
+        refuse("getQuicSSLCipherVersion");
+    }
+
+    hash<QuicGoawayStateInfo> getQuicSessionGoawayState(int session_id) {
+        refuse("getQuicSessionGoawayState");
+    }
+
+    int getQuicSessionId() {
+        refuse("getQuicSessionId");
+    }
+
+    int getQuicStreamAckedBytes(int session_id, int stream_id) {
+        refuse("getQuicStreamAckedBytes");
+    }
+
+    *hash<auto> getQuicStreamTrailers(int session_id, int stream_id) {
+        refuse("getQuicStreamTrailers");
+    }
+
+    *WebSocketCloseRecord getQuicStreamWebSocketCloseRecord(int session_id, int stream_id) {
+        refuse("getQuicStreamWebSocketCloseRecord");
+    }
+
+    Socket getServerAlias() {
+        refuse("getServerAlias");
+    }
+
+    *Socket getServerSocket() {
+        refuse("getServerSocket");
+    }
+
+    bool getSourceHostLookup() {
+        refuse("getSourceHostLookup");
+    }
+
+    hash<auto> getUsageInfo() {
+        refuse("getUsageInfo");
+    }
+
+    bool hasHttpFastRoutes() {
+        refuse("hasHttpFastRoutes");
+    }
+
+    bool isQuicDatagramSupported(int session_id) {
+        refuse("isQuicDatagramSupported");
+    }
+
+    bool isQuicGoawayReceived(int session_id) {
+        refuse("isQuicGoawayReceived");
+    }
+
+    bool isQuicSessionClosed() {
+        refuse("isQuicSessionClosed");
+    }
+
+    bool isQuicStreamComplete(int session_id, int stream_id) {
+        refuse("isQuicStreamComplete");
+    }
+
+    bool isServerAlias() {
+        refuse("isServerAlias");
+    }
+
+    bool isServerOwned() {
+        refuse("isServerOwned");
+    }
+
+    *binary readQuicConnectStreamData(int session_id, int stream_id) {
+        refuse("readQuicConnectStreamData");
+    }
+
+    *binary readQuicDatagram(int session_id, int stream_id, timeout timeout_ms = 30s) {
+        refuse("readQuicDatagram");
+    }
+
+    *binary readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout_ms = 30s) {
+        refuse("readQuicStreamDataBlock");
+    }
+
+    *hash<SseMessageInfo> readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
+            int max_event_size = 0) {
+        refuse("readServerSentEvent");
+    }
+
+    *hash<SseMessageInfo> readServerSentEvent(timeout timeout_ms = -1) {
+        refuse("readServerSentEvent");
+    }
+
+    nothing registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue queue) {
+        refuse("registerQuicConnectStreamFrameState");
+    }
+
+    nothing registerQuicConnectStreamQueue(int session_id, int stream_id, Queue queue) {
+        refuse("registerQuicConnectStreamQueue");
+    }
+
+    nothing registerQuicDatagramQueue(int session_id, int stream_id, Queue queue) {
+        refuse("registerQuicDatagramQueue");
+    }
+
+    nothing resetHttp2Stream(int stream_id) {
+        refuse("resetHttp2Stream");
+    }
+
+    nothing resetQuicStream(int session_id, int stream_id) {
+        refuse("resetQuicStream");
+    }
+
+    nothing sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+        refuse("sendHttp2StreamData");
+    }
+
+    int sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool end_stream = False) {
+        refuse("sendHttp2StreamWebSocketClose");
+    }
+
+    nothing sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
+        refuse("sendHttp2Trailers");
+    }
+
+    int sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) {
+        refuse("sendQuicClientStreamData");
+    }
+
+    nothing sendQuicClientTrailers(int stream_id, hash<string, string> trailers) {
+        refuse("sendQuicClientTrailers");
+    }
+
+    nothing setAlpnProtocols(list<string> protocols) {
+        refuse("setAlpnProtocols");
+    }
+
+    nothing setCertificate(SSLCertificate certificate) {
+        refuse("setCertificate");
+    }
+
+    nothing setCertificate(string pem) {
+        refuse("setCertificate");
+    }
+
+    nothing setCertificate(binary der) {
+        refuse("setCertificate");
+    }
+
+    nothing setCertificateAndPrivateKey(SSLCertificate certificate, SSLPrivateKey private_key) {
+        refuse("setCertificateAndPrivateKey");
+    }
+
+    nothing setEventQueue() {
+        refuse("setEventQueue");
+    }
+
+    nothing setEventQueue(Queue queue, auto argument, *bool with_data) {
+        refuse("setEventQueue");
+    }
+
+    nothing setHttp2ConnectProtocolEnabled(bool enabled = True) {
+        refuse("setHttp2ConnectProtocolEnabled");
+    }
+
+    nothing setHttp2InputStreamSendBound(int min_rate, timeout window, timeout stall_timeout = 30m) {
+        refuse("setHttp2InputStreamSendBound");
+    }
+
+    nothing setHttp2MaxRequestBodySize(int max_request_body_size) {
+        refuse("setHttp2MaxRequestBodySize");
+    }
+
+    nothing setHttp2StreamSendLimit(int stream_id, int limit) {
+        refuse("setHttp2StreamSendLimit");
+    }
+
+    nothing setHttp3ConnectProtocolEnabled(bool enabled = True) {
+        refuse("setHttp3ConnectProtocolEnabled");
+    }
+
+    nothing setHttpFastExtraHeaders(*hash<auto> headers) {
+        refuse("setHttpFastExtraHeaders");
+    }
+
+    nothing setHttpFastRoutes(*HttpFastRoutes routes) {
+        refuse("setHttpFastRoutes");
+    }
+
+    nothing setHttpFieldsAtTopLevel(bool top_level) {
+        refuse("setHttpFieldsAtTopLevel");
+    }
+
+    nothing setMaxHeaderSize(int max_header_size) {
+        refuse("setMaxHeaderSize");
+    }
+
+    nothing setMaxLineSize(int max_line_size) {
+        refuse("setMaxLineSize");
+    }
+
+    nothing setPrivateKey(SSLPrivateKey private_key) {
+        refuse("setPrivateKey");
+    }
+
+    nothing setPrivateKey(string pem, *string password) {
+        refuse("setPrivateKey");
+    }
+
+    nothing setPrivateKey(binary der) {
+        refuse("setPrivateKey");
+    }
+
+    nothing setQuicInputStreamSendBound(int session_id, int min_rate, timeout window, timeout stall_timeout = 30m) {
+        refuse("setQuicInputStreamSendBound");
+    }
+
+    nothing setQuicStreamSendLimit(int session_id, int stream_id, int limit) {
+        refuse("setQuicStreamSendLimit");
+    }
+
+    bool setServerOwned() {
+        refuse("setServerOwned");
+    }
+
+    nothing setSourceHostLookup(bool enabled = True) {
+        refuse("setSourceHostLookup");
+    }
+
+    nothing setSslCaLocations(*string ca_file, *string ca_path) {
+        refuse("setSslCaLocations");
+    }
+
+    nothing setSslTrustStore(*SSLTrustStore store) {
+        refuse("setSslTrustStore");
+    }
+
+    nothing setSslVerifyMode(int mode) {
+        refuse("setSslVerifyMode");
+    }
+
+    nothing setWarningQueue(int warning_ms, int warning_bytes, Queue queue, auto argument, timeout min_ms = 1s) {
+        refuse("setWarningQueue");
+    }
+
+    AbstractPollOperation<auto> startPollAccept() {
+        refuse("startPollAccept");
+    }
+
+    AbstractPollOperation<auto> startPollConnect(string target) {
+        refuse("startPollConnect");
+    }
+
+    AbstractPollOperation<auto> startPollConnectSsl(string target) {
+        refuse("startPollConnectSsl");
+    }
+
+    AbstractPollOperation<auto> startPollHttp2ClientMultiplex() {
+        refuse("startPollHttp2ClientMultiplex");
+    }
+
+    AbstractPollOperation<auto> startPollHttp2Flush() {
+        refuse("startPollHttp2Flush");
+    }
+
+    AbstractPollOperation<auto> startPollIdleAndReadHttpHeader(timeout idle_timeout) {
+        refuse("startPollIdleAndReadHttpHeader");
+    }
+
+    AbstractPollOperation<auto> startPollLingeringClose(int max_discard = 0) {
+        refuse("startPollLingeringClose");
+    }
+
+    AbstractPollOperation<auto> startPollQuicAccept(*hash<auto> options) {
+        refuse("startPollQuicAccept");
+    }
+
+    AbstractPollOperation<auto> startPollQuicConnect(string host, int port, int family = AF_INET) {
+        refuse("startPollQuicConnect");
+    }
+
+    AbstractPollOperation<auto> startPollQuicSendResponse(int session_id, int stream_id, int status_code,
+            *hash<auto> headers, *data body) {
+        refuse("startPollQuicSendResponse");
+    }
+
+    AbstractPollOperation<auto> startPollQuicSendStreamingResponse(int session_id, int stream_id, int status_code,
+            *hash<auto> headers, InputStream body, *int chunk_size) {
+        refuse("startPollQuicSendStreamingResponse");
+    }
+
+    AbstractPollOperation<auto> startPollReadHttp2Request(*hash<auto> options) {
+        refuse("startPollReadHttp2Request");
+    }
+
+    AbstractPollOperation<auto> startPollReadHttpBody(int content_length, bool chunked, bool connection_close) {
+        refuse("startPollReadHttpBody");
+    }
+
+    AbstractPollOperation<auto> startPollReadHttpHeader() {
+        refuse("startPollReadHttpHeader");
+    }
+
+    AbstractPollOperation<auto> startPollRecvBinary(int size) {
+        refuse("startPollRecvBinary");
+    }
+
+    AbstractPollOperation<auto> startPollRecvData() {
+        refuse("startPollRecvData");
+    }
+
+    AbstractPollOperation<auto> startPollRecvFrom(*int max_size) {
+        refuse("startPollRecvFrom");
+    }
+
+    AbstractPollOperation<auto> startPollRecvString(int size) {
+        refuse("startPollRecvString");
+    }
+
+    AbstractPollOperation<auto> startPollRecvUntilBytesBinary(string pattern) {
+        refuse("startPollRecvUntilBytesBinary");
+    }
+
+    AbstractPollOperation<auto> startPollRecvUntilBytesString(string pattern) {
+        refuse("startPollRecvUntilBytesString");
+    }
+
+    AbstractPollOperation<auto> startPollSend(string data) {
+        refuse("startPollSend");
+    }
+
+    AbstractPollOperation<auto> startPollSend(binary data) {
+        refuse("startPollSend");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+        refuse("startPollSendHttp2ConnectResponse");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+            *data body) {
+        refuse("startPollSendHttp2Response");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttp2StreamingResponse(int stream_id, int status_code,
+            *hash<auto> headers, InputStream body, *int chunk_size) {
+        refuse("startPollSendHttp2StreamingResponse");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpChunkedResponseAndReadHeader(int status_code,
+            string status_description, string http_version, *hash<auto> headers, InputStream body,
+            timeout idle_timeout) {
+        refuse("startPollSendHttpChunkedResponseAndReadHeader");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpChunkedResponseWithStream(int status_code, string status_description,
+            string http_version, *hash<auto> headers, InputStream body) {
+        refuse("startPollSendHttpChunkedResponseWithStream");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponse(int status_code, string status_description,
+            string http_version, *hash<auto> headers, *data body, bool head = False) {
+        refuse("startPollSendHttpResponse");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
+            string http_version, *hash<auto> headers, *data body, timeout idle_timeout, bool head = False) {
+        refuse("startPollSendHttpResponseAndReadHeader");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponseWithStream(int status_code, string status_description,
+            string http_version, *hash<auto> headers, InputStream body, softint content_length) {
+        refuse("startPollSendHttpResponseWithStream");
+    }
+
+    AbstractPollOperation<auto> startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
+            string status_description, string http_version, *hash<auto> headers, InputStream body,
+            softint content_length, timeout idle_timeout) {
+        refuse("startPollSendHttpResponseWithStreamAndReadHeader");
+    }
+
+    AbstractPollOperation<auto> startPollSendTo(string host, int port, binary data, *int family) {
+        refuse("startPollSendTo");
+    }
+
+    AbstractPollOperation<auto> startPollUpgradeClientToSSL() {
+        refuse("startPollUpgradeClientToSSL");
+    }
+
+    AbstractPollOperation<auto> startPollUpgradeServerToSSL() {
+        refuse("startPollUpgradeServerToSSL");
+    }
+
+    nothing submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitHttp2ConnectResponse");
+    }
+
+    int submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
+        refuse("submitHttp2PushPromise");
+    }
+
+    int submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) {
+        refuse("submitHttp2Request");
+    }
+
+    nothing submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
+        refuse("submitHttp2Response");
+    }
+
+    nothing submitHttp2StreamingResponseHeaders(int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitHttp2StreamingResponseHeaders");
+    }
+
+    int submitHttp2StreamingResponseWithStream(int stream_id, int status_code, *hash<auto> headers, InputStream body) {
+        refuse("submitHttp2StreamingResponseWithStream");
+    }
+
+    nothing submitQuicConnectResponse(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitQuicConnectResponse");
+    }
+
+    nothing submitQuicDatagram(int session_id, int stream_id, binary data) {
+        refuse("submitQuicDatagram");
+    }
+
+    int submitQuicRequest(string method, string path, *hash<auto> headers, *data body, bool suppress_wake = False) {
+        refuse("submitQuicRequest");
+    }
+
+    int submitQuicRequestStreaming(string method, string path, *hash<auto> headers, bool suppress_wake = False) {
+        refuse("submitQuicRequestStreaming");
+    }
+
+    nothing submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
+        refuse("submitQuicResponse");
+    }
+
+    nothing submitQuicResponseStreaming(int session_id, int stream_id, int status_code, *hash<auto> headers) {
+        refuse("submitQuicResponseStreaming");
+    }
+
+    nothing submitQuicShutdown(int session_id) {
+        refuse("submitQuicShutdown");
+    }
+
+    nothing submitQuicShutdownNotice(int session_id) {
+        refuse("submitQuicShutdownNotice");
+    }
+
+    int submitQuicStreamData(int session_id, int stream_id, *data body, softbool end_stream = False) {
+        refuse("submitQuicStreamData");
+    }
+
+    int submitQuicStreamWebSocketClose(int session_id, int stream_id, binary frame, softbool end_stream = False) {
+        refuse("submitQuicStreamWebSocketClose");
+    }
+
+    int submitQuicStreamingResponseWithStream(int session_id, int stream_id, int status_code, *hash<auto> headers,
+            InputStream body) {
+        refuse("submitQuicStreamingResponseWithStream");
+    }
+
+    nothing unregisterQuicDatagramQueue(int session_id, int stream_id) {
+        refuse("unregisterQuicDatagramQueue");
+    }
+
+    int waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForHttp2StreamDrain");
+    }
+
+    int waitForHttp2StreamFlushed(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForHttp2StreamFlushed");
+    }
+
+    int waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForQuicClientStreamDrain");
+    }
+
+    int waitForQuicClientStreamFlushed(int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForQuicClientStreamFlushed");
+    }
+
+    bool waitForQuicSettings(timeout timeout_ms = -1) {
+        refuse("waitForQuicSettings");
+    }
+
+    int waitForQuicStreamDrain(int session_id, int stream_id, timeout timeout_ms = 5s) {
+        refuse("waitForQuicStreamDrain");
     }
 
     #! Sets the timeout of the object's sends that are given none; the connection's timeout does not change
@@ -12133,6 +12757,93 @@ class Http1HandlerSocket inherits Qore::Socket {
     #! Returns @ref True "True" if the request has a chunked body that was not read yet
     bool pendingHttpChunkedBody() {
         return rh.h1IsCurrent(gen) && !rh.h1ChunkedBodyTaken() && real.pendingHttpChunkedBody();
+    }
+
+    #! Returns @ref True "True" if data of the request's body that was not read is available on the connection
+    /** The data of the request is its chunked body before it is read, and the rest of a body with a
+        \c Content-Length that the server did not read; any other data on the connection is the next request's, so
+        @ref False "False" is returned once the request's body is read, as for a request without one.  The timeout
+        is bounded as that of a read; raises an exception once the request ended, as its reads do
+    */
+    bool isDataAvailable(timeout timeout_ms = 0) {
+        rh.h1Enter(gen, "isDataAvailable");
+        on_exit rh.h1Leave();
+        if (rh.h1ChunkedBodyTaken()) {
+            return False;
+        }
+        if (!real.pendingHttpChunkedBody() && !rh.h1BodyLeft()) {
+            return False;
+        }
+        return real.isDataAvailable(timeout_ms ? recvTimeout(timeout_ms) : 0);
+    }
+
+    #! Returns @ref True "True" if the data sent on the connection was written
+    /** The timeout is bounded as that of a send; raises an exception once the request ended, as its sends do
+    */
+    bool isWriteFinished(timeout timeout_ms = 0) {
+        rh.h1Enter(gen, "isWriteFinished");
+        on_exit rh.h1Leave();
+        return real.isWriteFinished(timeout_ms ? sendTimeout(timeout_ms) : 0);
+    }
+
+    #! Returns @ref True "True" if the read of the request's chunked body started and stopped before its end
+    bool unfinishedHttpChunkedBody() {
+        return rh.h1IsCurrent(gen) && rh.h1ChunkedBodyTaken() && real.unfinishedHttpChunkedBody();
+    }
+
+    #! Returns the object's own character encoding, as getEncoding()
+    string getCharset() {
+        return getEncoding();
+    }
+
+    #! Sets the object's own character encoding, as setEncoding()
+    nothing setCharset(string encoding) {
+        setEncoding(encoding);
+    }
+
+    #! Returns the value of the connection's socket
+    int getPort() {
+        return real.getPort();
+    }
+
+    #! Returns the value of the connection's socket
+    int getConnectionId() {
+        return real.getConnectionId();
+    }
+
+    #! Returns the value of the connection's socket
+    bool getNoDelay() {
+        return real.getNoDelay();
+    }
+
+    #! Returns the value of the connection's socket
+    int getUserTimeout() {
+        return real.getUserTimeout();
+    }
+
+    #! Returns the object's own maximum size of a chunked body once it was set, otherwise the connection's
+    int getMaxChunkedBodySize() {
+        return max_chunked ?? real.getMaxChunkedBodySize();
+    }
+
+    #! Returns the value of the connection's socket
+    int getMaxHeaderSize() {
+        return real.getMaxHeaderSize();
+    }
+
+    #! Returns the value of the connection's socket
+    int getMaxLineSize() {
+        return real.getMaxLineSize();
+    }
+
+    #! Returns the value of the connection's socket
+    int getSslVerifyMode() {
+        return real.getSslVerifyMode();
+    }
+
+    #! Returns the value of the connection's socket
+    bool getAcceptAllCertificates() {
+        return real.getAcceptAllCertificates();
     }
 
     # the raw sends of the bytes of a response's body with a Content-Length
@@ -12428,6 +13139,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         # the connection's socket decodes the body in the object's encoding
         if (ownEncoding()) {
             real.setEncoding(enc);
@@ -12442,6 +13157,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         return real.readHTTPChunkedBodyBinary(recvTimeout(timeout_ms));
     }
 
@@ -12450,6 +13169,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         return real.readHTTPChunkedBodyToOutputStream(output_stream, recvTimeout(timeout_ms));
     }
 
@@ -12458,6 +13181,10 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         # the connection's socket decodes the chunks in the object's encoding
         if (ownEncoding()) {
             real.setEncoding(enc);
@@ -12473,7 +13200,28 @@ class Http1HandlerSocket inherits Qore::Socket {
         on_exit rh.h1Leave();
         # the body was read to its end only if the read returns
         on_success rh.h1_chunk_open = False;
+        *int conn_max = applyChunkedLimit();
+        on_exit if (exists conn_max) {
+            real.setMaxChunkedBodySize(conn_max);
+        }
         real.readHTTPChunkedBodyBinaryWithCallback(receive_callback, recvTimeout(timeout_ms));
+    }
+
+    #! Gives the connection's socket the object's own maximum size of a chunked body for a read of the request's
+    #! chunked body, and returns the connection's to set again at its end, if it changed
+    /** There is one read of the chunked body of a request (h1EnterChunkedRead()), and the server uses the connection's
+        socket only after it ended
+    */
+    private:internal *int applyChunkedLimit() {
+        if (!exists max_chunked) {
+            return;
+        }
+        int conn_max = real.getMaxChunkedBodySize();
+        if (conn_max == max_chunked) {
+            return;
+        }
+        real.setMaxChunkedBodySize(max_chunked);
+        return conn_max;
     }
 
     #! Returns True if the object's encoding is not the connection's
@@ -14153,6 +14901,11 @@ class HandlerSocketState {
         int n = (size <= 0 || size > h1_body) ? h1_body : size;
         h1_body -= n;
         return n;
+    }
+
+    #! Returns the bytes of the request's body with a Content-Length that were not taken by a read
+    synchronized int h1BodyLeft() {
+        return h1_body;
     }
 
     #! Takes exactly the given number of bytes of the rest of the body, or none
