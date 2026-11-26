@@ -1556,6 +1556,12 @@ protected:
     //! true if a variant of runtime_variants could not be indexed in unmarked_decl_variants (an allocation failed):
     //! every marking event then refreshes every variant
     bool unmarked_index_incomplete = false;
+    //! the number of declarations of the Program whose references of qore_type_owner_take_runtime_refs() could not be
+    //! taken (QoreTypeOwner::type_owner_refs_pending), which the next marking event takes (qore#7680)
+    /** A count, not a list, so that recording a failure allocates nothing: the next event finds them in the namespace
+        tree (retryPendingRuntimeRefs()); one that is freed before (with a namespace whose attach failed) is not found
+    */
+    size_t pending_runtime_refs = 0;
     //! true from the start of a marking event until its upgrade of the derived types and its refresh of
     //! runtime_variants have completed (completeRuntimeMarking()): an event that did not complete (an allocation
     //! failed) is completed by the next event or run-time variant, with a full upgrade and refresh
@@ -2763,6 +2769,8 @@ public:
     //! completes it (see runtime_refresh_pending); called before a declaration is marked, under the runtime namespace
     //! write lock
     DLLLOCAL bool beginRuntimeMarking() {
+        // before a declaration is marked (qore_runtime_mortal_decls_exist(), qore#7680)
+        qore_set_runtime_mortal_decls_exist();
         bool incomplete = runtime_refresh_pending;
         runtime_refresh_pending = true;
         return incomplete;
@@ -2778,6 +2786,20 @@ public:
         if (runtime_refresh_pending) {
             completeRuntimeMarking(type_vec_t(), 0, true);
         }
+    }
+
+    //! Gives declarations of the Program that became mortal the references of qore_type_owner_take_runtime_refs(), or,
+    //! if an allocation fails, records them for the next marking event (retryPendingRuntimeRefs(); qore#7680); does
+    //! not throw; called under the runtime namespace write lock
+    DLLLOCAL void takeRuntimeRefs(const std::vector<QoreTypeOwner*>& owners);
+
+    //! Takes the references that takeRuntimeRefs() could not take; throws std::bad_alloc if an allocation fails, in
+    //! which case they stay pending; called under the runtime namespace write lock
+    DLLLOCAL void retryPendingRuntimeRefs();
+
+    //! Returns the number of declarations whose references are pending (pending_runtime_refs; qore#7680)
+    DLLLOCAL size_t pendingRuntimeRefs() const {
+        return pending_runtime_refs;
     }
 
     //! Returns true if a marking event did not complete (runtime_refresh_pending)

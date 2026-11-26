@@ -488,8 +488,9 @@ public:
         if (rns) {
             // as in markProgramLocal(): a declaration of a Program references the binary module declarations that it
             // names from its first batch, which a declaration marked now has only at its Program's teardown, possibly
-            // after the module is deleted; taken before the rest of the event (qore#7540, qore#7649)
-            qore_type_owner_take_module_refs(marked_owners);
+            // after the module is deleted, and the declarations of other Programs that it names; taken before the rest
+            // of the event (qore#7540, qore#7649, qore#7680)
+            rns->takeRuntimeRefs(marked_owners);
             rns->completeRuntimeMarking(marked_types, start, full);
         }
     }
@@ -521,6 +522,13 @@ void QoreNamespace::addSystemHashDecl(TypedHashDecl* hd) {
     priv->hashDeclList.add(hd);
 #endif
     rmh.complete();
+#ifdef DEBUG
+    // a declaration of a namespace that no Program owns takes no reference to a mortal declaration that it names
+    // (qore#7680)
+    if (!rmh && priv->getRoot() && qore_runtime_mortal_decls_exist()) {
+        qore_dbg_check_unowned_names(&typed_hash_decl_private::get(*hd)->type_owner);
+    }
+#endif
 
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
@@ -617,6 +625,13 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
     priv->classList.add(oc);
 #endif
     rmh.complete();
+#ifdef DEBUG
+    // a declaration of a namespace that no Program owns takes no reference to a mortal declaration that it names: it
+    // would keep it until library cleanup; a module must add it to the Program's own namespace (qore#7680)
+    if (!rmh && priv->getRoot() && qore_runtime_mortal_decls_exist()) {
+        qore_dbg_check_unowned_names(&qore_class_private::get(*oc)->type_owner);
+    }
+#endif
     // code in other threads can reach the class from now on, or when the module being initialized returns from its
     // initialization (issue #6422)
     qore_class_private::get(*oc)->systemClassCommitted();
@@ -1074,7 +1089,47 @@ void qore_dbg_fail_next_runtime_refresh() {
 }
 #endif
 
+void qore_root_ns_private::takeRuntimeRefs(const std::vector<QoreTypeOwner*>& owners) {
+    if (owners.empty()) {
+        return;
+    }
+    // a builtin declaration became mortal: from now on, a builtin variant of a namespace that no Program owns can name
+    // one (qore#7680)
+    qore_set_runtime_mortal_decls_exist();
+    if (qore_type_owner_take_runtime_refs(owners, this)) {
+        return;
+    }
+    // recorded without an allocation; the next marking event takes them (retryPendingRuntimeRefs())
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_module_refs_taken && !o->type_owner_refs_pending) {
+            o->type_owner_refs_pending = true;
+            ++pending_runtime_refs;
+        }
+    }
+}
+
+void qore_root_ns_private::retryPendingRuntimeRefs() {
+    if (!pending_runtime_refs) {
+        return;
+    }
+    std::vector<QoreTypeOwner*> all;
+    getTypeOwners(all);
+    std::vector<QoreTypeOwner*> pending;
+    for (QoreTypeOwner* o : all) {
+        if (o->type_owner_refs_pending) {
+            pending.push_back(o);
+        }
+    }
+    if (!qore_type_owner_take_runtime_refs(pending, this)) {
+        throw std::bad_alloc();
+    }
+    // a declaration not found was freed with a namespace whose attach failed
+    pending_runtime_refs = 0;
+}
+
 void qore_root_ns_private::completeRuntimeMarking(const type_vec_t& marked_types, size_t start, bool full) {
+    // the references that an earlier event could not take (qore#7680)
+    retryPendingRuntimeRefs();
     bool all = full || !marked_types.empty();
     if (all) {
         qore_upgrade_program_local_derived_types(marked_types, full);
@@ -1215,9 +1270,9 @@ void qore_ns_private::markProgramLocal(qore_ns_private& tree) const {
     // that they do not reference yet
     // a declaration of a Program references the binary module declarations that it names from its first batch, which
     // a declaration marked now has only at its Program's teardown, possibly after the module is deleted (qore#7540);
-    // taken before the rest of the event, which can fail and is then completed by the next one, which does not see
-    // the declarations marked now
-    qore_type_owner_take_module_refs(marked_owners);
+    // taken before the rest of the event, which can fail and is then completed by the next one; the declarations of
+    // other Programs that they name are referenced with them (qore#7680)
+    rns->takeRuntimeRefs(marked_owners);
     rns->completeRuntimeMarking(marked_types, old_variants, full);
 }
 
@@ -1297,8 +1352,10 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
 
     // a variant added to a namespace that a Program owns references the mortal declarations that it names, also those
     // marked later (qore#7540); one added to a namespace that no Program owns, or to a function that the namespace
-    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs and
-    // references none: it would keep them until the static system namespace is deleted at library cleanup
+    // shares with one (which adds it to every namespace that shares the function), is shared by the Programs: it
+    // references the mortal declarations that it names when it is added (a variant added before a declaration that
+    // it names is marked does not reference it), which it keeps for as long as it lives, until library cleanup or
+    // until its module is deleted, as any Program can call it (qore#7680)
     BuiltinFunctionVariantBase* bv = get_builtin_variant_base(v);
     bool runtime_variant = false;
     if (bv) {
@@ -1306,6 +1363,11 @@ void qore_ns_private::addBuiltinVariantIntern(const char* fname, AbstractQoreFun
             runtime_variant = !bv->isSharedOrigin();
         } else if (getRoot() || module_owned || (fe && fe->isSharedUnowned())) {
             bv->setSharedOrigin();
+            // before the variant is added, so that a failed allocation fails the call with no reference taken and the
+            // variant unpublished; no builtin declaration can be mortal before one was marked
+            if (qore_runtime_mortal_decls_exist()) {
+                bv->refMortalDecls();
+            }
         }
     }
 
@@ -1711,8 +1773,27 @@ QoreClass* qore_ns_private::runtimeImportClass(ExceptionSink* xsink, const QoreC
         return nullptr;
     }
 
+    // allocated before the copy is made, so that the references of the copy below are taken without an allocation
+    // that could fail after it is published
+    std::vector<QoreTypeOwner*> owners;
+    owners.reserve(1);
     QoreClass* nc = qore_class_private::makeImportClass(*c, spgm, new_name, inject, injectedClass, this, set_pub);
+    qore_class_private* npriv = qore_class_private::get(*nc);
+    // the copy keeps its source if it is a builtin class that a binary module added to another Program (qore#7680)
+    {
+        const qore_class_private* opriv = qore_class_private::get(*c);
+        qore_root_ns_private* rns = getRoot();
+        npriv->refMortalImportSource(*opriv, !opriv->ns || !rns || opriv->ns->getRoot() != rns);
+    }
     classList.add(nc);
+    // the import copy of a builtin class is mortal (qore#7540): it references the binary module declarations and the
+    // declarations of other Programs that it names now, not at its Program's teardown (qore#7680)
+    if (!npriv->type_owner.isTypeOwnerSystem() && npriv->sys) {
+        if (qore_root_ns_private* rns = getRoot()) {
+            owners.push_back(&npriv->type_owner);
+            rns->takeRuntimeRefs(owners);
+        }
+    }
 
     // If the host opted in to re-export this import (or the source was already
     // marked re-export, e.g. for a transitive inheritance copy), tag the new

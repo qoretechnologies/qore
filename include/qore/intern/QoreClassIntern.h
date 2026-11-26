@@ -6997,6 +6997,22 @@ protected:
     }
 
 public:
+    //! Makes the import copy of a class reference its source if the source is a builtin class that a binary module
+    //! added to another Program (or the import copy of a builtin class there), unless it references it already
+    //! (import_source; qore#7680)
+    /** The copy shares the types of its source (of its methods' signatures, members and base classes), which is freed
+        with its Program otherwise; a source of a user class is referenced when it has a source Program that is not the
+        importing one (see the copy constructor).  Called before the copy is published; \a other_program is true if
+        the source does not belong to the importing Program
+    */
+    DLLLOCAL void refMortalImportSource(const qore_class_private& src, bool other_program) {
+        if (import_source || !other_program || !src.sys || src.type_owner.isTypeOwnerSystem()) {
+            return;
+        }
+        src.ref();
+        import_source = const_cast<qore_class_private*>(&src);
+    }
+
     //! Marks a builtin class as owned by the Program to whose namespace it is added; returns true if it was marked now
     //! and adds its types to \a marked_types (qore#7540)
     /** A class made with a type of its module (QoreClass(..., const QoreTypeInfo*)) is not marked and stays immortal:
@@ -7037,6 +7053,11 @@ protected:
     //! Calls \a f with each type of the members, static variables, method signatures and type parameters
     template <typename F>
     DLLLOCAL void forEachTypeOwnerType(F&& f) const;
+
+    //! The namespace of the declaration (QoreTypeOwner::getTypeOwnerNamespace(), qore#7680)
+    DLLLOCAL const qore_ns_private* getTypeOwnerNamespace() const {
+        return ns;
+    }
 
     //! The base classes (the special method list of the class holds a reference to each) and the source of an imported
     //! class

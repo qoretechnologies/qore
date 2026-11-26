@@ -435,10 +435,27 @@ static QoreValue f_dbg_program_local_derived_type_scans(const QoreListNode* para
     return qore_dbg_program_local_derived_type_scans();
 }
 
+//! Returns the Program of the optional argument \a i, or the calling Program (qore#7680)
+static QoreProgram* dbg_target_program(const QoreListNode* params, size_t i, ReferenceHolder<QoreProgram>& holder,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, i).get<const QoreObject>();
+    if (!obj) {
+        return getProgram();
+    }
+    holder = static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM, xsink));
+    return *holder;
+}
+
 static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     // a short string value is inline: read through the helper
     QoreStringValueHelper name(get_hard_value_param(params, 0));
     int64 variant = HARD_QORE_VALUE_INT(params, 1);
+    // the Program to add the namespace to: the calling Program by default (qore#7680)
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* target = dbg_target_program(params, 2, target_holder, xsink);
+    if (!target) {
+        return QoreValue();
+    }
     // "outer::inner": the declarations are in a subnamespace of the namespace that is added
     std::string full = name->c_str();
     size_t sep = full.find("::");
@@ -450,9 +467,9 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         if (sep != std::string::npos) {
             return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "variant 5 takes a name without '::'");
         }
-        RootQoreNamespace* root = getProgram()->getRootNS();
+        RootQoreNamespace* root = target->getRootNS();
         root->addNamespace(new QoreNamespace(inner.c_str()));
-        QoreNamespace* ans = getProgram()->findNamespace(QoreString(inner.c_str()));
+        QoreNamespace* ans = target->findNamespace(QoreString(inner.c_str()));
         if (!ans) {
             return xsink->raiseException("DBG-ADD-RUNTIME-NAMESPACE-ERROR", "the attached namespace was not found");
         }
@@ -478,6 +495,11 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
     }
     ns->addConstant("DbgRtConst", static_cast<int64>(variant));
     QoreClass* qc = new QoreClass("DbgRtClass", (path + "::DbgRtClass").c_str());
+    if (variant == 1) {
+        // a static method that names the class, which the import copy of the class shares (qore#7680)
+        qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1,
+            qc->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "obj");
+    }
     ns->addSystemClass(qc);
     if (variant == 3) {
         // a type of a static generic class with the class as its type argument, made before the namespace is added, and
@@ -565,7 +587,7 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         outer->addNamespace(ns.release());
         ns.reset(outer.release());
     }
-    RootQoreNamespace* root = getProgram()->getRootNS();
+    RootQoreNamespace* root = target->getRootNS();
     root->addNamespace(ns.release());
     if (variant == 2) {
         // the class is added to the namespace that the Program has now
@@ -603,6 +625,247 @@ static QoreValue f_dbg_add_runtime_namespace(const QoreListNode* params, Runtime
         }
     }
     return QoreValue();
+}
+
+//! the number of classes that dbg_add_runtime_naming() added to the static system namespace (qore#7680)
+static std::atomic<int> dbg_rt_static_count{0};
+
+//! Returns the class, hashdecl and enum of the namespace DbgRtNs that dbg_add_runtime_namespace() added to \a pgm
+static int dbg_rt_find_decls(QoreProgram* pgm, const QoreClass*& qc, const TypedHashDecl*& hd,
+        const QoreEnumDecl*& ed, ExceptionSink* xsink) {
+    qc = pgm->findClass("DbgRtNs::DbgRtClass", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    const QoreNamespace* pns = nullptr;
+    hd = pgm->findHashDecl("DbgRtNs::DbgRtHash", pns);
+    ed = pgm->findEnum("DbgRtNs::DbgRtEnum", pns);
+    if (!qc || !hd || !ed) {
+        xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "the source Program has no DbgRtNs declarations of "
+            "variant 1");
+        return -1;
+    }
+    return 0;
+}
+
+//! Returns the type owner of a class or hashdecl of the calling Program, or nullptr
+static QoreTypeOwner* dbg_rt_find_owner(QoreProgram* pgm, const char* path, ExceptionSink* xsink) {
+    ExceptionSink xs;
+    if (const QoreClass* qc = pgm->findClass(path, &xs)) {
+        return &qore_class_private::get(*const_cast<QoreClass*>(qc))->type_owner;
+    }
+    xs.clear();
+    const QoreNamespace* pns = nullptr;
+    if (const TypedHashDecl* hd = pgm->findHashDecl(path, pns)) {
+        return &typed_hash_decl_private::get(*const_cast<TypedHashDecl*>(hd))->type_owner;
+    }
+    xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "no class or hashdecl '%s'", path);
+    return nullptr;
+}
+
+//! Adds builtin declarations that name the declarations that dbg_add_runtime_namespace() (variant 1) added to the
+//! Program \a src at run time, through the paths by which another Program can come to name them (qore#7680)
+/** Run in the calling Program Q:
+    - kind 1: attaches the namespace DbgRtQ to Q with the class DbgRtQClass (a static method take() with a parameter
+      of the type *DbgRtNs::DbgRtClass, a member m and a static variable sv of that type) and the hashdecl DbgRtQHash
+      (members c, h and e of the types *DbgRtClass, *hash<DbgRtHash> and *DbgRtEnum)
+    - kind 2: adds the class DbgRtQOne and the hashdecl DbgRtQOneHash one at a time to DbgRtQ (kind 1 first), naming
+      DbgRtClass as kind 1 does
+    - kind 3: adds the variant dbg_rt_shared(*DbgRtClass) to Q's copy of the function Qore::dbg_rt_shared(), which the
+      static system namespace shares with every Program
+    - kind 4: adds the class Qore::DbgRtStatic<n> with a static method take(*DbgRtClass) to the static system namespace
+    - kind 5: attaches namespaces DbgRtMP to \a src and DbgRtMQ to Q whose classes DbgRtMP and DbgRtMQ have members of
+      each other's types (\a src needs no namespace of its own)
+    - kind 6: attaches the namespace DbgRtF to Q and adds the class DbgRtFOne to it with the next two takes of the
+      references failing: returns a hash with the number of pending declarations and whether the class's references
+      are taken after the failure (\c pending1, \c taken1) and after the attach of an empty namespace (\c pending2,
+      \c taken2)
+*/
+static QoreValue f_dbg_add_runtime_naming(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> src(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!src) {
+        return QoreValue();
+    }
+    int64 kind = HARD_QORE_VALUE_INT(params, 1);
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* pgm = dbg_target_program(params, 2, target_holder, xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    RootQoreNamespace* root = pgm->getRootNS();
+    if (kind == 5) {
+        QoreClass* a = new QoreClass("DbgRtMP", "::DbgRtMP::DbgRtMP");
+        QoreClass* b = new QoreClass("DbgRtMQ", "::DbgRtMQ::DbgRtMQ");
+        a->addMember("b", Public, b->getOrNothingTypeInfo());
+        b->addMember("a", Public, a->getOrNothingTypeInfo());
+        std::unique_ptr<QoreNamespace> np(new QoreNamespace("DbgRtMP"));
+        std::unique_ptr<QoreNamespace> nq(new QoreNamespace("DbgRtMQ"));
+        np->addSystemClass(a);
+        nq->addSystemClass(b);
+        src->getRootNS()->addNamespace(np.release());
+        root->addNamespace(nq.release());
+        return QoreValue();
+    }
+    if (kind == 6) {
+        root->addNamespace(new QoreNamespace("DbgRtF"));
+        QoreNamespace* fns = root->findLocalNamespace("DbgRtF");
+        assert(fns);
+        QoreClass* qc = new QoreClass("DbgRtFOne", "::DbgRtF::DbgRtFOne");
+        // the class names the module declaration of the next class, so that it has references to take
+        QoreClass* mc = new QoreClass("DbgRtFMod", "::DbgRtF::DbgRtFMod");
+        qc->addMember("m", Public, mc->getOrNothingTypeInfo());
+        std::unique_ptr<QoreNamespace> mns(new QoreNamespace("DbgRtFM"));
+        mns->addSystemClass(mc);
+        qore_dbg_fail_next_runtime_refs(2);
+        try {
+            fns->addSystemClass(qc);
+        } catch (std::bad_alloc&) {
+        }
+        qore_dbg_fail_next_runtime_refs(0);
+        QoreTypeOwner* o = &qore_class_private::get(*qc)->type_owner;
+        qore_root_ns_private* rns = qore_root_ns_private::get(*root);
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+        rv->setKeyValue("pending1", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
+        rv->setKeyValue("taken1", o->type_owner_module_refs_taken, xsink);
+        root->addNamespace(new QoreNamespace("DbgRtFE"));
+        rv->setKeyValue("pending2", static_cast<int64>(rns->pendingRuntimeRefs()), xsink);
+        rv->setKeyValue("taken2", o->type_owner_module_refs_taken, xsink);
+        // the module class is kept by the class
+        mns.reset();
+        return rv.release();
+    }
+    const QoreClass* sqc;
+    const TypedHashDecl* shd;
+    const QoreEnumDecl* sed;
+    if (dbg_rt_find_decls(*src, sqc, shd, sed, xsink)) {
+        return QoreValue();
+    }
+    const QoreTypeInfo* cti = sqc->getOrNothingTypeInfo();
+    switch (kind) {
+        case 1: {
+            std::unique_ptr<QoreNamespace> ns(new QoreNamespace("DbgRtQ"));
+            QoreClass* qc = new QoreClass("DbgRtQClass", "::DbgRtQ::DbgRtQClass");
+            qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            qc->addMember("m", Public, cti);
+            qc->addBuiltinStaticVar("sv", QoreValue(), Public, cti);
+            ns->addSystemClass(qc);
+            TypedHashDecl* hd = new TypedHashDecl("DbgRtQHash", "::DbgRtQ::DbgRtQHash");
+            hd->addMember("c", cti, QoreValue());
+            hd->addMember("h", shd->getTypeInfo(true), QoreValue());
+            hd->addMember("e", sed->getTypeInfo(true), QoreValue());
+            ns->addSystemHashDecl(hd);
+            root->addNamespace(ns.release());
+            break;
+        }
+        case 2: {
+            QoreNamespace* ns = root->findLocalNamespace("DbgRtQ");
+            if (!ns) {
+                return xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "kind 2 needs kind 1 first");
+            }
+            QoreClass* qc = new QoreClass("DbgRtQOne", "::DbgRtQ::DbgRtQOne");
+            qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            ns->addSystemClass(qc);
+            TypedHashDecl* hd = new TypedHashDecl("DbgRtQOneHash", "::DbgRtQ::DbgRtQOneHash");
+            hd->addMember("c", cti, QoreValue());
+            ns->addSystemHashDecl(hd);
+            break;
+        }
+        case 3: {
+            QoreNamespace* qns = root->findLocalNamespace("Qore");
+            assert(qns);
+            qns->addBuiltinVariant("dbg_rt_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            break;
+        }
+        case 4: {
+            std::string name = "DbgRtStatic" + std::to_string(dbg_rt_static_count.fetch_add(1));
+            QoreClass* qc = new QoreClass(name.c_str(), ("::Qore::" + name).c_str());
+            qc->addStaticMethod("take", f_dbg_rt_func, Public, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo, 1, cti,
+                QORE_PARAM_NO_ARG, "obj");
+            staticSystemNamespace->addSystemClass(qc);
+            break;
+        }
+        default:
+            return xsink->raiseException("DBG-ADD-RUNTIME-NAMING-ERROR", "unknown kind %lld", kind);
+    }
+    return QoreValue();
+}
+
+//! Returns True if the class or hashdecl of the Program \a target (or the calling Program) with the given path has taken its references to the
+//! declarations that it names (qore_type_owner_take_runtime_refs(), qore#7680)
+static QoreValue f_dbg_runtime_refs_taken(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringValueHelper path(get_hard_value_param(params, 0));
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* pgm = dbg_target_program(params, 1, target_holder, xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    QoreTypeOwner* o = dbg_rt_find_owner(pgm, path->c_str(), xsink);
+    return o ? QoreValue(o->type_owner_module_refs_taken) : QoreValue();
+}
+
+//! Returns the number of declarations of the Program \a target (or the calling Program) whose references are pending
+//! (qore#7680)
+static QoreValue f_dbg_runtime_refs_pending(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<QoreProgram> target_holder(xsink);
+    QoreProgram* pgm = dbg_target_program(params, 0, target_holder, xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    RootQoreNamespace* root = pgm->getRootNS();
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(*qore_root_ns_private::get(*root));
+    return static_cast<int64>(qore_root_ns_private::get(*root)->pendingRuntimeRefs());
+}
+
+//! Makes the next \a count takes of the references of declarations that become mortal fail (qore#7680)
+static QoreValue f_dbg_fail_next_runtime_refs(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_fail_next_runtime_refs(static_cast<int>(HARD_QORE_VALUE_INT(params, 0)));
+    return QoreValue();
+}
+
+//! Returns the number of survivors in cycles that hold references to declarations of other Programs (qore#7680)
+static QoreValue f_dbg_cross_program_cycles(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_dbg_cross_program_cycle_count());
+}
+
+//! Returns the number of declarations added at run time to a namespace that no Program owns that name a mortal
+//! declaration (qore#7680)
+static QoreValue f_dbg_unowned_program_local_names(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_dbg_unowned_program_local_names();
+}
+
+//! Makes an instance of the generic hashdecl DbgRtNs::DbgRtGen of the calling Program with the type argument of the
+//! name given (\c "string" or \c "float"); returns True if it took its references at once, or NOTHING if it could not
+//! be made because an allocation failed (\a fail: the take of its references fails) (qore#7680)
+static QoreValue f_dbg_rt_gen_instance(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringValueHelper arg(get_hard_value_param(params, 0));
+    bool fail = HARD_QORE_VALUE_BOOL(params, 1);
+    const QoreNamespace* pns = nullptr;
+    const TypedHashDecl* gen = getProgram()->findHashDecl("DbgRtNs::DbgRtGen", pns);
+    if (!gen) {
+        return xsink->raiseException("DBG-RT-GEN-INSTANCE-ERROR", "no DbgRtNs::DbgRtGen");
+    }
+    const QoreTypeInfo* ti = !strcmp(arg->c_str(), "float") ? floatTypeInfo : stringTypeInfo;
+    if (fail) {
+        qore_dbg_fail_next_runtime_refs(1);
+    }
+    const TypedHashDecl* inst;
+    try {
+        inst = typed_hash_decl_private::get(*gen)->getParameterizedHashDecl(type_vec_t{ti});
+    } catch (std::bad_alloc&) {
+        qore_dbg_fail_next_runtime_refs(0);
+        return QoreValue();
+    }
+    qore_dbg_fail_next_runtime_refs(0);
+    if (!inst) {
+        return xsink->raiseException("DBG-RT-GEN-INSTANCE-ERROR", "no instance");
+    }
+    return typed_hash_decl_private::get(*inst)->type_owner.type_owner_module_refs_taken;
 }
 
 // returns a hash of all namespace information
@@ -37641,7 +37904,27 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_program_local_derived_type_scans", f_dbg_program_local_derived_type_scans,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_add_runtime_namespace", f_dbg_add_runtime_namespace, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
-        nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant");
+        nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name", bigIntTypeInfo, QORE_PARAM_NO_ARG, "variant",
+        QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_add_runtime_naming", f_dbg_add_runtime_naming, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        autoTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "src", bigIntTypeInfo, QORE_PARAM_NO_ARG,
+        "kind", QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    // a function of the static system namespace to which dbg_add_runtime_naming() adds a variant (qore#7680)
+    qns.addBuiltinVariant("dbg_rt_shared", f_dbg_rt_func, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "i");
+    qns.addBuiltinVariant("dbg_runtime_refs_taken", f_dbg_runtime_refs_taken, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "path", QC_PROGRAM->getOrNothingTypeInfo(),
+        QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_runtime_refs_pending", f_dbg_runtime_refs_pending, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo, 1, QC_PROGRAM->getOrNothingTypeInfo(), QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_fail_next_runtime_refs", f_dbg_fail_next_runtime_refs, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count");
+    qns.addBuiltinVariant("dbg_cross_program_cycles", f_dbg_cross_program_cycles, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_unowned_program_local_names", f_dbg_unowned_program_local_names, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_rt_gen_instance", f_dbg_rt_gen_instance, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolOrNothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "arg", boolTypeInfo, QORE_PARAM_NO_ARG, "fail");
     qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_run_datasource_pending_tests", f_dbg_run_datasource_pending_tests, QCF_NO_FLAGS,

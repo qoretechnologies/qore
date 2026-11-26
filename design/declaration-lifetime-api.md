@@ -63,6 +63,48 @@ Program's namespace data.
   what the destructors, methods and module data of its classes need valid until then
   (`doxygen/lib/70_qore_modules.doxygen`, Releasing Module State at Shutdown;
   `examples/test/qore/namespaces/runtime-builtin-survivor`).
+- A declaration that another Program comes to name keeps such a declaration with a counted
+  reference that it takes when it starts naming it and releases when it is freed (qore#7680):
+  - the import copy of a class references its source when the source is such a declaration
+    of another Program (`qore_class_private::import_source`, `refMortalImportSource()`), as it
+    references the source of a user class from another Program;
+  - the copy of such an enum references its original (`orig_ref`), as the copy of a binary
+    module's enum does;
+  - a builtin variant added to a namespace that no Program owns (the static system namespace or
+    a module's), or to a function that a Program's namespace shares with one, references the
+    mortal declarations that its signature names when it is added
+    (`BuiltinFunctionVariantBase::refMortalDecls()`, before it is published); it keeps them
+    until it is freed, at library cleanup or with its module, as any Program can call it; a
+    variant added before a declaration that it names is marked does not reference it;
+  - a declaration that becomes mortal at run time (one marked when it is added or attached,
+    the import copy of a builtin class, an instance of a mortal generic hashdecl) references the
+    mortal declarations of other Programs that its member, static variable and signature types
+    name directly (`QoreTypeOwner::type_owner_xrefs`), with the binary module declarations that
+    it names (`type_owner_module_refs`), when it becomes mortal
+    (`qore_type_owner_take_runtime_refs()`): in the marking event, under the runtime namespace
+    write lock of its Program, with the type lock (`ctl`) for the references; the declarations of
+    its own Program are left to its Program's `QoreTypeOwnerBatch`.  A builtin declaration that is
+    not mortal yet is referenced as a module's, also if a later attach marks it;
+  - a global variable imported into another Program (`Program::importGlobalVariable()`)
+    references the mortal declarations that its type names (`Var::refTypeDecls()`), as the
+    importing Program is parsed with its type after the source Program can be deleted (the source's
+    variable itself refuses writes then); the typedefs, constants and global variables that a child
+    Program inherits are covered by the references of `refLeftOutDecls()` (qore#7607).
+  The references are all or nothing: the lists are made before any reference is taken.  When an
+  allocation fails, the declarations are flagged (`type_owner_refs_pending`, counted by the root
+  namespace without an allocation) and the next marking event of the Program takes them
+  (`qore_root_ns_private::retryPendingRuntimeRefs()`, which fails that event if it fails again); an
+  instance of a mortal generic hashdecl takes them before it is published, and a failure fails its
+  creation.  Two Programs whose declarations name each other (a module can make two such classes
+  before it attaches them to two Programs) keep each other's until library cleanup:
+  `delete_qore_types()` lists these references among those held inside a cycle of survivors and
+  releases them with the cycle (`qore_dbg_cross_program_cycle_count()` counts such cycles in a debug
+  build).  A declaration that a binary module adds at run time to a namespace that no Program owns
+  takes no reference to the mortal declarations that it names, which would keep them until library
+  cleanup whatever Programs are created and deleted: a module must add such a declaration to the
+  namespace of the Program whose declarations it names (a debug build counts the others:
+  `qore_dbg_unowned_program_local_names()`).  No binary module of this repository does so; module-jni's
+  classes for a Program's class loader are qore#7650.
 
 The accessors follow the existing namespace back-pointer; they add exported
 methods without changing the public object layout. No reference is acquired.
@@ -112,6 +154,11 @@ alone would keep the declaration allocation alive without necessarily retaining
 the namespace, source locations, default expressions, and other referenced types.
 
 ## Coverage and Python follow-up
+
+`examples/test/qore/namespaces/runtime-builtin-naming.qtest` checks each path by which another
+Program names a declaration added to a Program at run time, in each execution mode, after the
+Program is deleted, with the failures of the references and the cycles; the cases `cycle` and
+`shared` of `runtime-builtin-survivor` check that what is kept until library cleanup is freed then.
 
 `examples/test/qore/misc/declaration_owner.cpp` exercises the public C++ API with
 AST, IR, JIT, and tiered Programs. It checks nested declarations, child copies, explicit imports,
