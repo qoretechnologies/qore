@@ -8728,7 +8728,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             try {
                 serv.stopListenerAccepting(self);
             } catch (hash<ExceptionInfo> ex) {
-                if (!silent) {
+                # the server is being destroyed in another thread (a stop started with stopNoWait()), and cannot be
+                # called (qore#7509): its destructor stops accepting connections itself
+                if (ex.err != "OBJECT-ALREADY-DELETED" && !silent) {
                     logError("error refusing new connections on listener %d: %s: %s: %s", id, get_ex_pos(ex), ex.err,
                         ex.desc);
                 }
