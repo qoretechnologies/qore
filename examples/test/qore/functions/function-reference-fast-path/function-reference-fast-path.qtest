@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of calls through function references, threads, Program entry and deletion, and the sandbox's file-system policy
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class FunctionReferenceFastPathTest
+
+#! Calls through references to user functions give the results of the generic call path in every execution mode
+/** The runtime makes a call through a reference whose class is exactly FunctionCallReferenceNode or
+    LocalFunctionCallReferenceNode without the generic call path when the reference and the call allow it (qore#5578):
+    a single user variant that needs nothing of that path, an argument for each parameter that it takes as it is, no
+    debugger, and a reference made by the code of the Program that calls it, in the same context, with no sandbox
+    provenance; every other call takes the generic call path.
+
+    FunctionReferenceFastPath.q calls references with scalar and container arguments and with 0 to 3 parameters,
+    references whose callee raises exceptions or returns a value of the wrong type, references called with named
+    arguments, with too few or too many arguments or with arguments of the wrong type, references to variants that need
+    the generic call path (a default argument, overloads, synchronized, a soft parameter, implicit arguments, a
+    reference parameter), a reference to a function to which a later parse tries to add an overload, a reference whose
+    first calls are made by many threads at once, references made and called in the background, references to a
+    module's function made by the script and by the module, a reference to a function of a deleted Program, and the
+    sandbox matrix (references made by sandboxed code and called by trusted code and the reverse, references reached
+    through a Program lent to sandboxed code, references bound to the sandbox).  Its output must be the AST
+    interpreter's (FunctionReferenceFastPath.expected) in every execution mode, on the IR tier and in programs compiled
+    with qcc -O0 and -O3.  In a debug build, the cases whose calls take the fast path must be the ones that
+    FunctionReferenceFastPath.report.expected lists in the IR and JIT modes, and FunctionReferenceFastPath.report-aot.expected
+    in compiled programs; none with the AST interpreter.
+
+    FunctionReferenceDebugger.q attaches a debugger while a loop calls a function through a reference after a warm-up:
+    every call made after it attached must give the debugger the function's entry, as with the AST interpreter, and
+    none takes the fast path.
+*/
+class FunctionReferenceFastPathTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = realpath(get_script_dir());
+        string fixture = dir + "/FunctionReferenceFastPath.q";
+        string debugger_fixture = dir + "/FunctionReferenceDebugger.q";
+        string expected = ReadOnlyFile::readTextFile(dir + "/FunctionReferenceFastPath.expected");
+        string report_expected = ReadOnlyFile::readTextFile(dir + "/FunctionReferenceFastPath.report.expected");
+        #! the cases that take the fast path in a program compiled with qcc, which compiles the module that the
+        #! fixture requires by its path into the program: the module's code runs in the program's Program, so the
+        #! references that it makes and calls are the program's own
+        string report_aot_expected = ReadOnlyFile::readTextFile(dir + "/FunctionReferenceFastPath.report-aot.expected");
+        #! True if the library has the debug functions of the report
+        bool can_report;
+
+        #! the output of FunctionReferenceDebugger.q
+        const DebuggerExpected = "warm 125250 result 5050 entries after attach 62\n";
+    }
+
+    constructor() : QUnit::Test("function reference fast path", "1.0", \ARGV) {
+        can_report = backquote(sprintf("%s --enable-debug -e 'printf(\"%%y\", "
+            "exists_function(\"dbg_function_reference_fast_calls\"));' 2>/dev/null", shellQuote(qore_bin))) == "True";
+
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode, fixture)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered", fixture)));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("fast path taken", \checkReport());
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("debugger attached after warm-up, " + mode, sub () {
+                checkDebugger(execution_mode);
+            });
+        }
+
+        set_return_value(main());
+    }
+
+    private string command(string mode, string script, *string arg) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s%s", shellQuote(qore_bin), mode, shellQuote(script),
+            arg ? " " + arg : "");
+    }
+
+    #! compiles the fixture with qcc and returns the path of the program, or skips the test
+    private string compile(string tmp, int opt) {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc not found");
+        }
+        string program = tmp + "/function-reference-fast-path";
+        string output = backquote(sprintf("cd %s && %s -O%d -o %s %s 2>&1", shellQuote(dir), shellQuote(qcc_bin), opt,
+            shellQuote(program), shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        return program;
+    }
+
+    private checkQcc(int opt) {
+        string tmp = make_tmp_dir();
+        on_exit remove_tree(tmp);
+        string program = compile(tmp, opt);
+        assertEq(expected, backquote(sprintf("cd %s && %s 2>&1", shellQuote(dir), shellQuote(program))));
+        if (can_report) {
+            assertEq(report_aot_expected, backquote(sprintf("cd %s && %s --enable-debug report 2>&1", shellQuote(dir),
+                shellQuote(program))), "fast path taken");
+        }
+    }
+
+    private checkReport() {
+        if (!can_report) {
+            testSkip("the library has no debug functions");
+        }
+        # the AST interpreter never takes the fast path
+        string generic = (map regex_subst($1, ": .*$", ": generic"), expected.split("\n"), $1 != "").join("\n")
+            + "\n";
+        assertEq(generic, ExecModeHarness::run(command("ast", fixture, "report")), "AST");
+        foreach string mode in (("ir", "jit")) {
+            assertEq(report_expected, ExecModeHarness::run(command(mode, fixture, "report")), mode);
+        }
+    }
+
+    private checkDebugger(string mode) {
+        string out = ExecModeHarness::run(command(mode, debugger_fixture), ExecModeHarness::NativeCheck::None);
+        assertEq(DebuggerExpected, out);
+        if (can_report) {
+            out = ExecModeHarness::run(command(mode, debugger_fixture, "report"), ExecModeHarness::NativeCheck::None);
+            assertEq(DebuggerExpected + "fast calls after attach: 0\n", out);
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
