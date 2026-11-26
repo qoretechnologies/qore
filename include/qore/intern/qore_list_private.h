@@ -568,10 +568,12 @@ struct qore_list_private {
         if (__builtin_expect(length + 1 >= allocated, 0) && growOrRaise(length + 1, xsink)) {
             return -1;
         }
-        // the storage holds the entry: it is stored as pushIntern() stores it, without growing the list
+        // the storage holds the entry: it is stored as initEntry() stores it, without growing the list; a list or hash
+        // that a weak reference designates is replaced by a copy of its own (qore#7342)
         QoreValue val = holder.release();
+        bool scan = qore_store_needs_scan(val);
         entry[length++] = val;
-        if (needs_scan(val)) {
+        if (scan) {
             incScanCount(1);
         }
         return 0;

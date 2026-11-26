@@ -9325,12 +9325,13 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_impl(
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
-        QoreHashNode* new_h = qore_rt_make_implicit_hash_for_lvalue(var, xsink);
+        // the new hash is released if the key cannot be stored (qore#7466)
+        ReferenceHolder<QoreHashNode> new_h_holder(qore_rt_make_implicit_hash_for_lvalue(var, xsink), xsink);
+        QoreHashNode* new_h = *new_h_holder;
         if (!new_h) {
             return toBits(QoreValue());
         }
         if (qore_hash_private::get(*new_h)->checkLValueKey(key, xsink)) {
-            new_h->deref(xsink);
             return toBits(QoreValue());
         }
         if (res) {
@@ -9342,10 +9343,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_impl(
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
         }
         if (*xsink) {
-            new_h->deref(xsink);
             return toBits(QoreValue());
         }
-        new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
         qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink,
             res);
@@ -9405,12 +9404,13 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_aot_impl(
         // LValueHelper::doHashLValue() including hashdecl error behavior.
         LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
             ? ctx->locals[local_slot] : nullptr;
-        QoreHashNode* new_h = qore_rt_make_implicit_hash_for_lvalue(var, xsink);
+        // the new hash is released if the key cannot be stored (qore#7466)
+        ReferenceHolder<QoreHashNode> new_h_holder(qore_rt_make_implicit_hash_for_lvalue(var, xsink), xsink);
+        QoreHashNode* new_h = *new_h_holder;
         if (!new_h) {
             return toBits(QoreValue());
         }
         if (qore_hash_private::get(*new_h)->checkLValueKey(key, xsink)) {
-            new_h->deref(xsink);
             return toBits(QoreValue());
         }
         if (res) {
@@ -9422,10 +9422,8 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_hash_key_store_cow_aot_impl(
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
         }
         if (*xsink) {
-            new_h->deref(xsink);
             return toBits(QoreValue());
         }
-        new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
         qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink,
             res);
@@ -9533,7 +9531,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_index_store_cow_impl(
         } else if (entry.isPointer()) {
             strip_untyped_list_element(vti, entry, xsink);
         }
-        if (!*xsink) {
+        // the list is grown before it takes the element, which memory that cannot be allocated leaves to be released
+        // here (qore#7466)
+        if (!*xsink && !qore_list_private::get(*l)->reserve(static_cast<size_t>(index) + 1, xsink)) {
             l->setEntry(index, entry, xsink);
             // the value of the assignment is the value stored, which the element type can convert (qore#7589)
             if (res && !*xsink) {
@@ -9660,7 +9660,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_list_index_store_cow_aot_impl(
         } else if (entry.isPointer()) {
             strip_untyped_list_element(vti, entry, xsink);
         }
-        if (!*xsink) {
+        // the list is grown before it takes the element, which memory that cannot be allocated leaves to be released
+        // here (qore#7466)
+        if (!*xsink && !qore_list_private::get(*l)->reserve(static_cast<size_t>(index) + 1, xsink)) {
             l->setEntry(index, entry, xsink);
             // the value of the assignment is the value stored, which the element type can convert (qore#7589)
             if (res && !*xsink) {

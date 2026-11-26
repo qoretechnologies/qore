@@ -9235,7 +9235,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue push_val = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
             if (inv->list_push_in_place && list_val.getType() == NT_LIST) {
                 QoreListNode* l = list_val.get<QoreListNode>();
-                qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
+                qore_list_private::pushCanonicalRaising(*l, push_val.refSelf(), xsink);
                 // refSelf: result shares same list pointer as operand; both are in
                 // cleanup, so both need their own reference
                 return xsink && *xsink ? QoreValue() : list_val.refSelf();
@@ -13804,7 +13804,7 @@ dispatch_folded_step_host:
                     // Track element type for correct list<T> type info at runtime
                     qore_list_private::get(*list)->setListTypeFromNewElementType(
                         push_val.getFullTypeInfo());
-                    qore_list_private::pushCanonical(*list, push_val, xsink);
+                    qore_list_private::pushCanonicalRaising(*list, push_val, xsink);
                 }
                 ++ip;
                 break;
@@ -13815,7 +13815,7 @@ dispatch_folded_step_host:
                 QoreValue result;
                 if (inst->list_push_in_place && list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
-                    qore_list_private::pushCanonical(*l, push_val.refSelf(), xsink);
+                    qore_list_private::pushCanonicalRaising(*l, push_val.refSelf(), xsink);
                     // an in-place push borrows the list from the local, which keeps its reference: when the value is
                     // rejected, the result stays empty, so the discard below does not release the local's list (the
                     // frame's locals release it); no flag is used, as execute() is at its stack budget
@@ -23950,8 +23950,9 @@ weak_receiver_raised:
         // raised exactly where the native code would leave frames without their cleanup (qore#7466)
         qore_raise_allocation_failure(xsink, "compiled code");
         if (frame.unwinding_function) {
-            // the frame was already being unwound when the memory could not be allocated: its handlers are not run
-            // again
+            // the frame was already being unwound when the memory could not be allocated: its values are released,
+            // and the handlers that had not run yet are skipped, as running them again could run some twice
+            cleanupValues(values, frame.cleanup, xsink, true, cleanup_log, &func.interpreter_exception_release_groups);
             cleanupLocalCaches(false);
             return false;
         }
