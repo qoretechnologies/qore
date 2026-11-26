@@ -296,6 +296,28 @@ if (CMAKE_HOST_APPLE)
     target_link_options(tdpgmowner PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
 
+# --- the module that creates builtin classes at run time while their parent classes get base classes ---------
+# (see builtin-ancestry/ancestryprobe-module.cpp and builtin-ancestry/builtin-ancestry.qtest; qore#7614)
+
+add_library(ancestryprobe MODULE builtin-ancestry/ancestryprobe-module.cpp)
+add_dependencies(ancestryprobe libqore)
+target_include_directories(ancestryprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(ancestryprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(ancestryprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/ancestryprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(ancestryprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
 # --- the modules initialized with the legacy AOT module entry point -------------------------------
 # (see aot-v1-init/aotv1init-module.cpp and qore/misc/module-loader/module-load-failure-cleanup.qtest): one source
 # built twice, with an initialization that fails (aotv1fail) and one that succeeds (aotv1ok)
@@ -327,6 +349,7 @@ target_compile_definitions(aotv1ok PRIVATE AOTV1_FAIL=0)
 
 # remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
 foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe dsoptprobe dbitargetprobe
-        tlpdprobe forkexita forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb)
+        tlpdprobe forkexita forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb
+        ancestryprobe)
     qore_remove_stale_module_api_files(${_cppapi_test_module})
 endforeach()

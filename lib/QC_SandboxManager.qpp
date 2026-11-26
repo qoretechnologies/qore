@@ -72,7 +72,7 @@ int qore_program_cache_check_caller(const QoreObject* owner, const char* what, E
             return 0;
         }
         if (const BCSMList* sml = cls->getBCSMList()) {
-            for (auto& i : *sml) {
+            for (auto& i : sml->view()) {
                 if (qore_class_private::get(*i.first)->spgm.load() == pgm) {
                     return 0;
                 }
