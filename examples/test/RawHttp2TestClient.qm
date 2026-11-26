@@ -79,6 +79,8 @@ public hashdecl RawHttp2StreamResult {
     bool ended = False;
     #! the error code of the RST_STREAM that ended the stream, if one did
     *int reset_code;
+    #! the time on the monotonic clock in microseconds when that RST_STREAM arrived, if one did
+    *int reset_us;
     #! the error code of a GOAWAY that the connection received, if one did
     *int goaway_code;
 }
@@ -194,6 +196,89 @@ public class RawHttp2Client {
                     if ((f.flags & FlagEndStream) && f.stream_id == stream_id) {
                         rv.ended = True;
                         return rv;
+                    }
+                    break;
+            }
+        }
+    }
+
+    #! Reads several streams while granting their data at a given rate in total, until each ends or the time is up
+    /** The client should have been created with a stream window of 0, so that each stream receives only the credit
+        that this method grants: every @p tick, it grants @p rate × @p tick in total, in equal shares to the streams
+        that have not ended (WINDOW_UPDATE for each stream and for the connection).  SETTINGS and PING frames are
+        acknowledged.
+
+        @param stream_ids the streams to read
+        @param rate the total rate in bytes per second at which the data of the streams is granted
+        @param max_time the time after which the streams that have not ended are left as they are
+        @param tick the time between two grants
+
+        @return the result of each stream, keyed by its ID
+    */
+    hash<string, hash<RawHttp2StreamResult>> readStreamsPaced(list<int> stream_ids, int rate, timeout max_time,
+            timeout tick = 50ms) {
+        hash<string, hash<RawHttp2StreamResult>> rv;
+        foreach int id in (stream_ids) {
+            rv{id} = <RawHttp2StreamResult>{};
+        }
+        int end_us = clock_get_monotonic_us() + max_time * 1000;
+        int next_grant_us = clock_get_monotonic_us();
+        while (True) {
+            list<int> open = select stream_ids, !rv{$1}.ended && !exists rv{$1}.reset_code;
+            int now_us = clock_get_monotonic_us();
+            if (!open || now_us >= end_us) {
+                return rv;
+            }
+            if (now_us >= next_grant_us) {
+                int share = rate * tick / 1000 / open.size();
+                if (share > 0) {
+                    binary out = binary();
+                    foreach int id in (open) {
+                        out += frame(FrameWindowUpdate, 0, id, u32(share));
+                    }
+                    out += frame(FrameWindowUpdate, 0, 0, u32(share * open.size()));
+                    sock.send(out, io_timeout);
+                }
+                next_grant_us += tick * 1000;
+            }
+            # a frame is read only once data has arrived, so that no read is cut off by its timeout
+            int wait_ms = max(0, min(next_grant_us, end_us) - clock_get_monotonic_us()) / 1000;
+            if (!sock.isDataAvailable(wait_ms)) {
+                continue;
+            }
+            *hash<auto> f = readFrame(io_timeout);
+            if (!f) {
+                return rv;
+            }
+            string key = string(f.stream_id);
+            switch (f.type) {
+                case FrameSettings:
+                    if (!(f.flags & FlagAck)) {
+                        sock.send(frame(FrameSettings, FlagAck, 0, binary()), io_timeout);
+                    }
+                    break;
+                case FramePing:
+                    if (!(f.flags & FlagAck)) {
+                        sock.send(frame(FramePing, FlagAck, 0, f.payload), io_timeout);
+                    }
+                    break;
+                case FrameRstStream:
+                    if (rv{key}) {
+                        rv{key}.reset_code = u32val(f.payload, 0);
+                        rv{key}.reset_us = clock_get_monotonic_us();
+                    }
+                    break;
+                case FrameData:
+                    if (rv{key}) {
+                        rv{key}.data_bytes += f.payload.size();
+                        if (f.flags & FlagEndStream) {
+                            rv{key}.ended = True;
+                        }
+                    }
+                    break;
+                case FrameHeaders:
+                    if (rv{key} && (f.flags & FlagEndStream)) {
+                        rv{key}.ended = True;
                     }
                     break;
             }

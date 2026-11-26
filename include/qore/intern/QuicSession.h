@@ -1591,9 +1591,26 @@ public:
         @param window_ms the window of the minimum rate in milliseconds
         @param stall_ms the time in milliseconds after which a body that the client acknowledges nothing of is ended
 
-        The bounds of a connection are set once, with its first such body; later calls are ignored.
+        The stall time of a connection is set once, by its first such body, and its minimum rate once, by its first
+        such body or its first checkStreamSendRate(); later values are ignored.
     */
     DLLLOCAL void setInputStreamSendBound(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
+    //! Checks the connection's minimum rate for a send on a handler thread that waits for the client (qore#7280)
+    /** The connection's rate is measured across all its streams while one of them waits for the client, the bodies
+        that the I/O thread pumps and the sends of handler threads alike; called on the I/O thread
+
+        @param stream_id the stream of the send
+        @param waiting true while the send waits for the client; false once it is done, which ends its wait
+        @param min_rate the minimum rate in bytes per second, if the connection's rate is not set yet
+        @param window_ms the window of the minimum rate in milliseconds, if the connection's rate is not set yet
+        @param verdict set to true if this call found the connection below the rate, which ends the other waiting
+        bodies as well
+
+        @return true if the connection was found below the minimum rate while the send waited: the send must end
+    */
+    DLLLOCAL bool checkStreamSendRate(int64_t stream_id, bool waiting, int64_t min_rate, int64_t window_ms,
+        bool& verdict);
 
     //! Returns the time in milliseconds after which the bounds of the pumped bodies must be checked, or -1
     DLLLOCAL int getInputStreamPollTimeoutMs() const;
@@ -2285,9 +2302,39 @@ private:
     int64_t pump_stall_ms_ = 30 * 60 * 1000;
     //! true once the bounds of the pumped bodies have been set
     bool pump_bound_set_ = false;
+    //! true once the minimum rate of the connection has been set, by a pumped body or by a send of a handler thread
+    bool pump_rate_set_ = false;
+    //! the streams whose sends on handler threads wait for the client, which the connection's minimum rate covers
+    std::unordered_set<int64_t> send_rate_waiters_;
+    //! the streams whose sends on handler threads waited when the connection was found below its minimum rate, and
+    //! which have not been told yet
+    std::unordered_set<int64_t> send_rate_ended_;
 
     //! Checks the bounds of the pumped bodies; the bodies of a client below them are ended (qore#7280)
     DLLLOCAL void checkInputStreamSendBound();
+
+    //! Sets the minimum rate of the connection once; the caller holds the lock
+    DLLLOCAL void setSendRateUnlocked(int64_t min_rate, int64_t window_ms);
+
+    //! Updates the connection's minimum rate; the caller holds the lock
+    /** When the connection is below the rate while a body waits, every waiting pumped body is ended (its stream is
+        added to @p ended, for the caller to cancel), every waiting send of a handler thread is recorded in
+        send_rate_ended_, and a new measurement starts
+
+        @param now_ms the time of the update
+        @param ended the pumped bodies that a verdict ends
+        @param leaving a waiting send that ends its wait with this update, or -1: the time until now is charged as
+        waiting time for it, and the time from now on only if another body waits
+
+        @return true if the connection was found below the rate
+    */
+    DLLLOCAL bool updateSendRateUnlocked(int64_t now_ms, std::vector<int64_t>& ended, int64_t leaving = -1);
+
+    //! Ends the wait of a send of a handler thread whose stream closes; the caller holds the lock
+    /** The state of the connection's measurement is recorded without a verdict (which is not reached inside an
+        ngtcp2 callback): the low credit of a connection that was below the rate is found by the next check
+    */
+    DLLLOCAL void endSendRateWaitUnlocked(int64_t stream_id);
 
     //! Returns true if a pumped body has data that its client has not acknowledged
     DLLLOCAL bool isInputStreamWaiting(int64_t stream_id) const;
