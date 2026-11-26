@@ -138,8 +138,34 @@ string sub g_change() {
 string sub g_creates() {
     return SandboxManager::createsSharedObjects() ? '1' : '0';
 }
+string sub g_copy() {
+    try {
+        object o = get_shared_box();
+        object c = o.copy();
+        return 'ok';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub g_cache() {
+    try {
+        AsyncIoController::getCacheSize();
+        return 'ok';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub g_cap() {
+    try {
+        SandboxManager::createTrustedBuildCall(sub () {});
+        return 'ok';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
 string sub g_ops() {
-    list<string> r = ('change:' + g_change(), 'creates:' + g_creates());
+    list<string> r = ('change:' + g_change(), 'copy:' + g_copy(), 'creates:' + g_creates(), 'cache:' + g_cache(),
+        'cap:' + g_cap());
     try {
         build_host_program('x');
         r += 'inject:ok';
@@ -194,14 +220,28 @@ string sub run(code c) {
         return 'error: ' + ex.err;
     }
 }
+# the host functions are called directly, not through a call reference that the tenant creates, whose provenance
+# would carry the tenant's sandbox into the thread
 string sub bg() {
-    return run(\\run_bg_ops());
+    try {
+        return run_bg_ops();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
 }
 string sub bg_closure() {
-    return run(\\run_bg_closure_ops());
+    try {
+        return run_bg_closure_ops();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
 }
 string sub direct() {
-    return run(\\direct_ops());
+    try {
+        return direct_ops();
+    } catch (hash<ExceptionInfo> ex) {
+        return 'error: ' + ex.err;
+    }
 }
 sub wrappers() {
     make_wrappers(int sub () { return 7; });
@@ -242,9 +282,10 @@ TenantBox sub tenant_box() {
 ";
 
         #! what the governed code gets for trusted callers
-        const Trusted = "change:ok,creates:1,inject:ok,refl:ok";
+        const Trusted = "change:ok,copy:ok,creates:1,cache:ok,cap:ok,inject:ok,refl:ok";
         #! what it gets for restricted callers
-        const Restricted = "change:SHARED-OBJECT-ERROR,creates:0,inject:CLASS-IMPORT-ERROR,refl:REFLECTION-ACCESS-ERROR";
+        const Restricted = "change:SHARED-OBJECT-ERROR,copy:SHARED-OBJECT-ERROR,creates:0,cache:PERMISSION-DENIED,"
+            "cap:SANDBOX-CAPABILITY-ERROR,inject:CLASS-IMPORT-ERROR,refl:REFLECTION-ACCESS-ERROR";
     }
 
     constructor() : QUnit::Test("SandboxTrustedGovernedIntermediaryTest", "1.0") {
@@ -321,7 +362,8 @@ TenantBox sub tenant_box() {
         assertEq(refused, rv.restricting, func + ": restricting manager");
     }
 
-    #! the thread inherits the restricting sandbox of the caller; the governed code that it calls acts for it
+    #! the thread inherits the restricting sandbox of the caller; the governed code that it calls (a Program that the
+    #! host created with a trusted manager of its own, before any tenant ran) acts for it
     threadTest() {
         check("bg", Trusted, Restricted);
     }
