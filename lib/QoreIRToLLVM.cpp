@@ -14284,8 +14284,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         can_use_fast_entry = llvm::ConstantInt::getFalse(ctx);
     }
     // a call that a debugger must see is made by the runtime path, which reports it (qore#7676); in a Program that
-    // cannot be debugged, only a call into another module's Program can be one
-    if (aot_debugger_can_attach || cross_module) {
+    // cannot be debugged, only a call into another module's Program can be one; code compiled without debugging
+    // never checks
+    if (aot_debugger_checks == AOTDebuggerChecks::All
+            || (cross_module && aot_debugger_checks == AOTDebuggerChecks::CrossModule)) {
         can_use_fast_entry = builder->CreateAnd(can_use_fast_entry,
             qore_llvm_emit_no_debugger_attached(*builder, module));
     }
@@ -14518,8 +14520,9 @@ llvm::Value* QoreIRToLLVM::emitAotDebuggerGuardedFastCall(llvm::Module& module, 
         llvm::BasicBlock* exception_target, const std::function<llvm::Value*(bool&)>& emit_fast,
         bool& fast_nothrow, std::string& error) {
     assert(raw_args.size() == static_cast<size_t>(nargs) && boxed_args.size() == static_cast<size_t>(nargs));
-    // no debugger can be attached to a Program that cannot be debugged: the call is made without the runtime
-    if (!aot_debugger_can_attach) {
+    // no debugger can be attached to a Program that cannot be debugged, and code compiled without debugging does not
+    // check: the call is made without the runtime
+    if (aot_debugger_checks != AOTDebuggerChecks::All) {
         fast_nothrow = false;
         llvm::Value* fast_result = emit_fast(fast_nothrow);
         assert(fast_result || !error.empty());
@@ -15508,7 +15511,7 @@ llvm::Function* QoreIRToLLVM::lowerNestedFunction(const QoreIRFunction& func, co
     if (aot_mode) {
         // the nested function shares the AOT context of the function being lowered: its slot tables
         nested_lowering.setAOTMode(aot_slots, aot_direct_closure_fast_entry);
-        nested_lowering.setAOTDebuggerCanAttach(aot_debugger_can_attach);
+        nested_lowering.setAOTDebuggerChecks(aot_debugger_checks);
         // and its slot symbols, such as the dispatch functions of its closures (qore#6339)
         nested_lowering.aot_symbol_owner = getAOTSymbolOwner();
     }
@@ -34634,7 +34637,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // the call is made through the generic path while a debugger is attached (qore#7676), as
                         // when its arguments do not have the types of the fast entry's native parameters
                         {
-                            llvm::Value* args_assigned = aot_debugger_can_attach
+                            llvm::Value* args_assigned = aot_debugger_checks == AOTDebuggerChecks::All
                                 ? qore_llvm_emit_no_debugger_attached(*builder, module)
                                 : llvm::ConstantInt::getTrue(ctx);
                             for (int i = 0; guarded_native_args && i < native_nargs; ++i) {

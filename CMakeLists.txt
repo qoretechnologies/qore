@@ -97,6 +97,11 @@ option(QORE_BUILD_AOT_MODULES
        "Build AOT-compiled .qmod artifacts alongside each user module via qcc"
        ON)
 set(QORE_AOT_MODULE_OPT_LEVEL "3" CACHE STRING "Optimization level (0-3) for AOT user modules")
+# qcc -g for the AOT user modules (qore#7676): debug support that costs performance, so never on by default, in any
+# build type
+option(QORE_QMOD_DEBUGGING
+       "Compile the AOT user modules with debugging (qcc -g): their calls report entry and exit to any debugger"
+       OFF)
 
 option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
        "Require installed dependencies instead of downloading and bundling fallback sources"

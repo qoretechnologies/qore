@@ -60,7 +60,7 @@ class AotDebugIrCallFormsTest inherits QUnit::Test {
         TmpDir tmp("qore-aot-debug-ir-call-forms-");
         foreach string opt in (("-O0", "-O3")) {
             string exe = tmp.path + DirSep + Worker + opt;
-            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -g -o " + quote(exe) + " " + quote(worker));
             assertTrue(is_file(exe), opt + ": qcc produced the executable");
             assertEq(ast, ExecModeHarness::run_any(prefix + quote(exe) + " -b"), "AOT " + opt);
         }

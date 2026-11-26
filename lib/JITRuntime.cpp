@@ -21689,9 +21689,50 @@ static_assert(sizeof(std::atomic<unsigned>) == sizeof(unsigned) && std::atomic<u
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 constinit std::atomic<unsigned> qore_rt_aot_direct_call_mode{1};
 
+// set once AOT code compiled without debugging is loaded (qore_aot_note_code_without_debugging())
+static constinit std::atomic<bool> qore_aot_code_without_debugging{false};
+// set once the warning has been given
+static constinit std::atomic<bool> qore_aot_debugging_warned{false};
+// the label of the first binary compiled without debugging that was loaded
+static std::mutex qore_aot_code_without_debugging_lock;
+static std::string qore_aot_code_without_debugging_label;
+
+//! Warns once in the process that a debugger is attached while AOT code compiled without debugging is loaded
+static void qore_aot_warn_code_without_debugging() {
+    if (qore_aot_debugging_warned.exchange(true, std::memory_order_acq_rel)) {
+        return;
+    }
+    std::string label;
+    {
+        std::lock_guard<std::mutex> l(qore_aot_code_without_debugging_lock);
+        label = qore_aot_code_without_debugging_label;
+    }
+    fprintf(stderr, "warning: a debugger is attached while code compiled without debugging (qcc -g) is loaded (%s): "
+        "calls in it may give no entry/exit events, and some of its functions cannot be stepped\n", label.c_str());
+}
+
+void qore_aot_note_code_without_debugging(const char* label) {
+    if (!qore_aot_code_without_debugging.load(std::memory_order_acquire)) {
+        {
+            std::lock_guard<std::mutex> l(qore_aot_code_without_debugging_lock);
+            if (qore_aot_code_without_debugging_label.empty()) {
+                qore_aot_code_without_debugging_label = label && *label ? label : "<unknown>";
+            }
+        }
+        // sequentially consistent with the attach below: one of the two sees the other
+        qore_aot_code_without_debugging.store(true, std::memory_order_seq_cst);
+    }
+    if (qore_rt_aot_direct_call_mode.load(std::memory_order_seq_cst) >= 2) {
+        qore_aot_warn_code_without_debugging();
+    }
+}
+
 void qore_aot_debug_program_change(bool attached) {
     if (attached) {
-        qore_rt_aot_direct_call_mode.fetch_add(2, std::memory_order_release);
+        qore_rt_aot_direct_call_mode.fetch_add(2, std::memory_order_seq_cst);
+        if (qore_aot_code_without_debugging.load(std::memory_order_seq_cst)) {
+            qore_aot_warn_code_without_debugging();
+        }
     } else {
         assert(qore_rt_aot_direct_call_mode.load(std::memory_order_relaxed) >= 2);
         qore_rt_aot_direct_call_mode.fetch_sub(2, std::memory_order_release);

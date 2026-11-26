@@ -349,7 +349,7 @@ int main(int argc, char** argv) {
 
         string qo_dir = root + "/qo";
         mkdir(qo_dir);
-        string out = run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+        string out = run(sprintf("%s %s -O3 -g -c --parse-option=PO_ALLOW_DEBUGGER "
             "--source-symbol-manifest=%s/source-symbols.manifest --output-dir=%s %s", env, qcc_bin, root, qo_dir,
             hd));
         assertTrue(out.find("script-context .qo") != -1, "compiled the hashdecl: " + out);
@@ -362,7 +362,7 @@ int main(int argc, char** argv) {
     private string compileConsumer(string root, string qo_dir, string name, string code) {
         string src = sprintf("%s/%s.qr", root, name);
         write(src, code);
-        return run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+        return run(sprintf("%s %s -O3 -g -c --parse-option=PO_ALLOW_DEBUGGER "
             "--source-symbol-manifest=%s/source-symbols.manifest -L %s --output-dir=%s %s", env, qcc_bin, root,
             qo_dir, qo_dir, src));
     }
@@ -411,7 +411,7 @@ int main(int argc, char** argv) {
         TmpDir tmp("qore-aot-deferred-hashdecl-vrn-exe-");
         string qo_dir = compileObjects(tmp.path);
         string exe = tmp.path + "/deferred-hashdecl";
-        string link_out = run(sprintf("%s %s -o %s %s/hdprov.qo %s/eng.qo", env, qcc_bin, exe, qo_dir, qo_dir));
+        string link_out = run(sprintf("%s %s -g -o %s %s/hdprov.qo %s/eng.qo", env, qcc_bin, exe, qo_dir, qo_dir));
         assertTrue(is_file(exe), "linked the executable: " + link_out);
 
         string out = runStatus(sprintf("%s %s", env, exe));

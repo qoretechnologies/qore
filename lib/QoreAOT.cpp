@@ -1165,17 +1165,46 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
-//! Returns true if a debugger can be attached to the Program (it has no PO_NO_DEBUGGING; qore#7676)
-/** Native code of a Program that cannot be debugged does not check whether a debugger is attached before it calls a
-    fast entry of its own module (see QoreIRToLLVM::setAOTDebuggerCanAttach()).
+//! Returns true if the code is compiled with debugging (qcc -g, which sets QORE_AOT_DEBUGGING; qore#7676)
+/** Debug support that costs performance is emitted only in code compiled with debugging: the debugger checks of its
+    calls (aotDebuggerChecks()), the debug IR of the functions whose native code's IR differs from the IR that a
+    debugger can interpret (aotLowerUnrewrittenDebugIR()), and the calls that -O0 keeps for a debugger to step into
+    (aotPreserveDebugCalls()).  The binary records it in its header (QORE_AOT_FLAG_DEBUGGING), and a debugger that
+    attaches while code compiled without it is loaded gets a warning (qore_aot_warn_debugging_unsupported()).
 */
-static bool aotDebuggerCanAttach(QoreProgram* pgm) {
-    return !pgm || qore_program_private::get(*pgm)->checkAllowDebugging(nullptr);
+static bool aotCompileWithDebugging() {
+    static constinit QoreEnvFlag debugging_env("QORE_AOT_DEBUGGING");
+    return debugging_env.get();
 }
 
-// A different Program can attach after native code has entered the caller.
+//! Returns the header flags of a binary written by this compilation: the given ones and QORE_AOT_FLAG_DEBUGGING for
+//! code compiled with debugging (qore#7676)
+/** A binary linked from objects (qcc -F, -a) is written with the flags of the link, whose debug IR and slot maps it
+    makes again; qcc links only objects compiled with the same choice (see check_link_inputs_debugging() in qcc)
+*/
+static uint16_t aotHeaderFlags(uint16_t flags) {
+    return aotCompileWithDebugging() ? static_cast<uint16_t>(flags | QORE_AOT_FLAG_DEBUGGING) : flags;
+}
+
+//! Returns the calls of the Program's native code that check whether a debugger is attached (qore#7676)
+/** Code compiled without debugging checks none.  The code of a Program that cannot be debugged (PO_NO_DEBUGGING)
+    checks only its calls into another module's Program, which can be debugged (see
+    QoreIRToLLVM::setAOTDebuggerChecks()).
+*/
+static AOTDebuggerChecks aotDebuggerChecks(QoreProgram* pgm) {
+    if (!aotCompileWithDebugging()) {
+        return AOTDebuggerChecks::None;
+    }
+    return !pgm || qore_program_private::get(*pgm)->checkAllowDebugging(nullptr)
+        ? AOTDebuggerChecks::All : AOTDebuggerChecks::CrossModule;
+}
+
+//! Returns true if the native code keeps the calls of the Program that a debugger can step into
+/** Only at -O0 and in code compiled with debugging (qcc -O0 -g); a different Program can attach after native code has
+    entered the caller.
+*/
 static bool aotPreserveDebugCalls(int opt_level, QoreProgram* pgm) {
-    return opt_level == 0 && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
+    return opt_level == 0 && aotCompileWithDebugging() && aotEmitDebugInfo() && pgm->checkAllowDebugging(nullptr);
 }
 
 static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
@@ -2340,6 +2369,7 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("opt-level", std::to_string(opt_level));
     add("include-source", include_source ? "true" : "false");
     add("debug-info", QORE_ENV_IS_SET("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
+    add("debugging", aotCompileWithDebugging() ? "true" : "false");
     QoreEnvironmentValue big_fn_holder("QORE_AOT_BIG_FN_THRESHOLD");
     const char* big_fn = big_fn_holder.c_str();
     add("big-fn-threshold", big_fn ? big_fn : "");
@@ -6038,7 +6068,7 @@ static void aotEraseOutlinedFunctions(llvm::Module& module, const std::vector<AO
 }
 
 static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, bool preserve_debug_calls,
-        bool debugger_can_attach, llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
+        AOTDebuggerChecks debugger_checks, llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
         llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu, std::string& error) {
     const bool dbg = QORE_ENV_IS_SET("QORE_AOT_DEBUG");
     for (auto& h : helpers) {
@@ -6050,7 +6080,7 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers, b
         }
         QoreIRToLLVM lowerer(ctx);
         lowerer.setAOTMode(&slots, !preserve_debug_calls);
-        lowerer.setAOTDebuggerCanAttach(debugger_can_attach);
+        lowerer.setAOTDebuggerChecks(debugger_checks);
         lowerer.setSharedDebugInfo(di_builder, di_cu);
         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
         lowerer.setDeferredExceptionChecking(false);
@@ -6315,7 +6345,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRToLLVM lowerer(ctx);
     lowerer.setAOTMode(&slots, false);
-    lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+    lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
     lowerer.setDeferredExceptionChecking(false);
     lowerer.setSharedDebugInfo(&di_builder, di_cu);
     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -20107,7 +20137,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                    fast_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                    fast_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     fast_lowerer.setDeferredExceptionChecking(false);
@@ -20194,7 +20224,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         } else {
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots, !preserve_debug_calls);
-            lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+            lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
             lowerer.setDeferredExceptionChecking(false);
@@ -22282,10 +22312,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                 bool will_outline = outline_probe.run(ir_func, false);
                 outline_probe.undo();
                 // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
-                // the serialized IR cannot express (#7733)
+                // the serialized IR cannot express (#7733); code compiled without debugging has none then, as the IR
+                // of its native code is not one that a debugger can interpret: the function runs its native code under
+                // a debugger (qore#7676)
                 std::unique_ptr<QoreIRFunction> debug_ir_func;
                 const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
-                if (rewritten || ir_func->has_debug_ir_call_forms) {
+                const bool needs_debug_ir_lowering = rewritten || ir_func->has_debug_ir_call_forms;
+                const bool no_debug_ir = needs_debug_ir_lowering && !aotCompileWithDebugging();
+                if (needs_debug_ir_lowering && !no_debug_ir) {
                     std::string debug_error;
                     debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, function_name.c_str(), pgm, func,
                         const_reverse_map, debug_error);
@@ -22484,7 +22518,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     // Lower to LLVM with AOT mode
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                    lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                    lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
                     lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                     // Deferring exception checks is not semantics-preserving for
@@ -22539,7 +22573,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     if (fn_outliner.active()) {
                         std::string helper_error;
                         if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls,
-                                aotDebuggerCanAttach(pgm), ctx,
+                                aotDebuggerChecks(pgm), ctx,
                                 module, slots, &di_builder, di_cu, helper_error)) {
                             fn_outliner.undo();
                         }
@@ -22559,7 +22593,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         fn_outliner.undo();
                         QoreIRToLLVM retry_lowerer(ctx);
                         retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                        retry_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                        retry_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                         retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         retry_lowerer.setDeferredExceptionChecking(false);
@@ -22618,7 +22652,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
                         QoreIRToLLVM fast_lowerer(ctx);
                         fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                        fast_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                        fast_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(false);
@@ -22695,13 +22729,18 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         cf.native_ir.reset(ir_func);
                         ir_func = debug_ir_func.release();
                     }
-                    // Keep the serialized debug IR source-visible.  The LLVM
-                    // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
-                    // to avoid dynamic-linker interposition; stack traces and
-                    // diagnostics must keep the original Qore variant key.
-                    ir_func->name = variant_key;
-                    ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
-                    cf.debug_ir.reset(ir_func);
+                    if (no_debug_ir) {
+                        // no debug IR is serialized (see above)
+                        cf.native_ir.reset(ir_func);
+                    } else {
+                        // Keep the serialized debug IR source-visible.  The LLVM
+                        // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
+                        // to avoid dynamic-linker interposition; stack traces and
+                        // diagnostics must keep the original Qore variant key.
+                        ir_func->name = variant_key;
+                        ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
+                        cf.debug_ir.reset(ir_func);
+                    }
                     ir_func = nullptr;
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
@@ -22830,10 +22869,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                     bool will_outline = outline_probe.run(ir_func, false);
                     outline_probe.undo();
                     // the debug IR, when the rewrites of the native code's IR changed it (#7696) or the lowering made calls that
-                    // the serialized IR cannot express (#7733)
+                    // the serialized IR cannot express (#7733); none in code compiled without debugging (qore#7676; see
+                    // the functions above)
                     std::unique_ptr<QoreIRFunction> debug_ir_func;
                     const bool rewritten = !will_outline && refine_interprocedural(*ir_func);
-                    if (rewritten || ir_func->has_debug_ir_call_forms) {
+                    const bool needs_debug_ir_lowering = rewritten || ir_func->has_debug_ir_call_forms;
+                    const bool no_debug_ir = needs_debug_ir_lowering && !aotCompileWithDebugging();
+                    if (needs_debug_ir_lowering && !no_debug_ir) {
                         std::string debug_error;
                         debug_ir_func = aotLowerUnrewrittenDebugIR(*ir_func, uvb, method_name.c_str(), pgm, nullptr,
                             const_reverse_map, debug_error);
@@ -23039,7 +23081,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         // Lower to LLVM with AOT mode
                         QoreIRToLLVM lowerer(ctx);
                         lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                        lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                        lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         lowerer.setDeferredExceptionChecking(false);
@@ -23074,7 +23116,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                         if (fn_outliner.active()) {
                             std::string helper_error;
                             if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, preserve_debug_calls,
-                                    aotDebuggerCanAttach(pgm), ctx,
+                                    aotDebuggerChecks(pgm), ctx,
                                     module, slots, &di_builder, di_cu, helper_error)) {
                                 fn_outliner.undo();
                             }
@@ -23092,7 +23134,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             fn_outliner.undo();
                             QoreIRToLLVM retry_lowerer(ctx);
                             retry_lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                            retry_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                            retry_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                             retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             retry_lowerer.setDeferredExceptionChecking(false);
@@ -23142,7 +23184,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
 
                             QoreIRToLLVM fast_lowerer(ctx);
                             fast_lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                            fast_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                            fast_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                             fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                             fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                             fast_lowerer.setDeferredExceptionChecking(false);
@@ -23215,13 +23257,18 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
                             cf.native_ir.reset(ir_func);
                             ir_func = debug_ir_func.release();
                         }
-                        // Keep the serialized debug IR source-visible.  The LLVM
-                        // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
-                        // to avoid dynamic-linker interposition; stack traces and
-                        // diagnostics must keep the original Qore variant key.
-                        ir_func->name = variant_key;
-                        ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
-                        cf.debug_ir.reset(ir_func);
+                        if (no_debug_ir) {
+                            // no debug IR is serialized (see above)
+                            cf.native_ir.reset(ir_func);
+                        } else {
+                            // Keep the serialized debug IR source-visible.  The LLVM
+                            // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
+                            // to avoid dynamic-linker interposition; stack traces and
+                            // diagnostics must keep the original Qore variant key.
+                            ir_func->name = variant_key;
+                            ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
+                            cf.debug_ir.reset(ir_func);
+                        }
                         ir_func = nullptr;
                         const size_t owner_index = compiled_funcs.size();
                         compiled_funcs.push_back(std::move(cf));
@@ -23368,7 +23415,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm, boo
             }
             QoreIRToLLVM lowerer(ctx);
             lowerer.setAOTMode(&slots, false);
-            lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+            lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
             lowerer.setDeferredExceptionChecking(false);
             lowerer.setSharedDebugInfo(&di_builder, di_cu);
             lowerer.setEmitDebugInfo(aotEmitDebugInfo());
@@ -25931,7 +25978,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots, !preserve_debug_calls);
-                llvm_lowerer.setAOTDebuggerCanAttach(aotDebuggerCanAttach(pgm));
+                llvm_lowerer.setAOTDebuggerChecks(aotDebuggerChecks(pgm));
                 if (!executable_batch_callees.empty()) {
                     llvm_lowerer.setBatchCallees(&executable_batch_callees);
                 }
@@ -26054,7 +26101,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = QORE_AOT_FLAG_HAS_TOPLEVEL;
+        hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_HAS_TOPLEVEL);
         hdr.parse_options_lo = parse_options.getLo();
         hdr.label_offset = writer.addSourcePath(label);
         hdr.max_opcode_id = QORE_IR_MAX_OPCODE;
@@ -28766,7 +28813,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+        hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
         // Use the program's current parse options (after parsing), not the
         // initial mod_po.  The source may add options via %modern, %new-style,
         // %require-types, etc; without this, those added options are lost at
@@ -29304,7 +29351,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             // Use the program's current parse options (after parsing), not the
             // initial mod_po — see comment in generateModuleBinary().
             const QoreParseOptions& final_po = qpgm->getParseOptions();
@@ -29968,7 +30015,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = 0;
+        hdr.flags = aotHeaderFlags(0);
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
@@ -31959,7 +32006,7 @@ bool QoreAOT::compileScriptAggregate(
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = 0;
+        hdr.flags = aotHeaderFlags(0);
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
@@ -32683,7 +32730,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         QoreAOTBinaryHeader hdr{};
         hdr.magic = QORE_AOT_BINARY_MAGIC;
         hdr.version = QORE_AOT_BINARY_VERSION;
-        hdr.flags = 0;  // not a module
+        hdr.flags = aotHeaderFlags(0);  // not a module
         const QoreParseOptions& final_po = qpgm->getParseOptions();
         hdr.parse_options_lo = final_po.getLo();
         hdr.parse_options_hi = final_po.getHi();
@@ -33304,7 +33351,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.addSourcePath(qm_path.c_str());
@@ -33849,7 +33896,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.addSourcePath(qm_path.c_str());
@@ -34424,7 +34471,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             QoreAOTBinaryHeader hdr{};
             hdr.magic = QORE_AOT_BINARY_MAGIC;
             hdr.version = QORE_AOT_BINARY_VERSION;
-            hdr.flags = QORE_AOT_FLAG_IS_MODULE;
+            hdr.flags = aotHeaderFlags(QORE_AOT_FLAG_IS_MODULE);
             const QoreParseOptions& final_po = qpgm->getParseOptions();
             hdr.parse_options_lo = final_po.getLo();
             hdr.label_offset = writer.addSourcePath(qm_path.c_str());

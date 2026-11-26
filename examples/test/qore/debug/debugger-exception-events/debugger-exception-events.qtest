@@ -344,7 +344,7 @@ c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=null
     aotDismissalsTest(int opt) {
         TmpDir tmp("qore-debugger-dismissals-");
         string exe = tmp.path + DirSep + "dismissals";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -g -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             dismissals_script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
         string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
@@ -355,7 +355,7 @@ c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=null
     aotEntryReturnTest(int opt) {
         TmpDir tmp("qore-debugger-entry-return-");
         string exe = tmp.path + DirSep + "entry-return";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -g -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             entry_return_script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
         string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,
@@ -366,7 +366,7 @@ c_t_wh/1: [\"DIVISION-BY-ZERO@168\"] rv=null
     aotFunctionEventsTest(int opt, string arg) {
         TmpDir tmp("qore-debugger-exception-events-");
         string exe = tmp.path + DirSep + "functions";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -g -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             functions_script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
         string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s", libqore_dir,

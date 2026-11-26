@@ -99,6 +99,21 @@ DLLLOCAL bool qore_ir_fast_entry_refuses_given_args(bool call_gives_args, const 
 //! the handlers: no element index, which is an int, has this value
 constexpr int64_t QORE_IR_NO_DEFERRED_ELEMENT = INT64_MIN;
 
+//! The calls of AOT code that check whether a debugger is attached before they call a fast entry (qore#7676)
+/** A call through a fast entry or a summary of the callee does not report the call to a debugger, so while one is
+    attached such a call is made by the runtime call path, which does.  The check is debug support that costs
+    performance, so it is emitted only in code compiled with debugging (qcc -g).
+*/
+enum class AOTDebuggerChecks : uint8_t {
+    //! code compiled without debugging: no call checks; a debugger can miss the entry and exit of its calls
+    None,
+    //! code with debugging of a Program that cannot be debugged (PO_NO_DEBUGGING): only its calls into another
+    //! module's Program check
+    CrossModule,
+    //! code with debugging of a Program that can be debugged: every call that a debugger must see checks
+    All,
+};
+
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -170,12 +185,12 @@ public:
         aot_direct_closure_fast_entry = direct_closure_fast_entry;
     }
 
-    //! Sets whether a debugger can be attached to the Program of the code (qore#7676)
-    /** False for a Program with PO_NO_DEBUGGING: its calls through fast entries of its own module then do not check
-        whether a debugger is attached; true (the default) otherwise.
+    //! Sets which calls of the AOT code check whether a debugger is attached (qore#7676)
+    /** AOTDebuggerChecks::All is the default; AOT compilation sets it for each Program (aotDebuggerChecks() in
+        QoreAOT.cpp)
     */
-    void setAOTDebuggerCanAttach(bool can_attach) {
-        aot_debugger_can_attach = can_attach;
+    void setAOTDebuggerChecks(AOTDebuggerChecks checks) {
+        aot_debugger_checks = checks;
     }
 
     //! Sets the name of the native function generated for the IR function, if not its own name
@@ -316,8 +331,8 @@ private:
 
     // AOT mode: emit _aot helper calls with slot indices instead of embedded pointers
     bool aot_mode = false;
-    //! False if no debugger can be attached to the Program of the code (see setAOTDebuggerCanAttach())
-    bool aot_debugger_can_attach = true;
+    //! The calls that check whether a debugger is attached (see setAOTDebuggerChecks())
+    AOTDebuggerChecks aot_debugger_checks = AOTDebuggerChecks::All;
     const AOTSlotMap* aot_slots = nullptr;
     llvm::Value* aot_ctx_arg = nullptr;   //!< QoreAOTContext* first parameter in AOT mode
     //! the current object (NaN-boxed), read at the start of the function by the first check of a call through self

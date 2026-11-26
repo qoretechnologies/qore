@@ -88,7 +88,7 @@ class AOTTopLevelDebugIRLocalSlotsTest inherits QUnit::Test {
     aotTest(int opt) {
         TmpDir tmp("qore-aot-toplevel-debug-ir-local-slots-");
         string exe = tmp.path + DirSep + "toplevel-debug-ir-local-slots";
-        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -g -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
             script));
         assertTrue(is_file(exe), "compiled the executable: " + out);
         string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir,

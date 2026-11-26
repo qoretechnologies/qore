@@ -86,7 +86,7 @@ class GenericFunctionLocalObjectTypeTest inherits QUnit::Test {
         string dir = make_tmp_dir();
         on_exit remove_tree(dir);
         string program = dir + "/" + name;
-        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+        string output = backquote(sprintf("%s -O%d -g -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
             shellQuote(fixture(name))));
         assertTrue(is_file(program), "the fixture compiled: " + output);
         assertEq(expected(name), backquote(shellQuote(program) + " 2>&1"));

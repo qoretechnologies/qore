@@ -9757,6 +9757,8 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     context.emplace_back("symbol_index_version", std::to_string(QORE_AOT_SYMBOL_INDEX_VERSION));
     context.emplace_back("feature_flags", aotHashHex(writer.feature_flags));
     context.emplace_back("max_opcode_id", std::to_string(QORE_IR_MAX_OPCODE));
+    // compiled with debugging (qcc -g; qore#7676): a change of the choice changes the compile and declaration contracts
+    context.emplace_back("debugging", QORE_ENV_IS_SET("QORE_AOT_DEBUGGING") ? "1" : "0");
     context.emplace_back("module_filter", module_name ? module_name : "");
     context.emplace_back("compile_file", qore_aot_map_source_path(compile_file));
     context.emplace_back("compile_file_count", std::to_string(compile_files ? compile_files->size() : 0));

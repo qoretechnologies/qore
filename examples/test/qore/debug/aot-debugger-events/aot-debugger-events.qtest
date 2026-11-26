@@ -17,7 +17,8 @@
 /** In a Program that allows the debugger, AOT code compiled at -O3 called method fast entries, inline summaries of
     small callees and other fast paths directly, so a debugger attached during a loop got no entry and exit events for
     those calls (qore#7676).  Each worker records the events of its callees with a debugger attached at different
-    points; every execution mode and the programs compiled at -O0 and -O3 must print what the AST interpreter prints.
+    points; every execution mode and the programs compiled at -O0 and -O3 with debugging (qcc -g, without which the
+    calls do not check for a debugger; see aot-debugging-option.qtest) must print what the AST interpreter prints.
 */
 class AotDebuggerEventsTest inherits QUnit::Test {
     public {
@@ -55,8 +56,8 @@ class AotDebuggerEventsTest inherits QUnit::Test {
     }
 
     #! a Program that cannot be debugged (%no-debugging) makes its calls without checking for a debugger
-    /** No debugger can be attached to it, so its code compiled at -O3 does not refer to the counter of the debuggers
-        that the code of any other Program checks before such a call
+    /** No debugger can be attached to it, so its code compiled at -O3, also with -g, does not refer to the counter of
+        the debuggers that the code of any other Program checks before such a call
     */
     noDebuggingTest() {
         if (!qcc_bin) {
@@ -74,7 +75,7 @@ class AotDebuggerEventsTest inherits QUnit::Test {
         hash<string, string> exes;
         foreach hash<auto> i in ({"default": src, "no-debugging": no_debugging_src}.pairIterator()) {
             string exe = tmp.path + DirSep + "guard-calls-" + i.key;
-            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O3 -o " + quote(exe) + " " + quote(i.value));
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " -O3 -g -o " + quote(exe) + " " + quote(i.value));
             assertTrue(is_file(exe), i.key + ": qcc produced the executable");
             assertEq("240\n", ExecModeHarness::run_any(prefix + quote(exe) + " -b"), i.key + ": result");
             exes{i.key} = exe;
@@ -114,7 +115,7 @@ class AotDebuggerEventsTest inherits QUnit::Test {
         TmpDir tmp("qore-aot-debugger-events-");
         foreach string opt in (("-O0", "-O3")) {
             string exe = tmp.path + DirSep + name + opt;
-            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -o " + quote(exe) + " " + quote(worker));
+            ExecModeHarness::run_any(prefix + quote(qcc_bin) + " " + opt + " -g -o " + quote(exe) + " " + quote(worker));
             assertTrue(is_file(exe), name + opt + ": qcc produced the executable");
             string output = ExecModeHarness::run_any(prefix + quote(exe) + " -b");
             if (name == "fused-call-debugger" && opt == "-O3") {

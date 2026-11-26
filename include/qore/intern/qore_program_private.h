@@ -67,6 +67,14 @@ class QoreSandboxManager;
 // Update the process-wide fast path for prelinked AOT calls when a Program gains or loses its debugger.
 DLLLOCAL void qore_aot_debug_program_change(bool attached);
 
+//! Records that AOT code compiled without debugging (qcc -g; QORE_AOT_FLAG_DEBUGGING) is loaded (qore#7676)
+/** A debugger that is attached then, or that attaches later, gets a warning once in the process: calls in that code
+    may give no entry and exit events, and some of its functions run their native code under a debugger.
+
+    @param label the label of the binary, named in the warning
+*/
+DLLLOCAL void qore_aot_note_code_without_debugging(const char* label);
+
 #include <algorithm>
 #include <atomic>
 #include <cerrno>

@@ -3444,6 +3444,11 @@ struct QoreAOTLazyFunctionIR {
 static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len,
         AOTMetadataStorage storage = AOTMetadataStorage::Copy, bool keep_decoded = false) {
+    // every binary that is registered to run comes here once: one compiled without debugging is recorded for the
+    // warning of a debugger (qore#7676)
+    if (!(reader.getHeader().flags & QORE_AOT_FLAG_DEBUGGING)) {
+        qore_aot_note_code_without_debugging(reader.getLabel());
+    }
     if ((reader.getHeader().version < QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
                 && (reader.getHeader().feature_flags
                     & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0)

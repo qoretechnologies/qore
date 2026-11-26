@@ -983,6 +983,13 @@ constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
 constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
 //! The encoded metadata is followed by its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
 constexpr uint16_t QORE_AOT_FLAG_METADATA_CHECKSUM = 0x0004;
+//! The code was compiled with debugging (qcc -g; qore#7676): its calls check whether a debugger is attached, and the
+//! functions whose native code's IR is not one that a debugger can interpret have debug IR of their own
+/** Without it, a debugger can miss the entry and exit of its calls, and such functions run their native code under a
+    debugger; a debugger that attaches while such code is loaded gets a warning once
+    (qore_aot_note_code_without_debugging()).  A flag of the AOT3 format (v54), which readers before it ignore.
+*/
+constexpr uint16_t QORE_AOT_FLAG_DEBUGGING = 0x0008;
 
 //! Returns the length of the encoded AOT metadata at \a data without its checksum, from its header
 /** The data can be longer than the metadata (\a avail): a symbol of an object file, whose size is taken up to the next
