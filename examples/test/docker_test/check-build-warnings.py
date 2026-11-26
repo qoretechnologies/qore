@@ -15,11 +15,12 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """Reports the compiler warnings in Qore's own sources from the build logs of the CI build jobs (qore#7757).
 
-The jobs that build Qore keep the compiler output in a log (ci-build-log.sh: build/build.log of the build jobs and of
-the macOS job, build-separate-units/build.log of the build of separate compilation units).  The check-build-warnings
+The jobs that build Qore keep the compiler output in a log (ci-build-log.sh: build/build.log of the build jobs, of the
+macOS job and of the release build of the performance tests, build-separate-units/build.log of the build of separate
+compilation units); the warnings are reported by platform and build type (BUILD_JOBS).  The check-build-warnings
 job runs this script with --fetch: it downloads that file of each of these jobs (only that file of its artifacts), finds
 the warnings that gcc and clang report for files of the Qore tree (not for bundled third-party code or system
-headers), prints them and writes them to a report.  Local logs are checked with --log PLATFORM=PATH.
+headers), prints them and writes them to a report.  Local logs are checked with --log LABEL=PATH.
 
 Exit codes:
 - 0: no warning in Qore's own sources (also when no build log was found: the build jobs were skipped)
@@ -40,16 +41,20 @@ import urllib.request
 
 WARNINGS_FOUND = 3
 
-# the jobs whose build logs are checked, by the platform they are reported for, with the path of the log in their
-# artifacts: the build jobs (build.sh), the macOS job, which builds with test-macos.sh, and the build of separate
-# compilation units (build-separate-units.sh), which shows warnings that the single compilation unit hides
+# the jobs whose build logs are checked, by the platform and build type they are reported for (the last part of the
+# label: debug or release, as the job's script configures it), with the path of the log in their artifacts: the build
+# jobs (build.sh), the macOS job, which builds with test-macos.sh, the build of separate compilation units
+# (build-separate-units.sh), which shows warnings that the single compilation unit hides, and the release build of the
+# performance tests (build-perf.sh), the only release build with gcc, which reports warnings that only its
+# optimizations find (it builds the targets of the performance tests)
 BUILD_JOBS = {
-    "ubuntu-amd64": ("build-ubuntu-amd64", "build/build.log"),
-    "ubuntu-arm64": ("build-ubuntu-arm64", "build/build.log"),
-    "alpine-amd64": ("build-alpine-amd64", "build/build.log"),
-    "alpine-arm64": ("build-alpine-arm64", "build/build.log"),
-    "macos": ("test-macos", "build/build.log"),
-    "ubuntu-amd64-non-scu": ("check-build-separate-units", "build-separate-units/build.log"),
+    "ubuntu-amd64-debug": ("build-ubuntu-amd64", "build/build.log"),
+    "ubuntu-arm64-debug": ("build-ubuntu-arm64", "build/build.log"),
+    "alpine-amd64-debug": ("build-alpine-amd64", "build/build.log"),
+    "alpine-arm64-debug": ("build-alpine-arm64", "build/build.log"),
+    "macos-release": ("test-macos", "build/build.log"),
+    "ubuntu-amd64-non-scu-debug": ("check-build-separate-units", "build-separate-units/build.log"),
+    "ubuntu-amd64-release": ("build-perf", "build/build.log"),
 }
 
 # the first line of a log that ci-build-log.sh writes: the source directory of the build
@@ -186,7 +191,7 @@ def api_get(url, opener, missing_ok=False):
 
 
 def fetch_logs(directory, opener=urllib.request.urlopen):
-    """Downloads build/build.log of each build job of the pipeline into the directory; returns {platform: path}"""
+    """Downloads build/build.log of each build job of the pipeline into the directory; returns {label: path}"""
     api = os.environ.get("CI_API_V4_URL")
     project = os.environ.get("CI_PROJECT_ID")
     pipeline = os.environ.get("CI_PIPELINE_ID")
@@ -203,34 +208,34 @@ def fetch_logs(directory, opener=urllib.request.urlopen):
             break
         page += 1
     rv = {}
-    for platform, (name, log_path) in BUILD_JOBS.items():
+    for label, (name, log_path) in BUILD_JOBS.items():
         job = jobs.get(name)
         if not job or job.get("status") not in DONE_STATUSES:
             state = f"is {job.get('status', '?')}" if job else "is not in the pipeline"
-            print(f"{platform}: no build log ({name} {state})")
+            print(f"{label}: no build log ({name} {state})")
             continue
         body = api_get(f"{api}/projects/{project}/jobs/{job['id']}/artifacts/{log_path}", opener, missing_ok=True)
         if body is None:
             # the job ended before its build (the tree had already passed, see tree-tested-skip.sh), or failed in it
-            print(f"{platform}: no build log in {name}")
+            print(f"{label}: no build log in {name}")
             continue
         path = Path(directory) / f"{name}.log"
         path.write_bytes(body)
-        rv[platform] = path
+        rv[label] = path
     return rv
 
 
-def write_report(warnings_by_platform, report):
+def write_report(warnings_by_label, report):
     """Writes the text report and a JSON report beside it; returns the text"""
     lines = []
-    for platform, warnings in warnings_by_platform.items():
+    for label, warnings in warnings_by_label.items():
         for w in warnings:
             flag = f" [{w['flag']}]" if w["flag"] else ""
-            lines.append(f"{platform}: {w['file']}:{w['line']}{flag} {w['message']}")
+            lines.append(f"{label}: {w['file']}:{w['line']}{flag} {w['message']}")
     text = "\n".join(lines) + ("\n" if lines else "")
     if report:
         Path(report).write_text(text)
-        Path(report).with_suffix(".json").write_text(json.dumps(warnings_by_platform, indent=2) + "\n")
+        Path(report).with_suffix(".json").write_text(json.dumps(warnings_by_label, indent=2) + "\n")
     return text
 
 
@@ -238,8 +243,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--fetch", action="store_true",
                         help="download build/build.log of each build job of the CI pipeline")
-    parser.add_argument("--log", action="append", default=[], metavar="PLATFORM=PATH",
-                        help="a local build log")
+    parser.add_argument("--log", action="append", default=[], metavar="LABEL=PATH",
+                        help="a local build log, by its label (ex: ubuntu-amd64-release)")
     parser.add_argument("--log-source-dir", default=os.environ.get("CI_PROJECT_DIR"),
                         help="the source directory of the builds, as their logs name it (default: CI_PROJECT_DIR)")
     parser.add_argument("--source-dir", default=None,
@@ -254,26 +259,26 @@ def main(argv=None):
     logs = {}
     try:
         for spec in args.log:
-            platform, sep, path = spec.partition("=")
-            if not sep or not platform or not path:
+            label, sep, path = spec.partition("=")
+            if not sep or not label or not path:
                 print(f"invalid --log argument: {spec!r}", file=sys.stderr)
                 return 2
             if not Path(path).is_file():
-                print(f"{platform}: no build log ({path})")
+                print(f"{label}: no build log ({path})")
                 continue
-            logs[platform] = Path(path)
+            logs[label] = Path(path)
         if args.fetch:
             Path(args.download_dir).mkdir(parents=True, exist_ok=True)
             logs.update(fetch_logs(args.download_dir))
-        warnings_by_platform = {}
-        for platform, path in logs.items():
-            warnings_by_platform[platform] = parse_log(path.read_text(errors="replace"), args.log_source_dir,
+        warnings_by_label = {}
+        for label, path in logs.items():
+            warnings_by_label[label] = parse_log(path.read_text(errors="replace"), args.log_source_dir,
                                                        source_dir)
     except (OSError, RuntimeError, ValueError) as e:
         print(f"check-build-warnings: {e}", file=sys.stderr)
         return 1
-    text = write_report(warnings_by_platform, args.report)
-    count = sum(len(w) for w in warnings_by_platform.values())
+    text = write_report(warnings_by_label, args.report)
+    count = sum(len(w) for w in warnings_by_label.values())
     if not logs:
         print("no build log to check")
         return 0

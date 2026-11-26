@@ -120,7 +120,10 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
     -DQORE_STACK_USAGE_REPORT=ON ${QMOD_CACHE_ARG:+"${QMOD_CACHE_ARG}"}
 PERF_TARGETS=$(cd ${QORE_SRC_DIR} && python3 -I test/docker_test/perf-build-targets.py build ${PERF_TESTS})
 echo "-- targets: ${PERF_TARGETS} --"
-make -j${MAKE_JOBS} ${PERF_TARGETS}
+# the compiler output is kept in build.log for check-build-warnings: the only release build with gcc (see
+# ci-build-log.sh)
+. "${QORE_SRC_DIR}/test/docker_test/ci-build-log.sh"
+qore_ci_build_logged build.log make -j${MAKE_JOBS} ${PERF_TARGETS}
 # the frames of the per-call path of interpreted code against their budgets: each byte more is a byte more at each
 # level of a recursion (issue #5852); this is the release build with the compiler the budgets are calibrated for
 echo && echo "-- checking the stack frames of the call path (tools/stack-usage-budgets.txt) --"

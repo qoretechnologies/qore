@@ -2,8 +2,8 @@
 # -*- mode: sh -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
-# Sourced by the CI scripts that build Qore (build.sh, test-macos.sh, build-separate-units.sh): keeps the compiler
-# output of a build in a log for the check-build-warnings job (check-build-warnings.py, qore#7757).
+# Sourced by the CI scripts that build Qore (build.sh, test-macos.sh, build-separate-units.sh, build-perf.sh): keeps the
+# compiler output of a build in a log for the check-build-warnings job (check-build-warnings.py, qore#7757).
 
 #! qore_ci_build_logged LOG COMMAND...: runs the command, shows its output as it is written and keeps it in LOG
 #  The first line of the log names the source directory of the build (QORE_SRC_DIR), so that the checker finds the
