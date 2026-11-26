@@ -44,6 +44,15 @@ string sub add_field(HashDataType t) {
 string sub set_default(AbstractDataField f) {
     return try_change(sub () { f.setDefaultValue(\"tenant\"); });
 }
+
+# the type of a schema object, or the exception
+string sub get_data_type(object so) {
+    try {
+        return so.getDataType().getName();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
 ";
 
 Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
@@ -99,6 +108,13 @@ sub check_document(object doc, object so) {
         member(sc, "AbstractRestSchemaObject", "shared_object"),
         exists member(sc, "AbstractRestSchemaObject", "dataType"),
         exists member(so, "AbstractRestSchemaObject", "dataType"));
+    # the copy builds its own type; the shared document's type cache keeps only what its own objects built
+    hash<auto> typemap = member(doc, doc.className(), "typemap") ?? {};
+    printf("  the tenant's copy builds its type: %y, the document's type cache is unchanged: %y\n",
+        p.callFunction("get_data_type", sc) != "", (member(doc, doc.className(), "typemap") ?? {}) == typemap);
+    printf("  the copy caches its own type: %y, not the object's: %y\n",
+        exists member(sc, "AbstractRestSchemaObject", "dataType"),
+        member(sc, "AbstractRestSchemaObject", "dataType") != member(so, "AbstractRestSchemaObject", "dataType"));
 }
 
 {
