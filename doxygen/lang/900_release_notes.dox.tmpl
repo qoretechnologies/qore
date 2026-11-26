@@ -3003,6 +3003,9 @@
       hash with too many keys in one bucket switches to a keyed hash function with a secret key of the process (see
       @ref hash_key_hardening;
       <a href="https://github.com/qoretechnologies/qore/issues/7557">issue 7557</a>)
+    - an operand of an operator keeps the value of the variable that it read when a later operand changes the
+      variable in place, as in <tt>a == (a += x)</tt>, in the AST interpreter as in the other execution modes
+      (<a href="https://github.com/qoretechnologies/qore/issues/7722">issue 7722</a>)
     - @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" opens a WebSocket only on a \c GET request or an
       extended \c CONNECT; a request of another method with the upgrade headers gets <tt>405 Method Not Allowed</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/7668">issue 7668</a>)

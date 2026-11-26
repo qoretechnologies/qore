@@ -39,7 +39,7 @@ void qore_raise_modulo_by_zero(ExceptionSink* xsink) {
 }
 
 QoreValue QoreModuloOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    QoreOperandEvalHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink, this->snapshotLeft());
     if (*xsink) return false;
     QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;

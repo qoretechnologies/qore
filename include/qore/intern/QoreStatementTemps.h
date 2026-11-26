@@ -223,14 +223,19 @@ public:
         @param exp the operand, which must outlive the holder (the operand of an operator node)
         @param xs the exception sink of the evaluation; null when an operator is folded at parse time (keys), when
         nothing is held
+        @param snapshot true if a later operand of the operator can change the value in place: a list, hash, string,
+        binary or number value that the operand gives without a reference of its own (the value of a variable) then
+        gets one, which the holder keeps at least while the operator runs, so that a later change of the variable
+        copies the value first and the operand keeps the value that it read, as in the other execution modes
+        (qore#7722)
 
         Always inlined: every operator of the AST evaluates its operands with it, and whether it is inlined must not
         depend on the size of the code around it in the library's single compilation unit (as for
         ProgramThreadCountContextHelper, qore#7009)
     */
-    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs)
-            : ValueEvalOptimizedRefHolder(xs) {
-        evalOperand(exp);
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs,
+            bool snapshot = false) : ValueEvalOptimizedRefHolder(xs) {
+        evalOperand(exp, snapshot);
     }
 
     QoreOperandEvalHolder(const QoreOperandEvalHolder&) = delete;
@@ -244,7 +249,7 @@ private:
         inlined does not depend on the size of the code around it in the library's single compilation unit (qore#7052
         callgrind rows; ProgramThreadCountContextHelper, qore#7009)
     */
-    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void evalOperand(const QoreValue& exp) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void evalOperand(const QoreValue& exp, bool snapshot) {
         if (!exp.needsEval()) {
             needs_deref = false;
             v = exp;
@@ -252,6 +257,15 @@ private:
         }
         bool nd = true;
         v = exp.eval(nd, xsink);
+        // a value that can be changed in place, given without a reference of its own, gets one when a later operand
+        // can change it (qore#7722)
+        if (snapshot && !nd && v.hasNode()) {
+            qore_type_t t = v.getType();
+            if (t == NT_LIST || t == NT_HASH || t == NT_STRING || t == NT_BINARY || t == NT_NUMBER) {
+                v.getInternalNode()->ref();
+                nd = true;
+            }
+        }
         needs_deref = nd;
         // a value folded at parse time (no exception sink) is not a temporary of a statement
         if (nd && xsink && v.needsRef()) {
