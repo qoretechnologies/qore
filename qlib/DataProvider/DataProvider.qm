@@ -1829,6 +1829,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       from records that do not all have the same fields with columns of different lengths, misaligning the values
       of later records; a field that a record lacks is now @ref nothing in that record's row
       (<a href="https://github.com/qoretechnologies/qore/issues/7718">issue 7718</a>)
+    - fixed @ref DataProvider::HashDataType::getDefaultValue() "HashDataType::getDefaultValue()" to remove the default
+      value of the type only when the type refuses it, not when its check fails in the context of the caller
+      (<a href="https://github.com/qoretechnologies/qore/issues/7734">issue 7734</a>)
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
