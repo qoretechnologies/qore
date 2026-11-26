@@ -252,6 +252,15 @@ public class QoreDataField inherits AbstractDataField {
         return rv;
     }
 
+    #! Makes a copy of the field that belongs to the code that makes it
+    /** The copy is not a shared object (see AbstractDataField::copy(), which resets its shared state): what the class
+        does for a field that is a shared object keeps no state of its own (updateFieldType() freezes the new type of
+        a field that is a shared object, which the copy no longer is) (qore#7728, qore#7667)
+    */
+    copy() {
+        # no own guarded state
+    }
+
     #! Updates the field type
     /** @param type the final or replacement field type
         @return this field

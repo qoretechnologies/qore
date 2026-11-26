@@ -1919,11 +1919,19 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
         for (QoreTypeOwner* n : mod_refs) {
             n->derefTypeOwner();
         }
+        // and the declarations of other Programs (qore#7680)
+        std::vector<QoreTypeOwner*> xrefs;
+        xrefs.swap(owner->type_owner_xrefs);
+        for (QoreTypeOwner* n : xrefs) {
+            n->derefTypeOwner();
+        }
         return;
     }
     std::vector<QoreTypeOwner*> release_list;
     // the binary module declarations that it named (qore#7533), released after the lock is released
     std::vector<QoreTypeOwner*> mod_refs;
+    // and the declarations of other Programs (qore#7680)
+    std::vector<QoreTypeOwner*> xrefs;
     {
         AutoLocker al(ctl);
         type_owner_counted_registry().erase(owner);
@@ -1931,6 +1939,7 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
         retired_derived_naming.erase(owner);
         type_owner_uncount_names(owner, release_list);
         mod_refs.swap(owner->type_owner_module_refs);
+        xrefs.swap(owner->type_owner_xrefs);
         // a member of a group is freed only when the group has been collected, unless it is deleted with its class
         // object (qore_class_private::deref() with in_del): it leaves its group then
         QoreTypeOwnerGroup* g = owner->type_owner_group;
@@ -1949,6 +1958,9 @@ void qore_type_owner_destroyed(QoreTypeOwner* owner) {
     }
     type_owner_release(release_list);
     for (QoreTypeOwner* n : mod_refs) {
+        n->derefTypeOwner();
+    }
+    for (QoreTypeOwner* n : xrefs) {
         n->derefTypeOwner();
     }
 }
@@ -2175,16 +2187,106 @@ static void type_owner_set_module_refs(QoreTypeOwner* o, std::vector<QoreTypeOwn
     o->type_owner_module_refs_taken = true;
 }
 
-void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners) {
+//! true once a builtin declaration became mortal at run time (qore_runtime_mortal_decls_exist(); qore#7680)
+static std::atomic<bool> runtime_mortal_decls_exist{false};
+
+bool qore_runtime_mortal_decls_exist() {
+    return runtime_mortal_decls_exist.load(std::memory_order_acquire);
+}
+
+void qore_set_runtime_mortal_decls_exist() {
+    if (!runtime_mortal_decls_exist.load(std::memory_order_relaxed)) {
+        runtime_mortal_decls_exist.store(true, std::memory_order_release);
+    }
+}
+
+#ifdef DEBUG
+//! the number of the next calls of qore_type_owner_take_runtime_refs() that fail (qore_dbg_fail_next_runtime_refs())
+static std::atomic<int> dbg_fail_runtime_refs{0};
+
+void qore_dbg_fail_next_runtime_refs(int count) {
+    dbg_fail_runtime_refs.store(count, std::memory_order_relaxed);
+}
+
+//! the number of builtin declarations added at run time to a namespace that no Program owns that name a mortal
+//! declaration (qore_dbg_unowned_program_local_names())
+static std::atomic<int64> dbg_unowned_program_local_names{0};
+
+//! the number of refused builtin variants (qore_dbg_refused_shared_variants())
+static std::atomic<int64> dbg_refused_shared_variants{0};
+
+int64 qore_dbg_refused_shared_variants() {
+    return dbg_refused_shared_variants.load(std::memory_order_relaxed);
+}
+
+void qore_dbg_count_refused_shared_variant() {
+    dbg_refused_shared_variants.fetch_add(1, std::memory_order_relaxed);
+}
+
+int64 qore_dbg_unowned_program_local_names() {
+    return dbg_unowned_program_local_names.load(std::memory_order_relaxed);
+}
+
+void qore_dbg_check_unowned_names(const QoreTypeOwner* owner) {
+    std::vector<QoreTypeOwner*> names;
+    AutoLocker al(ctl);
+    owner->getTypeOwnerNames(names);
+    for (QoreTypeOwner* n : names) {
+        if (!n->isTypeOwnerSystem()) {
+            dbg_unowned_program_local_names.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+    }
+}
+#endif
+
+size_t qore_type_owner_set_refs_pending(const std::vector<QoreTypeOwner*>& owners) {
+    size_t count = 0;
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : owners) {
+        if (!o->type_owner_module_refs_taken && !o->type_owner_refs_pending) {
+            o->type_owner_refs_pending = true;
+            ++count;
+        }
+    }
+    return count;
+}
+
+void qore_type_owner_get_refs_pending(const std::vector<QoreTypeOwner*>& all, std::vector<QoreTypeOwner*>& pending) {
+    AutoLocker al(ctl);
+    for (QoreTypeOwner* o : all) {
+        if (o->type_owner_refs_pending) {
+            pending.push_back(o);
+        }
+    }
+}
+
+//! Returns the root namespace of a declaration, or nullptr if it has no namespace or one that is not attached
+static const qore_root_ns_private* type_owner_root(const QoreTypeOwner* o) {
+    const qore_ns_private* ns = o->getTypeOwnerNamespace();
+    return ns ? ns->getRoot() : nullptr;
+}
+
+bool qore_type_owner_take_runtime_refs(const std::vector<QoreTypeOwner*>& owners, const qore_root_ns_private* root) {
     if (owners.empty() || type_owner_cleanup.load(std::memory_order_acquire)) {
-        return;
+        return true;
     }
     AutoLocker al(ctl);
     qore_type_owner_module_names_cache_t module_class_names;
-    // every list is made before any reference is taken, so that a failed allocation takes none: the declarations then
-    // take them at their batch, as a declaration of a Program does
-    std::vector<std::pair<QoreTypeOwner*, std::vector<QoreTypeOwner*>>> refs;
+    // every list is made before any reference is taken, so that a failed allocation takes none
+    struct Refs {
+        QoreTypeOwner* owner;
+        std::vector<QoreTypeOwner*> mod_names;
+        std::vector<QoreTypeOwner*> xrefs;
+    };
+    std::vector<Refs> refs;
     try {
+#ifdef DEBUG
+        if (dbg_fail_runtime_refs.load(std::memory_order_relaxed) > 0) {
+            dbg_fail_runtime_refs.fetch_sub(1, std::memory_order_relaxed);
+            throw std::bad_alloc();
+        }
+#endif
         refs.reserve(owners.size());
         std::vector<QoreTypeOwner*> names;
         for (QoreTypeOwner* o : owners) {
@@ -2193,15 +2295,37 @@ void qore_type_owner_take_module_refs(const std::vector<QoreTypeOwner*>& owners)
             }
             names.clear();
             o->getTypeOwnerNames(names);
-            refs.emplace_back(o, type_owner_module_names(names, &module_class_names));
+            refs.push_back(Refs{o, type_owner_module_names(names, &module_class_names), {}});
+            std::vector<QoreTypeOwner*>& xrefs = refs.back().xrefs;
+            for (QoreTypeOwner* n : names) {
+                // a declaration of its own Program is decided with it by its Program's batch
+                if (n->isTypeOwnerSystem() || std::find(owners.begin(), owners.end(), n) != owners.end()
+                        || std::find(xrefs.begin(), xrefs.end(), n) != xrefs.end()) {
+                    continue;
+                }
+                const qore_root_ns_private* nroot = type_owner_root(n);
+                if (root && nroot == root) {
+                    continue;
+                }
+                xrefs.push_back(n);
+            }
         }
     } catch (std::bad_alloc&) {
-        return;
+        return false;
     }
     // nothing is thrown from here on
-    for (auto& i : refs) {
-        type_owner_set_module_refs(i.first, i.second);
+    for (Refs& i : refs) {
+        type_owner_set_module_refs(i.owner, i.mod_names);
+        assert(i.owner->type_owner_xrefs.empty());
+        for (QoreTypeOwner* n : i.xrefs) {
+            n->refTypeOwner();
+        }
+        i.owner->type_owner_xrefs.swap(i.xrefs);
     }
+    for (QoreTypeOwner* o : owners) {
+        o->type_owner_refs_pending = false;
+    }
+    return true;
 }
 
 QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
@@ -2230,6 +2354,17 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             owners.push_back(o);
         }
     }
+    // the references to declarations of this batch that a declaration took as module references before a later
+    // attach marked them, released after the lock is released: this batch references each of them, so no release
+    // frees one (qore#7680)
+    struct SameBatchRefs {
+        std::vector<QoreTypeOwner*> refs;
+        ~SameBatchRefs() {
+            for (QoreTypeOwner* n : refs) {
+                n->derefTypeOwner();
+            }
+        }
+    } same_batch;
     // what each declaration names is taken now, while every type is valid; a declaration whose names are counted
     // (one that survived another Program sharing it) keeps them
     AutoLocker al(ctl);
@@ -2259,6 +2394,20 @@ void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
             // references them itself, does not list them (qore#7533)
             std::vector<QoreTypeOwner*> mod_names = type_owner_module_names(names, &module_class_names);
             type_owner_set_module_refs(o, mod_names);
+        }
+    }
+    // a builtin declaration that another declaration referenced as a module's while it was not marked yet, and that a
+    // later attach marked in the same Program, is decided with it by this batch: the reference is released, so that
+    // two such declarations that name each other do not keep each other until library cleanup (qore#7680)
+    for (QoreTypeOwner* o : owners) {
+        std::vector<QoreTypeOwner*>& mod = o->type_owner_module_refs;
+        for (auto i = mod.begin(); i != mod.end();) {
+            if (!(*i)->isTypeOwnerSystem() && seen.count(*i)) {
+                same_batch.refs.push_back(*i);
+                i = mod.erase(i);
+            } else {
+                ++i;
+            }
         }
     }
 }
@@ -2629,6 +2778,11 @@ static void type_owner_find_cyclic_survivors(std::vector<QoreTypeOwner*>& garbag
     for (QoreTypeOwner* o : counted) {
         std::vector<QoreTypeOwner*> refs(o->type_owner_refs);
         o->getTypeOwnerHeldRefs(refs);
+        // the references to the declarations of other Programs, and to a builtin declaration that became mortal after
+        // this one referenced it as a module's: two Programs whose declarations name each other keep each other's
+        // until library cleanup, which frees them (qore#7680)
+        refs.insert(refs.end(), o->type_owner_xrefs.begin(), o->type_owner_xrefs.end());
+        refs.insert(refs.end(), o->type_owner_module_refs.begin(), o->type_owner_module_refs.end());
         std::vector<QoreTypeOwner*>& in_set = held[o];
         for (QoreTypeOwner* n : refs) {
             if (counted.find(n) != counted.end()) {
@@ -2675,6 +2829,43 @@ size_t qore_cyclic_type_owner_count() {
     type_owner_find_cyclic_survivors(garbage);
     return garbage.size();
 }
+
+//! Moves the references that a survivor in a cycle holds to the mortal declarations of other Programs
+//! (type_owner_xrefs, and the mortal ones of type_owner_module_refs) to \a out (qore#7680); the caller holds ctl
+static void type_owner_take_cross_program_refs(QoreTypeOwner* o, std::vector<QoreTypeOwner*>& out) {
+    out.insert(out.end(), o->type_owner_xrefs.begin(), o->type_owner_xrefs.end());
+    o->type_owner_xrefs.clear();
+    std::vector<QoreTypeOwner*>& mod = o->type_owner_module_refs;
+    for (auto i = mod.begin(); i != mod.end();) {
+        if (!(*i)->isTypeOwnerSystem()) {
+            out.push_back(*i);
+            i = mod.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+#ifdef DEBUG
+size_t qore_dbg_cross_program_cycle_count() {
+    std::vector<QoreTypeOwner*> garbage;
+    AutoLocker al(ctl);
+    type_owner_find_cyclic_survivors(garbage);
+    size_t count = 0;
+    for (QoreTypeOwner* o : garbage) {
+        bool cross = !o->type_owner_xrefs.empty();
+        for (QoreTypeOwner* n : o->type_owner_module_refs) {
+            if (!n->isTypeOwnerSystem()) {
+                cross = true;
+            }
+        }
+        if (cross) {
+            ++count;
+        }
+    }
+    return count;
+}
+#endif
 
 namespace {
 //! Releases the references to declarations that it holds when it goes out of scope, also if an exception is thrown
@@ -2761,6 +2952,8 @@ void delete_qore_types() {
                 names.refs.insert(names.refs.end(), o->type_owner_refs.begin(), o->type_owner_refs.end());
                 o->type_owner_refs.clear();
                 o->type_owner_names_counted = false;
+                // and the references that keep the declarations of other Programs (qore#7680)
+                type_owner_take_cross_program_refs(o, names.refs);
             }
         }
     }
@@ -4300,6 +4493,27 @@ void QoreTypeDeclRefs::getUnmarkedDeclTypes(const QoreTypeInfo* ti, type_vec_t& 
     // under the type lock, as addMortal() walks the type
     AutoLocker al(ctl);
     qore_type_decl_refs_private::getUnmarked(types, ti, 0);
+}
+
+bool QoreTypeDeclRefs::getMortalDeclName(const QoreTypeInfo* ti, std::string& name) {
+    if (!ti) {
+        return false;
+    }
+    // the references are released when the walk is done
+    QoreTypeDeclRefs refs;
+    refs.addMortal(ti);
+    if (refs.empty()) {
+        return false;
+    }
+    if (!refs.priv->classes.empty()) {
+        name = refs.priv->classes[0]->getName();
+    } else if (!refs.priv->hashdecls.empty()) {
+        name = refs.priv->hashdecls[0]->getName();
+    } else {
+        assert(!refs.priv->enums.empty());
+        name = refs.priv->enums[0]->getName();
+    }
+    return true;
 }
 
 void QoreTypeDeclRefs::addMortalDecls(const std::vector<const QoreClass*>& classes,

@@ -61,6 +61,25 @@ string sub change_renamed_field(DataProvider::QoreDataField shared) {
     return try_change(sub () { shared.getRenamedField(\"renamed\").setDefaultValue(\"renamed\"); });
 }
 
+# the tenant's copy of a type that is a shared object: an ordinary type that works and that the tenant can change
+string sub use_type_copy(DataProvider::HashDataType shared) {
+    DataProvider::HashDataType c = shared.copy();
+    return sprintf(\"shared: %y, default value: %y, accepts: %y, change: %s\", SandboxManager::isSharedObject(c),
+        c.getDefaultValue(), c.acceptsValue({}), try_change(sub () {
+            # a field added to the copy is the tenant's to change: the copy is not frozen
+            DataProvider::QoreDataField f = new_field(\"copy\");
+            c.addField(f);
+            f.setDefaultValue(\"changed\");
+        }));
+}
+
+# the tenant's copy of a field that is a shared object: an ordinary field that works and that the tenant can change
+string sub use_field_copy(DataProvider::QoreDataField shared) {
+    DataProvider::QoreDataField c = shared.copy();
+    return sprintf(\"shared: %y, default value: %y, accepts: %y, change: %s\", SandboxManager::isSharedObject(c),
+        c.getDefaultValue(), c.acceptsValue(\"v\"), try_change(sub () { c.setDefaultValue(\"copy\"); }));
+}
+
 # a pipeline step that removes a field of a nested hash type copies the nested type and the field that holds it
 string sub remove_nested_field(DataProvider::HashDataType shared) {
     try {
@@ -113,3 +132,26 @@ printf("the shared simple type's options: %y\n", shared_simple.getOptions());
 # a copy that code no sandbox governs makes is shared, as a type that such code creates
 HashDataType trusted_copy = shared.copy();
 printf("the tenant changes a copy that trusted code made: %s\n", p.callFunction("add_field", trusted_copy));
+
+# a type and a field that trusted code froze, which marked them as shared objects: the copies are ordinary objects of
+# the code that makes them, which work and which it can change (qore#7667, qore#7728)
+HashDataType marked("marked");
+marked.addField(new QoreDataField("d", "d", IntOrNothingType, 1));
+QoreDataField marked_field("m", "m", StringOrNothingType, "dflt");
+marked.freeze();
+marked_field.freeze();
+printf("marked: type: %y, field: %y\n", SandboxManager::isSharedObject(marked),
+    SandboxManager::isSharedObject(marked_field));
+printf("the tenant's copy of a marked type: %s\n", p.callFunction("use_type_copy", marked));
+printf("the tenant's copy of a marked field: %s\n", p.callFunction("use_field_copy", marked_field));
+{
+    HashDataType c = marked.copy();
+    c.addField(new QoreDataField("t", "t", StringOrNothingType));
+    printf("trusted code's copy of a marked type: shared: %y, fields: %s, default value: %y\n",
+        SandboxManager::isSharedObject(c), field_names(c), c.getDefaultValue());
+    QoreDataField fc = marked_field.copy();
+    fc.setDefaultValue("trusted");
+    printf("trusted code's copy of a marked field: shared: %y, default value: %y\n", SandboxManager::isSharedObject(fc),
+        fc.getDefaultValue());
+}
+printf("the marked type and field are unchanged: %s, %y\n", field_names(marked), marked_field.getDefaultValue());

@@ -1012,5 +1012,8 @@ sub test() {
     ordinary method call, in every @ref execution_modes "execution mode"; object state and exceptions raised by
     \c copy() methods are therefore identical in @ref exec_mode_ir "IR", @ref exec_mode_jit "JIT", and
     @ref exec_mode_aot "AOT" execution.\n\n
-        Not all built-in classes can be copied. Classes not supporting copying will throw an exception when the \c copy() methods are called. See the documentation for each class for more information.
+        Not all built-in classes can be copied. Classes not supporting copying will throw an exception when the \c copy() methods are called. See the documentation for each class for more information.\n\n
+        Code that is sandboxed or acts for sandboxed code can copy an object that trusted code marked as shared by every
+        %Program of the process only if a class of the copy declares a \c copy() method in %Qore code; see
+        @ref sandbox_shared_objects.
 */

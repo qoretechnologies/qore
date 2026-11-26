@@ -120,6 +120,18 @@ public class HashDataType inherits QoreDataType {
         return rv;
     }
 
+    #! Makes a copy of the type that belongs to the code that makes it
+    /** The copy is not a shared object (see AbstractDataProviderType::copy(), which resets its shared and frozen
+        state): what the class does for a type that is a shared object keeps no state of its own.  getDefaultValue()
+        records the check of the default value in an update scope for such a type, and the result is the same for the
+        copy, which has the same fields and default value, and which records the next result as an ordinary type; the
+        types and fields that it holds are those of the original, and those added to it are frozen only if it is
+        frozen (qore#7728, qore#7667)
+    */
+    copy() {
+        # no own guarded state
+    }
+
     #! Sets the default field type for unlisted fields
     setDefaultOtherFieldType(*AbstractDataProviderType default_other_field_type) {
         checkChange("fields");

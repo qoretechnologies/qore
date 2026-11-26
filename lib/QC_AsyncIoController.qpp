@@ -925,15 +925,17 @@ static hash<auto> AsyncIoController::getInfo() {
     @throw SANDBOX-REGISTRATION-ERROR code that is sandboxed or acts for sandboxed code cannot set or clear the
     logger, which is process-wide (see @ref sandbox_process_wide_registries)
 
-    @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
-    unless the logger has been replaced since; a server that sandboxed code creates does not
+    @note an \c HttpServer created with a logger sets it here while it runs and gives back the logger it replaced
+    when it stops, unless the logger has been replaced since; a server created without a logger or by sandboxed code
+    does not
 
     @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
     (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
     callback, for example) is logged by this logger at the error level, or else by the async I/O logger
-    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, it is reported as an unhandled
-    exception on the standard error output, so that the failure of a callback is never silent.  An exception raised by
-    a task (@ref submitTask()) is always reported as an unhandled exception on the standard error output
+    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, or when the logger cannot take the
+    message because its Program is being destroyed, it is reported as an unhandled exception on the standard error
+    output, so that the failure of a callback is never silent.  An exception raised by a task (@ref submitTask()) is
+    always reported as an unhandled exception on the standard error output
 
     @see getLogger()
 

@@ -2296,6 +2296,13 @@ public class HttpAsyncSocketIoController {
             sock.setMaxChunkedBodySize(linfo.max_request_body_size);
             sock.setHttp2MaxRequestBodySize(linfo.max_request_body_size);
         }
+        # the bounds of the connection's HTTP/2 response bodies, which its session takes when it is created: a body
+        # is charged to its client until the client has taken it (qore#7653)
+        {
+            hash<auto> send_settings = getStreamSendSettings(linfo.http_listener);
+            sock.setHttp2InputStreamSendBound(send_settings.stream_send_min_rate,
+                send_settings.stream_send_min_rate_window, HttpServer::StreamStallTimeout);
+        }
 
         log(LoggerLevel::DEBUG, "Accept complete: %y (SSL: %y, HTTP/2: %y)", uh, output.ssl, output.is_http2);
         @debug {
@@ -2480,6 +2487,18 @@ public class HttpAsyncSocketIoController {
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
             pool_opts.quic_headers_only ?? True,
             max_request_body_size);
+        # the bounds of the response bodies of the listener's connections: a body is charged to its client until the
+        # client has acknowledged it (qore#7653)
+        {
+            *HttpServer::HttpListenerInterface http_listener;
+            {
+                AutoReadLock al(m);
+                http_listener = listeners{owner}.http_listener;
+            }
+            hash<auto> send_settings = getStreamSendSettings(http_listener);
+            h3op.setStreamSendBound(send_settings.stream_send_min_rate, send_settings.stream_send_min_rate_window,
+                HttpServer::StreamStallTimeout);
+        }
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 

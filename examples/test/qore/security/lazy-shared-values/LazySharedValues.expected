@@ -1,0 +1,30 @@
+tenant creates a LazySharedValue: "process-shared: False, value: 1, the object is shared: False"; a LazySharedMap: "process-shared: False, value: \"k\", a failed key: BAD-KEY, entries: 1"
+trusted deputy creates one for the tenant: "process-shared: False"
+trusted code creates one with the tenant's builder: process-shared: False
+trusted code creates one: process-shared: True, the object is shared: True
+a bound callback as the builder: SANDBOX-CAPABILITY-ERROR
+tenant's private value: process-shared: False; the tenant gets it first: obj shared: False, sandboxed: True, the file: FILESYSTEM-ACCESS-DENIED
+trusted code gets a private value first: obj shared: False, sandboxed: True, the file: FILESYSTEM-ACCESS-DENIED
+library code creates a lazy value for the tenant: process-shared: False, obj shared: False; with require_shared: SANDBOX-CAPABILITY-ERROR; for trusted code with require_shared: process-shared: True, obj shared: True
+tenant first caller: obj shared: True, built as trusted: True; plain lazy pattern: obj shared: False, built as trusted: False
+tenant changes the value: SHARED-OBJECT-ERROR
+trusted code gets the tenant-built value: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
+tenant first caller of a LazySharedValue: obj shared: True, built as trusted: True, built: True
+restricted first caller: obj shared: True, built as trusted: True; plain lazy pattern: obj shared: True, built as trusted: True
+its closure for an unrestricted caller: restricted: False; plain lazy pattern: True
+the restricted caller is still restricted itself: True
+trusted first caller: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; plain lazy pattern: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
+the file system for a restricted caller in a method of its object: "not lent"; plain lazy pattern: "lent"
+first caller with nothing for the barrier to hide (True): obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; its object for a restricted caller: "not lent"
+trusted deputy first caller for the tenant: "obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; plain lazy pattern: obj shared: False, built as trusted: False, its code restricted for an unrestricted caller: False"
+first caller with a hidden sandboxed caller record: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; plain lazy pattern: obj shared: False, built as trusted: False, its code restricted for an unrestricted caller: False
+the values for an unrestricted caller: tenant: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False; restricted: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
+the other first callers wait: [True, True]
+a caller with a timeout while another builds: SHARED-INIT-TIMEOUT
+race: builds: 1, results: ["\"race\"", "\"race\"", "\"race\""]
+a build that fails: BUILD-FAILED, new entries: 0; the next caller: "fail-once", new entries: 1
+tenant asks for 50 unknown keys: errors: ["UNKNOWN-KEY"], new entries: 0
+a builder that needs its own value: SHARED-INIT-ERROR, built: False
+a builder that returns an object that the tenant created: SHARED-INIT-ERROR, built: False
+cycle: the second builder waited: True, results: ["cycA: SHARED-INIT-CYCLE", "cycB: SHARED-INIT-ERROR"], new entries: 0
+a map limited to one entry: "trusted", then SHARED-INIT-ERROR, entries: 1

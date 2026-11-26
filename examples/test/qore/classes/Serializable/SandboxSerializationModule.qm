@@ -1,0 +1,179 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+#! the classes that trusted code declares, for SandboxSerialization.qtest (qore#7146)
+module SandboxSerializationModule {
+    version = "1.0";
+    desc = "sandbox serialization test module";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+public class SsTrusted inherits Serializable {
+    public {
+        string pub = "PUB";
+        static string spub = "SPUB";
+    }
+    private {
+        string priv = "PRIV-STATE";
+        static string spriv = "SPRIV-STATE";
+    }
+    private:internal {
+        string intern = "INTERN-STATE";
+    }
+    private {
+        transient string tpriv = "TPRIV";
+    }
+
+    string getPriv() {
+        return priv;
+    }
+
+    string getIntern() {
+        return intern;
+    }
+
+    static string getStaticPriv() {
+        return spriv;
+    }
+
+    #! the class's own code serializes for itself
+    hash<SerializationInfo> serializeSelf() {
+        return Serializable::serializeToData(self);
+    }
+}
+
+public class SsPublicOnly inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        transient string tpriv = "TPRIV";
+    }
+
+    string getTransient() {
+        return tpriv;
+    }
+}
+
+public class SsHook inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        string priv = "PRIV-STATE";
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"pub": pub, "leak": priv};
+    }
+}
+
+public class SsHookPublic inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"pub": pub + "-HOOK"};
+    }
+}
+
+public class SsOptIn inherits SandboxSerializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        string priv = "OPT-STATE";
+        static string spriv = "OPT-SSTATE";
+    }
+
+    string getPriv() {
+        return priv;
+    }
+
+    static string getStaticPriv() {
+        return spriv;
+    }
+}
+
+#! inherits the marker through its parent only: its own non-public members are not opted in
+public class SsOptInSub inherits SsOptIn {
+    private {
+        string sub_priv = "SUB-STATE";
+    }
+}
+
+#! opts in its own non-public members too
+public class SsOptInSub2 inherits SsOptIn, SandboxSerializable {
+    private {
+        string sub_priv = "SUB2-STATE";
+    }
+
+    string getSubPriv() {
+        return sub_priv;
+    }
+}
+
+#! a class whose only non-public member is transient and has no initializer
+public class SsTransient inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        transient *string token;
+    }
+
+    *string getToken() {
+        return token;
+    }
+}
+
+#! a class whose hook reads a non-public static variable
+public class SsHookStatic inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        static string key = "STATIC-SECRET";
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"pub": pub, "k": key};
+    }
+}
+
+#! a class with public members only and a deserialization hook
+public class SsDeserHook inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        pub = members.pub + "-HOOK";
+    }
+}
+
+#! a trusted API that formats and serializes the values that its caller gives it
+public class SsValidator {
+    static check(auto v) {
+        throw "BAD-VALUE", sprintf("bad value: %y", v);
+    }
+
+    static hash<SerializationInfo> toData(auto v) {
+        return Serializable::serializeToData(v);
+    }
+}
+
+#! a class with a non-public member that has no value
+public class SsUnset inherits Serializable {
+    public {
+        string pub = "PUB";
+    }
+    private {
+        *string opt;
+    }
+}

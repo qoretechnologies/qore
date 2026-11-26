@@ -1676,7 +1676,7 @@ public:
     //! Returns true when a response is ready or connection is closed
     DLLLOCAL virtual bool goalReached() const override {
         AutoLocker al(response_lock);
-        return !completed_responses.empty() || h2_state == H2C_CLOSED;
+        return !completed_responses.empty() || h2_state.load(std::memory_order_acquire) == H2C_CLOSED;
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
@@ -1744,7 +1744,7 @@ public:
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
-        switch (h2_state) {
+        switch (h2_state.load(std::memory_order_acquire)) {
             case H2C_NONE: return "none";
             case H2C_SEND_PREFACE: return "sending-preface";
             case H2C_RECV_PREFACE: return "receiving-preface";
@@ -1756,10 +1756,11 @@ public:
     }
 
     //! Returns true if the connection is still open for multiplexing
-    DLLLOCAL bool isOpen() const { return h2_state != H2C_CLOSED; }
+    DLLLOCAL bool isOpen() const { return h2_state.load(std::memory_order_acquire) != H2C_CLOSED; }
 
+    //! Closes the operation; can run on any thread (see h2_state)
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        h2_state = H2C_CLOSED;
+        h2_state.store(H2C_CLOSED, std::memory_order_release);
         SocketPollSocketOperationBase::abort(xsink);
     }
 
@@ -1770,7 +1771,19 @@ private:
 #endif
 
     Http2SessionPtr h2_session;
-    int h2_state = H2C_NONE;
+    //! The state of the connection
+    /** Atomic: abort() sets it to H2C_CLOSED on the thread that calls it, which can be any thread while the I/O
+        thread runs continuePoll() (the Qore-level abort() of Http2ClientPollOperationBase; issue #7699); the
+        transitions of continuePoll() do not replace H2C_CLOSED (see advanceState())
+    */
+    std::atomic<int> h2_state{H2C_NONE};
+
+    //! Changes the state from \a from to \a to, unless it changed meanwhile (an abort() closed the operation)
+    /** @return true if the state was changed, false if it was not \a from
+    */
+    DLLLOCAL bool advanceState(int from, int to) {
+        return h2_state.compare_exchange_strong(from, to, std::memory_order_acq_rel, std::memory_order_acquire);
+    }
     bool peer_closed = false;
 
     //! Queue of completed responses (thread-safe)
@@ -2465,6 +2478,11 @@ public:
     */
     DLLLOCAL void setMaxRequestBodySize(int64_t size);
 
+    //! Sets the bounds of the response bodies of the sessions as the listener's default (qore#7653)
+    /** Applied to the sessions and to those accepted later; see QuicSession::setInputStreamSendBound()
+    */
+    DLLLOCAL void setInputStreamSendBoundDefault(int64_t min_rate, int64_t window_ms, int64_t stall_ms);
+
     //! Drains per-session lifecycle events accumulated since the last call
     /** Surfaces, to the H3 server poll operation (and thence the controller),
         the QUIC streams the peer reset and the sessions that closed, so a
@@ -2509,6 +2527,12 @@ private:
 
     //! Maximum request body size (0 = unlimited); propagated to sessions
     int64_t max_request_body_size_ = 0;
+
+    //! the listener's default bounds of the response bodies, propagated to sessions (qore#7653)
+    bool send_bound_set_ = false;
+    int64_t send_bound_min_rate_ = 0;
+    int64_t send_bound_window_ms_ = 0;
+    int64_t send_bound_stall_ms_ = 0;
 
     //! Cached completed stream info; mutable so getOutput() (const) can consume it.
     //! Thread safety: the poll framework serializes continuePoll() and getOutput()

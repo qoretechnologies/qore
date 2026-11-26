@@ -1061,9 +1061,11 @@ pipeline.append(new QoreFilterRecordsProcessor({
     @anchor dpql_exists
     @par Fields That a Record Does Not Have
     A field reference to a field that the record does not have raises an error; <tt>exists \@field</tt> is \c true
-    when the record has the field, also when its value is \c null, and \c false when it does not, so records of
-    different shapes can be told apart: <tt>exists \@type && \@type == &quot;return&quot;</tt> is \c false for a record
-    without \c type, while <tt>\@type == &quot;return&quot;</tt> raises an error for it.  \c exists binds tighter than any
+    when the record has the field with a value, and \c false when it does not have it or its value is \c null (as
+    with Qore's \c exists operator; an SQL \c NULL is a value), so records of different shapes can be told apart,
+    and a record gives the same result on its own and in a block, where every record has every field:
+    <tt>exists \@type && \@type == &quot;return&quot;</tt> is \c false for a record without \c type, while
+    <tt>\@type == &quot;return&quot;</tt> raises an error for it.  \c exists binds tighter than any
     other operator (<tt>!exists \@type</tt>, <tt>exists \@type == false</tt>), and its field reference can be in
     parentheses (<tt>exists(\@type)</tt>).  Its field reference is a path:
     - <tt>exists \@a.b</tt> and <tt>exists \@a{b}</tt>: the record has \c a, which is a hash with the key \c b
@@ -1074,8 +1076,8 @@ pipeline.append(new QoreFilterRecordsProcessor({
     - the field reference is a path as everywhere else (@ref dpql_field_paths): <tt>exists \@&quot;x.y&quot;</tt> is the
       path \c x, \c y, and <tt>exists \@&quot;a\\.b&quot;</tt> is the key <tt>a.b</tt>
 
-    Whether a field has a value is tested with <tt>isNotNull(\@field)</tt>, which needs the record to have the
-    field.  A database cannot search with \c exists, as every row has every column: it is not pushed down, and is
+    <tt>isNotNull(\@field)</tt> is also \c false for an SQL \c NULL, and needs the record to have the field.  A
+    database cannot search with \c exists, as every row has every column: it is not pushed down, and is
     evaluated on the records read where the provider filters on the client (such as a database table with the
     \c allow_client_side_filter search option); a provider that searches only on its server reports it with
     \c DPQL-E041.
@@ -1829,6 +1831,9 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       PDF provider and its installed actions
     - @ref DataProvider::DataProviderBaseInfo::supports_refusal_redelivery "supports_refusal_redelivery"
       tells consumers whether the source redelivers a refused event
+    - the spreadsheet \c profile actions and @ref DataProvider::TabularProfiler::profile() "TabularProfiler::profile()"
+      take a \c header_row option: the 1-based row holding the column names, or \c 0 if the sheets have none, for when
+      the person who knows the file says where the column names are
     - fixed a bug where @ref DataProvider::DefaultBulkRecordInterface "DefaultBulkRecordInterface" built a block
       from records that do not all have the same fields with columns of different lengths, misaligning the values
       of later records; a field that a record lacks is now @ref nothing in that record's row
@@ -1836,9 +1841,6 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - fixed @ref DataProvider::HashDataType::getDefaultValue() "HashDataType::getDefaultValue()" to remove the default
       value of the type only when the type refuses it, not when its check fails in the context of the caller
       (<a href="https://github.com/qoretechnologies/qore/issues/7734">issue 7734</a>)
-    - the spreadsheet \c profile actions and @ref DataProvider::TabularProfiler::profile() "TabularProfiler::profile()"
-      take a \c header_row option: the 1-based row holding the column names, or \c 0 if the sheets have none, for when
-      the person who knows the file says where the column names are
 
     @section dataprovider_v3_12 DataProvider v3.12
     - @ref DataProvider::AbstractDataProviderType::freeze() "AbstractDataProviderType::freeze()" and
@@ -1996,18 +1998,20 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyValue()
       "DataProviderActionCatalog::registerLazyValue()" and
       @ref DataProvider::DataProviderActionCatalog::getLazyValue() "DataProviderActionCatalog::getLazyValue()" to
-      build shared values, such as types built from a vendored API description, on first use in the same way
+      build shared values, such as types built from a vendored API description, on first use, with
+      @ref Qore::Thread::LazySharedValue "LazySharedValue"
     - the module needs a %Qore with \c register_exit_hook(), \c SandboxManager::createSystemThreadCall(),
       \c SandboxManager::isSandboxed() and module initialization with no sandbox provenance (a module from the module
       path is initialized as library code, also when sandboxed code loads it first, so its registrations and what
       they create belong to no tenant); when the @ref Qore::Program "Program" that loads it first
       may not create the worker's capability (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"), every
-      deferred registration runs and every lazy value is built when it is registered, as before they were deferred;
+      deferred registration runs when it is registered, as before registrations were deferred;
       code restricted with \c PO_NO_UNCONTROLLED_APIS uses the catalog as any other code after a trusted load
     - registrations (pending or lazy) made by code that a sandbox governs, also under a policy barrier, run when they
       are made, and so do the output type and dynamic option callbacks of the actions that it registers, so that no
-      code registered under a sandbox runs later on another thread; for a sandboxed reader, the catalog workers run
-      the registrations that trusted code made
+      code registered under a sandbox runs later on another thread (except the builder of a lazy value of a module
+      that sandboxed code loaded by its path, which is private and built on its first use, on the thread of its
+      first reader); for a sandboxed reader, the catalog workers run the registrations that trusted code made
     - sandboxed code cannot add a catalog change listener, nor set or clear the scheme lookup callback or the
       generic API call action or child builder; a catalog change listener never runs on a sandboxed thread
     - a lazy value registered by a module whose load fails and is rolled back is removed
