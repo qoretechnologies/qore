@@ -7191,6 +7191,21 @@ void QuicSession::dbgResumeHeldStreams() {
 }
 #endif
 
+#ifdef DEBUG
+int64_t QuicSession::dbgNsUntilExpiry() {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!conn_) {
+        return INT64_MAX;
+    }
+    ngtcp2_tstamp expiry = ngtcp2_conn_get_expiry(conn_);
+    if (expiry == UINT64_MAX) {
+        return INT64_MAX;
+    }
+    ngtcp2_tstamp now = timestamp();
+    return expiry > now ? static_cast<int64_t>(std::min<ngtcp2_tstamp>(expiry - now, INT64_MAX)) : 0;
+}
+#endif
+
 void QuicSession::noteLengthErrorLocked(int64_t stream_id, QuicStreamingBodyData& sbd, uint64_t len) {
     if (sbd.length_error) {
         return;

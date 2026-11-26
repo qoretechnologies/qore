@@ -600,6 +600,10 @@ string sql = fk.getTableConstraintSql();
             self.primary_key = primary_key;
         }
 
+        private string getIdentitySql(AbstractTable t) {
+            return " primary key autoincrement";
+        }
+
         #! returns a list of sql strings that can be used to add the column to an existing table
         /** @par Example:
             @code{.py}
@@ -1788,6 +1792,16 @@ string sql = pk.getTableConstraintSql();
                 throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
             }
 
+            bool has_identity;
+            if (inlist(1, qh.pk) && !inlist(2, qh.pk)) {
+                # AUTOINCREMENT is a reserved keyword. Ignore quoted names, literal text and comments in the DDL.
+                *string ddl = ds.selectRow("select sql from sqlite_temp_master where type = 'table' and name = %v "
+                    "union all select sql from sqlite_master where type = 'table' and name = %v limit 1", name, name).sql;
+                if (ddl) {
+                    ddl =~ s/'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\// /g;
+                    has_identity = ddl =~ /\bautoincrement\b/i;
+                }
+            }
             hash<string, AbstractColumn> rv;
             foreach hash<auto> row in (qh.contextIterator()) {
                 row.type = row.type.lwr();
@@ -1835,6 +1849,10 @@ string sql = pk.getTableConstraintSql();
                 }
 
                 Sqlite3Column c(row.name, row.type, th.qore, !row.notnull, defval, auto_increment, primary_key);
+                if (has_identity && row.pk && row.type == "integer") {
+                    c.setIdentity("sqlite3");
+                    c.nullable = False;
+                }
                 rv{row.name} = c;
             }
 
@@ -2023,7 +2041,12 @@ string sql = pk.getTableConstraintSql();
             list<string> defs = map "  " + $1.getCreateSql(self), columns.iterator();
             # SQLite cannot add a primary key to an existing table, so it is created with the table
             getPrimaryKeyUnlocked();
-            if (!primaryKey.empty()) {
+            list<string> identities = map $1.name, columns.iterator(), exists $1.identity_driver;
+            if (identities) {
+                if (identities.size() != 1 || (!primaryKey.empty() && primaryKey.keys() != identities)) {
+                    throw "COLUMN-ERROR", "a SQLite identity column must be the table's only primary key column";
+                }
+            } else if (!primaryKey.empty()) {
                 defs += "  " + cast<Sqlite3PrimaryKey>(primaryKey).getTableConstraintSql();
             }
             # nor a unique constraint: one that is a unique index is created with its index
@@ -2410,6 +2433,11 @@ string str = table.getSqlValue(date);
         }
 
         private preSetupTableImpl(reference<hash> desc, *hash<auto> opt) {
+            foreach string col in (desc.columns.keyIterator()) {
+                if (desc.columns{col}.identity && !desc.primary_key) {
+                    desc.primary_key = {"name": "PRIMARY", "columns": (col,)};
+                }
+            }
             # see if there is an auto-increment column and set the primary key flag if it matches the primary key declaraion
             foreach string k in (desc.columns.keyIterator()) {
                 if (desc.columns{k}.auto_increment) {

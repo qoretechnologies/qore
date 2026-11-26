@@ -6946,7 +6946,9 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         const QoreTypeInfo* element_type, ExceptionSink* xsink) {
     if (list_val.getType() == NT_LIST) {
         QoreListNode* l = list_val.get<QoreListNode>();
-        if (l->reference_count() > 1) {
+        // a list pushed into itself (push l, l) is the value that the operand had: the list is copied first, also
+        // when the operand did not take a reference of its own (qore#7622)
+        if (l->reference_count() > 1 || push_val.getInternalNode() == l) {
             ReferenceHolder<QoreListNode> copy(l->copy(), xsink);
             qore_list_private::pushCanonical(**copy, push_val.refSelf(), xsink);
             if (xsink && *xsink) {
@@ -8058,6 +8060,20 @@ static const AbstractQoreZoneInfo* qore_rt_resolve_date_zone(const char* zone_na
     // the zone of a date literal was loaded when the code was parsed (also from a zoneinfo path that the code's
     // %set-time-zone directive named): it is found by its name without access to a file
     if (*zone_name != '+' && *zone_name != '-') {
+        // a zoneinfo path in the literal of a restricted Program that names the Program's own zone (the path of its
+        // %set-time-zone directive, which its sandbox let it load) is that zone, not the zone that the name has in
+        // the global cache, which other code may have bound to another file at that path since (qore#7566); any
+        // other name is the zone of the literal when it was parsed (the Program's zone may have changed since), which
+        // the lookup below finds by its name as for any Program
+        if (QoreTimeZoneManager::isPathName(zone_name)) {
+            QoreProgram* pgm = getProgram();
+            if (pgm && QoreTimeZoneManager::programRestricted(pgm)) {
+                const AbstractQoreZoneInfo* own = currentTZ();
+                if (own && !strcmp(AbstractQoreZoneInfo::getRegionName(own), zone_name)) {
+                    return own;
+                }
+            }
+        }
         if (const AbstractQoreZoneInfo* loaded = QTZM.findLoadedZone(zone_name)) {
             return loaded;
         }
@@ -14285,16 +14301,21 @@ struct QoreNativeMethodContext {
     ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env{nullptr};
     // the method runs in the call Program context of its class, as on the other fast method call paths (issue #7079)
     ObjectSubstitutionHelper receiver;
-    ArgvContextHelper implicit_args;
+    // only for a body that reads its implicit arguments, as the ordinary call of a compiled body does
+    // (UserVariantBase::evalTiered()): a body that does not leaves the caller's, which it cannot observe (#7043)
+    std::optional<ArgvContextHelper> implicit_args;
     QoreRtUserCallOverrideHelper options;
     QoreRtReceiverTypeInfoGuard receiver_type;
     std::optional<QoreProgramLocationHelper> body_options;
 
     QoreNativeMethodContext(QoreObject* obj, const MethodVariantBase* method, const UserVariantBase* uvb,
             QoreProgram* pgm, const QoreTypeInfo* receiver_ti, ExceptionSink* xsink)
-        : receiver(obj, method->getClassPriv(), QoreSetCallProgramContext(), xsink), implicit_args(nullptr, xsink),
+        : receiver(obj, method->getClassPriv(), QoreSetCallProgramContext(), xsink),
           options(pgm, uvb, pgm),
           receiver_type(receiver_ti) {
+        if (uvb->usesArgv()) {
+            implicit_args.emplace(nullptr, xsink);
+        }
         if (uvb->getUserSignature()->getParseLocation()) {
             body_options.emplace(nullptr, uvb->getParseOptions(qore_program_private::getParseOptions(*pgm)));
         }

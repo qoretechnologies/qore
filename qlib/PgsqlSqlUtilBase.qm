@@ -1380,8 +1380,18 @@ alter table draft_guard add constraint fk_draft foreign key (draft_user) referen
 
 #! represents a PostgreSQL-specific check constraint
 public class PgsqlCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
+    private {
+        # A catalog object's src holds PostgreSQL's complete CHECK clause for existing callers.
+        *string catalog_expression;
+    }
+
     #! creates the constraint from the supplied arguments
-    constructor(string n, string n_src) : AbstractCheckConstraint(n, n_src) {
+    constructor(string n, string n_src, *string expression = NOTHING) : AbstractCheckConstraint(n, n_src) {
+        catalog_expression = expression;
+    }
+
+    string getDescriptionExpression() {
+        return catalog_expression ?? src;
     }
 
     #! returns a string that can be used to drop the constraint from the database
@@ -1468,6 +1478,17 @@ public class PgsqlColumn inherits SqlUtil::AbstractColumn {
         return AbstractColumn::getNativeTypeString();
     }
 
+    string getCreateSql(AbstractTable t) {
+        if (identity_driver && pgsql_get_server_version_num(t.getDatasource()) < 100000) {
+            *string serial_type = (select (keys SerialTypeMap), SerialTypeMap{$1} == native_type)[0];
+            if (!serial_type || identity_start != 1 || identity_increment != 1 || identity_generation != "by default") {
+                throw "UNSUPPORTED", sprintf("PostgreSQL before 10 cannot create the identity definition of column %y", name);
+            }
+            return sprintf("%s %s not null", ddl_name, serial_type);
+        }
+        return AbstractColumn::getCreateSql(t);
+    }
+
     #! returns a list of sql strings that can be used to add the column to an existing table
     /** @par Example:
         @code{.py}
@@ -1477,7 +1498,7 @@ list l = col.getAddColumnSql(t);
         @param t the SqlUtil::AbstractTable object to modify
         */
     list getAddColumnSql(AbstractTable t) {
-        list l += sprintf("alter table %s add %s", t.getSqlName(), AbstractColumn::getCreateSql(t));
+        list l += sprintf("alter table %s add %s", t.getSqlName(), getCreateSql(t));
         if (comment)
             l += sprintf("comment on column %s.%s is %s", t.getSqlName(), ddl_name, t.getSqlValue(comment));
         return l;
@@ -1514,14 +1535,14 @@ list l = col.getModifySql(t, newcol);
         } else if (getNativeTypeString() != nts) {
             #printf("ME: %s\nDB: %s\n", nts, getNativeTypeString());
             # first drop any default value if it's changing
-            if (def_val !== c.def_val)
+            if (!(identity_driver && c.identity_driver) && def_val !== c.def_val)
                 l += sprintf("alter table %s alter %s drop default", t.getSqlName(), ddl_name);
 
             l += sprintf("alter table %s alter %s type %s", t.getSqlName(), ddl_name, nts);
 
             if (def_val !== c.def_val && exists c.def_val && c.def_val !== NULL)
                 l += sprintf("alter table %s alter %s set default %s", t.getSqlName(), ddl_name, c.def_val);
-        } else if (def_val !== c.def_val) {
+        } else if (!(identity_driver && c.identity_driver) && def_val !== c.def_val) {
             # issue #2527: ensure that mismatches are not due to server type info
             if (!PgsqlColumn::equalDefaultValue(def_val, c.def_val)) {
                 #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
@@ -1539,6 +1560,10 @@ list l = col.getModifySql(t, newcol);
         if (c.comment != comment)
             l += sprintf("comment on column %s.%s is %s", t.getSqlName(), ddl_name, t.getSqlValue(c.comment));
         return l;
+    }
+
+    private bool canModifyIdentity(AbstractColumn target) {
+        return exists SerialTypeMap{target.native_type} || (identity_driver && exists def_val && !target.identity_driver);
     }
 
     #! Returns the SQL that makes the column a column of a serial pseudo-type, as PostgreSQL creates one
@@ -5409,7 +5434,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         # they have no physical storage) so that partitioned tables can be described too; a view (relkind 'v') is
         # described as well, so that a table object for a view can read it, as the DbDataProvider module's view
         # data providers do; a view is still not opened as a table by getTable(), see checkExistenceImpl()
-        *hash<auto> qh = ds.select("select column_name, data_type, c.udt_name, "
+        bool pg10 = pgsql_get_server_version_num(ds) >= 100000;
+        string identity_fields = pg10
+            ? "c.identity_generation, seq.seqstart as identity_start, seq.seqincrement as identity_increment, "
+            : "";
+        string identity_join = pg10
+            ? "left join pg_catalog.pg_sequence seq on seq.seqrelid = owned.oid "
+            : "";
+        *hash<auto> qh = ds.select("select column_name, data_type, c.udt_name, " + identity_fields
+            + "case when c.column_default = 'nextval(' || quote_literal(owned.oid::regclass::text) || '::regclass)' "
+            "then owned.oid::regclass::text end as serial_sequence, "
             "character_maximum_length, "
             "character_octet_length, numeric_precision, numeric_scale, datetime_precision, "
             "pa.atttypmod, is_nullable, "
@@ -5420,7 +5454,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "c.table_name = st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid "
             "and pgd.objsubid = c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
             "pa.attnum = c.ordinal_position and not pa.attisdropped) "
-            "where table_schema = %v and table_name = %v order by ordinal_position", schema,
+            "left join pg_catalog.pg_class owned on owned.oid = "
+            "pg_get_serial_sequence(quote_ident(c.table_schema) || '.' || quote_ident(c.table_name), c.column_name)::regclass "
+            + identity_join + "where table_schema = %v and table_name = %v order by ordinal_position", schema,
             getRelationName());
         if (!qh.column_name) {
             # information_schema.columns has no columns of a materialized view (relkind 'm'), so they are read from
@@ -5483,6 +5519,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 c = new PgsqlColumn(row.column_name, row.data_type, th.qore, exists size ? size : 0,
                     row.is_nullable == "YES", defval, row.description ? row.description : NOTHING,
                     row.character_octet_length, NOTHING);
+            }
+            if (row.identity_generation.val() || row.serial_sequence.val()) {
+                if (!pg10) {
+                    # Before v10 the sequence relation itself holds its declared start and increment.
+                    hash<auto> seq = ds.selectRow("select start_value, increment_by from " + row.serial_sequence);
+                    row.identity_start = seq.start_value;
+                    row.identity_increment = seq.increment_by;
+                }
+                c.setIdentity("pgsql", row.identity_start, row.identity_increment,
+                    row.identity_generation.val() ? row.identity_generation.lwr() : "by default");
             }
             rv{row.column_name} = c;
         }
@@ -5849,45 +5895,39 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return new ForeignConstraints(rv);
     }
 
+    private bool supportsCheckDescriptionsImpl() {
+        return True;
+    }
+
     private Constraints getConstraintsImpl() {
-        # get check constraints
-        *hash qh = ds.select("select
-            c.conname as constraint_name,
-            case when c.condeferrable = 'f' then 0 else 1 end as is_deferrable,
-            case when c.condeferred = 'f' then 0 else 1 end as is_deferred,
-            t.relname as table_name,
-            array_to_string(c.conkey, ' ') as constraint_key,
-            case confupdtype
-                when 'a' then 'NO ACTION'
-                when 'r' then 'RESTRICT'
-                when 'c' then 'CASCADE'
-                when 'n' then 'SET NULL'
-                when 'd' then 'SET DEFAULT'
-            end as on_update,
-            case confdeltype
-                when 'a' then 'NO ACTION'
-                when 'r' then 'RESTRICT'
-                when 'c' then 'CASCADE'
-                when 'n' then 'SET NULL'
-                when 'd' then 'SET DEFAULT'
-            end as on_delete,
-            case confmatchtype
-                when 'u' then 'UNSPECIFIED'
-                when 'f' then 'FULL'
-                when 'p' then 'PARTIAL'
-            end as match_type,
-            t2.relname as references_table,
-            array_to_string(c.confkey, ' ') as fk_constraint_key,
-            pg_get_constraintdef(c.oid) as consrc
-        from pg_constraint c
-            left join pg_class t on c.conrelid = t.oid
-            left join pg_class t2 on c.confrelid = t2.oid
-            join pg_catalog.pg_namespace n on n.oid = t.relnamespace
-        where
-            c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, getRelationName());
+        # Read the predicate without the surrounding CHECK clause. Keep special checks together with the names of
+        # their columns, since dropping a column would implicitly remove its check.
+        int version = pgsql_get_server_version_num(ds);
+        string reason = "case when not c.conislocal or c.coninhcount > 0 then 'inherited' ";
+        if (version >= 90100) {
+            reason += "when not c.convalidated then 'NOT VALID' ";
+        }
+        if (version >= 90200) {
+            reason += "when c.connoinherit then 'NO INHERIT' ";
+        }
+        if (version >= 180000) {
+            reason += "when not c.conenforced then 'NOT ENFORCED' ";
+        }
+        *hash qh = ds.select("select c.conname as constraint_name, pg_catalog.pg_get_constraintdef(c.oid) as consrc, "
+            "pg_catalog.pg_get_expr(c.conbin, c.conrelid, true) as expression, " + reason + "end as preserve_reason, a.attname as column_name from pg_catalog.pg_constraint c "
+            "join pg_catalog.pg_class t on c.conrelid = t.oid join pg_catalog.pg_namespace n on n.oid = t.relnamespace "
+            "left join pg_catalog.pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey) "
+            "where c.contype = 'c' and n.nspname = %v and t.relname = %v", schema, getRelationName());
         hash rv;
         foreach hash<auto> row in (qh.contextIterator()) {
-            rv.(row.constraint_name) = new PgsqlCheckConstraint(row.constraint_name, row.consrc);
+            reference<PgsqlCheckConstraint> ck = \rv{row.constraint_name};
+            if (!ck) {
+                ck = new PgsqlCheckConstraint(row.constraint_name, row.consrc, row.expression);
+                ck.preserve_reason = row.preserve_reason ?? NOTHING;
+            }
+            if (ck.preserve_reason && row.column_name) {
+                ck.catalog_columns += row.column_name;
+            }
         }
 
         Constraints c = new Constraints(rv);
@@ -7495,6 +7535,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! returns @ref True "True" if the database automatically creates a unique constraint when a unique index is created (ex: mysql)
     private bool uniqueIndexCreatesConstraintImpl() {
         return False;
+    }
+
+    #! Returns whether the server supports changing a table's logging mode
+    bool supportsTableLogging() {
+        return pgsql_get_server_version_num(ds) >= 90500;
+    }
+
+    private string getSetLoggingSqlImpl(bool enabled) {
+        if (!supportsTableLogging()) {
+            return AbstractTable::getSetLoggingSqlImpl(enabled);
+        }
+        return sprintf("alter table %s %s", getSqlName(), enabled ? "set logged" : "set unlogged");
     }
 
     #! returns @ref True "True" if the database support tablespaces

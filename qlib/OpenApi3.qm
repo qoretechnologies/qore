@@ -1123,7 +1123,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         }
         {
             optional_field(obj_type, oh.components, "schemas", NT_HASH, \source_definition_hash);
-            map processDefinition($1.key, $1.value), source_definition_hash.pairIterator();
+            # A forward reference may already have built a definition later in document order.
+            foreach string key in (keys source_definition_hash) {
+                auto definition = source_definition_hash{key};
+                # A reference declaration can import external data or apply its own XML override.
+                if (!exists components.schemas{key} || definition."$ref") {
+                    processDefinition(key, definition);
+                }
+            }
             # all definitions must be resolved now; delete the intermediate definition hash
             delete source_definition_hash;
 
@@ -6108,7 +6115,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             nullable = checked_field_value(obj_type, oh, "nullable", NT_BOOLEAN);
         }
 
-        if (optional_field(obj_type, oh, "format", NT_STRING, \format)) {
+        if (oh.hasKey("format")) {
+            format = checked_field_value(obj_type, oh, "format", NT_STRING);
             # unrecognized format values should be ignored
             if (!format.val()) {
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object: invalid %y type empty \"format\" value passed",
@@ -6123,12 +6131,22 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             optional_field(obj_type, oh, "description", (NT_STRING: True, NT_NOTHING: True), \desc);
         }
 
-        if (optional_field(obj_type, oh, "maxProperties", NT_INT, \maxProperties)) {
+        # Scalar declarations often consist entirely of fields already consumed by SchemaBase and the
+        # parsing above. Other keywords, including explicit nulls, still go through their usual validation.
+        if (type != "object" && type != "array" && !(oh - ("type", "format", "title", "description", "default",
+                "nullable", "x-nullable", "maxLength", "minLength", "enum", "minimum", "maximum", "pattern"))) {
+            additionalProperties = True;
+            return;
+        }
+
+        if (oh.hasKey("maxProperties")) {
+            maxProperties = checked_field_value(obj_type, oh, "maxProperties", NT_INT);
             checkObjectProperty(name, "maxProperties");
             if (maxProperties < 0)
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'maxProperties' field less than 0", name);
         }
-        if (optional_field(obj_type, oh, "minProperties", NT_INT, \minProperties)) {
+        if (oh.hasKey("minProperties")) {
+            minProperties = checked_field_value(obj_type, oh, "minProperties", NT_INT);
             checkObjectProperty(name, "minProperties");
             if (minProperties < 0)
                 throw "INVALID-FIELD-FORMAT", sprintf("Schema Object %y: 'minProperties' field less than 0", name);
@@ -6153,8 +6171,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             additionalProperties = True;
         }
 
-        if (optional_field(obj_type, oh, "additionalProperties", (NT_BOOLEAN: True, NT_HASH: True),
-            \additionalProperties)) {
+        if (oh.hasKey("additionalProperties") && optional_field(obj_type, oh, "additionalProperties",
+                (NT_BOOLEAN: True, NT_HASH: True), \additionalProperties)) {
             checkObjectProperty(name, "additionalProperties");
             if (additionalProperties.typeCode() == NT_HASH)
                 additionalProperties = SchemaObject::newSchemaObject("additionalProperties", additionalProperties,
@@ -6163,7 +6181,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
 
         # process "required"
-        if (optional_field(obj_type, oh, "required", OpenApi3ListToStringSet, \required)) {
+        if (oh.hasKey("required") && optional_field(obj_type, oh, "required", OpenApi3ListToStringSet, \required)) {
             # JSON Schema 2020-12 allows an empty required array, equivalent to omitting the keyword.
             # OpenAPI 3.0 retains the older non-empty array constraint.
             if (!required && !openapi3.is31OrLater()) {
@@ -6201,7 +6219,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             }
             # NOTE: OpenAPI 3.x says the discriminator property SHOULD be in the "required" list, not MUST, so no
             # exception is thrown here if it's missing; the Swagger 2.0 string form below requires it (MUST)
-        } else if (optional_field(obj_type, oh, "discriminator", NT_STRING, \discriminator)) {
+        } else if (oh.hasKey("discriminator")) {
+            discriminator = checked_field_value(obj_type, oh, "discriminator", NT_STRING);
             if (!required{discriminator})
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: 'discriminator' field value not in the "
                     "'required' list", name);
@@ -6306,7 +6325,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         # that the schema composing it declares is the standard idiom.  Pinecone writes a document scoring method
         # as an object declaring every property, plus an "anyOf" of four branches selecting a "type" and requiring
         # the property that type needs; the required names of "allOf" members are merged into this schema above
-        if (!composed && (*list<string> missing = keys (required - keys properties))) {
+        if (required && !composed && (*list<string> missing = keys (required - keys properties))) {
             if (additionalProperties === False) {
                 throw "INVALID-FIELD-VALUE", sprintf("Schema Object %y: the following required properties are not "
                     "defined, and \"additionalProperties\" is false, so no value can have them: %y", name, missing);
@@ -6366,17 +6385,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
 
         # a composition that is only a wrapper around one schema describes whatever that schema describes
-        if (!desc.val()) {
+        if (!desc.val() && (allOf || oneOf || anyOf)) {
             inheritDescriptionFromWrapper();
         }
 
-        *hash xmlObj;
-        if (optional_field(obj_type, oh, "xml", NT_HASH, \xmlObj))
-            xml = new XmlObject(xmlObj);
+        if (oh.hasKey("xml")) {
+            xml = new XmlObject(checked_field_value(obj_type, oh, "xml", NT_HASH));
+        }
 
-        *hash extDocsObj;
-        if (optional_field(obj_type, oh, "externalDocs", NT_HASH, \extDocsObj))
-            externalDocs = new ExternalDocumentationObject(extDocsObj);
+        if (oh.hasKey("externalDocs")) {
+            externalDocs = new ExternalDocumentationObject(checked_field_value(obj_type, oh, "externalDocs", NT_HASH));
+        }
 
         # Parse example (3.0 style) and examples (3.1 style)
         if (oh.hasKey("example"))

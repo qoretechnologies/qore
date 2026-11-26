@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RuntimeBuiltinThreadsModulesTest
+
+#! The lifetime of the declarations that a binary module adds to a Program at run time, in a foreign thread and in a module's namespace
+/** A binary module can add a namespace with builtin declarations to a Program at run time
+    (QoreNamespace::addNamespace()); the declarations are owned by that Program and freed with it (qore#7540).  The
+    namespace is added with the debug function dbg_add_runtime_namespace(), so the test needs a library with debugging.
+    - a thread that entered another Program checks its arguments against a type that names such a declaration while
+      the Program that added it is deleted and the retired declarations are freed: the check reads no freed type
+    - a namespace added at run time into a Program's copy of the namespace of a user module: the module's own
+      declarations stay valid and shared by every Program that loaded the module, and only the incoming ones are
+      the adding Program's and are freed with it (qore#7609)
+*/
+public class RuntimeBuiltinThreadsModulesTest inherits QUnit::Test {
+    public {
+        const AddSource = "sub add(string name, int variant) { dbg_add_runtime_namespace(name, variant); }
+sub imp(Program q, string f) { q.importFunction(f); }";
+
+        const CallSource = "auto sub call(string f, softlist<auto> args) { return call_function_args(f, args); }";
+
+        #! the imported function whose parameter names the class added at run time
+        const Func = "DbgRtNs::dbg_rt_new";
+
+        #! the type checks that the foreign thread makes at least after the Program that added the class is deleted
+        const MinChecks = 20;
+    }
+
+    constructor() : QUnit::Test("runtime builtin declarations: threads and modules", "1.0") {
+        addTestCase("a foreign thread checks a type while the Program that added its declaration is deleted",
+            \foreignThreadTest());
+        addTestCase("a namespace added at run time into a Program's copy of a user module's namespace",
+            \moduleNamespaceTest());
+        set_return_value(main());
+    }
+
+    private skipIfNoDebugging() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists_function("dbg_add_runtime_namespace")) {
+            testSkip("the library has no debugging");
+        }
+    }
+
+    #! returns the number of declarations of Programs that are not freed, after freeing the retired ones, or -1
+    private static int liveDecls() {
+        call_function("dbg_type_retirement_free");
+        return call_function("dbg_live_type_declarations");
+    }
+
+    #! runs a case and checks that the declarations that it made are freed when it is done
+    private checkFreed(code scenario, string label) {
+        int before = liveDecls();
+        scenario();
+        int after = liveDecls();
+        if (before >= 0) {
+            assertEq(before, after, label + ": the declarations are freed");
+        }
+    }
+
+    foreignThreadTest() {
+        skipIfNoDebugging();
+        checkFreed(sub () {
+            # q keeps the function imported from p: its parameter type names the class that p added
+            Program q(PO_NEW_STYLE);
+            q.parse(CallSource, "q");
+            Program p(PO_NEW_STYLE);
+            p.parse(AddSource, "add");
+            p.callFunction("add", "DbgRtNs", 1);
+            p.callFunction("imp", q, Func);
+
+            Queue started();
+            Queue result();
+            # the thread runs until the main thread has deleted p and freed what was retired
+            Counter running(1);
+            int tid = background sub () {
+                int checked = 0;
+                int bad = 0;
+                started.push(True);
+                while (running.getCount()) {
+                    try {
+                        # a wrong argument is checked against the type of the class, and its message names it
+                        q.callFunction("call", Func, ("x",));
+                        ++bad;
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "RUNTIME-OVERLOAD-ERROR" || ex.desc !~ /DbgRtClass/) {
+                            ++bad;
+                        }
+                    }
+                    if (q.callFunction("call", Func, (NOTHING,)) != 1) {
+                        ++bad;
+                    }
+                    ++checked;
+                }
+                # more checks after the Program that added the class is gone and its declarations are freed
+                for (int i = 0; i < MinChecks; ++i) {
+                    try {
+                        q.callFunction("call", Func, ("x",));
+                        ++bad;
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "RUNTIME-OVERLOAD-ERROR" || ex.desc !~ /DbgRtClass/) {
+                            ++bad;
+                        }
+                    }
+                    ++checked;
+                }
+                result.push((checked, bad));
+            }();
+            on_exit thread_join(tid);
+            on_exit {
+                if (running.getCount()) {
+                    running.dec();
+                }
+            }
+
+            assertTrue(started.get(60s), "the foreign thread entered the Program");
+            # the Program that added the class is deleted in this thread, the retired declarations are freed
+            delete p;
+            call_function("dbg_type_retirement_free");
+            running.dec();
+            *list<int> r = result.get(60s);
+            assertTrue(exists r, "the foreign thread finished");
+            if (r) {
+                assertEq(0, r[1], "every type check of the foreign thread was correct");
+                assertGe(MinChecks, r[0], "the foreign thread checked its argument");
+            }
+        }, "foreignThreadTest");
+    }
+
+    moduleNamespaceTest() {
+        skipIfNoDebugging();
+        string dir = get_script_dir() + "/runtime-module-ns";
+        string module_src = sprintf("%%append-module-path %s\n%%requires RtModNs\n", dir);
+
+        # this Program holds the module: its declarations stay alive whatever the adding Programs do
+        Program keep(PO_NEW_STYLE);
+        keep.parse(module_src + CallSource + "
+int sub modv() { return new RtModNs::RtModClass().v(); }
+int sub modf() { return RtModNs::rtModFunc(new RtModNs::RtModClass()); }", "keep");
+        assertEq(7, keep.callFunction("modv"), "the module's class in the Program that holds the module");
+
+        checkFreed(sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse(module_src + AddSource + CallSource + "
+int sub modv() { return new RtModNs::RtModClass().v(); }", "p");
+            # the namespace of the module in p is p's copy, and the namespace added at run time is merged into it
+            p.callFunction("add", "RtModNs", 1);
+            # the module's own declarations are still the module's: p uses them, and the incoming ones too
+            assertEq(7, p.callFunction("modv"), "the module's class in the merged namespace");
+            assertEq(1, p.callFunction("call", "RtModNs::dbg_rt_new", (NOTHING,)), "the declaration that was added");
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "DbgRtClass", \p.callFunction(),
+                ("call", "RtModNs::dbg_rt_new", ("x",)), "a wrong argument to the added function");
+            delete p;
+        }, "moduleNamespaceTest");
+
+        # the module's declarations are not the deleted Program's: they are valid for the Program that holds the
+        # module and for one that loads the module afterwards
+        assertEq(7, keep.callFunction("modv"), "the module's class after the adding Program was deleted");
+        assertEq(7, keep.callFunction("modf"), "the module's function after the adding Program was deleted");
+        Program later(PO_NEW_STYLE);
+        later.parse(module_src + "int sub modv() { return new RtModNs::RtModClass().v(); }", "later");
+        assertEq(7, later.callFunction("modv"), "the module's class in a Program that loads it afterwards");
+        delete later;
+        delete keep;
+    }
+}

@@ -101,6 +101,7 @@ struct ScanAcctSlot {
     std::atomic<uint64_t> restarts{0};
     std::atomic<uint64_t> exclusive{0};
     std::atomic<uint64_t> nodes{0};
+    std::atomic<uint64_t> unsealed{0};
     std::atomic<uint64_t> total_ns{0};
     std::atomic<uint64_t> wait_ns{0};
     std::atomic<uint64_t> max_ns{0};
@@ -171,14 +172,14 @@ void scan_acct_dump() {
     if (!f) {
         return;
     }
-    fprintf(f, "%-52s %10s %10s %10s %9s %9s %12s %14s %12s %10s\n", "scan_root", "scans", "deferred", "already",
-        "restarts", "exclusive", "nodes", "total_ms", "wait_ms", "max_us");
+    fprintf(f, "%-52s %10s %10s %10s %9s %9s %12s %14s %12s %10s %12s\n", "scan_root", "scans", "deferred",
+        "already", "restarts", "exclusive", "nodes", "total_ms", "wait_ms", "max_us", "unsealed");
     for (const QoreScanAccountingRecord& r : qore_scan_accounting_snapshot()) {
-        fprintf(f, "%-52s %10llu %10llu %10llu %9llu %9llu %12llu %14.1f %12.1f %10.1f\n", r.root.c_str(),
+        fprintf(f, "%-52s %10llu %10llu %10llu %9llu %9llu %12llu %14.1f %12.1f %10.1f %12llu\n", r.root.c_str(),
             static_cast<unsigned long long>(r.scans), static_cast<unsigned long long>(r.deferred),
             static_cast<unsigned long long>(r.already), static_cast<unsigned long long>(r.restarts),
             static_cast<unsigned long long>(r.exclusive), static_cast<unsigned long long>(r.nodes),
-            r.total_ns / 1e6, r.wait_ns / 1e6, r.max_ns / 1e3);
+            r.total_ns / 1e6, r.wait_ns / 1e6, r.max_ns / 1e3, static_cast<unsigned long long>(r.unsealed));
     }
     fclose(f);
 }
@@ -202,7 +203,8 @@ enum class ScanOutcome {
 //! accounts one scan when accounting is enabled; the counters are written once, when the scan ends
 class ScanAcctHelper {
 public:
-    ScanAcctHelper(bool& acct, const uint64_t& nodes, const RObject& obj) : nodes(nodes) {
+    ScanAcctHelper(bool& acct, const uint64_t& nodes, const uint64_t& unsealed, const RObject& obj) : nodes(nodes),
+            unsealed(unsealed) {
         if (!scan_acct_on) {
             return;
         }
@@ -227,6 +229,7 @@ public:
         slot.restarts.fetch_add(restarts, std::memory_order_relaxed);
         slot.exclusive.fetch_add(exclusive, std::memory_order_relaxed);
         slot.nodes.fetch_add(nodes, std::memory_order_relaxed);
+        slot.unsealed.fetch_add(unsealed, std::memory_order_relaxed);
         slot.total_ns.fetch_add(elapsed, std::memory_order_relaxed);
         slot.wait_ns.fetch_add(wait_ns, std::memory_order_relaxed);
         uint64_t max = slot.max_ns.load(std::memory_order_relaxed);
@@ -256,6 +259,8 @@ public:
 
 private:
     const uint64_t& nodes;
+    //! set when the scan commits; see RSetHelper::acct_unsealed
+    const uint64_t& unsealed;
     const char* name = nullptr;
     uint64_t start = 0;
     uint64_t wait_ns = 0;
@@ -559,6 +564,7 @@ std::vector<QoreScanAccountingRecord> qore_scan_accounting_snapshot() {
         r.restarts = slot.restarts.load(std::memory_order_relaxed);
         r.exclusive = slot.exclusive.load(std::memory_order_relaxed);
         r.nodes = slot.nodes.load(std::memory_order_relaxed);
+        r.unsealed = slot.unsealed.load(std::memory_order_relaxed);
         r.total_ns = slot.total_ns.load(std::memory_order_relaxed);
         r.wait_ns = slot.wait_ns.load(std::memory_order_relaxed);
         r.max_ns = slot.max_ns.load(std::memory_order_relaxed);
@@ -2690,7 +2696,7 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const QoreRemovedValu
     }
 
     // accounts this scan when QORE_SCAN_STATS is set; see design/dgc.md "Diagnosing scan contention"
-    ScanAcctHelper sah(acct, acct_nodes, obj);
+    ScanAcctHelper sah(acct, acct_nodes, acct_unsealed, obj);
 
     // if the scan should be deferred
     if (obj.checkDeferScan()) {
@@ -2975,6 +2981,14 @@ void RSetHelper::assignRegions() {
         }
         if (sealed[c]) {
             any = true;
+        }
+    }
+    if (acct) {
+        // the part of this graph that a later scan enters whatever regions are current
+        for (const ScanNode& n : nodes) {
+            if (!sealed[n.component]) {
+                ++acct_unsealed;
+            }
         }
     }
 

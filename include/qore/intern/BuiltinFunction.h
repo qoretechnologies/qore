@@ -139,6 +139,8 @@ public:
     } \
     DLLLOCAL virtual const QoreTypeInfo* parseGetReturnTypeInfo(int& err) const { return signature.getReturnTypeInfo(); }
 
+class QoreTypeDeclRefs;
+
 class BuiltinFunctionVariantBase {
 public:
     BuiltinSignature signature;
@@ -152,6 +154,43 @@ public:
             functionality(functionality) {
         //printd(5, "BuiltinFunctionVariantBase::BuiltinFunctionVariantBase() this=%p flags=%lld (%lld) functionality=%lld\n", this, flags, n_flags, functionality);
     }
+
+    //! not copied: the signature is not copyable, and the references belong to the variant
+    DLLLOCAL BuiltinFunctionVariantBase(const BuiltinFunctionVariantBase&) = delete;
+    DLLLOCAL BuiltinFunctionVariantBase& operator=(const BuiltinFunctionVariantBase&) = delete;
+
+    //! releases the references of refMortalDecls()
+    DLLLOCAL ~BuiltinFunctionVariantBase();
+
+    //! References the mortal declarations that the signature names, in addition to those already referenced
+    //! (qore#7540)
+    /** Called for the variants of the namespace functions that a Program owns (qore_root_ns_private::runtime_variants)
+        when they become reachable from it and whenever a declaration of the Program becomes mortal, under its runtime
+        namespace write lock: a mortal declaration (one that a binary module added to that Program at run time) is
+        freed with its Program, but the variant can be copied into a child Program or imported into another Program,
+        which hold no reference to it; the references keep the declarations that the variant's type checks read for as
+        long as the variant lives.  The declarations of a static namespace or of a module are not referenced, and a
+        variant that names no mortal declaration writes nothing.  Not called for methods, whose class holds the
+        declarations that its signatures name.
+    */
+    DLLLOCAL void refMortalDecls();
+
+    //! Returns true if the variant was added to a namespace that no Program owns (the static system namespace or the
+    //! namespace of a module), whose Programs share it (qore#7540)
+    DLLLOCAL bool isSharedOrigin() const {
+        return shared_origin;
+    }
+
+    //! Records that the variant was added to a namespace that no Program owns
+    DLLLOCAL void setSharedOrigin() {
+        shared_origin = true;
+    }
+
+private:
+    //! the mortal declarations that the signature names (refMortalDecls()), or nullptr
+    QoreTypeDeclRefs* mortal_decl_refs = nullptr;
+    //! true if the variant was added to a namespace that no Program owns (isSharedOrigin())
+    bool shared_origin = false;
 };
 
 //! Returns a cold forwarding implementation for a core builtin, or nullptr. Used only at variant registration.

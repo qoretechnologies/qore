@@ -274,6 +274,11 @@
     <a href="https://github.com/qoretechnologies/qore/issues/7305">7305</a>, <a href="https://github.com/qoretechnologies/qore/issues/7338">7338</a>,
     <a href="https://github.com/qoretechnologies/qore/issues/7577">7577</a>).
 
+    @par A Trusted RestHandler Whose Sandboxed Classes Are Below Trusted Ones Calls setHandlerSocketView()
+    A trusted @ref RestHandler::RestHandler "RestHandler" that hands its HTTP/1.x requests to REST classes or stream
+    handlers of a sandboxed %Program below its trusted classes calls @ref HttpServer::AbstractHttpRequestHandler::setHandlerSocketView() "setHandlerSocketView()"
+    in its constructor, or such a request is refused (see @ref httpserver_handler_socket; <a href="https://github.com/qoretechnologies/qore/issues/7620">issue 7620</a>).
+
     @par A Handler That Gets the Socket of Its Request Gets a WebSocket Connection Only Through WebSocketHandler
     The HTTP/1.1 WebSocket connection of such a handler is set up without the connection's socket, and another socket
     handler's \c 101 response is answered with \c 500 (see @ref httpserver_handler_socket and
@@ -316,9 +321,9 @@
     (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6750">issue 6750</a>).
 
     @par Classes Declared by Sandboxed Code Have No Private Access to Trusted Classes
-    A class declared by sandboxed code cannot use the private declarations of a class declared by trusted code but
-    can override them and call an overridden method's base version; library classes give their subclasses final public
-    methods, so a subclass method with one of their names and signatures is a parse error and must be renamed
+    A class declared by code that its sandbox restricts cannot use the private declarations of a class declared by
+    trusted code but can override them and call an overridden method's base version; library classes give their
+    subclasses final public methods, so a subclass method with one of their names and signatures must be renamed
     (@ref sandboxed_class_private_access; <a href="https://github.com/qoretechnologies/qore/issues/6843">issue 6843</a>).
 
     @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
@@ -1437,10 +1442,22 @@
     the same for the %Program of a call reference or a closure
     (<a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>).
 
+    @par Configurable Exception Report Limit
+    @ref exception_report_limit "QORE_EXCEPTION_REPORT_LIMIT" controls how many chained exceptions appear in an
+    unhandled text report, including the errors from a syntax check (issue #2311).
+
     @par The Program ID of a Caller Frame
     @ref Qore::get_caller_program_id() "get_caller_program_id()" and its C++ API \c qore_get_caller_program_id() give
     the ID of the Program of a frame of the call stack without building a @ref Qore::CallStackInfo "CallStackInfo"
     hash (<a href="https://github.com/qoretechnologies/qore/issues/7581">issue 7581</a>).
+
+    @par Leading Command-Line Options
+    @ref Qore::GetOpt::parseLeading() "GetOpt::parseLeading()" lets a wrapper parse its options and leave the
+    program name and subsequent arguments together (<a href="https://github.com/qoretechnologies/qore/issues/1969">issue 1969</a>).
+
+    @par String Transliteration
+    @ref Qore::transliterate() "transliterate()" maps bytes in a string using source and target patterns supplied
+    at run time.
 
     @par Minimum Send Rate Monitor
     @ref Qore::SendRateMonitor "SendRateMonitor" measures the average rate at which a peer takes data while a sender
@@ -1644,6 +1661,12 @@
     @ref Qore::Option "Option" constants \c HAVE_BROTLI, \c HAVE_ZSTD, \c HAVE_LZ4, \c HAVE_HTTP2 and
     \c HAVE_HTTP3 are always \c True; see the \c BUILDING file for versions, package names, pinned source
     archives, mirrors and reproducible builds.
+
+    @par Faster Thread-Local Variable Access on x86_64 Linux
+    The %Qore library accesses its thread-local variables through TLS descriptors on x86_64 Linux with GCC or Clang
+    (the \c QORE_TLS_DESCRIPTORS build option, on by default; see the \c BUILDING file) instead of a call of
+    \c __tls_get_addr() for each access, and @ref Qore::get_qore_library_info() "get_qore_library_info()" reports it
+    as \c TlsDescriptors.
 
     @par Standard Descriptors at Startup
     \c qore, \c qcc and library initialization open a missing standard file descriptor on the null device before
@@ -2147,6 +2170,8 @@
     - @ref dataproviderintro "DataProvider" module
       - delivery actions can publish @ref DataProvider::DataProviderMessageFormat "message formats" and validate
         a saved form against the installed action and destination variant
+      - @ref dpql_list_functions "DPQL list functions" flatten and group lists, select records by extreme keys, and compute percentiles
+      - @ref dpql_list_reducers "DPQL list reducers" compute totals, averages, and extrema over values or record fields
       - the process-wide registration and setter APIs declare the \c PROCESS @ref function_domains "functional domain"
         (<a href="https://github.com/qoretechnologies/qore/issues/5803">issue 5803</a>)
       - code parsed with \c PO_NO_PROCESS_CONTROL can no longer call \c registerChild(), \c addCatalogChangeListener(),
@@ -2519,6 +2544,10 @@
         default value (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
 
     - @ref sqlutilintro "SqlUtil" module
+      - @ref SqlUtil::AbstractTable::getSetLoggingSql() "table logging controls" support Oracle redo logging and
+        PostgreSQL logged and unlogged tables (issue #2975)
+      - @ref sqlutil_identity_columns "identity columns" round-trip through schema descriptions and use the target
+        database's native auto-increment mechanism
       - @ref SqlUtil::AbstractDatabase::getSequence() "getSequence()" reports sequence ownership and native type
         where the database provides them (<a href="https://github.com/qoretechnologies/qore/issues/7587">issue 7587</a>)
       - serialized objects keep no credentials of their datasource (see @ref sqlutil_serialization)
@@ -2722,7 +2751,8 @@
     - @ref freshsalesrestclientintro "FreshsalesRestClient": REST client for the Freshsales API
     - @ref gcpauthintro "GcpAuth": GCP bearer access tokens through Application Default Credentials
     - @ref geminibodyshapeintro "GeminiBodyShape": the Gemini \c generateContent wire format shared by the Gemini
-      and Vertex AI clients
+      and Vertex AI clients, including the model-specific
+      @ref GeminiBodyShape::highestThinkingLevel() "highest thinking level"
     - @ref geminidataproviderintro "GeminiDataProvider": data provider for Google Gemini
     - @ref geminirestclientintro "GeminiRestClient": REST client for the Google Gemini API
     - @ref generatordataproviderintro "GeneratorDataProvider": configurable test record streams
@@ -2816,6 +2846,7 @@
     - @ref onerecordclientintro "OneRecordClient": IATA ONE Record client for air cargo data sharing
     - @ref onerecordserverhandlerintro "OneRecordServerHandler": IATA ONE Record server handler
     - @ref openapi3intro "OpenApi3": OpenAPI 3.x schemas for REST APIs
+      - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" builds schema objects faster while validating them eagerly
     - @ref openapi3dataproviderintro "OpenApi3DataProvider": data provider API for OpenAPI 3.0 / 3.1 schemas
     - @ref opensearchdataproviderintro "OpenSearchDataProvider": data provider and vector store for OpenSearch
     - @ref opensearchloggerappenderintro "OpenSearchLoggerAppender": logger appender for OpenSearch
@@ -2932,8 +2963,18 @@
     - the request handlers, Connect, JSON-RPC and YAML-RPC method handlers and WebSocket, socket and SSE connection
       setups of restricted code get the request without its credentials (@ref httpserverutil_request_credentials;
       <a href="https://github.com/qoretechnologies/qore/issues/7303">issue 7303</a>)
+    - the @ref push "push" and @ref unshift "unshift" operators whose operand is the lvalue's own list (\c push l, l)
+      add the value that the list had, as \c += does; they added the changed list to itself, and \c unshift failed an
+      assertion of a debug build (<a href="https://github.com/qoretechnologies/qore/issues/7622">issue 7622</a>)
+    - fixed a memory-safety issue with the builtin declarations in a namespace that a binary module adds to a Program
+      at run time, which are now freed with their Program only once nothing uses them
+      (<a href="https://github.com/qoretechnologies/qore/issues/7540">issue 7540</a>)
     - Type mismatch and member access errors identify same-named classes by their @ref namespace_paths "namespace
       paths", including a program's root class and a class in a Qore sub-namespace (issue #7378).
+    - fixed a memory-safety issue with a child @ref Qore::Program "Program" that outlives its parent: the parent's
+      classes, hashdecls and enums that the child did not inherit but that its inherited functions, constants,
+      typedefs or global variables name are now kept with the child
+      (<a href="https://github.com/qoretechnologies/qore/issues/7607">issue 7607</a>)
     - @ref Qore::get_parent_caller_location() "get_parent_caller_location()" and its C++ API
       \c qore_get_parent_caller_location(), whose default offset is \c 1, return the frame at the given offset of the
       call stack; they returned @ref nothing for any offset other than \c 0

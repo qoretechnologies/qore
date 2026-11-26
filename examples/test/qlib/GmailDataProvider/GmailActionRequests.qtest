@@ -301,14 +301,35 @@ public class GmailActionRequestsTest inherits QUnit::Test {
         hash<auto> indexed = ProviderIndexUtil::tryGetActionMetadata("Gmail", "send-message");
         hash<auto> form = DataProviderMessageFormat::selectForm(indexed, "default", "html");
         assertEq("text/html", form.form.selector_value);
-        assertFalse(form.form.plain_alternative);
+        assertTrue(form.form.plain_alternative);
+        hash<auto> options = DataProviderMessageFormat::bindForm(indexed, "default", form, {
+            "to": "reader@example.org", "thread_id": "t-1", "in_reply_to": OriginalMessageId,
+            "body-encoding": "base64",
+        }, {"subject": "Delivery", "content": "<p>Růžová</p>", "fallback": "Plain café"});
+        string parser = get_script_dir() + "/../MailMessage/check-alternatives.py";
+        foreach string layout in ("alternative", "mixed") {
+            if (layout == "mixed") {
+                options.attachments = ({"data": {"name": "sample.bin", "content": "AP8=",
+                    "mime_type": "application/octet-stream"}},);
+            }
+            rest.requests = ();
+            prov.doRequest(options);
+            assertEq(1, rest.requests.size());
+            hash<auto> sent = rest.requests[0].body;
+            assertEq("t-1", sent.threadId);
+            string raw = getMime(sent);
+            assertEq(OriginalMessageId, getHeader(raw, "In-Reply-To"));
+            assertEq(OriginalMessageId, getHeader(raw, "References"));
+            assertEq(0, system(sprintf("python3 -I '%s' %s %s", replace(parser, "'", "'\\''"), sent.raw, layout)));
+        }
         rest.requests = ();
-        prov.doRequest(DataProviderMessageFormat::bindForm(indexed, "default", form,
-            {"to": "reader@example.org"}, {"subject": "Delivery", "content": "<p>Hello</p>"}));
+        prov.doRequest(options - ("plain-body", "attachments"));
         assertEq(1, rest.requests.size());
-        string html_message = getMime(rest.requests[0].body);
-        assertRegex("text/html", getHeader(html_message, "Content-Type"));
-        assertRegex("reader@example.org", getHeader(html_message, "To"));
+        assertRegex("text/html", getHeader(getMime(rest.requests[0].body), "Content-Type"));
+        rest.requests = ();
+        assertThrows("BODY-ERROR", \prov.doRequest(), options + {"body-mime-type": "text/plain"});
+        assertThrows("BODY-ERROR", \prov.doRequest(), options + {"plain-body": ""});
+        assertEq(0, rest.requests.size());
     }
 
     #! create-draft must post the same message wrapped in a draft, without sending anything
