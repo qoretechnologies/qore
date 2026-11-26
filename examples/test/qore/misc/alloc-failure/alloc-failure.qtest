@@ -66,6 +66,7 @@ class AllocFailureTest inherits QUnit::Test {
         addTestCase("a statement that fails for lack of memory", \statementTest());
         addTestCase("compiled code", \compiledTest());
         addTestCase("allocations of native code that no runtime helper handles", \unhandledTest());
+        addTestCase("the value stored when a list cannot grow is released", \countsTest());
         set_return_value(main());
     }
 
@@ -156,6 +157,37 @@ class AllocFailureTest inherits QUnit::Test {
                     "fail", r.out, name);
                 assertNRegex("caught|Assertion|Segmentation", r.out, name);
             }
+        }
+    }
+
+    #! the operations of compiled code (IR, JIT, tiered, qcc) release the object that they were storing when the
+    #! list could not grow; the AST interpreter's push and map do not (the generic push of the runtime, which is not
+    #! changed)
+    countsTest() {
+        checkDebug();
+        list<hash<auto>> runs;
+        foreach string mode in (Modes) {
+            if (mode != "ast") {
+                runs += {"name": mode, "cmd": interpreter(mode)};
+            }
+        }
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (qcc) {
+            foreach int opt in ((0, 3)) {
+                *string exe = compiledChild(qcc, opt);
+                if (exe) {
+                    runs += {"name": sprintf("qcc -O%d", opt), "cmd": quote(exe)};
+                }
+            }
+        }
+        string expected;
+        foreach string name in (("push", "map", "index")) {
+            expected += sprintf("%s: caught MEMORY-ALLOCATION-ERROR\n%s: balanced: True\n", name, name);
+        }
+        foreach hash<auto> c in (runs) {
+            hash<auto> r = run(sprintf("%s counts", c.cmd));
+            assertEq(0, r.rc, sprintf("%s: the process goes on: %s", c.name, r.out));
+            assertEq(expected, r.out, c.name);
         }
     }
 

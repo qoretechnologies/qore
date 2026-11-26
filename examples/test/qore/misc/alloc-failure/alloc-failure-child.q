@@ -129,6 +129,46 @@ int sub grow_on_exit(reference<list<string>> log, int n) {
     return l.size();
 }
 
+#! counts the objects created and destroyed
+class Counted {
+    public {
+        static int created = 0;
+        static int destroyed = 0;
+    }
+
+    constructor() {
+        ++created;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! pushes new objects to a list
+int sub push_objects(int n) {
+    list<Counted> l = ();
+    for (int i = 0; i < n; ++i) {
+        push l, new Counted();
+    }
+    return l.size();
+}
+
+#! makes a list of new objects with map
+int sub map_objects(int n) {
+    list<Counted> l = map new Counted(), xrange(n);
+    return l.size();
+}
+
+#! stores new objects past the end of a list
+int sub index_objects(int n) {
+    list<Counted> l = ();
+    for (int i = 0; i < n; ++i) {
+        l[i] = new Counted();
+    }
+    return l.size();
+}
+
 #! grows a list in a method
 class Grower {
     int grow(int n) {
@@ -145,6 +185,7 @@ class AllocFailureChild {
         switch (ARGV[0]) {
             case "compiled": compiled(); break;
             case "locked": locked(); break;
+            case "counts": counts(); break;
             case "locked-unhandled": lockedUnhandled(); break;
             case "unhandled-direct": unhandled(False); break;
             case "unhandled-nested": unhandled(True); break;
@@ -264,6 +305,31 @@ class AllocFailureChild {
         disarm();
         printf("method: again: %d\n", g.grow(100000));
         printf("caller local: %s\n", caller_local);
+    }
+
+    #! the value that an operation of compiled code was storing when its list could not grow is released: as many
+    #! objects are destroyed as were created
+    static counts() {
+        for (int i = 0; i < 50; ++i) {
+            push_objects(10);
+            map_objects(10);
+            index_objects(10);
+        }
+        foreach string name in (("push", "map", "index")) {
+            try {
+                fail_next_allocation();
+                switch (name) {
+                    case "push": push_objects(100000); break;
+                    case "map": map_objects(100000); break;
+                    case "index": index_objects(100000); break;
+                }
+                printf("%s: no exception\n", name);
+            } catch (hash<ExceptionInfo> ex) {
+                printf("%s: caught %s\n", name, ex.err);
+            }
+            disarm();
+            printf("%s: balanced: %y\n", name, Counted::created == Counted::destroyed);
+        }
     }
 
     #! a function that holds a lock and runs an on_exit handler that uses a local fails with the exception: the lock
