@@ -39,6 +39,7 @@ class AsyncIoFlushInCallbackTest inherits QUnit::Test {
         addTestCase("a callback flushes the callbacks", \flushInCallbackTest());
         addTestCase("a destructor that a callback runs flushes the callbacks", \flushInDestructorTest());
         addTestCase("a flush in a callback waits for the callbacks of other workers", \flushWaitsForOthersTest());
+        addTestCase("two callbacks flush the callbacks at the same time", \flushInTwoCallbacksTest());
         set_return_value(main());
     }
 
@@ -94,5 +95,31 @@ class AsyncIoFlushInCallbackTest inherits QUnit::Test {
             "the flush in the callback waits for the callback of the other worker");
         release_other.dec();
         assertTrue(result.get(HangTimeout), "the flush returns after the callback of the other worker has ended");
+    }
+
+    #! Two callbacks flush the callbacks at the same time, on two workers (qore#7509)
+    /** As the destructors of two servers that the last requests of two servers destroy in callbacks: each flush waited
+        for the callback of the other, which ended only when its own flush had returned, and both waited forever
+    */
+    flushInTwoCallbacksTest() {
+        Counter entered(2);
+        Queue flushed();
+        code flush = sub () {
+            entered.dec();
+            # both callbacks run, each on its own worker, before either of them flushes
+            if (entered.waitForZero(HangTimeout)) {
+                flushed.push("the other callback did not run");
+                return;
+            }
+            AsyncIoController::flushCallbacks();
+            flushed.push(gettid());
+        };
+        AsyncIoController::addTimerDelay(0s, flush);
+        AsyncIoController::addTimerDelay(0s, flush);
+        auto first = flushed.get(HangTimeout);
+        auto second = flushed.get(HangTimeout);
+        assertEq(Type::Int, first.type(), "the flush of the first callback returns");
+        assertEq(Type::Int, second.type(), "the flush of the second callback returns");
+        assertNeq(first, second, "the callbacks run on two workers");
     }
 }

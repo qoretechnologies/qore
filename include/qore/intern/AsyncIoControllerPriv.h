@@ -612,7 +612,8 @@ public:
 
         Called on a worker of this dispatcher (a callback that flushes the callbacks, or a destructor that its
         release of an object runs, such as that of a server's async I/O controller stopped in a callback), it does
-        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508).
+        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508), nor
+        for the callbacks of the other workers that wait here, for the same reason (qore#7509).
     */
     DLLLOCAL void waitForIdle();
 
@@ -811,6 +812,10 @@ private:
         blocked ping continuePoll wedge HttpServer::stop()->flushCallbacks()
         forever (qorus-core shutdown deadlock). */
     int active_continue_poll = 0;
+    //! Number of workers whose callback waits in waitForIdle()
+    /** Subset of @ref active_processing less @ref active_continue_poll.  waitForIdle() does not wait for them: each
+        ends only when its own wait has returned (qore#7509) */
+    int callback_idle_waiters = 0;
 #ifdef DEBUG
     //! Debug-only: the number of onComplete() calls dispatched so far (see dbgOnCompleteDispatched())
     std::atomic<int64_t> dbg_on_complete_dispatched{0};
