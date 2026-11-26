@@ -7272,7 +7272,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 // a new connection (RFC 9110 section 9.2.2): the next pass takes the Alt-Svc upgrade again, and
                 // falls back to HTTP/1.1 or HTTP/2 if HTTP/3 fails there; another request raises the error, and the
                 // next request takes a new connection (qore#6930); not for a cancelled request, which is reported
-                if (!request_target && http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
+                if (http3_active && !attempted_h3_upgrade && !undelivered_h3_retried && *xsink
                         && qore_http_manager_ops::isIdempotentMethod(meth)
                         && !qore_http_manager_ops::isCancelPending()) {
                     QoreStringValueHelper err(xsink->getExceptionErr());
@@ -7280,8 +7280,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             || !strcmp(err->c_str(), "HTTP3-STATELESS-RESET")
                             || !strcmp(err->c_str(), "HTTP3-IDLE-CLOSE")) {
                         undelivered_h3_retried = true;
-                        http3_active = false;
-                        dropConnMgr(true);
+                        // a request that selects its own target (sendUrl()) is repeated on a new connection of the
+                        // client's connection manager, which it leaves as it is (qore#7720)
+                        if (!request_target) {
+                            http3_active = false;
+                            dropConnMgr(true);
+                        }
                         xsink->clear();
                         continue;
                     }
@@ -7857,6 +7861,9 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         return nullptr;
     }
 
+    // the upgrade request is sent with HTTP/1.1: getHttpVersion() reports the client's own state after a request of
+    // its own, and the protocol of a request that selected its own target (qore#7720)
+    last_url_protocol = request_target ? 1 : 0;
     return ans.release();
 }
 
@@ -8721,8 +8728,10 @@ public:
                         const char* p = proto_str->c_str();
                         if (!strcmp(p, "h2")) {
                             priv_ref->http2_active = true;
-                            priv_ref->last_url_protocol = 0;
                         }
+                        // the response of a request of the client's own: getHttpVersion() reports the client's
+                        // state (qore#7720)
+                        priv_ref->last_url_protocol = 0;
                     }
                 }
                 pv.discard(&peek_xsink);

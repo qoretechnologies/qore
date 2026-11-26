@@ -2,7 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # HttpClientSendUrlClientState.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
 #
-# test-platform: macos - HTTP/2 over TLS and HTTP/3 over QUIC connections of the HTTP client's connection manager
+# test-platform: macos - TLS connections of the HTTP client's connection manager to a server that advertises HTTP/3
 # HTTPClient::sendUrl() changes nothing on the client: a request to another target leaves the client's protocol state
 # as it was, and the HTTP/3 advertisement (Alt-Svc) of a target does not make the client replace its connection
 # manager under the requests of other threads that send on it at the same time (qoretechnologies/qore#7720)
@@ -29,7 +29,8 @@ class HttpClientSendUrlClientStateTest inherits QUnit::Test {
         #! the client's own origin: plain HTTP/1.1
         HttpServer server_a(<HttpServerOptionInfo>{});
         string url_a;
-        #! another origin: HTTPS with HTTP/2, advertising HTTP/3 with Alt-Svc
+        #! another origin: HTTPS, advertising HTTP/3 with Alt-Svc (the client's manager, for its own plain HTTP origin,
+        #! sends to it with HTTP/1.1 over TLS)
         HttpServer server_b(<HttpServerOptionInfo>{});
         string url_b;
     }
@@ -76,8 +77,8 @@ class HttpClientSendUrlClientStateTest inherits QUnit::Test {
         hash<auto> resp = hc.send(NOTHING, "GET", "/port");
         assertEq(200, resp.status_code);
         string port = resp.body;
-        # the other target answers over HTTP/2 and advertises HTTP/3: a second request to it would take the HTTP/3
-        # upgrade, which replaces the client's connection manager, if the first had recorded the advertisement
+        # the other target advertises HTTP/3: a second request to it would take the HTTP/3 upgrade, which replaces the
+        # client's connection manager, if the first had recorded the advertisement
         for (int i = 0; i < 2; ++i) {
             resp = hc.sendUrl(NOTHING, "GET", url_b + "/other");
             assertEq(200, resp.status_code, sprintf("request %d to the other target", i + 1));

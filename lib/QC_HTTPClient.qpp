@@ -219,9 +219,11 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     be read as if the server had sent it.  The same applies to the connections of the
     @ref httpclientiointro "HttpClientIo" module through a proxy, over HTTP/1.1 and HTTP/2.
 
-    Objects of this class are thread-safe: requests that several threads make on one object at the same time are sent
-    at the same time, each on a connection or stream of the client's connection manager.  The timeout applies to the maximum time that a single internal send
-    or receive action of a request can take.
+    Objects of this class are thread-safe: requests that several threads make on one object at the same time are
+    sent at the same time, each on a connection or stream of the client's connection manager.  A request of the
+    client's own that changes the protocol of its connections (an HTTP/3 upgrade after an \c Alt-Svc advertisement)
+    replaces the connection manager, which ends the requests of other threads that are in progress on it; a request
+    sent with @ref sendUrl() changes nothing on the client.
 
     This class understands and automatically decodes \c "deflate", \c "gzip", and \c "bzip2" content encodings as
     well.
