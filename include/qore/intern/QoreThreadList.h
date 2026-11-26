@@ -509,6 +509,15 @@ public:
             : 0;
     }
 
+    //! Returns the word of the cancellation request bits of the given thread that getCancelBits() reads, or nullptr
+    //! for an invalid TID
+    /** For the inline cancellation poll of native code (see QoreCancelPollWords); the entry is never freed, so the
+        address is always valid, and it is the thread's own while the thread has the TID
+    */
+    DLLLOCAL const std::atomic<unsigned>* getCancelWord(int tid) const {
+        return (tid >= 0 && tid < MAX_QORE_THREADS) ? &entry[tid].cancel_requested : nullptr;
+    }
+
     //! Sets the sandbox limit bit of the given threads and wakes them if they are blocked; acquires lck
     /** Called by the sandbox watchdog when a call budget expires (see design/sandbox-resource-limits.md); a TID
         whose thread has meanwhile left the call (or ended) gets a spurious bit, which the thread clears at its next

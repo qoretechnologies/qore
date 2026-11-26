@@ -33379,7 +33379,9 @@ static QoreValue f_dbg_get_list_create_count(const QoreListNode* params, Runtime
 //! returns the number of cancellation checks (qore_check_cancel()) that the current thread has made
 /** Code that checks for cancellation at a fixed interval of the work it does - every 100 nodes of a syntax tree in
     the astparser module, for example - makes a number of checks that grows with that work, so tests use this to
-    verify that the work grows linearly with the size of the input.
+    verify that the work grows linearly with the size of the input.  The inline polls of the loops of native (JIT,
+    tiered, AOT) code are not counted, only the full checks that they make: one per invocation of a loop without a
+    request.
 */
 static QoreValue f_dbg_get_cancel_check_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return q_get_cancel_check_count();

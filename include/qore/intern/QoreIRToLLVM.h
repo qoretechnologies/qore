@@ -329,6 +329,14 @@ private:
     // The ExceptionSink* parameter for the current function
     llvm::Value* xsink_arg = nullptr;
 
+    //! the state of the inline cancellation polls of the function that cancel_poll_func names (emitLoopCancelPoll()):
+    //! the stack slots that hold the addresses of the two words that a poll reads, and the QoreCancelPollWords that
+    //! qore_rt_check_cancel_poll() fills; made in the entry block of the function by its first poll
+    llvm::Function* cancel_poll_func = nullptr;
+    llvm::AllocaInst* cancel_poll_bits_slot = nullptr;
+    llvm::AllocaInst* cancel_poll_count_slot = nullptr;
+    llvm::AllocaInst* cancel_poll_words = nullptr;
+
     // AOT mode: emit _aot helper calls with slot indices instead of embedded pointers
     bool aot_mode = false;
     //! The calls that check whether a debugger is attached (see setAOTDebuggerChecks())
@@ -2843,6 +2851,15 @@ private:
     */
     void emitExceptionBranch(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst, bool force_function_error, llvm::Value* pending = nullptr);
+    //! Emits the cancellation check of the branch \a inst into a block that starts an iteration of a loop statement,
+    //! with the label \a operation, and its exception check
+    /** The check is an inline poll of the thread's cancellation word and of the count of requested sandbox
+        interrupts, which calls qore_rt_check_cancel_poll() only when one of them is set; the first poll of an
+        invocation finds the words unresolved and calls it as well (see "Inline polls of native code" in
+        design/cooperative-cancellation.md)
+    */
+    void emitLoopCancelPoll(llvm::Module& module, llvm::Function* llvm_func, const QoreIRInstruction* inst,
+            const char* operation);
 
     // Emit the in-place debug-step hook (issue #5352) at a DebugBlock (synthetic=true,
     // block-entry → dbgSyntheticBlockStep) or DebugStatement (synthetic=false,

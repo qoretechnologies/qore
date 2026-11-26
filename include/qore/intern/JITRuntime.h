@@ -1793,6 +1793,27 @@ int64_t qore_rt_list_append_element(uint64_t list_val, uint64_t value_val, int64
 //! the skipped ones otherwise; returns 1 if an exception was raised.  See QoreIROpcode::CheckCancelEvery.
 int64_t qore_rt_check_cancel_every(int64_t count, int64_t point, int64_t limit, ExceptionSink* xsink);
 
+//! The two words that the inline cancellation poll of native code reads where a loop statement starts an iteration
+/** While both are 0, no cancellation, sandbox limit or program interrupt is pending for the thread, and
+    qore_check_cancel() would return false; any other value makes the poll call qore_rt_check_cancel_poll(), which
+    makes the check.  Native code reads both with 32-bit atomic loads (see "Inline polls of native code" in
+    design/cooperative-cancellation.md); the addresses stay valid for the rest of the native invocation that got them
+    on the thread that got them.
+*/
+struct QoreCancelPollWords {
+    //! the cancellation request bits of the thread (ThreadEntry::cancel_requested), or a word that is never 0
+    const std::atomic<unsigned>* thread_bits;
+    //! the number of sandbox managers with an interrupt requested (qore_sandbox_interrupt_count)
+    const std::atomic<int>* interrupt_count;
+};
+
+//! The cancellation check of a loop statement's iteration in native code, when its inline poll found a word set
+/** Checks as qore_check_cancel() does, with \a operation as the label, and stores the words that the poll of the
+    calling native invocation reads from now on in \a words (see QoreCancelPollWords); an exception is raised in
+    \a xsink.
+*/
+void qore_rt_check_cancel_poll(ExceptionSink* xsink, const char* operation, QoreCancelPollWords* words);
+
 //! Raises RANGE-ERROR if \a bound_val, the QoreIRRangeBound \a which of a range operator, is NOTHING; returns 1 if
 //! an exception was raised.  See QoreIROpcode::CheckRangeBound.
 int64_t qore_rt_check_range_bound(uint64_t bound_val, int64_t which, ExceptionSink* xsink);
