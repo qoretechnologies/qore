@@ -729,13 +729,18 @@ class PipelineQueue {
     }
 
     #! Returns the pipeline for a call, or @ref nothing if it is gone
-    /** In the queue thread, the reference is kept in \c thread_hold until the thread no longer holds the pipeline's
-        lock (see releasePipeline())
+    /** In a queue thread of the pipeline, the reference is kept in the \c thread_hold of the queue that the thread
+        runs (DataProviderPipelinePriv::running_queue), which can be another queue than this one (a parent queue's
+        thread submits records to a child queue), until the thread no longer holds the pipeline's lock (see
+        releasePipeline())
     */
     private *DataProviderPipeline getPipeline() {
         *DataProviderPipeline p = parent;
-        if (p && tid == gettid() && !thread_hold) {
-            thread_hold = p;
+        if (p) {
+            *PipelineQueue running = DataProviderPipelinePriv::running_queue;
+            if (running && running.shared === shared && !running.thread_hold) {
+                running.thread_hold = p;
+            }
         }
         return p;
     }
@@ -796,6 +801,9 @@ class PipelineQueue {
             remove DataProviderPipelinePriv::running_queue_cnt;
             cnt.done();
         }
+        # the queue that this thread runs keeps the thread's reference to the pipeline (see getPipeline())
+        DataProviderPipelinePriv::running_queue = self;
+        on_exit remove DataProviderPipelinePriv::running_queue;
 
         # Call registerThread() while the constructor still blocks on run_cnt.wait(),
         # which guarantees the user thread holds a strong ref to the parent pipeline
@@ -2947,6 +2955,8 @@ namespace DataProviderPipelinePriv {
 #! the count of the queue thread of a pipeline that the current thread runs, until it is released (see
 #! PipelineQueue::run())
 thread_local *WaitGroup running_queue_cnt;
+#! the queue that the current thread runs (see PipelineQueue::getPipeline())
+thread_local *PipelineQueue running_queue;
 }
 #! @endcond
 
