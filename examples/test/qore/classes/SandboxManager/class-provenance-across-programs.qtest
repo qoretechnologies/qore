@@ -169,7 +169,9 @@ public object sub class_provenance_test_module_make() {
         f.write(ModuleSource);
         f.close();
 
-        Program s = getSandboxed();
+        # the sandbox may read the module's directory: its file-system policy applies to the module sources that the
+        # code that it governs loads
+        Program s = getSandboxed(tmp.path);
         # a Program that sandboxed code created: its sandbox is that of its creator, not one of its own
         Program p = s.callFunction("make_program");
         p.parse(sprintf("%%requires %s\nobject sub make() { return class_provenance_test_module_make(); }\n"
@@ -339,9 +341,17 @@ object sub make_own() {
     }
 
     #! returns a sandboxed Program with the declaring code
-    private static Program getSandboxed() {
+    #! returns a sandboxed Program that declares the class
+    /** @param read_dir a directory that the sandbox may read, if any (a sandbox's file-system policy also applies to
+        the module sources that its code loads)
+    */
+    private static Program getSandboxed(*string read_dir) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
-        p.setSandboxManager(new SandboxManager());
+        SandboxManager sm();
+        if (read_dir) {
+            sm.addFilesystemAllowedPath(read_dir, QSEC_READ);
+        }
+        p.setSandboxManager(sm);
         p.parse(DeclaringSource, "declaring");
         return p;
     }

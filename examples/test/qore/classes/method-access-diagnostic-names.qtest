@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class MethodAccessDiagnosticNamesTest
+
+#! Method access errors name a class by its path when another class shares its name, as member errors do (qore#7626)
+/** PRIVATE-MEMBER and the other member diagnostics name a class by its path (\c '::Shape') when another declaration
+    shares its name (qore#7378); METHOD-IS-PRIVATE, BASE-CLASS-IS-PRIVATE and ILLEGAL-CALL-REFERENCE named it by its
+    short name, so an error about one of two same-named classes did not say which one was meant.  The worker
+    (\c method-access-diagnostic-names/method-access-diagnostic-names.q) prints each error for a root class and a
+    namespaced class that share their names with others, and for a class whose name is its own; every mode, the IR tier
+    and qcc executables must print the output of the AST interpreter (\c method-access-diagnostic-names.expected).
+*/
+class MethodAccessDiagnosticNamesTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string dir = get_script_dir() + "/method-access-diagnostic-names";
+        string worker = dir + "/method-access-diagnostic-names.q";
+    }
+
+    constructor() : QUnit::Test("MethodAccessDiagnosticNamesTest", "1.0", \ARGV) {
+        addTestCase("every execution mode prints the output of the AST", \testModes());
+        addTestCase("the IR tier prints the output of the AST", \testIrTier());
+        addTestCase("qcc executables print the output of the AST", \testCompiled());
+        set_return_value(main());
+    }
+
+    static string quote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string expected() {
+        return ReadOnlyFile::readTextFile(dir + "/method-access-diagnostic-names.expected");
+    }
+
+    testModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(expected(), ExecModeHarness::run(sprintf("%s -b --enable-debug --exec-mode=%s %s",
+                quote(qore_bin), mode, quote(worker))), mode);
+        }
+    }
+
+    testIrTier() {
+        assertEq(expected(), ExecModeHarness::run_ir_tier(sprintf("%s -b --enable-debug --exec-mode=tiered %s",
+            quote(qore_bin), quote(worker))));
+    }
+
+    testCompiled() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            *string found = backquote("command -v qcc 2>/dev/null");
+            trim found;
+            if (!found) {
+                testSkip("qcc is not available");
+            }
+            qcc_bin = found;
+        }
+        TmpDir tmp("methodaccessdiag");
+        foreach string opt in (("0", "3")) {
+            string exe = sprintf("%s/worker-O%s", tmp.path, opt);
+            int rc;
+            string out = backquote(sprintf("%s -O%s -o %s %s 2>&1", quote(qcc_bin), opt, quote(exe), quote(worker)),
+                \rc);
+            assertEq(0, rc, sprintf("-O%s: qcc compiles the worker: %s", opt, out));
+            if (rc || !is_file(exe)) {
+                continue;
+            }
+            # -b must be the first argument of a compiled program
+            string result = backquote(sprintf("%s -b 2>&1", quote(exe)), \rc);
+            assertEq(0, rc, sprintf("-O%s: exit status (output: %y)", opt, result));
+            assertEq(expected(), result, sprintf("-O%s", opt));
+        }
+    }
+}

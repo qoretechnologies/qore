@@ -273,6 +273,10 @@ size_t qore_ir_prune_release_checks(QoreIRFunction& func);
 */
 bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count);
 
+//! Finds single-use invoke results stored into a direct local on the invoke's sole normal continuation edge.
+bool qore_ir_find_invoke_store_moves(const QoreIRFunction& func, std::unordered_set<uint32_t>& moves,
+    size_t* check_count);
+
 //! Marks each LoadLocal directly followed by the CheckCallTarget of its value (QoreIRInstruction::
 //! fused_call_target_check): the interpreter then makes the check in the load, without the dispatch of the check
 /** Run on the final IR of a function that the interpreter executes; the instructions themselves are unchanged, so
@@ -456,8 +460,10 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 
     Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
     list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
-    receiver or an operand that the statement holds, or 0 if it is released on its own (an operand of any other
-    instruction, or a value used more than once);
+    receiver or an operand that the statement holds (including the source of a CopyCallArg, the original of a call's
+    value that an argument took a copy of, qore#7426), or 0 if it is released on its own (an operand of any other
+    instruction, or a value used more than once); the release of a temporary (ReleaseOwnedTemp,
+    ReleaseCallArgSource) is not a use;
     an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
     the incoming value, which an engine can keep in the incoming value's own slot.
 

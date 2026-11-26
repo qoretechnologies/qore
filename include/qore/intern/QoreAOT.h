@@ -308,6 +308,9 @@ DLLLOCAL std::string qore_aot_dot_method_ref(const char* name, const QoreMethod*
         const AbstractQoreFunctionVariant* variant, bool pseudo);
 DLLLOCAL uint8_t qore_aot_dot_target_flags(const QoreMethod* method, bool pseudo, bool name_dispatch);
 DLLLOCAL void qore_aot_write_dot_target_family(QoreAOTBinaryWriter& writer, const QoreMethod* method, bool pseudo);
+//! returns the method that a call bound to \a method and \a variant is written with (qore#7411)
+DLLLOCAL const QoreMethod* qore_aot_dot_target_method(const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant);
 bool qore_aot_read_dot_target(const QoreAOTBinaryReader& reader, const uint8_t*& ptr, const uint8_t* end,
     QoreProgram* pgm, bool slot, QoreAOTDotTarget& target, std::string& error);
 

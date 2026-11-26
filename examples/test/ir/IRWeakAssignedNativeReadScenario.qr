@@ -1,0 +1,290 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The scenario of IRWeakAssignedNativeRead.qtest (qore#7764): a local int or float is assigned with the weak assignment
+# operator (:=), which holds an int or a float as a normal assignment does, and its value is read: directly, as a member
+# of a local hash or list with a fixed layout that the local is written after, in a loop, in nested try statements,
+# by a closure, as a parameter, as the receiver of a pseudo-method call, and after its scope ends.  The values are
+# boxed nodes in a QoreValue (an integer outside the inline range, a double whose bits collide with a value tag, a NaN)
+# and inline values.  A value of the wrong type raises an exception, and a local that can hold an object still holds a
+# weak reference to it.  Every call runs three times, so that tiered execution runs it on the AST tier, the IR tier and
+# as native code.
+
+%modern
+%allow-weak-references
+
+class WeakAssignedNativeReadObject {
+    public {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    destructor() {
+        printf("destructor %s\n", name);
+    }
+}
+
+sub repro() {
+    auto v = 1;
+    try {
+        int x = 1;
+        x := v;
+        printf("repro: %y\n", x);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("repro: %s\n", ex.err);
+    }
+}
+
+sub noTry() {
+    auto v = 1;
+    int x = 1;
+    x := v;
+    printf("noTry: %y\n", x);
+}
+
+sub bigInt() {
+    auto v = 1152921504606846979;
+    int x = 1;
+    x := v;
+    hash<auto> h = {"a": x, "b": x + 1};
+    x = 3458764513820540937;
+    v = 5;
+    printf("bigInt: %y %y %y\n", h.a, h.b, x);
+}
+
+sub bigIntList() {
+    auto v = -2305843009213693957;
+    int x = 1;
+    x := v;
+    list<auto> l = (x, x * 2);
+    x := 7;
+    printf("bigIntList: %y %y %y\n", l[0], l[1], x);
+}
+
+sub floatTag() {
+    auto v = -4e+307;
+    float x = 1.0;
+    x := v;
+    hash<auto> h = {"a": x, "b": x * 2};
+    x = 2.5;
+    printf("floatTag: %y %y %y\n", h.a, h.b, x);
+}
+
+sub floatNan() {
+    auto v = -@nan@;
+    float x = 1.0;
+    x := v;
+    hash<auto> h = {"a": x};
+    x = 1.5;
+    printf("floatNan: %y %y\n", h.a, x);
+}
+
+sub boolValue() {
+    auto v = True;
+    bool x = False;
+    x := v;
+    hash<auto> h = {"a": x};
+    x = False;
+    printf("boolValue: %y %y\n", h.a, x);
+}
+
+sub stringValue() {
+    auto v = "abc" + "def";
+    string x = "z";
+    x := v;
+    hash<auto> h = {"a": x};
+    v = "other";
+    x = "q";
+    printf("stringValue: %y %y\n", h.a, x);
+}
+
+sub wrongType() {
+    auto v = "str";
+    try {
+        int x = 1;
+        x := v;
+        printf("wrongType int: %y\n", x);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("wrongType int: %s\n", ex.err);
+    }
+    try {
+        float x = 1.0;
+        x := v;
+        printf("wrongType float: %y\n", x);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("wrongType float: %s\n", ex.err);
+    }
+    auto o = new WeakAssignedNativeReadObject("wrongType");
+    try {
+        int x = 1;
+        x := o;
+        printf("wrongType object: %y\n", x);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("wrongType object: %s\n", ex.err);
+    }
+}
+
+sub loop() {
+    int sum = 0;
+    for (int i = 0; i < 5; ++i) {
+        auto v = 1152921504606846979 + i;
+        int x = 0;
+        x := v;
+        sum += x - 1152921504606846979;
+        hash<auto> h = {"a": x};
+        x = i;
+        sum += h.a - 1152921504606846979;
+    }
+    printf("loop: %y\n", sum);
+}
+
+sub nested() {
+    auto v = 9007199254740993;
+    try {
+        try {
+            int x = 1;
+            x := v;
+            hash<auto> h = {"a": x};
+            x = 2;
+            throw "NESTED", sprintf("%y", h.a);
+        } catch (hash<ExceptionInfo> ex) {
+            int y = 3;
+            y := v + 2;
+            hash<auto> h = {"a": y};
+            y = 4;
+            printf("nested inner: %s %y %y\n", ex.desc, h.a, y);
+            rethrow;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        printf("nested outer: %s %s\n", ex.err, ex.desc);
+    }
+}
+
+sub scopeEnd() {
+    hash<auto> h;
+    {
+        auto v = 1152921504606846981;
+        int x = 1;
+        x := v;
+        h = {"a": x};
+    }
+    printf("scopeEnd: %y\n", h.a);
+}
+
+sub sourceChanges() {
+    hash<auto> h;
+    auto v = 1152921504606846983;
+    int x = 1;
+    x := v;
+    v = 1152921504606846985;
+    h = {"a": x};
+    remove v;
+    x = 6;
+    printf("sourceChanges: %y %y %y\n", h.a, x, v);
+}
+
+sub autoInt() {
+    auto v = 1152921504606846979;
+    auto x = 1;
+    x := v;
+    hash<auto> h = {"a": x};
+    x = 2;
+    printf("autoInt: %y %y\n", h.a, x);
+}
+
+sub closureWrite() {
+    auto v = 1152921504606846979;
+    int x = 1;
+    code c = sub () { x := v; };
+    c();
+    hash<auto> h = {"a": x};
+    x = 2;
+    printf("closureWrite: %y %y\n", h.a, x);
+}
+
+sub param(int x, auto v) {
+    x := v;
+    hash<auto> h = {"a": x};
+    x = 4;
+    printf("param: %y %y\n", h.a, x);
+}
+
+# the local is the receiver of a pseudo-method call
+sub receiver() {
+    auto v = 1152921504606846979;
+    int x = 1;
+    x := v;
+    string s = x.toString();
+    hash<auto> h = {"a": x, "t": x.typeCode()};
+    x = 3;
+    printf("receiver: %y %y %y %y\n", s, h.a, h.t, x);
+    float f = 1.0;
+    auto fv = -4e+307;
+    f := fv;
+    hash<auto> hf = {"a": f, "s": f.toString()};
+    f = 2.0;
+    printf("receiver float: %y %y %y\n", hf.a, hf.s, f);
+}
+
+# a closure-bound local that is the receiver of a pseudo-method call
+sub closureReceiver() {
+    auto v = 1152921504606846979;
+    int x = 1;
+    x := v;
+    code c = string sub () { return x.toString(); };
+    hash<auto> h = {"a": x, "s": x.toString()};
+    x = 5;
+    printf("closureReceiver: %y %y %y %y\n", h.a, h.s, c(), x);
+}
+
+sub objects() {
+    {
+        auto o = new WeakAssignedNativeReadObject("object");
+        object x = new WeakAssignedNativeReadObject("replaced");
+        x := o;
+        printf("objects: %y\n", x.name);
+        delete o;
+        printf("objects after delete: %y\n", x);
+    }
+    {
+        auto o = new WeakAssignedNativeReadObject("auto");
+        auto x = 1152921504606846979;
+        hash<auto> h0 = {"a": x};
+        x := o;
+        hash<auto> h = {"a": x};
+        printf("objects auto: %y %y\n", h0.a, h.a.name);
+        delete o;
+        printf("objects auto after delete: %y %y\n", x, h.a);
+    }
+}
+
+sub run() {
+    repro();
+    noTry();
+    bigInt();
+    bigIntList();
+    floatTag();
+    floatNan();
+    boolValue();
+    stringValue();
+    wrongType();
+    loop();
+    nested();
+    scopeEnd();
+    sourceChanges();
+    autoInt();
+    closureWrite();
+    param(1, 1152921504606846979);
+    receiver();
+    closureReceiver();
+    objects();
+}
+
+for (int i = 0; i < 3; ++i) {
+    run();
+}

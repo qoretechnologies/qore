@@ -46,6 +46,10 @@ sub main() {
         sm.setUncontrolledApiPolicy(True);
         mode = mode.substr(8);
     }
+    # the module that the sandboxed code loads by path, and the one that it requires, are read with the policy of
+    # the sandbox, which must allow them (qore#7518)
+    sm.addFilesystemAllowedPath(get_script_dir() + "/ReportLoadFail.qm", QSEC_READ);
+    sm.addFilesystemAllowedPath(get_script_dir() + "/ReportGate.qm", QSEC_READ);
     p.setSandboxManager(sm);
     p.loadModule("ReportCheck");
     p.parse(ReadOnlyFile::readTextFile(get_script_dir() + "/tenant.q"), "tenant");

@@ -92,6 +92,8 @@ sub export_to(Program h) {
         # a restricting sandbox (the default policy): a trusted (governed) one does not make its code restricted
         # (qore#7737)
         SandboxManager sm();
+        # the module is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(get_script_dir() + "ScopeProgramMaker.qm", QSEC_READ);
         sandboxed = new Program(PO_MODERN);
         sandboxed.setSandboxManager(sm);
         sandboxed.parse("%modern

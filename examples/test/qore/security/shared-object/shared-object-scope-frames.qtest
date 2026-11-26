@@ -41,7 +41,7 @@ class SharedObjectScopeFramesTest inherits QUnit::Test {
             addTestCase("execution mode " + mode, sub () {
                 # the checks run in child Programs, whose code chooses its own execution, so the native compilation
                 # is not checked
-                assertEq(expected, ExecModeHarness::run(command(execution_mode), ExecModeHarness::NativeCheck::None));
+                assertEq(expected, ExecModeHarness::run_stdout(command(execution_mode), ExecModeHarness::NativeCheck::None));
             });
         }
         addTestCase("qcc -O0", sub () { checkQcc(0); });

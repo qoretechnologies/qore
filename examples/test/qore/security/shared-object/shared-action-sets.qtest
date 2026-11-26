@@ -36,7 +36,7 @@ class SharedActionSetsTest inherits QUnit::Test {
                 string execution_mode = mode;
                 addTestCase(name + ": execution mode " + mode, sub () {
                     # the library modules' code chooses its own execution, so the native compilation is not checked
-                    assertEq(expected(name), ExecModeHarness::run(command(name, execution_mode),
+                    assertEq(expected(name), ExecModeHarness::run_stdout(command(name, execution_mode),
                         ExecModeHarness::NativeCheck::None));
                 });
             }

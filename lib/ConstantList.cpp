@@ -254,7 +254,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         // it from its own entry
         aot_pending_init(old.aot_pending_init),
         aot_parse_shell_value(old.aot_parse_shell_value.refSelf()),
-        access(old.access), from_module(old.from_module), runtime_dependent_path(old.runtime_dependent_path),
+        access(old.access), from_module(old.from_module), runtime_dependent_path(old.runtime_dependent_path), domain(old.domain),
         runtime_compiled_define(old.runtime_compiled_define.refSelf()) {
     assert(!old.in_init);
     assert(old.init);
@@ -279,7 +279,32 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
     //  QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(val.getTypeInfo()));
 }
 
-void ConstantEntry::setRuntimeDependent(std::string path, QoreValue compiled_define) {
+QoreValue ConstantEntry::getParseValue(const QoreProgramLocation* consumer_loc) const {
+    if (domain && parse_check_restriction(domain)) {
+        parse_error(consumer_loc ? *consumer_loc : *loc, "parse options do not allow access to constant '%s' "
+            "(functional domain: %s)", getName(), qore_describe_source_domains(domain).c_str());
+        return QoreValue();
+    }
+    return runtime_ref ? QoreValue(static_cast<AbstractQoreNode*>(runtime_ref)) : val;
+}
+
+bool ConstantEntry::runtimeAllowsDomain() const {
+    return !domain || qore_parse_options_allow_domain(runtime_get_parse_options(), domain);
+}
+
+bool ConstantEntry::checkRuntimeDomain(ExceptionSink* xsink) const {
+    if (runtimeAllowsDomain()) {
+        return true;
+    }
+    if (xsink) {
+        xsink->raiseException("INVALID-CONSTANT-ACCESS", "parse options do not allow access to constant '%s' "
+            "(functional domain: %s)", getName(), qore_describe_source_domains(domain).c_str());
+    }
+    return false;
+}
+
+void ConstantEntry::setRuntimeDependent(std::string path, QoreValue compiled_define, int64 required_domain) {
+    domain = required_domain;
     assert(builtin);
     assert(!runtime_ref);
     runtime_dependent_path = std::move(path);
@@ -1113,7 +1138,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // reference still triggers a rebuild when that file changes.
             qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
             qore_aot_record_folded_constant_import(consumer_loc, i->second, ptr);
-            return i->second->getParseValue();
+            return i->second->getParseValue(consumer_loc);
         }
         constantTypeInfo = nothingTypeInfo;
         found = true;
@@ -1303,8 +1328,11 @@ QoreHashNode* ConstantList::getInfo() {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
     qore_hash_private* hp = qore_hash_private::get(*h);
-    for (cnemap_t::iterator i = cnemap.begin(), e = cnemap.end(); i != e; ++i)
-        hp->setKeyValueIntern(i->first, i->second->val.refSelf());
+    for (auto& entry : cnemap) {
+        if (entry.second->runtimeAllowsDomain()) {
+            hp->setKeyValueIntern(entry.first, entry.second->val.refSelf());
+        }
+    }
 
     return h;
 }

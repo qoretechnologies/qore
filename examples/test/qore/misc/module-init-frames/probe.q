@@ -43,7 +43,10 @@ switch (how) {
     case "sandboxed-path": {
         # a sandboxed Program loads the module by its path: its restrictions apply to the initialization
         Program p(Opts);
-        p.setSandboxManager(new SandboxManager());
+        SandboxManager sm();
+        # the module is read with the policy of the sandbox, which must allow it (qore#7518)
+        sm.addFilesystemAllowedPath(dir, QSEC_READ);
+        p.setSandboxManager(sm);
         p.parse("string sub report(string path) { load_module(path);
     return call_static_method('InitFramesA::InitFramesA', 'report'); }", "sandboxed-loader");
         printf("%s\n", p.callFunction("report", dir + "/InitFramesA" + ext));
