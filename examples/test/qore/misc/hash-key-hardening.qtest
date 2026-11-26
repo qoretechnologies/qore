@@ -32,6 +32,7 @@ class HashKeyHardeningTest inherits QUnit::Test {
         addTestCase("searches, removals and copies of a hardened hash", \hardenedOperationsTest());
         addTestCase("equality of hardened and other hashes", \equalityTest());
         addTestCase("keys that do not share hashes do not harden the key map", \normalKeysTest());
+        addTestCase("hashes that are emptied and filled again", \emptiedTest());
         addTestCase("a hardening that cannot allocate changes nothing", \allocFailureTest());
         addTestCase("the keyed hash differs between processes", \processLayoutTest());
         addTestCase("threads harden their first hashes at once", \concurrentFirstHardeningTest());
@@ -223,6 +224,71 @@ class HashKeyHardeningTest inherits QUnit::Test {
             h2{"a" + chr(i ?: 1)} = i;
         }
         assertFalse(mapInfo(h2).hardened);
+    }
+
+    emptiedTest() {
+        # a hash that alternates between one member and none, as in a loop that adds and removes a key
+        hash<auto> h;
+        for (int i = 0; i < 100; ++i) {
+            assertFalse(exists h.k);
+            assertFalse(h.hasKey("k"));
+            h.k = i;
+            assertEq(i, h.k);
+            assertEq(i, remove h.k);
+            assertEq(0, h.size());
+        }
+        # an emptied hash: searches find nothing, and the members added again are found
+        hash<auto> e = map {("key-" + $1): $1}, xrange(100);
+        foreach string k in (keys e) {
+            delete e{k};
+        }
+        assertEq(0, e.size());
+        assertFalse(exists e."key-1");
+        assertEq(NOTHING, e{"key-99"});
+        # its copy is empty and takes members
+        hash<auto> ec = e;
+        ec.a = 1;
+        assertEq({"a": 1}, ec);
+        assertEq(0, e.size());
+        for (int i = 0; i < 200; ++i) {
+            e{"n-" + i} = i;
+        }
+        assertEq(200, e.size());
+        int bad = 0;
+        for (int i = 0; i < 200; ++i) {
+            if (e{"n-" + i} !== i || !e.hasKey("n-" + i) || exists e{"key-" + i}) {
+                ++bad;
+            }
+        }
+        assertEq(0, bad, "the members added to an emptied hash are found, and the removed ones are not");
+        # copies of the filled hash
+        hash<auto> c = e;
+        assertEq(e, c);
+        assertEq(199, c."n-199");
+        assertEq(e + {}, c);
+
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            return;
+        }
+        assertFalse(mapInfo(e).hardened);
+        # a hardened hash that is emptied stays hardened; searches find nothing, and members added again are found
+        hash<auto> hh = makeHardened(100);
+        for (int i = 0; i < 100; ++i) {
+            remove hh{"k" + i};
+        }
+        assertEq(0, hh.size());
+        assertTrue(mapInfo(hh).hardened, "an emptied hardened hash stays hardened");
+        assertFalse(exists hh.k1);
+        assertFalse(hh.hasKey("k99"));
+        for (int i = 0; i < 300; ++i) {
+            hh{"k" + i} = i;
+        }
+        assertTrue(mapInfo(hh).hardened);
+        checkKeys(hh, 300);
+        hash<auto> hc = hh;
+        assertTrue(mapInfo(hc).hardened, "a copy of a hardened hash that was emptied and filled is hardened");
+        checkKeys(hc, 300);
+        assertEq(hh, hc);
     }
 
     allocFailureTest() {

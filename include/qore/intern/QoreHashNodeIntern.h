@@ -316,10 +316,9 @@ public:
         return buckets ? static_cast<size_t>(getMask()) + 1 : 0;
     }
 
-    //! true if the map gives the buckets of its keys by the keyed hash (qore#7557): a map with buckets whose insert
-    //! limit is 0
+    //! true if the map gives the buckets of its keys by the keyed hash (qore#7557): bit 31 of its mask is set
     DLLLOCAL bool isHardened() const {
-        return buckets && !getLimit();
+        return (mask & HardenedBit) != 0;
     }
 
     //! returns the hash that the member of the key of \a len bytes at \a str keeps: its member hash, in any map (a
@@ -328,9 +327,10 @@ public:
         return qore_hash_lookup_key::hashBytes(str, len);
     }
 
-    //! true if find() can search the map: it has buckets and is not hardened (its insert limit is not 0); else
+    //! true if find() can search the map: it has members and is not hardened (its insert limit is not 0); else
     //! findSlow() searches it
-    /** the test replaces the test of the member count that came before qore#7557, so that a search costs no test more
+    /** the test replaces the test of the member count that came before qore#7557, so that a search costs no test more;
+        a map without members has an insert limit of 0, so that its key is not hashed
     */
     DLLLOCAL bool fastFind() const {
         return getLimit() != 0;
@@ -339,7 +339,7 @@ public:
     //! returns the member with the key \a k, or nullptr, in a map that has buckets and is not hardened (fastFind())
     DLLLOCAL HashMember* find(const qore_hash_lookup_key& k) const {
         assert(fastFind());
-        for (HashMember* m = buckets[k.hash & getMask()]; m; m = m->bucket_next) {
+        for (HashMember* m = buckets[k.hash & mask]; m; m = m->bucket_next) {
             if (m->matches(k)) {
                 return m;
             }
@@ -365,15 +365,19 @@ public:
         // grow when the map has as many members as buckets, and an insert into a hardened map (whose limit is 0)
         // takes the slow path; the test of the first member of the chain is the only test more
         if (count >= getLimit()) [[unlikely]] {
-            // a map with buckets and a limit of 0 is hardened; any other map has as many members as buckets, or no
-            // buckets
-            if (buckets && !getLimit()) {
+            // a hardened map takes the slow path; a map without members (limit 0) gets its limit back, and a map
+            // without buckets or with as many members as buckets grows
+            if (isHardened()) {
                 insertSlow(m);
                 return;
             }
-            grow();
+            if (buckets && count <= mask) {
+                limit = mask + 1;
+            } else {
+                grow();
+            }
         }
-        HashMember*& b = buckets[m->hash & getMask()];
+        HashMember*& b = buckets[m->hash & mask];
         HashMember* first = b;
         if (first) [[unlikely]] {
             if (chainFull(first)) {
@@ -391,10 +395,12 @@ public:
     //! the member in that map (qore#7557); throws std::bad_alloc, with nothing changed, if the bucket array cannot
     //! grow
     DLLLOCAL void insertCopy(HashMember* m) {
-        if (count >= bucket_count()) {
+        // the map has buckets and is not hardened (reserveForCopy())
+        assert(buckets && !isHardened());
+        if (count > mask) {
             grow();
         }
-        HashMember*& b = buckets[m->hash & getMask()];
+        HashMember*& b = buckets[m->hash & mask];
         m->bucket_next = b;
         b = m;
         ++count;
@@ -403,18 +409,22 @@ public:
     //! removes \a m, which is in the map
     DLLLOCAL void erase(HashMember* m) {
         assert(count);
-        // the map has buckets (it has members); a hardened map gives the bucket of m by the keyed hash
+        // the map has members, so its limit is 0 only if it is hardened, which gives the bucket of m by the keyed
+        // hash
         if (!getLimit()) [[unlikely]] {
             eraseHardened(m);
             return;
         }
-        HashMember** p = &buckets[m->hash & getMask()];
+        HashMember** p = &buckets[m->hash & mask];
         while (*p != m) {
             assert(*p);
             p = &(*p)->bucket_next;
         }
         *p = m->bucket_next;
-        --count;
+        // a map without members has an insert limit of 0, so that a search does not hash its key (fastFind())
+        if (!--count) {
+            limit = 0;
+        }
     }
 
     //! forgets all members and frees the bucket array; reads no member; the map is not hardened after it
@@ -442,18 +452,19 @@ public:
     */
     DLLLOCAL bool copyKind(const qore_hash_member_map& src) {
         assert(!count && buckets && src.buckets);
-        if (!src.getLimit()) [[unlikely]] {
+        if (src.isHardened()) [[unlikely]] {
             // the copy of a hardened map is hardened; its inserts give the buckets by the keyed hash (insertSlow())
-            setLimit(0);
+            mask |= HardenedBit;
+            limit = 0;
             return false;
         }
-        return getMask() >= src.getMask();
+        return mask >= src.mask;
     }
 
     //! returns the index of the bucket of \a m, which is in the map (for debug functions)
     DLLLOCAL size_t bucketIndex(const HashMember* m) const {
         assert(count);
-        return getLimit() ? (m->hash & getMask()) : keyedBucket(m);
+        return isHardened() ? keyedBucket(m) : (m->hash & mask);
     }
 
     //! returns the length of the longest chain of a bucket (for debug functions)
@@ -468,16 +479,21 @@ public:
 private:
     HashMember** buckets = nullptr;
     size_t count = 0;
-    //! the mask: the number of buckets - 1, if the array is allocated
+    //! bit 31 of the mask: the map is hardened (qore#7557); there are at most MaxBuckets (2^31) buckets, so the bit is
+    //! never part of the number of buckets - 1
+    static constexpr uint32_t HardenedBit = static_cast<uint32_t>(1) << 31;
+
+    //! the mask: the number of buckets - 1, if the array is allocated, and HardenedBit in a hardened map
     uint32_t mask = 0;
     //! the number of members from which an insert takes the slow path (qore#7557): the number of buckets in a map
-    //! that is not hardened, where the buckets grow then, and 0 in a map without buckets and in a hardened map, whose
-    //! inserts all take the slow path and whose searches are made by findSlow()
+    //! that is not hardened and has members, where the buckets grow then, and 0 in a map without members (whose next
+    //! insert sets it again) and in a hardened map, whose inserts all take the slow path; a search of a map whose limit
+    //! is 0 is made by findSlow()
     uint32_t limit = 0;
 
-    //! the mask: the number of buckets - 1, if the array is allocated
+    //! the mask without the hardened bit: the number of buckets - 1, if the array is allocated
     DLLLOCAL uint32_t getMask() const {
-        return mask;
+        return mask & ~HardenedBit;
     }
 
     //! the insert limit
@@ -1228,6 +1244,8 @@ public:
     DLLLOCAL bool reserveForCopy(const qore_hash_private& src) {
         assert(member_list.empty());
         assert(hm.empty());
+        // the copy is a new hash, so its map is not hardened (insertCopy())
+        assert(!hm.isHardened());
         if (src.hm.empty()) {
             return true;
         }
