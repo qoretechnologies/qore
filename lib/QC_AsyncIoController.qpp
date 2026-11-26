@@ -98,7 +98,7 @@ public:
         // released when the code has run, also if it raises an exception
         struct ReleaseHelper {
             int64 handle;
-            DLLLOCAL ~ReleaseHelper() {
+            ~ReleaseHelper() {
                 if (handle) {
                     qore_module_cleanup_release_work(handle);
                 }
@@ -1528,7 +1528,7 @@ static nothing AsyncIoController::runModuleCleanupWork(int handle, code<nothing(
     // released when the code has run, also if it raises an exception, unless the caller releases it itself
     struct ReleaseHelper {
         int64 handle;
-        DLLLOCAL ~ReleaseHelper() {
+        ~ReleaseHelper() {
             if (handle) {
                 qore_module_cleanup_release_work(handle);
             }
