@@ -1271,6 +1271,10 @@ DLLLOCAL QoreProgram* qore_thread_current_program_if_any();
 //! module's (the code of a module acts for its caller), or nullptr if there is none
 DLLLOCAL QoreProgram* qore_get_calling_program();
 
+//! returns the temporary directory of the Program of the code that calls the library (see qore_get_calling_program()
+//! and Program::setTempDir()) as a new string, or nullptr if it has none (qore#7656)
+DLLLOCAL QoreStringNode* qore_get_caller_temp_dir();
+
 //! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
 /** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
     qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without

@@ -1535,6 +1535,12 @@
     takes neither the sandbox nor the restrictions of that caller (see @ref sandbox_lazy_shared_values;
     <a href="https://github.com/qoretechnologies/qore/issues/7684">issue 7684</a>).
 
+    @par The Temporary Directory of a Program
+    @ref Qore::Program::setTempDir() "Program::setTempDir()" sets the directory that
+    @ref Util::tmp_location() "tmp_location()" and the library's temporary files use for the code of a %Program,
+    also code restricted from external information (see @ref sandbox_temp_dir;
+    <a href="https://github.com/qoretechnologies/qore/issues/7656">issue 7656</a>).
+
     @par Restricted Programs
     @ref Qore::SandboxManager::isFromRestrictedProgram() "SandboxManager::isFromRestrictedProgram()" tells whether a
     sandbox that does not trust its code governs the %Program of the class of an object, as

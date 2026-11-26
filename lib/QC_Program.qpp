@@ -54,6 +54,8 @@
 #include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreMiscMembersOps.h"
 
+#include <sys/stat.h>
+
 // returns -1 and raises SANDBOX-ACCESS-ERROR if the calling code may not serialize or deserialize for the Program with
 // the full state of the classes that trusted code declared (qore#7146)
 static int qore_program_check_trusted_serialization(QoreProgram* p, const char* api, ExceptionSink* xsink) {
@@ -3473,6 +3475,96 @@ hash<SerializationInfo> Program::serializeToData(auto value, *int flags) [flags=
         return QoreValue();
     }
     return QoreSerializable::serializeToDataTrusted(value, flags, xsink);
+}
+
+//! Sets or clears the temporary directory of the %Program
+/** @ref Util::tmp_location() "tmp_location()" returns this directory to the code of the %Program, and the library
+    code that creates temporary files and directories for that code without being given a directory
+    (ex: @ref FsUtil::TmpDir "TmpDir") uses it, instead of the directory of the environment (\c TMPDIR) or the
+    platform default; this lets a host choose where code that may not read its environment
+    (@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO") puts its temporary files (see @ref sandbox_temp_dir)
+
+    @param dir the absolute path of an existing directory, which is kept as given (symbolic links are not resolved,
+    so the code of the %Program learns no other path of the host from it); @ref nothing to clear the directory, so
+    that the directory of the environment or the platform default is used again
+
+    @par Example:
+    @code{.py}
+pgm.setTempDir("/var/lib/myapp/tenant1/tmp");
+    @endcode
+
+    @note A %Program created by the code of this %Program takes its directory when it is created; one created by module
+    code takes none, as the module may keep it for all of its callers
+    @note Setting the directory grants no access to it: for a sandboxed %Program, the host allows it in the file system
+    policy of the %Program's sandbox (see @ref sandbox_temp_dir); if the code of the %Program cannot write to it when
+    it asks for it, @ref Util::tmp_location() "tmp_location()" raises an exception instead of using another directory
+
+    @throw SANDBOX-ACCESS-ERROR sandboxed code, or code whose functional domains are restricted, cannot set the
+    temporary directory of a %Program
+    @throw PROGRAM-TEMP-DIR-ERROR the path is not absolute, contains a NUL character, or is not an existing directory
+
+    @see Program::getTempDir()
+
+    @since Qore 3.0
+ */
+nothing Program::setTempDir(*string dir) [flags=NAMED_ARGS] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    // the host chooses the directory: restricted code could otherwise move its own temporary files, or those of a
+    // Program that it can reach (one lent to it included), to a directory of its choice (qore#7656)
+    if (qore_caller_is_sandboxed() || qore_calling_code_is_untrusted()) {
+        return xsink->raiseException("SANDBOX-ACCESS-ERROR", "sandboxed code, or code whose functional domains are "
+            "restricted, cannot set the temporary directory of a Program");
+    }
+    if (!dir) {
+        qore_program_private::get(*p)->setTempDir(nullptr);
+        return QoreValue();
+    }
+    if (q_check_path(*dir, "PROGRAM-TEMP-DIR-ERROR", xsink)) {
+        return QoreValue();
+    }
+    if (!q_absolute_path(dir->c_str())) {
+        return xsink->raiseException("PROGRAM-TEMP-DIR-ERROR", "the temporary directory of a Program must be an "
+            "absolute path; got: '%s'", dir->c_str());
+    }
+    // the directory is checked without trailing separators, which stat() refuses on Windows (except for a drive's root)
+    std::string check(dir->c_str());
+#ifdef _Q_WINDOWS
+    while (check.size() > 3 && (check.back() == '\\' || check.back() == '/')) {
+        check.pop_back();
+    }
+#endif
+    struct stat sbuf;
+    if (stat(check.c_str(), &sbuf) || !S_ISDIR(sbuf.st_mode)) {
+        return xsink->raiseException("PROGRAM-TEMP-DIR-ERROR", "the temporary directory of a Program must be an "
+            "existing directory; '%s' is not", dir->c_str());
+    }
+    qore_program_private::get(*p)->setTempDir(dir->c_str());
+}
+
+//! Returns the temporary directory of the %Program, if any
+/** @return the directory set with Program::setTempDir() or taken from the %Program that created this %Program, or
+    @ref nothing if it has none
+
+    @par Example:
+    @code{.py}
+*string dir = pgm.getTempDir();
+    @endcode
+
+    @note The code of the %Program gets its directory with @ref Util::tmp_location() "tmp_location()" (see
+    SandboxManager::callerTempDir()); this method gives a path of the host to the holder of the %Program object, so it
+    is not available to code restricted from external information
+
+    @since Qore 3.0
+ */
+*string Program::getTempDir() [dom=EXTERNAL_INFO; flags=CONSTANT] {
+    // another tenant's Program is not used in a trusted build that a tenant called: its code and its state (qore#6536)
+    if (qore_sandbox_check_program_isolation(p, xsink, "accessing a Program")) {
+        return QoreValue();
+    }
+    return qore_program_private::get(*p)->getTempDir();
 }
 
 //! Sets the sandbox manager for the program to enforce security restrictions
