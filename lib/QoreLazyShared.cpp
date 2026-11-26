@@ -33,6 +33,7 @@
 #include "qore/intern/QC_LazySharedValue.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/qore_thread_intern.h"
 
 #include <unistd.h>
@@ -188,10 +189,39 @@ int lazy_shared_check_value(const QoreValue v, const char* what, ExceptionSink* 
 }
 
 QoreLazySharedBase::QoreLazySharedBase(const ResolvedCallReferenceNode* b, ExceptionSink* xsink) {
-    // the checks of SandboxManager::createTrustedBuildCall(): trusted creating code, a plain callback of trusted code
-    build_cap = qore_create_trusted_build_call(b, xsink);
-    if (!build_cap) {
+    // a bound callback or a capability as the builder would run its rights for whoever calls get(): refused in both
+    // modes
+    if (qore_get_sandbox_bound_callback(b)) {
+        xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "the builder of a lazy shared value must be a plain "
+            "callback, not a bound callback or a capability");
         return;
+    }
+    // the mode is fixed here: process-shared if the creating code may create a trusted build of the builder (the
+    // checks of SandboxManager::createTrustedBuildCall()), private otherwise
+    bool shared = !qore_caller_is_sandboxed();
+    if (shared) {
+        QoreSandboxContext* creation = qore_get_call_reference_provenance(b);
+        if (creation) {
+            creation->deref();
+            shared = false;
+        }
+    }
+    if (shared) {
+        QoreParseOptions po;
+        bool code_sandboxed = false;
+        int rc = qore_call_reference_code_parse_options(b, po, xsink, &code_sandboxed);
+        if (*xsink) {
+            return;
+        }
+        if (rc > 0 && code_sandboxed) {
+            shared = false;
+        }
+    }
+    if (shared) {
+        build_cap = qore_create_trusted_build_call(b, xsink);
+        if (!build_cap) {
+            return;
+        }
     }
     builder = b->refRefSelf();
 }
@@ -266,11 +296,13 @@ int QoreLazySharedBase::getIntern(SafeLocker& sl, const std::shared_ptr<QoreLazy
     entry->builder_pid = pid;
     entry->builder_tid.store(tid, std::memory_order_release);
     sl.unlock();
-    // the builder runs as trusted code: directly when the barrier of a trusted build would hide nothing of the caller,
-    // otherwise behind it, so that what it creates never takes the sandbox or the restrictions of the caller
-    ResolvedCallReferenceNode* call = qore_trusted_build_hides_nothing() ? builder : build_cap;
+    // a process-shared value is built as trusted code: directly when the barrier of a trusted build would hide nothing
+    // of the caller, otherwise behind it, so that what it creates never takes the sandbox or the restrictions of the
+    // caller; a private value's builder runs as a call of the code that created the object, with its own provenance
+    // and restrictions, whoever calls get(), and its value crosses no trust boundary
+    ResolvedCallReferenceNode* call = build_cap && !qore_trusted_build_hides_nothing() ? build_cap : builder;
     ValueHolder value(call->invoke(args, xsink), xsink);
-    if (!*xsink) {
+    if (!*xsink && build_cap) {
         lazy_shared_check_value(*value, what, xsink);
     }
     sl.lock();

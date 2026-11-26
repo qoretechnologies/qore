@@ -32,7 +32,7 @@
 class LazySharedValuesTest inherits QUnit::Test {
     private {
         string qore_bin = TestInterpreter::qore_interpreter();
-        list<string> fixtures = ("LazySharedValues", "LazySharedVendoredSchemas");
+        list<string> fixtures = ("LazySharedValues", "LazySharedVendoredSchemas", "LazySharedModuleByPath");
     }
 
     constructor() : QUnit::Test("lazy shared values", "1.0", \ARGV) {

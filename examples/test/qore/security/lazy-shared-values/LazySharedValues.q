@@ -62,11 +62,18 @@ string sub change_value(string key) {
 }
 
 string sub create_value() {
-    return try_it(auto sub () { object v = new LazySharedValue(int sub () { return 1; }); return \"created\"; });
+    return try_it(auto sub () {
+        LazySharedValue v(int sub () { return 1; });
+        return sprintf(\"process-shared: %y, value: %y, the object is shared: %y\", v.isProcessShared(), v.get(),
+            SandboxManager::isSharedObject(v));
+    });
 }
 
 string sub create_map() {
-    return try_it(auto sub () { object m = new LazySharedMap(string sub (string k) { return k; }); return \"created\"; });
+    return try_it(auto sub () {
+        LazySharedMap m(string sub (string k) { return k; });
+        return sprintf(\"process-shared: %y, value: %y\", m.isProcessShared(), m.get(\"k\"));
+    });
 }
 
 string sub call_deputy(code deputy) {
@@ -98,9 +105,36 @@ nothing sub give_object() {
 }
 ";
 
+const TenantOnlyCode = "
+# a private value of the tenant: its builder tries a file that the tenant's sandbox does not let it read
+LazySharedValue sub private_value() {
+    return new LazySharedValue(hash<auto> sub () {
+        string fs;
+        try {
+            ReadOnlyFile::readTextFile(\"/etc/passwd\");
+            fs = \"read\";
+        } catch (hash<ExceptionInfo> ex) {
+            fs = ex.err;
+        }
+        return {
+            \"obj\": new LazySharedProbe::Built(\"private\"),
+            \"sandboxed\": SandboxManager::isSandboxed(),
+            \"fs\": fs,
+        };
+    });
+}
+
+string sub describe_private(LazySharedValue v) {
+    hash<auto> r = v.get();
+    return sprintf(\"obj shared: %y, sandboxed: %y, the file: %s\", SandboxManager::isSharedObject(r.obj),
+        r.sandboxed, r.fs);
+}
+
+";
+
 Program tenant(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
 tenant.setSandboxManager(new SandboxManager());
-tenant.parse(CallerCode, "tenant");
+tenant.parse(CallerCode + TenantOnlyCode, "tenant");
 
 # restricted by a parse option, with no sandbox
 Program restricted(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION | PO_NO_FILESYSTEM);
@@ -111,19 +145,49 @@ string sub describe(hash<auto> v) {
         SandboxManager::isSharedObject(v.obj), v.creates_shared, v.closure());
 }
 
-# 1: only trusted code creates the objects
+# 1: only trusted code creates process-shared objects; other code creates private ones
 printf("tenant creates a LazySharedValue: %s; a LazySharedMap: %s\n", tenant.callFunction("create_value"),
     tenant.callFunction("create_map"));
-code deputy = string sub () { LazySharedValue v(int sub () { return 1; }); return "created"; };
+code deputy = string sub () {
+    LazySharedValue v(int sub () { return 1; });
+    return sprintf("process-shared: %y", v.isProcessShared());
+};
 printf("trusted deputy creates one for the tenant: %s\n", tenant.callFunction("call_deputy", deputy));
 printf("trusted code creates one with the tenant's builder: %s\n", (string sub () {
     try {
         LazySharedValue v(tenant.callFunction("tenant_builder"));
+        return sprintf("process-shared: %y", v.isProcessShared());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+})());
+
+{
+    LazySharedValue v(int sub () { return 1; });
+    printf("trusted code creates one: process-shared: %y, the object is shared: %y\n", v.isProcessShared(),
+        SandboxManager::isSharedObject(v));
+}
+printf("a bound callback as the builder: %s\n", (string sub () {
+    try {
+        code cap = SandboxManager::createTrustedBuildCall(int sub () { return 1; });
+        LazySharedValue v(cap);
         return "created";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
 })());
+# a private value's builder runs as the tenant's code, also when trusted code needs the value first
+{
+    LazySharedValue v = tenant.callFunction("private_value");
+    printf("tenant's private value: process-shared: %y; the tenant gets it first: %s\n", v.isProcessShared(),
+        tenant.callFunction("describe_private", v));
+    LazySharedValue v2 = tenant.callFunction("private_value");
+    printf("trusted code gets a private value first: %s\n", (string sub () {
+        hash<auto> r = v2.get();
+        return sprintf("obj shared: %y, sandboxed: %y, the file: %s", SandboxManager::isSharedObject(r.obj),
+            r.sandboxed, r.fs);
+    })());
+}
 
 # 2: a sandboxed first caller
 printf("tenant first caller: %s; plain lazy pattern: %s\n", tenant.callFunction("value_of", "tenant"),

@@ -75,8 +75,11 @@ struct QoreLazySharedEntry {
 //! and the condition of the builds (qore#7684)
 class QoreLazySharedBase : public AbstractPrivateData {
 public:
-    //! Creates the object for a builder that trusted code gives; raises SANDBOX-CAPABILITY-ERROR if the creating code
-    //! is sandboxed or acts for sandboxed code, or the builder is not a plain callback of trusted code
+    //! Creates the object; raises SANDBOX-CAPABILITY-ERROR if the builder is a bound callback or a capability
+    /** The object is process-shared if the creating code may create a trusted build of the builder (see
+        SandboxManager::createTrustedBuildCall()): its value is built as trusted code; otherwise it is private: its
+        value is built as a call of the builder, in the context of the code that created it (qore#7684)
+    */
     DLLLOCAL QoreLazySharedBase(const ResolvedCallReferenceNode* builder, ExceptionSink* xsink);
 
     DLLLOCAL virtual void deref(ExceptionSink* xsink) {
@@ -93,13 +96,19 @@ public:
 
     //! true if the object was created
     DLLLOCAL operator bool() const {
+        return builder;
+    }
+
+    //! true if the value is built as trusted code for every caller, false for a private value
+    DLLLOCAL bool isProcessShared() const {
         return build_cap;
     }
 
 protected:
     //! the builder, run directly when the trusted build barrier would hide nothing of the caller
     ResolvedCallReferenceNode* builder = nullptr;
-    //! the builder as a trusted build capability (SandboxManager::createTrustedBuildCall())
+    //! the builder as a trusted build capability (SandboxManager::createTrustedBuildCall()); nullptr for a private
+    //! value
     ResolvedCallReferenceNode* build_cap = nullptr;
     //! the lock of the build state
     mutable QoreThreadLock l;

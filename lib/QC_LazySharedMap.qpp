@@ -44,8 +44,8 @@
     code, a module name or a path that it does not check.  The threads that waited for the key build it again, or
     fail, on their own.  The creator can also limit the number of entries.
 
-    @note see @ref Qore::Thread::LazySharedValue "LazySharedValue" for the rules of the builder, the value and the lock
-    order of the wait
+    @note see @ref Qore::Thread::LazySharedValue "LazySharedValue" for the two modes of the object (process-shared and
+    private), the rules of the builder, the value and the lock order of the wait
 
     @since %Qore 3.0
 */
@@ -58,8 +58,7 @@ qclass LazySharedMap [arg=QoreLazySharedMap* m; ns=Qore::Thread];
     @param max_size the most entries (values built or being built); 0 (the default) or less for no limit; a key that would
     exceed it is refused
 
-    @throw SANDBOX-CAPABILITY-ERROR the creating code is sandboxed or acts for sandboxed code, or @p builder has
-    sandbox provenance, belongs to a sandboxed %Program or is a bound callback or a capability
+    @throw SANDBOX-CAPABILITY-ERROR @p builder is a bound callback or a capability
     @throw LAZYSHAREDMAP-ERROR @p max_size is negative
 */
 LazySharedMap::constructor(code builder, int max_size = 0) {
@@ -72,9 +71,11 @@ LazySharedMap::constructor(code builder, int max_size = 0) {
     if (*xsink) {
         return;
     }
+    bool shared = m->isProcessShared();
     self->setPrivate(CID_LAZYSHAREDMAP, m.release());
-    // the object is shared state of trusted code: sandboxed code cannot delete it (see SandboxManager::shareObject())
-    if (qore_caller_creates_shared_objects()) {
+    // a process-shared object is shared state of trusted code: sandboxed code cannot delete it (see
+    // SandboxManager::shareObject())
+    if (shared && qore_caller_creates_shared_objects()) {
         qore_object_private::get(*self)->setShared();
     }
 }
@@ -108,6 +109,16 @@ auto LazySharedMap::get(string key, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 */
 bool LazySharedMap::isBuilt(string key) [flags=RET_VALUE_ONLY] {
     return m->isBuilt(key, xsink);
+}
+
+//! Returns @ref True if the values are built as trusted code for every caller, @ref False for a private map
+/** @return @ref True if the object is process-shared (see @ref Qore::Thread::LazySharedValue "LazySharedValue"),
+    @ref False if it is private
+
+    @since %Qore 3.0
+*/
+bool LazySharedMap::isProcessShared() [flags=RET_VALUE_ONLY] {
+    return m->isProcessShared();
 }
 
 //! Returns the number of entries: the values built and being built

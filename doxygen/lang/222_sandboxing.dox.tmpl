@@ -807,6 +807,14 @@ authenticate();
     progress; a build that fails publishes nothing (a key of a map whose build fails leaves no entry, so that callers
     cannot make the map grow with keys that its builder does not know).
 
+    The mode of such an object is fixed when it is created: it is process-shared, as described above, only if the
+    code that creates it may create a trusted build of its builder (as for
+    @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()").  An object that
+    sandboxed code creates, or a trusted deputy for it, or with a builder of sandboxed code (the static members of a
+    module that a sandboxed %Program loads by its path, for example) is private: its value is built once, but as a
+    plain call of its builder, which runs with the provenance and the restrictions of its own code, whoever calls
+    \c get(), also trusted code; nothing that it builds is marked as shared.
+
     The value is published as it is: the builder marks or freezes the objects that it shares, as for any shared
     object; the check of the value before it is published refuses only objects and callable values that sandboxed or
     restricted code created, in the value and in the lists and hashes that it holds, not in the members of objects.  A

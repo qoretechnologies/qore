@@ -1,6 +1,10 @@
-tenant creates a LazySharedValue: SANDBOX-CAPABILITY-ERROR; a LazySharedMap: SANDBOX-CAPABILITY-ERROR
-trusted deputy creates one for the tenant: SANDBOX-CAPABILITY-ERROR
-trusted code creates one with the tenant's builder: SANDBOX-CAPABILITY-ERROR
+tenant creates a LazySharedValue: "process-shared: False, value: 1, the object is shared: False"; a LazySharedMap: "process-shared: False, value: \"k\""
+trusted deputy creates one for the tenant: "process-shared: False"
+trusted code creates one with the tenant's builder: process-shared: False
+trusted code creates one: process-shared: True, the object is shared: True
+a bound callback as the builder: SANDBOX-CAPABILITY-ERROR
+tenant's private value: process-shared: False; the tenant gets it first: obj shared: False, sandboxed: True, the file: FILESYSTEM-ACCESS-DENIED
+trusted code gets a private value first: obj shared: False, sandboxed: True, the file: FILESYSTEM-ACCESS-DENIED
 tenant first caller: obj shared: True, built as trusted: True; plain lazy pattern: obj shared: False, built as trusted: False
 tenant changes the value: SHARED-OBJECT-ERROR
 trusted code gets the tenant-built value: obj shared: True, built as trusted: True, its code restricted for an unrestricted caller: False
