@@ -64,10 +64,10 @@ apart by the expression of the instruction (`qore_ir_is_list_join_function_form(
 `<list>::join()` of a map is fused with the map (`string.method.join.start`): the AST interpreter evaluates the whole
 map, and then the join raises for the first value that it cannot convert, while the fused loop joins each value as the
 map gives it.  So the join of a value that cannot be converted gives the failed join, a list of the join of the values
-before it and the value, and drops the exception; the map gives its other values as before (an exception that it raises then is the exception, as the
-join never runs in the AST interpreter), and the finish of the join, after the loop, makes the ordinary call of
-`<list>::join()` with the failed join (the value and the values after it), which raises the exception of that value in the frame of the
-join; should the call join them, the result is the join of all the values.  The join
+before it and the value, and drops the exception; the map gives its other values, which are added to it (an exception
+that it raises then is the exception, as the join never runs in the AST interpreter), and the finish of the join, after
+the loop, makes the ordinary call of `<list>::join()` with the value and the values after it, which raises the exception
+of that value in the frame of the join; should the call join them, the result is the join of all the values.  The join
 converts each value on its own and in order, so the exception is the one that the join of all the values raises
 (`qore_rt_string_method_join_start()`).  The partial join is never visible: the fused loop's accumulator is internal.
 
