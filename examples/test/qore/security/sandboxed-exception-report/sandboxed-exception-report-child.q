@@ -40,7 +40,13 @@ sub main() {
     AsyncIoController::setMaxCallbackWorkers(1);
     Queue q();
     Program p(PO_MODERN);
-    p.setSandboxManager(new SandboxManager());
+    SandboxManager sm();
+    # a trusted (governed) manager: the tenant's exceptions are reported as the host's (qore#7737)
+    if (mode =~ /^trusted-/) {
+        sm.setUncontrolledApiPolicy(True);
+        mode = mode.substr(8);
+    }
+    p.setSandboxManager(sm);
     p.loadModule("ReportCheck");
     p.parse(ReadOnlyFile::readTextFile(get_script_dir() + "/tenant.q"), "tenant");
     printf("pgm=%d\n", p.getProgramId());
