@@ -27031,16 +27031,27 @@ extern "C" DLLEXPORT uint64_t qore_fast_toupper_string(uint64_t val_bits, Except
 //! INVALID-ENCODING for text that is not valid in its encoding, as the builtin does
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_xsink_noguard(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue value = fromBits(val_bits);
-    if (!value.isShortString() && (!value.hasNode() || value.getInternalNode()->getType() != NT_STRING)) {
-        // any other value, such as a string enum member, takes the ordinary call
-        return toBits(qore_string_call_length(value, false, xsink));
+    // a string node, as the base always is at run time; any other value (a short string, a string enum member) and a
+    // pending exception take the ordinary call (see qore_rt_string_fast_path())
+    if (value.hasNode() && value.getInternalNode()->getType() == NT_STRING) [[likely]] {
+        // note: safe; the node of the value, read under value.hasNode() above
+        const auto* str = static_cast<const QoreStringNode*>(value.getInternalNode());
+        if (!xsink) {
+            return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, nullptr)));
+        }
+        if (!*xsink) [[likely]] {
+            size_t count = qore_string_private::characterCount(*str, xsink);
+            if (!*xsink) [[likely]] {
+                return toBits(static_cast<int64_t>(count));
+            }
+            xsink->clear();
+        }
     }
-    return qore_rt_string_fast_path(xsink, [&]() {
-        // the work of length() of a string (the base is an assigned string)
-        return qore_fast_length_string(fromBits(val_bits), xsink);
-    }, [&]() {
-        return toBits(qore_string_call_length(fromBits(val_bits), false, xsink));
-    });
+    if (!xsink) {
+        QoreStringValueHelper str(value);
+        return toBits(static_cast<int64_t>(qore_string_private::characterCount(**str, nullptr)));
+    }
+    return toBits(qore_string_call_length(value, false, xsink));
 }
 
 //! Measure an assigned string after case conversion without retaining the transformed value.
