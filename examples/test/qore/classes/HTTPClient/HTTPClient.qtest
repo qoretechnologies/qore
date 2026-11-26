@@ -1243,7 +1243,13 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         string path = socket_dir.path + "/server.sock";
 
         Queue q();
+        # the server thread closes the server after it has sent the response, and the close removes the socket file:
+        # the thread is waited for, so that the close cannot race with the removal of the socket directory at the end
+        # of this scope
+        Counter server_done(1);
+        on_exit server_done.waitForZero();
         background sub () {
+            on_exit server_done.dec();
             try {
                 Socket server();
                 server.bindUNIX(path);
@@ -1279,6 +1285,8 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("GET", hdr.method);
         assertEq("/unix-test?x=1", hdr.path);
         assertEq(encode_url(path, True), hdr.host);
+        server_done.waitForZero();
+        assertFalse(is_socket(path), "the socket file is removed before the socket directory");
     }
 
     unixSocketProxyConnMgrTest() {
